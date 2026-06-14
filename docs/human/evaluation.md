@@ -37,14 +37,15 @@ The current repo-native schema package is `roboclaws.evals`. Versioned suite and
 sample definitions live under `evals/<capability>/`, starting with
 `evals/household_world/`.
 
-The first deterministic runner is available through:
+The deterministic runner is available through:
 
 ```bash
 just agent::eval suite=smoke_regression budget=smoke
+just agent::eval suite=map_build_consumer budget=smoke
 ```
 
-It runs the direct-runner household smoke suite without provider keys, writes
-`output/evals/<suite>/<stamp>/eval_results.json`, and renders
+These suites run direct-runner household samples without provider keys, write
+`output/evals/<suite>/<stamp>/eval_results.json`, and render
 `eval_report.html` with links to the underlying product run artifacts. Smoke
 budget uses the synthetic cleanup backend for local determinism while eval
 identity still records the sample's public surface, world, backend, evidence

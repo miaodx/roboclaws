@@ -1,17 +1,17 @@
 {
   "schema": "roboclaws_eval_sample_v1",
-  "sample_id": "map_build.baseline_seed7",
+  "sample_id": "open_ended.drink_seed7",
   "version": "2026-06-15",
   "surface": "household-world",
-  "intent": "map-build",
-  "preset": "map-build",
+  "intent": "open-ended",
+  "preset": "not_applicable",
   "world": "molmospaces/val_0",
   "backend": "mujoco",
   "evidence_lane": "world-oracle-labels",
   "camera_labeler": "not_applicable",
   "scenario_setup": "baseline",
   "seed": 7,
-  "prompt": "not_applicable",
+  "prompt": "我渴了，帮我找些解渴的东西",
   "goal_contract_hash": "unavailable",
   "allowed_agent_engines": [
     "direct-runner"
@@ -23,19 +23,16 @@
   "required_graders": [
     "artifacts",
     "privacy",
-    "trajectory"
+    "trajectory",
+    "open_ended"
   ],
   "private_goal_reference": {
     "schema": "household_eval_private_goal_reference_v1",
     "private_truth_scope": "grader_only",
-    "expected_runtime_metric_map": true
+    "semantic_satisfaction": "advisory"
   },
   "grader_config": {
-    "min_public_semantic_anchors": 1,
-    "min_generated_exploration_candidates": 1,
-    "require_runtime_metric_map_schema": "runtime_metric_map_v1",
-    "require_private_truth_absent": true,
-    "require_source_map_not_mutated": true
+    "semantic_satisfaction_authoritative": false
   },
   "launch_overrides": {
     "agent_engine": "direct-runner",

@@ -110,6 +110,7 @@ class EvalSample:
     private_goal_reference: dict[str, Any]
     provider_profiles: tuple[str, ...] = (MISSING_NOT_APPLICABLE,)
     grader_config: dict[str, Any] | None = None
+    artifact_dependencies: dict[str, Any] | None = None
     launch_overrides: dict[str, Any] | None = None
 
     @classmethod
@@ -146,6 +147,7 @@ class EvalSample:
                 default=(MISSING_NOT_APPLICABLE,),
             ),
             grader_config=_optional_mapping(payload, "grader_config"),
+            artifact_dependencies=_optional_mapping(payload, "artifact_dependencies"),
             launch_overrides=_optional_mapping(payload, "launch_overrides"),
         )
 
@@ -173,6 +175,8 @@ class EvalSample:
         }
         if self.grader_config is not None:
             payload["grader_config"] = dict(self.grader_config)
+        if self.artifact_dependencies is not None:
+            payload["artifact_dependencies"] = dict(self.artifact_dependencies)
         if self.launch_overrides is not None:
             payload["launch_overrides"] = dict(self.launch_overrides)
         return payload

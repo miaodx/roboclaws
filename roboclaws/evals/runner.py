@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from roboclaws.evals.dependencies import (
+    dependency_failure,
+    resolve_artifact_dependencies,
+    sample_artifact_key,
+)
 from roboclaws.evals.models import (
-    EVAL_RESULT_SCHEMA,
     MISSING_NOT_APPLICABLE,
+    MISSING_SENTINELS,
     MISSING_UNAVAILABLE,
     EvalResult,
     EvalSample,
@@ -21,13 +25,16 @@ from roboclaws.evals.models import (
     load_eval_sample,
     load_eval_suite,
 )
+from roboclaws.evals.reports import render_eval_report, results_bundle
 from roboclaws.household.backend_contract import SYNTHETIC_BACKEND
 from roboclaws.household.realworld_cleanup import run_realworld_cleanup
 from roboclaws.launch.backends import BACKEND_SPECS
+from roboclaws.launch.catalog import SURFACE_SPECS
+from roboclaws.launch.goals import normalize_goal_contract
+from roboclaws.launch.intents import TASK_INTENT_SPECS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "output" / "evals"
-RESULTS_BUNDLE_SCHEMA = "roboclaws_eval_results_bundle_v1"
 
 ProductRun = Callable[..., dict[str, Any]]
 
@@ -61,6 +68,7 @@ def run_eval_suite(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[EvalResult] = []
+    sample_artifacts: dict[str, dict[str, Any]] = {}
     for sample in samples:
         if "direct-runner" not in sample.allowed_agent_engines:
             raise ValueError(
@@ -75,22 +83,28 @@ def run_eval_suite(
             )
             sample_run_dir = output_dir / "runs" / _path_token(sample.sample_id)
             run_dir = sample_run_dir / f"trial-{repetition_index:04d}"
-            results.append(
-                _run_trial(
-                    suite=suite,
-                    sample=sample,
-                    trial=trial,
-                    run_dir=run_dir,
-                    budget=budget,
-                    product_runner=product_runner,
-                )
+            result = _run_trial(
+                suite=suite,
+                sample=sample,
+                trial=trial,
+                run_dir=run_dir,
+                budget=budget,
+                repetition_index=repetition_index,
+                sample_artifacts=sample_artifacts,
+                product_runner=product_runner,
             )
+            results.append(result)
+            sample_artifacts[sample_artifact_key(sample.sample_id, repetition_index)] = (
+                result.artifacts or _artifact_paths(run_dir)
+            )
+            if repetition_index == 0:
+                sample_artifacts[sample.sample_id] = result.artifacts or _artifact_paths(run_dir)
 
-    bundle = _results_bundle(suite=suite, results=results, output_dir=output_dir, budget=budget)
+    bundle = results_bundle(suite=suite, results=results, output_dir=output_dir, budget=budget)
     results_path = output_dir / "eval_results.json"
     report_path = output_dir / "eval_report.html"
     _write_json(results_path, bundle)
-    report_path.write_text(_render_eval_report(bundle), encoding="utf-8")
+    report_path.write_text(render_eval_report(bundle), encoding="utf-8")
     bundle["artifacts"]["eval_results"] = str(results_path)
     bundle["artifacts"]["eval_report"] = str(report_path)
     _write_json(results_path, bundle)
@@ -182,15 +196,37 @@ def _run_trial(
     trial: EvalTrial,
     run_dir: Path,
     budget: str,
+    repetition_index: int,
+    sample_artifacts: dict[str, dict[str, Any]],
     product_runner: ProductRun,
 ) -> EvalResult:
     run_dir.mkdir(parents=True, exist_ok=True)
+    dependency_artifacts = resolve_artifact_dependencies(
+        sample,
+        repetition_index=repetition_index,
+        sample_artifacts=sample_artifacts,
+    )
+    failure = dependency_failure(dependency_artifacts)
+    if failure is not None:
+        return _failed_result_from_dependency(trial, run_dir, failure)
     try:
-        run_result = product_runner(**_product_run_kwargs(sample, run_dir=run_dir, budget=budget))
+        run_result = product_runner(
+            **_product_run_kwargs(
+                sample,
+                run_dir=run_dir,
+                budget=budget,
+                dependency_artifacts=dependency_artifacts,
+            )
+        )
     except Exception as exc:  # noqa: BLE001 - eval packets must classify runner failures.
         return _blocked_result_from_exception(trial, exc)
 
-    grader_outputs = _grade_trial(sample=sample, run_dir=run_dir, run_result=run_result)
+    grader_outputs = _grade_trial(
+        sample=sample,
+        run_dir=run_dir,
+        run_result=run_result,
+        dependency_artifacts=dependency_artifacts,
+    )
     status, failure_class = _status_from_graders(grader_outputs)
     artifacts = _artifact_paths(run_dir)
     metrics = _metrics_from_graders(grader_outputs, status=status, run_result=run_result)
@@ -206,10 +242,16 @@ def _run_trial(
     )
 
 
-def _product_run_kwargs(sample: EvalSample, *, run_dir: Path, budget: str) -> dict[str, Any]:
+def _product_run_kwargs(
+    sample: EvalSample,
+    *,
+    run_dir: Path,
+    budget: str,
+    dependency_artifacts: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     launch_overrides = sample.launch_overrides or {}
     semantic_sweep = sample.intent == "map-build" or sample.preset == "map-build"
-    return {
+    kwargs: dict[str, Any] = {
         "output_dir": run_dir,
         "seed": sample.seed,
         "task_prompt": _task_prompt(sample),
@@ -225,6 +267,13 @@ def _product_run_kwargs(sample: EvalSample, *, run_dir: Path, budget: str) -> di
             "eval_suite_runner": "roboclaws.evals.runner",
         },
     }
+    goal_contract = _goal_contract_json(sample)
+    if goal_contract:
+        kwargs["goal_contract_json"] = goal_contract
+    runtime_map_prior = str((dependency_artifacts or {}).get("runtime_map_prior_path") or "")
+    if runtime_map_prior:
+        kwargs["runtime_map_prior_path"] = runtime_map_prior
+    return kwargs
 
 
 def _implementation_backend(sample: EvalSample, *, budget: str) -> str:
@@ -269,17 +318,23 @@ def _grade_trial(
     sample: EvalSample,
     run_dir: Path,
     run_result: dict[str, Any],
+    dependency_artifacts: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
-        "artifacts": _artifact_grader(run_dir),
+        "artifacts": _artifact_grader(run_dir, dependency_artifacts=dependency_artifacts),
         "privacy": _privacy_grader(run_result),
         "trajectory": _trajectory_grader(sample=sample, run_dir=run_dir, run_result=run_result),
         "outcome": _outcome_grader(sample=sample, run_dir=run_dir, run_result=run_result),
+        "open_ended": _open_ended_grader(sample=sample, run_dir=run_dir, run_result=run_result),
         "efficiency": _efficiency_grader(run_result),
     }
 
 
-def _artifact_grader(run_dir: Path) -> dict[str, Any]:
+def _artifact_grader(
+    run_dir: Path,
+    *,
+    dependency_artifacts: dict[str, Any] | None,
+) -> dict[str, Any]:
     required = {
         "run_result": run_dir / "run_result.json",
         "report": run_dir / "report.html",
@@ -292,6 +347,7 @@ def _artifact_grader(run_dir: Path) -> dict[str, Any]:
     return {
         "status": "failed" if missing else "passed",
         "missing": missing,
+        "resolved_dependencies": dict(dependency_artifacts or {}),
         "required": {name: str(path) for name, path in required.items()},
     }
 
@@ -361,11 +417,45 @@ def _outcome_grader(
     if sample.intent == "map-build":
         runtime_map_path = run_dir / "runtime_metric_map.json"
         runtime_map = _load_json(runtime_map_path) if runtime_map_path.exists() else {}
-        passed = runtime_map_path.exists() and bool(runtime_map)
+        config = sample.grader_config or {}
+        schema_ok = runtime_map.get("schema") == str(
+            config.get("require_runtime_metric_map_schema") or "runtime_metric_map_v1"
+        )
+        anchors = runtime_map.get("public_semantic_anchors") or []
+        exploration = runtime_map.get("generated_exploration_candidates") or []
+        private_truth_absent = runtime_map.get("private_truth_included") is False
+        source_map_not_mutated = runtime_map.get("source_map_mutated") is False
+        passed = (
+            runtime_map_path.exists()
+            and schema_ok
+            and len(anchors) >= _int_value(config.get("min_public_semantic_anchors") or 0)
+            and len(exploration)
+            >= _int_value(config.get("min_generated_exploration_candidates") or 0)
+            and (private_truth_absent if config.get("require_private_truth_absent", True) else True)
+            and (
+                source_map_not_mutated
+                if config.get("require_source_map_not_mutated", True)
+                else True
+            )
+        )
         return {
             "status": "passed" if passed else "failed",
+            "failure_class": "map_actionability_failure" if not passed else MISSING_NOT_APPLICABLE,
             "runtime_metric_map_exists": runtime_map_path.exists(),
-            "public_anchor_count": len(runtime_map.get("public_anchors") or []),
+            "runtime_metric_map_schema": runtime_map.get("schema", MISSING_UNAVAILABLE),
+            "schema_ok": schema_ok,
+            "public_semantic_anchor_count": len(anchors),
+            "generated_exploration_candidate_count": len(exploration),
+            "private_truth_absent": private_truth_absent,
+            "source_map_not_mutated": source_map_not_mutated,
+        }
+    if sample.intent == "open-ended":
+        open_ended = _open_ended_grader(sample=sample, run_dir=run_dir, run_result=run_result)
+        return {
+            "status": "passed",
+            "completion_claim_present": open_ended["completion_claim_present"],
+            "artifact_readiness": open_ended["artifact_readiness"],
+            "semantic_satisfaction_status": open_ended["semantic_satisfaction_status"],
         }
     score = run_result.get("score") if isinstance(run_result.get("score"), dict) else {}
     completion_status = str(
@@ -396,16 +486,53 @@ def _efficiency_grader(run_result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _open_ended_grader(
+    *,
+    sample: EvalSample,
+    run_dir: Path,
+    run_result: dict[str, Any],
+) -> dict[str, Any]:
+    if sample.intent != "open-ended":
+        return {
+            "status": "not_applicable",
+            "completion_claim_present": MISSING_NOT_APPLICABLE,
+            "artifact_readiness": MISSING_NOT_APPLICABLE,
+            "semantic_satisfaction_status": "advisory_not_applicable",
+        }
+    claim = run_result.get("agent_completion_claim")
+    claim_present = isinstance(claim, dict) and bool(claim.get("completion_summary"))
+    required = ("run_result.json", "report.html", "trace.jsonl", "goal_contract.json")
+    missing = [name for name in required if not (run_dir / name).exists()]
+    artifact_ready = not missing
+    advisory = (
+        run_result.get("advisory_evaluation")
+        if isinstance(run_result.get("advisory_evaluation"), dict)
+        else _load_json(run_dir / "advisory_evaluation.json")
+    )
+    advisory_available = bool(advisory)
+    semantic_status = "advisory_available" if advisory_available else "advisory_unavailable"
+    return {
+        "status": "passed" if claim_present and artifact_ready else "failed",
+        "completion_claim_present": claim_present,
+        "artifact_readiness": "ready" if artifact_ready else "missing",
+        "missing_artifacts": missing,
+        "semantic_satisfaction_status": semantic_status,
+        "semantic_satisfaction_authoritative": False,
+    }
+
+
 def _status_from_graders(grader_outputs: dict[str, Any]) -> tuple[str, str]:
     ordered_failures = (
         ("artifacts", "artifact_missing"),
         ("privacy", "private_truth_leak"),
         ("trajectory", "trajectory_policy_violation"),
+        ("open_ended", "agent_no_completion_claim"),
         ("outcome", "private_goal_not_satisfied"),
     )
     for grader_name, failure_class in ordered_failures:
-        if grader_outputs.get(grader_name, {}).get("status") == "failed":
-            return "failed", failure_class
+        grader = grader_outputs.get(grader_name, {})
+        if grader.get("status") == "failed":
+            return "failed", str(grader.get("failure_class") or failure_class)
     return "passed", MISSING_NOT_APPLICABLE
 
 
@@ -421,6 +548,10 @@ def _metrics_from_graders(
         "private_truth_leak_count": grader_outputs["privacy"]["private_truth_leak_count"],
         "trajectory_policy_violation_count": grader_outputs["trajectory"]["violation_count"],
         "mess_restoration_rate": score.get("mess_restoration_rate", MISSING_UNAVAILABLE),
+        "open_ended_artifact_readiness": grader_outputs["open_ended"].get(
+            "artifact_readiness",
+            MISSING_NOT_APPLICABLE,
+        ),
         "tool_event_count": grader_outputs["efficiency"]["tool_event_count"],
     }
 
@@ -454,115 +585,36 @@ def _failure_class_from_exception(exc: Exception) -> str:
     return "harness_bug_unclassified"
 
 
-def _results_bundle(
-    *,
-    suite: EvalSuite,
-    results: list[EvalResult],
-    output_dir: Path,
-    budget: str,
-) -> dict[str, Any]:
-    result_payloads = [result.to_dict() for result in results]
-    aggregate = _aggregate_results(result_payloads)
-    return {
-        "schema": RESULTS_BUNDLE_SCHEMA,
-        "suite": suite.to_dict(),
-        "budget": budget,
-        "result_schema": EVAL_RESULT_SCHEMA,
-        "aggregate": aggregate,
-        "results": result_payloads,
-        "artifacts": {
-            "output_dir": str(output_dir),
+def _failed_result_from_dependency(
+    trial: EvalTrial,
+    run_dir: Path,
+    dependency_failure: dict[str, Any],
+) -> EvalResult:
+    failure_class = str(dependency_failure.get("failure_class") or "artifact_missing")
+    artifacts = _artifact_paths(run_dir)
+    return EvalResult.from_trial(
+        trial,
+        status="failed",
+        failure_class=failure_class,
+        grader_outputs={
+            "artifacts": {
+                "status": "failed",
+                "missing": [],
+                "missing_dependencies": dependency_failure.get("missing_dependencies", []),
+                "resolved_dependencies": dependency_failure.get("resolved_dependencies", {}),
+                "required": {},
+            },
+            "runner": {
+                "status": "failed",
+                "error_type": "EvalDependencyError",
+                "message": str(dependency_failure.get("message") or ""),
+            },
         },
-    }
-
-
-def _aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
-    total = len(results)
-    passed = sum(1 for result in results if result.get("status") == "passed")
-    failed = sum(1 for result in results if result.get("status") == "failed")
-    blocked = sum(1 for result in results if result.get("status") == "blocked")
-    failure_classes: dict[str, int] = {}
-    for result in results:
-        failure_class = str(result.get("failure_class") or MISSING_UNAVAILABLE)
-        if failure_class == MISSING_NOT_APPLICABLE:
-            continue
-        failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
-    return {
-        "total": total,
-        "passed": passed,
-        "failed": failed,
-        "blocked": blocked,
-        "pass_at_1": round(passed / total, 6) if total else 0.0,
-        "failure_classes": failure_classes,
-    }
-
-
-def _render_eval_report(bundle: dict[str, Any]) -> str:
-    suite = bundle["suite"]
-    artifacts = bundle.get("artifacts") if isinstance(bundle.get("artifacts"), dict) else {}
-    output_dir = Path(str(artifacts.get("output_dir") or "."))
-    rows = "\n".join(_report_row(result, output_dir=output_dir) for result in bundle["results"])
-    aggregate = bundle["aggregate"]
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Roboclaws Eval - {html.escape(str(suite["suite_id"]))}</title>
-  <style>
-    body {{ font-family: system-ui, sans-serif; margin: 2rem; color: #1f2933; }}
-    table {{ border-collapse: collapse; width: 100%; }}
-    th, td {{ border: 1px solid #d9e2ec; padding: 0.5rem; text-align: left; }}
-    th {{ background: #f0f4f8; }}
-    .passed {{ color: #176b3a; font-weight: 700; }}
-    .failed, .blocked {{ color: #9f1239; font-weight: 700; }}
-  </style>
-</head>
-<body>
-  <h1>{html.escape(str(suite["suite_id"]))}</h1>
-  <p>Pass@1: {aggregate["pass_at_1"]} ({aggregate["passed"]}/{aggregate["total"]})</p>
-  <table>
-    <thead>
-      <tr><th>Sample</th><th>Trial</th><th>Status</th><th>Failure</th><th>Run</th></tr>
-    </thead>
-    <tbody>
-{rows}
-    </tbody>
-  </table>
-</body>
-</html>
-"""
-
-
-def _report_row(result: dict[str, Any], *, output_dir: Path) -> str:
-    identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
-    artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
-    run_result = str(artifacts.get("run_result") or "")
-    report = str(artifacts.get("report") or "")
-    links = []
-    if run_result:
-        href = html.escape(_report_href(run_result, output_dir))
-        links.append(f'<a href="{href}">run_result</a>')
-    if report:
-        href = html.escape(_report_href(report, output_dir))
-        links.append(f'<a href="{href}">report</a>')
-    status = str(result.get("status") or "")
-    return (
-        "      <tr>"
-        f"<td>{html.escape(str(identity.get('sample_id') or ''))}</td>"
-        f"<td>{html.escape(str(identity.get('trial_id') or ''))}</td>"
-        f'<td class="{html.escape(status)}">{html.escape(status)}</td>'
-        f"<td>{html.escape(str(result.get('failure_class') or ''))}</td>"
-        f"<td>{' | '.join(links)}</td>"
-        "</tr>"
+        artifacts=artifacts,
+        artifact_schema_versions={key: MISSING_UNAVAILABLE for key in artifacts},
+        metrics={"pass": 0.0},
+        limitations=(*trial.limitations, "eval_dependency_missing_before_product_run"),
     )
-
-
-def _report_href(path: str, output_dir: Path) -> str:
-    artifact_path = Path(path)
-    try:
-        return artifact_path.relative_to(output_dir).as_posix()
-    except ValueError:
-        return artifact_path.as_posix()
 
 
 def _artifact_paths(run_dir: Path) -> dict[str, Any]:
@@ -612,6 +664,19 @@ def _mcp_profile(sample: EvalSample) -> str:
     if sample.intent == "cleanup":
         return "household_world_v1+household_manipulation_v1"
     return "household_world_v1+household_episode_v1"
+
+
+def _goal_contract_json(sample: EvalSample) -> str:
+    if sample.intent not in TASK_INTENT_SPECS:
+        return ""
+    surface = SURFACE_SPECS.get(sample.surface)
+    if surface is None:
+        return ""
+    return normalize_goal_contract(
+        surface=surface,
+        intent=TASK_INTENT_SPECS[sample.intent],
+        raw_prompt="" if sample.prompt in MISSING_SENTINELS else sample.prompt,
+    ).to_json()
 
 
 def _tool_surface(sample: EvalSample) -> tuple[str, ...]:

@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-driven-architecture
-status: Active - Slice 0/1/2/3 verified; Slice 4 next
+status: Active - Slice 0/1/2/3/4 verified; Slice 5 next
 created: 2026-06-14
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -167,10 +167,10 @@ first internal suite proves what framework help is actually needed.
 evals/
   household_world/
     suites/
-      smoke_regression.yaml
-      cleanup_capability.yaml
-      map_build_consumer.yaml
-      open_ended_goals.yaml
+      smoke_regression.json
+      map_build_consumer.json
+      cleanup_capability.json
+      open_ended_goals.json
     samples/
       cleanup/
       map_build/
@@ -636,7 +636,7 @@ Slice 3 verification evidence:
 
 ### Slice 4: Map-Build And Open-Ended Eval Coverage
 
-Status: planning candidate.
+Status: implemented and verified 2026-06-15.
 
 Scope:
 
@@ -651,6 +651,46 @@ Acceptance:
 - map-build eval catches missing or unusable runtime-map artifacts;
 - open-ended eval distinguishes completion claim, artifact readiness, and
   advisory semantic satisfaction.
+
+Slice 4 verification evidence:
+
+- Added the deterministic `map_build_consumer` suite with
+  `map_build.baseline_seed7`, `cleanup.consume_map_seed7`, and
+  `open_ended.drink_seed7` samples.
+- Added `EvalSample.artifact_dependencies` and runner dependency resolution so
+  cleanup samples can consume a previous sample's `runtime_metric_map.json` as
+  `runtime_map_prior_path`.
+- Tightened Runtime Metric Map grading for schema, public semantic anchors,
+  generated exploration candidates, private-truth absence, and source-map
+  immutability; unusable maps fail as `map_actionability_failure`.
+- Added open-ended grading that separates completion-claim presence, artifact
+  readiness, and non-authoritative advisory semantic satisfaction.
+- Preserved direct-runner goal-contract injection so product run artifacts carry
+  `agent_completion_claim`; open-ended cleanup status is recorded as advisory
+  rather than terminal.
+- `ruff check roboclaws/evals roboclaws/household/realworld_cleanup.py
+  roboclaws/household/realworld_run_artifacts.py tests/unit/evals
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` passed.
+- `ruff format --check roboclaws/evals
+  roboclaws/household/realworld_cleanup.py
+  roboclaws/household/realworld_run_artifacts.py tests/unit/evals
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` passed.
+- `python scripts/dev/check_python_quality_ratchet.py` passed; the eval runner
+  stayed below the oversized-module threshold after extracting eval report and
+  dependency helpers.
+- `git diff --check` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_writes_open_ended_goal_status
+  tests/contract/dev_tools`
+  passed.
+- `just agent::harness agent-validation recommend
+  plan=docs/plans/2026-06-14-eval-driven-architecture.md budget=focused`
+  wrote `output/agent-validation-matrix/20260614T180012Z/validation_matrix.json`.
+- `just agent::eval suite=map_build_consumer budget=smoke stamp=codex-slice4-final2`
+  passed and wrote
+  `output/evals/household_world_map_build_consumer/codex-slice4-final2/eval_results.json`
+  plus `eval_report.html`; aggregate result was `pass_at_1=1.0`,
+  `passed=3`, `failed=0`, `blocked=0`.
 
 ### Slice 5: Live-Agent Repetition And `pass^k`
 
@@ -709,7 +749,7 @@ ruff format --check .
 ./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools
 ```
 
-Focused integration gates once eval runner exists:
+Focused integration gates:
 
 ```bash
 just agent::harness agent-validation recommend \
@@ -717,10 +757,11 @@ just agent::harness agent-validation recommend \
   budget=focused
 ```
 
-Product/eval proof once eval command exists:
+Product/eval proof:
 
 ```bash
 just agent::eval suite=smoke_regression budget=smoke
+just agent::eval suite=map_build_consumer budget=smoke
 ```
 
 If the public command name changes during implementation, update this plan and

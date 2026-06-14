@@ -51,8 +51,7 @@ Use the existing command surfaces directly when they fit:
 
 - `just run::surface ...` for user-facing surface/preset execution.
 - `just agent::verify ...` for confidence gates.
-- `just agent::eval ...` for versioned capability suites once the eval facade
-  exists.
+- `just agent::eval ...` for versioned capability suites.
 - `just dev::test ...` for pytest marker slices.
 - `just harness::*` or lower private modules only for maintainer debugging and
   specialist gates.

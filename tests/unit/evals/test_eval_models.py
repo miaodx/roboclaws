@@ -23,6 +23,7 @@ from roboclaws.evals.models import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "smoke_regression.json"
+MAP_BUILD_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "map_build_consumer.json"
 
 
 def test_direct_runner_eval_sample_and_result_round_trip(tmp_path: Path) -> None:
@@ -265,20 +266,16 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     sample_paths = sorted((REPO_ROOT / "evals" / "household_world" / "samples").glob("*/*.json"))
 
     assert sample_paths
-    suite = load_eval_suite(SMOKE_SUITE)
+    suites = [load_eval_suite(SMOKE_SUITE), load_eval_suite(MAP_BUILD_SUITE)]
     loaded = [load_eval_sample(path) for path in sample_paths]
     assert {sample.sample_id for sample in loaded} == {
+        "cleanup.consume_map_seed7",
         "cleanup.smoke_seed7",
         "map_build.baseline_seed7",
+        "open_ended.drink_seed7",
     }
-    suite_sample_ids = set(suite.sample_ids)
-    parked_samples = {
-        sample.sample_id
-        for sample, path in zip(loaded, sample_paths, strict=True)
-        if sample.sample_id not in suite_sample_ids
-        and json.loads(path.read_text(encoding="utf-8")).get("suite_status") == "parked_for_slice_4"
-    }
-    assert parked_samples == {"map_build.baseline_seed7"}
+    suite_sample_ids = {sample_id for suite in suites for sample_id in suite.sample_ids}
+    assert {sample.sample_id for sample in loaded} <= suite_sample_ids
 
 
 def _minimal_suite_payload(sample_id: str) -> dict:
