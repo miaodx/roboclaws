@@ -93,6 +93,11 @@ from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
 from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
     semantic_label_target_prims as _semantic_label_target_prims,
 )
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
+    SemanticPoseRobotViewHooks,
+    SemanticPoseRobotViewRequest,
+    real_semantic_pose_robot_view_images,
+)
 from scripts.isaac_lab_cleanup.isaac_support_surfaces import usd_support_surface_union
 from scripts.isaac_lab_cleanup.isaac_usd_xform import (
     set_usd_xform_translate as _set_usd_xform_translate,
@@ -6350,144 +6355,29 @@ def _real_semantic_pose_robot_view_images(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
-    runtime = _dict(state.get("runtime"))
-    scene_usd = str(state.get("scene_usd") or "")
-    if runtime.get("runtime_mode") != "real" or not scene_usd or not Path(scene_usd).is_file():
-        return {}
-    try:
-        capture_kwargs = {
-            "state": state,
-            "scene_usd": Path(scene_usd),
-            "view_paths": target_images,
-            "width": width,
-            "height": height,
-            "focus_object_id": focus_object_id,
-            "focus_receptacle_id": focus_receptacle_id,
-        }
-        if render_settle_frames:
-            capture_kwargs["render_settle_frames"] = render_settle_frames
-        if isaac_aa_op is not None:
-            capture_kwargs["isaac_aa_op"] = isaac_aa_op
-        if isaac_tonemap_op is not None:
-            capture_kwargs["isaac_tonemap_op"] = isaac_tonemap_op
-        if isaac_exposure_bias is not None:
-            capture_kwargs["isaac_exposure_bias"] = isaac_exposure_bias
-        if isaac_colorcorr_gain is not None:
-            capture_kwargs["isaac_colorcorr_gain"] = isaac_colorcorr_gain
-        color_profile_override = _dict(state.get("robot_view_color_profile_override"))
-        if color_profile_override:
-            capture_kwargs["color_profile_override"] = color_profile_override
-        capture = capture_semantic_pose_robot_views(**capture_kwargs)
-    except Exception as exc:
-        state.setdefault("mapping_gaps", []).append(
-            {
-                "area": "semantic_pose_robot_view_rerender",
-                "status": "blocked_capability",
-                "source": scene_usd,
-                "detail": str(exc),
-            }
-        )
-        write_state_from_state_arg(state)
-        return {}
-    images = {
-        key: str(value)
-        for key, value in _dict(capture.get("robot_view_images")).items()
-        if key in ROBOT_VIEW_KEYS and value
-    }
-    if not _has_required_robot_view_images(images):
-        return {}
-    semantic_pose_stage_application = _dict(capture.get("semantic_pose_stage_application"))
-    robot_pose_stage_application = _dict(capture.get("robot_pose_stage_application"))
-    semantic_pose_rendered = semantic_pose_stage_application.get("rendered_to_usd") is True
-    robot_pose_rendered = robot_pose_stage_application.get("status") == "applied"
-    if not (semantic_pose_rendered or robot_pose_rendered):
-        state.setdefault("mapping_gaps", []).append(
-            {
-                "area": "semantic_pose_robot_view_rerender",
-                "status": "blocked_capability",
-                "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
-                "detail": (
-                    "Isaac produced robot-view images, but semantic pose state was not "
-                    "applied to the USD stage, so the images are not accepted as "
-                    "semantic-pose-synced robot-view evidence."
-                ),
-                "semantic_pose_stage_application": semantic_pose_stage_application,
-                "robot_pose_stage_application": robot_pose_stage_application,
-            }
-        )
-        write_state_from_state_arg(state)
-        return {}
-    mounted_head_camera = bool(capture.get("robot_view_uses_mounted_head_camera"))
-    state["robot_view_images"] = images
-    state["robot_view_provenance"] = _semantic_pose_robot_view_provenance(
-        mounted_head_camera=mounted_head_camera,
-        head_camera_equivalent=not mounted_head_camera,
+    return real_semantic_pose_robot_view_images(
+        SemanticPoseRobotViewRequest(
+            state=state,
+            target_images=target_images,
+            width=width,
+            height=height,
+            render_settle_frames=render_settle_frames,
+            isaac_aa_op=isaac_aa_op,
+            isaac_tonemap_op=isaac_tonemap_op,
+            isaac_exposure_bias=isaac_exposure_bias,
+            isaac_colorcorr_gain=isaac_colorcorr_gain,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
+        ),
+        hooks=SemanticPoseRobotViewHooks(
+            capture_semantic_pose_robot_views=capture_semantic_pose_robot_views,
+            has_required_robot_view_images=_has_required_robot_view_images,
+            semantic_pose_robot_view_provenance=_semantic_pose_robot_view_provenance,
+            write_state_from_state_arg=write_state_from_state_arg,
+        ),
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
+        isaac_rby1m_head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
     )
-    state["semantic_pose_view_capture"] = {
-        "schema": "isaac_semantic_pose_robot_view_capture_v1",
-        "capture_method": REAL_ROBOT_VIEW_RERENDER_METHOD,
-        "scene_usd": scene_usd,
-        "rendered_to_usd": True,
-        "render_steps": int(capture.get("render_steps") or 0),
-        "render_settle_frames": int(capture.get("render_settle_frames") or 0),
-        "canonical_camera_control": False,
-        "robot_mounted_head_camera": mounted_head_camera,
-        "head_camera_equivalent": not mounted_head_camera,
-        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
-        "robot_stage": _dict(capture.get("robot_stage")),
-        "semantic_pose_stage_application": semantic_pose_stage_application,
-        "robot_pose_stage_application": robot_pose_stage_application,
-        "camera_diagnostics": _dict(capture.get("camera_diagnostics")),
-        "lighting_profile": _dict(capture.get("lighting_profile")),
-        "lighting_diagnostics": _dict(capture.get("lighting_diagnostics")),
-        "color_profile": _dict(capture.get("color_profile")),
-        "color_management": _dict(capture.get("color_management")),
-        "native_render_diagnostics": _dict(capture.get("native_render_diagnostics")),
-    }
-    state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
-    state["robot_view_color_management"] = _dict(capture.get("color_management"))
-    state["robot_view_camera_diagnostics"] = _dict(capture.get("camera_diagnostics"))
-    state["native_render_diagnostics"] = _dict(capture.get("native_render_diagnostics"))
-    state["robot_view_lighting_profile"] = _dict(capture.get("lighting_profile"))
-    state["robot_view_lighting_diagnostics"] = _dict(capture.get("lighting_diagnostics"))
-    state.pop("canonical_robot_view_camera_control_request", None)
-    state.pop("canonical_robot_view_camera_control_capture", None)
-    mapping_gaps = [
-        item
-        for item in state.get("mapping_gaps", [])
-        if not (isinstance(item, dict) and item.get("area") == "robot_view_variants")
-    ]
-    mapping_gaps.append(
-        {
-            "area": "robot_view_variants",
-            "status": "real_rendering_proven",
-            "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
-            "detail": (
-                "Robot-view images were recaptured from the loaded USD scene after "
-                "applying backend semantic pose state. FPV uses the imported RBY1M "
-                "mounted head camera when the robot USD import artifact is present; "
-                "otherwise it is explicitly marked as a head-camera equivalent. "
-                "Chase/map remain auxiliary report views. This is semantic pose "
-                "report evidence, not planner-backed or physics-backed "
-                "manipulation proof."
-            ),
-        }
-    )
-    state["mapping_gaps"] = mapping_gaps
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    semantic_pose_state["rendered_to_usd"] = True
-    semantic_pose_state["semantic_pose_view_capture"] = dict(state["semantic_pose_view_capture"])
-    if robot_pose_rendered:
-        semantic_pose_state["robot_pose_rendered_to_usd"] = True
-    semantic_pose_state["evidence_note"] = (
-        "Semantic cleanup primitives still update backend JSON pose/articulation state "
-        "and are not planner-backed manipulation proof. The current report robot-view "
-        "images were recaptured from Isaac after applying that semantic pose state to "
-        "the loaded USD stage."
-    )
-    state["semantic_pose_state"] = semantic_pose_state
-    write_state_from_state_arg(state)
-    return images
 
 
 def _robot_view_focus(

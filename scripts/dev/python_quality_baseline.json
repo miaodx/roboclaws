@@ -88,7 +88,7 @@
         "path": "roboclaws/reports/live_performance.py"
       },
       {
-        "lines": 7745,
+        "lines": 7635,
         "max_module_lines": 800,
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py"
       },
@@ -1087,26 +1087,6 @@
         "row": 436,
         "symbol": "_parse_urdf_tree",
         "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_real_semantic_pose_robot_view_images",
-        "limit": 10,
-        "message": "`_real_semantic_pose_robot_view_images` is too complex (12 > 10)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 6339,
-        "symbol": "_real_semantic_pose_robot_view_images",
-        "value": 12
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|_real_semantic_pose_robot_view_images",
-        "limit": 50,
-        "message": "Too many statements (54 > 50)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 6339,
-        "symbol": "_real_semantic_pose_robot_view_images",
-        "value": 54
       },
       {
         "code": "C901",
