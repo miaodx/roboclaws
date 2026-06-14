@@ -635,3 +635,21 @@ Stop this refactor loop when:
   `check_molmo_planner_manipulation_probe.py::_assert_probe_result` PLR0915
   140>50, was removed from the baseline. The runtime worker/probe script
   remains a separate P3 candidate.
+- 2026-06-14: Started P3 with the parent-process result packaging split.
+  Added `scripts/molmo_cleanup/planner_manipulation_probe_result.py` for
+  worker stdout event parsing, worker returncode/blocker normalization,
+  manipulation evidence assembly, RBY1M CuRobo gate attachment, shared report
+  rendering, and `run_result.json` writing. The public runner keeps its CLI,
+  worker path, and existing private test hook names as imported delegates, so
+  current `just harness::molmo-planner-manipulation-probe` and direct checker
+  tests keep the same behavior. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py scripts/molmo_cleanup/planner_manipulation_probe_result.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py tests/unit/molmo_cleanup/test_molmo_planner_headless_renderer.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 195 to 192 Ruff complexity
+  violations, with oversized modules unchanged at 59. The runner file dropped
+  from 3014 to 2798 lines, and `_write_probe_result` C901, PLR0912, and
+  PLR0915 rows were removed from the baseline. Remaining P3 work is the
+  worker-runtime side: task-sampler adapters, runtime diagnostics, and
+  worker invocation.

@@ -9,7 +9,6 @@ import importlib.util
 import json
 import os
 import platform
-import signal
 import subprocess
 import sys
 import time
@@ -23,26 +22,26 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.household.manipulation_provenance import (  # noqa: E402
-    BLOCKED_CAPABILITY_PROVENANCE,
-    MANIPULATION_PROBE_CONTRACT,
-    PLANNER_BACKED_PROVENANCE,
-    blocked_planner_probe_evidence,
-    planner_backed_probe_evidence,
-)
 from roboclaws.household.planner_probe_primitive_executor import (  # noqa: E402
     PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
 )
-from roboclaws.household.rby1m_curobo_gate import (  # noqa: E402
-    rby1m_curobo_gate_from_planner_probe,
-)
-from roboclaws.household.report import render_planner_manipulation_report  # noqa: E402
 from roboclaws.household.semantic_timeline import (  # noqa: E402
     canonical_cleanup_tool_sequence,
 )
 from roboclaws.household.subprocess_backend import (  # noqa: E402
     DEFAULT_MOLMOSPACES_PYTHON,
-    MOLMOSPACES_SUBPROCESS_BACKEND,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (  # noqa: E402
+    blockers_from_completed as _blockers_from_completed,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (
+    process_output_text as _process_output_text,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (
+    worker_payload_from_stdout as _worker_payload_from_stdout,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (
+    write_probe_result as _write_probe_result,
 )
 
 DEFAULT_MOLMOSPACES_ROOT = Path("/tmp/roboclaws-molmospaces-spike/molmospaces")
@@ -2776,221 +2775,6 @@ def _write_first_camera_image(
         image.save(path)
         return path
     return None
-
-
-def _write_probe_result(
-    *,
-    output_dir: Path,
-    stdout_path: Path,
-    stderr_path: Path,
-    embodiment: str,
-    probe_mode: str,
-    steps: int,
-    worker_payload: dict[str, Any] | None,
-    returncode: int,
-    blockers: list[dict[str, Any]],
-) -> dict[str, Any]:
-    worker_payload = worker_payload or {}
-    executed = bool(worker_payload.get("execution_attempted"))
-    max_delta = float(worker_payload.get("max_abs_qpos_delta") or 0.0)
-    planner_success = returncode == 0 and executed and max_delta > 0.0 and not blockers
-    if planner_success:
-        evidence = planner_backed_probe_evidence(
-            backend=MOLMOSPACES_SUBPROCESS_BACKEND,
-            embodiment=embodiment,
-            task=PROBE_TASK,
-            probe_mode=probe_mode,
-            upstream_policy_class=str(worker_payload["upstream_policy_class"]),
-            steps_requested=steps,
-            steps_executed=int(worker_payload.get("steps_executed") or 0),
-            max_abs_qpos_delta=max_delta,
-            image_artifacts=worker_payload.get("image_artifacts") or {},
-        )
-        status = PLANNER_BACKED_PROVENANCE
-        primitive_provenance = PLANNER_BACKED_PROVENANCE
-    else:
-        blockers = blockers or _default_blockers(worker_payload, probe_mode)
-        evidence = blocked_planner_probe_evidence(
-            backend=MOLMOSPACES_SUBPROCESS_BACKEND,
-            embodiment=embodiment,
-            task=PROBE_TASK,
-            probe_mode=probe_mode,
-            blockers=blockers,
-            upstream_policy_class=worker_payload.get("upstream_policy_class"),
-            execution_attempted=executed,
-        )
-        status = BLOCKED_CAPABILITY_PROVENANCE
-        primitive_provenance = BLOCKED_CAPABILITY_PROVENANCE
-    evidence["worker_returncode"] = returncode
-    evidence["worker_payload"] = worker_payload
-    if worker_payload.get("runtime_diagnostics"):
-        evidence["runtime_diagnostics"] = worker_payload["runtime_diagnostics"]
-    if worker_payload.get("cuda_memory_snapshots"):
-        evidence["cuda_memory_snapshots"] = worker_payload["cuda_memory_snapshots"]
-    if worker_payload.get("curobo_memory_profile"):
-        evidence["curobo_memory_profile"] = worker_payload["curobo_memory_profile"]
-    if worker_payload.get("cleanup_task_config"):
-        evidence["cleanup_task_config"] = worker_payload["cleanup_task_config"]
-    task_sampler_robot_placement_profile = worker_payload.get(
-        "task_sampler_robot_placement_profile"
-    )
-    if task_sampler_robot_placement_profile and (
-        task_sampler_robot_placement_profile.get("requested")
-        or task_sampler_robot_placement_profile.get("applied")
-    ):
-        evidence["task_sampler_robot_placement_profile"] = task_sampler_robot_placement_profile
-    if worker_payload.get("cleanup_task_sampler_adapter"):
-        evidence["cleanup_task_sampler_adapter"] = worker_payload["cleanup_task_sampler_adapter"]
-    if worker_payload.get("task_sampler_failure_diagnostics"):
-        evidence["task_sampler_failure_diagnostics"] = worker_payload[
-            "task_sampler_failure_diagnostics"
-        ]
-    if worker_payload.get("image_artifacts"):
-        evidence["image_artifacts"] = worker_payload["image_artifacts"]
-    if worker_payload.get("sampled_task_binding"):
-        evidence["sampled_task_binding"] = worker_payload["sampled_task_binding"]
-    if worker_payload.get("requested_cleanup_primitive_binding"):
-        evidence["requested_cleanup_primitive_binding"] = worker_payload[
-            "requested_cleanup_primitive_binding"
-        ]
-    if worker_payload.get("cleanup_primitive_binding"):
-        evidence["cleanup_primitive_binding"] = worker_payload["cleanup_primitive_binding"]
-    if "cleanup_primitive_binding_blockers" in worker_payload:
-        evidence["cleanup_primitive_binding_blockers"] = worker_payload[
-            "cleanup_primitive_binding_blockers"
-        ]
-    if worker_payload.get("policy_exception_context"):
-        evidence["policy_exception_context"] = worker_payload["policy_exception_context"]
-    worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
-    if worker_stage_events:
-        evidence["worker_stage_events"] = worker_stage_events
-        evidence["last_worker_stage"] = worker_payload.get("last_worker_stage")
-    run_result = {
-        "artifact_kind": "molmo_planner_backed_manipulation_probe",
-        "contract": MANIPULATION_PROBE_CONTRACT,
-        "backend": MOLMOSPACES_SUBPROCESS_BACKEND,
-        "status": status,
-        "final_status": status,
-        "primitive_provenance": primitive_provenance,
-        "manipulation_evidence": evidence,
-        "artifacts": {
-            "stdout": stdout_path.name,
-            "stderr": stderr_path.name,
-        },
-    }
-    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
-    report_path = render_planner_manipulation_report(run_dir=output_dir, run_result=run_result)
-    run_result["artifacts"]["report"] = report_path.name
-    (output_dir / "run_result.json").write_text(
-        json.dumps(run_result, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    return run_result
-
-
-def _blockers_from_completed(
-    returncode: int,
-    worker_payload: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    if returncode == 0 and worker_payload and worker_payload.get("ok"):
-        return []
-    if returncode < 0:
-        signum = -returncode
-        name = (
-            signal.Signals(signum).name
-            if signum in {item.value for item in signal.Signals}
-            else signum
-        )
-        return [{"code": "process_signal", "message": f"worker terminated by {name}"}]
-    if worker_payload and not worker_payload.get("ok"):
-        message = (
-            worker_payload.get("message") or worker_payload.get("exception_type") or "worker failed"
-        )
-        return [
-            {
-                "code": str(worker_payload.get("exception_type", "worker_exception")),
-                "message": str(message),
-            }
-        ]
-    if returncode != 0:
-        return [{"code": "worker_exit", "message": f"worker exited {returncode}"}]
-    return []
-
-
-def _default_blockers(worker_payload: dict[str, Any], probe_mode: str) -> list[dict[str, Any]]:
-    if probe_mode == "config_import":
-        return [
-            {
-                "code": "execution_not_attempted",
-                "message": (
-                    "Planner config/class import succeeded, but execution proof was not attempted."
-                ),
-            }
-        ]
-    if not worker_payload.get("execution_attempted"):
-        return [
-            {
-                "code": "execution_not_reached",
-                "message": "Planner execution did not start.",
-            }
-        ]
-    return [
-        {"code": "no_robot_state_delta", "message": "Planner execution did not move robot state."}
-    ]
-
-
-def _worker_payload_from_stdout(stdout: str) -> dict[str, Any] | None:
-    json_objects = _parse_stdout_json_objects(stdout)
-    if not json_objects:
-        return None
-    final_payload = next((item for item in reversed(json_objects) if "ok" in item), None)
-    payload: dict[str, Any] = dict(final_payload or {})
-    worker_events = [item for item in json_objects if item.get("event")]
-    runtime_diagnostics = next(
-        (
-            item.get("runtime_diagnostics")
-            for item in reversed(worker_events)
-            if item.get("event") == "runtime_diagnostics"
-        ),
-        None,
-    )
-    if runtime_diagnostics and "runtime_diagnostics" not in payload:
-        payload["runtime_diagnostics"] = runtime_diagnostics
-    if worker_events:
-        payload["worker_stage_events"] = worker_events
-        last_stage = str(worker_events[-1].get("stage") or worker_events[-1].get("event") or "")
-        payload["last_worker_stage"] = last_stage
-        memory_snapshots = [
-            item["cuda_memory"]
-            for item in worker_events
-            if item.get("event") == "cuda_memory_snapshot" and item.get("cuda_memory")
-        ]
-        if memory_snapshots and "cuda_memory_snapshots" not in payload:
-            payload["cuda_memory_snapshots"] = memory_snapshots
-    return payload or None
-
-
-def _parse_stdout_json_objects(stdout: str) -> list[dict[str, Any]]:
-    objects = []
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            objects.append(payload)
-    return objects
-
-
-def _process_output_text(value: str | bytes | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value
 
 
 def _append_optional_int_arg(command: list[str], name: str, value: int | None) -> None:

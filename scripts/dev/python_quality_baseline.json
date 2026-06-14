@@ -133,7 +133,7 @@
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
       },
       {
-        "lines": 3014,
+        "lines": 2798,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py"
       },
@@ -1664,7 +1664,7 @@
         "limit": 10,
         "message": "`_apply_task_sampler_failure_diagnostics_adapter` is too complex (12 > 10)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1733,
+        "row": 1732,
         "symbol": "_apply_task_sampler_failure_diagnostics_adapter",
         "value": 12
       },
@@ -1674,7 +1674,7 @@
         "limit": 10,
         "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1493,
+        "row": 1492,
         "symbol": "_configure_exact_cleanup_task",
         "value": 11
       },
@@ -1684,29 +1684,9 @@
         "limit": 10,
         "message": "`_install_grasp_collision_diagnostics` is too complex (11 > 10)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1928,
+        "row": 1927,
         "symbol": "_install_grasp_collision_diagnostics",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_write_probe_result",
-        "limit": 10,
-        "message": "`_write_probe_result` is too complex (16 > 10)",
-        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 2781,
-        "symbol": "_write_probe_result",
-        "value": 16
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0912|_write_probe_result",
-        "limit": 12,
-        "message": "Too many branches (16 > 12)",
-        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 2781,
-        "symbol": "_write_probe_result",
-        "value": 16
       },
       {
         "code": "PLR0915",
@@ -1714,7 +1694,7 @@
         "limit": 50,
         "message": "Too many statements (68 > 50)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1733,
+        "row": 1732,
         "symbol": "_apply_task_sampler_failure_diagnostics_adapter",
         "value": 68
       },
@@ -1724,19 +1704,9 @@
         "limit": 50,
         "message": "Too many statements (59 > 50)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1249,
+        "row": 1248,
         "symbol": "_execute_policy_probe",
         "value": 59
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0915|_write_probe_result",
-        "limit": 50,
-        "message": "Too many statements (51 > 50)",
-        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 2781,
-        "symbol": "_write_probe_result",
-        "value": 51
       },
       {
         "code": "C901",
