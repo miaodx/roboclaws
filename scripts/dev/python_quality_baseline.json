@@ -3,7 +3,7 @@
   "pylint_too_many_lines": {
     "files": [
       {
-        "lines": 2774,
+        "lines": 2800,
         "max_module_lines": 800,
         "path": "roboclaws/agents/drivers/openai_agents_live.py"
       },
@@ -308,26 +308,6 @@
       "PLR0915"
     ],
     "violations": [
-      {
-        "code": "C901",
-        "key": "roboclaws/agents/drivers/openai_agents_live.py|C901|_camera_grounded_history_info",
-        "limit": 10,
-        "message": "`_camera_grounded_history_info` is too complex (11 > 10)",
-        "path": "roboclaws/agents/drivers/openai_agents_live.py",
-        "row": 904,
-        "symbol": "_camera_grounded_history_info",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/agents/drivers/openai_agents_live.py|C901|_unwrap_mcp_text_content_payload",
-        "limit": 10,
-        "message": "`_unwrap_mcp_text_content_payload` is too complex (12 > 10)",
-        "path": "roboclaws/agents/drivers/openai_agents_live.py",
-        "row": 1145,
-        "symbol": "_unwrap_mcp_text_content_payload",
-        "value": 12
-      },
       {
         "code": "PLR0915",
         "key": "roboclaws/agents/drivers/openai_agents_live.py|PLR0915|_run_openai_agents",

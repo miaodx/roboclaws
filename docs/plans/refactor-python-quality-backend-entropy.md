@@ -3064,9 +3064,8 @@ aggregation moved to `scripts/molmo_cleanup/openai_agents_metrics.py` and
 RAW-FPV budget-guard classification moved to
 `scripts/molmo_cleanup/openai_agents_budget.py`,
 `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` no longer has grouped
-complexity rows. `roboclaws/agents/drivers/openai_agents_live.py` still has
-`_run_openai_agents(...)` PLR0915 plus `_camera_grounded_history_info(...)`
-and `_unwrap_mcp_text_content_payload(...)` C901 rows.
+complexity rows. `roboclaws/agents/drivers/openai_agents_live.py` now has one
+remaining grouped row: `_run_openai_agents(...)` PLR0915.
 
 Impact radius: workflow.
 
@@ -4457,3 +4456,19 @@ Stop this refactor loop when:
   appears in the complexity-by-file summary. The remaining Candidate A work is
   now limited to SDK adapter rows in
   `roboclaws/agents/drivers/openai_agents_live.py`.
+- 2026-06-14: Continued the SDK-adapter part of the OpenAI Agents residual
+  runtime boundary by splitting MCP text-content payload unwrapping and
+  camera-grounded history tool/eligibility classification inside
+  `roboclaws/agents/drivers/openai_agents_live.py`. The recursive MCP
+  text-content unwrap semantics, camera-grounded history compaction payloads,
+  and model-input filter behavior are unchanged; the parser and history
+  classifier now route through focused helpers. Evidence:
+  `ruff check roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py::test_model_input_compaction_summarizes_wrapped_mcp_camera_grounded_history tests/unit/agents/test_live_runtime.py::test_model_input_compaction_summarizes_prefixed_mcp_camera_grounded_history tests/unit/agents/test_live_runtime.py::test_model_input_compaction_summarizes_function_call_camera_history_by_call_id -q`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py -q`
+  passed with 71 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 94 to 92 Ruff complexity violations, with oversized modules unchanged
+  at 59. The remaining OpenAI Agents Candidate A row is
+  `roboclaws/agents/drivers/openai_agents_live.py::_run_openai_agents(...)`.

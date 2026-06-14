@@ -918,19 +918,11 @@ def _camera_grounded_history_info(
     }:
         return None
     call_id = str(payload.get("call_id") or "")
-    tool = _normalize_mcp_tool_name(
-        (tool_names_by_call_id or {}).get(call_id)
-        or payload.get("name")
-        or payload.get("tool")
-        or payload.get("tool_name")
-        or ""
+    tool = _camera_grounded_history_tool(
+        payload,
+        call_id=call_id,
+        tool_names_by_call_id=tool_names_by_call_id,
     )
-    if not tool and "observe_camera_grounded_candidates" in call_id:
-        tool = "observe_camera_grounded_candidates"
-    if not tool and "declare_visual_candidates" in call_id:
-        tool = "declare_visual_candidates"
-    if not tool and "observe" in call_id:
-        tool = "observe"
     output = payload.get("output") if "output" in payload else payload.get("content")
     if output is None:
         return None
@@ -938,19 +930,7 @@ def _camera_grounded_history_info(
     decoded = decoded if isinstance(decoded, dict) else {}
     if not tool:
         tool = _normalize_mcp_tool_name(decoded.get("tool") or "")
-    if tool not in {
-        "observe_camera_grounded_candidates",
-        "declare_visual_candidates",
-        "observe",
-    }:
-        return None
-    if tool == "observe" and str(decoded.get("perception_mode") or "") != "camera_model_policy":
-        return None
-    if tool == "declare_visual_candidates" and not (
-        "camera_model_candidates" in decoded
-        or "model_declared_observations" in decoded
-        or "visual_grounding_pipeline" in decoded
-    ):
+    if not _camera_grounded_history_tool_allowed(tool, decoded):
         return None
     output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
     raw_fpv_observation = decoded.get("raw_fpv_observation")
@@ -971,6 +951,44 @@ def _camera_grounded_history_info(
         "actionable_candidate_count": _camera_grounded_actionable_candidate_count(decoded),
         "candidate_refs": _camera_grounded_candidate_refs(decoded),
     }
+
+
+def _camera_grounded_history_tool(
+    payload: dict[str, Any],
+    *,
+    call_id: str,
+    tool_names_by_call_id: dict[str, str] | None,
+) -> str:
+    tool = _normalize_mcp_tool_name(
+        (tool_names_by_call_id or {}).get(call_id)
+        or payload.get("name")
+        or payload.get("tool")
+        or payload.get("tool_name")
+        or ""
+    )
+    if tool:
+        return tool
+    if "observe_camera_grounded_candidates" in call_id:
+        return "observe_camera_grounded_candidates"
+    if "declare_visual_candidates" in call_id:
+        return "declare_visual_candidates"
+    if "observe" in call_id:
+        return "observe"
+    return ""
+
+
+def _camera_grounded_history_tool_allowed(tool: str, decoded: dict[str, Any]) -> bool:
+    if tool not in {"observe_camera_grounded_candidates", "declare_visual_candidates", "observe"}:
+        return False
+    if tool == "observe":
+        return str(decoded.get("perception_mode") or "") == "camera_model_policy"
+    if tool == "declare_visual_candidates":
+        return (
+            "camera_model_candidates" in decoded
+            or "model_declared_observations" in decoded
+            or "visual_grounding_pipeline" in decoded
+        )
+    return True
 
 
 def _normalize_mcp_tool_name(value: Any) -> str:
@@ -1144,32 +1162,40 @@ def _decode_tool_output_payload(output: Any) -> Any:
 
 def _unwrap_mcp_text_content_payload(decoded: Any) -> Any:
     if isinstance(decoded, dict):
-        content = decoded.get("content")
-        if isinstance(content, list):
-            unwrapped = _unwrap_mcp_text_content_payload(content)
-            if unwrapped is not content:
-                return unwrapped
-        text = decoded.get("text")
-        if isinstance(text, str) and str(decoded.get("type") or "") in {"", "text"}:
-            try:
-                return _unwrap_mcp_text_content_payload(json.loads(text))
-            except json.JSONDecodeError:
-                return decoded
-        return decoded
+        return _unwrap_mcp_text_content_dict(decoded)
     if isinstance(decoded, list):
-        for item in decoded:
-            if not isinstance(item, dict):
-                continue
-            if str(item.get("type") or "") not in {"", "text"}:
-                continue
-            text = item.get("text")
-            if not isinstance(text, str):
-                continue
-            try:
-                return _unwrap_mcp_text_content_payload(json.loads(text))
-            except json.JSONDecodeError:
-                continue
-        return decoded
+        return _unwrap_mcp_text_content_list(decoded)
+    return decoded
+
+
+def _unwrap_mcp_text_content_dict(decoded: dict[str, Any]) -> Any:
+    content = decoded.get("content")
+    if isinstance(content, list):
+        unwrapped = _unwrap_mcp_text_content_payload(content)
+        if unwrapped is not content:
+            return unwrapped
+    text = decoded.get("text")
+    if isinstance(text, str) and str(decoded.get("type") or "") in {"", "text"}:
+        try:
+            return _unwrap_mcp_text_content_payload(json.loads(text))
+        except json.JSONDecodeError:
+            return decoded
+    return decoded
+
+
+def _unwrap_mcp_text_content_list(decoded: list[Any]) -> Any:
+    for item in decoded:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "") not in {"", "text"}:
+            continue
+        text = item.get("text")
+        if not isinstance(text, str):
+            continue
+        try:
+            return _unwrap_mcp_text_content_payload(json.loads(text))
+        except json.JSONDecodeError:
+            continue
     return decoded
 
 
