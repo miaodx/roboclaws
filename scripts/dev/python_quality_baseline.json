@@ -78,7 +78,7 @@
         "path": "roboclaws/operator_console/routes.py"
       },
       {
-        "lines": 1036,
+        "lines": 913,
         "max_module_lines": 800,
         "path": "roboclaws/operator_console/state.py"
       },
@@ -667,46 +667,6 @@
         "row": 379,
         "symbol": "_normalize_room_only_fixture_poses",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/state.py|C901|_camera_angle_summary",
-        "limit": 10,
-        "message": "`_camera_angle_summary` is too complex (16 > 10)",
-        "path": "roboclaws/operator_console/state.py",
-        "row": 227,
-        "symbol": "_camera_angle_summary",
-        "value": 16
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/state.py|C901|_run_result_success",
-        "limit": 10,
-        "message": "`_run_result_success` is too complex (14 > 10)",
-        "path": "roboclaws/operator_console/state.py",
-        "row": 721,
-        "symbol": "_run_result_success",
-        "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/operator_console/state.py|PLR0912|_camera_angle_summary",
-        "limit": 12,
-        "message": "Too many branches (16 > 12)",
-        "path": "roboclaws/operator_console/state.py",
-        "row": 227,
-        "symbol": "_camera_angle_summary",
-        "value": 16
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/operator_console/state.py|PLR0912|_run_result_success",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/operator_console/state.py",
-        "row": 721,
-        "symbol": "_run_result_success",
-        "value": 13
       },
       {
         "code": "C901",

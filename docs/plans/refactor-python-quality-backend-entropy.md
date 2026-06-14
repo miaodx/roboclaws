@@ -2915,3 +2915,19 @@ Stop this refactor loop when:
   `roboclaws/operator_console/launcher.py` no longer appears in the
   complexity-by-file summary; the remaining operator-console grouped rows are
   in `roboclaws/operator_console/state.py`.
+- 2026-06-14: Completed the currently material operator-console state residual
+  split by moving camera-angle trace summarization and run-result success /
+  failure predicates into `roboclaws/operator_console/state_summary.py`.
+  `state.py` keeps compatibility wrappers for the existing private helper
+  names while the branch-heavy parsing and status logic lives in a focused
+  state-summary module. Evidence:
+  `ruff check roboclaws/operator_console/state.py roboclaws/operator_console/state_summary.py --select C901,PLR0912,PLR0915`
+  passed; `ruff check roboclaws/operator_console/state.py roboclaws/operator_console/state_summary.py tests/unit/operator_console/test_state.py tests/unit/operator_console/test_static_assets.py tests/unit/operator_console/test_operator_console.py`
+  passed; `ruff format --check roboclaws/operator_console/state.py roboclaws/operator_console/state_summary.py tests/unit/operator_console/test_state.py tests/unit/operator_console/test_static_assets.py tests/unit/operator_console/test_operator_console.py`
+  passed; `python -m py_compile roboclaws/operator_console/state.py roboclaws/operator_console/state_summary.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 110 to
+  106 Ruff complexity violations, with oversized modules unchanged at 59.
+  `roboclaws/operator_console/state.py` no longer appears in the
+  complexity-by-file summary.
