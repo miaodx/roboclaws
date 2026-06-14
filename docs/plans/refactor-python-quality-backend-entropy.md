@@ -152,12 +152,12 @@ Rejected alternatives:
     complexity grouped by file.
   - Keep default gate output terse so hooks and CI stay readable.
 
-- [ ] **Q2: Lower the explicit baseline after each accepted slice.**
+- [x] **Q2: Lower the explicit baseline after each accepted slice.**
   - Run the ratchet in write-baseline mode only after the focused tests pass.
   - Record the before/after counts in this plan's execution log.
   - Do not refresh the baseline to hide new debt.
 
-- [ ] **C1: Split the live cleanup checker assertion pipeline.**
+- [x] **C1: Split the live cleanup checker assertion pipeline.**
   - Target `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`.
   - Extract assertion phases for core run result, public agent view, runtime
     metric map, backend-specific runtime evidence, and waypoint honesty.
@@ -331,3 +331,18 @@ Stop this refactor loop when:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 5`
   passed. No baseline refresh was run because the ratcheted debt counts did not
   decrease.
+- 2026-06-14: Split the live cleanup checker assertion pipeline. The main
+  checker now routes `_assert_result` through staged helpers for core run
+  result, public agent/runtime-map checks, private evaluation and semantic
+  success, artifact/report checks, optional agent/planner/backend gates, and
+  backend-specific Isaac runtime evidence. Isaac runtime and semantic-pose
+  evidence checks moved to focused checker modules under
+  `scripts/molmo_cleanup/`, keeping each new module below the 800-line
+  oversized-module threshold. Evidence:
+  `python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --help`
+  passed; `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/molmo_cleanup/isaac_runtime_checker.py scripts/molmo_cleanup/isaac_semantic_pose_checker.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 217 to 211 Ruff complexity
+  violations, with oversized modules unchanged at 61. The live cleanup checker
+  grouped complexity count dropped from 20 to 14 violations.
