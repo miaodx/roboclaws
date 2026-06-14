@@ -7,6 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household import realworld_contract_init
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.planner_observed_binding import (
@@ -54,8 +55,7 @@ from roboclaws.household.visual_scan_guidance import (
     visual_scan_done_recovery_hint,
     visual_scan_payload,
 )
-from roboclaws.maps.bundle import metric_map_bundle_metadata, validate_nav2_map_bundle
-from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
+from roboclaws.maps.bundle import metric_map_bundle_metadata
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
@@ -254,14 +254,11 @@ class RealWorldCleanupContract:
         cleanup_profile: str | None = None,
         public_acceptance_config: dict[str, Any] | None = None,
     ) -> None:
-        if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
-            raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
-        if perception_mode not in REALWORLD_PERCEPTION_MODES:
-            allowed = ", ".join(sorted(REALWORLD_PERCEPTION_MODES))
-            raise ValueError(f"perception_mode must be one of: {allowed}")
-        if map_mode not in REALWORLD_MAP_MODES:
-            allowed = ", ".join(sorted(REALWORLD_MAP_MODES))
-            raise ValueError(f"map_mode must be one of: {allowed}")
+        realworld_contract_init.validate_contract_options(
+            fixture_hint_mode=fixture_hint_mode,
+            perception_mode=perception_mode,
+            map_mode=map_mode,
+        )
         self.contract = contract
         self.backend = contract.backend
         self.scenario: CleanupScenario = contract.backend.scenario
@@ -269,132 +266,22 @@ class RealWorldCleanupContract:
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = perception_mode
         self.map_mode = map_mode
-        self.cleanup_profile = (
-            str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
+        realworld_contract_init.init_profile_and_acceptance(
+            self,
+            cleanup_profile,
+            public_acceptance_config,
         )
-        self.public_acceptance_config = _public_acceptance_config(public_acceptance_config)
-        self.task_intent = normalize_household_intent(
-            self.public_acceptance_config.get("task_intent")
+        realworld_contract_init.init_visual_grounding(
+            self,
+            visual_grounding_client=visual_grounding_client,
+            visual_grounding_pipeline_id=visual_grounding_pipeline_id,
+            visual_grounding_artifact_base_dir=visual_grounding_artifact_base_dir,
+            visual_grounding_run_id=visual_grounding_run_id,
         )
-        self.task_intent_mode = normalize_task_intent_mode(
-            self.public_acceptance_config.get("task_intent_mode")
-        )
-        self.sanitize_world_labels = self.cleanup_profile == WORLD_LABELS_SANITIZED_PROFILE
-        self.visible_detection_exposure_policy = (
-            SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
-            if self.sanitize_world_labels
-            else WORLD_LABELS_DETECTION_POLICY
-        )
-        self.visual_grounding_client = visual_grounding_client
-        self.visual_grounding_pipeline_id = str(
-            visual_grounding_pipeline_id
-            or getattr(visual_grounding_client, "pipeline_id", "")
-            or SIM_VISUAL_GROUNDING_PIPELINE_ID
-        )
-        self.visual_grounding_artifact_base_dir = (
-            Path(visual_grounding_artifact_base_dir)
-            if visual_grounding_artifact_base_dir is not None
-            else None
-        )
-        self.visual_grounding_run_id = visual_grounding_run_id
-        self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
-        self.map_bundle_validation: dict[str, Any] | None = None
-        self._bundle_metric_map_template: dict[str, Any] | None = None
-        self._bundle_fixture_hints_template: dict[str, Any] | None = None
-        if self.map_bundle_dir is not None:
-            validation = validate_nav2_map_bundle(self.map_bundle_dir)
-            validation.raise_for_errors()
-            self.map_bundle_validation = validation.as_dict()
-            self._bundle_metric_map_template = metric_map_from_bundle(self.map_bundle_dir)
-            self._bundle_fixture_hints_template = fixture_hints_from_bundle(
-                self.map_bundle_dir,
-                fixture_hint_mode=fixture_hint_mode,
-            )
-            self._fixtures = _fixtures_from_bundle_fixture_hints(
-                self._bundle_fixture_hints_template
-            )
-            self._rooms = _rooms_from_bundle_projection(
-                self._bundle_metric_map_template,
-                self._bundle_fixture_hints_template,
-            )
-            self._waypoints = _inspection_waypoints_from_bundle_projection(
-                self._bundle_metric_map_template,
-                self._bundle_fixture_hints_template,
-            )
-            self._scene_index_fixture_overlay = _scene_index_public_fixture_overlay(
-                backend=self.backend,
-                scenario=self.scenario,
-                existing_fixtures=self._fixtures,
-                fallback_waypoint_id=_first_waypoint_id(self._waypoints),
-            )
-            self._fixtures.update(self._scene_index_fixture_overlay)
-        else:
-            self._fixtures = {
-                item.receptacle_id: item.to_public_dict() for item in self.scenario.receptacles
-            }
-            scene_room_outlines = _scene_room_outlines_from_backend(self.backend)
-            if scene_room_outlines:
-                self._apply_scene_room_outlines_to_fixtures(scene_room_outlines)
-            self._rooms = _rooms_from_fixtures(self._fixtures)
-            self._waypoints = _inspection_waypoints(self._rooms)
-            self._scene_index_fixture_overlay = {}
-        if self.map_mode == MINIMAL_MAP_MODE:
-            source_metric_map = (
-                self._bundle_metric_map_template
-                if self._bundle_metric_map_template is not None
-                else self._fallback_metric_map_template()
-            )
-            self._public_rooms = _public_room_hints_from_metric_map(
-                source_metric_map,
-                fallback_rooms=self._rooms,
-            )
-            self._public_fixtures: dict[str, dict[str, Any]] = {}
-            self._public_waypoints = _minimal_generated_exploration_waypoints(
-                source_metric_map,
-                fallback_waypoints=self._waypoints,
-                public_rooms=self._public_rooms,
-            )
-            self._private_waypoint_by_public_id = _private_waypoint_map_for_generated_candidates(
-                self._public_waypoints,
-                self._waypoints,
-            )
-        else:
-            self._public_rooms = self._rooms
-            self._public_fixtures = self._fixtures
-            self._public_waypoints = self._waypoints
-            self._private_waypoint_by_public_id = {}
-        first_waypoint = self._waypoints[0]["waypoint_id"] if self._waypoints else ""
-        if self.map_mode == MINIMAL_MAP_MODE and self._public_waypoints:
-            first_waypoint = str(self._public_waypoints[0]["waypoint_id"])
-        self._current_waypoint_id = first_waypoint
-        self._observed_waypoint_ids: set[str] = set()
-        self._observed_handles_by_object_id: dict[str, str] = {}
-        self._object_ids_by_handle: dict[str, str] = {}
-        self._detections_by_handle: dict[str, dict[str, Any]] = {}
-        self._object_lifecycle: dict[str, dict[str, Any]] = {}
-        self._raw_fpv_observations: list[dict[str, Any]] = []
-        self._visible_observation_count = 0
-        self._camera_model_policy_events: list[dict[str, Any]] = []
-        self._model_declared_observations: list[dict[str, Any]] = []
-        self._runtime_map_priors = _runtime_map_priors_from_snapshot(runtime_map_prior)
-        self._runtime_map_anchor_priors = _runtime_map_anchor_priors_from_snapshot(
-            runtime_map_prior
-        )
-        self._runtime_map_room_priors = _runtime_map_room_priors_from_snapshot(runtime_map_prior)
-        self._public_anchor_ids_by_private_fixture_id: dict[str, str] = {}
-        self._generated_inspection_waypoints: dict[str, dict[str, Any]] = {}
-        self._seed_public_fixture_anchor_ids_from_prior_anchors()
-        self._camera_yaw_offset_deg = 0.0
-        self._camera_pitch_offset_deg = 0.0
-        self._camera_adjustment_events: list[dict[str, Any]] = []
-        self._inspection_observations: list[dict[str, Any]] = []
-        self._handled_handles: set[str] = set()
-        self._held_handle: str | None = None
-        self._current_object_handle: str | None = None
-        self._current_receptacle_for_handle: tuple[str, str] | None = None
-        self._opened_receptacle_for_handle: tuple[str, str] | None = None
-        self._pending_close_receptacle_for_handle: tuple[str, str] | None = None
-        self._initial_locations = self.backend.object_locations()
+        realworld_contract_init.init_map_projection(self, map_bundle_dir)
+        realworld_contract_init.init_public_map_projection(self)
+        self._current_waypoint_id = realworld_contract_init.initial_waypoint_id(self)
+        realworld_contract_init.init_runtime_state(self, runtime_map_prior)
 
     def _apply_scene_room_outlines_to_fixtures(
         self,

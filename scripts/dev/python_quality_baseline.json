@@ -38,7 +38,7 @@
         "path": "roboclaws/household/realworld_cleanup.py"
       },
       {
-        "lines": 6942,
+        "lines": 6829,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_contract.py"
       },
@@ -634,7 +634,7 @@
         "limit": 10,
         "message": "`_runtime_public_semantic_anchors` is too complex (13 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 2314,
+        "row": 2201,
         "symbol": "RealWorldCleanupContract._runtime_public_semantic_anchors",
         "value": 13
       },
@@ -644,7 +644,7 @@
         "limit": 10,
         "message": "`declare_visual_candidates` is too complex (12 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 1010,
+        "row": 897,
         "symbol": "RealWorldCleanupContract.declare_visual_candidates",
         "value": 12
       },
@@ -654,7 +654,7 @@
         "limit": 10,
         "message": "`_inspection_waypoints_from_bundle_projection` is too complex (11 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 6065,
+        "row": 5952,
         "symbol": "_inspection_waypoints_from_bundle_projection",
         "value": 11
       },
@@ -664,7 +664,7 @@
         "limit": 10,
         "message": "`cleanup_policy_trace_from_events` is too complex (17 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 5441,
+        "row": 5328,
         "symbol": "cleanup_policy_trace_from_events",
         "value": 17
       },
@@ -674,19 +674,9 @@
         "limit": 12,
         "message": "Too many branches (18 > 12)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 5441,
+        "row": 5328,
         "symbol": "cleanup_policy_trace_from_events",
         "value": 18
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/realworld_contract.py|PLR0915|RealWorldCleanupContract.__init__",
-        "limit": 50,
-        "message": "Too many statements (89 > 50)",
-        "path": "roboclaws/household/realworld_contract.py",
-        "row": 240,
-        "symbol": "RealWorldCleanupContract.__init__",
-        "value": 89
       },
       {
         "code": "PLR0915",
@@ -694,7 +684,7 @@
         "limit": 50,
         "message": "Too many statements (64 > 50)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 5441,
+        "row": 5328,
         "symbol": "cleanup_policy_trace_from_events",
         "value": 64
       },

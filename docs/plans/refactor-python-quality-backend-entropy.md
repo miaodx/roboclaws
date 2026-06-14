@@ -185,8 +185,10 @@ Rejected alternatives:
 
 - [ ] **C2: Extract RealWorldCleanupContract construction and payload builders.**
   - Target `roboclaws/household/realworld_contract.py`.
-  - Start with constructor option normalization and payload-builder helpers for
-    runtime metric map and cleanup worklist.
+  - Constructor option normalization and map/runtime initialization are split
+    into `roboclaws/household/realworld_contract_init.py`.
+  - Remaining C2 work: extract payload-builder helpers for runtime metric map
+    and cleanup worklist.
   - Keep public payload schemas stable.
 
 - [ ] **C3: Split cleanup report sections from shared HTML wrapper.**
@@ -444,3 +446,20 @@ Stop this refactor loop when:
   `RealWorldMolmoCleanupMCPServer._finalize_done` PLR0915 row was removed from
   the explicit baseline; the server still carries the existing `__init__`
   PLR0915 row for a future bounded slice.
+- 2026-06-14: Implemented the first C2 constructor-structure slice. Added
+  `roboclaws/household/realworld_contract_init.py` for constructor option
+  validation, profile/acceptance normalization, visual-grounding setup,
+  map-bundle/scenario map projection setup, public minimal-map projection, and
+  runtime state initialization. `RealWorldCleanupContract.__init__` now reads as
+  a sequence of named initialization stages while public payload methods remain
+  unchanged. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py roboclaws/household/realworld_contract_init.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `ruff format --check roboclaws/household/realworld_contract.py roboclaws/household/realworld_contract_init.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 210 to 209 Ruff complexity
+  violations, with oversized modules unchanged at 61. The
+  `RealWorldCleanupContract.__init__` PLR0915 row was removed from the baseline,
+  and `roboclaws/household/realworld_contract.py` dropped from 6942 to 6829
+  lines at the time of the summary run because constructor helpers moved out of
+  the oversized module.
