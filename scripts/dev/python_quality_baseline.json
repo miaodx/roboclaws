@@ -48,7 +48,7 @@
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
       {
-        "lines": 7838,
+        "lines": 7637,
         "max_module_lines": 800,
         "path": "roboclaws/household/report.py"
       },
@@ -627,16 +627,6 @@
         "row": 157,
         "symbol": "RealWorldMolmoCleanupMCPServer.__init__",
         "value": 57
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/report.py|C901|_grasp_cache_availability_preflight_section",
-        "limit": 10,
-        "message": "`_grasp_cache_availability_preflight_section` is too complex (11 > 10)",
-        "path": "roboclaws/household/report.py",
-        "row": 2417,
-        "symbol": "_grasp_cache_availability_preflight_section",
-        "value": 11
       },
       {
         "code": "C901",

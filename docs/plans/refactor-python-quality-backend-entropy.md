@@ -248,7 +248,9 @@ Rejected alternatives:
   - First extracted section modules:
     `roboclaws/household/report_sections_map.py` and
     `roboclaws/household/report_sections_timing.py`; action-evidence badges now
-    live in `roboclaws/household/report_sections_action.py`.
+    live in `roboclaws/household/report_sections_action.py`; grasp-cache
+    preflight sections now live in
+    `roboclaws/household/report_sections_grasp_cache.py`.
   - Continue with proof/robot/agent report families only as separate verified
     slices; do not mix planner-probe report renderers into this cleanup-report
     slice.
@@ -320,12 +322,13 @@ Discovery round: 2026-06-14 post-I1 Isaac camera-capture splits.
 
 Quality signal:
 
-- `python scripts/dev/check_python_quality_ratchet.py` passes at 143 Ruff
+- `python scripts/dev/check_python_quality_ratchet.py` passes at 142 Ruff
   complexity violations and 59 oversized modules.
 - `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`
   shows the largest implementation hotspots are
+  `roboclaws/household/report.py` (7637 lines, 0 complexity rows),
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7635 lines, 0
-  complexity rows), `roboclaws/household/report.py` (7838 lines, 1 row),
+  complexity rows),
   `roboclaws/household/scene_camera_comparison.py` (6796 lines, 8 rows),
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` (3701 lines, 7
   rows), `roboclaws/operator_console/launcher.py` plus
@@ -426,10 +429,10 @@ Severity: P1
 
 Entropy source: report review friction and recurring rediscovery.
 
-Materiality: `roboclaws/household/report.py` is still 7838 lines after map,
-timing, and action-evidence extraction. The remaining complexity row is
-`_grasp_cache_availability_preflight_section(...)`, while proof, robot, agent,
-Agibot, and SDK runner sections still share the same namespace.
+Materiality: `roboclaws/household/report.py` is still 7637 lines after map,
+timing, action-evidence, and grasp-cache preflight extraction. It now has zero
+grouped complexity rows, while proof, robot, agent, Agibot, and SDK runner
+sections still share the same namespace.
 
 Impact radius: module.
 
@@ -1379,3 +1382,20 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. `report.py` dropped from
   7889 to 7838 lines and from 3 to 1 grouped complexity row; the
   `_action_evidence_summary` C901/PLR0912 rows were removed.
+- 2026-06-14: Continued C3 by extracting grasp-cache availability and
+  generation preflight rendering into
+  `roboclaws/household/report_sections_grasp_cache.py`. `report.py` now imports
+  `grasp_cache_availability_preflight_section(...)` and
+  `grasp_cache_generation_preflight_section(...)` instead of carrying the
+  asset, loader-probe, object-probe, generation-check, and blocker tables
+  inline. Evidence:
+  `ruff check roboclaws/household/report.py roboclaws/household/report_sections_grasp_cache.py tests/contract/reports/test_molmo_cleanup_report.py`
+  passed; `ruff format --check roboclaws/household/report.py roboclaws/household/report_sections_grasp_cache.py`
+  passed; `python -m py_compile roboclaws/household/report.py roboclaws/household/report_sections_grasp_cache.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py::test_planner_proof_bundle_runner_report_renders_commands -q`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 143 to 142 Ruff complexity
+  violations, with oversized modules unchanged at 59. `report.py` dropped from
+  7838 to 7637 lines and from 1 to 0 grouped complexity rows; the
+  `_grasp_cache_availability_preflight_section` C901 row was removed.
