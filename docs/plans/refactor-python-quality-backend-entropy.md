@@ -668,3 +668,19 @@ Stop this refactor loop when:
   complexity rows dropped from 5 to 3; remaining P3 runtime work is
   `_execute_policy_probe(...)`, exact cleanup-task configuration, and worker
   invocation/runtime diagnostics.
+- 2026-06-14: Continued P3 by splitting `_execute_policy_probe(...)` into
+  ordered execute-stage helpers: renderer preparation, task-sampler setup,
+  task sampling/binding, policy execution, policy exception recording, and
+  planner-view image artifact collection. The event names, exception context,
+  cleanup binding payloads, and returned evidence keys are preserved. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
+  passed; `ruff format --check` for the same file passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 190 to 189 Ruff complexity
+  violations, with oversized modules unchanged at 59. The
+  `_execute_policy_probe` PLR0915 row was removed from the baseline. Remaining
+  P3 runner rows are small C901 entries for exact cleanup-task configuration
+  and grasp-collision diagnostics; runtime diagnostics / worker invocation
+  can be considered in a later loop if they still pass materiality after the
+  broader checker/backend candidates are weighed.

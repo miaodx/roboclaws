@@ -133,7 +133,7 @@
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
       },
       {
-        "lines": 2829,
+        "lines": 2904,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py"
       },
@@ -1664,7 +1664,7 @@
         "limit": 10,
         "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1492,
+        "row": 1567,
         "symbol": "_configure_exact_cleanup_task",
         "value": 11
       },
@@ -1674,19 +1674,9 @@
         "limit": 10,
         "message": "`_install_grasp_collision_diagnostics` is too complex (11 > 10)",
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1958,
+        "row": 2033,
         "symbol": "_install_grasp_collision_diagnostics",
         "value": 11
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0915|_execute_policy_probe",
-        "limit": 50,
-        "message": "Too many statements (59 > 50)",
-        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1248,
-        "symbol": "_execute_policy_probe",
-        "value": 59
       },
       {
         "code": "C901",

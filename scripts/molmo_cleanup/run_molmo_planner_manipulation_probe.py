@@ -1257,6 +1257,66 @@ def _execute_policy_probe(
     import numpy as np
     from molmo_spaces.utils.test_utils import run_task_for_steps_with_observations
 
+    renderer_adapter = _prepare_execute_renderer(renderer_device_id)
+    sampler_context = _prepare_execute_task_sampler(
+        config,
+        output_dir,
+        requested_cleanup_binding=requested_cleanup_binding,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
+    )
+    task, task_binding_context = _sample_execute_task(
+        sampler_context["task_sampler"],
+        requested_cleanup_binding,
+    )
+    _emit_worker_event("execute_warp_adapter_start", stage="execute_warp_adapter")
+    warp_adapter = _apply_warp_torch_adapter()
+    _emit_worker_event(
+        "execute_warp_adapter_ready",
+        stage="execute_warp_adapter",
+        warp_adapter=warp_adapter,
+    )
+    policy, initial_qpos, final_qpos, initial_obs, final_obs = _run_execute_policy(
+        config,
+        task,
+        steps,
+        run_task_for_steps_with_observations,
+    )
+    image_artifacts = _execute_probe_image_artifacts(
+        output_dir,
+        initial_obs,
+        final_obs,
+    )
+    max_abs_qpos_delta = float(np.max(np.abs(final_qpos - initial_qpos)))
+    _emit_worker_event(
+        "execute_probe_evidence_ready",
+        stage="execute_probe_evidence",
+        steps_executed=steps,
+        max_abs_qpos_delta=max_abs_qpos_delta,
+        image_artifacts=image_artifacts,
+    )
+    return {
+        "execution_attempted": True,
+        "steps_requested": steps,
+        "steps_executed": steps,
+        "max_abs_qpos_delta": max_abs_qpos_delta,
+        "image_artifacts": image_artifacts,
+        "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
+        "renderer_adapter": renderer_adapter,
+        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
+        "cleanup_task_sampler_adapter": sampler_context["cleanup_task_sampler_adapter"],
+        "task_sampler_failure_diagnostics": sampler_context["task_sampler_failure_diagnostics"],
+        "sampled_task_binding": task_binding_context["sampled_task_binding"],
+        "requested_cleanup_primitive_binding": requested_cleanup_binding,
+        "cleanup_primitive_binding": task_binding_context["cleanup_binding_result"].get(
+            "cleanup_primitive_binding"
+        ),
+        "cleanup_primitive_binding_blockers": task_binding_context["cleanup_binding_result"].get(
+            "blockers", []
+        ),
+    }
+
+
+def _prepare_execute_renderer(renderer_device_id: int | None) -> dict[str, Any]:
     _emit_worker_event("execute_renderer_adapter_start", stage="execute_renderer_adapter")
     renderer_adapter = _apply_headless_renderer_adapter(renderer_device_id)
     _emit_worker_event(
@@ -1264,6 +1324,16 @@ def _execute_policy_probe(
         stage="execute_renderer_adapter",
         renderer_adapter=renderer_adapter,
     )
+    return renderer_adapter
+
+
+def _prepare_execute_task_sampler(
+    config: Any,
+    output_dir: Path,
+    *,
+    requested_cleanup_binding: dict[str, Any],
+    task_sampler_robot_placement_profile: dict[str, Any],
+) -> dict[str, Any]:
     _emit_worker_event("execute_task_sampler_construct_start", stage="execute_task_sampler")
     task_sampler = config.task_sampler_config.task_sampler_class(config)
     cleanup_task_sampler_adapter = _apply_exact_cleanup_task_sampler_adapter(
@@ -1282,6 +1352,17 @@ def _execute_policy_probe(
         task_sampler_failure_diagnostics=task_sampler_failure_diagnostics,
     )
     _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
+    return {
+        "task_sampler": task_sampler,
+        "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
+        "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
+    }
+
+
+def _sample_execute_task(
+    task_sampler: Any,
+    requested_cleanup_binding: dict[str, Any],
+) -> tuple[Any, dict[str, Any]]:
     _emit_worker_event("execute_task_sampler_reset_start", stage="execute_task_sampler_reset")
     task_sampler.reset()
     _emit_worker_event("execute_task_sampler_reset_done", stage="execute_task_sampler_reset")
@@ -1309,13 +1390,18 @@ def _execute_policy_probe(
     _emit_worker_event("execute_task_reset_start", stage="execute_task_reset")
     task.reset()
     _emit_worker_event("execute_task_reset_done", stage="execute_task_reset")
-    _emit_worker_event("execute_warp_adapter_start", stage="execute_warp_adapter")
-    warp_adapter = _apply_warp_torch_adapter()
-    _emit_worker_event(
-        "execute_warp_adapter_ready",
-        stage="execute_warp_adapter",
-        warp_adapter=warp_adapter,
-    )
+    return task, {
+        "sampled_task_binding": sampled_task_binding,
+        "cleanup_binding_result": cleanup_binding_result,
+    }
+
+
+def _run_execute_policy(
+    config: Any,
+    task: Any,
+    steps: int,
+    run_task_for_steps_with_observations: Any,
+) -> tuple[Any, Any, Any, dict[str, Any], dict[str, Any]]:
     _record_cuda_memory_snapshot("execute_policy_construct_before")
     _emit_worker_event("execute_policy_construct_start", stage="execute_policy_construct")
     policy = config.policy_config.policy_cls(config, task)
@@ -1336,24 +1422,36 @@ def _execute_policy_probe(
             profiler=None,
         )
     except BaseException as exc:  # noqa: BLE001 - preserve target-runtime diagnosis.
-        policy_exception_context = _policy_exception_context(
-            policy,
-            exc,
-            stage="execute_policy_run",
-            steps_requested=steps,
-        )
-        _record_worker_exception_context(
-            policy_exception_context=policy_exception_context,
-        )
-        _emit_worker_event(
-            "execute_policy_run_exception",
-            stage="execute_policy_run",
-            policy_exception_context=policy_exception_context,
-        )
-        _record_cuda_memory_snapshot("execute_policy_run_exception")
+        _record_policy_run_exception(policy, exc, steps=steps)
         raise
     _record_cuda_memory_snapshot("execute_policy_run_done")
     _emit_worker_event("execute_policy_run_done", stage="execute_policy_run", steps=steps)
+    return policy, initial_qpos, final_qpos, initial_obs, final_obs
+
+
+def _record_policy_run_exception(policy: Any, exc: BaseException, *, steps: int) -> None:
+    policy_exception_context = _policy_exception_context(
+        policy,
+        exc,
+        stage="execute_policy_run",
+        steps_requested=steps,
+    )
+    _record_worker_exception_context(
+        policy_exception_context=policy_exception_context,
+    )
+    _emit_worker_event(
+        "execute_policy_run_exception",
+        stage="execute_policy_run",
+        policy_exception_context=policy_exception_context,
+    )
+    _record_cuda_memory_snapshot("execute_policy_run_exception")
+
+
+def _execute_probe_image_artifacts(
+    output_dir: Path,
+    initial_obs: dict[str, Any],
+    final_obs: dict[str, Any],
+) -> dict[str, str]:
     views_dir = output_dir / "planner_views"
     image_artifacts = {}
     initial = _write_first_camera_image(initial_obs, views_dir, "initial")
@@ -1362,30 +1460,7 @@ def _execute_policy_probe(
         image_artifacts["initial"] = str(initial.relative_to(output_dir))
     if final:
         image_artifacts["final"] = str(final.relative_to(output_dir))
-    max_abs_qpos_delta = float(np.max(np.abs(final_qpos - initial_qpos)))
-    _emit_worker_event(
-        "execute_probe_evidence_ready",
-        stage="execute_probe_evidence",
-        steps_executed=steps,
-        max_abs_qpos_delta=max_abs_qpos_delta,
-        image_artifacts=image_artifacts,
-    )
-    return {
-        "execution_attempted": True,
-        "steps_requested": steps,
-        "steps_executed": steps,
-        "max_abs_qpos_delta": max_abs_qpos_delta,
-        "image_artifacts": image_artifacts,
-        "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
-        "renderer_adapter": renderer_adapter,
-        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
-        "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
-        "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
-        "sampled_task_binding": sampled_task_binding,
-        "requested_cleanup_primitive_binding": requested_cleanup_binding,
-        "cleanup_primitive_binding": cleanup_binding_result.get("cleanup_primitive_binding"),
-        "cleanup_primitive_binding_blockers": cleanup_binding_result.get("blockers", []),
-    }
+    return image_artifacts
 
 
 def _policy_exception_context(
