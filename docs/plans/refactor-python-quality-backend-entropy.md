@@ -3612,3 +3612,20 @@ Stop this refactor loop when:
   at 59. `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
   dropped from 3381 to 2808 lines and no longer appears in the
   complexity-by-file summary.
+- 2026-06-14: Continued Candidate B backend command-layer catalog adoption by
+  adding launch-catalog helpers in `roboclaws/launch/backends.py` for cleanup
+  and map-build Codex implementation backend choices. `just/molmo.just` now
+  validates private cleanup backend overrides through
+  `python -m roboclaws.launch.backends cleanup-implementation-backend`, and
+  `just/agent.just` uses the same catalog module for the
+  household-world.map-build Codex backend gate. This removes the first
+  duplicated command-layer backend allowlists while keeping public
+  `backend=mujoco|isaaclab|agibot-gdk` lowering and Agibot-specific execution
+  behavior unchanged. Evidence:
+  `ruff check roboclaws/launch/backends.py tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_backend_catalog_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_backend_catalog_just_recipes.py -q`
+  passed with 15 tests;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed with 101
+  Ruff complexity violations and 59 oversized modules.
