@@ -175,7 +175,7 @@ Rejected alternatives:
     metric map, backend-specific runtime evidence, and waypoint honesty.
   - Preserve CLI flags and current `just verify` / `just harness` behavior.
 
-- [ ] **C1.1: Split remaining live checker Agibot and minimal-map families.**
+- [x] **C1.1: Split remaining live checker Agibot and minimal-map families.**
   - Target `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
     and focused helper modules under `scripts/molmo_cleanup/`.
   - Extract Agibot semantic-map build, Agibot G2 hardware, and minimal-map
@@ -310,17 +310,19 @@ Quality signal:
   C901 18, PLR0912 19, PLR0915 68 after the facade and finalizer slices.
 - `roboclaws/household/realworld_contract.py::cleanup_policy_trace_from_events`
   remains C901 17, PLR0912 18, PLR0915 64.
-- `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` has six
-  grouped complexity rows after the agent-view and waypoint-honesty splits.
+- `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` has one
+  remaining grouped complexity row after the agent-view, waypoint-honesty,
+  Agibot, and minimal-map splits.
 
 Materiality gate:
 
 - Candidate probe file: `.tmp/reduce_entropy_candidates_2026_06_14.json`
   during discovery only.
 - Gate result: five eligible candidates, one rejected parked observation.
-- Implementation update: Candidate 3, contract policy trace split, shipped in
-  this flow slice. Remaining active candidates from this packet are Candidate
-  1, Candidate 2, Candidate 4, and Candidate 5.
+- Implementation update: Candidate 3, contract policy trace split, and
+  Candidate 4, live checker Agibot/minimal-map split, shipped in this flow.
+  Remaining active candidates from this packet are Candidate 1, Candidate 2,
+  and Candidate 5.
 - The gate rejected the planner-manipulation probe micro residual because the
   remaining two C901 11 rows are too small to count as a standalone open-ended
   entropy group.
@@ -445,6 +447,8 @@ Suggested proof:
 Execution risk: safe if `CLEANUP_POLICY_TRACE_SCHEMA` remains stable.
 
 ### Candidate 4: Live Checker Agibot/Minimal-Map Split
+
+Status: implemented 2026-06-14.
 
 Severity: P1
 
@@ -1024,3 +1028,20 @@ Stop this refactor loop when:
   `cleanup_policy_trace_from_events` C901 / PLR0912 / PLR0915 rows were removed
   from `roboclaws/household/realworld_contract.py`, and that module dropped
   from 6602 to 6424 lines at the time of the baseline refresh.
+- 2026-06-14: Implemented C1.1 by extracting Agibot semantic-map build and
+  minimal-map assertion families out of
+  `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` into
+  `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py` and
+  `scripts/molmo_cleanup/realworld_minimal_map_checker.py`. The main checker
+  keeps the private `_assert_agibot_semantic_map_build_result(...)` and
+  `_assert_minimal_map(...)` hooks as imported aliases, and keeps
+  `RUNTIME_METRIC_MAP_SCHEMA` as an explicit checker-module hook for existing
+  contract tests. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/molmo_cleanup/realworld_agibot_map_build_checker.py scripts/molmo_cleanup/realworld_minimal_map_checker.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 172 to 167 Ruff complexity
+  violations, with oversized modules unchanged at 59. The live cleanup checker
+  dropped from 2258 to 1914 lines, and the Agibot/minimal-map C901/PLR0912/
+  PLR0915 rows were removed from the main checker baseline.

@@ -33,7 +33,6 @@ from roboclaws.household.planner_proof_quality import (
 )
 from roboclaws.household.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 from roboclaws.household.profiles import (
-    CAMERA_GROUNDED_LABELS_LANE,
     WORLD_LABELS_PROFILE,
     cleanup_profile,
     validate_cleanup_profile_metadata,
@@ -47,9 +46,11 @@ from roboclaws.household.realworld_contract import (
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REAL_ROBOT_READINESS_SCHEMA,
     REALWORLD_CONTRACT,
-    RUNTIME_METRIC_MAP_SCHEMA,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
+)
+from roboclaws.household.realworld_contract import (
+    RUNTIME_METRIC_MAP_SCHEMA as RUNTIME_METRIC_MAP_SCHEMA,
 )
 from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.household.semantic_timeline import (
@@ -78,15 +79,21 @@ from scripts.molmo_cleanup.realworld_agent_view_checker import (
 from scripts.molmo_cleanup.realworld_agent_view_checker import (
     assert_runtime_metric_map as _assert_runtime_metric_map,
 )
+from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
+    AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
+)
+from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
+    assert_agibot_semantic_map_build_result as _assert_agibot_semantic_map_build_result,
+)
+from scripts.molmo_cleanup.realworld_minimal_map_checker import (
+    assert_minimal_map as _assert_minimal_map,
+)
 from scripts.molmo_cleanup.realworld_waypoint_honesty_checker import (
     assert_waypoint_honesty,
     post_place_observe_count_allowing_public_state_queries,
 )
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
-AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
-AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER = "agibot_semantic_map_build"
-AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 
 
 class _ResultOptions(dict[str, Any]):
@@ -742,276 +749,6 @@ def _needs_isaac_runtime(opts: _ResultOptions) -> bool:
     )
 
 
-def _assert_agibot_semantic_map_build_result(
-    data: dict[str, Any],
-    base: Path,
-    *,
-    expect_backend: str | None,
-    expect_policy: str | None,
-    expect_profile: str | None,
-    expect_mcp_server: str | None,
-    require_agent_driven: bool,
-    require_camera_model_policy: bool,
-    require_runtime_metric_map: bool,
-    require_semantic_sweep: bool,
-    require_agibot_g2_hardware: bool,
-    expect_visual_grounding_pipeline: str | None,
-    require_visual_grounding_failure: bool,
-    min_sweep_coverage: float | None,
-) -> None:
-    assert require_semantic_sweep, data
-    assert data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA, data
-    assert data.get("cleanup_profile") == "real_robot_cleanup_v1", data
-    assert data.get("backend_variant") == "agibot_gdk", data
-    if require_semantic_sweep and expect_policy in {
-        "deterministic_sweep_baseline",
-        "semantic_sweep_baseline",
-    }:
-        expect_policy = AGIBOT_SEMANTIC_MAP_BUILD_POLICY
-    if expect_backend is not None:
-        assert (
-            data.get("backend_variant") == expect_backend or data.get("backend") == expect_backend
-        ), data
-    if expect_policy is not None:
-        assert data.get("policy") == expect_policy, data
-    if expect_mcp_server is not None:
-        assert data.get("mcp_server") == expect_mcp_server, data
-    else:
-        assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
-    if require_agent_driven:
-        assert data.get("agent_driven") is True, data
-
-    agent_view = data.get("agent_view") or {}
-    _assert_agibot_semantic_map_build_agent_view(agent_view)
-
-    if require_runtime_metric_map:
-        _assert_agibot_semantic_map_build_runtime_map(
-            data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
-        )
-    if min_sweep_coverage is not None:
-        assert float(data.get("sweep_coverage_rate") or 0.0) >= min_sweep_coverage, data
-
-    readiness = data.get("real_robot_readiness") or {}
-    assert readiness.get("schema") == REAL_ROBOT_READINESS_SCHEMA, readiness
-    assert readiness.get("backend_variant") == "agibot_gdk", readiness
-    assert readiness.get("semantic_map_build") is True, readiness
-    assert readiness.get("physical_navigation_pilot") is True, readiness
-    assert readiness.get("physical_cleanup_ready") is False, readiness
-    assert readiness.get("manipulation_blocked") is True, readiness
-    if require_agibot_g2_hardware:
-        _assert_agibot_g2_hardware_semantic_map_build(data, base, readiness)
-
-    manipulation = data.get("manipulation_evidence") or {}
-    assert manipulation.get("status") == "blocked_capability", manipulation
-    assert manipulation.get("primitive_provenance") == "blocked_capability", manipulation
-
-    trace = data.get("cleanup_policy_trace") or {}
-    assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
-    assert trace.get("agent_reasoning_visible") is True, trace
-    assert trace.get("cleanup_action_count") == 0, trace
-    decisions = {str(item.get("decision") or "") for item in trace.get("events") or []}
-    assert {"inspect_public_metric_map", "inspect_public_fixture_hints"} <= decisions, trace
-    assert "observe_head_color" in decisions, trace
-
-    private = data.get("private_evaluation") or {}
-    assert private.get("generated_mess_count") == 0, private
-    assert private.get("acceptable_destination_sets") == {}, private
-
-    artifacts = data.get("artifacts") or {}
-    for key in ("trace", "before_snapshot", "after_snapshot", "report"):
-        path = _resolve_path(base, artifacts.get(key, ""))
-        assert path.is_file(), path
-        assert path.stat().st_size > 0, path
-    if require_runtime_metric_map:
-        path = _resolve_path(base, artifacts.get("runtime_metric_map", ""))
-        assert path.is_file(), path
-        assert path.stat().st_size > 0, path
-    trace_path = _resolve_path(base, artifacts["trace"])
-    _assert_trace_is_public(trace_path)
-    _assert_no_duplicate_post_place_navigation(trace_path)
-
-    report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
-    if expect_profile is not None:
-        assert expect_profile in report_text, report_text[:500]
-    assert "AgiBot Backend Evidence" in report_text, report_text[:500]
-    assert "Real-Robot Readiness" in report_text, report_text[:500]
-    assert "Agent View" in report_text, report_text[:500]
-    assert "Private Evaluation" in report_text, report_text[:500]
-    assert "Score" in report_text, report_text[:500]
-    if require_runtime_metric_map:
-        assert "Runtime Metric Map" in report_text, report_text[:500]
-    if require_camera_model_policy:
-        _assert_agibot_semantic_map_build_camera_model_policy(
-            data,
-            report_text,
-            expect_pipeline_id=expect_visual_grounding_pipeline,
-            require_failure=require_visual_grounding_failure,
-        )
-
-
-def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> None:
-    assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
-    assert "metric_map" in agent_view, agent_view
-    assert "fixture_hints" in agent_view, agent_view
-    assert agent_view.get("observed_objects") == [], agent_view
-    policy_view = agent_view.get("policy_view") or {}
-    assert policy_view.get("policy_observation_camera") == "head_color", policy_view
-    raw = agent_view.get("raw_fpv_observations") or []
-    assert raw, agent_view
-    for item in raw:
-        assert item.get("camera") == "head_color", item
-        assert item.get("source") == "agibot_g2_policy_camera", item
-        assert item.get("primitive_provenance") in {
-            "blocked_capability",
-            "agibot_gdk_head_color",
-            "agibot_gdk_head_color_camera",
-        }, item
-    _assert_no_forbidden_keys(agent_view)
-
-
-def _assert_agibot_semantic_map_build_runtime_map(runtime_metric_map: dict[str, Any]) -> None:
-    assert runtime_metric_map.get("schema") == RUNTIME_METRIC_MAP_SCHEMA, runtime_metric_map
-    assert runtime_metric_map.get("source") == "agibot_semantic_map_build_mcp", runtime_metric_map
-    assert "metric_map" in runtime_metric_map, runtime_metric_map
-    assert "fixture_hints" in runtime_metric_map, runtime_metric_map
-    assert isinstance(runtime_metric_map.get("observed_objects") or [], list), runtime_metric_map
-    assert isinstance(runtime_metric_map.get("visited_waypoint_ids") or [], list), (
-        runtime_metric_map
-    )
-    assert isinstance(runtime_metric_map.get("observed_waypoint_ids") or [], list), (
-        runtime_metric_map
-    )
-    _assert_no_forbidden_keys(runtime_metric_map)
-
-
-def _assert_agibot_semantic_map_build_camera_model_policy(
-    data: dict[str, Any],
-    report_text: str,
-    *,
-    expect_pipeline_id: str | None,
-    require_failure: bool,
-) -> None:
-    assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
-    evidence = data.get("camera_model_policy_evidence") or (
-        (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
-    )
-    assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
-    assert evidence.get("enabled") is True, evidence
-    assert evidence.get("model_provenance") == EXTERNAL_VISUAL_GROUNDING_PROVENANCE, evidence
-    assert evidence.get("private_truth_included") is False, evidence
-    pipeline_id = str(evidence.get("visual_grounding_pipeline_id") or "")
-    pipeline_ids = [str(item) for item in evidence.get("visual_grounding_pipeline_ids") or []]
-    if expect_pipeline_id is not None:
-        assert expect_pipeline_id in pipeline_ids, evidence
-    assert pipeline_id in pipeline_ids, evidence
-    assert int(evidence.get("event_count") or 0) >= 1, evidence
-    failure_count = int(evidence.get("visual_grounding_failure_count") or 0)
-    if require_failure:
-        assert failure_count >= 1, evidence
-    events = evidence.get("events") or []
-    assert events, evidence
-    for event in events:
-        pipeline = event.get("visual_grounding_pipeline") or {}
-        assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
-        assert pipeline.get("pipeline_id") in pipeline_ids, event
-        if require_failure:
-            assert event.get("candidate_count") == 0, event
-            assert pipeline.get("status") == "failed", event
-            assert pipeline.get("failure_reason"), event
-            stages = pipeline.get("stages") or []
-            stage_names = {str(stage.get("stage") or "") for stage in stages}
-            assert "agibot_head_color_capture" in stage_names, event
-            assert "external_visual_grounding_not_invoked" in stage_names, event
-        else:
-            assert pipeline.get("status") in {"ok", "failed"}, event
-    assert data.get("raw_fpv_observations"), data
-    assert "Camera Labeler Evidence" in report_text, report_text[:500]
-    assert "Raw FPV Observations" in report_text, report_text[:500]
-    assert pipeline_id in report_text, report_text[:500]
-    assert "Bearer " not in json.dumps(data), data
-    assert "Bearer " not in report_text, report_text[:500]
-
-
-def _assert_agibot_g2_hardware_semantic_map_build(
-    data: dict[str, Any],
-    base: Path,
-    readiness: dict[str, Any],
-) -> None:
-    assert data.get("agent_driven") is True, data
-    assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
-    assert data.get("policy") == AGIBOT_SEMANTIC_MAP_BUILD_POLICY, data
-    assert data.get("evidence_lane") == CAMERA_GROUNDED_LABELS_LANE, data
-    assert data.get("camera_labeler"), data
-    assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
-    runtime_metric_map = data.get("runtime_metric_map") or (data.get("agent_view") or {}).get(
-        "runtime_metric_map"
-    )
-    assert isinstance(runtime_metric_map, dict), data
-    _assert_agibot_semantic_map_build_runtime_map(runtime_metric_map)
-    assert readiness.get("status") == "physical_agibot_semantic_map_build_complete", readiness
-    assert readiness.get("movement_enabled") is True, readiness
-    assert readiness.get("navigation_perception_ready") is True, readiness
-    assert readiness.get("human_takeover_stop") is False, readiness
-    assert int(readiness.get("inspection_waypoint_attempt_count") or 0) >= 1, readiness
-    assert int(readiness.get("inspection_waypoint_total") or 0) >= 1, readiness
-    assert int(readiness.get("reached_waypoint_count") or 0) >= 1, readiness
-    assert float(readiness.get("observed_waypoint_rate") or 0.0) >= 1.0, readiness
-    assert data.get("cleanup_status") == "physical_agibot_semantic_map_build_complete", data
-    assert data.get("primitive_provenance") == "agibot_gdk_normal_navi", data
-    assert float(data.get("sweep_coverage_rate") or 0.0) >= 1.0, data
-
-    raw = data.get("raw_fpv_observations") or []
-    assert raw, data
-    live_head_color = [
-        item
-        for item in raw
-        if item.get("ok") is True
-        and item.get("camera") == "head_color"
-        and item.get("primitive_provenance") == "agibot_gdk_head_color_camera"
-        and (item.get("image_artifacts") or {}).get("fpv")
-    ]
-    assert live_head_color, raw
-    for item in live_head_color:
-        path = _resolve_path(base, str((item.get("image_artifacts") or {}).get("fpv") or ""))
-        assert path.is_file(), item
-        assert path.stat().st_size > 0, item
-
-    camera_policy = data.get("camera_model_policy_evidence") or {}
-    assert camera_policy.get("enabled") is True, camera_policy
-    assert camera_policy.get("model_provenance") == EXTERNAL_VISUAL_GROUNDING_PROVENANCE, (
-        camera_policy
-    )
-    pipeline_id = str(camera_policy.get("visual_grounding_pipeline_id") or "")
-    pipeline_ids = [
-        str(item)
-        for item in (camera_policy.get("visual_grounding_pipeline_ids") or [pipeline_id])
-        if str(item)
-    ]
-    assert pipeline_ids, camera_policy
-    assert pipeline_id in pipeline_ids, camera_policy
-    assert not {"sim", "manual"}.intersection(pipeline_ids), camera_policy
-    assert int(camera_policy.get("event_count") or 0) >= 1, camera_policy
-    assert int(camera_policy.get("candidate_count") or 0) >= 1, camera_policy
-    assert int(camera_policy.get("visual_grounding_failure_count") or 0) == 0, camera_policy
-    for event in camera_policy.get("events") or []:
-        pipeline = event.get("visual_grounding_pipeline") or {}
-        assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
-        assert str(pipeline.get("pipeline_id") or "") in pipeline_ids, event
-        assert str(pipeline.get("pipeline_id") or "") not in {"sim", "manual"}, event
-        assert pipeline.get("status") == "ok", event
-        assert int(pipeline.get("candidate_count") or 0) >= 1, event
-        stages = pipeline.get("stages") or []
-        assert stages, event
-        assert all(str(stage.get("status") or "ok") != "blocked" for stage in stages), event
-
-    trace = data.get("cleanup_policy_trace") or {}
-    decisions = {str(item.get("decision") or "") for item in trace.get("events") or []}
-    assert "visit_public_waypoint" in decisions, trace
-    assert "observe_head_color" in decisions, trace
-    manipulation = data.get("manipulation_evidence") or {}
-    assert manipulation.get("status") == "blocked_capability", manipulation
-
-
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
     assert data.get("policy") == "openclaw_agent", data
     assert data.get("agent_driven") is True, data
@@ -1164,87 +901,6 @@ def _assert_completion_claim(data: dict[str, Any]) -> None:
     assert str(claim["why_done"]).strip(), claim
     assert isinstance(claim["evidence_used"], list), claim
     assert isinstance(claim["remaining_risks"], list), claim
-
-
-def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
-    assert data.get("map_mode") == "minimal", data
-    metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
-    runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
-    static_map = runtime_map.get("static_map") or {}
-    assert metric_map.get("mode") == "minimal", metric_map
-    assert fixture_hints.get("mode") == "minimal", fixture_hints
-    assert runtime_map.get("map_mode") == "minimal", runtime_map
-    assert runtime_map.get("minimal_map_mode") is True, runtime_map
-    rooms = metric_map.get("rooms") or []
-    driveable_ways = metric_map.get("driveable_ways") or []
-    room_category_hints = metric_map.get("room_category_hints") or []
-    assert isinstance(rooms, list), metric_map
-    assert all(isinstance(room, dict) and room.get("room_label") for room in rooms), rooms
-    assert isinstance(driveable_ways, list), metric_map
-    assert isinstance(room_category_hints, list), metric_map
-    assert all(
-        isinstance(hint, dict) and hint.get("anchor_type") == "room_area"
-        for hint in room_category_hints
-    ), room_category_hints
-    assert fixture_hints.get("rooms") == [], fixture_hints
-    static_rooms = static_map.get("rooms") or []
-    static_driveable_ways = static_map.get("driveable_ways") or []
-    assert isinstance(static_rooms, list), static_map
-    assert all(isinstance(room, dict) and room.get("room_label") for room in static_rooms), (
-        static_rooms
-    )
-    assert static_map.get("fixtures") == [], static_map
-    assert isinstance(static_driveable_ways, list), static_map
-    waypoints = metric_map.get("inspection_waypoints") or []
-    assert waypoints, metric_map
-    generated = runtime_map.get("generated_exploration_candidates") or []
-    generated_target_inspection = runtime_map.get("generated_target_inspection_candidates") or []
-    exploration_waypoints = [
-        item
-        for item in waypoints
-        if item.get("waypoint_source") == "generated_exploration_candidate"
-    ]
-    target_inspection_waypoints = [
-        item
-        for item in waypoints
-        if item.get("waypoint_source") == "generated_target_inspection_candidate"
-    ]
-    assert len(generated) == len(exploration_waypoints), runtime_map
-    assert len(generated_target_inspection) == len(target_inspection_waypoints), runtime_map
-    anchors = runtime_map.get("public_semantic_anchors") or []
-    assert anchors, runtime_map
-    assert any(item.get("anchor_type") == "observation_waypoint" for item in anchors), anchors
-    for waypoint in exploration_waypoints:
-        assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
-        assert waypoint.get("waypoint_source") == "generated_exploration_candidate", waypoint
-        assert waypoint.get("purpose") == "minimal_map_exploration", waypoint
-        provenance = waypoint.get("candidate_provenance") or {}
-        assert provenance.get("source") == "public_occupancy_free_space", waypoint
-        assert provenance.get("source_room_hidden") is False, waypoint
-        assert provenance.get("source_room_label_available") is bool(waypoint.get("room_label")), (
-            waypoint
-        )
-        assert provenance.get("source_fixtures_hidden") is True, waypoint
-        assert provenance.get("source_waypoint_hidden") is True, waypoint
-        assert "source_waypoint_id" not in provenance, waypoint
-    for waypoint in target_inspection_waypoints:
-        assert str(waypoint.get("waypoint_id") or "").startswith("generated_inspection_"), waypoint
-        assert waypoint.get("purpose") == "target_inspection", waypoint
-        assert waypoint.get("verified_navigation") is True, waypoint
-        assert waypoint.get("source_observation_id"), waypoint
-        assert waypoint.get("source_target_candidate_id"), waypoint
-        provenance = waypoint.get("candidate_provenance") or {}
-        assert provenance.get("source") == "server_verified_standoff_from_visible_evidence", (
-            waypoint
-        )
-        assert provenance.get("source_waypoint_id"), waypoint
-        assert provenance.get("source_observation_id"), waypoint
-    semantic_sweep = data.get("semantic_sweep")
-    if semantic_sweep is not None:
-        assert semantic_sweep.get("minimal_map_mode") is True, data
-    _assert_no_forbidden_keys(metric_map)
-    _assert_no_forbidden_keys(fixture_hints)
 
 
 def _assert_semantic_sweep_did_not_clean(data: dict[str, Any]) -> None:
