@@ -3059,18 +3059,22 @@ Severity: P1
 
 Entropy source: live-agent runtime workflow friction.
 
-Materiality: false confidence and real workflow friction. After metrics
-aggregation moved to `scripts/molmo_cleanup/openai_agents_metrics.py` and
-RAW-FPV budget-guard classification moved to
-`scripts/molmo_cleanup/openai_agents_budget.py`,
-`scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` no longer has grouped
-complexity rows. `roboclaws/agents/drivers/openai_agents_live.py` now has one
-remaining grouped row: `_run_openai_agents(...)` PLR0915.
+Status: complete as of the 2026-06-14 OpenAI Agents setup split. Keep this
+section as evidence for the completed P1 slice; do not reopen it unless fresh
+live-agent runtime drift appears.
+
+Materiality: false confidence and real workflow friction. Metrics aggregation
+moved to `scripts/molmo_cleanup/openai_agents_metrics.py`, RAW-FPV
+budget-guard classification moved to
+`scripts/molmo_cleanup/openai_agents_budget.py`, and the remaining SDK adapter
+setup/parser branches are split inside
+`roboclaws/agents/drivers/openai_agents_live.py`. These files no longer appear
+in the complexity-by-file summary for production rows.
 
 Impact radius: workflow.
 
 Maintainer test: provider/profile, continuation, RAW-FPV budget, and MCP
-payload changes should fail in small audited helpers rather than across the
+payload changes now fail in smaller audited helpers rather than across the
 cleanup runner and generic SDK driver.
 
 Affected paths:
@@ -4472,3 +4476,19 @@ Stop this refactor loop when:
   from 94 to 92 Ruff complexity violations, with oversized modules unchanged
   at 59. The remaining OpenAI Agents Candidate A row is
   `roboclaws/agents/drivers/openai_agents_live.py::_run_openai_agents(...)`.
+- 2026-06-14: Completed Candidate A by extracting OpenAI Agents SDK setup into
+  focused run-part, MCP server kwargs, and agent kwargs helpers inside
+  `roboclaws/agents/drivers/openai_agents_live.py`. `_run_openai_agents(...)`
+  now owns SDK imports, trace processor registration, run dispatch, and trace
+  flush/shutdown, while model/run/server/agent setup and skill-context summary
+  writing are isolated. Evidence:
+  `ruff check roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py -q`
+  passed with 71 tests; `ruff check roboclaws/agents/drivers/openai_agents_live.py --select C901,PLR0912,PLR0915`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 92 to
+  91 Ruff complexity violations, with oversized modules unchanged at 59.
+  `roboclaws/agents/drivers/openai_agents_live.py` no longer appears in the
+  complexity-by-file summary, so the OpenAI Agents residual runtime boundary is
+  complete for this loop.

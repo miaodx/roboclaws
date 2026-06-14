@@ -3,7 +3,7 @@
   "pylint_too_many_lines": {
     "files": [
       {
-        "lines": 2800,
+        "lines": 2872,
         "max_module_lines": 800,
         "path": "roboclaws/agents/drivers/openai_agents_live.py"
       },
@@ -308,16 +308,6 @@
       "PLR0915"
     ],
     "violations": [
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/agents/drivers/openai_agents_live.py|PLR0915|_run_openai_agents",
-        "limit": 50,
-        "message": "Too many statements (56 > 50)",
-        "path": "roboclaws/agents/drivers/openai_agents_live.py",
-        "row": 142,
-        "symbol": "_run_openai_agents",
-        "value": 56
-      },
       {
         "code": "C901",
         "key": "roboclaws/agents/live_runtime.py|C901|LiveAgentResult.to_live_status_payload",

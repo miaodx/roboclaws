@@ -157,43 +157,15 @@ def _run_openai_agents(
         add_trace_processor = None
         flush_traces = None
 
-    model = _model_for_request(request)
-    timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
-    runtime_config = _runtime_config(
+    parts = _openai_agents_run_parts(
         request,
-        mcp_client_session_timeout_configured=timeout_configured,
-        mcp_client_session_timeout_s=timeout_s,
+        agent_cls=Agent,
+        model_settings_cls=ModelSettings,
+        run_config_cls=RunConfig,
+        mcp_server_cls=MCPServerStreamableHttp,
+        events_path=events_path,
+        skill_context_path=skill_context_path,
     )
-    model_settings_payload = _sdk_model_settings_payload(request)
-    run_config_payload = _sdk_run_config_payload(request, events_path=events_path)
-    model_settings = ModelSettings(**model_settings_payload)
-    run_config = RunConfig(model_settings=model_settings, **run_config_payload)
-    server_kwargs: dict[str, Any] = {
-        "name": request.mcp_server.name,
-        "params": {"url": request.mcp_server.url},
-        "cache_tools_list": _cache_tools_list(request),
-    }
-    if timeout_configured:
-        server_kwargs["client_session_timeout_seconds"] = timeout_s
-    server = MCPServerStreamableHttp(
-        **server_kwargs,
-    )
-    instructions, skill_context_summary = _instructions_with_skill_context(request)
-    _write_skill_context_summary(skill_context_path, skill_context_summary)
-    agent_kwargs: dict[str, Any] = {
-        "name": f"roboclaws-{request.task_name}",
-        "instructions": instructions,
-        "mcp_servers": [server],
-        "mcp_config": {
-            "failure_error_function": _recording_tool_error_function(
-                events_path,
-                runtime_config=runtime_config,
-            )
-        },
-        "model": model,
-        "model_settings": model_settings,
-    }
-    agent = Agent(**agent_kwargs)
     events_path.parent.mkdir(parents=True, exist_ok=True)
     events_path.write_text("", encoding="utf-8")
     spans_path.parent.mkdir(parents=True, exist_ok=True)
@@ -203,15 +175,15 @@ def _run_openai_agents(
         {
             "event": "start",
             "ts_epoch": time.time(),
-            **runtime_config,
-            "skill_context": skill_context_summary,
+            **parts.runtime_config,
+            "skill_context": parts.skill_context_summary,
         },
     )
-    span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=runtime_config)
+    span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=parts.runtime_config)
     if add_trace_processor is None:
         _append_span_limitation(
             spans_path,
-            runtime_config=runtime_config,
+            runtime_config=parts.runtime_config,
             reason="sdk_trace_processor_api_unavailable",
         )
         span_processor = None
@@ -221,24 +193,24 @@ def _run_openai_agents(
         except Exception as exc:
             _append_span_limitation(
                 spans_path,
-                runtime_config=runtime_config,
+                runtime_config=parts.runtime_config,
                 reason="sdk_trace_processor_registration_failed",
                 exc=exc,
             )
             span_processor = None
 
     try:
-        if hasattr(server, "__aenter__"):
+        if hasattr(parts.server, "__aenter__"):
             return _run_with_async_mcp_server(
-                server,
-                agent,
+                parts.server,
+                parts.agent,
                 request,
                 events_path,
-                run_config=run_config,
+                run_config=parts.run_config,
             )
         runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
-        runner_kwargs["run_config"] = run_config
-        result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
+        runner_kwargs["run_config"] = parts.run_config
+        result = Runner.run_sync(parts.agent, request.kickoff_prompt, **runner_kwargs)
         _append_event(
             events_path,
             {"event": "result", "ts_epoch": time.time(), "summary": _summarize_sdk_result(result)},
@@ -261,6 +233,106 @@ def _run_openai_agents(
         if span_processor is not None:
             span_processor.force_flush()
             span_processor.shutdown()
+
+
+@dataclass(frozen=True)
+class _OpenAIAgentsRunParts:
+    agent: Any
+    server: Any
+    run_config: Any
+    runtime_config: dict[str, Any]
+    skill_context_summary: dict[str, Any]
+
+
+def _openai_agents_run_parts(
+    request: LiveAgentRequest,
+    *,
+    agent_cls: Any,
+    model_settings_cls: Any,
+    run_config_cls: Any,
+    mcp_server_cls: Any,
+    events_path: Path,
+    skill_context_path: Path,
+) -> _OpenAIAgentsRunParts:
+    timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
+    runtime_config = _runtime_config(
+        request,
+        mcp_client_session_timeout_configured=timeout_configured,
+        mcp_client_session_timeout_s=timeout_s,
+    )
+    model_settings = model_settings_cls(**_sdk_model_settings_payload(request))
+    run_config = run_config_cls(
+        model_settings=model_settings,
+        **_sdk_run_config_payload(request, events_path=events_path),
+    )
+    server = mcp_server_cls(
+        **_mcp_server_kwargs(
+            request,
+            timeout_configured=timeout_configured,
+            timeout_s=timeout_s,
+        )
+    )
+    instructions, skill_context_summary = _instructions_with_skill_context(request)
+    _write_skill_context_summary(skill_context_path, skill_context_summary)
+    agent = agent_cls(
+        **_agent_kwargs(
+            request,
+            model=_model_for_request(request),
+            model_settings=model_settings,
+            server=server,
+            instructions=instructions,
+            events_path=events_path,
+            runtime_config=runtime_config,
+        )
+    )
+    return _OpenAIAgentsRunParts(
+        agent=agent,
+        server=server,
+        run_config=run_config,
+        runtime_config=runtime_config,
+        skill_context_summary=skill_context_summary,
+    )
+
+
+def _mcp_server_kwargs(
+    request: LiveAgentRequest,
+    *,
+    timeout_configured: bool,
+    timeout_s: float,
+) -> dict[str, Any]:
+    server_kwargs: dict[str, Any] = {
+        "name": request.mcp_server.name,
+        "params": {"url": request.mcp_server.url},
+        "cache_tools_list": _cache_tools_list(request),
+    }
+    if timeout_configured:
+        server_kwargs["client_session_timeout_seconds"] = timeout_s
+    return server_kwargs
+
+
+def _agent_kwargs(
+    request: LiveAgentRequest,
+    *,
+    model: Any,
+    model_settings: Any,
+    server: Any,
+    instructions: str,
+    events_path: Path,
+    runtime_config: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "name": f"roboclaws-{request.task_name}",
+        "instructions": instructions,
+        "mcp_servers": [server],
+        "mcp_config": {
+            "failure_error_function": _recording_tool_error_function(
+                events_path,
+                runtime_config=runtime_config,
+            )
+        },
+        "model": model,
+        "model_settings": model_settings,
+    }
 
 
 def _run_with_async_mcp_server(
