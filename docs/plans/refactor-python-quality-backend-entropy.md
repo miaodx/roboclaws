@@ -4026,3 +4026,19 @@ Stop this refactor loop when:
   at 59. The apple-to-apple runner dropped from 5844 to 5332 lines and from
   six to two grouped complexity rows; the remaining rows are
   `run_comparison(...)` and `_object_gate_classification(...)`.
+- 2026-06-14: Continued Candidate A apple-to-apple parity diagnostics by
+  extracting object-gate classification and protected visual-physics RGB /
+  coverage / target-visual-state checks into
+  `scripts/molmo_cleanup/robot_camera_apple2apple_object_gate.py`.
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` keeps the
+  existing private helper names as thin wrappers for current tests and report
+  assembly, while the visual-physics protection token is shared from the
+  helper to avoid future policy-string drift. Evidence:
+  `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py scripts/molmo_cleanup/robot_camera_apple2apple_object_gate.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py -q`
+  passed with 39 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 97 to 96 Ruff complexity violations, with oversized modules unchanged
+  at 59. The apple-to-apple runner dropped from 5332 to 5279 lines and now has
+  one remaining grouped complexity row: `run_comparison(...)`.

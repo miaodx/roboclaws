@@ -36,6 +36,7 @@ from scripts.isaac_lab_cleanup.isaac_lab_backend_worker import (
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
 )
 from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
+from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
 
 SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
@@ -69,7 +70,7 @@ OBJECT_VISUAL_STATE_REGISTRY = {
 OBJECT_VISUAL_STATE_CATEGORIES = set(OBJECT_VISUAL_STATE_REGISTRY)
 VISUAL_PHYSICS_PROTECTION = {
     "schema": "robot_camera_visual_physics_protection_policy_v1",
-    "protected_by": "prepared_usd_visual_physics_freeze",
+    "protected_by": object_gate.VISUAL_PHYSICS_PROTECTED_BY,
     "policy": (
         "Objects with MuJoCo articulated visual joints or preserved Isaac physics are "
         "visual-physics-sensitive. Stripping PhysX or USD physics is necessary to keep "
@@ -2301,73 +2302,19 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str:
-    binding_status = str(item.get("binding_status") or "")
-    if binding_status in {"missing_both", "missing_mujoco_state", "missing_isaac_index"}:
-        return "missing_binding"
-    if binding_status in {"missing_usd_prim_path", "isaac_geometry_gap"}:
-        return "missing_renderable_geometry"
-    if str(item.get("category_status") or "") == "category_delta":
-        return "not_comparable"
-    if str(item.get("pose_status") or "") == "pose_delta":
-        return "pose_delta"
-    if str(item.get("support_status") or "") == "support_metadata_delta":
-        return "pose_delta"
-    if _visual_physics_protected_without_selected_rgb(item):
-        return "visual_state_needs_rgb_evidence"
-    if _visual_physics_protected_without_target_coverage(item):
-        return "visual_state_needs_target_coverage"
-    if _visual_physics_protected_with_target_visual_delta(item):
-        return "visual_state_delta"
-    if str(item.get("state_status") or "") in {
-        "state_delta",
-        "state_not_rendered_to_usd",
-        "visual_state_articulation_physics_preserved",
-        "visual_state_unverified",
-    }:
-        return "visual_state_delta"
-    if str(_dict(item.get("render_contract_delta")).get("status") or "") in {
-        "material_or_texture_name_delta",
-        "missing_object_binding_evidence",
-    }:
-        return "material_delta"
-    if any(status.startswith("missing_") for status in statuses):
-        return "missing_binding"
-    return "comparable"
+    return object_gate.object_gate_classification(item, statuses)
 
 
 def _visual_physics_protected_without_selected_rgb(item: dict[str, Any]) -> bool:
-    visual_state = _dict(item.get("visual_state_contract"))
-    protected_by = str(visual_state.get("protected_by") or "")
-    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
-        return False
-    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
-        return False
-    rgb_status = str(_dict(item.get("rgb_view_evidence")).get("status") or "")
-    return rgb_status != "selected_views_nonblank"
+    return object_gate.visual_physics_protected_without_selected_rgb(item)
 
 
 def _visual_physics_protected_without_target_coverage(item: dict[str, Any]) -> bool:
-    visual_state = _dict(item.get("visual_state_contract"))
-    protected_by = str(visual_state.get("protected_by") or "")
-    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
-        return False
-    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
-        return False
-    coverage_status = str(_dict(item.get("rgb_view_evidence")).get("target_coverage_status") or "")
-    return coverage_status != "selected_object_centered_coverage"
+    return object_gate.visual_physics_protected_without_target_coverage(item)
 
 
 def _visual_physics_protected_with_target_visual_delta(item: dict[str, Any]) -> bool:
-    visual_state = _dict(item.get("visual_state_contract"))
-    protected_by = str(visual_state.get("protected_by") or "")
-    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
-        return False
-    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
-        return False
-    target_visual_status = str(
-        _dict(item.get("rgb_view_evidence")).get("target_visual_state_status") or ""
-    )
-    return target_visual_status != "selected_object_visual_state_aligned"
+    return object_gate.visual_physics_protected_with_target_visual_delta(item)
 
 
 def _object_gate_blocking_status(item: dict[str, Any], statuses: set[str]) -> str:

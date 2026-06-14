@@ -148,7 +148,7 @@
         "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py"
       },
       {
-        "lines": 5332,
+        "lines": 5279,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py"
       },
@@ -879,22 +879,12 @@
         "value": 72
       },
       {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_object_gate_classification",
-        "limit": 10,
-        "message": "`_object_gate_classification` is too complex (12 > 10)",
-        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 2303,
-        "symbol": "_object_gate_classification",
-        "value": 12
-      },
-      {
         "code": "PLR0915",
         "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|PLR0915|run_comparison",
         "limit": 50,
         "message": "Too many statements (76 > 50)",
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 262,
+        "row": 263,
         "symbol": "run_comparison",
         "value": 76
       },
