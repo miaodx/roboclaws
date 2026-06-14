@@ -529,18 +529,10 @@ class LiveOpenAIAgentsCleanupRunner:
         result = None
         attempts: list[dict[str, Any]] = []
         while True:
-            preflight_failure = _budget_failure_from_run_state(
-                self.run_dir,
-                self.live_timing,
-                self.agent_sdk_perf_profile,
+            self._raise_agent_sdk_budget_failure_if_any(
+                attempt_index=attempt_index,
+                stage="before",
             )
-            if preflight_failure is not None:
-                self.live_timing["agent_sdk_budget_terminal"] = preflight_failure.status_fields()
-                raise LiveAgentRunFailure(
-                    f"OpenAI Agents SDK budget guard stopped before attempt {attempt_index}: "
-                    f"{preflight_failure.reason}",
-                    preflight_failure,
-                )
             if attempt_index:
                 self._write_status("running-openai-agents-continuation")
             request = self._sdk_request(prompt=prompt, attempt_index=attempt_index)
@@ -552,18 +544,10 @@ class LiveOpenAIAgentsCleanupRunner:
                 break
             if (self.run_dir / "run_result.json").is_file():
                 break
-            budget_failure = _budget_failure_from_run_state(
-                self.run_dir,
-                self.live_timing,
-                self.agent_sdk_perf_profile,
+            self._raise_agent_sdk_budget_failure_if_any(
+                attempt_index=attempt_index,
+                stage="after",
             )
-            if budget_failure is not None:
-                self.live_timing["agent_sdk_budget_terminal"] = budget_failure.status_fields()
-                raise LiveAgentRunFailure(
-                    f"OpenAI Agents SDK budget guard stopped after attempt {attempt_index}: "
-                    f"{budget_failure.reason}",
-                    budget_failure,
-                )
             continuation_prompt = recovery_policy.continuation_prompt(
                 original_prompt=self.initial_kickoff_prompt,
                 result=result,
@@ -614,6 +598,21 @@ class LiveOpenAIAgentsCleanupRunner:
                 "OpenAI Agents SDK turn ended without done after "
                 f"{len(attempts)} OpenAI Agents SDK invocation(s)"
             )
+
+    def _raise_agent_sdk_budget_failure_if_any(self, *, attempt_index: int, stage: str) -> None:
+        budget_failure = _budget_failure_from_run_state(
+            self.run_dir,
+            self.live_timing,
+            self.agent_sdk_perf_profile,
+        )
+        if budget_failure is None:
+            return
+        self.live_timing["agent_sdk_budget_terminal"] = budget_failure.status_fields()
+        raise LiveAgentRunFailure(
+            f"OpenAI Agents SDK budget guard stopped {stage} attempt {attempt_index}: "
+            f"{budget_failure.reason}",
+            budget_failure,
+        )
 
     def _sdk_request(self, *, prompt: str, attempt_index: int) -> LiveAgentRequest:
         artifact_paths = {

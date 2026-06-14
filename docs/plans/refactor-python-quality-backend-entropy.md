@@ -3063,9 +3063,8 @@ Materiality: false confidence and real workflow friction. After metrics
 aggregation moved to `scripts/molmo_cleanup/openai_agents_metrics.py` and
 RAW-FPV budget-guard classification moved to
 `scripts/molmo_cleanup/openai_agents_budget.py`,
-`scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` still has
-`_run_sdk_agent(...)` as a C901 row. `roboclaws/agents/drivers/openai_agents_live.py`
-still has
+`scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` no longer has grouped
+complexity rows. `roboclaws/agents/drivers/openai_agents_live.py` still has
 `_run_openai_agents(...)` PLR0915 plus `_camera_grounded_history_info(...)`
 and `_unwrap_mcp_text_content_payload(...)` C901 rows.
 
@@ -4441,3 +4440,20 @@ Stop this refactor loop when:
   `_run_sdk_agent(...)` and the SDK adapter rows `_run_openai_agents(...)`,
   `_camera_grounded_history_info(...)`, and
   `_unwrap_mcp_text_content_payload(...)`.
+- 2026-06-14: Completed the runner-local part of the OpenAI Agents residual
+  runtime boundary by extracting the pre/post-attempt budget guard raise path
+  from `LiveOpenAIAgentsCleanupRunner._run_sdk_agent(...)` into a focused
+  class helper. The error message, `agent_sdk_budget_terminal` status field,
+  and `LiveAgentRunFailure` surface remain unchanged, while the SDK attempt
+  loop now reads as request/run/result/continuation orchestration. Evidence:
+  `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_budget.py --select C901,PLR0912,PLR0915,I,F`
+  passed; `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/openai_agents_budget.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+  passed; `ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_budget.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py -q`
+  passed with 71 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 95 to 94 Ruff complexity violations, with oversized modules unchanged
+  at 59. `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` no longer
+  appears in the complexity-by-file summary. The remaining Candidate A work is
+  now limited to SDK adapter rows in
+  `roboclaws/agents/drivers/openai_agents_live.py`.
