@@ -157,6 +157,17 @@ Rejected alternatives:
   - Preserve synthetic fallback snapshots, visual-backend robot-view artifacts,
     public artifact schemas, and fake Isaac tests.
 
+- [ ] **B6: Normalize MolmoSpaces worker command dispatch.**
+  - Target `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`.
+  - Replace the duplicated one-shot `main(...)` command branch and persistent
+    `run_state_command(...)` branch with one backend command dispatch table or
+    shared handler.
+  - Keep persistent-worker behavior MolmoSpaces-specific; this is the
+    worker-internal parity follow-up after B4 normalized the parent process
+    runner.
+  - Preserve JSON result shapes, state writeback behavior, and current
+    MolmoSpaces subprocess backend tests.
+
 - [x] **Q1: Add a quality-debt selection report to the ratchet.**
   - Extend `scripts/dev/check_python_quality_ratchet.py` with a read-only
     summary mode such as `--summary` or `--top-debt`.
@@ -298,34 +309,34 @@ Rejected alternatives:
 
 ## Current Candidate Packet
 
-Discovery round: 2026-06-14 post-checker/backend quality loop.
+Discovery round: 2026-06-14 post-C1.1 checker/backend quality loop.
 
 Quality signal:
 
-- `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
-  reports 175 Ruff complexity violations and 59 oversized modules.
+- `python scripts/dev/check_python_quality_ratchet.py --summary --top 50`
+  reports 167 Ruff complexity violations and 59 oversized modules.
 - Top grouped complexity remains
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` with 14 rows.
 - `roboclaws/household/realworld_cleanup.py::run_realworld_cleanup` remains
   C901 18, PLR0912 19, PLR0915 68 after the facade and finalizer slices.
-- `roboclaws/household/realworld_contract.py::cleanup_policy_trace_from_events`
-  remains C901 17, PLR0912 18, PLR0915 64.
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` has one
   remaining grouped complexity row after the agent-view, waypoint-honesty,
   Agibot, and minimal-map splits.
+- `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` has five grouped
+  complexity rows; one-shot and persistent worker commands are still dispatched
+  through separate branch tables.
 
 Materiality gate:
 
-- Candidate probe file: `.tmp/reduce_entropy_candidates_2026_06_14.json`
+- Candidate probe file: `.tmp/reduce_entropy_candidates_2026_06_14_post_c11.json`
   during discovery only.
-- Gate result: five eligible candidates, one rejected parked observation.
-- Implementation update: Candidate 3, contract policy trace split, and
-  Candidate 4, live checker Agibot/minimal-map split, shipped in this flow.
-  Remaining active candidates from this packet are Candidate 1, Candidate 2,
-  and Candidate 5.
-- The gate rejected the planner-manipulation probe micro residual because the
-  remaining two C901 11 rows are too small to count as a standalone open-ended
-  entropy group.
+- Gate result: four eligible candidates and no rejected candidates. The gate
+  warned that four candidates pass for six requested groups, so the request
+  must be treated as a maximum, not a quota.
+- Implementation update: earlier candidates for contract policy trace and live
+  checker Agibot/minimal-map splitting have shipped in this flow.
+- Remaining active candidates from this packet are Candidate 1, Candidate 2,
+  Candidate 5, and new Candidate 6.
 - Requested group count was treated as a maximum, not a quota.
 
 ### Candidate 1: Isaac Worker Camera/Runtime Split
@@ -407,6 +418,8 @@ Suggested proof:
 Execution risk: safe if public artifacts remain schema-stable.
 
 ### Candidate 3: Contract Policy Trace Split
+
+Status: implemented 2026-06-14.
 
 Severity: P1
 
@@ -529,6 +542,46 @@ Suggested proof:
 Execution risk: safe if rendered HTML assertions stay behavior-focused and no
 visual redesign is attempted.
 
+### Candidate 6: MolmoSpaces Worker Command Dispatch
+
+Severity: P1
+
+Entropy source: backend worker parity and false-confidence risk.
+
+Materiality: `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` still
+dispatches backend commands through separate one-shot `main(...)` and
+persistent `run_state_command(...)` branch tables. A new command can be wired
+into one path and missed in the other, which is easy to miss because B4 already
+normalized the parent process runner while explicitly keeping persistent-worker
+behavior MolmoSpaces-specific.
+
+Impact radius: workflow.
+
+Maintainer test: a backend command addition should have one obvious dispatch
+definition so one-shot and persistent MolmoSpaces worker behavior cannot drift.
+
+Affected paths:
+
+- `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`
+- `tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make one backend command surface explicit.
+
+Pattern hint: Command dispatch table; a small adapter for CLI args and
+persistent kwargs is likely clearer than duplicating branch ladders.
+
+Suggested proof:
+
+- `ruff check scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py`
+- `ruff format --check scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe if JSON result shapes and state writeback remain stable;
+avoid changing MuJoCo scene behavior in the same slice.
+
 ### Parked Observation: Planner Manipulation Probe Micro Residual
 
 Remaining rows:
@@ -556,18 +609,20 @@ runtime-diagnostics slice bundles them with material workflow friction.
 - Agibot GDK backend parity can reuse the facade later, but this plan should
   first stabilize the current synthetic, MolmoSpaces, and Isaac Lab cleanup
   path.
-- OpenAI Agents SDK runner cleanup is material but already covered by
-  `docs/plans/2026-06-12-open-ended-household-default-architecture.md` and
-  `docs/plans/refactor-coding-agent-provider-registry.md`. Do not duplicate it
-  here unless a future loop finds SDK-specific drift outside those plans.
+- OpenAI Agents SDK runner cleanup and `run_live_openai_agents_cleanup.py`
+  complexity are material but already covered by
+  `docs/plans/2026-06-12-open-ended-household-default-architecture.md`,
+  `docs/plans/refactor-coding-agent-provider-registry.md`, and the report
+  performance plan. Do not duplicate it here unless a future loop finds
+  SDK-specific drift outside those plans.
 - Operator-console readiness/state splitting is material but already covered by
   `docs/plans/operator-console-orthogonal-launch-refactor.md` plus the recent
   legacy-route-wrapper removal. Do not count it again unless new route-gate
   drift appears.
-- Scene-camera/render-parity, Agibot rehearsal/pilot, raw-FPV probe, and
-  apple2apple comparison surfaces remain large and live, but current evidence
-  points to their existing specialized plans rather than this backend-quality
-  batch.
+- Scene-camera/render-parity, visual-grounding sidecar/benchmark, Agibot
+  rehearsal/pilot, raw-FPV probe, and apple2apple comparison surfaces remain
+  large and live, but current evidence points to their existing specialized
+  plans rather than this backend-quality batch.
 
 ## Evidence Ladder
 
