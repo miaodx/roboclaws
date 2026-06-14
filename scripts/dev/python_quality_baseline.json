@@ -128,7 +128,7 @@
         "path": "scripts/molmo_cleanup/run_live_codex_cleanup.py"
       },
       {
-        "lines": 3701,
+        "lines": 3297,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
       },
@@ -1044,29 +1044,9 @@
         "limit": 10,
         "message": "`_run_sdk_agent` is too complex (11 > 10)",
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 507,
+        "row": 516,
         "symbol": "LiveOpenAIAgentsCleanupRunner._run_sdk_agent",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|C901|_model_racing_observability_metrics",
-        "limit": 10,
-        "message": "`_model_racing_observability_metrics` is too complex (21 > 10)",
-        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 2825,
-        "symbol": "_model_racing_observability_metrics",
-        "value": 21
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|C901|_model_service_fallback_metrics",
-        "limit": 10,
-        "message": "`_model_service_fallback_metrics` is too complex (13 > 10)",
-        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 2746,
-        "symbol": "_model_service_fallback_metrics",
-        "value": 13
       },
       {
         "code": "C901",
@@ -1074,39 +1054,9 @@
         "limit": 10,
         "message": "`_raw_fpv_budget_failure` is too complex (12 > 10)",
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 1857,
+        "row": 1866,
         "symbol": "_raw_fpv_budget_failure",
         "value": 12
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|PLR0912|_model_racing_observability_metrics",
-        "limit": 12,
-        "message": "Too many branches (21 > 12)",
-        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 2825,
-        "symbol": "_model_racing_observability_metrics",
-        "value": 21
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|PLR0915|_model_input_filter_metrics",
-        "limit": 50,
-        "message": "Too many statements (91 > 50)",
-        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 2970,
-        "symbol": "_model_input_filter_metrics",
-        "value": 91
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|PLR0915|_model_racing_observability_metrics",
-        "limit": 50,
-        "message": "Too many statements (88 > 50)",
-        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
-        "row": 2825,
-        "symbol": "_model_racing_observability_metrics",
-        "value": 88
       },
       {
         "code": "C901",
