@@ -32,6 +32,10 @@ from roboclaws.household.camera_control import (
     write_camera_control_request,
 )
 from roboclaws.household.isaac_lab_backend import IsaacLabSubprocessBackend
+from roboclaws.household.scene_camera_report_hydration import (
+    SceneCameraReportHydration,
+    hydrate_scene_camera_report_manifest,
+)
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 
 SCENE_CAMERA_COMPARISON_SCHEMA = "molmospaces_isaac_scene_camera_comparison_v1"
@@ -316,23 +320,11 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         canonical_views=canonical_views,
         isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
     )
-    manifest["candidate_visual_diagnostics"] = _candidate_visual_diagnostics(
+    hydrate_scene_camera_report_manifest(
         manifest,
         output_dir=output_dir,
+        builders=_report_hydration(),
     )
-    manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
-    manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
-    manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
-        manifest,
-        output_dir=output_dir,
-    )
-    manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
-    manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
-    manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
-    manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
-    manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
-    manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
-    manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
     manifest_path.write_text(
@@ -345,37 +337,30 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
 
 def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_dir: Path) -> Path:
     _write_contact_sheet(manifest, output_dir=output_dir)
-    if not isinstance(manifest.get("candidate_visual_diagnostics"), dict):
-        manifest["candidate_visual_diagnostics"] = _candidate_visual_diagnostics(
-            manifest,
-            output_dir=output_dir,
-        )
-    if not isinstance(manifest.get("projection_diagnostics"), dict):
-        manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
-    if not isinstance(manifest.get("visual_diagnostics"), dict):
-        manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
-    if not isinstance(manifest.get("room_wall_light_diagnostics"), dict):
-        manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
-            manifest,
-            output_dir=output_dir,
-        )
-    if not isinstance(manifest.get("native_isaac_render_diagnostics"), dict):
-        manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
-    if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
-        manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
-    if not isinstance(manifest.get("render_domain_view_triage"), dict):
-        manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
-    if not isinstance(manifest.get("render_domain_contract_probe"), dict):
-        manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
-    if not isinstance(manifest.get("lighting_tone_provenance"), dict):
-        manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
-    if not isinstance(manifest.get("shadow_parity_probe"), dict):
-        manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
-    if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
-        manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
+    hydrate_scene_camera_report_manifest(
+        manifest,
+        output_dir=output_dir,
+        builders=_report_hydration(),
+    )
     report_path = output_dir / "report.html"
     report_path.write_text(_report_html(manifest, output_dir=output_dir), encoding="utf-8")
     return report_path
+
+
+def _report_hydration() -> SceneCameraReportHydration:
+    return SceneCameraReportHydration(
+        candidate_visual_diagnostics=_candidate_visual_diagnostics,
+        projection_diagnostics=_projection_diagnostics,
+        visual_diagnostics=_visual_diagnostics,
+        room_wall_light_diagnostics=_room_wall_light_diagnostics,
+        native_isaac_render_diagnostics=_native_isaac_render_diagnostics,
+        render_domain_source_diagnostics=_render_domain_source_diagnostics,
+        render_domain_view_triage=_render_domain_view_triage,
+        render_domain_contract_probe=_render_domain_contract_probe,
+        lighting_tone_provenance=_lighting_tone_provenance,
+        shadow_parity_probe=_shadow_parity_probe,
+        backend_swap_geometry_contract=_backend_swap_geometry_contract,
+    )
 
 
 def comparison_successful(manifest: dict[str, Any]) -> bool:

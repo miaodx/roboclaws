@@ -48,12 +48,12 @@
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
       {
-        "lines": 6930,
+        "lines": 6195,
         "max_module_lines": 800,
         "path": "roboclaws/household/report.py"
       },
       {
-        "lines": 6796,
+        "lines": 6781,
         "max_module_lines": 800,
         "path": "roboclaws/household/scene_camera_comparison.py"
       },
@@ -352,31 +352,31 @@
         "code": "C901",
         "key": "roboclaws/cli/household_agent_server.py|C901|run_molmo_realworld_cleanup_agent_server",
         "limit": 10,
-        "message": "`run_molmo_realworld_cleanup_agent_server` is too complex (17 > 10)",
+        "message": "`run_molmo_realworld_cleanup_agent_server` is too complex (13 > 10)",
         "path": "roboclaws/cli/household_agent_server.py",
-        "row": 279,
+        "row": 275,
         "symbol": "run_molmo_realworld_cleanup_agent_server",
-        "value": 17
+        "value": 13
       },
       {
         "code": "PLR0912",
         "key": "roboclaws/cli/household_agent_server.py|PLR0912|run_molmo_realworld_cleanup_agent_server",
         "limit": 12,
-        "message": "Too many branches (18 > 12)",
+        "message": "Too many branches (15 > 12)",
         "path": "roboclaws/cli/household_agent_server.py",
-        "row": 279,
+        "row": 275,
         "symbol": "run_molmo_realworld_cleanup_agent_server",
-        "value": 18
+        "value": 15
       },
       {
         "code": "PLR0915",
         "key": "roboclaws/cli/household_agent_server.py|PLR0915|run_molmo_realworld_cleanup_agent_server",
         "limit": 50,
-        "message": "Too many statements (67 > 50)",
+        "message": "Too many statements (56 > 50)",
         "path": "roboclaws/cli/household_agent_server.py",
-        "row": 279,
+        "row": 275,
         "symbol": "run_molmo_realworld_cleanup_agent_server",
-        "value": 67
+        "value": 56
       },
       {
         "code": "C901",
@@ -634,7 +634,7 @@
         "limit": 10,
         "message": "`_mujoco_render_contract_from_xml` is too complex (13 > 10)",
         "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 3801,
+        "row": 3786,
         "symbol": "_mujoco_render_contract_from_xml",
         "value": 13
       },
@@ -644,7 +644,7 @@
         "limit": 10,
         "message": "`_render_source_snippet` is too complex (14 > 10)",
         "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 4478,
+        "row": 4463,
         "symbol": "_render_source_snippet",
         "value": 14
       },
@@ -654,7 +654,7 @@
         "limit": 10,
         "message": "`_room_scale_contract_from_capture` is too complex (13 > 10)",
         "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 1322,
+        "row": 1307,
         "symbol": "_room_scale_contract_from_capture",
         "value": 13
       },
@@ -664,19 +664,9 @@
         "limit": 10,
         "message": "`_view_usd_prim_path` is too complex (11 > 10)",
         "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 3627,
+        "row": 3612,
         "symbol": "_view_usd_prim_path",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/scene_camera_comparison.py|C901|render_scene_camera_comparison_report",
-        "limit": 10,
-        "message": "`render_scene_camera_comparison_report` is too complex (12 > 10)",
-        "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 346,
-        "symbol": "render_scene_camera_comparison_report",
-        "value": 12
       },
       {
         "code": "PLR0912",
@@ -684,7 +674,7 @@
         "limit": 12,
         "message": "Too many branches (13 > 12)",
         "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 4478,
+        "row": 4463,
         "symbol": "_render_source_snippet",
         "value": 13
       },
@@ -694,19 +684,9 @@
         "limit": 12,
         "message": "Too many branches (13 > 12)",
         "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 1322,
+        "row": 1307,
         "symbol": "_room_scale_contract_from_capture",
         "value": 13
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/scene_camera_comparison.py|PLR0915|run_scene_camera_comparison",
-        "limit": 50,
-        "message": "Too many statements (55 > 50)",
-        "path": "roboclaws/household/scene_camera_comparison.py",
-        "row": 169,
-        "symbol": "run_scene_camera_comparison",
-        "value": 55
       },
       {
         "code": "C901",

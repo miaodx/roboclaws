@@ -1537,6 +1537,9 @@ only when claiming visual parity behavior changed.
 
 ## Parked Cross-Seam / Future Ideas
 
+- Scene-camera report manifest hydration is complete. The remaining
+  scene-camera work is narrower render-contract / source-diagnostics cleanup,
+  not a reason to keep reopening the already extracted report hydration path.
 - Test-only oversized modules are real ratchet debt, but broad test-suite
   fixture/layout cleanup belongs to `intuitive-tests` unless a selected code
   slice needs a targeted helper extraction.
@@ -1572,6 +1575,249 @@ only when claiming visual parity behavior changed.
   rehearsal/pilot, raw-FPV probe, and apple2apple comparison surfaces remain
   large and live, but current evidence points to their existing specialized
   plans rather than this backend-quality batch.
+
+## Latest Reduce-Entropy Loop: 2026-06-14 Post-Scene-Camera Hydration Split
+
+This loop rechecked the repo after the scene-camera report manifest hydration
+slice. It is the current candidate ordering for continuing the
+reduce-entropy run.
+
+Quality signal:
+
+- `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`
+  reports 140 Ruff complexity violations and 59 oversized modules.
+- `roboclaws/household/scene_camera_comparison.py` dropped from 6796 to 6781
+  lines and from eight to six grouped complexity rows. The removed rows are
+  `render_scene_camera_comparison_report` C901 and
+  `run_scene_camera_comparison` PLR0915.
+- `scripts/dev/python_quality_baseline.json` was deliberately refreshed after
+  the targeted checks passed. The refresh also records earlier completed B7/C3
+  reductions that were still below the prior baseline: `report.py` 6930 ->
+  6195 lines and `run_molmo_realworld_cleanup_agent_server` complexity 17/18/67
+  -> 13/15/56.
+- Largest current implementation hotspots are
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7635 lines, 0
+  grouped rows), `roboclaws/household/scene_camera_comparison.py` (6781 lines,
+  6 rows), `roboclaws/household/realworld_contract.py` (6424 lines, 3 rows),
+  `roboclaws/household/report.py` (6195 lines, 0 rows), and
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` (5844
+  lines, 6 rows).
+
+Materiality gate:
+
+- Gate command:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/materiality-gate.mjs" <tmpfile>`.
+- Gate result: five eligible candidates, no rejected candidates, no warnings.
+- Saturation check: the loop has not saturated. P1 workflow friction remains
+  in scene-camera render diagnostics, live OpenAI Agents runtime, and operator
+  console readiness/routing. Visual-grounding contract validation and
+  apple2apple parity diagnostics remain material P2 directions.
+
+### Current Candidate A: Scene-Camera Render Diagnostics Split
+
+Severity: P1
+
+Entropy source: backend visual-parity workflow friction.
+
+Materiality: after the report hydration split,
+`roboclaws/household/scene_camera_comparison.py` still has six grouped
+complexity rows around room-scale capture contracts, USD prim lookup,
+MuJoCo XML render-contract parsing, and source-code snippet diagnostics.
+`scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` still
+imports private render-contract helpers from this module.
+
+Impact radius: workflow.
+
+Maintainer test: backend visual-parity fixes should not require editing one
+6.7k-line module where render contracts, USD lookup, source snippets, and
+report diagnostics are mixed.
+
+Affected paths:
+
+- `roboclaws/household/scene_camera_comparison.py`
+- likely `roboclaws/household/scene_camera_render_diagnostics.py`
+- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- `tests/contract/molmo_cleanup/test_scene_camera_comparison.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: separate render evidence extraction from report presentation.
+
+Pattern hint: direct diagnostic helper extraction; avoid a broad parity
+framework.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/scene_camera_comparison.py roboclaws/household/scene_camera_render_diagnostics.py scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- `ruff format --check roboclaws/household/scene_camera_comparison.py roboclaws/household/scene_camera_render_diagnostics.py scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_scene_camera_comparison.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe for extraction; real render parity claims remain
+local-renderer-sensitive.
+
+### Current Candidate B: OpenAI Agents Live Runtime Boundary
+
+Severity: P1
+
+Entropy source: live-agent runtime workflow friction.
+
+Materiality: `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is 3701
+lines with seven grouped complexity rows around server lifecycle, visual slot
+locking, retry/continuation policy, checker execution, and model observability
+metrics. `roboclaws/agents/drivers/openai_agents_live.py` is another 2774 lines
+with three grouped complexity rows.
+
+Impact radius: workflow.
+
+Maintainer test: provider/profile, retry, or context-metric changes should not
+require tracing both SDK adapter setup and cleanup-runner lifecycle logic.
+
+Affected paths:
+
+- `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
+- `roboclaws/agents/drivers/openai_agents_live.py`
+- `tests/unit/agents/test_live_runtime.py`
+- likely `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make live-agent runtime boundaries explicit.
+
+Pattern hint: adapter plus runner lifecycle modules; keep cleanup task behavior
+out of the generic SDK driver.
+
+Suggested proof:
+
+- `ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: medium. Keep provider calls mocked; do not claim live provider
+behavior without a local live-agent run.
+
+### Current Candidate C: Operator Console API Routing And Readiness Gates
+
+Severity: P1
+
+Entropy source: operator workflow false-confidence risk.
+
+Materiality: `roboclaws/operator_console/launcher.py` has six grouped
+complexity rows including `route_readiness(...)` at 75 > 50, and
+`roboclaws/operator_console/server.py` has five grouped rows across HTTP
+handlers. These paths own provider-key checks, evidence-lane blockers, MCP port
+checks, route gates, lock state, and attachable-run handling.
+
+Impact radius: workflow.
+
+Maintainer test: console readiness should not mislead operators because route
+gates, env overrides, lock state, and HTTP handlers are hard to audit.
+
+Affected paths:
+
+- `roboclaws/operator_console/launcher.py`
+- `roboclaws/operator_console/server.py`
+- likely `roboclaws/operator_console/readiness.py`
+- likely `roboclaws/operator_console/api_routes.py`
+- `tests/unit/operator_console/`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make every operator gate name its own reason.
+
+Pattern hint: readiness gate pipeline plus HTTP router table.
+
+Suggested proof:
+
+- `ruff check roboclaws/operator_console/launcher.py roboclaws/operator_console/server.py tests/unit/operator_console`
+- `ruff format --check roboclaws/operator_console/launcher.py roboclaws/operator_console/server.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: medium. Preserve API payload shapes; browser QA is useful if
+frontend routing changes.
+
+### Current Candidate D: Visual-Grounding Contract Validation And Adapter Catalog
+
+Severity: P2
+
+Entropy source: detector-sidecar false-confidence risk.
+
+Materiality: the active sidecar is detector-only, so request/response
+validation is the trust boundary. `roboclaws/household/visual_grounding.py`
+has six grouped complexity rows around validation and HTTP failure handling,
+while `scripts/visual_grounding/adapters.py` owns fake/real adapter routing in
+a 1793-line script.
+
+Impact radius: workflow.
+
+Maintainer test: malformed detector responses should fail through a small,
+auditable validation surface rather than hidden branches in the HTTP client and
+adapter script.
+
+Affected paths:
+
+- `roboclaws/household/visual_grounding.py`
+- likely `roboclaws/household/visual_grounding_contract.py`
+- `scripts/visual_grounding/adapters.py`
+- `tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make the external sidecar contract explicit.
+
+Pattern hint: contract validator module plus adapter registry.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/visual_grounding.py scripts/visual_grounding/adapters.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+- `ruff format --check roboclaws/household/visual_grounding.py scripts/visual_grounding/adapters.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe for schema-preserving validation refactors. Real detector
+model behavior is outside the default gate.
+
+### Current Candidate E: Robot-Camera Apple-To-Apple Parity Diagnostics
+
+Severity: P2
+
+Entropy source: visual backend parity rediscovery.
+
+Materiality: `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+is 5844 lines with six grouped complexity rows and imports private
+render-contract helpers from `scene_camera_comparison.py`. It combines
+object-gate classification, material response probes, tone/color probes, USD
+PreviewSurface checks, report rendering, and command orchestration.
+
+Impact radius: workflow.
+
+Maintainer test: parity investigations should not require rediscovering object,
+material, tone/color, camera, and report diagnostics in one render-only script.
+
+Affected paths:
+
+- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- `roboclaws/household/scene_camera_comparison.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make backend visual diagnostics reusable without private imports.
+
+Pattern hint: shared render-contract/diagnostic helper module; direct
+extraction is clearer than a full parity framework.
+
+Suggested proof:
+
+- `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py roboclaws/household/scene_camera_comparison.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+- `ruff format --check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py roboclaws/household/scene_camera_comparison.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe for report/diagnostic extraction; run local renderer proof
+only when claiming visual parity behavior changed.
 
 ## Evidence Ladder
 
@@ -2351,3 +2597,29 @@ Stop this refactor loop when:
   none. C3 is complete for currently material cleanup-report families. The loop
   is still not saturated because P1 workflow friction remains in scene-camera
   comparison, live OpenAI Agents runtime, and operator-console readiness/routing.
+- 2026-06-14: Continued the scene-camera pipeline candidate by extracting report
+  manifest hydration into `roboclaws/household/scene_camera_report_hydration.py`.
+  Both the full comparison run and the report-only renderer now use one ordered
+  hydration helper for candidate visual, projection, room-wall/light,
+  render-domain, lighting, shadow, and backend-swap diagnostics. Evidence:
+  `ruff check roboclaws/household/scene_camera_comparison.py roboclaws/household/scene_camera_report_hydration.py tests/contract/molmo_cleanup/test_scene_camera_comparison.py`
+  passed; `ruff format --check roboclaws/household/scene_camera_comparison.py roboclaws/household/scene_camera_report_hydration.py tests/contract/molmo_cleanup/test_scene_camera_comparison.py`
+  passed; `python -m py_compile roboclaws/household/scene_camera_comparison.py roboclaws/household/scene_camera_report_hydration.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_scene_camera_comparison.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 142 to
+  140 Ruff complexity violations, with oversized modules unchanged at 59.
+  `scene_camera_comparison.py` dropped from 6796 to 6781 lines and from eight
+  to six grouped complexity rows; the
+  `render_scene_camera_comparison_report` C901 and
+  `run_scene_camera_comparison` PLR0915 rows were removed.
+- 2026-06-14: Ran the post-scene-camera hydration reduce-entropy saturation
+  check. Evidence:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs" --examples 5`;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`;
+  and the materiality gate over the current candidate packet. The gate accepted
+  five remaining candidates and rejected none: scene-camera render diagnostics,
+  OpenAI Agents live runtime boundary, operator-console readiness/routing,
+  visual-grounding contract validation, and apple2apple parity diagnostics.
+  The loop is not saturated yet, but the completed report hydration path is now
+  parked unless future report-only behavior changes.
