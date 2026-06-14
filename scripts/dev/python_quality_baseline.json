@@ -649,36 +649,6 @@
         "value": 12
       },
       {
-        "code": "C901",
-        "key": "scripts/agibot/generate_metric_map_from_context.py|C901|_coordinate_bounds",
-        "limit": 10,
-        "message": "`_coordinate_bounds` is too complex (11 > 10)",
-        "path": "scripts/agibot/generate_metric_map_from_context.py",
-        "row": 417,
-        "symbol": "_coordinate_bounds",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/agibot/generate_metric_map_from_context.py|C901|validate_context",
-        "limit": 10,
-        "message": "`validate_context` is too complex (18 > 10)",
-        "path": "scripts/agibot/generate_metric_map_from_context.py",
-        "row": 75,
-        "symbol": "validate_context",
-        "value": 18
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/agibot/generate_metric_map_from_context.py|PLR0912|validate_context",
-        "limit": 12,
-        "message": "Too many branches (18 > 12)",
-        "path": "scripts/agibot/generate_metric_map_from_context.py",
-        "row": 75,
-        "symbol": "validate_context",
-        "value": 18
-      },
-      {
         "code": "PLR0915",
         "key": "scripts/dev/probe_mify_v25_image.py|PLR0915|main",
         "limit": 50,
