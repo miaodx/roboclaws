@@ -40,6 +40,8 @@ def _run_eval_from_overrides(overrides: dict[str, str]):
     agent_engine = values.pop("agent_engine", "direct-runner")
     provider_profile = values.pop("provider_profile", None)
     model = values.pop("model", None)
+    live_execution = values.pop("live_execution", "blocked")
+    live_timeout_s = _optional_float(values.pop("live_timeout_s", None))
     if values:
         keys = ", ".join(sorted(values))
         raise ValueError(f"unsupported eval override(s): {keys}")
@@ -51,6 +53,8 @@ def _run_eval_from_overrides(overrides: dict[str, str]):
         agent_engine=agent_engine,
         provider_profile=provider_profile,
         model=model,
+        live_execution=live_execution,
+        live_timeout_s=live_timeout_s,
     )
 
 
@@ -76,3 +80,9 @@ def _parse_key_value_args(argv: list[str]) -> dict[str, str]:
             raise ValueError(f"unsupported eval argument {item!r}; expected key=value")
         index += 1
     return parsed
+
+
+def _optional_float(value: str | None) -> float | None:
+    if value in {None, ""}:
+        return None
+    return float(value)

@@ -54,12 +54,22 @@ lane, and missing live-provider fields explicitly.
 
 `cleanup_capability` records repeated cleanup trials and reports `pass@k` plus
 `pass^k` aggregate metrics. Live-agent eval identity can be requested with
-`agent_engine=... provider_profile=...`; until live eval runtime integration
-lands, those trials are recorded as blocked with provider/runtime failure
-classes instead of being silently downgraded to direct-runner proof. Blocked
-live-agent packets include a `roboclaws_live_eval_preflight_v1` runner section
-with required provider env keys, missing env keys, route status, and local
-runtime prerequisites.
+`agent_engine=... provider_profile=...`; by default those trials are recorded
+as blocked identity/preflight packets so provider-backed work is not launched
+by accident. Use `live_execution=run` only when you intend to run the selected
+live provider route:
+
+```bash
+just agent::eval suite=cleanup_capability budget=smoke \
+  agent_engine=openai-agents-sdk provider_profile=codex-env \
+  live_execution=run live_timeout_s=120
+```
+
+Blocked live-agent packets include either `roboclaws_live_eval_preflight_v1`
+runner metadata, or a live product-route failure classified separately from
+agent behavior failures. Provider 5xx/429/model-service failures are
+`model_or_provider_unavailable`; missing simulator/runtime dependencies are
+`environment_blocked`.
 
 Failed, blocked, or inconclusive eval results can be promoted into a durable
 regression sample with:

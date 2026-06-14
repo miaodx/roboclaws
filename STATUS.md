@@ -19,10 +19,12 @@ through `just agent::eval suite=smoke_regression budget=smoke` and
 suites write `eval_results.json` plus `eval_report.html` linked to product run
 artifacts. The `map_build_consumer` suite covers map-build Runtime Metric Map
 actionability, cleanup consumption of `runtime_map_prior`, and open-ended
-completion-claim versus artifact-readiness grading. Failed, blocked, or
-inconclusive eval results can now be promoted into regression samples with
-`just agent::eval promote-regression ...` while keeping private scorer truth
-inside grader-only sample metadata.
+completion-claim versus artifact-readiness grading. Live eval execution is
+opt-in with `live_execution=run`; default non-direct eval requests still record
+blocked identity/preflight packets so provider-backed work is not launched by
+accident. Failed, blocked, or inconclusive eval results can now be promoted into
+regression samples with `just agent::eval promote-regression ...` while keeping
+private scorer truth inside grader-only sample metadata.
 
 The household-world launch contract remains the active product shape:
 `surface=household-world` defaults to the no-preset open household task
@@ -46,19 +48,20 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Continue `docs/plans/2026-06-14-eval-driven-architecture.md` with the remaining
-Slice 5 live-agent runtime integration: run selected eval samples with a real
-Codex CLI, Claude Code, or OpenAI Agents SDK provider route when local
-provider/runtime requirements are available.
+Continue `docs/plans/2026-06-14-eval-driven-architecture.md` by deciding
+whether the current opt-in live eval bridge is enough for Slice 5, or whether
+Codex CLI / Claude Code detached-run completion polling should also be added.
 
 ## Current Blocker
 
-No current implementation blocker for deterministic eval work. Live-agent eval
-execution remains gated on local provider/runtime availability; current
-non-direct eval requests are recorded as blocked with provider/runtime failure
-classes instead of being downgraded. The only known validation blocker is
-OpenClaw Gateway: this host is on the work network, so Gateway proof must run
-separately off the work network before OpenClaw can be called healthy.
+No current implementation blocker for deterministic eval work. Opt-in
+OpenAI Agents SDK live eval execution reaches the live product route on this
+host, but the latest proof was blocked by provider 502 responses and correctly
+classified as `model_or_provider_unavailable`. Default non-direct eval requests
+remain blocked identity/preflight packets instead of being downgraded. The only
+known validation blocker is OpenClaw Gateway: this host is on the work network,
+so Gateway proof must run separately off the work network before OpenClaw can be
+called healthy.
 
 ## Human Review Surface
 

@@ -20,10 +20,19 @@ just agent::eval suite=cleanup_capability budget=smoke
 ```
 
 Non-direct selections preserve live-agent identity and produce blocked
-provider/runtime evidence until a supported live eval runtime is available:
+provider/runtime evidence unless live execution is explicitly requested:
 
 ```bash
 just agent::eval suite=cleanup_capability budget=smoke agent_engine=codex-cli provider_profile=codex-env
+```
+
+Run an opt-in live provider route only when local provider/runtime requirements
+are available:
+
+```bash
+just agent::eval suite=cleanup_capability budget=smoke \
+  agent_engine=openai-agents-sdk provider_profile=codex-env \
+  live_execution=run live_timeout_s=120
 ```
 
 The smoke budget writes `output/evals/<suite>/<stamp>/eval_results.json`,

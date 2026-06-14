@@ -19,9 +19,14 @@ from roboclaws.evals.dependencies import (
     resolve_artifact_dependencies,
     sample_artifact_key,
 )
+from roboclaws.evals.live_runtime import (
+    LiveTrialHooks,
+    product_run_kwargs,
+    run_live_eval_trial,
+    run_live_surface_product,
+)
 from roboclaws.evals.models import (
     MISSING_NOT_APPLICABLE,
-    MISSING_SENTINELS,
     MISSING_UNAVAILABLE,
     EvalResult,
     EvalSample,
@@ -33,10 +38,6 @@ from roboclaws.evals.models import (
 from roboclaws.evals.reports import render_eval_report, results_bundle
 from roboclaws.household.backend_contract import SYNTHETIC_BACKEND
 from roboclaws.household.realworld_cleanup import run_realworld_cleanup
-from roboclaws.launch.backends import BACKEND_SPECS
-from roboclaws.launch.catalog import SURFACE_SPECS
-from roboclaws.launch.goals import normalize_goal_contract
-from roboclaws.launch.intents import TASK_INTENT_SPECS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "output" / "evals"
@@ -64,9 +65,15 @@ def run_eval_suite(
     agent_engine: str = "direct-runner",
     provider_profile: str | None = None,
     model: str | None = None,
+    live_execution: str = "blocked",
+    live_timeout_s: float | None = None,
     product_runner: ProductRun = run_realworld_cleanup,
+    live_product_runner: ProductRun | None = None,
 ) -> EvalSuiteRun:
     """Run a repo-native deterministic eval suite."""
+
+    if live_execution not in {"blocked", "run"}:
+        raise ValueError("live_execution must be blocked or run")
 
     suite_path = resolve_suite_path(suite_ref)
     suite = load_eval_suite(suite_path)
@@ -106,7 +113,12 @@ def run_eval_suite(
                 repetition_index=repetition_index,
                 sample_artifacts=sample_artifacts,
                 agent_engine=engine.id,
+                provider_profile=selected_provider_profile,
+                model=model,
+                live_execution=live_execution,
+                live_timeout_s=live_timeout_s,
                 product_runner=product_runner,
+                live_product_runner=live_product_runner,
             )
             results.append(result)
             sample_artifacts[sample_artifact_key(sample.sample_id, repetition_index)] = (
@@ -222,10 +234,37 @@ def _run_trial(
     repetition_index: int,
     sample_artifacts: dict[str, dict[str, Any]],
     agent_engine: str,
+    provider_profile: str,
+    model: str | None,
+    live_execution: str,
+    live_timeout_s: float | None,
     product_runner: ProductRun,
+    live_product_runner: ProductRun | None,
 ) -> EvalResult:
     run_dir.mkdir(parents=True, exist_ok=True)
     if agent_engine != "direct-runner":
+        if live_execution == "run":
+            return run_live_eval_trial(
+                sample=sample,
+                trial=trial,
+                run_dir=run_dir,
+                budget=budget,
+                repetition_index=repetition_index,
+                sample_artifacts=sample_artifacts,
+                agent_engine=agent_engine,
+                provider_profile=provider_profile,
+                model=model,
+                live_timeout_s=live_timeout_s,
+                live_product_runner=live_product_runner or run_live_surface_product,
+                hooks=LiveTrialHooks(
+                    failed_result_from_dependency=_failed_result_from_dependency,
+                    blocked_result_from_exception=_blocked_result_from_exception,
+                    grade_trial=_grade_trial,
+                    status_from_graders=_status_from_graders,
+                    artifact_paths=_artifact_paths,
+                    metrics_from_graders=_metrics_from_graders,
+                ),
+            )
         return blocked_result_from_live_agent_request(
             trial,
             agent_engine=agent_engine,
@@ -241,7 +280,7 @@ def _run_trial(
         return _failed_result_from_dependency(trial, run_dir, failure)
     try:
         run_result = product_runner(
-            **_product_run_kwargs(
+            **product_run_kwargs(
                 sample,
                 run_dir=run_dir,
                 budget=budget,
@@ -270,77 +309,6 @@ def _run_trial(
         metrics=metrics,
         limitations=trial.limitations,
     )
-
-
-def _product_run_kwargs(
-    sample: EvalSample,
-    *,
-    run_dir: Path,
-    budget: str,
-    dependency_artifacts: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    launch_overrides = sample.launch_overrides or {}
-    semantic_sweep = sample.intent == "map-build" or sample.preset == "map-build"
-    kwargs: dict[str, Any] = {
-        "output_dir": run_dir,
-        "seed": sample.seed,
-        "task_prompt": _task_prompt(sample),
-        "backend": _implementation_backend(sample, budget=budget),
-        "cleanup_profile": _cleanup_profile(sample, budget=budget),
-        "semantic_sweep": semantic_sweep,
-        "generated_mess_count": _generated_mess_count(sample),
-        "scene_source": str(launch_overrides.get("scene_source") or "procthor-10k-val"),
-        "scene_index": int(launch_overrides.get("scene_index") or 0),
-        "run_metadata_overrides": {
-            "eval_sample_id": sample.sample_id,
-            "eval_sample_version": sample.version,
-            "eval_suite_runner": "roboclaws.evals.runner",
-        },
-    }
-    goal_contract = _goal_contract_json(sample)
-    if goal_contract:
-        kwargs["goal_contract_json"] = goal_contract
-    runtime_map_prior = str((dependency_artifacts or {}).get("runtime_map_prior_path") or "")
-    if runtime_map_prior:
-        kwargs["runtime_map_prior_path"] = runtime_map_prior
-    return kwargs
-
-
-def _implementation_backend(sample: EvalSample, *, budget: str) -> str:
-    if budget == "smoke":
-        return SYNTHETIC_BACKEND
-    backend = BACKEND_SPECS.get(sample.backend)
-    if backend is None:
-        return sample.backend
-    return backend.implementation_backend
-
-
-def _cleanup_profile(sample: EvalSample, *, budget: str) -> str:
-    if budget == "smoke":
-        return "smoke"
-    return sample.evidence_lane
-
-
-def _task_prompt(sample: EvalSample) -> str:
-    if sample.prompt not in {"", MISSING_NOT_APPLICABLE, MISSING_UNAVAILABLE}:
-        return sample.prompt
-    if sample.intent == "map-build":
-        return "帮我建立这个房间的语义地图"
-    return "帮我收拾这个房间"
-
-
-def _generated_mess_count(sample: EvalSample) -> int:
-    reference = sample.private_goal_reference
-    if isinstance(reference.get("generated_mess_count"), int):
-        return int(reference["generated_mess_count"])
-    launch_overrides = sample.launch_overrides or {}
-    for key in ("generated_mess_count", "relocation_count"):
-        value = launch_overrides.get(key)
-        if value is not None:
-            return int(value)
-    if sample.intent == "map-build":
-        return 0
-    return 10
 
 
 def _grade_trial(
@@ -588,13 +556,14 @@ def _metrics_from_graders(
 
 def _blocked_result_from_exception(trial: EvalTrial, exc: Exception) -> EvalResult:
     failure_class = _failure_class_from_exception(exc)
+    blocked = failure_class in {"environment_blocked", "model_or_provider_unavailable"}
     return EvalResult.from_trial(
         trial,
-        status="blocked" if failure_class == "environment_blocked" else "failed",
+        status="blocked" if blocked else "failed",
         failure_class=failure_class,
         grader_outputs={
             "runner": {
-                "status": "blocked" if failure_class == "environment_blocked" else "failed",
+                "status": "blocked" if blocked else "failed",
                 "error_type": type(exc).__name__,
                 "message": str(exc),
             }
@@ -612,6 +581,19 @@ def _failure_class_from_exception(exc: Exception) -> str:
     environment_tokens = ("no module named", "not installed", "unavailable", "timed out")
     if any(token in message for token in environment_tokens):
         return "environment_blocked"
+    provider_tokens = (
+        "provider_transient_failure",
+        "provider_config_failure",
+        "provider_context_failure",
+        "model_service",
+        "error code: 5",
+        "error code: 429",
+        "bad_response_status_code",
+        "openai_error",
+        "rate_limit",
+    )
+    if any(token in message for token in provider_tokens):
+        return "model_or_provider_unavailable"
     return "harness_bug_unclassified"
 
 
@@ -694,19 +676,6 @@ def _mcp_profile(sample: EvalSample) -> str:
     if sample.intent == "cleanup":
         return "household_world_v1+household_manipulation_v1"
     return "household_world_v1+household_episode_v1"
-
-
-def _goal_contract_json(sample: EvalSample) -> str:
-    if sample.intent not in TASK_INTENT_SPECS:
-        return ""
-    surface = SURFACE_SPECS.get(sample.surface)
-    if surface is None:
-        return ""
-    return normalize_goal_contract(
-        surface=surface,
-        intent=TASK_INTENT_SPECS[sample.intent],
-        raw_prompt="" if sample.prompt in MISSING_SENTINELS else sample.prompt,
-    ).to_json()
 
 
 def _tool_surface(sample: EvalSample) -> tuple[str, ...]:

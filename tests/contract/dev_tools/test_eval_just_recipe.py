@@ -17,6 +17,8 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
         "stamp=trace",
         "agent_engine=codex-cli",
         "provider_profile=codex-env",
+        "live_execution=run",
+        "live_timeout_s=30",
     )
 
     assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
@@ -24,6 +26,8 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
     assert "budget=smoke" in trace
     assert "agent_engine=codex-cli" in trace
     assert "provider_profile=codex-env" in trace
+    assert "live_execution=run" in trace
+    assert "live_timeout_s=30" in trace
 
 
 def test_agent_eval_public_facade_routes_promotion_cli() -> None:

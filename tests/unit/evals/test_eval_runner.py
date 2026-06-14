@@ -6,11 +6,13 @@ from typing import Any
 
 import pytest
 
+from roboclaws.evals.live_runtime import live_surface_command, live_surface_env
 from roboclaws.evals.regression import (
     promote_regression_from_cli_overrides,
     promote_regression_sample_from_eval_result,
 )
 from roboclaws.evals.runner import run_eval_suite
+from roboclaws.launch.catalog import resolve_surface_launch
 
 
 def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
@@ -133,6 +135,115 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
     assert preflight["runtime_readiness"]["required_runtime"] == "docker-backed coding-agent CLI"
     assert preflight["blocker"] == "repo_native_live_eval_execution_not_integrated"
     assert "live_agent_eval_runtime_not_implemented" in result["limitations"]
+
+
+def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> None:
+    seen_kwargs: list[dict[str, Any]] = []
+
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        seen_kwargs.append(kwargs)
+        surface_run_dir = Path(kwargs["output_dir"]) / "surface-run" / f"seed-{kwargs['seed']}"
+        _write_product_artifacts(surface_run_dir, completion_status="success")
+        result = _run_result(surface_run_dir, completion_status="success")
+        result["eval_effective_run_dir"] = str(surface_run_dir)
+        return result
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-run",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-env",
+        live_execution="run",
+        live_timeout_s=12.5,
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["passed"] == 3
+    assert payload["aggregate"]["blocked"] == 0
+    assert seen_kwargs[0]["agent_engine"] == "openai-agents-sdk"
+    assert seen_kwargs[0]["provider_profile"] == "codex-env"
+    assert seen_kwargs[0]["live_timeout_s"] == 12.5
+    result = payload["results"][0]
+    assert result["identity"]["runner_class"] == "live-agent"
+    assert result["artifacts"]["run_result"].endswith(
+        "runs/cleanup_repeated_seed7/trial-0000/surface-run/seed-7/run_result.json"
+    )
+
+
+def test_eval_runner_classifies_live_provider_failures_as_blocked(tmp_path: Path) -> None:
+    def live_product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError(
+            "OpenAI Agents SDK runtime failed: provider_transient_failure; "
+            "Error code: 502 - bad_response_status_code"
+        )
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-provider-blocked",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-env",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["blocked"] == 3
+    assert payload["aggregate"]["failed"] == 0
+    assert payload["aggregate"]["failure_classes"] == {"model_or_provider_unavailable": 3}
+    result = payload["results"][0]
+    assert result["status"] == "blocked"
+    assert result["failure_class"] == "model_or_provider_unavailable"
+    assert result["grader_outputs"]["runner"]["status"] == "blocked"
+
+
+def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
+    seen_kwargs: list[dict[str, Any]] = []
+
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        seen_kwargs.append(kwargs)
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="success")
+        return _run_result(run_dir, completion_status="success")
+
+    run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-command",
+        agent_engine="codex-cli",
+        provider_profile="codex-env",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    command = live_surface_command(seen_kwargs[0], output_dir=tmp_path / "surface-run")
+    assert "backend=mujoco" in command
+    assert "agent_engine=codex-cli" in command
+    assert "provider_profile=codex-env" in command
+    assert "evidence_lane=world-oracle-labels" in command
+    assert "run_preset=smoke" in command
+    assert "preset=cleanup" in command
+    assert not any(item.startswith("generated_mess_count=") for item in command)
+    plan = resolve_surface_launch(command[5:])
+    assert plan.agent_engine == "codex-cli"
+    assert plan.backend == "mujoco"
+    assert plan.mode == "smoke"
+
+
+def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
+    kwargs: dict[str, Any] = {
+        "agent_engine": "claude-code",
+        "provider_profile": "mimo-anthropic",
+        "model": "mimo-v2.5",
+    }
+
+    env = live_surface_env(kwargs, base_env={"PATH": "/bin"})
+
+    assert env["PATH"] == "/bin"
+    assert env["ROBOCLAWS_CLAUDE_PROVIDER"] == "mimo-anthropic"
+    assert env["ROBOCLAWS_CLAUDE_MODEL"] == "mimo-v2.5"
 
 
 def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(

@@ -694,9 +694,9 @@ Slice 4 verification evidence:
 
 ### Slice 5: Live-Agent Repetition And `pass^k`
 
-Status: partially implemented and verified 2026-06-15; live-agent runtime
-execution remains blocked by provider/runtime availability and runner
-integration.
+Status: partially implemented and verified 2026-06-15; opt-in OpenAI Agents
+SDK live execution reaches the product route, while Codex CLI / Claude Code
+detached-run completion polling remains a follow-up integration gap.
 
 Scope:
 
@@ -720,12 +720,19 @@ Slice 5a verification evidence:
   eligible-count reporting so repeated trials remain visible.
 - Added `agent_engine`, `provider_profile`, and `model` eval CLI overrides.
   Non-direct eval requests now preserve live-agent identity and produce blocked
-  `model_or_provider_unavailable` result packets until live runtime integration
-  lands.
+  `model_or_provider_unavailable` result packets unless
+  `live_execution=run` is explicitly requested.
 - Blocked live-agent eval packets now include
   `roboclaws_live_eval_preflight_v1` runner metadata with provider route
   readiness, required/missing env keys, route status, and local runtime
   prerequisites.
+- Added `roboclaws.evals.live_runtime` plus `live_execution=run` /
+  `live_timeout_s=...` CLI overrides. The live bridge calls the public
+  `run::surface` route for selected live eval trials, loads the resulting
+  product run artifacts, and grades the effective `seed-<n>` run directory.
+- Live provider/model service failures are classified as blocked
+  `model_or_provider_unavailable` results, separate from agent behavior
+  failures and harness bugs.
 - `just dev::network-status` reported `network: work`; OpenClaw and
   system-provider Claude Code routes are guarded on this host.
 - `ruff check roboclaws/evals tests/unit/evals
@@ -746,6 +753,16 @@ Slice 5a verification evidence:
   `output/evals/household_world_cleanup_capability/codex-slice5-live-blocked2/eval_results.json`;
   aggregate result was `blocked=3`,
   `failure_classes={"model_or_provider_unavailable": 3}`.
+- `bash -lc 'set -a; source .env; set +a; .venv/bin/python -m
+  roboclaws.cli.main eval suite=cleanup_capability budget=smoke
+  stamp=codex-slice5-live-openai-agents-provider-blocked
+  agent_engine=openai-agents-sdk provider_profile=codex-env
+  live_execution=run live_timeout_s=120'` reached the real OpenAI Agents SDK
+  product route and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice5-live-openai-agents-provider-blocked/eval_results.json`;
+  aggregate result was `blocked=3`, `failed=0`,
+  `failure_classes={"model_or_provider_unavailable": 3}` after provider 502
+  responses.
 
 Backend entropy follow-up evidence:
 
