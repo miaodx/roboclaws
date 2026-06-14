@@ -2856,3 +2856,22 @@ Stop this refactor loop when:
   `route_readiness(...)` no longer appears in the quality summary; `launcher.py`
   keeps three residual C901 rows for `build_launch_argv(...)`,
   `_validate_env_overrides(...)`, and `_docker_container_ids_with_mount(...)`.
+- 2026-06-14: Continued the visual-grounding contract candidate by extracting
+  request/response schema validation into
+  `roboclaws/household/visual_grounding_contract.py`. The HTTP client module
+  keeps the public schema constants, `VisualGroundingContractError`, and
+  validator names as imported exports, while base64 validation, request image
+  checks, pipeline/stage checks, candidate region validation, and numeric list
+  validation now live in the focused contract module. Evidence:
+  `ruff check roboclaws/household/visual_grounding.py roboclaws/household/visual_grounding_contract.py scripts/visual_grounding/adapters.py tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+  passed; `ruff format --check roboclaws/household/visual_grounding.py roboclaws/household/visual_grounding_contract.py scripts/visual_grounding/adapters.py tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+  passed; `python -m py_compile roboclaws/household/visual_grounding.py roboclaws/household/visual_grounding_contract.py`
+  passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 121 to
+  116 Ruff complexity violations, with oversized modules unchanged at 59.
+  The request/response/candidate validation rows were removed from
+  `visual_grounding.py`; the remaining visual-grounding rows are
+  `HttpVisualGroundingClient.request_candidates(...)` and
+  `scripts/visual_grounding/adapters.py::_yolo_candidates_from_model(...)`.

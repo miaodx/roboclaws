@@ -664,59 +664,9 @@
         "limit": 10,
         "message": "`request_candidates` is too complex (11 > 10)",
         "path": "roboclaws/household/visual_grounding.py",
-        "row": 67,
+        "row": 68,
         "symbol": "HttpVisualGroundingClient.request_candidates",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/visual_grounding.py|C901|_validate_visual_grounding_candidate",
-        "limit": 10,
-        "message": "`_validate_visual_grounding_candidate` is too complex (11 > 10)",
-        "path": "roboclaws/household/visual_grounding.py",
-        "row": 366,
-        "symbol": "_validate_visual_grounding_candidate",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/visual_grounding.py|C901|validate_visual_grounding_request",
-        "limit": 10,
-        "message": "`validate_visual_grounding_request` is too complex (14 > 10)",
-        "path": "roboclaws/household/visual_grounding.py",
-        "row": 298,
-        "symbol": "validate_visual_grounding_request",
-        "value": 14
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/visual_grounding.py|C901|validate_visual_grounding_response",
-        "limit": 10,
-        "message": "`validate_visual_grounding_response` is too complex (14 > 10)",
-        "path": "roboclaws/household/visual_grounding.py",
-        "row": 329,
-        "symbol": "validate_visual_grounding_response",
-        "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/visual_grounding.py|PLR0912|validate_visual_grounding_request",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/household/visual_grounding.py",
-        "row": 298,
-        "symbol": "validate_visual_grounding_request",
-        "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/visual_grounding.py|PLR0912|validate_visual_grounding_response",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/household/visual_grounding.py",
-        "row": 329,
-        "symbol": "validate_visual_grounding_response",
-        "value": 13
       },
       {
         "code": "C901",
