@@ -93,6 +93,7 @@ from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
 from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
     semantic_label_target_prims as _semantic_label_target_prims,
 )
+from scripts.isaac_lab_cleanup.isaac_support_surfaces import usd_support_surface_union
 from scripts.isaac_lab_cleanup.isaac_usd_xform import (
     set_usd_xform_translate as _set_usd_xform_translate,
 )
@@ -1224,60 +1225,12 @@ def _usd_support_surface_union(
     *,
     whole_surface: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    broad = []
-    best_top_z = float(candidates[0].get("top_z") or 0.0) if candidates else 0.0
-    for surface in candidates:
-        if surface.get("source") != ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE:
-            continue
-        top_z = _float_or_default(surface.get("top_z"), best_top_z)
-        area = _float_or_default(surface.get("area_m2"), 0.0)
-        whole_area = _float_or_default(_dict(whole_surface).get("area_m2"), 0.0)
-        if area < 0.03:
-            continue
-        if whole_area > 0.0 and area / whole_area < 0.35:
-            continue
-        if abs(top_z - best_top_z) > 0.08:
-            continue
-        center = surface.get("center")
-        half_extents = surface.get("half_extents")
-        if not isinstance(center, (list, tuple)) or len(center) < 2:
-            continue
-        if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
-            continue
-        try:
-            min_x = float(center[0]) - abs(float(half_extents[0]))
-            max_x = float(center[0]) + abs(float(half_extents[0]))
-            min_y = float(center[1]) - abs(float(half_extents[1]))
-            max_y = float(center[1]) + abs(float(half_extents[1]))
-        except (TypeError, ValueError):
-            continue
-        broad.append((surface, min_x, max_x, min_y, max_y, top_z))
-    if len(broad) < 2:
-        return None
-    min_x = min(item[1] for item in broad)
-    max_x = max(item[2] for item in broad)
-    min_y = min(item[3] for item in broad)
-    max_y = max(item[4] for item in broad)
-    top_z = max(item[5] for item in broad)
-    area = (max_x - min_x) * (max_y - min_y)
-    if area <= 0.0:
-        return None
-    return {
-        "surface_id": "+".join(str(item[0].get("surface_id") or "") for item in broad),
-        "center": [round((min_x + max_x) / 2.0, 6), round((min_y + max_y) / 2.0, 6)],
-        "top_z": round(top_z, 6),
-        "half_extents": [
-            round((max_x - min_x) / 2.0, 6),
-            round((max_y - min_y) / 2.0, 6),
-        ],
-        "area_m2": round(area, 6),
-        "source": ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
-        "selection_score": round(
-            max(float(item[0].get("selection_score") or 0.0) for item in broad),
-            6,
-        ),
-        "member_count": len(broad),
-    }
+    return usd_support_surface_union(
+        candidates,
+        whole_surface=whole_surface,
+        descendant_source=ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
+        union_source=ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
+    )
 
 
 def _room_outline_from_usd_prim(
