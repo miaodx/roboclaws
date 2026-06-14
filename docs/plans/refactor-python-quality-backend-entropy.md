@@ -320,11 +320,11 @@ Discovery round: 2026-06-14 post-I1 Isaac camera-capture splits.
 
 Quality signal:
 
-- `python scripts/dev/check_python_quality_ratchet.py` passes at 152 Ruff
+- `python scripts/dev/check_python_quality_ratchet.py` passes at 150 Ruff
   complexity violations and 59 oversized modules.
 - `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`
   shows the largest implementation hotspots are
-  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (8232 lines, 7
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (8021 lines, 5
   complexity rows), `roboclaws/household/report.py` (7889 lines, 3 rows),
   `roboclaws/household/scene_camera_comparison.py` (6796 lines, 8 rows),
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` (3701 lines, 7
@@ -353,8 +353,7 @@ Materiality: `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` remains
 the largest backend-specific module. After camera-capture extraction and the
 CLI/dispatch split, its remaining rows are separate families:
 `_usd_support_surface_union`, `_set_usd_xform_translate`,
-`_apply_scene_index_semantic_labels`,
-`_apply_isaac_capture_quality_overrides`, and
+`_apply_scene_index_semantic_labels`, and
 `_real_semantic_pose_robot_view_images`.
 
 Impact radius: workflow.
@@ -383,6 +382,12 @@ Progress:
   explicit state-command dispatch table. The `parse_args(...)` worker entrypoint
   remains stable for tests and callers. This removed the `parse_args` PLR0915
   row and the `main` C901/PLR0912 rows.
+- 2026-06-14: capture-quality setting mutation, restoration, requested-setting
+  row construction, and JSON-safe setting value normalization moved to
+  `scripts/isaac_lab_cleanup/isaac_capture_quality.py`. The worker keeps its
+  `_apply_isaac_capture_quality_overrides(...)` wrapper so existing hook and
+  test seams stay stable. This removed the `_apply_isaac_capture_quality_overrides`
+  C901/PLR0912 rows.
 
 Suggested proof:
 
@@ -1258,3 +1263,20 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. The Isaac worker dropped
   from 8391 to 8232 lines and from 10 to 7 grouped complexity rows; the
   `parse_args` PLR0915 and `main` C901/PLR0912 rows were removed.
+- 2026-06-14: Continued I1 by extracting Isaac capture-quality renderer-setting
+  mutation helpers into `scripts/isaac_lab_cleanup/isaac_capture_quality.py`.
+  The worker keeps `_apply_isaac_capture_quality_overrides(...)` as the stable
+  worker-local wrapper that binds Isaac setting path constants; restoration,
+  requested-setting row construction, and JSON-safe setting serialization now
+  live in the helper module. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_capture_quality.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+  passed; `ruff format --check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_capture_quality.py`
+  passed; `python -m py_compile scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_capture_quality.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+  passed with the existing Pillow deprecation warning from scene-camera image
+  saving; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 152 to 150 Ruff complexity
+  violations, with oversized modules unchanged at 59. The Isaac worker dropped
+  from 8232 to 8021 lines and from 7 to 5 grouped complexity rows; the
+  `_apply_isaac_capture_quality_overrides` C901/PLR0912 rows were removed.

@@ -70,6 +70,15 @@ from scripts.isaac_lab_cleanup.isaac_camera_capture import (
     IsaacCameraCaptureRequest,
     capture_isaac_lab_camera_views,
 )
+from scripts.isaac_lab_cleanup.isaac_capture_quality import (
+    apply_isaac_capture_quality_overrides,
+)
+from scripts.isaac_lab_cleanup.isaac_capture_quality import (
+    json_safe_setting_value as _json_safe_setting_value,
+)
+from scripts.isaac_lab_cleanup.isaac_capture_quality import (
+    restore_isaac_capture_quality_overrides as _restore_isaac_capture_quality_overrides,
+)
 from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureHooks,
     IsaacSceneCameraCaptureRequest,
@@ -4254,225 +4263,15 @@ def _apply_isaac_capture_quality_overrides(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    mutation: dict[str, Any] = {
-        "schema": "isaac_capture_quality_settings_mutation_v1",
-        "settings_mutation_attempted": False,
-        "default_render_settings_changed": False,
-        "settings": {},
-    }
-    if (
-        isaac_aa_op is None
-        and isaac_tonemap_op is None
-        and isaac_exposure_bias is None
-        and isaac_colorcorr_gain is None
-    ):
-        mutation["status"] = "not_requested"
-        return mutation
-    mutation["settings_mutation_attempted"] = True
-    if settings is None:
-        mutation["status"] = "settings_api_unavailable"
-        if isaac_aa_op is not None:
-            mutation["settings"]["anti_aliasing"] = {
-                "name": "anti_aliasing",
-                "status": "not_available",
-                "value": None,
-                "requested_value": int(isaac_aa_op),
-                "setting_path": "",
-                "candidate_paths": list(ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"]),
-                "default_render_settings_changed": False,
-            }
-        if isaac_tonemap_op is not None:
-            mutation["settings"]["tonemap_operator"] = {
-                "name": "tonemap_operator",
-                "status": "not_available",
-                "value": None,
-                "requested_value": int(isaac_tonemap_op),
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["operator"]
-                ),
-                "default_render_settings_changed": False,
-            }
-        if isaac_exposure_bias is not None:
-            mutation["settings"]["exposure_bias"] = {
-                "name": "exposure_bias",
-                "status": "not_available",
-                "value": None,
-                "requested_value": float(isaac_exposure_bias),
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["exposure_bias"]
-                ),
-                "default_render_settings_changed": False,
-            }
-        if isaac_colorcorr_gain is not None:
-            mutation["settings"]["colorcorr_enabled"] = {
-                "name": "colorcorr_enabled",
-                "status": "not_available",
-                "value": None,
-                "requested_value": True,
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["enabled"]
-                ),
-                "default_render_settings_changed": False,
-            }
-            mutation["settings"]["colorcorr_gain"] = {
-                "name": "colorcorr_gain",
-                "status": "not_available",
-                "value": None,
-                "requested_value": list(isaac_colorcorr_gain),
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["gain"]
-                ),
-                "default_render_settings_changed": False,
-            }
-        return mutation
-    if isaac_aa_op is not None:
-        row = _set_isaac_setting(
-            settings,
-            ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"],
-            int(isaac_aa_op),
-            name="anti_aliasing",
-        )
-        mutation["settings"]["anti_aliasing"] = row
-    if isaac_tonemap_op is not None:
-        row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["operator"],
-            int(isaac_tonemap_op),
-            name="tonemap_operator",
-        )
-        mutation["settings"]["tonemap_operator"] = row
-    if isaac_exposure_bias is not None:
-        row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["exposure_bias"],
-            float(isaac_exposure_bias),
-            name="exposure_bias",
-        )
-        mutation["settings"]["exposure_bias"] = row
-    if isaac_colorcorr_gain is not None:
-        enabled_row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["enabled"],
-            True,
-            name="colorcorr_enabled",
-        )
-        mutation["settings"]["colorcorr_enabled"] = enabled_row
-        gain_row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["gain"],
-            list(isaac_colorcorr_gain),
-            name="colorcorr_gain",
-        )
-        mutation["settings"]["colorcorr_gain"] = gain_row
-    statuses = [
-        str(row.get("status") or "")
-        for row in _dict(mutation.get("settings")).values()
-        if isinstance(row, dict)
-    ]
-    mutation["default_render_settings_changed"] = any(status == "applied" for status in statuses)
-    if any(status == "applied" for status in statuses):
-        mutation["status"] = "applied"
-    elif statuses:
-        mutation["status"] = ",".join(statuses)
-    else:
-        mutation["status"] = "not_available"
-    return mutation
-
-
-def _restore_isaac_capture_quality_overrides(
-    *,
-    settings: Any | None,
-    mutation: dict[str, Any],
-) -> dict[str, Any]:
-    if not mutation.get("settings_mutation_attempted"):
-        mutation["restore_status"] = "not_needed"
-        return mutation
-    if settings is None:
-        mutation["restore_status"] = "settings_api_unavailable"
-        return mutation
-    restored_any = False
-    failed_any = False
-    for row in _dict(mutation.get("settings")).values():
-        if not isinstance(row, dict) or row.get("status") != "applied":
-            continue
-        path = str(row.get("setting_path") or "")
-        if not path:
-            continue
-        try:
-            settings.set(path, row.get("previous_value"))
-        except Exception as exc:
-            row["restore_status"] = "failed"
-            row["restore_error"] = str(exc)
-            failed_any = True
-            continue
-        row["restore_status"] = "restored"
-        row["restored_value"] = _json_safe_setting_value(row.get("previous_value"))
-        restored_any = True
-    if failed_any:
-        mutation["restore_status"] = "restore_failed"
-    elif restored_any:
-        mutation["restore_status"] = "restored"
-    else:
-        mutation["restore_status"] = "not_needed"
-    return mutation
-
-
-def _set_isaac_setting(
-    settings: Any,
-    candidate_paths: tuple[str, ...],
-    requested_value: Any,
-    *,
-    name: str,
-) -> dict[str, Any]:
-    paths = list(candidate_paths)
-    for path in candidate_paths:
-        try:
-            previous_value = settings.get(path)
-        except Exception:
-            continue
-        if previous_value is None:
-            continue
-        try:
-            settings.set(path, requested_value)
-        except Exception as exc:
-            return {
-                "name": name,
-                "status": "set_failed",
-                "value": _json_safe_setting_value(previous_value),
-                "previous_value": _json_safe_setting_value(previous_value),
-                "requested_value": _json_safe_setting_value(requested_value),
-                "setting_path": path,
-                "candidate_paths": paths,
-                "default_render_settings_changed": False,
-                "error": str(exc),
-            }
-        try:
-            new_value = settings.get(path)
-        except Exception:
-            new_value = requested_value
-        return {
-            "name": name,
-            "status": "applied",
-            "value": _json_safe_setting_value(new_value),
-            "previous_value": _json_safe_setting_value(previous_value),
-            "requested_value": _json_safe_setting_value(requested_value),
-            "setting_path": path,
-            "candidate_paths": paths,
-            "default_render_settings_changed": True,
-        }
-    return {
-        "name": name,
-        "status": "not_available",
-        "value": None,
-        "requested_value": _json_safe_setting_value(requested_value),
-        "setting_path": "",
-        "candidate_paths": paths,
-        "default_render_settings_changed": False,
-    }
+    return apply_isaac_capture_quality_overrides(
+        settings=settings,
+        setting_paths=ISAAC_NATIVE_RENDER_SETTING_PATHS,
+        capture_quality_fields=ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
+        isaac_aa_op=isaac_aa_op,
+        isaac_tonemap_op=isaac_tonemap_op,
+        isaac_exposure_bias=isaac_exposure_bias,
+        isaac_colorcorr_gain=isaac_colorcorr_gain,
+    )
 
 
 def _isaac_settings_interface() -> Any | None:
@@ -4512,16 +4311,6 @@ def _isaac_setting_value(settings: Any | None, candidate_paths: tuple[str, ...])
         "setting_path": "",
         "candidate_paths": paths,
     }
-
-
-def _json_safe_setting_value(value: Any) -> Any:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, list | tuple):
-        return [_json_safe_setting_value(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): _json_safe_setting_value(item) for key, item in value.items()}
-    return str(value)
 
 
 def _camera_render_product_paths(camera: Any) -> list[str]:
