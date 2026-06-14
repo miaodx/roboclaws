@@ -6,7 +6,7 @@
   "role": "household_open_task_behavior",
   "status": "active",
   "mcp": {
-    "profiles": ["household_world_v1", "household_episode_v1"],
+    "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
     "required_tools": [
       "metric_map",
       "navigate_to_waypoint",
@@ -33,7 +33,7 @@
     "boundary_notes": "Public household open-task surface. Manipulation is optional and task-triggered; private generated mess truth, destination tables, and scorer artifacts are excluded."
   },
   "capability_requirements": {
-    "profiles": ["household_world_v1", "household_episode_v1"],
+    "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
     "backend_variants": ["api_semantic_synthetic", "molmospaces_subprocess", "nav2_ros2", "agibot_gdk"],
     "notes": "Default surface=household-world open tasks require world evidence plus task lifecycle. Cleanup preset composes the separate manipulation-heavy cleanup skill."
   },

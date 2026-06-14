@@ -15,18 +15,22 @@ from roboclaws.operator_console.interactions import (
     list_operator_messages,
 )
 from roboclaws.operator_console.paths import console_output_root
-from roboclaws.operator_console.routes import get_route
+from roboclaws.operator_console.routes import get_selection
+
+MUJOCO_CODEX_CLEANUP = (
+    "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+)
 
 
 def _write_run(
     root: Path,
     *,
     run_id: str = "run-a",
-    route_id: str = "codex-mujoco-cleanup",
+    selection_id: str = MUJOCO_CODEX_CLEANUP,
     phase: str = "running-codex",
     run_result: dict[str, object] | None = None,
 ) -> Path:
-    route = get_route(route_id)
+    route = get_selection(selection_id)
     run_dir = console_output_root(root) / "runs" / run_id
     run_dir.mkdir(parents=True)
     session = attach_run_to_session(root, run_id)
@@ -113,7 +117,10 @@ def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path
     assert request["auto_start_allowed"] is True
     assert request["queue_reason"] == "parent_terminal_and_result_available"
     assert request["operator_session_id"].startswith("session-")
-    assert request["route_id"] == "codex-mujoco-cleanup"
+    assert (
+        request["selection_id"]
+        == MUJOCO_CODEX_CLEANUP
+    )
     assert request["next_goal_packet"]["instruction"].startswith(
         "This is a linked follow-up Robot Run"
     )

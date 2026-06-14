@@ -1206,7 +1206,7 @@ function handleStartAction() {
 
 function attachExistingRun(run) {
   state.activeRunId = run.run_id;
-  state.activeRouteId = run.selection_id || run.route_id || state.selectedRoute.id;
+  state.activeRouteId = run.selection_id || state.selectedRoute.id;
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   startPolling();
 }
@@ -1217,9 +1217,7 @@ async function attachLatestResult() {
     els.eventList.textContent = result.error;
     return;
   }
-  const route = state.routes.find(
-    (item) => item.id === (result.selection_id || result.route_id)
-  );
+  const route = state.routes.find((item) => item.id === result.selection_id);
   if (route) {
     state.selectedRoute = route;
     state.selectedIntent = route.intent_id || "";
@@ -1228,7 +1226,7 @@ async function attachLatestResult() {
     renderSelection();
   }
   state.activeRunId = result.run_id;
-  state.activeRouteId = result.selection_id || result.route_id || (route ? route.id : state.selectedRoute.id);
+  state.activeRouteId = result.selection_id || (route ? route.id : state.selectedRoute.id);
   els.eventList.textContent = `Attached latest result ${result.run_id}${
     result.display_run_id ? ` / ${result.display_run_id}` : ""
   }.`;

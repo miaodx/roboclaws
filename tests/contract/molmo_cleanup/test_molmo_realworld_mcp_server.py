@@ -33,7 +33,12 @@ from roboclaws.household.types import (
 from roboclaws.launch.catalog import SURFACE_SPECS
 from roboclaws.launch.goals import normalize_goal_contract
 from roboclaws.launch.intents import TASK_INTENT_SPECS
-from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
+from roboclaws.mcp.profiles import (
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
+    contract_profile,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -70,11 +75,16 @@ def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: P
         port=0,
     )
     try:
-        profile = contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
+        profiles = (
+            contract_profile(HOUSEHOLD_WORLD_PROFILE),
+            contract_profile(HOUSEHOLD_MANIPULATION_PROFILE),
+            contract_profile(HOUSEHOLD_EPISODE_PROFILE),
+        )
+        public_tool_names = {name for profile in profiles for name in profile.public_tool_names()}
 
-        assert _fastmcp_tool_names(server) == set(profile.public_tool_names())
-        assert not profile.privileged_tool_names()
-        assert "resolve_target_query" in profile.public_tool_names()
+        assert _fastmcp_tool_names(server) == public_tool_names
+        assert not any(profile.privileged_tool_names() for profile in profiles)
+        assert "resolve_target_query" in public_tool_names
         assert "resolve_target_query" in server._agent_view_payload()["public_tool_names"]
     finally:
         server.close()

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.operator_console.paths import console_output_root
-from roboclaws.operator_console.routes import ConsoleRoute, get_route
+from roboclaws.operator_console.routes import ConsoleLaunchSelection, get_selection
 from roboclaws.operator_console.state import (
     derive_operator_state,
     resolve_display_run_dir,
@@ -190,7 +190,6 @@ def append_next_goal_request(
             "operator_session_id": session["operator_session_id"],
             "parent_run_id": run_id,
             "selection_id": _state_selection_id(state),
-            "route_id": _state_legacy_route_id(state) or (route.id if route else ""),
             "intent": str(state.get("selected_intent") or ""),
             "queue_reason": reason,
             "auto_start_allowed": status == "ready_to_start",
@@ -411,16 +410,16 @@ def _public_artifact_scope(artifacts: list[Any]) -> list[dict[str, str]]:
     return output
 
 
-def _run_context(root: Path, run_id: str) -> tuple[Path, ConsoleRoute | None]:
+def _run_context(root: Path, run_id: str) -> tuple[Path, ConsoleLaunchSelection | None]:
     if not run_id:
         raise InteractionError("run_id is required.")
     run_dir = console_output_root(root) / "runs" / run_id
     if not run_dir.is_dir():
         raise InteractionError(f"unknown run: {run_id}")
     state = _read_json(run_dir / "operator_state.json")
-    route_id = _state_legacy_route_id(state)
+    selection_id = _state_selection_id(state)
     try:
-        route = get_route(route_id) if route_id else None
+        route = get_selection(selection_id) if selection_id else None
     except KeyError:
         route = None
     return run_dir, route
@@ -433,13 +432,6 @@ def _state_selection_id(state: dict[str, Any]) -> str:
     route_payload = state.get("route")
     if isinstance(route_payload, dict):
         return str(route_payload.get("selection_id") or route_payload.get("id") or "")
-    return ""
-
-
-def _state_legacy_route_id(state: dict[str, Any]) -> str:
-    route_payload = state.get("route")
-    if isinstance(route_payload, dict):
-        return str(route_payload.get("legacy_route_id") or route_payload.get("route_id") or "")
     return ""
 
 
@@ -475,7 +467,7 @@ def _terminal_success(state: dict[str, Any]) -> bool:
     return True
 
 
-def _requires_next_goal_confirmation(route: ConsoleRoute | None) -> bool:
+def _requires_next_goal_confirmation(route: ConsoleLaunchSelection | None) -> bool:
     if route is None:
         return True
     return route.emergency_stop_required or route.resource_kind in {"physical_robot", "real_robot"}

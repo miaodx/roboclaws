@@ -866,8 +866,7 @@ def test_plugins_allow_seeded_from_canonical_allowlist(tmp_path: Path) -> None:
         "or the bootstrap pre-seed in lockstep so both paths agree on the list"
     )
     # acpx probeAgent pins the embedded-ACP health probe to one of our agents
-    # instead of the upstream default ``codex`` — see the same fix in
-    # scripts/appliance/appliance_seed_openclaw.py for rationale.
+    # instead of the upstream default ``codex``.
     assert cfg["plugins"]["entries"]["acpx"]["enabled"] is True, (
         "plugins.entries.acpx must set enabled=true or the entries-system "
         "warns 'plugin disabled (bundled (disabled by default)) but config "
@@ -889,6 +888,20 @@ def test_bootstrap_reads_canonical_plugin_allowlist() -> None:
         "openclaw-bootstrap.sh must read the canonical allow-list module and "
         "forward it to the pre-seed as PLUGIN_ALLOW_JSON"
     )
+
+
+def test_retired_railway_appliance_surface_stays_removed() -> None:
+    retired_paths = (
+        ROOT / "Dockerfile.railway",
+        ROOT / "railway.toml",
+        ROOT / "deploy" / "railway",
+        ROOT / "scripts" / "appliance",
+        ROOT / "scripts" / "appliance-run-interactive.sh",
+        ROOT / "scripts" / "appliance_control_ui_smoke.py",
+    )
+
+    for path in retired_paths:
+        assert not path.exists(), f"retired Railway/OpenClaw appliance surface returned: {path}"
 
 
 def test_mcp_url_env_override_honored(tmp_path: Path) -> None:

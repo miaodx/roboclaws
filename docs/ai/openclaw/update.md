@@ -39,7 +39,6 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
   - Any local autop-run commands used in phase tasks (e.g. territory/coverage scripts)
 - [ ] Re-run relevant test entry points that assert OpenClaw startup/config invariants:
   - `pytest -q tests/contract/openclaw/test_openclaw_bootstrap.py`
-  - `pytest -q tests/contract/appliance/test_appliance_seed_openclaw.py`
 - [ ] Record failures or behavior changes with exact image tag in checklist notes.
 
 ## 5) Documentation sync

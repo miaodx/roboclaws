@@ -14,7 +14,7 @@ from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.household.report import render_cleanup_report, write_state_snapshot
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
-from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, contract_profile_metadata
+from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, legacy_contract_profile_metadata
 
 AGIBOT_SDK_RUNNER_BACKEND = "agibot_sdk_runner"
 AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
@@ -532,7 +532,7 @@ def run_physical_agibot_cleanup_pilot(
         "schema": PHYSICAL_AGIBOT_PILOT_SCHEMA,
         "contract": REALWORLD_CONTRACT,
         "cleanup_profile": REAL_ROBOT_CLEANUP_PROFILE,
-        "cleanup_profile_metadata": contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE),
+        "cleanup_profile_metadata": legacy_contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE),
         "backend": AGIBOT_SDK_RUNNER_BACKEND,
         "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
         "policy": PHYSICAL_AGIBOT_PILOT_POLICY,

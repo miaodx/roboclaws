@@ -32,7 +32,11 @@ cleanup startup if it is missing or invalid. Override the selection with
 
 ## Pilot Contract
 
-Use semantic profile `real_robot_cleanup_v1`.
+Use the task-neutral household capability profiles:
+`household_world_v1`, `household_manipulation_v1`, and
+`household_episode_v1`. Older pilot artifacts may still record
+`cleanup_profile=real_robot_cleanup_v1` as legacy report metadata, but that id
+is not an active MCP contract profile for new routes.
 
 Navigation and perception pilot tools:
 

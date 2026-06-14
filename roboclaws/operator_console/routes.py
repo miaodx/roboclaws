@@ -237,106 +237,6 @@ class ConsoleLaunchSelection:
         return payload
 
 
-@dataclass(frozen=True)
-class ConsoleRoute:
-    """Legacy display wrapper for older route-id history records."""
-
-    id: str
-    label: str
-    selection: ConsoleLaunchSelection
-
-    def to_payload(self) -> dict[str, Any]:
-        payload = self.selection.to_payload()
-        payload["selection_id"] = self.selection.id
-        payload["legacy_route_id"] = self.id
-        payload["id"] = self.id
-        payload["label"] = self.label
-        return payload
-
-    @property
-    def surface(self) -> str:
-        return self.selection.surface
-
-    @property
-    def intent(self) -> str:
-        return self.selection.intent_id
-
-    @property
-    def driver(self) -> str:
-        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].dispatch_runner
-
-    @property
-    def driver_label(self) -> str:
-        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].label
-
-    @property
-    def profile(self) -> str:
-        return self.selection.evidence_lane
-
-    @property
-    def backend(self) -> str:
-        return self.selection.backend.implementation_backend
-
-    @property
-    def default_overrides(self) -> tuple[str, ...]:
-        return self.selection.default_overrides
-
-    @property
-    def launch_default_overrides(self) -> tuple[str, ...]:
-        return self.selection.launch_default_overrides
-
-    @property
-    def required_overrides(self) -> tuple[str, ...]:
-        return self.selection.required_overrides
-
-    @property
-    def gates(self) -> tuple[RouteGate, ...]:
-        return self.selection.gates
-
-    @property
-    def enabled(self) -> bool:
-        return self.selection.enabled
-
-    @property
-    def disabled_reason(self) -> str:
-        return self.selection.disabled_reason
-
-    @property
-    def lock_name(self) -> str:
-        return self.selection.lock_name
-
-    @property
-    def supports_prompt(self) -> bool:
-        return self.selection.supports_prompt
-
-    @property
-    def supports_operator_steer(self) -> bool:
-        return self.selection.supports_operator_steer
-
-    @property
-    def pause_supported(self) -> bool:
-        return self.selection.pause_supported
-
-    @property
-    def emergency_stop_required(self) -> bool:
-        return self.selection.emergency_stop_required
-
-    @property
-    def resource_kind(self) -> str:
-        return self.selection.resource_kind
-
-    @property
-    def checker_id(self) -> str:
-        return self.selection.checker_id
-
-    @property
-    def task_prompt_default(self) -> str:
-        return self.selection.task_prompt_default
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.selection, name)
-
-
 PROVIDER_KEY_GATE = RouteGate(
     id="provider_key",
     label="Agent provider route present",
@@ -449,23 +349,6 @@ def get_selection(selection_id: str) -> ConsoleLaunchSelection:
         if selection.id == selection_id:
             return selection
     raise KeyError(selection_id)
-
-
-def list_console_routes(*, include_disabled: bool = True) -> tuple[ConsoleRoute, ...]:
-    """Return legacy route wrappers for old callers."""
-
-    routes = tuple(_LEGACY_ROUTE_BY_ID.values())
-    if include_disabled:
-        return routes
-    return tuple(route for route in routes if route.selection.enabled)
-
-
-def get_route(route_id: str) -> ConsoleRoute:
-    route = _LEGACY_ROUTE_BY_ID.get(route_id)
-    if route:
-        return route
-    selection = get_selection(route_id)
-    return ConsoleRoute(id=selection.id, label=selection.label, selection=selection)
 
 
 def validate_supported_routes_against_catalog() -> None:
@@ -925,71 +808,6 @@ def _lane_selections(
             )
         )
     return tuple(rows)
-
-
-_LEGACY_ROUTE_BY_ID: dict[str, ConsoleRoute] = {
-    "codex-mujoco-cleanup": ConsoleRoute(
-        id="codex-mujoco-cleanup",
-        label="MolmoSpaces val_0 / MuJoCo / Cleanup / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "claude-mujoco-cleanup": ConsoleRoute(
-        id="claude-mujoco-cleanup",
-        label="MolmoSpaces val_0 / MuJoCo / Cleanup / Claude Code",
-        selection=get_selection(
-            "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-        ),
-    ),
-    "codex-isaac-cleanup": ConsoleRoute(
-        id="codex-isaac-cleanup",
-        label="MolmoSpaces val_0 / Isaac Lab / Cleanup / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "claude-isaac-cleanup": ConsoleRoute(
-        id="claude-isaac-cleanup",
-        label="MolmoSpaces val_0 / Isaac Lab / Cleanup / Claude Code",
-        selection=get_selection(
-            "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
-        ),
-    ),
-    "codex-agibot-g2-map-build": ConsoleRoute(
-        id="codex-agibot-g2-map-build",
-        label="Agibot G2 Map 12 / Agibot GDK / Map Build / Codex CLI",
-        selection=get_selection(
-            "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
-        ),
-    ),
-    "codex-mujoco-map-build": ConsoleRoute(
-        id="codex-mujoco-map-build",
-        label="MolmoSpaces val_0 / MuJoCo / Map Build / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "codex-isaac-map-build": ConsoleRoute(
-        id="codex-isaac-map-build",
-        label="MolmoSpaces val_0 / Isaac Lab / Map Build / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "codex-b1-map12-open-ended": ConsoleRoute(
-        id="codex-b1-map12-open-ended",
-        label="B1 / Map 12 / Isaac Lab / Open-ended / Codex CLI",
-        selection=get_selection("b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"),
-    ),
-    "agibot-g2-cleanup": ConsoleRoute(
-        id="agibot-g2-cleanup",
-        label="Agibot G2 Map 12 / Agibot GDK / Cleanup / Codex CLI",
-        selection=get_selection(
-            "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
-        ),
-    ),
-}
 
 
 def _intent_option(intent_id: str) -> dict[str, str]:

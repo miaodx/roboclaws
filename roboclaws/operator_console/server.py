@@ -233,7 +233,6 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     operator_session_id=str(payload.get("operator_session_id") or ""),
                     parent_run_id=str(payload.get("parent_run_id") or ""),
                     next_goal_packet=dict(payload.get("next_goal_packet") or {}),
-                    route_id=str(payload.get("route_id") or ""),
                     selection_id_override=str(payload.get("selection_id") or ""),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)

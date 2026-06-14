@@ -238,16 +238,17 @@ responses until manipulation is proven.
 
 ### Legacy cleanup-shaped profiles
 
-`molmospaces_cleanup_v1` remains a legacy cleanup-shaped profile composed from
-the household world, manipulation, and lifecycle capabilities. It is kept for
-older contract tests and archived report interpretation, not as the clean public
-capability head.
+`molmospaces_cleanup_v1` is no longer an active selectable MCP contract profile.
+It remains only as legacy report metadata for archived MolmoSpaces cleanup
+artifacts. New skills and MCP routers compose `household_world_v1`,
+`household_manipulation_v1`, and `household_episode_v1` directly.
 
-`real_robot_cleanup_v1` remains a legacy physical cleanup-shaped profile while
-the Agibot/Nav2 pilot artifacts migrate to the task-neutral household profiles.
-It narrows executable capability to navigation and perception. The backend is
-`physical_robot` with backend variants currently represented by `nav2_ros2` and
-`agibot_gdk`; both variants preserve the same public tool names.
+`real_robot_cleanup_v1` is likewise a legacy artifact metadata value for older
+Nav2/Agibot pilot reports while those artifacts migrate to task-neutral
+household profile composition. Active physical routes should describe required
+capabilities through the household world, manipulation, and episode profiles,
+with manipulation returning structured `blocked_capability` responses until
+physical proof exists.
 
 - `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
   derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from
