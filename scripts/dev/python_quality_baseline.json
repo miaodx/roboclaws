@@ -48,7 +48,7 @@
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
       {
-        "lines": 8607,
+        "lines": 7889,
         "max_module_lines": 800,
         "path": "roboclaws/household/report.py"
       },
@@ -704,7 +704,7 @@
         "limit": 10,
         "message": "`_action_evidence_summary` is too complex (16 > 10)",
         "path": "roboclaws/household/report.py",
-        "row": 7463,
+        "row": 6745,
         "symbol": "_action_evidence_summary",
         "value": 16
       },
@@ -714,19 +714,9 @@
         "limit": 10,
         "message": "`_grasp_cache_availability_preflight_section` is too complex (11 > 10)",
         "path": "roboclaws/household/report.py",
-        "row": 3134,
+        "row": 2416,
         "symbol": "_grasp_cache_availability_preflight_section",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/report.py|C901|runtime_timing_from_trace",
-        "limit": 10,
-        "message": "`runtime_timing_from_trace` is too complex (13 > 10)",
-        "path": "roboclaws/household/report.py",
-        "row": 1159,
-        "symbol": "runtime_timing_from_trace",
-        "value": 13
       },
       {
         "code": "PLR0912",
@@ -734,19 +724,9 @@
         "limit": 12,
         "message": "Too many branches (15 > 12)",
         "path": "roboclaws/household/report.py",
-        "row": 7463,
+        "row": 6745,
         "symbol": "_action_evidence_summary",
         "value": 15
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/report.py|PLR0915|runtime_timing_from_trace",
-        "limit": 50,
-        "message": "Too many statements (56 > 50)",
-        "path": "roboclaws/household/report.py",
-        "row": 1159,
-        "symbol": "runtime_timing_from_trace",
-        "value": 56
       },
       {
         "code": "C901",

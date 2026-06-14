@@ -206,6 +206,12 @@ Rejected alternatives:
 - [ ] **C3: Split cleanup report sections from shared HTML wrapper.**
   - Target `roboclaws/household/report.py`.
   - Extract coherent report sections without rewriting visual output.
+  - First extracted section modules:
+    `roboclaws/household/report_sections_map.py` and
+    `roboclaws/household/report_sections_timing.py`.
+  - Continue with proof/robot/agent report families only as separate verified
+    slices; do not mix planner-probe report renderers into this cleanup-report
+    slice.
   - Keep `report.html` visual core tests green.
 
 - [ ] **P1: Split planner-proof bundle checker assertion phases.**
@@ -532,3 +538,19 @@ Stop this refactor loop when:
   `run_realworld_cleanup` complexity rows C901 22 -> 18, PLR0912 23 -> 19,
   PLR0915 74 -> 68. Overall Ruff complexity count remains 209 and oversized
   module count remains 61.
+- 2026-06-14: Implemented the first C3 cleanup-report section split.
+  Map-evidence refresh summary rendering moved to
+  `roboclaws/household/report_sections_map.py`; runtime timing rendering and
+  `runtime_timing_from_trace(...)` moved to
+  `roboclaws/household/report_sections_timing.py`. Live cleanup runners,
+  MCP artifact finalization, and report-performance extraction now import the
+  timing helper from the section module instead of the monolithic report
+  renderer. Evidence:
+  `ruff check roboclaws/household/report.py roboclaws/household/report_sections_map.py roboclaws/household/report_sections_timing.py roboclaws/household/realworld_mcp_run_artifacts.py roboclaws/reports/live_performance.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/summarize_live_run.py`
+  passed; `ruff format --check` for the same touched files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py tests/contract/molmo_cleanup/test_agibot_map_evidence_refresh_report.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 209 to 207 Ruff complexity
+  violations, with oversized modules unchanged at 61. `report.py` file size
+  dropped from 8607 to 7889 lines, and the `runtime_timing_from_trace` C901 and
+  PLR0915 rows were removed from the report-module baseline.

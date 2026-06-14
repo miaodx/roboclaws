@@ -26,7 +26,8 @@ from roboclaws.household.realworld_contract import (
     cleanup_policy_trace_from_events,
     real_robot_readiness_from_events,
 )
-from roboclaws.household.report import render_cleanup_report, runtime_timing_from_trace
+from roboclaws.household.report import render_cleanup_report
+from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.semantic_timeline import (
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,

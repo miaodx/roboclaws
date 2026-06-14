@@ -41,7 +41,7 @@ from roboclaws.household.realworld_mcp_server import (
     ROBOT_VIEW_CAPTURE_POLICIES,
     ROBOT_VIEW_CAPTURE_POLICY_FULL,
 )
-from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
