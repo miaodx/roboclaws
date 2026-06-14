@@ -44,8 +44,6 @@ from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_POLICY_TRACE_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
-    MAIN_CLEANUP_AGENT_PRODUCER,
-    MODEL_DECLARED_OBSERVATION_SOURCE,
     MODEL_DECLARED_OBSERVATIONS_SCHEMA,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REAL_ROBOT_READINESS_SCHEMA,
@@ -74,6 +72,12 @@ from roboclaws.household.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVE
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from scripts.molmo_cleanup.isaac_runtime_checker import (
     assert_isaac_runtime as _assert_isaac_backend_runtime,
+)
+from scripts.molmo_cleanup.realworld_agent_view_checker import (
+    assert_public_agent_view as _assert_public_agent_view,
+)
+from scripts.molmo_cleanup.realworld_agent_view_checker import (
+    assert_runtime_metric_map as _assert_runtime_metric_map,
 )
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
@@ -436,9 +440,9 @@ def _assert_core_cleanup_success(
 
 def _assert_core_thresholds(data: dict[str, Any], opts: _ResultOptions) -> None:
     if opts["min_restored_count"] is not None:
-        assert int((data.get("score") or {}).get("restored_count") or 0) >= opts[
-            "min_restored_count"
-        ], data
+        assert (
+            int((data.get("score") or {}).get("restored_count") or 0) >= opts["min_restored_count"]
+        ), data
     if opts["min_semantic_accepted_count"] is not None:
         _assert_semantic_acceptability(data, opts["min_semantic_accepted_count"])
     if opts["min_sweep_coverage"] is not None:
@@ -678,9 +682,10 @@ def _assert_optional_planner_gates(
         )
     if opts["require_mixed_planner_cleanup_primitives"]:
         _assert_mixed_planner_cleanup_primitives(data, report_text)
-    if opts["accept_blocked_planner_cleanup_bridge"] or opts[
-        "require_planner_cleanup_bridge_ready"
-    ]:
+    if (
+        opts["accept_blocked_planner_cleanup_bridge"]
+        or opts["require_planner_cleanup_bridge_ready"]
+    ):
         _assert_planner_cleanup_bridge(
             data,
             report_text,
@@ -1133,246 +1138,6 @@ def _successful_semantic_phase_set(data: dict[str, Any]) -> set[str]:
     return phases
 
 
-def _assert_public_agent_view(
-    agent_view: dict[str, Any],
-    *,
-    open_ended_intent: bool = False,
-    semantic_sweep: bool = False,
-) -> None:
-    assert agent_view.get("contract") == REALWORLD_CONTRACT, agent_view
-    assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
-    assert "metric_map" in agent_view, agent_view
-    assert "fixture_hints" in agent_view, agent_view
-    assert "observed_objects" in agent_view, agent_view
-    assert "objects" not in agent_view.get("metric_map", {}), agent_view
-    if agent_view.get("runtime_metric_map"):
-        _assert_runtime_metric_map(agent_view["runtime_metric_map"], agent_view=agent_view)
-    worklist = agent_view.get("cleanup_worklist") or {}
-    if worklist:
-        assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
-        expected_waypoint_source = (
-            "generated_exploration_candidate"
-            if (agent_view.get("runtime_metric_map") or {}).get("minimal_map_mode") is True
-            else "static_map_fixture_coverage"
-        )
-        assert worklist.get("waypoint_source") == expected_waypoint_source, worklist
-    policy_view = agent_view.get("policy_view") or {}
-    if policy_view:
-        assert policy_view.get("chase_camera_policy_input") is False, policy_view
-    _assert_no_forbidden_keys(agent_view)
-    if agent_view.get("perception_mode") == "raw_fpv_only":
-        assert agent_view.get("structured_detections_available") is False, agent_view
-        raw = agent_view.get("raw_fpv_observations") or []
-        assert raw, agent_view
-        for item in raw:
-            assert item.get("perception_mode") == "raw_fpv_only", item
-            assert item.get("structured_detections_available") is False, item
-            forbidden = {"category", "name", "support_estimate", "target_receptacle_id"}
-            assert not forbidden.intersection(item), item
-        declared = agent_view.get("model_declared_observations") or []
-        observed = agent_view.get("observed_objects") or []
-        if declared:
-            assert observed, agent_view
-            for item in observed:
-                assert item.get("perception_source") == MODEL_DECLARED_OBSERVATION_SOURCE, item
-                assert item.get("source_observation_id"), item
-                assert "target_receptacle_id" not in item, item
-        else:
-            assert not observed, agent_view
-        return
-    if agent_view.get("perception_mode") == CAMERA_MODEL_POLICY_MODE:
-        assert agent_view.get("structured_detections_available") is False, agent_view
-        raw = agent_view.get("raw_fpv_observations") or []
-        assert raw, agent_view
-        evidence = agent_view.get("camera_model_policy_evidence") or {}
-        assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
-        assert evidence.get("enabled") is True, evidence
-        observed = agent_view.get("observed_objects") or []
-        if not observed and (open_ended_intent or semantic_sweep):
-            assert agent_view.get("model_declared_observations") == [], agent_view
-            assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
-            return
-        assert observed, agent_view
-        allowed_producer_types = {
-            CAMERA_GROUNDED_LABELS_LANE,
-            SIMULATED_CAMERA_MODEL_PROVENANCE,
-            EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
-            MAIN_CLEANUP_AGENT_PRODUCER,
-        }
-        for item in observed:
-            assert str(item.get("object_id", "")).startswith("observed_"), item
-            assert item.get("perception_source") in {
-                CAMERA_MODEL_POLICY_MODE,
-                MODEL_DECLARED_OBSERVATION_SOURCE,
-            }, item
-            assert item.get("producer_type") in allowed_producer_types, item
-            assert item.get("model_provenance") in {
-                CAMERA_GROUNDED_LABELS_LANE,
-                SIMULATED_CAMERA_MODEL_PROVENANCE,
-                EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
-                MAIN_CLEANUP_AGENT_PRODUCER,
-                None,
-            }, item
-            assert item.get("source_observation_id"), item
-            support = item.get("support_estimate") or {}
-            if support:
-                assert support.get("source") in {
-                    CAMERA_MODEL_POLICY_MODE,
-                    MODEL_DECLARED_OBSERVATION_SOURCE,
-                    "public_semantic_anchor",
-                }, item
-            else:
-                assert item.get("producer_type") in {
-                    EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
-                    MAIN_CLEANUP_AGENT_PRODUCER,
-                }, item
-            assert "is_misplaced" not in item, item
-            assert "target_receptacle_id" not in item, item
-        return
-    observed = agent_view.get("observed_objects") or []
-    if not observed and (open_ended_intent or semantic_sweep):
-        assert agent_view.get("perception_mode") == "visible_object_detections", agent_view
-        assert agent_view.get("structured_detections_available") is True, agent_view
-        assert agent_view.get("raw_fpv_observations") == [], agent_view
-        assert agent_view.get("model_declared_observations") == [], agent_view
-        assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
-        return
-    assert observed, agent_view
-    for item in observed:
-        assert str(item.get("object_id", "")).startswith("observed_"), item
-        assert "support_estimate" in item, item
-        assert "is_misplaced" not in item, item
-        assert "target_receptacle_id" not in item, item
-
-
-def _assert_runtime_metric_map(
-    runtime_metric_map: dict[str, Any],
-    *,
-    agent_view: dict[str, Any],
-) -> None:
-    assert runtime_metric_map.get("schema") == RUNTIME_METRIC_MAP_SCHEMA, runtime_metric_map
-    assert runtime_metric_map.get("contract") == REALWORLD_CONTRACT, runtime_metric_map
-    assert runtime_metric_map.get("source_map_mutated") is False, runtime_metric_map
-    assert runtime_metric_map.get("private_truth_included") is False, runtime_metric_map
-    static_map = runtime_metric_map.get("static_map") or {}
-    assert isinstance(static_map.get("rooms") or [], list), runtime_metric_map
-    assert isinstance(static_map.get("fixtures") or [], list), runtime_metric_map
-    assert isinstance(static_map.get("inspection_waypoints") or [], list), runtime_metric_map
-    assert static_map.get("contains_runtime_observations") is False, static_map
-    for fixture in static_map.get("fixtures") or []:
-        assert "observed_objects" not in fixture, fixture
-        assert "objects" not in fixture, fixture
-        assert not str(fixture.get("fixture_id") or "").startswith("observed_"), fixture
-    anchors = runtime_metric_map.get("public_semantic_anchors") or []
-    assert isinstance(anchors, list), runtime_metric_map
-    for anchor in anchors:
-        assert str(anchor.get("anchor_id") or ""), anchor
-        assert str(anchor.get("anchor_id") or "").startswith("anchor_"), anchor
-        assert anchor.get("anchor_type") in {
-            "room_area",
-            "surface",
-            "receptacle",
-            "fixture",
-            "observation_waypoint",
-        }, anchor
-        for key in (
-            "category",
-            "label",
-            "waypoint_id",
-            "affordances",
-            "producer_type",
-            "producer_id",
-            "confidence",
-            "source_observation_id",
-            "promotion_status",
-        ):
-            assert key in anchor, anchor
-
-        assert isinstance(anchor.get("affordances") or [], list), anchor
-        assert anchor.get("promotion_status") != "promoted", anchor
-        assert not str(anchor.get("anchor_id") or "").startswith("observed_"), anchor
-        assert "target_receptacle_id" not in anchor, anchor
-        assert "is_misplaced" not in anchor, anchor
-    observed = runtime_metric_map.get("observed_objects") or []
-    agent_observed = agent_view.get("observed_objects") or []
-    current_observed = [item for item in observed if item.get("freshness") != "prior"]
-    assert len(current_observed) == len(agent_observed), (runtime_metric_map, agent_view)
-    for item in observed:
-        assert str(item.get("object_id", "")).startswith("observed_"), item
-        for key in (
-            "category",
-            "room_id",
-            "waypoint_id",
-            "source_observation_id",
-            "image_region",
-            "producer_type",
-            "producer_id",
-            "confidence",
-            "freshness",
-            "actionability",
-            "state",
-        ):
-            assert key in item, item
-        assert item.get("freshness") in {"current_run", "prior"}, item
-        if item.get("freshness") == "prior":
-            assert item.get("actionability") != "actionable", item
-        assert "target_receptacle_id" not in item, item
-        assert "is_misplaced" not in item, item
-    target_candidates = runtime_metric_map.get("target_candidates") or []
-    assert isinstance(target_candidates, list), runtime_metric_map
-    assert target_candidates, runtime_metric_map
-    allowed_actionability = {
-        "query_unmatched",
-        "visible_only",
-        "anchor_unbound",
-        "unreachable",
-        "needs_observe",
-        "actionable",
-    }
-    for candidate in target_candidates:
-        for key in (
-            "candidate_id",
-            "candidate_type",
-            "query",
-            "label",
-            "category",
-            "evidence_lane",
-            "producer_type",
-            "producer_id",
-            "target_actionability_status",
-            "confidence",
-            "inspection_budget",
-        ):
-            assert key in candidate, candidate
-        assert candidate.get("target_actionability_status") in allowed_actionability, candidate
-        assert candidate.get("actionability") == candidate.get("target_actionability_status"), (
-            candidate
-        )
-        assert isinstance(candidate.get("inspection_budget") or {}, dict), candidate
-        assert "target_receptacle_id" not in candidate, candidate
-        assert "is_misplaced" not in candidate, candidate
-        if candidate.get("target_actionability_status") != "actionable":
-            assert candidate.get("rejection_reason"), candidate
-    target_search = runtime_metric_map.get("target_search_summary") or {}
-    assert target_search.get("schema") == "target_search_summary_v1", runtime_metric_map
-    assert target_search.get("private_truth_included") is False, target_search
-    assert target_search.get("candidate_count") == len(target_candidates), target_search
-    viewpoint_budget = target_search.get("viewpoint_budget") or {}
-    assert "total_public_waypoints" in viewpoint_budget, target_search
-    assert "visited_waypoint_count" in viewpoint_budget, target_search
-    camera_budget = target_search.get("camera_adjustment_budget") or {}
-    assert "attempt_count" in camera_budget, target_search
-    assert isinstance(target_search.get("inspection_observations") or [], list), target_search
-    assert isinstance(runtime_metric_map.get("map_update_candidates") or [], list), (
-        runtime_metric_map
-    )
-    for candidate in runtime_metric_map.get("map_update_candidates") or []:
-        assert "target_receptacle_id" not in candidate, candidate
-        assert "is_misplaced" not in candidate, candidate
-        assert candidate.get("promotion_status") != "promoted", candidate
-    _assert_no_forbidden_keys(runtime_metric_map)
-
-
 def _assert_goal_contract(data: dict[str, Any], base: Path) -> None:
     contract = data.get("goal_contract") or {}
     assert contract.get("schema") == "roboclaws_goal_contract_v1", data
@@ -1750,7 +1515,6 @@ def _assert_isaac_runtime(
         _assert_isaac_scene_index_map_context(data, base)
 
 
-
 def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> None:
     isaac = data.get("isaac_runtime") or {}
     scenario_id = str(data.get("scenario_id") or "")
@@ -1870,7 +1634,6 @@ def _polygon_extent(points: list[Any], axis: str) -> float:
     if not values:
         return 0.0
     return max(values) - min(values)
-
 
 
 def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:

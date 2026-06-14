@@ -98,7 +98,7 @@
         "path": "scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py"
       },
       {
-        "lines": 2610,
+        "lines": 2373,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
       },
@@ -1374,29 +1374,9 @@
         "limit": 10,
         "message": "`_assert_agibot_semantic_map_build_result` is too complex (14 > 10)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 737,
+        "row": 742,
         "symbol": "_assert_agibot_semantic_map_build_result",
         "value": 14
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_public_agent_view",
-        "limit": 10,
-        "message": "`_assert_public_agent_view` is too complex (14 > 10)",
-        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 1136,
-        "symbol": "_assert_public_agent_view",
-        "value": 14
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_runtime_metric_map",
-        "limit": 10,
-        "message": "`_assert_runtime_metric_map` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 1248,
-        "symbol": "_assert_runtime_metric_map",
-        "value": 11
       },
       {
         "code": "C901",
@@ -1404,7 +1384,7 @@
         "limit": 10,
         "message": "`_assert_waypoint_honesty` is too complex (11 > 10)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 2260,
+        "row": 2023,
         "symbol": "_assert_waypoint_honesty",
         "value": 11
       },
@@ -1414,19 +1394,9 @@
         "limit": 12,
         "message": "Too many branches (14 > 12)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 737,
+        "row": 742,
         "symbol": "_assert_agibot_semantic_map_build_result",
         "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0912|_assert_public_agent_view",
-        "limit": 12,
-        "message": "Too many branches (15 > 12)",
-        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 1136,
-        "symbol": "_assert_public_agent_view",
-        "value": 15
       },
       {
         "code": "PLR0912",
@@ -1434,7 +1404,7 @@
         "limit": 12,
         "message": "Too many branches (14 > 12)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 2260,
+        "row": 2023,
         "symbol": "_assert_waypoint_honesty",
         "value": 14
       },
@@ -1444,7 +1414,7 @@
         "limit": 50,
         "message": "Too many statements (53 > 50)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 927,
+        "row": 932,
         "symbol": "_assert_agibot_g2_hardware_semantic_map_build",
         "value": 53
       },
@@ -1454,7 +1424,7 @@
         "limit": 50,
         "message": "Too many statements (67 > 50)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 737,
+        "row": 742,
         "symbol": "_assert_agibot_semantic_map_build_result",
         "value": 67
       },
@@ -1464,29 +1434,9 @@
         "limit": 50,
         "message": "Too many statements (59 > 50)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 1401,
+        "row": 1166,
         "symbol": "_assert_minimal_map",
         "value": 59
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_public_agent_view",
-        "limit": 50,
-        "message": "Too many statements (71 > 50)",
-        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 1136,
-        "symbol": "_assert_public_agent_view",
-        "value": 71
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_runtime_metric_map",
-        "limit": 50,
-        "message": "Too many statements (61 > 50)",
-        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 1248,
-        "symbol": "_assert_runtime_metric_map",
-        "value": 61
       },
       {
         "code": "PLR0915",
@@ -1494,7 +1444,7 @@
         "limit": 50,
         "message": "Too many statements (72 > 50)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 2260,
+        "row": 2023,
         "symbol": "_assert_waypoint_honesty",
         "value": 72
       },
@@ -1504,7 +1454,7 @@
         "limit": 50,
         "message": "Too many statements (57 > 50)",
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 116,
+        "row": 120,
         "symbol": "parse_args",
         "value": 57
       },

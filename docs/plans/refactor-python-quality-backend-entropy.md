@@ -684,3 +684,19 @@ Stop this refactor loop when:
   and grasp-collision diagnostics; runtime diagnostics / worker invocation
   can be considered in a later loop if they still pass materiality after the
   broader checker/backend candidates are weighed.
+- 2026-06-14: Continued the live cleanup checker split by extracting public
+  agent-view and runtime-metric-map assertions into
+  `scripts/molmo_cleanup/realworld_agent_view_checker.py`. The main checker
+  keeps `_assert_public_agent_view(...)` and `_assert_runtime_metric_map(...)`
+  as imported private aliases so direct checker tests and internal call sites
+  keep the same entrypoints while the assertion details live in focused helper
+  phases. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/molmo_cleanup/realworld_agent_view_checker.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 189 to 184 Ruff complexity
+  violations, with oversized modules unchanged at 59. The live cleanup checker
+  grouped complexity count dropped from 14 to 9 violations, and the
+  `_assert_public_agent_view` / `_assert_runtime_metric_map` rows were removed
+  from the main checker baseline.
