@@ -163,6 +163,15 @@ Rejected alternatives:
     metric map, backend-specific runtime evidence, and waypoint honesty.
   - Preserve CLI flags and current `just verify` / `just harness` behavior.
 
+- [ ] **C1.5: Split direct cleanup orchestration from artifact/result assembly.**
+  - Target `roboclaws/household/realworld_cleanup.py`.
+  - Extract the post-loop artifact writer, run-result payload builder, profile
+    metadata attachment, planner-proof attachment, and report/writeback stages
+    from `run_realworld_cleanup`.
+  - Keep public `run_result.json`, `agent_view.json`, `runtime_metric_map.json`,
+    `private_evaluation.json`, `advisory_evaluation.json`, and `report.html`
+    schemas stable.
+
 - [ ] **C2: Extract RealWorldCleanupContract construction and payload builders.**
   - Target `roboclaws/household/realworld_contract.py`.
   - Start with constructor option normalization and payload-builder helpers for
@@ -198,6 +207,15 @@ Rejected alternatives:
     structure, waypoint reachability, fixture references, and route checks.
   - Keep `runtime_metric_map.json` and
     `actionable_semantic_map_snapshot.json` schemas stable.
+
+- [ ] **I1: Split Isaac Lab worker backend details after facade stabilization.**
+  - Target `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` and focused
+    helper modules under `scripts/isaac_lab_cleanup/`.
+  - Extract camera capture, scene-index scenario generation, semantic-pose
+    stage mutation, segmentation diagnostics, and fake/real runtime packaging
+    into modules that keep Isaac imports inside the worker process.
+  - Treat this as a post-facade backend-internal cleanup; do not change normal
+    Roboclaws process imports or require real Isaac Lab for default verification.
 
 - [ ] **R1: Continue reduce-entropy discovery after each completed group.**
   - Run the bounded high-noise summary and the quality-debt summary.
@@ -257,8 +275,13 @@ Stop this refactor loop when:
 
 - `run_realworld_cleanup` no longer contains backend-specific metadata/artifact
   assembly for MolmoSpaces and Isaac Lab.
+- `run_realworld_cleanup` is mostly an orchestration reader: setup, loop
+  execution, artifact assembly, report rendering, and result writeback are named
+  stages with focused tests.
 - Backend id selection no longer depends on concrete class-name checks in live
   paths that can use the facade.
+- Isaac worker internals either have a focused split plan or the final
+  saturation round records why the worker remains parked.
 - The quality ratchet is still green and the baseline was deliberately lowered
   for every completed slice.
 - The live checker, contract, and report candidates are either completed or
@@ -346,3 +369,25 @@ Stop this refactor loop when:
   quality baseline was deliberately lowered from 217 to 211 Ruff complexity
   violations, with oversized modules unchanged at 61. The live cleanup checker
   grouped complexity count dropped from 20 to 14 violations.
+- 2026-06-14: Ran another bounded reduce-entropy discovery loop after C1.
+  Evidence: `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs"`;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`;
+  targeted probes across `realworld_cleanup.py`, `realworld_contract.py`,
+  `report.py`, planner-proof checker/probe scripts, map bundle validation,
+  `TODOs.md`, `tests/README.md`, and current `docs/plans/**` references. The
+  current quality signal is 211 Ruff complexity violations and 61 oversized
+  modules. The materiality gate accepted seven P1 candidates and reported
+  `eligible_count=7`, `quota_saturated=true` for a requested maximum of eight:
+  C1.5 direct cleanup orchestration/result assembly splitting; C2 contract
+  construction/payload builders; C3 report section splitting; P1 planner-proof
+  bundle checker phases; P2 planner manipulation probe/runtime packaging; M1
+  map bundle validation/snapshot checks; and I1 Isaac worker backend-detail
+  splitting. The new signal after backend facade work is that
+  `run_realworld_cleanup` remains the highest individual complexity entry
+  (`140>50 PLR0915`) because it now mixes execution loop, artifact writing,
+  `run_result` construction, proof/profile/map attachment, report rendering,
+  and writeback. OpenAI Agents SDK, operator-console, scene-camera/render
+  parity, Agibot rehearsal/pilot, raw-FPV, apple2apple, and broad test-suite
+  cleanup remain parked because current specialized plans or `intuitive-tests`
+  own those surfaces; this loop should not count them again unless fresh drift
+  appears.
