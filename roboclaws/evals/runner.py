@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import time
 from dataclasses import dataclass
@@ -739,89 +738,10 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _parse_key_value_args(argv: list[str]) -> dict[str, str]:
-    parsed: dict[str, str] = {}
-    index = 0
-    while index < len(argv):
-        item = argv[index]
-        if item.startswith("--"):
-            key = item.removeprefix("--").replace("-", "_")
-            if "=" in key:
-                key, value = key.split("=", 1)
-            else:
-                index += 1
-                if index >= len(argv):
-                    raise ValueError(f"missing value for {item}")
-                value = argv[index]
-            parsed[key] = value
-        elif "=" in item:
-            key, value = item.split("=", 1)
-            parsed[key.replace("-", "_")] = value
-        else:
-            raise ValueError(f"unsupported eval argument {item!r}; expected key=value")
-        index += 1
-    return parsed
-
-
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run a Roboclaws eval suite.")
-    parser.add_argument("overrides", nargs="*", help="key=value overrides.")
-    args = parser.parse_args(argv)
-    if args.overrides and args.overrides[0] in {"promote-regression", "promote_regression"}:
-        try:
-            from roboclaws.evals.regression import promote_regression_sample_from_eval_result
+    from roboclaws.evals.cli import main as cli_main
 
-            overrides = _parse_key_value_args(args.overrides[1:])
-            eval_results_path = Path(overrides.pop("eval_results", overrides.pop("results", "")))
-            if not str(eval_results_path):
-                raise ValueError("promote-regression requires eval_results=<path>")
-            promotion = promote_regression_sample_from_eval_result(
-                eval_results_path,
-                source_sample_id=overrides.pop("source_sample_id", None),
-                source_trial_id=overrides.pop("source_trial_id", None),
-                regression_sample_id=overrides.pop("regression_sample_id", None),
-                review_label=overrides.pop("review_label", "eval-regression:accepted"),
-                sample_output_path=_optional_path(overrides.pop("sample_output_path", None)),
-                suite_path=_optional_path(overrides.pop("suite", None)),
-                suite_output_path=_optional_path(overrides.pop("suite_output_path", None)),
-                version=overrides.pop("version", None),
-            )
-            if overrides:
-                keys = ", ".join(sorted(overrides))
-                raise ValueError(f"unsupported promote-regression override(s): {keys}")
-        except ValueError as exc:
-            parser.exit(2, f"error: {exc}\n")
-        print(json.dumps(promotion, sort_keys=True))
-        return 0
-    try:
-        overrides = _parse_key_value_args(args.overrides)
-        suite_ref = overrides.pop("suite", "smoke_regression")
-        budget = overrides.pop("budget", "smoke")
-        output_root = Path(overrides.pop("output_dir", str(DEFAULT_OUTPUT_ROOT)))
-        stamp = overrides.pop("stamp", None)
-        agent_engine = overrides.pop("agent_engine", "direct-runner")
-        provider_profile = overrides.pop("provider_profile", None)
-        model = overrides.pop("model", None)
-        if overrides:
-            keys = ", ".join(sorted(overrides))
-            raise ValueError(f"unsupported eval override(s): {keys}")
-        run = run_eval_suite(
-            suite_ref,
-            output_root=output_root,
-            budget=budget,
-            stamp=stamp,
-            agent_engine=agent_engine,
-            provider_profile=provider_profile,
-            model=model,
-        )
-    except ValueError as exc:
-        parser.exit(2, f"error: {exc}\n")
-    print(json.dumps({"results": str(run.results_path), "report": str(run.report_path)}))
-    return 0
-
-
-def _optional_path(value: str | None) -> Path | None:
-    return Path(value) if value else None
+    return cli_main(argv)
 
 
 if __name__ == "__main__":

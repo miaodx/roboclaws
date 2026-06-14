@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from roboclaws.evals.regression import promote_regression_sample_from_eval_result
+import pytest
+
+from roboclaws.evals.regression import (
+    promote_regression_from_cli_overrides,
+    promote_regression_sample_from_eval_result,
+)
 from roboclaws.evals.runner import run_eval_suite
 
 
@@ -336,6 +341,42 @@ def test_failed_eval_result_promotes_to_regression_sample_and_suite(tmp_path: Pa
     assert str(sample_output) in suite["sample_refs"]
     assert suite["metadata"]["regression_sample_count"] == 1
     assert suite["metadata"]["regression_promotions"][0]["private_truth_scope"] == "grader_only"
+
+
+def test_regression_promotion_rejects_passed_results(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="passed",
+        product_runner=_passing_product_runner,
+    )
+
+    with pytest.raises(ValueError, match="no failed, blocked, or inconclusive"):
+        promote_regression_sample_from_eval_result(run.results_path)
+
+
+def test_regression_promotion_stop_label_does_not_write_outputs(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+
+    with pytest.raises(ValueError, match="cannot write a sample"):
+        promote_regression_from_cli_overrides(
+            {
+                "eval_results": str(run.results_path),
+                "review_label": "eval-regression:do-not-promote",
+                "sample_output_path": str(sample_output),
+                "suite_output_path": str(suite_output),
+            }
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
 
 
 def _passing_product_runner(**kwargs: Any) -> dict[str, Any]:

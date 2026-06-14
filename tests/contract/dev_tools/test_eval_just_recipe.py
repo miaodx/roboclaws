@@ -26,6 +26,21 @@ def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
     assert "provider_profile=codex-env" in trace
 
 
+def test_agent_eval_public_facade_routes_promotion_cli() -> None:
+    trace = _trace_agent_eval(
+        "promote-regression",
+        "eval_results=output/evals/demo/eval_results.json",
+        "source_sample_id=cleanup.smoke_seed7",
+        "regression_sample_id=regression.cleanup_demo",
+    )
+
+    assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
+    assert "promote-regression" in trace
+    assert "eval_results=output/evals/demo/eval_results.json" in trace
+    assert "source_sample_id=cleanup.smoke_seed7" in trace
+    assert "regression_sample_id=regression.cleanup_demo" in trace
+
+
 def _trace_agent_eval(*args: str) -> list[str]:
     binary = _just_bin()
     env = os.environ.copy()

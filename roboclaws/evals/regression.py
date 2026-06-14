@@ -26,6 +26,7 @@ PROMOTION_REVIEW_LABELS = frozenset(
         "eval-regression:do-not-promote",
     }
 )
+NO_PROMOTION_REVIEW_LABEL = "eval-regression:do-not-promote"
 
 
 def promote_regression_sample_from_eval_result(
@@ -45,7 +46,7 @@ def promote_regression_sample_from_eval_result(
     if review_label not in PROMOTION_REVIEW_LABELS:
         expected = "|".join(sorted(PROMOTION_REVIEW_LABELS))
         raise ValueError(f"unsupported review_label {review_label!r}; expected {expected}")
-    if review_label == "eval-regression:do-not-promote":
+    if review_label == NO_PROMOTION_REVIEW_LABEL:
         raise ValueError("review_label eval-regression:do-not-promote cannot write a sample")
 
     eval_results_path = Path(eval_results_path)
@@ -108,6 +109,30 @@ def promote_regression_sample_from_eval_result(
             "failure_class": failure_class,
         },
     }
+    return promotion
+
+
+def promote_regression_from_cli_overrides(overrides: dict[str, str]) -> dict[str, Any]:
+    """Run regression promotion from parsed eval CLI key/value overrides."""
+
+    values = dict(overrides)
+    eval_results_path = Path(values.pop("eval_results", values.pop("results", "")))
+    if not str(eval_results_path):
+        raise ValueError("promote-regression requires eval_results=<path>")
+    promotion = promote_regression_sample_from_eval_result(
+        eval_results_path,
+        source_sample_id=values.pop("source_sample_id", None),
+        source_trial_id=values.pop("source_trial_id", None),
+        regression_sample_id=values.pop("regression_sample_id", None),
+        review_label=values.pop("review_label", "eval-regression:accepted"),
+        sample_output_path=_optional_path(values.pop("sample_output_path", None)),
+        suite_path=_optional_path(values.pop("suite", None)),
+        suite_output_path=_optional_path(values.pop("suite_output_path", None)),
+        version=values.pop("version", None),
+    )
+    if values:
+        keys = ", ".join(sorted(values))
+        raise ValueError(f"unsupported promote-regression override(s): {keys}")
     return promotion
 
 
@@ -357,6 +382,10 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"JSON file must contain an object: {path}")
     return payload
+
+
+def _optional_path(value: str | None) -> Path | None:
+    return Path(value) if value else None
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

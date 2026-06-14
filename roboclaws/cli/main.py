@@ -13,7 +13,7 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) >= 2 and args[0] == "run" and args[1] == "surface":
         return surface_run_main(args[2:])
     if args and args[0] == "eval":
-        from roboclaws.evals.runner import main as eval_main
+        from roboclaws.evals.cli import main as eval_main
 
         return eval_main(args[1:])
     if args and args[0] == "agent-server":
