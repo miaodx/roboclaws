@@ -50,10 +50,9 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Finish the eval-driven architecture plan with a completion audit: rerun the
-final focused eval/doc gates, decide whether any live-provider validation must
-remain a local environment-dependent follow-up, then mark the plan complete or
-record the remaining blocker explicitly.
+Pick the next repo maintenance or product slice. The eval-driven architecture
+plan is implemented; remaining live-provider and OpenClaw proofs are
+environment-dependent validation items, not active implementation blockers.
 
 ## Current Blocker
 

@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-driven-architecture
-status: Active - Slice 0/1/2/3/4/5/6 verified; final completion audit remains
+status: Implemented - Slice 0/1/2/3/4/5/6 verified; external live-provider and OpenClaw proofs remain environment-dependent
 created: 2026-06-14
 last_reviewed: 2026-06-15
 implementation_allowed: true
