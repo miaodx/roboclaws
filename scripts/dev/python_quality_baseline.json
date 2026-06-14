@@ -153,7 +153,7 @@
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py"
       },
       {
-        "lines": 3381,
+        "lines": 2808,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py"
       },
@@ -947,56 +947,6 @@
         "row": 488,
         "symbol": "_print_timing",
         "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|C901|_combined_material_light_default_gate_check",
-        "limit": 10,
-        "message": "`_combined_material_light_default_gate_check` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
-        "row": 1398,
-        "symbol": "_combined_material_light_default_gate_check",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|C901|_prepared_scale_square_default_gate_check",
-        "limit": 10,
-        "message": "`_prepared_scale_square_default_gate_check` is too complex (13 > 10)",
-        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
-        "row": 1238,
-        "symbol": "_prepared_scale_square_default_gate_check",
-        "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|C901|_view_specific_prepared_scale_square_tone_gate_check",
-        "limit": 10,
-        "message": "`_view_specific_prepared_scale_square_tone_gate_check` is too complex (13 > 10)",
-        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
-        "row": 1528,
-        "symbol": "_view_specific_prepared_scale_square_tone_gate_check",
-        "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|PLR0912|_prepared_scale_square_default_gate_check",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
-        "row": 1238,
-        "symbol": "_prepared_scale_square_default_gate_check",
-        "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|PLR0912|_view_specific_prepared_scale_square_tone_gate_check",
-        "limit": 12,
-        "message": "Too many branches (14 > 12)",
-        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
-        "row": 1528,
-        "symbol": "_view_specific_prepared_scale_square_tone_gate_check",
-        "value": 14
       },
       {
         "code": "C901",

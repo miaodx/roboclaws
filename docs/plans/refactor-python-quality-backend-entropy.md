@@ -1,6 +1,6 @@
 ---
 refactor_scope: python-quality-backend-entropy
-status: PARK
+status: CONTINUE
 accepted_severities:
   - P0
   - P1
@@ -12,7 +12,7 @@ last_verified: 2026-06-14
 
 ## Status
 
-PARK
+CONTINUE
 
 ## Target
 
@@ -2268,6 +2268,373 @@ Suggested proof:
 Execution risk: medium. Route through `intuitive-tests`; prune or split only
 when behavior grouping remains obvious.
 
+## Latest Reduce-Entropy Loop: 2026-06-14 Post-Robot-Camera Summary Gates
+
+This loop rechecked the repo after the robot-camera visual-parity summary-gate
+extraction lowered the quality ratchet to 101 Ruff complexity violations. It
+supersedes the "Post-Backend/Console Saturation" packet for current selection.
+The previous packet remains historical evidence for why backend/server/report
+mainline slices are complete.
+
+Quality signal:
+
+- `python scripts/dev/check_python_quality_ratchet.py` passes at 101 Ruff
+  complexity violations and 59 oversized modules.
+- `python scripts/dev/check_python_quality_ratchet.py --summary --top 25`
+  shows the current largest implementation hotspots are
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7635 lines, 0
+  grouped rows), `roboclaws/household/scene_camera_comparison.py` (6480 lines,
+  0 grouped rows), `roboclaws/household/realworld_contract.py` (6424 lines, 3
+  grouped rows), `roboclaws/household/report.py` (6195 lines, 0 grouped rows),
+  and `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` (5844
+  lines, 6 grouped rows).
+- The fresh backend abstraction probe found that Python cleanup backend facade
+  adoption is real, but command-layer backend semantics still repeat across
+  `roboclaws/launch/backends.py`, `roboclaws/household/backend_contract.py`,
+  `just/agent.just`, and `just/molmo.just`.
+- The fresh agent-guidance probe found a live doc/tool drift:
+  `AGENTS.md` and `CLAUDE.md` still point to `hybrid-phase-pipeline`, while
+  the installed local skill set exposes `intuitive-flow` and no
+  `hybrid-phase-pipeline` skill.
+
+Materiality gate:
+
+- Gate command:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/materiality-gate.mjs" <tmpfile>`.
+- Gate result: eight candidates accepted, no candidates rejected, no warnings.
+- Saturation check: a second high-noise/docs/tests/legacy scan found no
+  additional P0/P1 or materially useful P2 candidate beyond the packet below.
+  Historical plans, generated output, and most legacy references are either
+  already guarded or too speculative to count as new cleanup groups.
+
+### Current Candidate A: Finish Current Robot-Camera Summary-Gate Extraction
+
+Severity: P1
+
+Entropy source: current workspace truth drift.
+
+Materiality: this slice is implemented but not yet committed. The plan and
+quality baseline now describe a lowered ratchet, while the helper module is
+still untracked and the working tree also contains unrelated research-doc
+changes that must not be mixed into the refactor commit.
+
+Impact radius: workflow.
+
+Maintainer test: leaving this slice half-landed makes the next agent
+rediscover already-finished visual-parity gate work and risks committing
+unrelated research files with the refactor.
+
+Affected paths:
+
+- `docs/plans/refactor-python-quality-backend-entropy.md`
+- `scripts/dev/python_quality_baseline.json`
+- `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
+- `scripts/molmo_cleanup/robot_camera_visual_parity_gates.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make the repository state obvious before starting the next slice.
+
+Pattern hint: no new pattern; close the already-extracted helper boundary.
+
+Suggested proof:
+
+- `ruff check scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py scripts/molmo_cleanup/robot_camera_visual_parity_gates.py tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py`
+- `ruff format --check scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py scripts/molmo_cleanup/robot_camera_visual_parity_gates.py tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe. Stage only the refactor-owned paths; do not stage
+`docs/research/**`.
+
+### Current Candidate B: Backend Command-Layer Catalog Adoption
+
+Severity: P1
+
+Entropy source: backend abstraction live-source drift.
+
+Materiality: public backend metadata now lives in
+`roboclaws/launch/backends.py`, and Python cleanup sessions are built through
+`build_cleanup_backend_session(...)`; however, `just/agent.just` and
+`just/molmo.just` still branch on implementation backend strings and duplicate
+supported-backend validation.
+
+Impact radius: workflow.
+
+Maintainer test: adding or changing a backend option should not require
+updating launch catalog metadata, Python facade construction, and multiple
+Bash branch ladders separately.
+
+Affected paths:
+
+- `roboclaws/launch/backends.py`
+- `roboclaws/launch/catalog.py`
+- `roboclaws/household/backend_contract.py`
+- `just/agent.just`
+- `just/molmo.just`
+- `tests/contract/dev_tools/test_task_agent_just_recipes.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make one canonical backend mapping obvious from public id to
+implementation id.
+
+Pattern hint: catalog/facade adoption; avoid another compatibility layer.
+
+Suggested proof:
+
+- `ruff check roboclaws/launch/backends.py roboclaws/launch/catalog.py roboclaws/household/backend_contract.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+- `ruff format --check roboclaws/launch/backends.py roboclaws/launch/catalog.py roboclaws/household/backend_contract.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/molmo_cleanup/test_cleanup_backend_contract.py -q`
+- `just --dry-run run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: medium. Preserve public `backend=` ids and current
+implementation backend values; do not broaden Agibot GDK behavior in the same
+slice.
+
+### Current Candidate C: Apple-To-Apple Parity Diagnostics Split
+
+Severity: P1
+
+Entropy source: visual backend parity rediscovery.
+
+Materiality:
+`scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is 5844
+lines with six grouped complexity rows. It combines run orchestration,
+object-gate classification, material response probes, tone/color probe history,
+USD PreviewSurface checks, report rendering, and private render-contract
+imports.
+
+Impact radius: workflow.
+
+Maintainer test: renderer parity investigations should not require reviewers
+to rediscover object, material, tone/color, camera, and report diagnostics in
+one render-only script.
+
+Affected paths:
+
+- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- likely focused helpers under `scripts/molmo_cleanup/`
+- `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make backend visual diagnostics reusable by concern.
+
+Pattern hint: direct diagnostic-helper extraction; no full parity framework.
+
+Suggested proof:
+
+- `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+- `ruff format --check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe for report/diagnostic extraction; real renderer parity
+claims need separate local proof.
+
+### Current Candidate D: OpenAI Agents Live Runtime Residual Boundary
+
+Severity: P1
+
+Entropy source: live-agent runtime workflow friction.
+
+Materiality: after metrics aggregation moved to
+`scripts/molmo_cleanup/openai_agents_metrics.py`,
+`scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` still has residual
+SDK-run lifecycle and RAW-FPV budget-policy rows, while
+`roboclaws/agents/drivers/openai_agents_live.py` keeps SDK setup,
+camera-grounded history, and MCP text-content unwrapping complexity.
+
+Impact radius: workflow.
+
+Maintainer test: provider/profile, retry, context-metric, or RAW-FPV budget
+changes should not require tracing both the cleanup runner and generic SDK
+driver internals.
+
+Affected paths:
+
+- `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
+- `roboclaws/agents/drivers/openai_agents_live.py`
+- `tests/unit/agents/test_live_runtime.py`
+- `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: keep task lifecycle policy separate from generic SDK adapter logic.
+
+Pattern hint: lifecycle/budget helpers plus adapter parsing helpers.
+
+Suggested proof:
+
+- `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/drivers/openai_agents_live.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: medium. Keep provider calls mocked; do not claim live provider
+behavior without a local live-agent run.
+
+### Current Candidate E: Detector-Sidecar Adapter Contract Residual
+
+Severity: P2
+
+Entropy source: detector-sidecar false-confidence risk.
+
+Materiality: the active visual-grounding sidecar is detector-only, so client
+failure handling, adapter response parsing, and benchmark scoring are the
+promotion boundary. The request/response schema split is done, but
+`HttpVisualGroundingClient.request_candidates(...)`,
+`_yolo_candidates_from_model(...)`, and benchmark scoring remain branch-heavy.
+
+Impact radius: workflow.
+
+Maintainer test: malformed or weak detector responses should fail through
+small auditable client, adapter, and scoring helpers instead of scattered HTTP
+and benchmark branches.
+
+Affected paths:
+
+- `roboclaws/household/visual_grounding.py`
+- `scripts/visual_grounding/adapters.py`
+- `scripts/visual_grounding/run_visual_grounding_benchmark.py`
+- `tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: keep the external detector trust boundary explicit.
+
+Pattern hint: adapter parser plus scoring pipeline helpers.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/visual_grounding.py scripts/visual_grounding/adapters.py scripts/visual_grounding/run_visual_grounding_benchmark.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+- `ruff format --check roboclaws/household/visual_grounding.py scripts/visual_grounding/adapters.py scripts/visual_grounding/run_visual_grounding_benchmark.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe for schema-preserving parser/scoring extraction. Real
+detector behavior remains outside the default gate.
+
+### Current Candidate F: MCP Server Initialization And Done Finalization Residual
+
+Severity: P2
+
+Entropy source: live MCP workflow friction.
+
+Materiality: `RealWorldMolmoCleanupMCPServer.__init__` still has a PLR0915 row
+after done-finalization and runtime artifact helpers were split. The server
+initialization path still binds session setup, capability policy, artifact
+paths, operator messages, and backend metadata in one constructor.
+
+Impact radius: workflow.
+
+Maintainer test: live MCP cleanup changes should not hide server setup,
+capability policy, and artifact-finalization behavior in one branch-heavy
+constructor.
+
+Affected paths:
+
+- `roboclaws/household/realworld_mcp_server.py`
+- `roboclaws/household/realworld_mcp_run_artifacts.py`
+- `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make live MCP server setup stages explicit.
+
+Pattern hint: setup options object or constructor helper stages; avoid a
+second server abstraction.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/realworld_mcp_server.py roboclaws/household/realworld_mcp_run_artifacts.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+- `ruff format --check roboclaws/household/realworld_mcp_server.py roboclaws/household/realworld_mcp_run_artifacts.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe if MCP tool payloads and report artifacts remain stable.
+
+### Current Candidate G: Behavior-Test Fixture Builders
+
+Severity: P2
+
+Entropy source: test-suite recurring rediscovery.
+
+Materiality: the biggest test files repeatedly hand-build `run_result`,
+`report.html`, Isaac scene-index, robot-camera state, and live-runtime event
+fixtures. The issue is not line count alone; the repeated fixture construction
+makes schema changes hard to audit.
+
+Impact radius: workflow.
+
+Maintainer test: behavior changes should not require re-reading
+multi-thousand-line tests just to identify fixture setup, exercised behavior,
+and asserted contract fields.
+
+Affected paths:
+
+- `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+- `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `tests/unit/agents/test_live_runtime.py`
+- likely helpers under `tests/support/`
+
+Owner skill: `intuitive-tests`
+
+Zen hint: make tests tell one behavior story per fixture family.
+
+Pattern hint: fixture/factory extraction and behavior-grouped modules; avoid
+splitting only for aesthetics.
+
+Suggested proof:
+
+- `./scripts/dev/run_pytest_standalone.sh <selected test file> -q`
+- `ruff check <selected test file and helper modules>`
+- `ruff format --check <selected test file and helper modules>`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: medium. Route through `intuitive-tests`; keep behavior
+assertions visible after fixture extraction.
+
+### Current Candidate H: Agent Guidance Skill-Router Drift
+
+Severity: P2
+
+Entropy source: agent guidance live-source drift.
+
+Materiality: `AGENTS.md` and `CLAUDE.md` tell agents to use
+`hybrid-phase-pipeline` when available, but the installed skill set in this
+environment exposes `intuitive-flow` and no `hybrid-phase-pipeline` skill.
+This creates avoidable startup rediscovery for exactly the cleanup workflow
+this plan uses.
+
+Impact radius: workflow.
+
+Maintainer test: new agents should be routed to the actual installed workflow
+entrypoint instead of probing for a missing skill before starting repo work.
+
+Affected paths:
+
+- `AGENTS.md`
+- `CLAUDE.md`
+- possibly `docs/agents/**` if the repo wants a durable skill-routing note
+
+Owner skill: `intuitive-init`
+
+Zen hint: keep agent startup truth explicit and current.
+
+Pattern hint: no pattern; direct guidance alignment is clearer.
+
+Suggested proof:
+
+- `rg -n "hybrid-phase-pipeline|intuitive-flow" AGENTS.md CLAUDE.md docs/agents docs/human`
+- `rg --files "$HOME/.codex/skills" "$HOME/.agents/skills" | rg 'hybrid-phase|intuitive-flow/SKILL\\.md$'`
+
+Execution risk: safe if scoped to agent guidance. Do not rewrite broader repo
+orientation in the same slice.
+
 ## Evidence Ladder
 
 - L0 static:
@@ -3225,4 +3592,23 @@ Stop this refactor loop when:
   deliberate baseline refresh. The quality baseline was lowered from 110 to
   106 Ruff complexity violations, with oversized modules unchanged at 59.
   `roboclaws/operator_console/state.py` no longer appears in the
+  complexity-by-file summary.
+- 2026-06-14: Began implementing the parked Candidate A robot-camera parity
+  diagnostics packet by extracting the visual-parity default/report-side gate
+  logic from `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
+  into `scripts/molmo_cleanup/robot_camera_visual_parity_gates.py`. The
+  summary runner still produces the same manifest fields for
+  `prepared_scale_square_default_gate`,
+  `combined_material_light_default_gate`, and
+  `view_specific_prepared_scale_square_tone_gate`, while the probe selection,
+  blocker assembly, status decisions, chase-regression diagnostics, and
+  view-specific RGB-gain checks now live in focused helpers. Evidence:
+  `ruff check scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py scripts/molmo_cleanup/robot_camera_visual_parity_gates.py tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py -q`
+  passed with 25 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 106 to 101 Ruff complexity violations, with oversized modules unchanged
+  at 59. `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
+  dropped from 3381 to 2808 lines and no longer appears in the
   complexity-by-file summary.
