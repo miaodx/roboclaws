@@ -764,6 +764,10 @@ Slice 5 verification evidence:
   tests/unit/evals/test_eval_runner.py
   tests/contract/dev_tools/test_eval_just_recipe.py` passed.
 - `python scripts/dev/check_python_quality_ratchet.py` passed.
+- `just agent::harness agent-validation recommend
+  plan=docs/plans/2026-06-14-eval-driven-architecture.md budget=focused`
+  passed and wrote
+  `output/agent-validation-matrix/20260614T191207Z/validation_matrix.json`.
 - `git diff --check` passed.
 - `just agent::eval suite=cleanup_capability budget=smoke
   stamp=codex-slice5-detached-poll` passed and wrote
