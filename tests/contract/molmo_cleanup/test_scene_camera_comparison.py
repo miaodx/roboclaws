@@ -22,7 +22,6 @@ from roboclaws.household.camera_control import (
     scene_probe_camera_control_request,
 )
 from roboclaws.household.scene_camera_comparison import (
-    GENESIS_LANE_ID,
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,
@@ -30,15 +29,12 @@ from roboclaws.household.scene_camera_comparison import (
     _camera_intrinsics_contract_from_capture,
     _camera_pose_contract_from_capture,
     _candidate_color_calibrations,
-    _candidate_visual_diagnostics,
     _canonical_camera_control_views,
     _contact_sheet_entries,
-    _genesis_movable_object_visibility_diagnostics,
     _image_pair_visual_delta,
     _image_visual_metrics,
     _isaac_view_specs,
     _key_light_direction_diagnostics,
-    _material_response_diagnostics,
     _molmospaces_view_specs,
     _mujoco_render_contract_from_xml,
     _native_isaac_render_diagnostics,
@@ -49,15 +45,12 @@ from roboclaws.household.scene_camera_comparison import (
     _render_domain_contract_probe,
     _render_domain_source_diagnostics,
     _render_domain_view_triage,
-    _renderer_version,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _room_wall_light_diagnostics,
-    _runtime_render_state,
     _scene_camera_lighting_profile,
     _scene_frame_transform_from_capture,
     _shadow_parity_probe,
-    comparison_successful,
     render_scene_camera_comparison_report,
 )
 
@@ -203,257 +196,6 @@ def Xform "val_1"
     manifest["lanes"][ISAAC_LANE_ID]["views"][1]["usd_prim_path"] = (  # type: ignore[index]
         "/val_1/Geometry/bed_01"
     )
-
-
-def _write_material_response_fixtures(
-    tmp_path: Path,
-    manifest: dict[str, object],
-) -> None:
-    xml_path = tmp_path / "scene.xml"
-    xml_path.write_text(
-        """
-<mujoco>
-  <asset>
-    <texture type="2d" name="BasketballTex" file="textures/Basketball.png" />
-    <texture type="2d" name="ClothTex" file="textures/Cloth.png" />
-    <texture type="2d" name="WoodTex" file="textures/LightWoodCounters.png" />
-    <material name="material_BasketBall" texture="BasketballTex" rgba="1 1 1 1" />
-    <material name="material_Cloth" texture="ClothTex" rgba="0.5 0.25 0.1 1" />
-    <material name="material_LightWoodCounters3" texture="WoodTex" rgba="0.7 0.34 0.13 1" />
-  </asset>
-  <worldbody>
-    <body name="basketball_01">
-      <geom name="basketball_01_visual_0" class="__VISUAL_MJT__" type="mesh"
-            material="material_BasketBall" mesh="BasketballMesh" />
-    </body>
-    <body name="cloth_01">
-      <geom name="cloth_01_visual_0" class="__VISUAL_MJT__" type="mesh"
-            material="material_Cloth" mesh="ClothMesh" />
-    </body>
-    <body name="bat_01">
-      <geom name="bat_01_visual_0" class="__VISUAL_MJT__" type="mesh"
-            material="material_LightWoodCounters3" mesh="BaseballBatMesh" />
-    </body>
-  </worldbody>
-</mujoco>
-""",
-        encoding="utf-8",
-    )
-    usd_path = tmp_path / "scene.usda"
-    usd_path.write_text(
-        """
-#usda 1.0
-def Xform "val_1"
-{
-  def Scope "Geometry"
-  {
-    def Xform "basketball_01"
-    {
-      def Mesh "BasketballMesh"
-      {
-        rel material:binding = </val_1/Geometry/basketball_01/Materials/material_BasketBall>
-      }
-      def Scope "Materials"
-      {
-        def Material "material_BasketBall"
-        {
-          def Shader "PreviewSurface"
-          {
-            uniform token info:id = "UsdPreviewSurface"
-            color3f inputs:diffuseColor.connect =
-                </val_1/Geometry/basketball_01/Materials/material_BasketBall/DiffuseTexture.outputs:rgb>
-          }
-          def Shader "DiffuseTexture"
-          {
-            asset inputs:file = @textures/Basketball.png@
-          }
-        }
-      }
-    }
-    def Xform "cloth_01"
-    {
-      def Mesh "ClothMesh"
-      {
-        rel material:binding = </val_1/Geometry/cloth_01/Materials/material_Cloth>
-      }
-      def Scope "Materials"
-      {
-        def Material "material_Cloth"
-        {
-          def Shader "PreviewSurface"
-          {
-            uniform token info:id = "UsdPreviewSurface"
-            color3f inputs:diffuseColor.connect =
-                </val_1/Geometry/cloth_01/Materials/material_Cloth/DiffuseTexture.outputs:rgb>
-          }
-          def Shader "DiffuseTexture"
-          {
-            asset inputs:file = @textures/Cloth.png@
-            float4 inputs:scale = (0.25, 0.0625, 0.01, 1)
-            float4 inputs:fallback = (0.25, 0.0625, 0.01, 1)
-          }
-        }
-      }
-    }
-    def Xform "bat_01"
-    {
-      def Mesh "BaseballBatMesh"
-      {
-        rel material:binding = </val_1/Geometry/bat_01/Materials/material_LightWoodCounters3>
-      }
-      def Scope "Materials"
-      {
-        def Material "material_LightWoodCounters3"
-        {
-          def Shader "PreviewSurface"
-          {
-            uniform token info:id = "UsdPreviewSurface"
-            color3f inputs:diffuseColor.connect =
-                </val_1/Geometry/bat_01/Materials/material_LightWoodCounters3/DiffuseTexture.outputs:rgb>
-          }
-          def Shader "DiffuseTexture"
-          {
-            asset inputs:file = @textures/LightWoodCounters.png@
-          }
-        }
-      }
-    }
-  }
-}
-""",
-        encoding="utf-8",
-    )
-    manifest["lanes"][MOLMOSPACES_LANE_ID]["scene_xml"] = str(xml_path)  # type: ignore[index]
-    manifest["lanes"][ISAAC_LANE_ID]["scene_usd"] = str(usd_path)  # type: ignore[index]
-    manifest["lanes"][GENESIS_LANE_ID] = _genesis_lane_fixture()  # type: ignore[index]
-    manifest["genesis_movable_object_visibility_diagnostics"] = {
-        "schema": "genesis_movable_object_visibility_diagnostics_v1",
-        "status": "computed",
-        "object_count": 3,
-        "in_frame_object_count": 3,
-        "objects": [],
-        "crop_artifacts": {
-            "schema": "genesis_movable_object_crop_artifacts_v1",
-            "crop_size_px": 16,
-            "crop_dir": "genesis_movable_object_crops",
-            "object_count": 3,
-            "objects": [
-                {
-                    "object_key": "basketball_01",
-                    "category": "BasketBall",
-                    "view_id": "view_03_diningtable",
-                    "crop_status": "written",
-                    "geometry_status": "runtime_pose_match",
-                    "geometry_delta_m": 0.0,
-                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
-                },
-                {
-                    "object_key": "cloth_01",
-                    "category": "Cloth",
-                    "view_id": "view_04_sink",
-                    "crop_status": "written",
-                    "geometry_status": "runtime_pose_match",
-                    "geometry_delta_m": 0.0,
-                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
-                },
-                {
-                    "object_key": "bat_01",
-                    "category": "BaseballBat",
-                    "view_id": "view_02_bed",
-                    "crop_status": "written",
-                    "geometry_status": "runtime_pose_match",
-                    "geometry_delta_m": 0.0,
-                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
-                },
-            ],
-        },
-    }
-    crop_dir = tmp_path / "genesis_movable_object_crops"
-    _write_image(
-        crop_dir / f"basketball_01__view_03_diningtable__{MOLMOSPACES_LANE_ID}.png",
-        color=(180, 180, 180),
-    )
-    _write_image(
-        crop_dir / f"basketball_01__view_03_diningtable__{ISAAC_LANE_ID}.png",
-        color=(90, 90, 90),
-    )
-    _write_image(
-        crop_dir / f"basketball_01__view_03_diningtable__{GENESIS_LANE_ID}.png",
-        color=(80, 80, 80),
-    )
-    _write_image(
-        crop_dir / f"cloth_01__view_04_sink__{MOLMOSPACES_LANE_ID}.png",
-        color=(80, 120, 80),
-    )
-    _write_image(
-        crop_dir / f"cloth_01__view_04_sink__{ISAAC_LANE_ID}.png",
-        color=(200, 80, 100),
-    )
-    _write_image(
-        crop_dir / f"cloth_01__view_04_sink__{GENESIS_LANE_ID}.png",
-        color=(200, 80, 100),
-    )
-    _write_image(
-        crop_dir / f"bat_01__view_02_bed__{MOLMOSPACES_LANE_ID}.png",
-        color=(120, 120, 120),
-    )
-    _write_image(
-        crop_dir / f"bat_01__view_02_bed__{ISAAC_LANE_ID}.png",
-        color=(130, 130, 130),
-    )
-    _write_image(
-        crop_dir / f"bat_01__view_02_bed__{GENESIS_LANE_ID}.png",
-        color=(130, 130, 130),
-    )
-    asset_dir = tmp_path / "genesis" / "camera_views" / "prepared_usd_visual_asset"
-    asset_dir.mkdir(parents=True)
-    (asset_dir / "prepared_usd_visual_asset.obj").write_text(
-        """
-mtllib prepared_usd_visual_asset.mtl
-usemtl material_BasketBall_BASKETBALL_AlbedoTransparency
-f 1 2 3
-usemtl material_Cloth_8_Mat
-f 1 3 4
-usemtl material_LightWoodCounters3
-f 2 3 4
-""",
-        encoding="utf-8",
-    )
-    (asset_dir / "prepared_usd_visual_asset.mtl").write_text(
-        """
-newmtl material_BasketBall_BASKETBALL_AlbedoTransparency
-Kd 1.0 1.0 1.0
-map_Kd textures/BasketBall_BASKETBALL_AlbedoTransparency.png
-
-newmtl material_Cloth_8_Mat
-Kd 1.0 1.0 1.0
-map_Kd textures/Cloth1AO.png
-
-newmtl material_LightWoodCounters3
-Kd 1.0 1.0 1.0
-map_Kd textures/LightWoodCounters.png
-""",
-        encoding="utf-8",
-    )
-    manifest["lanes"][GENESIS_LANE_ID]["scene_load"] = {  # type: ignore[index]
-        "render_only_visual_asset": {
-            "visual_object_audit": {
-                "texture_conversion_objects": [
-                    {
-                        "object_key": "bat_01",
-                        "category": "BaseballBat",
-                        "asset_id": "BaseballBat_2",
-                        "material_names": ["material_LightWoodCounters3"],
-                    }
-                ],
-                "non_static_render_objects": [],
-                "collision_mesh_objects": [],
-                "runtime_pose_overlay_objects": [],
-            }
-        }
-    }
-
-
 def _native_isaac_diagnostics() -> dict[str, object]:
     return {
         "schema": "isaac_native_render_diagnostics_v1",
@@ -495,115 +237,6 @@ def _native_isaac_diagnostics() -> dict[str, object]:
                 "setting_path": "/rtx/rendermode",
             },
         },
-    }
-
-
-def _genesis_lane_fixture() -> dict[str, object]:
-    lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
-    rig = scene_light_rig(lighting_profile)
-    roles = scene_light_rig_roles(rig)
-    key = rig["key"]
-    ambient = rig["ambient"]
-    genesis = rig["backend_overrides"]["genesis"]
-    genesis_lights = [
-        {
-            "type": "directional",
-            "dir": list(key["direction"]),
-            "color": list(key["color"]),
-            "intensity": genesis["key_intensity"],
-            "role": "key",
-            "source": "scene_light_rig.key.direction",
-        }
-    ]
-    return {
-        "status": "success",
-        "python_executable": ".venv-genesis/bin/python",
-        "runtime": {"python_version": "3.12.9", "genesis_version": "1.0.0"},
-        "scene_usd": "/tmp/scene_semantic.usda",
-        "visual_artifact_provenance": "genesis_real_rgb_render",
-        "camera_control_api": CAMERA_CONTROL_API_NAME,
-        "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-        "lighting_profile": lighting_profile,
-        "lighting_diagnostics": {
-            "status": "genesis_scene_light_rig_applied",
-            "source": "prepared_usd_plus_genesis_rasterizer",
-            "genesis_lighting_profile": {
-                "profile_id": lighting_profile["profile_id"],
-                "source": lighting_profile["source"],
-                "scene_light_rig": rig,
-                "scene_light_rig_schema": rig["schema"],
-                "scene_light_rig_roles": roles,
-                "ambient_light": ambient["genesis_ambient_light"],
-                "background_color": ambient["genesis_background_color"],
-                "shadow": key["shadow"],
-                "scene_key_light_direction": key["direction"],
-                "scene_key_light_frame": rig["frame"],
-                "lights": genesis_lights,
-            },
-        },
-        "color_profile": {
-            "profile_id": "display_srgb_soft_highlight_v1",
-            "backend_luminance_gain": {GENESIS_LANE_ID: 0.94},
-            "backend_rgb_gain": {GENESIS_LANE_ID: [1.04, 1.0, 0.97]},
-            "backend_tone_adjustment": {
-                GENESIS_LANE_ID: {
-                    "shadow_lift": 8.0,
-                    "shadow_floor": 135.0,
-                    "gamma": 1.1,
-                    "saturation": 1.0,
-                    "gain": 1.0,
-                }
-            },
-            "backend_view_tone_adjustment": {
-                GENESIS_LANE_ID: {
-                    "room_01_room_2": {
-                        "shadow_lift": 8.0,
-                        "shadow_floor": 135.0,
-                        "gamma": 1.1,
-                        "saturation": 1.0,
-                        "gain": 1.2,
-                    }
-                }
-            },
-            "genesis_backend_tone_adjustment_source": "Genesis baked-texture visual probe",
-        },
-        "images": {
-            "room_01_room_2": {
-                "path": "genesis/camera_views/room_01_room_2.png",
-                "dimensions": {"width": 64, "height": 48, "channels": 3},
-            },
-            "view_01_bed": {
-                "path": "genesis/camera_views/view_01_bed.png",
-                "dimensions": {"width": 64, "height": 48, "channels": 3},
-            },
-            "view_02_sink": {
-                "path": "genesis/camera_views/view_02_sink.png",
-                "dimensions": {"width": 64, "height": 48, "channels": 3},
-            },
-        },
-        "views": [
-            {
-                "view_id": "room_01_room_2",
-                "eye": [1.0, 2.0, 1.45],
-                "target": [2.0, 3.0, 1.45],
-                "backend_eye": [1.0, 2.0, 1.45],
-                "backend_target": [2.0, 3.0, 1.45],
-            },
-            {
-                "view_id": "view_01_bed",
-                "eye": [0.2, 6.4, 2.6],
-                "target": [2.8, 9.0, 0.8],
-                "backend_eye": [0.2, 6.4, 2.6],
-                "backend_target": [2.8, 9.0, 0.8],
-            },
-            {
-                "view_id": "view_02_sink",
-                "eye": [7.0, -1.4, 2.6],
-                "target": [9.6, 1.8, 0.6],
-                "backend_eye": [7.0, -1.4, 2.6],
-                "backend_target": [9.6, 1.8, 0.6],
-            },
-        ],
     }
 
 
@@ -1004,12 +637,10 @@ def _manifest() -> dict[str, object]:
 
 def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path: Path) -> None:
     manifest = _manifest()
-    manifest["lanes"][GENESIS_LANE_ID] = _genesis_lane_fixture()  # type: ignore[index]
     manifest["lane_registry"] = {  # type: ignore[index]
         "baseline": MOLMOSPACES_LANE_ID,
-        "candidates": [ISAAC_LANE_ID, GENESIS_LANE_ID],
+        "candidates": [ISAAC_LANE_ID],
     }
-    manifest["view_specs"][GENESIS_LANE_ID] = []  # type: ignore[index]
     _write_render_contract_probe_fixtures(tmp_path, manifest)
     for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
         for image in lane["images"].values():  # type: ignore[index,union-attr]
@@ -1022,10 +653,6 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
                 color = (180, 180, 180)
             elif "isaaclab" in path and "view_01" in path:
                 color = (80, 80, 80)
-            elif "genesis" in path and "room_01" in path:
-                color = (150, 145, 135)
-            elif "genesis" in path:
-                color = (130, 110, 90)
             elif "molmospaces" in path:
                 color = (120, 70, 50)
             else:
@@ -1067,25 +694,14 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Candidate Visual Acceptance" in html
     assert "Native Isaac Render Diagnostics" in html
     assert "Lighting &amp; Tone Provenance" in html
-    assert manifest["lighting_tone_provenance"]["status"] == (  # type: ignore[index]
-        "environment_light_configured_tone_adjusted"
-    )
-    assert "environment_light_configured_tone_adjusted" in html
+    assert manifest["lighting_tone_provenance"]["status"] == "environment_light_configured"  # type: ignore[index]
+    assert "environment_light_configured" in html
     assert "missing_environment_light_lanes=" in html
-    assert "tone_adjusted_lanes=genesis-prepared-usd" in html
-    assert "genesis_scene_light_rig_applied" in html
     assert "scene_light_rig_v1" in html
-    assert "active_roles=ambient_light, background_color, directional_key" in html
-    assert "ambient=0.37, 0.37, 0.37" in html
-    assert "directional_lights=1" in html
     assert "authored=disabled_for_comparison" in html
-    assert "background=0.04, 0.08, 0.12" in html
     assert "active_authored_usd_lights=0" in html
     assert "active_roles=dome_environment, directional_key" in html
-    assert "post_render_tone_adjustment_applied" in html
-    assert "view_tone_overrides=1" in html
-    assert "Genesis baked-texture visual probe" in html
-    assert "Lighting is configured for all successful lanes" in html
+    assert "Lighting is configured; inspect render-domain residual diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
     assert "Render Domain View Triage" in html
     assert "Render Domain Contract Probe" in html
@@ -1544,59 +1160,6 @@ def test_render_domain_contract_probe_reads_mjcf_and_usda_contracts(tmp_path: Pa
     assert probe["isaac_shadow_disabled_prim_count"] == 1
 
 
-def test_material_response_diagnostics_samples_crop_material_evidence(tmp_path: Path) -> None:
-    manifest = _manifest()
-    _write_material_response_fixtures(tmp_path, manifest)
-
-    diagnostics = _material_response_diagnostics(manifest, output_dir=tmp_path)
-
-    rows = {item["object_key"]: item for item in diagnostics["objects"]}
-    basketball = rows["basketball_01"]
-    cloth = rows["cloth_01"]
-    baseballbat = rows["bat_01"]
-    assert diagnostics["schema"] == "scene_camera_material_response_diagnostics_v1"
-    assert diagnostics["status"] == "computed"
-    assert diagnostics["sample_count"] == 3
-    assert diagnostics["conclusion"] == "mixed"
-    assert diagnostics["likely_squared_texture_scale_count"] == 1
-    assert diagnostics["mujoco_parse_status"] == "parsed"
-    assert diagnostics["isaac_parse_status"] == "parsed"
-    assert diagnostics["genesis_material_parse_status"] == "parsed"
-    assert basketball["signal"] == "shared_brightness_tone_drift"
-    assert cloth["signal"] == "material_texture_or_local_shadow_residual"
-    assert basketball["mujoco"]["materials"] == ["material_BasketBall"]
-    assert basketball["isaac"]["materials"] == ["material_BasketBall"]
-    assert basketball["genesis"]["status"] == "matched_by_material_name"
-    assert basketball["genesis"]["texture_files"] == [
-        "textures/BasketBall_BASKETBALL_AlbedoTransparency.png"
-    ]
-    assert cloth["genesis"]["materials"] == ["material_Cloth_8_Mat"]
-    assert cloth["material_scale_response"]["status"] == "likely_squared_texture_scale"
-    assert cloth["material_scale_response"]["likely_squared_pair_count"] == 1
-    assert baseballbat["genesis"]["status"] == "matched_by_material_name"
-    assert baseballbat["genesis"]["match_source"] == "visual_audit_material_names"
-    assert baseballbat["genesis"]["materials"] == ["material_LightWoodCounters3"]
-    assert "material evidence" in diagnostics["recommended_next_action"]
-
-
-def test_material_response_diagnostics_renders_report_section(tmp_path: Path) -> None:
-    manifest = _manifest()
-    _write_material_response_fixtures(tmp_path, manifest)
-    manifest["material_response_diagnostics"] = _material_response_diagnostics(
-        manifest,
-        output_dir=tmp_path,
-    )
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-    html = report.read_text(encoding="utf-8")
-
-    assert "Material Response Diagnostics" in html
-    assert "conclusion=mixed" in html
-    assert "shared_brightness_tone_drift" in html
-    assert "material_Cloth_8_Mat" in html
-    assert "likely_squared_texture_scale" in html
-    assert "material_LightWoodCounters3" in html
-
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
     manifest = _manifest()
@@ -1614,785 +1177,6 @@ def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_pat
     assert [entry["view_id"] for entry in entries] == ["room_01_room_2"]
     assert set(entries[0]["images"]) == {MOLMOSPACES_LANE_ID, ISAAC_LANE_ID}
 
-
-def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> None:
-    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
-    _write_image(tmp_path / "isaac.png", color=(80, 40, 20))
-    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "scene": {"scene_usd_path": "scene.usda"},
-        "camera_control": {
-            "api_name": CAMERA_CONTROL_API_NAME,
-            "request_artifact": "camera_control_request.json",
-            "same_pose_contract": True,
-        },
-        "camera_intrinsics_contract": {
-            "resolution": {"width": 64, "height": 48},
-            "requested_lens": {"vertical_fov_deg": 45.0},
-        },
-        "lane_registry": {
-            "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [ISAAC_LANE_ID, GENESIS_LANE_ID],
-        },
-        "canonical_camera_views": [
-            {
-                "view_id": "view_01",
-                "label": "test view",
-                "room_id": "room_1",
-                "category": "Table",
-                "eye": [0.0, -2.0, 1.0],
-                "target": [0.0, 0.0, 1.0],
-            }
-        ],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "runtime_object_positions": {
-                    "bowl_01": {
-                        "category": "Bowl",
-                        "position": [0.0, 0.0, 1.0],
-                        "seeded_start_receptacle_id": "diningtable_01",
-                        "target_receptacle_id": "sink_01",
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "molmo.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-                "views": [{"view_id": "view_01", "eye": [0, 0, 1], "target": [0, 1, 1]}],
-            },
-            ISAAC_LANE_ID: {
-                "status": "success",
-                "images": {
-                    "view_01": {
-                        "path": "isaac.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-                "views": [{"view_id": "view_01", "eye": [0, 0, 1], "target": [0, 1, 1]}],
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "runtime": {"runtime_mode": "fake"},
-                "scene_usd": "scene.usda",
-                "scene_load": {
-                    "render_only_visual_asset": {
-                        "visual_object_audit": {
-                            "schema": "genesis_visual_asset_object_audit_v1",
-                            "object_count": 2,
-                            "render_mesh_object_count": 2,
-                            "texture_conversion_object_count": 1,
-                            "non_static_render_object_count": 1,
-                            "collision_mesh_object_count": 1,
-                            "metadata_source": "scene_metadata.json",
-                            "interpretation": "audit fixture",
-                            "texture_conversion_objects": [
-                                {
-                                    "object_key": "toilet_01",
-                                    "category": "Toilet",
-                                    "asset_id": "Toilet_1",
-                                    "metadata_match": "exact",
-                                    "texture_modes": ["P"],
-                                    "converted_texture_names": [
-                                        "Toilet1_DefaultMaterial_AlbedoTransparency.png"
-                                    ],
-                                }
-                            ],
-                            "non_static_render_objects": [
-                                {
-                                    "object_key": "bowl_01",
-                                    "category": "Bowl",
-                                    "asset_id": "Bowl_12",
-                                    "metadata_match": "exact",
-                                    "parent": "diningtable_01",
-                                    "room_id": 2,
-                                    "bounds_min": [-0.1, -0.1, 0.95],
-                                    "bounds_max": [0.1, 0.1, 1.05],
-                                    "bounds_center": [0.0, 0.0, 1.0],
-                                    "bounds_size": [0.2, 0.2, 0.1],
-                                }
-                            ],
-                            "collision_mesh_objects": [
-                                {
-                                    "object_key": "bowl_01",
-                                    "category": "Bowl",
-                                    "asset_id": "Bowl_12",
-                                    "metadata_match": "exact",
-                                    "render_mesh_count": 2,
-                                    "collision_mesh_count": 50,
-                                }
-                            ],
-                        }
-                    }
-                },
-                "visual_artifact_provenance": "genesis_real_rgb_render",
-                "images": {
-                    "view_01": {
-                        "path": "genesis.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-                "views": [{"view_id": "view_01", "eye": [0, 0, 1], "target": [0, 1, 1]}],
-            },
-        },
-    }
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-
-    html = report.read_text(encoding="utf-8")
-    assert (tmp_path / "contact_sheet.png").is_file()
-    assert manifest["contact_sheet"]["lanes"] == [
-        MOLMOSPACES_LANE_ID,
-        ISAAC_LANE_ID,
-        GENESIS_LANE_ID,
-    ]
-    assert GENESIS_LANE_ID in html
-    assert "genesis.png" in html
-    assert 'data-image-src="genesis.png"' in html
-    assert '<dialog class="image-modal"' in html
-    assert "modal.showModal()" in html
-    assert "Genesis Visual Object Audit" in html
-    assert "Alike Object Risk Summary" in html
-    assert "Texture conversion" in html
-    assert "Toilet (1)" in html
-    assert "Movable clutter" in html
-    assert "Bowl (1)" in html
-    assert "Converted Texture Objects" in html
-    assert "Toilet1_DefaultMaterial_AlbedoTransparency.png" in html
-    assert "metadata_match" in html
-    assert "Non-Static Render Objects" in html
-    assert "Genesis Movable Object Visibility" in html
-    assert "In-frame views" in html
-    assert "view_01" in html
-    assert "genesis_movable_object_crops" in html
-    assert "crop-image" in html
-    assert "bowl_01" in html
-    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
-    assert visibility["status"] == "computed"
-    assert visibility["in_frame_object_count"] == 1
-    assert visibility["objects"][0]["object_key"] == "bowl_01"
-    assert visibility["objects"][0]["geometry_status"] == "runtime_pose_match"
-    assert visibility["objects"][0]["geometry_delta_m"] == 0.0
-    assert visibility["objects"][0]["crop_status"] == "written"
-    assert set(visibility["objects"][0]["crops"]) == {
-        MOLMOSPACES_LANE_ID,
-        ISAAC_LANE_ID,
-        GENESIS_LANE_ID,
-    }
-    for crop in visibility["objects"][0]["crops"].values():
-        assert (tmp_path / crop["path"]).is_file()
-
-
-def test_scene_camera_genesis_movable_visibility_flags_dynamic_pose_mismatch(
-    tmp_path: Path,
-) -> None:
-    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
-    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "camera_intrinsics_contract": {
-            "resolution": {"width": 64, "height": 48},
-            "requested_lens": {"vertical_fov_deg": 45.0},
-        },
-        "lane_registry": {
-            "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [GENESIS_LANE_ID],
-        },
-        "canonical_camera_views": [
-            {
-                "view_id": "view_01",
-                "label": "test view",
-                "eye": [0.0, -2.0, 1.0],
-                "target": [0.0, 0.0, 1.0],
-            }
-        ],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "runtime_object_positions": {
-                    "bowl_01": {
-                        "category": "Bowl",
-                        "position": [0.0, 4.0, 1.0],
-                        "seeded_start_receptacle_id": "bed_01",
-                        "target_receptacle_id": "sink_01",
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "molmo.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "scene_load": {
-                    "render_only_visual_asset": {
-                        "visual_object_audit": {
-                            "schema": "genesis_visual_asset_object_audit_v1",
-                            "non_static_render_objects": [
-                                {
-                                    "object_key": "bowl_01",
-                                    "category": "Bowl",
-                                    "asset_id": "Bowl_12",
-                                    "bounds_min": [-0.1, -0.1, 0.95],
-                                    "bounds_max": [0.1, 0.1, 1.05],
-                                    "bounds_center": [0.0, 0.0, 1.0],
-                                    "bounds_size": [0.2, 0.2, 0.1],
-                                }
-                            ],
-                        }
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "genesis.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-        },
-    }
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-
-    html = report.read_text(encoding="utf-8")
-    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
-    assert visibility["dynamic_pose_mismatch_count"] == 1
-    assert visibility["objects"][0]["geometry_status"] == "dynamic_pose_mismatch"
-    assert visibility["objects"][0]["geometry_delta_m"] == 4.0
-    assert "dynamic_pose_mismatch" in html
-    assert "4.000 m" in html
-
-
-def test_scene_camera_genesis_movable_visibility_matches_sanitized_runtime_alias(
-    tmp_path: Path,
-) -> None:
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "camera_intrinsics_contract": {
-            "resolution": {"width": 64, "height": 48},
-            "requested_lens": {"vertical_fov_deg": 45.0},
-        },
-        "canonical_camera_views": [],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "runtime_object_positions": {
-                    "plumber'shelper_d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3": {
-                        "category": "Plunger",
-                        "position": [6.0, 4.0, 0.25],
-                    }
-                },
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "scene_load": {
-                    "render_only_visual_asset": {
-                        "visual_object_audit": {
-                            "schema": "genesis_visual_asset_object_audit_v1",
-                            "non_static_render_objects": [
-                                {
-                                    "object_key": (
-                                        "tn__plumbershelper_"
-                                        "d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3_aa1"
-                                    ),
-                                    "category": "Plunger",
-                                    "asset_id": "Plunger_3",
-                                    "bounds_min": [5.9, 3.9, 0.2],
-                                    "bounds_max": [6.1, 4.1, 0.3],
-                                    "bounds_center": [6.0, 4.0, 0.25],
-                                    "bounds_size": [0.2, 0.2, 0.1],
-                                }
-                            ],
-                        }
-                    }
-                },
-            },
-        },
-    }
-
-    diagnostics = _genesis_movable_object_visibility_diagnostics(manifest)
-
-    assert diagnostics["objects"][0]["geometry_status"] == "runtime_pose_match"
-    assert diagnostics["objects"][0]["geometry_delta_m"] == 0.0
-
-
-def test_scene_camera_genesis_movable_visibility_accepts_runtime_pose_overlay(
-    tmp_path: Path,
-) -> None:
-    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
-    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "camera_intrinsics_contract": {
-            "resolution": {"width": 64, "height": 48},
-            "requested_lens": {"vertical_fov_deg": 45.0},
-        },
-        "lane_registry": {
-            "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [GENESIS_LANE_ID],
-        },
-        "canonical_camera_views": [
-            {
-                "view_id": "view_01",
-                "label": "test view",
-                "eye": [0.0, -2.0, 1.0],
-                "target": [0.0, 4.0, 1.0],
-            }
-        ],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "runtime_object_positions": {
-                    "bowl_01": {
-                        "category": "Bowl",
-                        "position": [0.0, 4.0, 1.0],
-                        "seeded_start_receptacle_id": "bed_01",
-                        "target_receptacle_id": "sink_01",
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "molmo.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "scene_load": {
-                    "render_only_visual_asset": {
-                        "visual_object_audit": {
-                            "schema": "genesis_visual_asset_object_audit_v1",
-                            "runtime_pose_overlay_object_count": 1,
-                            "runtime_pose_overlay_threshold_m": 0.25,
-                            "runtime_pose_overlay_objects": [
-                                {
-                                    "object_key": "bowl_01",
-                                    "category": "Bowl",
-                                    "asset_id": "Bowl_12",
-                                    "metadata_match": "exact",
-                                    "runtime_pose_overlay_geometry_delta_m": 4.0,
-                                    "runtime_pose_overlay_translation": [0.0, 4.0, 0.0],
-                                }
-                            ],
-                            "non_static_render_objects": [
-                                {
-                                    "object_key": "bowl_01",
-                                    "category": "Bowl",
-                                    "asset_id": "Bowl_12",
-                                    "bounds_min": [-0.1, 3.9, 0.95],
-                                    "bounds_max": [0.1, 4.1, 1.05],
-                                    "bounds_center": [0.0, 4.0, 1.0],
-                                    "bounds_size": [0.2, 0.2, 0.1],
-                                    "runtime_pose_overlay_applied": True,
-                                    "runtime_pose_overlay": {
-                                        "geometry_delta_m": 4.0,
-                                        "translation": [0.0, 4.0, 0.0],
-                                    },
-                                }
-                            ],
-                        }
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "genesis.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-        },
-    }
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-
-    html = report.read_text(encoding="utf-8")
-    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
-    assert visibility["dynamic_pose_mismatch_count"] == 0
-    assert visibility["runtime_pose_overlay_object_count"] == 1
-    assert visibility["objects"][0]["geometry_status"] == "runtime_pose_overlay_applied"
-    assert visibility["objects"][0]["geometry_delta_m"] == 0.0
-    assert visibility["objects"][0]["runtime_pose_overlay_geometry_delta_m"] == 4.0
-    assert "Runtime pose overlay" in html
-    assert "runtime_pose_overlay_applied" in html
-
-
-def test_scene_camera_request_carries_runtime_render_state_for_candidate_lanes() -> None:
-    state = {
-        "objects": {
-            "box_01": {
-                "category": "Box",
-                "position": [1.0, 2.0, 0.4],
-            }
-        },
-        "runtime_render_state": {
-            "schema": "molmospaces_runtime_render_state_v1",
-            "status": "computed",
-            "object_count": 1,
-            "articulated_object_count": 1,
-            "objects": {
-                "box_01": {
-                    "object_key": "box_01",
-                    "category": "Box",
-                    "position": [1.0, 2.0, 0.4],
-                    "subtree_joint_count": 2,
-                    "articulation_status": "articulated",
-                    "articulation_joints": [
-                        {
-                            "joint_name": "box_01/flap_inner_1",
-                            "joint_type": "hinge",
-                            "qposadr": 12,
-                            "qpos": [2.9],
-                        },
-                        {
-                            "joint_name": "box_01/flap_outer_1",
-                            "joint_type": "hinge",
-                            "qposadr": 13,
-                            "qpos": [-2.9],
-                        },
-                    ],
-                }
-            },
-        },
-    }
-
-    runtime_state = _runtime_render_state(state)
-
-    assert runtime_state["status"] == "computed"
-    assert runtime_state["articulated_object_count"] == 1
-    assert runtime_state["objects"]["box_01"]["articulation_joints"][0]["qpos"] == [2.9]
-
-
-def test_scene_camera_genesis_movable_visibility_blocks_articulated_pose_false_green(
-    tmp_path: Path,
-) -> None:
-    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
-    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "camera_intrinsics_contract": {
-            "resolution": {"width": 64, "height": 48},
-            "requested_lens": {"vertical_fov_deg": 45.0},
-        },
-        "lane_registry": {
-            "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [GENESIS_LANE_ID],
-        },
-        "canonical_camera_views": [
-            {
-                "view_id": "view_01",
-                "label": "box view",
-                "eye": [0.0, -2.0, 1.0],
-                "target": [0.0, 0.0, 1.0],
-            }
-        ],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "runtime_object_positions": {
-                    "box_01": {
-                        "category": "Box",
-                        "position": [0.0, 0.0, 1.0],
-                    }
-                },
-                "runtime_render_state": {
-                    "schema": "molmospaces_runtime_render_state_v1",
-                    "status": "computed",
-                    "articulated_object_count": 1,
-                    "objects": {
-                        "box_01": {
-                            "object_key": "box_01",
-                            "category": "Box",
-                            "body_name": "box_01",
-                            "position": [0.0, 0.0, 1.0],
-                            "subtree_joint_count": 4,
-                            "articulation_status": "articulated",
-                            "articulation_joints": [
-                                {
-                                    "joint_name": "box_01/flap_inner_1",
-                                    "joint_type": "hinge",
-                                    "qposadr": 41,
-                                    "qpos": [2.91219],
-                                },
-                                {
-                                    "joint_name": "box_01/flap_outer_1",
-                                    "joint_type": "hinge",
-                                    "qposadr": 42,
-                                    "qpos": [-2.93938],
-                                },
-                            ],
-                        }
-                    },
-                },
-                "images": {
-                    "view_01": {
-                        "path": "molmo.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "scene_load": {
-                    "render_only_visual_asset": {
-                        "visual_object_audit": {
-                            "schema": "genesis_visual_asset_object_audit_v1",
-                            "non_static_render_objects": [
-                                {
-                                    "object_key": "box_01",
-                                    "category": "Box",
-                                    "asset_id": "Box_10",
-                                    "bounds_min": [-0.1, -0.1, 0.95],
-                                    "bounds_max": [0.1, 0.1, 1.05],
-                                    "bounds_center": [0.0, 0.0, 1.0],
-                                    "bounds_size": [0.2, 0.2, 0.1],
-                                }
-                            ],
-                        }
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "genesis.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-        },
-    }
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-
-    html = report.read_text(encoding="utf-8")
-    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
-    box = visibility["objects"][0]
-    assert box["geometry_delta_m"] == 0.0
-    assert box["geometry_status"] == "articulated_runtime_state_unsupported"
-    assert box["articulation_required"] is True
-    assert box["articulation_joint_count"] == 2
-    assert box["articulation_apply_status"] == "unsupported_translation_only_visual_package"
-    assert visibility["articulated_runtime_state_unsupported_count"] == 1
-    assert "articulated_runtime_state_unsupported" in html
-    assert "unsupported_translation_only_visual_package" in html
-    assert "box_01/flap_inner_1" in html
-
-
-def test_scene_camera_genesis_movable_visibility_accepts_static_baked_articulation(
-    tmp_path: Path,
-) -> None:
-    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
-    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
-    usd_path = tmp_path / "scene_semantic.usda"
-    usd_path.write_text(
-        """
-#usda 1.0
-def Xform "val_1"
-{
-  def Scope "Geometry"
-  {
-    def Xform "box_01" {}
-  }
-}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "summary.json").write_text(
-        json.dumps(
-            {
-                "status": "ready",
-                "mujoco_visual_joint_endpoint_pose_status": (
-                    "mujoco_visual_joint_endpoint_pose_applied"
-                ),
-                "mujoco_visual_joint_endpoint_pose_corrected_count": 2,
-                "mujoco_visual_joint_endpoint_pose_missing_count": 0,
-                "visual_physics_status": "frozen_static_visual_usd",
-            }
-        ),
-        encoding="utf-8",
-    )
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "camera_intrinsics_contract": {
-            "resolution": {"width": 64, "height": 48},
-            "requested_lens": {"vertical_fov_deg": 45.0},
-        },
-        "lane_registry": {
-            "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [GENESIS_LANE_ID],
-        },
-        "canonical_camera_views": [
-            {
-                "view_id": "view_01",
-                "label": "box view",
-                "eye": [0.0, -2.0, 1.0],
-                "target": [0.0, 0.0, 1.0],
-            }
-        ],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "runtime_object_positions": {
-                    "box_01": {
-                        "category": "Box",
-                        "position": [0.0, 0.0, 1.0],
-                    }
-                },
-                "runtime_render_state": {
-                    "schema": "molmospaces_runtime_render_state_v1",
-                    "status": "computed",
-                    "articulated_object_count": 1,
-                    "objects": {
-                        "box_01": {
-                            "object_key": "box_01",
-                            "category": "Box",
-                            "body_name": "box_01",
-                            "position": [0.0, 0.0, 1.0],
-                            "subtree_joint_count": 2,
-                            "articulation_status": "articulated",
-                            "articulation_joints": [
-                                {
-                                    "joint_name": "box_01/flap_inner_1",
-                                    "joint_type": "hinge",
-                                    "qposadr": 41,
-                                    "qpos": [2.91219],
-                                    "range": [0.0, 2.91219],
-                                },
-                                {
-                                    "joint_name": "box_01/flap_outer_1",
-                                    "joint_type": "hinge",
-                                    "qposadr": 42,
-                                    "qpos": [-2.93938],
-                                    "range": [-2.93938, 0.0],
-                                },
-                            ],
-                        }
-                    },
-                },
-                "images": {
-                    "view_01": {
-                        "path": "molmo.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-            ISAAC_LANE_ID: {
-                "status": "success",
-                "scene_usd": str(usd_path),
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "scene_load": {
-                    "render_only_visual_asset": {
-                        "visual_object_audit": {
-                            "schema": "genesis_visual_asset_object_audit_v1",
-                            "non_static_render_objects": [
-                                {
-                                    "object_key": "box_01",
-                                    "category": "Box",
-                                    "asset_id": "Box_10",
-                                    "bounds_min": [-0.1, -0.1, 0.95],
-                                    "bounds_max": [0.1, 0.1, 1.05],
-                                    "bounds_center": [0.0, 0.0, 1.0],
-                                    "bounds_size": [0.2, 0.2, 0.1],
-                                }
-                            ],
-                        }
-                    }
-                },
-                "images": {
-                    "view_01": {
-                        "path": "genesis.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-        },
-    }
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-
-    html = report.read_text(encoding="utf-8")
-    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
-    box = visibility["objects"][0]
-    assert box["geometry_delta_m"] == 0.0
-    assert box["geometry_status"] == "articulated_static_baked_match"
-    assert box["articulation_apply_status"] == "prepared_usd_static_endpoint_baked"
-    assert visibility["articulated_static_baked_count"] == 1
-    assert visibility["articulated_runtime_state_unsupported_count"] == 0
-    assert "articulated_static_baked_match" in html
-    assert "prepared_usd_static_endpoint_baked" in html
-    assert "articulated_static_baked=1" in html
-
-
-def test_scene_camera_genesis_visual_mesh_fallback_is_degraded_visual_evidence(
-    tmp_path: Path,
-) -> None:
-    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
-    _write_image(tmp_path / "genesis.png", color=(120, 120, 120))
-    manifest = {
-        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
-        "purpose": "render-only test",
-        "lane_registry": {
-            "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [GENESIS_LANE_ID],
-        },
-        "canonical_camera_views": [{"view_id": "view_01", "label": "test view"}],
-        "lanes": {
-            MOLMOSPACES_LANE_ID: {
-                "status": "success",
-                "images": {
-                    "view_01": {
-                        "path": "molmo.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-            GENESIS_LANE_ID: {
-                "status": "success",
-                "scene_load": {
-                    "genesis_import_mode": "prepared_usd_visual_mesh",
-                    "claim_boundary": "geometry-only fallback",
-                },
-                "images": {
-                    "view_01": {
-                        "path": "genesis.png",
-                        "dimensions": {"width": 64, "height": 48, "channels": 3},
-                    }
-                },
-            },
-        },
-    }
-
-    diagnostics = _candidate_visual_diagnostics(manifest, output_dir=tmp_path)
-    manifest["candidate_visual_diagnostics"] = diagnostics
-
-    assert diagnostics["status"] == "degraded_visual_fidelity"
-    assert diagnostics["degraded_candidates"] == [GENESIS_LANE_ID]
-    assert (
-        "render_only_visual_mesh_drops_usd_materials_and_textures"
-        in diagnostics["candidates"][0]["warning_reasons"]
-    )
-    assert not comparison_successful(manifest)
-
-    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
-    html = report.read_text(encoding="utf-8")
-    assert "Do not accept the Genesis lane as visually comparable yet" in html
-    assert "render_only_visual_mesh_drops_usd_materials_and_textures" in html
-
-
-def test_scene_camera_renderer_version_includes_genesis_runtime() -> None:
-    assert _renderer_version({"genesis_version": "1.0.0"}) == "1.0.0"
 
 
 def test_scene_camera_comparison_manifest_is_json_serializable() -> None:
@@ -2457,7 +1241,6 @@ def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
     assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
     assert rig["ambient"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
     assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(120.0)
-    assert rig["ambient"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert rig["fill"]["enabled"] is False
     assert rig["authored_scene_lights_policy"] == "disabled_for_comparison"
     assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(900.0)
@@ -2531,29 +1314,19 @@ def test_scene_camera_key_light_direction_diagnostics_accepts_aligned_vectors() 
             }
         ]
     }
-    genesis_profile = {
-        "lights": [
-            {
-                "dir": [-0.577350269, 0.577350269, -0.577350269],
-                "intensity": 3.0,
-            }
-        ]
-    }
     isaac_lighting = {"applied_key_light_direction": [-0.577350269, 0.577350269, -0.577350269]}
 
     diagnostics = _key_light_direction_diagnostics(
         lighting_profile=profile,
         render_probe=render_probe,
         isaac_lighting=isaac_lighting,
-        genesis_profile=genesis_profile,
     )
 
     assert diagnostics["status"] == "key_light_direction_aligned"
     assert diagnostics["isaac_angle_delta_deg"] == pytest.approx(0.0)
-    assert diagnostics["genesis_angle_delta_deg"] == pytest.approx(0.0)
 
 
-def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_status() -> None:
+def test_scene_camera_balanced_review_profile_reports_default_fill_profile_status() -> None:
     manifest = _manifest()
     profile = dict(BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE)
     rig = scene_light_rig(profile)
@@ -2569,9 +1342,6 @@ def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_st
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
-    genesis = _genesis_lane_fixture()
-    genesis["lighting_diagnostics"]["genesis_lighting_profile"]["shadow"] = True  # type: ignore[index]
-    manifest["lanes"][GENESIS_LANE_ID] = genesis  # type: ignore[index]
     manifest["candidate_visual_diagnostics"] = {
         "status": "computed",
         "degraded_candidates": [],
@@ -2593,10 +1363,10 @@ def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_st
 
     diagnostics = _shadow_parity_probe(manifest)
 
-    assert diagnostics["status"] == "shadow_capable_profile_accepted"
-    assert diagnostics["is_shadow_capable_profile"] is True
+    assert diagnostics["status"] == "default_fill_profile_not_shadow_parity"
+    assert diagnostics["is_shadow_capable_profile"] is False
     assert diagnostics["comparison_successful"] is True
-    assert "passes the visual comparison gate" in diagnostics["recommended_next_action"]
+    assert "lighting_profile=shadow-parity" in diagnostics["recommended_next_action"]
 
 
 def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path: Path) -> None:
@@ -2617,13 +1387,9 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
-    genesis = _genesis_lane_fixture()
-    genesis["lighting_profile"] = profile
-    genesis["lighting_diagnostics"]["genesis_lighting_profile"]["shadow"] = True  # type: ignore[index]
-    manifest["lanes"][GENESIS_LANE_ID] = genesis  # type: ignore[index]
     manifest["lane_registry"] = {  # type: ignore[index]
         "baseline": MOLMOSPACES_LANE_ID,
-        "candidates": [ISAAC_LANE_ID, GENESIS_LANE_ID],
+        "candidates": [ISAAC_LANE_ID],
     }
     manifest["render_domain_contract_probe"] = {
         "status": "computed",
@@ -2648,7 +1414,6 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
     html = report.read_text(encoding="utf-8")
 
     assert diagnostics["status"] == "shadow_parity_probe_configured"
-    assert diagnostics["genesis_shadow"] is True
     assert diagnostics["isaac_dome_intensity"] == pytest.approx(12.0)
     assert diagnostics["isaac_key_intensity"] == pytest.approx(1200.0)
     assert diagnostics["isaac_shadow_disabled_prim_count"] == 18
@@ -2674,9 +1439,6 @@ def test_scene_camera_shadow_parity_probe_reports_visual_gate_failure() -> None:
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
-    genesis = _genesis_lane_fixture()
-    genesis["lighting_diagnostics"]["genesis_lighting_profile"]["shadow"] = True  # type: ignore[index]
-    manifest["lanes"][GENESIS_LANE_ID] = genesis  # type: ignore[index]
     manifest["candidate_visual_diagnostics"] = {
         "status": "degraded_visual_fidelity",
         "degraded_candidates": [ISAAC_LANE_ID],
@@ -2715,7 +1477,7 @@ def test_scene_camera_color_profile_normalizes_backend_tone_adjustment() -> None
         height=48,
         color_profile={
             "backend_tone_adjustment": {
-                "genesis-prepared-usd": {
+                "unit-test-renderer": {
                     "shadow_lift": 8,
                     "shadow_floor": 135,
                     "gamma": 1.1,
@@ -2727,7 +1489,7 @@ def test_scene_camera_color_profile_normalizes_backend_tone_adjustment() -> None
         },
     )
 
-    assert request["color_profile"]["backend_tone_adjustment"]["genesis-prepared-usd"] == {
+    assert request["color_profile"]["backend_tone_adjustment"]["unit-test-renderer"] == {
         "shadow_lift": pytest.approx(8.0),
         "shadow_floor": pytest.approx(135.0),
         "gamma": pytest.approx(1.1),
@@ -3208,39 +1970,3 @@ def test_scene_camera_comparison_recipe_checks_prepared_usd_before_running(tmp_p
     assert result.returncode != 0
     assert "missing prepared scene USD" in result.stderr
     assert str(missing_usd) in result.stderr
-
-
-def test_scene_camera_comparison_recipe_preflights_genesis_only_when_enabled(
-    tmp_path: Path,
-) -> None:
-    molmo_python = tmp_path / "molmo-python"
-    isaac_python = tmp_path / "isaac-python"
-    scene_usd = tmp_path / "scene.usda"
-    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
-    for runtime in (molmo_python, isaac_python):
-        runtime.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
-        runtime.chmod(0o755)
-
-    env = os.environ.copy()
-    env.pop("ROBOCLAWS_JUST_TRACE", None)
-    env["ROBOCLAWS_MOLMOSPACES_PYTHON"] = str(molmo_python)
-    env["ROBOCLAWS_ISAACLAB_PYTHON"] = str(isaac_python)
-    env["ROBOCLAWS_GENESIS_PYTHON"] = str(tmp_path / "missing-genesis-python")
-    result = subprocess.run(
-        [
-            just_bin(),
-            "-f",
-            str(MOLMO_JUST),
-            "scene-camera-comparison",
-            "genesis=on",
-            f"scene_usd_path={scene_usd}",
-        ],
-        cwd=tmp_path,
-        env=env,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode != 0
-    assert "missing Genesis runtime" in result.stderr

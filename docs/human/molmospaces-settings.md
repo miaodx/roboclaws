@@ -201,7 +201,7 @@ always include the `sim` control, then at most one detector-only proposer
 pipeline. Treat fake-contract recommendations as artifact-shape evidence only
 until real detector sidecar provenance is present for every selected non-sim
 pipeline; a mixed fake/real recommendation still requires real reruns before
-promotion.
+being used as a full cleanup probe.
 The benchmark checker treats zero candidates as a valid poor-recall result when
 `--require-success` is used; add `--require-candidates` only for deterministic
 fake smoke tests that are expected to emit at least one candidate.
@@ -390,11 +390,16 @@ the current source of truth before claiming a run supports a setting.
 
 ## Command Taxonomy
 
-Use `molmo::*` for daily operator commands. It names the run by driver and
-profile:
+Use the public launch catalog for operator-facing runs:
 
 ```bash
-just molmo::cleanup <driver> <profile>
+just run::surface surface=household-world preset=cleanup agent_engine=<engine> evidence_lane=<lane>
+```
+
+Use `agent::run` for maintainer-only axis/debug routes:
+
+```bash
+just agent::run household-world.cleanup <agent-engine-or-private-driver> <evidence-lane>
 ```
 
 | Axis | Values | Meaning |
@@ -414,7 +419,9 @@ just molmo::cleanup <driver> <profile>
 `verify::*` remains the confidence-gate namespace: it runs focused tests and then
 delegates scenario execution to `harness::*`. `harness::*` remains the
 lower-level implementation-rig namespace, useful when debugging a specific
-script or checker. Prefer `molmo::*` when deciding what report to produce.
+script or checker. The `molmo::*` report recipes below are convenience wrappers
+over the private household cleanup implementation runner; they are not a
+separate public cleanup dispatcher.
 Non-smoke cleanup profiles require a selected prebuilt Nav2 map bundle; the
 facade defaults to `assets/maps/molmospaces-procthor-val-0-7`, and `map_bundle=...`
 accepts either a path or an environment id under `assets/maps`.
@@ -502,7 +509,7 @@ is active, later live Codex rows are blocked rather than moved to a hidden port
 or silently replaced by a cheaper substitute.
 
 For quick axis overrides, use positional values or `driver=` / `profile=`
-prefixes:
+prefixes on the smoke convenience recipe:
 
 ```bash
 just molmo::quick-check openclaw-smoke smoke
@@ -550,16 +557,11 @@ Render-only MuJoCo/Isaac scene camera comparison:
 just molmo::scene-camera-comparison
 ```
 
-Add the opt-in Genesis candidate lane when reviewing Genesis visual parity:
+The retired Genesis candidate lane is no longer runnable from this recipe. The
+old Genesis reports remain historical renderer-parity evidence only.
 
-```bash
-ROBOCLAWS_GENESIS_PYTHON=.venv-genesis/bin/python \
-  just molmo::scene-camera-comparison genesis=on \
-  scene_usd_path=output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda
-```
-
-This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo, a
-prepared Isaac USD, and optionally Genesis with one external camera request. It
+This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo and a
+prepared Isaac USD with one external camera request. It
 is for scene/camera review only: it does not run cleanup, pick/place, private
 scoring, or pickup box annotation. The main lane now uses explicit canonical
 `eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
@@ -571,12 +573,7 @@ and USD-bounds residuals separately. MuJoCo canonical views convert the explicit
 before rendering; the manifest records the backend pose used for the parity
 check. The camera request also carries MuJoCo runtime render state separately
 from legacy object-center positions, including articulated child joint names
-and `qpos` values when MolmoSpaces exposes them. Genesis movable-object
-diagnostics treat translation-only object overlays as insufficient for
-articulated objects such as box flaps and report unsupported articulation
-instead of a false `runtime_pose_match`; when the prepared USD summary proves
-MuJoCo visual joint endpoint-pose baking and frozen visual physics, the report
-classifies those objects as `articulated_static_baked_match`. Isaac uses the
+and `qpos` values when MolmoSpaces exposes them. Isaac uses the
 prepared USD's scene lights plus the configured soft fill profile and reports
 both existing and added light counts. Target-vs-USD
 diagnostics are bounds-aware: large receptacles may aim the camera above a
@@ -585,9 +582,6 @@ the configured surface-aim height allowance separately from a true target/scene
 frame mismatch. A passing camera-pose contract means the two backends accepted
 the same render-camera API pose; material differences, renderer lighting, or
 display color-management differences can still prevent full visual identity.
-The Genesis lane is render-only evidence: when native USD stage import fails on
-the prepared mixed physics graph, it uses a material-preserving OBJ/MTL visual
-package fallback and reports that import mode in the manifest.
 
 Real visual MCP smoke:
 

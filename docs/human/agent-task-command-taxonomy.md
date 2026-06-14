@@ -36,7 +36,9 @@ Current agent engines:
 - `codex-cli`
 - `claude-code`
 - `openai-agents-sdk`
-- `openclaw-gateway`
+
+Validation-required maintainer engines such as `openclaw-gateway` are not part
+of the normal public engine list.
 
 `prompt=...` without a household preset runs the default open-task contract.
 `preset=cleanup prompt=...` keeps cleanup semantics while narrowing the

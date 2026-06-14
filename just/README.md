@@ -53,12 +53,14 @@ Agent engines:
 - `claude-code`
 - `openai-agents-sdk`
 - `direct-runner`
-- `openclaw-gateway` (validation-required maintainer route)
 
 Provider profiles are selected only for agent engines that need a model/key
 route. Examples include `codex-env`, `mify`, `kimi-anthropic`,
 `mimo-anthropic`, and `mify-anthropic`. Deterministic engines such as
 `direct-runner` do not accept `provider_profile`.
+
+Validation-required maintainer engines, such as `openclaw-gateway`, stay out of
+the normal public engine list. Use the OpenClaw docs before running them.
 
 Reports for non-Molmo tasks:
 
@@ -302,9 +304,9 @@ populated only when the configured sidecar reports stage usage/cost or memory
 metadata; otherwise the result records `not_reported_by_service`.
 The benchmark result also emits the capped end-to-end probe set: `sim` plus the
 best detector-only proposer pipeline.
-Promotion stays blocked until every selected non-sim pipeline has real detector
-sidecar provenance; mixed fake/real rows are still benchmark-shape evidence,
-not rollout evidence.
+Full cleanup probes stay blocked until every selected non-sim pipeline has real
+detector sidecar provenance; mixed fake/real rows are still benchmark-shape
+evidence, not rollout evidence.
 `--require-success` on the benchmark checker means no pipeline failures; zero
 candidates remain a valid poor-recall result. Use `--require-candidates` only
 for fake smoke tests that should always emit candidates.

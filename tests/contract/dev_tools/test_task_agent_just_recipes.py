@@ -474,7 +474,7 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
 
     assert "molmo-cleanup-codex-perf" in agent_text
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
-    assert 'just molmo::cleanup "codex-live" "world-oracle-labels"' in harness_text
+    assert "just molmo::household-cleanup-impl codex-live world-oracle-labels" in harness_text
     assert '"skill" "$robot_views"' in harness_text
 
 
@@ -585,7 +585,7 @@ def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -602,7 +602,7 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -838,7 +838,7 @@ def test_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -851,7 +851,7 @@ def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "smoke",
         "7",
@@ -900,7 +900,7 @@ def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> Non
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "direct",
         "world-public-labels",
         "7",
@@ -1033,9 +1033,39 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
             )
         )
 
-    assert exc.value.hint == (
-        "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|openclaw-gateway"
+    assert "expected codex-cli|claude-code|openai-agents-sdk|direct-runner" in exc.value.hint
+    assert "openclaw-gateway is validation-required" in exc.value.hint
+    assert "direct-runner|openclaw-gateway" not in exc.value.hint
+
+
+def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
+    readme = (JUST_DIR / "README.md").read_text(encoding="utf-8")
+    engine_section = readme.split("Agent engines:", 1)[1].split("Provider profiles", 1)[0]
+    taxonomy = (REPO_ROOT / "docs" / "human" / "agent-task-command-taxonomy.md").read_text(
+        encoding="utf-8"
     )
+    taxonomy_engine_bullets = [
+        line.strip()
+        for line in taxonomy.split("Current agent engines:", 1)[1].split(
+            "Validation-required maintainer engines", 1
+        )[0].splitlines()
+        if line.strip().startswith("- ")
+    ]
+
+    assert "openclaw-gateway" not in engine_section
+    assert "openclaw-gateway" in readme
+    assert "Validation-required maintainer engines" in readme
+    assert "- `openclaw-gateway`" not in taxonomy_engine_bullets
+    assert "Validation-required maintainer engines" in taxonomy
+
+
+def test_openclaw_demo_doc_stays_validation_required() -> None:
+    demo_doc = (REPO_ROOT / "docs" / "human" / "openclaw" / "demo.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "validation-required maintainer route" in demo_doc
+    assert "same public launch catalog" not in demo_doc
 
 
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
@@ -1046,7 +1076,13 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
         "camera_labeler=grounding-dino",
     )
 
-    assert route[:5] == ["just", "molmo::cleanup", "codex-live", "camera-grounded-labels", "7"]
+    assert route[:5] == [
+        "just",
+        "molmo::household-cleanup-impl",
+        "codex-live",
+        "camera-grounded-labels",
+        "7",
+    ]
     assert plan_trace[:7] == [
         "launch-plan",
         "surface=household-world",
@@ -1145,7 +1181,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -1175,7 +1211,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
 
     assert route[:10] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -1198,7 +1234,7 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "mcp-smoke",
         "camera-grounded-labels",
         "7",
@@ -1220,7 +1256,7 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "direct",
         "world-oracle-labels",
         "7",
@@ -1345,7 +1381,7 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
 
     assert route[:7] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -1366,7 +1402,12 @@ def test_semantic_map_build_codex_routes_isaac_backend_to_live_runner() -> None:
         "backend=isaaclab_subprocess",
     )
 
-    assert route[:4] == ["just", "molmo::cleanup", "codex-live", "world-oracle-labels"]
+    assert route[:4] == [
+        "just",
+        "molmo::household-cleanup-impl",
+        "codex-live",
+        "world-oracle-labels",
+    ]
     assert route[15] == "on"
     assert route[17] == "isaaclab_subprocess"
     assert route[-1] == "semantic-map-build"
@@ -1626,7 +1667,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
 
     assert route[:12] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "codex-live",
         "world-oracle-labels",
         "7",
@@ -1652,7 +1693,7 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
 
     assert raw_route[:7] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "direct",
         "camera-raw-fpv",
         "7",
@@ -1661,7 +1702,7 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     ]
     assert labels_route[:7] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "direct",
         "camera-grounded-labels",
         "7",
@@ -1676,7 +1717,7 @@ def test_prompt_mapping_semantic_map_build_direct_enables_sweep() -> None:
 
     assert route[:6] == [
         "just",
-        "molmo::cleanup",
+        "molmo::household-cleanup-impl",
         "direct",
         "smoke",
         "7",
@@ -2229,7 +2270,7 @@ def test_molmo_cleanup_recipe_passes_goal_contract_to_all_household_runners() ->
     assert 'ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \\' in agent_text
     assert 'ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \\' in agent_text
     assert 'ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \\' in agent_text
-    assert 'run_just molmo::cleanup "${molmo_args[@]}"' in agent_text
+    assert 'run_just molmo::household-cleanup-impl "${molmo_args[@]}"' in agent_text
     assert 'goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"' in (
         molmo_text
     )

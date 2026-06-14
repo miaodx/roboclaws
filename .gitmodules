@@ -5,6 +5,3 @@
 [submodule "vendors/molmospaces"]
 	path = vendors/molmospaces
 	url = https://github.com/allenai/molmospaces.git
-[submodule "vendors/genesis-world"]
-	path = vendors/genesis-world
-	url = https://github.com/Genesis-Embodied-AI/genesis-world

@@ -1222,7 +1222,6 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(120.0)
     assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
     assert rig["ambient"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
-    assert rig["ambient"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert request["color_profile"]["highlight_knee"] == pytest.approx(225.0)
     assert request["color_profile"]["backend_luminance_gain"]["molmospaces-mujoco"] == (
@@ -1365,7 +1364,7 @@ def test_camera_color_profile_applies_backend_tone_adjustment() -> None:
             "highlight_compression": 0.5,
             "gamma": 1.0,
             "backend_tone_adjustment": {
-                "genesis-prepared-usd": {
+                "unit-test-renderer": {
                     "shadow_lift": 16.0,
                     "shadow_floor": 128.0,
                     "gamma": 1.0,
@@ -1375,7 +1374,7 @@ def test_camera_color_profile_applies_backend_tone_adjustment() -> None:
             },
             "backend_tone_adjustment_source": "unit-tone",
         },
-        backend="genesis-prepared-usd",
+        backend="unit-test-renderer",
     )
 
     assert int(adjusted[0, 0, 0]) == 90

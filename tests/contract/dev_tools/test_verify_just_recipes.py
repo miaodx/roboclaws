@@ -147,7 +147,7 @@ def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^cleanup driver=\"mcp-smoke\" profile=\"smoke\"",
+        r"^household-cleanup-impl driver=\"mcp-smoke\" profile=\"smoke\"",
         r"^quick-check driver=\"mcp-smoke\" profile=\"smoke\"",
         r"^review-report seeds=\"1 2 3\"",
         r"^mcp-smoke-report seed=\"7\"",
@@ -165,18 +165,19 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     expected_calls = (
-        'just molmo::cleanup "{{driver}}" "{{profile}}"',
-        'just molmo::cleanup "direct" "world-oracle-labels"',
-        'just molmo::cleanup "mcp-smoke" "world-oracle-labels"',
-        'just molmo::cleanup "openclaw-smoke" "world-oracle-labels"',
-        'just molmo::cleanup "direct" "camera-raw-fpv"',
-        'just molmo::cleanup "codex-live" "{{profile}}"',
-        'just molmo::cleanup "claude-live" "{{profile}}"',
-        'just molmo::cleanup "openclaw-live" "{{profile}}"',
+        'just molmo::household-cleanup-impl "{{driver}}" "{{profile}}"',
+        "just molmo::household-cleanup-impl direct world-oracle-labels",
+        "just molmo::household-cleanup-impl mcp-smoke world-oracle-labels",
+        "just molmo::household-cleanup-impl openclaw-smoke world-oracle-labels",
+        "just molmo::household-cleanup-impl direct camera-raw-fpv",
+        'just molmo::household-cleanup-impl codex-live "{{profile}}"',
+        'just molmo::household-cleanup-impl claude-live "{{profile}}"',
+        'just molmo::household-cleanup-impl openclaw-live "{{profile}}"',
     )
     for call in expected_calls:
         assert call in text
 
+    assert "just molmo::cleanup" not in text
     assert "agent-report" not in text
     assert "openclaw_agent" in text
     assert "realworld_contract_smoke_agent" in text

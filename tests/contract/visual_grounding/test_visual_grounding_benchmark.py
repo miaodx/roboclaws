@@ -157,13 +157,13 @@ def test_visual_grounding_benchmark_runs_against_fake_http_service(tmp_path: Pat
     assert pipeline["metrics"]["actionability_proxy_rate"] > 0.0
     assert pipeline["stage_summary"][0]["producer_id"] == "fake-http"
     assert result["corpus"]["private_labels_in_requests"] is False
-    promotion = result["promotion_recommendation"]
-    assert promotion["selected_end_to_end_pipelines"] == [
+    detector_probe = result["detector_probe_recommendation"]
+    assert detector_probe["selected_end_to_end_pipelines"] == [
         "sim",
         "fake-http",
     ]
-    assert promotion["selected_real_stage_provenance_complete"] is False
-    assert promotion["requires_real_stage_provenance_before_promotion"] is True
+    assert detector_probe["selected_real_stage_provenance_complete"] is False
+    assert detector_probe["requires_real_stage_provenance_before_probe"] is True
 
     predictions = (tmp_path / "visual_grounding_predictions.jsonl").read_text(encoding="utf-8")
     assert "private_labels" not in predictions
@@ -174,7 +174,7 @@ def test_visual_grounding_benchmark_runs_against_fake_http_service(tmp_path: Pat
     assert "Visual Grounding Quality" in report
     assert "Destination Hint Quality" in report
     assert "Real stage provenance present: False" in report
-    assert "Requires real stage provenance before promotion: True" in report
+    assert "Requires real detector-sidecar provenance before full cleanup probe: True" in report
 
 
 def test_visual_grounding_benchmark_records_fake_http_failure(tmp_path: Path) -> None:
@@ -380,15 +380,16 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
         "omdet-turbo",
     }
     assert "actionability_proxy_rate" in result["ranking"][0]
-    promotion = result["promotion_recommendation"]
-    assert promotion["selected_end_to_end_pipelines"][0] == "sim"
-    assert promotion["best_proposer_only_pipeline_id"] == "grounding-dino"
-    assert "best_proposer_plus_refiner_pipeline_id" not in promotion
-    assert "best_direct_vlm_pipeline_id" not in promotion
-    assert "max_proposer_plus_refiner_pipelines" not in promotion["policy"]
-    assert "max_direct_vlm_pipelines" not in promotion["policy"]
-    assert promotion["selected_real_stage_provenance_complete"] is False
-    assert promotion["requires_real_stage_provenance_before_promotion"] is True
+    detector_probe = result["detector_probe_recommendation"]
+    assert detector_probe["selected_end_to_end_pipelines"][0] == "sim"
+    assert detector_probe["best_proposer_only_pipeline_id"] == "grounding-dino"
+    retired_slot_tokens = ("direct_vlm", "proposer_plus_refiner")
+    for key in detector_probe:
+        assert not any(token in key for token in retired_slot_tokens)
+    for key in detector_probe["policy"]:
+        assert not any(token in key for token in retired_slot_tokens)
+    assert detector_probe["selected_real_stage_provenance_complete"] is False
+    assert detector_probe["requires_real_stage_provenance_before_probe"] is True
 
     predictions = [
         json.loads(line)
@@ -567,8 +568,10 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
     assert family["yolo-world"]["under_sampled_reason"] == (
         "unit test matrix intentionally has one row"
     )
-    promotion = result["promotion_recommendation"]
-    assert promotion["selected"][1]["benchmark_row_id"] == result["ranking"][0]["benchmark_row_id"]
+    detector_probe = result["detector_probe_recommendation"]
+    assert detector_probe["selected"][1]["benchmark_row_id"] == (
+        result["ranking"][0]["benchmark_row_id"]
+    )
     predictions = [
         json.loads(line)
         for line in (tmp_path / "benchmark" / "visual_grounding_predictions.jsonl")

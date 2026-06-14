@@ -283,10 +283,10 @@ run dispatch_target agent_engine mode="" *overrides:
     export ROBOCLAWS_REPORT_RERUN_COMMAND="$(shell_join "${report_rerun_parts[@]}")"
 
     case "$implementation_task_name:$driver" in
-      semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|\
+      semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|household-cleanup:openclaw-smoke|\
       household-cleanup:codex|household-cleanup:claude|household-cleanup:openai-agents-live|household-cleanup:openclaw)
         case "$driver" in
-          direct|mcp-smoke)
+          direct|mcp-smoke|openclaw-smoke)
             impl_driver="$driver"
             ;;
           codex)
@@ -772,7 +772,7 @@ run dispatch_target agent_engine mode="" *overrides:
           ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \
           ROBOCLAWS_TASK_PRESET="${kv[task_preset]:-}" \
           ROBOCLAWS_TASK_SKILL="$skill_name" \
-          run_just molmo::cleanup "${molmo_args[@]}"
+          run_just molmo::household-cleanup-impl "${molmo_args[@]}"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:mcp-smoke)

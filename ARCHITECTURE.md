@@ -41,9 +41,10 @@ Open-ended goal
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
   (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  `direct-runner`, or `openclaw-gateway`) from
-  the model/key route (`provider_profile=codex-env`, `mify`,
-  `mimo-anthropic`, and related profiles).
+  or `direct-runner`) from the model/key route (`provider_profile=codex-env`,
+  `mify`, `mimo-anthropic`, and related profiles).
+  `openclaw-gateway` is registered only as a validation-required maintainer
+  route until off-work-network Gateway proof is green.
 - **Capability Profiles** define reusable capability environments. Skills
   require profiles; profiles should not be copied into task-specific supersets.
 - **MCP Tools** are the stable public robot interface: observe, navigate, map,
@@ -81,7 +82,7 @@ Key pieces:
   server processes behind `python -m roboclaws.cli.agent_server ...`.
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
-  request schema used by MuJoCo, Isaac, and opt-in Genesis scene probes.
+  request schema used by MuJoCo and Isaac scene probes.
 - `roboclaws/household/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.
