@@ -299,6 +299,11 @@ Rejected alternatives:
     into modules that keep Isaac imports inside the worker process.
   - Treat this as a post-facade backend-internal cleanup; do not change normal
     Roboclaws process imports or require real Isaac Lab for default verification.
+  - Status after 2026-06-14 loop: the main robot-view camera capture pipeline
+    is split into `scripts/isaac_lab_cleanup/isaac_camera_capture.py`; remaining
+    worker rows cover scene-camera capture, semantic-pose robot-view rerender,
+    capture-quality overrides, USD semantic labels, support-surface helpers,
+    parse_args, and command dispatch.
 
 - [ ] **R1: Continue reduce-entropy discovery after each completed group.**
   - Run the bounded high-noise summary and the quality-debt summary.
@@ -1134,3 +1139,32 @@ Stop this refactor loop when:
   `run_realworld_cleanup` no longer has C901, PLR0912, or PLR0915 rows in the
   baseline, and `realworld_cleanup.py` dropped from 1159 to 1067 lines in the
   oversized-module baseline.
+- 2026-06-14: Ran the post-C1.55 bounded reduce-entropy loop. Evidence:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs" --examples 10`;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`;
+  targeted probes across the accepted C3/P3/I1 checklist items, quality
+  baseline rows, Isaac worker tests, and the report renderer section map. The
+  current quality signal after C1.55 was 159 Ruff complexity violations and 59
+  oversized modules. The materiality gate accepted the I1 Isaac camera-capture
+  split as P1 because `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`
+  remained the top in-plan backend hotspot with 14 grouped complexity rows and
+  `_capture_isaac_lab_camera_views` carried C901, PLR0912, and PLR0915 85>50.
+  C3 remains a useful P2 report-section follow-up, while the P3 planner-probe
+  residual rows are parked as micro residuals unless bundled with a larger
+  runtime-diagnostics slice.
+- 2026-06-14: Continued I1 by extracting the Isaac robot-view camera capture
+  pipeline into `scripts/isaac_lab_cleanup/isaac_camera_capture.py`. The worker
+  keeps `_capture_isaac_lab_camera_views(...)` as a stable wrapper that passes
+  worker-private USD/render helpers through `IsaacCameraCaptureHooks`, so Isaac
+  imports still occur only inside the worker capture path and normal Roboclaws
+  imports stay clean. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_camera_capture.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+  passed with the existing Pillow deprecation warning from scene-camera image
+  saving; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 159 to 156 Ruff complexity
+  violations, with oversized modules unchanged at 59. The Isaac worker dropped
+  from 8685 to 8490 lines and from 14 to 11 grouped complexity rows; the
+  `_capture_isaac_lab_camera_views` C901 / PLR0912 / PLR0915 rows were removed.

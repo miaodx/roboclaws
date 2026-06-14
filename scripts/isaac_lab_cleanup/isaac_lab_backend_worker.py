@@ -65,6 +65,11 @@ from roboclaws.household.types import (
     PrivateScoringManifest,
     TargetRule,
 )
+from scripts.isaac_lab_cleanup.isaac_camera_capture import (
+    IsaacCameraCaptureHooks,
+    IsaacCameraCaptureRequest,
+    capture_isaac_lab_camera_views,
+)
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
@@ -2105,265 +2110,65 @@ def _capture_isaac_lab_camera_views(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    import isaaclab.sim as sim_utils
-    import isaacsim.core.utils.stage as stage_utils
-    import numpy as np
-    import torch
-    from isaaclab.sensors.camera import Camera, CameraCfg
-
-    opened = stage_utils.open_stage(str(scene_usd))
-    if opened is False:
-        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
-    _wait_for_stage_load(stage_utils, simulation_app)
-    _load_current_stage_payloads(stage_utils)
-    pose_apply = _apply_semantic_pose_state_to_stage(
-        stage_utils=stage_utils,
-        semantic_pose_state=semantic_pose_state,
-    )
-    robot_stage = _ensure_rby1m_robot_on_stage(
-        stage_utils=stage_utils,
-        robot_import=_dict(robot_import),
-    )
-    if robot_stage.get("head_camera_prim_exists") is True and hasattr(
-        sim_utils, "standardize_xform_ops"
-    ):
-        current_stage = stage_utils.get_current_stage()
-        if current_stage is not None:
-            sim_utils.standardize_xform_ops(
-                current_stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM)
-            )
-    scene_bounds = _current_stage_bounds(stage_utils)
-    lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
-    lighting_diagnostics = _ensure_capture_lighting(stage_utils, profile=lighting_profile)
-    semantic_label_application = (
-        _apply_scene_index_semantic_labels(
-            stage_utils=stage_utils,
-            sim_utils=sim_utils,
-            scene_index_diagnostics=scene_index_diagnostics,
-        )
-        if include_segmentation
-        else _semantic_label_application_not_requested()
-    )
-    camera_semantic_filter: str | list[str]
-    camera_semantic_filter = list(semantic_filter) if include_segmentation else "*:*"
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
-    mounted_head_camera = robot_stage.get("head_camera_prim_exists") is True
-    head_camera_lens = (
-        _configure_rby1m_head_camera_lens(stage_utils=stage_utils, width=width, height=height)
-        if mounted_head_camera
-        else {"status": "not_requested"}
-    )
-    data_types = [
-        "rgb",
-        *(segmentation_data_types if include_segmentation else ()),
-    ]
-    robot_view_horizontal_aperture = _horizontal_aperture_from_lens(
-        {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
-        width=width,
-        height=height,
-        focal_length=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
-    )
-    camera_spawn = sim_utils.PinholeCameraCfg(
-        focal_length=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
-        focus_distance=4.0,
-        horizontal_aperture=robot_view_horizontal_aperture,
-    )
-    head_camera = (
-        Camera(
-            cfg=CameraCfg(
-                prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-                update_period=0.0,
-                height=height,
-                width=width,
-                data_types=data_types,
-                semantic_filter=camera_semantic_filter,
-                colorize_semantic_segmentation=False,
-                colorize_instance_segmentation=False,
-                colorize_instance_id_segmentation=False,
-                spawn=None,
-            )
-        )
-        if mounted_head_camera
-        else None
-    )
-    sim_utils.create_prim("/World/RoboclawsSmokeCameraRig", "Xform")
-    scene_camera = Camera(
-        cfg=CameraCfg(
-            prim_path="/World/RoboclawsSmokeCameraRig/Camera",
-            update_period=0.0,
-            height=height,
+    return capture_isaac_lab_camera_views(
+        request=IsaacCameraCaptureRequest(
+            scene_usd=scene_usd,
+            view_paths=view_paths,
             width=width,
-            data_types=data_types,
-            semantic_filter=camera_semantic_filter,
-            colorize_semantic_segmentation=False,
-            colorize_instance_segmentation=False,
-            colorize_instance_id_segmentation=False,
-            spawn=camera_spawn,
-        )
-    )
-    view_poses = _isaac_camera_view_poses(
-        torch=torch,
-        device=sim.device,
-        scene_bounds=scene_bounds,
-        semantic_pose_state=semantic_pose_state,
-    )
-    sim.reset()
-    render_settle_frames = max(0, int(render_settle_frames))
-    settings = _isaac_settings_interface()
-    settings_mutation = _apply_isaac_capture_quality_overrides(
-        settings=settings,
-        isaac_aa_op=isaac_aa_op,
-        isaac_tonemap_op=isaac_tonemap_op,
-        isaac_exposure_bias=isaac_exposure_bias,
-        isaac_colorcorr_gain=isaac_colorcorr_gain,
-    )
-    native_render_diagnostics = _isaac_native_render_diagnostics(
-        renderer_mode=REAL_SMOKE_RENDERER_MODE,
-        capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
-        view_kind="robot_views",
-        render_resolution={"width": width, "height": height},
-        camera_prim_paths=[
-            ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
-            "/World/RoboclawsSmokeCameraRig/Camera",
-        ],
-        render_product_paths=[
-            *(_camera_render_product_paths(head_camera) if head_camera is not None else []),
-            *_camera_render_product_paths(scene_camera),
-        ],
-        isaac_lab_isp_active=False,
-        capture_quality_settings=_capture_quality_settings(
+            height=height,
+            simulation_app=simulation_app,
+            robot_import=_dict(robot_import),
+            include_segmentation=include_segmentation,
+            segmentation_data_types=segmentation_data_types,
+            semantic_filter=semantic_filter,
+            scene_index_diagnostics=scene_index_diagnostics,
+            semantic_pose_state=_dict(semantic_pose_state),
+            color_profile_override=color_profile_override,
             render_settle_frames=render_settle_frames,
-            settings=settings,
-            settings_mutation=settings_mutation,
+            isaac_aa_op=isaac_aa_op,
+            isaac_tonemap_op=isaac_tonemap_op,
+            isaac_exposure_bias=isaac_exposure_bias,
+            isaac_colorcorr_gain=isaac_colorcorr_gain,
+            robot_view_keys=ROBOT_VIEW_KEYS,
+            head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            head_camera_vertical_fov_deg=RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
+            head_camera_focal_length_mm=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+            renderer_mode=REAL_SMOKE_RENDERER_MODE,
+            capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
+            default_lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+        ),
+        hooks=IsaacCameraCaptureHooks(
+            wait_for_stage_load=_wait_for_stage_load,
+            load_current_stage_payloads=_load_current_stage_payloads,
+            apply_semantic_pose_state_to_stage=_apply_semantic_pose_state_to_stage,
+            ensure_rby1m_robot_on_stage=_ensure_rby1m_robot_on_stage,
+            current_stage_bounds=_current_stage_bounds,
+            ensure_capture_lighting=_ensure_capture_lighting,
+            apply_scene_index_semantic_labels=_apply_scene_index_semantic_labels,
+            semantic_label_application_not_requested=_semantic_label_application_not_requested,
+            configure_rby1m_head_camera_lens=_configure_rby1m_head_camera_lens,
+            horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+            isaac_camera_view_poses=_isaac_camera_view_poses,
+            isaac_settings_interface=_isaac_settings_interface,
+            apply_isaac_capture_quality_overrides=_apply_isaac_capture_quality_overrides,
+            isaac_native_render_diagnostics=_isaac_native_render_diagnostics,
+            capture_quality_settings=_capture_quality_settings,
+            camera_render_product_paths=_camera_render_product_paths,
+            position_robot_for_head_camera_view=_position_robot_for_head_camera_view,
+            usd_camera_diagnostics=_usd_camera_diagnostics,
+            isaac_eye_target_camera_diagnostics=_isaac_eye_target_camera_diagnostics,
+            robot_relative_chase_eye_target=_robot_relative_chase_eye_target,
+            rgb_tensor_to_uint8=_rgb_tensor_to_uint8,
+            image_has_variance=_image_has_variance,
+            robot_view_color_profile=_robot_view_color_profile,
+            camera_segmentation_view_diagnostics=_camera_segmentation_view_diagnostics,
+            restore_isaac_capture_quality_overrides=_restore_isaac_capture_quality_overrides,
+            camera_segmentation_capture_diagnostics=_camera_segmentation_capture_diagnostics,
+            camera_segmentation_not_requested_diagnostics=(
+                _camera_segmentation_not_requested_diagnostics
+            ),
         ),
     )
-    saved: dict[str, str] = {}
-    segmentation_views: list[dict[str, Any]] = []
-    total_render_steps = 0
-    robot_pose_application: dict[str, Any] = {}
-    camera_diagnostics: dict[str, dict[str, Any]] = {}
-    color_profile = _robot_view_color_profile(color_profile_override)
-    color_management: dict[str, dict[str, Any]] = {}
-    try:
-        for view_name in ROBOT_VIEW_KEYS:
-            if view_name == "fpv" and mounted_head_camera:
-                camera = head_camera
-                if camera is None:
-                    raise RuntimeError(
-                        "mounted head camera was requested but Camera sensor is absent"
-                    )
-                robot_pose_application = _position_robot_for_head_camera_view(
-                    stage_utils=stage_utils,
-                    scene_bounds=scene_bounds,
-                    semantic_pose_state=semantic_pose_state,
-                )
-                camera_diagnostics[view_name] = _usd_camera_diagnostics(
-                    stage_utils=stage_utils,
-                    prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-                    view_name=view_name,
-                    width=width,
-                    height=height,
-                    robot_pose_application=robot_pose_application,
-                    lens_application=head_camera_lens,
-                )
-            else:
-                camera = scene_camera
-                positions, targets = view_poses[view_name]
-                camera.set_world_poses_from_view(positions, targets)
-                camera_diagnostics[view_name] = _isaac_eye_target_camera_diagnostics(
-                    view_name=view_name,
-                    positions=positions,
-                    targets=targets,
-                    width=width,
-                    height=height,
-                    camera_basis="robot_relative_camera_follower"
-                    if view_name == "chase"
-                    and _robot_relative_chase_eye_target(
-                        _dict(_dict(semantic_pose_state).get("robot_pose"))
-                    )
-                    is not None
-                    else "scene_bounds_eye_target",
-                )
-            rgb_image = None
-            for _ in range(24):
-                sim.step()
-                total_render_steps += 1
-                camera.update(dt=sim.get_physics_dt())
-                rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-                if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                    break
-            for _ in range(render_settle_frames):
-                sim.step()
-                total_render_steps += 1
-                camera.update(dt=sim.get_physics_dt())
-                settled_rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-                if settled_rgb_image is not None:
-                    rgb_image = settled_rgb_image
-            if rgb_image is None:
-                raise RuntimeError(
-                    f"Isaac Lab camera did not produce an RGB tensor for {view_name}"
-                )
-            if not _image_has_variance(rgb_image, np=np):
-                raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_name}")
-            if view_name != "map":
-                rgb_image, color_management[view_name] = apply_camera_color_profile(
-                    rgb_image,
-                    np=np,
-                    profile=color_profile,
-                    backend=ISAACLAB_SUBPROCESS_BACKEND,
-                    view_id=view_name,
-                )
-            output_path = view_paths[view_name]
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(rgb_image, mode="RGB").save(output_path)
-            saved[view_name] = str(output_path)
-            if include_segmentation:
-                segmentation_views.append(
-                    _camera_segmentation_view_diagnostics(
-                        camera,
-                        data_types=segmentation_data_types,
-                        view_name=view_name,
-                        np=np,
-                    )
-                )
-    finally:
-        _restore_isaac_capture_quality_overrides(
-            settings=settings,
-            mutation=settings_mutation,
-        )
-    return {
-        "render_steps": total_render_steps,
-        "robot_view_images": saved,
-        "scene_bounds": scene_bounds,
-        "robot_stage": robot_stage,
-        "robot_view_uses_mounted_head_camera": mounted_head_camera,
-        "robot_pose_stage_application": robot_pose_application,
-        "camera_diagnostics": {
-            "schema": "isaac_robot_view_camera_diagnostics_v1",
-            "backend": ISAACLAB_SUBPROCESS_BACKEND,
-            "render_resolution": {"width": width, "height": height},
-            "render_settle_frames": render_settle_frames,
-            "lighting_profile": lighting_profile,
-            "lighting_diagnostics": lighting_diagnostics,
-            "native_render_diagnostics": native_render_diagnostics,
-            "views": camera_diagnostics,
-        },
-        "native_render_diagnostics": native_render_diagnostics,
-        "lighting_profile": lighting_profile,
-        "lighting_diagnostics": lighting_diagnostics,
-        "color_profile": color_profile,
-        "color_management": color_management,
-        "semantic_pose_stage_application": pose_apply,
-        "segmentation": _camera_segmentation_capture_diagnostics(
-            segmentation_views,
-            requested_data_types=segmentation_data_types,
-            semantic_label_application=semantic_label_application,
-            semantic_filter=camera_semantic_filter,
-        )
-        if include_segmentation
-        else _camera_segmentation_not_requested_diagnostics(),
-    }
 
 
 def _capture_scene_camera_request_with_existing_sim(

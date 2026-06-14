@@ -88,7 +88,7 @@
         "path": "roboclaws/reports/live_performance.py"
       },
       {
-        "lines": 8685,
+        "lines": 8490,
         "max_module_lines": 800,
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py"
       },
@@ -1094,7 +1094,7 @@
         "limit": 10,
         "message": "`_apply_isaac_capture_quality_overrides` is too complex (13 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 4723,
+        "row": 4528,
         "symbol": "_apply_isaac_capture_quality_overrides",
         "value": 13
       },
@@ -1104,19 +1104,9 @@
         "limit": 10,
         "message": "`_apply_scene_index_semantic_labels` is too complex (13 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2878,
+        "row": 2683,
         "symbol": "_apply_scene_index_semantic_labels",
         "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_capture_isaac_lab_camera_views",
-        "limit": 10,
-        "message": "`_capture_isaac_lab_camera_views` is too complex (15 > 10)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2088,
-        "symbol": "_capture_isaac_lab_camera_views",
-        "value": 15
       },
       {
         "code": "C901",
@@ -1124,7 +1114,7 @@
         "limit": 10,
         "message": "`_real_semantic_pose_robot_view_images` is too complex (12 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 7279,
+        "row": 7084,
         "symbol": "_real_semantic_pose_robot_view_images",
         "value": 12
       },
@@ -1134,7 +1124,7 @@
         "limit": 10,
         "message": "`_set_usd_xform_translate` is too complex (12 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2784,
+        "row": 2589,
         "symbol": "_set_usd_xform_translate",
         "value": 12
       },
@@ -1144,7 +1134,7 @@
         "limit": 10,
         "message": "`_usd_support_surface_union` is too complex (11 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 1371,
+        "row": 1376,
         "symbol": "_usd_support_surface_union",
         "value": 11
       },
@@ -1154,7 +1144,7 @@
         "limit": 10,
         "message": "`main` is too complex (17 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 389,
+        "row": 394,
         "symbol": "main",
         "value": 17
       },
@@ -1164,19 +1154,9 @@
         "limit": 12,
         "message": "Too many branches (13 > 12)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 4723,
+        "row": 4528,
         "symbol": "_apply_isaac_capture_quality_overrides",
         "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0912|_capture_isaac_lab_camera_views",
-        "limit": 12,
-        "message": "Too many branches (16 > 12)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2088,
-        "symbol": "_capture_isaac_lab_camera_views",
-        "value": 16
       },
       {
         "code": "PLR0912",
@@ -1184,19 +1164,9 @@
         "limit": 12,
         "message": "Too many branches (18 > 12)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 389,
+        "row": 394,
         "symbol": "main",
         "value": 18
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|_capture_isaac_lab_camera_views",
-        "limit": 50,
-        "message": "Too many statements (85 > 50)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2088,
-        "symbol": "_capture_isaac_lab_camera_views",
-        "value": 85
       },
       {
         "code": "PLR0915",
@@ -1204,7 +1174,7 @@
         "limit": 50,
         "message": "Too many statements (55 > 50)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2524,
+        "row": 2329,
         "symbol": "_capture_isaac_lab_scene_camera_views",
         "value": 55
       },
@@ -1214,7 +1184,7 @@
         "limit": 50,
         "message": "Too many statements (54 > 50)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 7279,
+        "row": 7084,
         "symbol": "_real_semantic_pose_robot_view_images",
         "value": 54
       },
@@ -1224,7 +1194,7 @@
         "limit": 50,
         "message": "Too many statements (53 > 50)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 235,
+        "row": 240,
         "symbol": "parse_args",
         "value": 53
       },
