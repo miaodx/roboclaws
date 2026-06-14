@@ -1,10 +1,23 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from roboclaws.household.backend import ApiSemanticCleanupBackend
+from roboclaws.household.isaac_lab_backend import (
+    ISAACLAB_SUBPROCESS_BACKEND,
+    IsaacLabSubprocessBackend,
+)
 from roboclaws.household.scenario import build_cleanup_scenario
-from roboclaws.household.types import CleanupScenario
+from roboclaws.household.subprocess_backend import (
+    MOLMOSPACES_SUBPROCESS_BACKEND,
+    MolmoSpacesSubprocessBackend,
+)
+from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
+
+SYNTHETIC_BACKEND = "api_semantic_synthetic"
+VISUAL_BACKENDS = frozenset({MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND})
 
 
 class CleanupBackendSession:
@@ -18,6 +31,9 @@ class CleanupBackendSession:
 
     def __init__(self, scenario: CleanupScenario | None = None, backend: Any | None = None):
         self.backend = backend or ApiSemanticCleanupBackend(scenario or build_cleanup_scenario())
+
+    def backend_name(self) -> str:
+        return cleanup_backend_name(self.backend)
 
     def observe(self) -> dict[str, Any]:
         return self.backend.observe()
@@ -66,3 +82,181 @@ class CleanupBackendSession:
 
     def done(self, reason: str = "") -> dict[str, Any]:
         return self.backend.done(reason=reason)
+
+    def attach_runtime_metadata(self, run_result: dict[str, Any], *, run_dir: Path) -> None:
+        attach_cleanup_backend_runtime_metadata(
+            run_result=run_result,
+            backend=self.backend,
+            backend_name=self.backend_name(),
+            run_dir=run_dir,
+        )
+
+
+def build_cleanup_backend_session(
+    *,
+    backend_name: str = SYNTHETIC_BACKEND,
+    run_dir: Path,
+    seed: int = 1,
+    include_robot: bool = False,
+    robot_name: str = "rby1m",
+    generated_mess_count: int = 10,
+    generated_mess_object_ids: tuple[str, ...] = (),
+    scene_source: str = "procthor-10k-val",
+    scene_index: int = 0,
+    molmospaces_python: str | Path | None = None,
+    map_bundle_dir: str | Path | None = None,
+    isaac_scene_usd_path: str | Path | None = None,
+    isaac_enable_segmentation: bool = False,
+    isaac_segmentation_data_types: tuple[str, ...] | None = None,
+    isaac_segmentation_semantic_filter: tuple[str, ...] | None = None,
+) -> CleanupBackendSession:
+    backend_instance: Any | None = None
+    if backend_name == MOLMOSPACES_SUBPROCESS_BACKEND:
+        backend_instance = MolmoSpacesSubprocessBackend(
+            run_dir=run_dir,
+            seed=seed,
+            python_executable=Path(molmospaces_python) if molmospaces_python else None,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
+            scene_source=scene_source,
+            scene_index=scene_index,
+        )
+        return CleanupBackendSession(backend_instance.scenario, backend=backend_instance)
+    if backend_name == ISAACLAB_SUBPROCESS_BACKEND:
+        backend_instance = IsaacLabSubprocessBackend(
+            run_dir=run_dir,
+            seed=seed,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
+            scene_source=scene_source,
+            scene_index=scene_index,
+            map_bundle_dir=Path(map_bundle_dir) if map_bundle_dir is not None else None,
+            scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
+            enable_segmentation=isaac_enable_segmentation,
+            segmentation_data_types=isaac_segmentation_data_types,
+            segmentation_semantic_filter=isaac_segmentation_semantic_filter,
+        )
+        return CleanupBackendSession(backend_instance.scenario, backend=backend_instance)
+    scenario = build_cleanup_scenario(seed=seed)
+    if generated_mess_count == 0:
+        scenario = scenario_without_private_targets(scenario)
+    return CleanupBackendSession(scenario)
+
+
+def cleanup_backend_name(backend: Any, *, override: str = "") -> str:
+    if override:
+        return override
+    explicit = getattr(backend, "backend", "")
+    if explicit:
+        return str(explicit)
+    return SYNTHETIC_BACKEND
+
+
+def attach_cleanup_backend_runtime_metadata(
+    *,
+    run_result: dict[str, Any],
+    backend: Any,
+    backend_name: str | None = None,
+    run_dir: Path,
+) -> None:
+    resolved_backend_name = backend_name or cleanup_backend_name(backend)
+    if resolved_backend_name not in VISUAL_BACKENDS:
+        return
+    _attach_common_diagnostics(run_result, backend)
+    if resolved_backend_name == ISAACLAB_SUBPROCESS_BACKEND:
+        _attach_isaac_runtime(run_result=run_result, backend=backend, run_dir=run_dir)
+        return
+    _attach_molmospaces_runtime(run_result=run_result, backend=backend)
+
+
+def scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
+    scenario_id = f"{scenario.scenario_id}-baseline"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=scenario.objects,
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
+    )
+
+
+def _attach_common_diagnostics(run_result: dict[str, Any], backend: Any) -> None:
+    mess_diagnostics = getattr(backend, "mess_placement_diagnostics", None)
+    placement_diagnostics = getattr(backend, "placement_diagnostics", None)
+    if mess_diagnostics is not None:
+        run_result["mess_placement_diagnostics"] = mess_diagnostics
+    if placement_diagnostics is not None:
+        run_result["placement_diagnostics"] = placement_diagnostics
+
+
+def _attach_molmospaces_runtime(*, run_result: dict[str, Any], backend: Any) -> None:
+    run_result["molmospaces_runtime"] = {
+        "python_executable": str(getattr(backend, "python_executable", "")),
+        "runtime": getattr(backend, "runtime", {}),
+        "model_stats": getattr(backend, "model_stats", {}),
+        "scene_xml": getattr(backend, "scene_xml", ""),
+        "metadata_object_count": getattr(backend, "metadata_object_count", None),
+        "requested_generated_mess_count": getattr(backend, "requested_generated_mess_count", None),
+        "generated_mess_count": getattr(backend, "generated_mess_count", None),
+    }
+    _attach_robot_metadata(run_result, backend)
+
+
+def _attach_isaac_runtime(
+    *,
+    run_result: dict[str, Any],
+    backend: Any,
+    run_dir: Path,
+) -> None:
+    isaac_scene_index_path = run_dir / "isaac_scene_index.json"
+    scene_index_artifact = getattr(backend, "scene_index_artifact_payload", None)
+    scene_index_payload = scene_index_artifact() if callable(scene_index_artifact) else {}
+    if scene_index_payload:
+        isaac_scene_index_path.write_text(
+            json.dumps(scene_index_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        run_result.setdefault("artifacts", {})["isaac_scene_index"] = str(isaac_scene_index_path)
+    run_result["isaac_runtime"] = {
+        "python_executable": str(getattr(backend, "python_executable", "")),
+        "runtime": getattr(backend, "runtime", {}),
+        "scenario_source": getattr(backend, "scenario_source", ""),
+        "scene_usd": getattr(backend, "scene_usd", ""),
+        "scene_index": getattr(backend, "scene_index", None),
+        "scene_index_artifact": str(isaac_scene_index_path) if scene_index_payload else "",
+        "object_index_count": len(getattr(backend, "object_index", {})),
+        "receptacle_index_count": len(getattr(backend, "receptacle_index", {})),
+        "object_index": getattr(backend, "object_index", {}),
+        "receptacle_index": getattr(backend, "receptacle_index", {}),
+        "scene_index_diagnostics": getattr(backend, "scene_index_diagnostics", {}),
+        "scene_binding_diagnostics": getattr(backend, "scene_binding_diagnostics", {}),
+        "segmentation": getattr(backend, "segmentation", {}),
+        "scene_load": getattr(backend, "scene_load", {}),
+        "mapping_gaps": getattr(backend, "current_mapping_gaps", []),
+        "snapshot_artifacts": getattr(backend, "snapshot_artifacts", []),
+        "semantic_pose_state": getattr(backend, "semantic_pose_state", {}),
+        "semantic_pose_view_capture": getattr(backend, "semantic_pose_view_capture", {}),
+        "robot": getattr(backend, "robot", None),
+        "robot_import": getattr(backend, "robot_import", {}),
+        "requested_generated_mess_count": getattr(backend, "requested_generated_mess_count", None),
+        "generated_mess_count": getattr(backend, "generated_mess_count", None),
+    }
+    _attach_robot_metadata(run_result, backend)
+
+
+def _attach_robot_metadata(run_result: dict[str, Any], backend: Any) -> None:
+    robot = getattr(backend, "robot", None)
+    if robot is None:
+        return
+    run_result["robot"] = robot
+    run_result["robot_import"] = getattr(backend, "robot_import", {})
+    run_result["robot_name"] = robot.get("robot_name")

@@ -15,7 +15,11 @@ from mcp.server.fastmcp import Image as MCPImage
 
 from roboclaws.household.advisory_scoring import build_advisory_evaluation
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.backend_contract import (
+    CleanupBackendSession,
+    attach_cleanup_backend_runtime_metadata,
+    cleanup_backend_name,
+)
 from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
@@ -715,7 +719,7 @@ class RealWorldMolmoCleanupMCPServer:
             run_dir=self.run_dir,
             source_bundle_dir=self.map_bundle_dir,
         )
-        _add_backend_runtime_metadata(run_result, self.base_contract.backend)
+        _add_backend_runtime_metadata(run_result, self.base_contract.backend, run_dir=self.run_dir)
         if self.robot_view_steps:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT
             run_result["robot_view_steps"] = self.robot_view_steps
@@ -1370,13 +1374,7 @@ def _default_agent_driven(policy: str) -> bool:
 
 
 def _backend_name(backend: Any, *, override: str = "") -> str:
-    if override:
-        return override
-    if backend.__class__.__name__ == "MolmoSpacesSubprocessBackend":
-        return "molmospaces_subprocess"
-    if backend.__class__.__name__ == "IsaacLabSubprocessBackend":
-        return "isaaclab_subprocess"
-    return "api_semantic_synthetic"
+    return cleanup_backend_name(backend, override=override)
 
 
 def _public_acceptance_config_from_backend(
@@ -1410,60 +1408,17 @@ def _goal_contract_from_env() -> GoalContract | None:
     return None
 
 
-def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> None:
-    backend_name = _backend_name(backend)
-    if backend_name not in {"molmospaces_subprocess", "isaaclab_subprocess"}:
-        return
-    mess_diagnostics = getattr(backend, "mess_placement_diagnostics", None)
-    placement_diagnostics = getattr(backend, "placement_diagnostics", None)
-    if mess_diagnostics is not None:
-        run_result["mess_placement_diagnostics"] = mess_diagnostics
-    if placement_diagnostics is not None:
-        run_result["placement_diagnostics"] = placement_diagnostics
-    if backend_name == "isaaclab_subprocess":
-        scene_index_payload = {}
-        scene_index_artifact = getattr(backend, "scene_index_artifact_payload", None)
-        if callable(scene_index_artifact):
-            scene_index_payload = scene_index_artifact()
-        run_result["isaac_runtime"] = {
-            "python_executable": str(getattr(backend, "python_executable", "")),
-            "runtime": getattr(backend, "runtime", {}),
-            "scene_usd": getattr(backend, "scene_usd", ""),
-            "scene_load": getattr(backend, "scene_load", {}),
-            "scene_index": getattr(backend, "scene_index", None),
-            "scenario_source": getattr(backend, "scenario_source", ""),
-            "object_index": getattr(backend, "object_index", {}),
-            "receptacle_index": getattr(backend, "receptacle_index", {}),
-            "scene_index_diagnostics": getattr(backend, "scene_index_diagnostics", {}),
-            "scene_binding_diagnostics": getattr(backend, "scene_binding_diagnostics", {}),
-            "mapping_gaps": getattr(backend, "current_mapping_gaps", []),
-            "segmentation": getattr(backend, "segmentation", {}),
-            "requested_generated_mess_count": getattr(
-                backend,
-                "requested_generated_mess_count",
-                None,
-            ),
-            "generated_mess_count": getattr(backend, "generated_mess_count", None),
-            "semantic_pose_state": getattr(backend, "semantic_pose_state", {}),
-            "semantic_pose_view_capture": getattr(backend, "semantic_pose_view_capture", {}),
-            "snapshot_artifacts": getattr(backend, "snapshot_artifacts", []),
-        }
-        if scene_index_payload:
-            run_result["isaac_runtime"]["scene_index_artifact_payload"] = scene_index_payload
-        return
-    run_result["molmospaces_runtime"] = {
-        "python_executable": str(getattr(backend, "python_executable", "")),
-        "runtime": getattr(backend, "runtime", {}),
-        "model_stats": getattr(backend, "model_stats", {}),
-        "scene_xml": getattr(backend, "scene_xml", ""),
-        "metadata_object_count": getattr(backend, "metadata_object_count", None),
-        "requested_generated_mess_count": getattr(backend, "requested_generated_mess_count", None),
-        "generated_mess_count": getattr(backend, "generated_mess_count", None),
-    }
-    robot = getattr(backend, "robot", None)
-    if robot is not None:
-        run_result["robot"] = robot
-        run_result["robot_name"] = robot.get("robot_name")
+def _add_backend_runtime_metadata(
+    run_result: dict[str, Any],
+    backend: Any,
+    *,
+    run_dir: Path,
+) -> None:
+    attach_cleanup_backend_runtime_metadata(
+        run_result=run_result,
+        backend=backend,
+        run_dir=run_dir,
+    )
 
 
 def _merge_run_metadata(
