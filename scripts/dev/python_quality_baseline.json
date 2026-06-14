@@ -68,7 +68,7 @@
         "path": "roboclaws/maps/actionable_snapshot.py"
       },
       {
-        "lines": 1024,
+        "lines": 963,
         "max_module_lines": 800,
         "path": "roboclaws/operator_console/launcher.py"
       },
@@ -667,36 +667,6 @@
         "row": 379,
         "symbol": "_normalize_room_only_fixture_poses",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/launcher.py|C901|_docker_container_ids_with_mount",
-        "limit": 10,
-        "message": "`_docker_container_ids_with_mount` is too complex (13 > 10)",
-        "path": "roboclaws/operator_console/launcher.py",
-        "row": 875,
-        "symbol": "_docker_container_ids_with_mount",
-        "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/launcher.py|C901|_validate_env_overrides",
-        "limit": 10,
-        "message": "`_validate_env_overrides` is too complex (13 > 10)",
-        "path": "roboclaws/operator_console/launcher.py",
-        "row": 464,
-        "symbol": "_validate_env_overrides",
-        "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/launcher.py|C901|build_launch_argv",
-        "limit": 10,
-        "message": "`build_launch_argv` is too complex (12 > 10)",
-        "path": "roboclaws/operator_console/launcher.py",
-        "row": 115,
-        "symbol": "build_launch_argv",
-        "value": 12
       },
       {
         "code": "C901",

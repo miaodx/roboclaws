@@ -15,7 +15,6 @@ from typing import Any
 from roboclaws.agents.provider_registry import (
     default_provider_profile,
     provider_readiness,
-    provider_route_spec,
 )
 from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
@@ -26,6 +25,11 @@ from roboclaws.launch.environment_setup import (
 )
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
+from roboclaws.operator_console.launch_support import (
+    ALLOWED_ENV_OVERRIDES,
+    docker_container_ids_with_mount,
+    validate_env_overrides,
+)
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.readiness import route_gate_rows
@@ -35,7 +39,6 @@ from roboclaws.operator_console.routes import (
 )
 from roboclaws.operator_console.state import resolve_display_run_dir
 
-ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
 RUN_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -140,19 +143,13 @@ def build_launch_argv(
         for item in route.launch_default_overrides
         if _override_key(item) not in overridden_keys
     ]
-    args = [
-        f"surface={route.surface}",
-        f"world={route.world_id}",
-        f"backend={route.backend_id}",
-        f"agent_engine={route.agent_engine_id}",
-        f"evidence_lane={route.evidence_lane}",
-        f"scenario_setup={request_overrides.pop('scenario_setup', route.scenario_setup)}",
-        *default_overrides,
-    ]
-    if selected_preset:
-        args.insert(3, f"preset={selected_preset}")
-    elif selected_intent != "open-ended":
-        args.insert(3, f"intent={selected_intent}")
+    args = _base_launch_args(
+        route,
+        selected_intent=selected_intent,
+        selected_preset=selected_preset,
+        scenario_setup=request_overrides.pop("scenario_setup", route.scenario_setup),
+        default_overrides=default_overrides,
+    )
     provider_profile = request_overrides.pop("provider_profile", route.provider_profile or "")
     if provider_profile:
         args.append(f"provider_profile={provider_profile}")
@@ -178,6 +175,30 @@ def build_launch_argv(
     except LaunchError as exc:
         raise ConsoleLaunchError(str(exc)) from exc
     return ["just", "run::surface", *args]
+
+
+def _base_launch_args(
+    route: ConsoleLaunchSelection,
+    *,
+    selected_intent: str,
+    selected_preset: str,
+    scenario_setup: str,
+    default_overrides: list[str],
+) -> list[str]:
+    args = [
+        f"surface={route.surface}",
+        f"world={route.world_id}",
+        f"backend={route.backend_id}",
+        f"agent_engine={route.agent_engine_id}",
+        f"evidence_lane={route.evidence_lane}",
+        f"scenario_setup={scenario_setup}",
+        *default_overrides,
+    ]
+    if selected_preset:
+        args.insert(3, f"preset={selected_preset}")
+    elif selected_intent != "open-ended":
+        args.insert(3, f"intent={selected_intent}")
+    return args
 
 
 def start_console_run(
@@ -462,44 +483,7 @@ def _normalized_launch_overrides(
 
 
 def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[str, str]) -> None:
-    if env_overrides and route.agent_engine_id not in {
-        "codex-cli",
-        "claude-code",
-        "openai-agents-sdk",
-    }:
-        raise ConsoleLaunchError("provider overrides are only supported for coding-agent routes")
-    for key, value in env_overrides.items():
-        if key not in ALLOWED_ENV_OVERRIDES:
-            raise ConsoleLaunchError(f"unsupported provider override: {key}")
-        if "\x00" in value or "\n" in value or "\r" in value:
-            raise ConsoleLaunchError(f"invalid control character in provider override: {key}")
-        if key == "ROBOCLAWS_CODEX_PROVIDER" and route.agent_engine_id not in {
-            "codex-cli",
-            "openai-agents-sdk",
-        }:
-            raise ConsoleLaunchError("Codex provider override is only supported for Codex routes")
-        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and route.agent_engine_id != "claude-code":
-            raise ConsoleLaunchError("Claude provider override is only supported for Claude routes")
-        if key == "ROBOCLAWS_CODEX_PROVIDER":
-            try:
-                route_spec = provider_route_spec(value)
-            except KeyError:
-                route_spec = None
-            if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
-                expected = ", ".join(route.to_payload()["supported_provider_profiles"])
-                raise ConsoleLaunchError(
-                    f"unsupported Codex provider override: {value}; expected {expected}"
-                )
-        if key == "ROBOCLAWS_CLAUDE_PROVIDER":
-            try:
-                route_spec = provider_route_spec(value)
-            except KeyError:
-                route_spec = None
-            if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
-                expected = ", ".join(route.to_payload()["supported_provider_profiles"])
-                raise ConsoleLaunchError(
-                    f"unsupported Claude provider override: {value}; expected {expected}"
-                )
+    validate_env_overrides(route, env_overrides, error_type=ConsoleLaunchError)
 
 
 def _apply_env_overrides(
@@ -873,52 +857,7 @@ def _stop_docker_containers_for_run(display_run_dir: Path) -> None:
 
 
 def _docker_container_ids_with_mount(source: Path) -> list[str]:
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "-q"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except (FileNotFoundError, OSError):
-        return []
-    if result.returncode != 0:
-        return []
-    container_ids: list[str] = []
-    for container_id in result.stdout.split():
-        try:
-            inspect = subprocess.run(
-                ["docker", "inspect", "--format", "{{json .Mounts}}", container_id],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-            )
-        except (FileNotFoundError, OSError):
-            continue
-        if inspect.returncode != 0:
-            continue
-        try:
-            mounts = json.loads(inspect.stdout)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(mounts, list):
-            continue
-        for mount in mounts:
-            if not isinstance(mount, dict):
-                continue
-            mount_source = mount.get("Source")
-            if not mount_source:
-                continue
-            try:
-                candidate = Path(str(mount_source)).resolve()
-            except OSError:
-                continue
-            if candidate == source:
-                container_ids.append(container_id)
-                break
-    return container_ids
+    return docker_container_ids_with_mount(source, run_command=subprocess.run)
 
 
 def _read_json(path: Path) -> dict[str, Any]:

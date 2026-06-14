@@ -2897,3 +2897,21 @@ Stop this refactor loop when:
   113 Ruff complexity violations, with oversized modules unchanged at 59.
   `roboclaws/cli/household_agent_server.py` no longer appears in the
   complexity-by-file summary.
+- 2026-06-14: Continued the operator-console residual launch/state candidate by
+  extracting route launch argument assembly, provider env override validation,
+  and Docker workspace mount inspection from
+  `roboclaws/operator_console/launcher.py`. Provider override and Docker mount
+  details now live in `roboclaws/operator_console/launch_support.py`, while
+  `launcher.py` keeps the existing API-facing wrappers and the same
+  `ConsoleLaunchError` surface. Evidence:
+  `ruff check roboclaws/operator_console/launcher.py roboclaws/operator_console/launch_support.py --select C901,PLR0912,PLR0915`
+  passed; `ruff check roboclaws/operator_console/launcher.py roboclaws/operator_console/launch_support.py tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_operator_console.py tests/unit/operator_console/test_state.py`
+  passed; `ruff format --check roboclaws/operator_console/launcher.py roboclaws/operator_console/launch_support.py tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_operator_console.py tests/unit/operator_console/test_state.py`
+  passed; `python -m py_compile roboclaws/operator_console/launcher.py roboclaws/operator_console/launch_support.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 113 to
+  110 Ruff complexity violations, with oversized modules unchanged at 59.
+  `roboclaws/operator_console/launcher.py` no longer appears in the
+  complexity-by-file summary; the remaining operator-console grouped rows are
+  in `roboclaws/operator_console/state.py`.
