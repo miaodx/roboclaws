@@ -653,3 +653,18 @@ Stop this refactor loop when:
   PLR0915 rows were removed from the baseline. Remaining P3 work is the
   worker-runtime side: task-sampler adapters, runtime diagnostics, and
   worker invocation.
+- 2026-06-14: Continued P3 by splitting the task-sampler failure diagnostics
+  hook installer inside `run_molmo_planner_manipulation_probe.py`. The
+  monolithic `_apply_task_sampler_failure_diagnostics_adapter(...)` now
+  delegates to focused robot-placement, asset-failure, grasp-collision,
+  grasp-failure, and candidate-removal hook installers, while preserving the
+  exact diagnostics payload shape and private test hooks. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
+  passed; `ruff format --check` for the same file passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 192 to 190 Ruff complexity
+  violations, with oversized modules unchanged at 59. The runner's grouped
+  complexity rows dropped from 5 to 3; remaining P3 runtime work is
+  `_execute_policy_probe(...)`, exact cleanup-task configuration, and worker
+  invocation/runtime diagnostics.

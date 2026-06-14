@@ -1759,6 +1759,28 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "image_artifacts": {},
         "visual_capture_failures": [],
     }
+    _install_robot_placement_diagnostics(
+        task_sampler,
+        diagnostics,
+        profile,
+        output_dir=output_dir,
+    )
+    _install_asset_failure_diagnostics(task_sampler, diagnostics)
+    _install_grasp_collision_diagnostics(task_sampler, diagnostics)
+    _install_grasp_failure_diagnostics(task_sampler, diagnostics)
+    _install_candidate_removal_diagnostics(task_sampler, diagnostics)
+    diagnostics["applied"] = bool(diagnostics["hooks"])
+    _refresh_task_sampler_failure_diagnostics(diagnostics)
+    return diagnostics
+
+
+def _install_robot_placement_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    output_dir: Path | None,
+) -> None:
     sample_and_place_robot = getattr(task_sampler, "_sample_and_place_robot", None)
     if callable(sample_and_place_robot):
 
@@ -1808,6 +1830,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("_sample_and_place_robot")
 
+
+def _install_asset_failure_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> None:
     report_asset_failure = getattr(task_sampler, "report_asset_failure", None)
     if callable(report_asset_failure):
 
@@ -1827,8 +1854,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("report_asset_failure")
 
-    _install_grasp_collision_diagnostics(task_sampler, diagnostics)
 
+def _install_grasp_failure_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> None:
     report_grasp_failure = getattr(task_sampler, "report_grasp_failure", None)
     if callable(report_grasp_failure):
 
@@ -1882,6 +1912,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("report_grasp_failure")
 
+
+def _install_candidate_removal_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> None:
     remove_candidate_object = getattr(task_sampler, "_remove_candidate_object", None)
     if callable(remove_candidate_object):
 
@@ -1918,10 +1953,6 @@ def _apply_task_sampler_failure_diagnostics_adapter(
             task_sampler,
         )
         diagnostics["hooks"].append("_remove_candidate_object")
-
-    diagnostics["applied"] = bool(diagnostics["hooks"])
-    _refresh_task_sampler_failure_diagnostics(diagnostics)
-    return diagnostics
 
 
 def _install_grasp_collision_diagnostics(task_sampler: Any, diagnostics: dict[str, Any]) -> None:
