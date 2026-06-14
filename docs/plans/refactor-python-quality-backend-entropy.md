@@ -2822,3 +2822,20 @@ Stop this refactor loop when:
   seven to two grouped complexity rows. The remaining OpenAI Agents rows are
   `_run_sdk_agent` and `_raw_fpv_budget_failure`; treat them as residual
   lifecycle/budget-policy cleanup, not part of the completed metrics split.
+- 2026-06-14: Continued the operator-console readiness/routing candidate by
+  splitting `ConsoleRequestHandler.do_GET` and `do_POST` into explicit static
+  file, JSON API, artifact file, exact POST, run-action POST, readiness-query,
+  launch-payload, and follow-up autostart helpers inside
+  `roboclaws/operator_console/server.py`. This keeps the HTTP endpoint payloads
+  and the stdlib server boundary unchanged while removing the branch ladders
+  from the request handler entrypoints. Evidence:
+  `ruff check roboclaws/operator_console/server.py tests/unit/operator_console/test_operator_console.py tests/unit/operator_console/test_launcher.py`
+  passed; `ruff format --check roboclaws/operator_console/server.py tests/unit/operator_console/test_operator_console.py tests/unit/operator_console/test_launcher.py`
+  passed; `ruff check roboclaws/operator_console/server.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 129 to
+  124 Ruff complexity violations, with oversized modules unchanged at 59.
+  `roboclaws/operator_console/server.py` no longer appears in the
+  complexity-by-file summary; the operator-console readiness candidate remains
+  open for `route_readiness(...)` and adjacent route/state helpers.

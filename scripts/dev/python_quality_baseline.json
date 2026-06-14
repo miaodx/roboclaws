@@ -810,56 +810,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/operator_console/server.py|C901|ConsoleRequestHandler.do_GET",
-        "limit": 10,
-        "message": "`do_GET` is too complex (23 > 10)",
-        "path": "roboclaws/operator_console/server.py",
-        "row": 59,
-        "symbol": "ConsoleRequestHandler.do_GET",
-        "value": 23
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/server.py|C901|ConsoleRequestHandler.do_POST",
-        "limit": 10,
-        "message": "`do_POST` is too complex (15 > 10)",
-        "path": "roboclaws/operator_console/server.py",
-        "row": 203,
-        "symbol": "ConsoleRequestHandler.do_POST",
-        "value": 15
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/operator_console/server.py|PLR0912|ConsoleRequestHandler.do_GET",
-        "limit": 12,
-        "message": "Too many branches (22 > 12)",
-        "path": "roboclaws/operator_console/server.py",
-        "row": 59,
-        "symbol": "ConsoleRequestHandler.do_GET",
-        "value": 22
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/operator_console/server.py|PLR0912|ConsoleRequestHandler.do_POST",
-        "limit": 12,
-        "message": "Too many branches (14 > 12)",
-        "path": "roboclaws/operator_console/server.py",
-        "row": 203,
-        "symbol": "ConsoleRequestHandler.do_POST",
-        "value": 14
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/operator_console/server.py|PLR0915|ConsoleRequestHandler.do_GET",
-        "limit": 50,
-        "message": "Too many statements (57 > 50)",
-        "path": "roboclaws/operator_console/server.py",
-        "row": 59,
-        "symbol": "ConsoleRequestHandler.do_GET",
-        "value": 57
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/operator_console/state.py|C901|_camera_angle_summary",
         "limit": 10,
         "message": "`_camera_angle_summary` is too complex (16 > 10)",
