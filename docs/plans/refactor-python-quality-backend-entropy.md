@@ -214,7 +214,7 @@ Rejected alternatives:
     slice.
   - Keep `report.html` visual core tests green.
 
-- [ ] **P1: Split planner-proof bundle checker assertion phases.**
+- [x] **P1: Split planner-proof bundle checker assertion phases.**
   - Target `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`.
   - Extract staged checks for manifest/core counts, report rendering,
     local-runtime preflight, proof request selection, proof result summary,
@@ -589,3 +589,24 @@ Stop this refactor loop when:
   violations and from 61 to 60 oversized modules. `roboclaws/maps/bundle.py`
   is no longer oversized, and the `validate_nav2_map_bundle` C901, PLR0912,
   and PLR0915 rows were removed from the baseline.
+- 2026-06-14: Implemented P1's highest-risk planner-proof bundle checker
+  phase split. Added
+  `scripts/molmo_cleanup/planner_proof_bundle_selection_checker.py` for proof
+  request selection, request filtering, feasibility blockers, fallback
+  generation, and selection requirement checks. Added
+  `scripts/molmo_cleanup/planner_proof_bundle_result_checker.py` for proof
+  result summary, prior proof summary, proof quality, grasp signature matrix,
+  worker stage, sampler adapter, robot placement, and view-source checks. The
+  main checker still owns CLI parsing, manifest core assertions, report
+  rendering, runtime preflight, warmup, command, and cleanup-rerun gates; the
+  remaining six checker complexity rows are smaller follow-up candidates, not
+  part of this phase split. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py scripts/molmo_cleanup/planner_proof_bundle_selection_checker.py scripts/molmo_cleanup/planner_proof_bundle_result_checker.py`
+  passed; `ruff format` for the same touched files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_planner_proof_bundle_runner_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 204 to 198 Ruff complexity
+  violations and from 60 to 59 oversized modules. The checker file dropped
+  from 12 to 6 grouped complexity rows, and the `_assert_proof_request_selection`
+  plus `_assert_proof_result_summary` PLR0915 rows were removed from the main
+  checker baseline.

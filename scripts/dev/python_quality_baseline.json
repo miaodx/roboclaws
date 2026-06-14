@@ -98,11 +98,6 @@
         "path": "scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py"
       },
       {
-        "lines": 990,
-        "max_module_lines": 800,
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py"
-      },
-      {
         "lines": 2610,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
@@ -1349,7 +1344,7 @@
         "limit": 10,
         "message": "`_assert_grasp_cache_availability_preflight` is too complex (12 > 10)",
         "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 805,
+        "row": 342,
         "symbol": "_assert_grasp_cache_availability_preflight",
         "value": 12
       },
@@ -1359,29 +1354,9 @@
         "limit": 10,
         "message": "`_assert_grasp_cache_generation_preflight` is too complex (15 > 10)",
         "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 865,
+        "row": 402,
         "symbol": "_assert_grasp_cache_generation_preflight",
         "value": 15
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_proof_request_selection",
-        "limit": 10,
-        "message": "`_assert_proof_request_selection` is too complex (43 > 10)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 308,
-        "symbol": "_assert_proof_request_selection",
-        "value": 43
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_proof_result_summary",
-        "limit": 10,
-        "message": "`_assert_proof_result_summary` is too complex (47 > 10)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 515,
-        "symbol": "_assert_proof_result_summary",
-        "value": 47
       },
       {
         "code": "C901",
@@ -1389,7 +1364,7 @@
         "limit": 10,
         "message": "`_assert_runner_result` is too complex (16 > 10)",
         "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 59,
+        "row": 60,
         "symbol": "_assert_runner_result",
         "value": 16
       },
@@ -1399,29 +1374,9 @@
         "limit": 12,
         "message": "Too many branches (14 > 12)",
         "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 865,
+        "row": 402,
         "symbol": "_assert_grasp_cache_generation_preflight",
         "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0912|_assert_proof_request_selection",
-        "limit": 12,
-        "message": "Too many branches (42 > 12)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 308,
-        "symbol": "_assert_proof_request_selection",
-        "value": 42
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0912|_assert_proof_result_summary",
-        "limit": 12,
-        "message": "Too many branches (46 > 12)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 515,
-        "symbol": "_assert_proof_result_summary",
-        "value": 46
       },
       {
         "code": "PLR0912",
@@ -1429,29 +1384,9 @@
         "limit": 12,
         "message": "Too many branches (16 > 12)",
         "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 59,
+        "row": 60,
         "symbol": "_assert_runner_result",
         "value": 16
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0915|_assert_proof_request_selection",
-        "limit": 50,
-        "message": "Too many statements (90 > 50)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 308,
-        "symbol": "_assert_proof_request_selection",
-        "value": 90
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0915|_assert_proof_result_summary",
-        "limit": 50,
-        "message": "Too many statements (113 > 50)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 515,
-        "symbol": "_assert_proof_result_summary",
-        "value": 113
       },
       {
         "code": "PLR0915",
@@ -1459,7 +1394,7 @@
         "limit": 50,
         "message": "Too many statements (58 > 50)",
         "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
-        "row": 59,
+        "row": 60,
         "symbol": "_assert_runner_result",
         "value": 58
       },
