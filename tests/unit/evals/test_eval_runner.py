@@ -21,8 +21,12 @@ def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
     assert payload["schema"] == "roboclaws_eval_results_bundle_v1"
     assert payload["suite"]["suite_id"] == "household_world.smoke_regression"
     assert payload["aggregate"]["total"] == 1
+    assert payload["aggregate"]["trial_count"] == 1
+    assert payload["aggregate"]["sample_count"] == 1
     assert payload["aggregate"]["passed"] == 1
     assert payload["aggregate"]["pass_at_1"] == 1.0
+    assert payload["aggregate"]["pass_at_k"] == {"1": 1.0}
+    assert payload["aggregate"]["pass_caret_k"] == {"1": 1.0}
 
     result = payload["results"][0]
     assert result["status"] == "passed"
@@ -66,6 +70,57 @@ def test_eval_runner_classifies_environment_blocked_exception(tmp_path: Path) ->
     assert result["status"] == "blocked"
     assert result["failure_class"] == "environment_blocked"
     assert result["grader_outputs"]["runner"]["error_type"] == "ModuleNotFoundError"
+
+
+def test_eval_runner_records_repetition_metrics(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="repeat",
+        product_runner=_passing_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["total"] == 3
+    assert payload["aggregate"]["sample_count"] == 1
+    assert payload["aggregate"]["max_repetition_count"] == 3
+    assert payload["aggregate"]["pass_at_k"] == {"1": 1.0, "2": 1.0, "3": 1.0}
+    assert payload["aggregate"]["pass_caret_k"] == {"1": 1.0, "2": 1.0, "3": 1.0}
+    assert payload["aggregate"]["pass_caret_k_eligible"] == {"1": 1, "2": 1, "3": 1}
+    sample = payload["aggregate"]["samples"]["cleanup.repeated_seed7"]
+    assert sample["trial_count"] == 3
+    assert sample["pass_all"] is True
+    assert [
+        result["identity"]["repetition_index"]
+        for result in payload["results"]
+        if result["identity"]["sample_id"] == "cleanup.repeated_seed7"
+    ] == [0, 1, 2]
+
+
+def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-blocked",
+        agent_engine="codex-cli",
+        provider_profile="codex-env",
+        product_runner=_passing_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["total"] == 3
+    assert payload["aggregate"]["blocked"] == 3
+    assert payload["aggregate"]["pass_at_k"] == {"1": 0.0, "2": 0.0, "3": 0.0}
+    assert payload["aggregate"]["pass_caret_k"] == {"1": 0.0, "2": 0.0, "3": 0.0}
+    assert payload["aggregate"]["failure_classes"] == {"model_or_provider_unavailable": 3}
+    result = payload["results"][0]
+    assert result["status"] == "blocked"
+    assert result["failure_class"] == "model_or_provider_unavailable"
+    assert result["identity"]["agent_engine"] == "codex-cli"
+    assert result["identity"]["runner_class"] == "live-agent"
+    assert result["identity"]["provider_profile"] == "codex-env"
+    assert result["grader_outputs"]["runner"]["error_type"] == "LiveAgentEvalNotExecuted"
+    assert "live_agent_eval_runtime_not_implemented" in result["limitations"]
 
 
 def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(

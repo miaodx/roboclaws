@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-driven-architecture
-status: Active - Slice 0/1/2/3/4 verified; Slice 5 next
+status: Active - Slice 0/1/2/3/4/5a verified; Slice 5 live runtime remains
 created: 2026-06-14
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -694,7 +694,9 @@ Slice 4 verification evidence:
 
 ### Slice 5: Live-Agent Repetition And `pass^k`
 
-Status: planning candidate.
+Status: partially implemented and verified 2026-06-15; live-agent runtime
+execution remains blocked by provider/runtime availability and runner
+integration.
 
 Scope:
 
@@ -709,6 +711,37 @@ Acceptance:
 - live-agent eval results identify provider/model/runtime conditions;
 - repeated trials aggregate without hiding individual failures;
 - blocked local/live requirements are honest, not silently downgraded.
+
+Slice 5a verification evidence:
+
+- Added the deterministic `cleanup_capability` suite with
+  `cleanup.repeated_seed7` and `trial_count=3`.
+- Added aggregate `pass_at_k`, `pass_caret_k`, per-sample status summaries, and
+  eligible-count reporting so repeated trials remain visible.
+- Added `agent_engine`, `provider_profile`, and `model` eval CLI overrides.
+  Non-direct eval requests now preserve live-agent identity and produce blocked
+  `model_or_provider_unavailable` result packets until live runtime integration
+  lands.
+- `just dev::network-status` reported `network: work`; OpenClaw and
+  system-provider Claude Code routes are guarded on this host.
+- `ruff check roboclaws/evals tests/unit/evals
+  tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `ruff format --check roboclaws/evals tests/unit/evals
+  tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals
+  tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `git diff --check` passed.
+- `just agent::eval suite=cleanup_capability budget=smoke stamp=codex-slice5-repeat2`
+  passed and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice5-repeat2/eval_results.json`;
+  aggregate result was `pass_at_1=1.0`, `pass_at_k[3]=1.0`,
+  `pass_caret_k[3]=1.0`, `passed=3`, `failed=0`, `blocked=0`.
+- `just agent::eval suite=cleanup_capability budget=smoke
+  stamp=codex-slice5-live-blocked2 agent_engine=codex-cli
+  provider_profile=codex-env` passed and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice5-live-blocked2/eval_results.json`;
+  aggregate result was `blocked=3`,
+  `failure_classes={"model_or_provider_unavailable": 3}`.
 
 ### Slice 6: Failure Replay And Regression Loop
 

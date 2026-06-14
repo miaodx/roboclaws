@@ -11,11 +11,19 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_agent_eval_public_facade_routes_to_eval_cli() -> None:
-    trace = _trace_agent_eval("suite=smoke_regression", "budget=smoke", "stamp=trace")
+    trace = _trace_agent_eval(
+        "suite=smoke_regression",
+        "budget=smoke",
+        "stamp=trace",
+        "agent_engine=codex-cli",
+        "provider_profile=codex-env",
+    )
 
     assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
     assert "suite=smoke_regression" in trace
     assert "budget=smoke" in trace
+    assert "agent_engine=codex-cli" in trace
+    assert "provider_profile=codex-env" in trace
 
 
 def _trace_agent_eval(*args: str) -> list[str]:

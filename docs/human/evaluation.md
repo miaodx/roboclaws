@@ -42,6 +42,7 @@ The deterministic runner is available through:
 ```bash
 just agent::eval suite=smoke_regression budget=smoke
 just agent::eval suite=map_build_consumer budget=smoke
+just agent::eval suite=cleanup_capability budget=smoke
 ```
 
 These suites run direct-runner household samples without provider keys, write
@@ -50,6 +51,12 @@ These suites run direct-runner household samples without provider keys, write
 budget uses the synthetic cleanup backend for local determinism while eval
 identity still records the sample's public surface, world, backend, evidence
 lane, and missing live-provider fields explicitly.
+
+`cleanup_capability` records repeated cleanup trials and reports `pass@k` plus
+`pass^k` aggregate metrics. Live-agent eval identity can be requested with
+`agent_engine=... provider_profile=...`; until live eval runtime integration
+lands, those trials are recorded as blocked with provider/runtime failure
+classes instead of being silently downgraded to direct-runner proof.
 
 Keep private scorer truth private. Generated mess sets, acceptable destinations,
 hidden target lists, and private manifests may feed graders and reports, but

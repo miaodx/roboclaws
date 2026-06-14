@@ -24,6 +24,7 @@ from roboclaws.evals.models import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "smoke_regression.json"
 MAP_BUILD_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "map_build_consumer.json"
+CLEANUP_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "cleanup_capability.json"
 
 
 def test_direct_runner_eval_sample_and_result_round_trip(tmp_path: Path) -> None:
@@ -266,10 +267,15 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     sample_paths = sorted((REPO_ROOT / "evals" / "household_world" / "samples").glob("*/*.json"))
 
     assert sample_paths
-    suites = [load_eval_suite(SMOKE_SUITE), load_eval_suite(MAP_BUILD_SUITE)]
+    suites = [
+        load_eval_suite(SMOKE_SUITE),
+        load_eval_suite(MAP_BUILD_SUITE),
+        load_eval_suite(CLEANUP_SUITE),
+    ]
     loaded = [load_eval_sample(path) for path in sample_paths]
     assert {sample.sample_id for sample in loaded} == {
         "cleanup.consume_map_seed7",
+        "cleanup.repeated_seed7",
         "cleanup.smoke_seed7",
         "map_build.baseline_seed7",
         "open_ended.drink_seed7",

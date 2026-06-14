@@ -8,15 +8,16 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws is executing the eval-driven architecture plan. Slice 0 through Slice
-4 are verified: eval suites are visible as a first-class architecture
+5a are verified: eval suites are visible as a first-class architecture
 layer, stale launch-axis documentation is cleaned, current cleanup/map-build
 MCP contracts no longer advertise `fixture_hints` as a callable active tool,
 and repo-native eval suite/sample/trial/result schema packets plus
 direct-runner household fixtures exist. Deterministic eval suites are available
 through `just agent::eval suite=smoke_regression budget=smoke` and
-`just agent::eval suite=map_build_consumer budget=smoke`; they write
-`eval_results.json` plus `eval_report.html` linked to product run artifacts.
-The `map_build_consumer` suite covers map-build Runtime Metric Map
+`just agent::eval suite=map_build_consumer budget=smoke`; the repeated
+`cleanup_capability` suite now records `pass@k` and `pass^k` metrics. Eval
+suites write `eval_results.json` plus `eval_report.html` linked to product run
+artifacts. The `map_build_consumer` suite covers map-build Runtime Metric Map
 actionability, cleanup consumption of `runtime_map_prior`, and open-ended
 completion-claim versus artifact-readiness grading.
 
@@ -42,17 +43,19 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Continue `docs/plans/2026-06-14-eval-driven-architecture.md` with Slice 5:
-add live-agent repetition and `pass^k` coverage when local provider/runtime
-requirements are available.
+Continue `docs/plans/2026-06-14-eval-driven-architecture.md` with the remaining
+Slice 5 live-agent runtime integration: run selected eval samples with a real
+Codex CLI, Claude Code, or OpenAI Agents SDK provider route when local
+provider/runtime requirements are available.
 
 ## Current Blocker
 
-No current implementation blocker for deterministic eval work. Live-agent
-repetition remains gated on local provider/runtime availability. The only known
-validation blocker is OpenClaw Gateway: this host is on the work network, so
-Gateway proof must run separately off the work network before OpenClaw can be
-called healthy.
+No current implementation blocker for deterministic eval work. Live-agent eval
+execution remains gated on local provider/runtime availability; current
+non-direct eval requests are recorded as blocked with provider/runtime failure
+classes instead of being downgraded. The only known validation blocker is
+OpenClaw Gateway: this host is on the work network, so Gateway proof must run
+separately off the work network before OpenClaw can be called healthy.
 
 ## Human Review Surface
 

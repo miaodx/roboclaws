@@ -9,6 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from roboclaws.evals.agent_identity import (
+    agent_engine_spec,
+    blocked_result_from_live_agent_request,
+    eval_provider_profile,
+    validate_sample_agent,
+)
 from roboclaws.evals.dependencies import (
     dependency_failure,
     resolve_artifact_dependencies,
@@ -56,6 +62,9 @@ def run_eval_suite(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     budget: str = "smoke",
     stamp: str | None = None,
+    agent_engine: str = "direct-runner",
+    provider_profile: str | None = None,
+    model: str | None = None,
     product_runner: ProductRun = run_realworld_cleanup,
 ) -> EvalSuiteRun:
     """Run a repo-native deterministic eval suite."""
@@ -63,6 +72,11 @@ def run_eval_suite(
     suite_path = resolve_suite_path(suite_ref)
     suite = load_eval_suite(suite_path)
     samples = _load_suite_samples(suite)
+    engine = agent_engine_spec(agent_engine)
+    selected_provider_profile = eval_provider_profile(
+        agent_engine=engine.id,
+        provider_profile=provider_profile,
+    )
     run_stamp = stamp or time.strftime("%Y%m%dT%H%M%S")
     output_dir = output_root / _path_token(suite.suite_id) / run_stamp
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -70,16 +84,17 @@ def run_eval_suite(
     results: list[EvalResult] = []
     sample_artifacts: dict[str, dict[str, Any]] = {}
     for sample in samples:
-        if "direct-runner" not in sample.allowed_agent_engines:
-            raise ValueError(
-                f"sample {sample.sample_id!r} does not allow the deterministic direct-runner"
-            )
+        validate_sample_agent(sample, agent_engine=engine.id)
         for repetition_index in range(sample.trial_count):
             trial = _trial_from_sample(
                 suite=suite,
                 sample=sample,
                 repetition_index=repetition_index,
                 budget=budget,
+                agent_engine=engine.id,
+                runner_class=engine.internal_runner_class,
+                provider_profile=selected_provider_profile,
+                model=model,
             )
             sample_run_dir = output_dir / "runs" / _path_token(sample.sample_id)
             run_dir = sample_run_dir / f"trial-{repetition_index:04d}"
@@ -91,6 +106,7 @@ def run_eval_suite(
                 budget=budget,
                 repetition_index=repetition_index,
                 sample_artifacts=sample_artifacts,
+                agent_engine=engine.id,
                 product_runner=product_runner,
             )
             results.append(result)
@@ -154,19 +170,27 @@ def _trial_from_sample(
     sample: EvalSample,
     repetition_index: int,
     budget: str,
+    agent_engine: str,
+    runner_class: str,
+    provider_profile: str,
+    model: str | None,
 ) -> EvalTrial:
     limitations: list[str] = []
-    if budget == "smoke" and sample.backend != SYNTHETIC_BACKEND:
+    if (
+        budget == "smoke"
+        and sample.backend != SYNTHETIC_BACKEND
+        and agent_engine == "direct-runner"
+    ):
         limitations.append("smoke_budget_uses_synthetic_backend_for_local_determinism")
     return EvalTrial.from_sample(
         sample,
         suite=suite,
         trial_id=f"{_path_token(sample.sample_id)}-{repetition_index:04d}",
         repetition_index=repetition_index,
-        agent_engine="direct-runner",
-        runner_class="direct_runner",
-        provider_profile=MISSING_NOT_APPLICABLE,
-        model=MISSING_NOT_APPLICABLE,
+        agent_engine=agent_engine,
+        runner_class=runner_class,
+        provider_profile=provider_profile,
+        model=model or MISSING_NOT_APPLICABLE,
         skill_name=_skill_name(sample),
         prompt_source=MISSING_NOT_APPLICABLE
         if sample.prompt == MISSING_NOT_APPLICABLE
@@ -198,9 +222,16 @@ def _run_trial(
     budget: str,
     repetition_index: int,
     sample_artifacts: dict[str, dict[str, Any]],
+    agent_engine: str,
     product_runner: ProductRun,
 ) -> EvalResult:
     run_dir.mkdir(parents=True, exist_ok=True)
+    if agent_engine != "direct-runner":
+        return blocked_result_from_live_agent_request(
+            trial,
+            agent_engine=agent_engine,
+            run_dir=run_dir,
+        )
     dependency_artifacts = resolve_artifact_dependencies(
         sample,
         repetition_index=repetition_index,
@@ -742,10 +773,21 @@ def main(argv: list[str] | None = None) -> int:
         budget = overrides.pop("budget", "smoke")
         output_root = Path(overrides.pop("output_dir", str(DEFAULT_OUTPUT_ROOT)))
         stamp = overrides.pop("stamp", None)
+        agent_engine = overrides.pop("agent_engine", "direct-runner")
+        provider_profile = overrides.pop("provider_profile", None)
+        model = overrides.pop("model", None)
         if overrides:
             keys = ", ".join(sorted(overrides))
             raise ValueError(f"unsupported eval override(s): {keys}")
-        run = run_eval_suite(suite_ref, output_root=output_root, budget=budget, stamp=stamp)
+        run = run_eval_suite(
+            suite_ref,
+            output_root=output_root,
+            budget=budget,
+            stamp=stamp,
+            agent_engine=agent_engine,
+            provider_profile=provider_profile,
+            model=model,
+        )
     except ValueError as exc:
         parser.exit(2, f"error: {exc}\n")
     print(json.dumps({"results": str(run.results_path), "report": str(run.report_path)}))
