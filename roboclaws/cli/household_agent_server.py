@@ -15,11 +15,12 @@ from urllib.parse import urlparse
 from roboclaws.household.agibot_cleanup_contract import (
     AgibotCleanupMCPContract,
 )
-from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.isaac_lab_backend import (
-    ISAACLAB_SUBPROCESS_BACKEND,
-    IsaacLabSubprocessBackend,
+from roboclaws.household.backend_contract import (
+    SYNTHETIC_BACKEND,
+    build_cleanup_backend_session,
+    validate_cleanup_run_options,
 )
+from roboclaws.household.isaac_lab_backend import ISAACLAB_SUBPROCESS_BACKEND
 from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir
 from roboclaws.household.profiles import cleanup_profile_names
 from roboclaws.household.realworld_contract import (
@@ -40,16 +41,12 @@ from roboclaws.household.realworld_mcp_server import (
     make_molmo_realworld_cleanup_mcp,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
-from roboclaws.household.subprocess_backend import (
-    MOLMOSPACES_SUBPROCESS_BACKEND,
-    MolmoSpacesSubprocessBackend,
-)
+from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     household_intent_from_goal_contract,
     household_intent_is_open_ended,
 )
-from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
@@ -57,7 +54,6 @@ from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_j
 from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
-SYNTHETIC_BACKEND = "api_semantic_synthetic"
 AGIBOT_GDK_BACKEND = "agibot_gdk"
 
 
@@ -321,24 +317,30 @@ def run_molmo_realworld_cleanup_agent_server(
     output_dir.mkdir(parents=True, exist_ok=True)
     if backend == AGIBOT_GDK_BACKEND:
         generated_mess_count = 0
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
+    else:
+        validate_cleanup_run_options(
+            backend_name=backend,
+            include_robot=include_robot,
+            record_robot_views=record_robot_views,
+            generated_mess_count=generated_mess_count,
+            map_mode=map_mode,
+            allowed_map_modes=REALWORLD_MAP_MODES,
+        )
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
     )
     runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
-    visual_backends = {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}
-    if include_robot and backend not in visual_backends:
-        raise ValueError("robot inclusion requires a visual subprocess backend")
-    if record_robot_views and (backend not in visual_backends or not include_robot):
-        raise ValueError(
-            "record_robot_views requires a visual subprocess backend and include_robot"
-        )
     agibot_contract: AgibotCleanupMCPContract | None = None
     if backend == AGIBOT_GDK_BACKEND:
         if context_json is None or str(context_json) == "":
             raise ValueError("backend=agibot_gdk requires --context-json")
+        if include_robot:
+            raise ValueError("robot inclusion requires a visual subprocess backend")
+        if record_robot_views:
+            raise ValueError(
+                "record_robot_views requires a visual subprocess backend and include_robot"
+            )
         scenario = build_cleanup_scenario(seed=seed)
         agibot_contract = AgibotCleanupMCPContract(
             run_dir=output_dir,
@@ -356,21 +358,9 @@ def run_molmo_realworld_cleanup_agent_server(
         perception_mode = agibot_contract.perception_mode
         map_mode = agibot_contract.map_mode
         cleanup_profile = None
-    elif backend == MOLMOSPACES_SUBPROCESS_BACKEND:
-        backend_instance = MolmoSpacesSubprocessBackend(
-            run_dir=output_dir,
-            seed=seed,
-            include_robot=include_robot,
-            robot_name=robot_name,
-            generated_mess_count=generated_mess_count,
-            generated_mess_object_ids=generated_mess_object_ids,
-            scene_source=scene_source,
-            scene_index=scene_index,
-        )
-        scenario = backend_instance.scenario
-        base_contract = CleanupBackendSession(scenario, backend=backend_instance)
-    elif backend == ISAACLAB_SUBPROCESS_BACKEND:
-        backend_instance = IsaacLabSubprocessBackend(
+    else:
+        base_contract = build_cleanup_backend_session(
+            backend_name=backend,
             run_dir=output_dir,
             seed=seed,
             include_robot=include_robot,
@@ -380,15 +370,9 @@ def run_molmo_realworld_cleanup_agent_server(
             scene_source=scene_source,
             scene_index=scene_index,
             map_bundle_dir=selected_bundle_dir,
-            scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
+            isaac_scene_usd_path=isaac_scene_usd_path,
         )
-        scenario = backend_instance.scenario
-        base_contract = CleanupBackendSession(scenario, backend=backend_instance)
-    else:
-        scenario = build_cleanup_scenario(seed=seed)
-        if generated_mess_count == 0:
-            scenario = _scenario_without_private_targets(scenario)
-        base_contract = CleanupBackendSession(scenario)
+        scenario = base_contract.scenario
 
     server: RealWorldMolmoCleanupMCPServer | None = None
     terminated_by = "unknown"
@@ -470,22 +454,6 @@ def run_molmo_realworld_cleanup_agent_server(
             )
             server.close()
     return result
-
-
-def _scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
-    scenario_id = f"{scenario.scenario_id}-baseline"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=scenario.objects,
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=(),
-            success_threshold=0,
-        ),
-    )
 
 
 def main(argv: list[str] | None = None) -> int:

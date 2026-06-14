@@ -12,41 +12,40 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
+from roboclaws.household.backend_contract import (  # noqa: E402
+    SYNTHETIC_BACKEND,
+    build_cleanup_backend_session,
+    validate_cleanup_run_options,
+)
 from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
 from roboclaws.household.profiles import (  # noqa: E402
     cleanup_profile_names,
 )
 from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
+    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
+    REALWORLD_MAP_MODES,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
 from roboclaws.household.realworld_mcp_server import (  # noqa: E402
     make_molmo_realworld_cleanup_mcp,
 )
-from roboclaws.household.scenario import build_cleanup_scenario  # noqa: E402
 from roboclaws.household.semantic_cleanup_loop import (  # noqa: E402
     run_semantic_cleanup_loop,
 )
-from roboclaws.household.subprocess_backend import (  # noqa: E402
-    MOLMOSPACES_SUBPROCESS_BACKEND,
-    MolmoSpacesSubprocessBackend,
-)
+from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND  # noqa: E402
 from roboclaws.household.task_intent import (  # noqa: E402
     HOUSEHOLD_INTENT_OPEN_ENDED,
     TASK_INTENT_MODE_DEFAULT,
     household_intent_from_goal_contract,
 )
-from roboclaws.household.types import CleanupScenario, PrivateScoringManifest  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json  # noqa: E402
 from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact  # noqa: E402
-
-SYNTHETIC_BACKEND = "api_semantic_synthetic"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -126,36 +125,30 @@ def run_smoke(
     goal_contract_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
+    validate_cleanup_run_options(
+        backend_name=backend,
+        include_robot=include_robot,
+        record_robot_views=record_robot_views,
+        generated_mess_count=generated_mess_count,
+        map_mode=DEFAULT_MAP_MODE,
+        allowed_map_modes=REALWORLD_MAP_MODES,
+    )
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
     )
     runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
-    if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
-        raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
-    if record_robot_views and (backend != MOLMOSPACES_SUBPROCESS_BACKEND or not include_robot):
-        raise ValueError(
-            "record_robot_views requires backend=molmospaces_subprocess and include_robot"
-        )
 
-    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
-        backend_instance = MolmoSpacesSubprocessBackend(
-            run_dir=output_dir,
-            seed=seed,
-            include_robot=include_robot,
-            robot_name=robot_name,
-            generated_mess_count=generated_mess_count,
-            generated_mess_object_ids=generated_mess_object_ids,
-        )
-        scenario = backend_instance.scenario
-        base_contract = CleanupBackendSession(scenario, backend=backend_instance)
-    else:
-        scenario = build_cleanup_scenario(seed=seed)
-        if generated_mess_count == 0:
-            scenario = _scenario_without_private_targets(scenario)
-        base_contract = CleanupBackendSession(scenario)
+    base_contract = build_cleanup_backend_session(
+        backend_name=backend,
+        run_dir=output_dir,
+        seed=seed,
+        include_robot=include_robot,
+        robot_name=robot_name,
+        generated_mess_count=generated_mess_count,
+        generated_mess_object_ids=generated_mess_object_ids,
+    )
+    scenario = base_contract.scenario
 
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
@@ -399,22 +392,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
-
-
-def _scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
-    scenario_id = f"{scenario.scenario_id}-baseline"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=scenario.objects,
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=(),
-            success_threshold=0,
-        ),
-    )
 
 
 if __name__ == "__main__":
