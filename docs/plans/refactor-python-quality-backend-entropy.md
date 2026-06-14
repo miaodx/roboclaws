@@ -222,11 +222,19 @@ Rejected alternatives:
   - Preserve CLI flags and current `just verify::molmo-planner-proof-*` /
     `just harness::molmo-planner-proof-*` behavior.
 
-- [ ] **P2: Split planner manipulation probe runtime and result packaging.**
+- [x] **P2: Split planner manipulation probe checker assertion phases.**
+  - Target `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`.
+  - Extract staged checker assertions for artifact/report core, runtime
+    diagnostics, task-sampler diagnostics, cleanup binding, required capability
+    gates, proof quality, and final blocked/planner-backed status.
+  - Preserve CLI flags, direct `_assert_probe_result(...)` test hook, and
+    current `just verify::molmo-planner-manipulation-probe` behavior.
+
+- [ ] **P3: Split planner manipulation probe runtime and result packaging.**
   - Target `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` and
-    `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`.
-  - Extract runtime diagnostics, task-sampler adapters, worker invocation,
-    result/report packaging, and checker proof-quality assertions.
+    focused helper modules under `scripts/molmo_cleanup/`.
+  - Extract runtime diagnostics, task-sampler adapters, worker invocation, and
+    result/report packaging.
   - Keep blocked-capability evidence valid by default; strict planner-backed
     proof remains a local-runtime gate.
 
@@ -610,3 +618,20 @@ Stop this refactor loop when:
   from 12 to 6 grouped complexity rows, and the `_assert_proof_request_selection`
   plus `_assert_proof_result_summary` PLR0915 rows were removed from the main
   checker baseline.
+- 2026-06-14: Implemented P2's planner manipulation probe checker split.
+  Added `scripts/molmo_cleanup/planner_manipulation_probe_checker.py` for
+  artifact/report core checks, runtime diagnostics, task-sampler failure
+  diagnostics, cleanup binding report assertions, required capability gates,
+  proof quality, RBY1M CuRobo gate checks, and final blocked/planner-backed
+  status checks. `check_molmo_planner_manipulation_probe.py` keeps the CLI and
+  the direct `_assert_probe_result(...)` test hook as a thin delegate. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py scripts/molmo_cleanup/planner_manipulation_probe_checker.py`
+  passed; `ruff format` for the same touched files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 198 to 195 Ruff complexity
+  violations, with oversized modules unchanged at 59. The previous top
+  individual complexity row,
+  `check_molmo_planner_manipulation_probe.py::_assert_probe_result` PLR0915
+  140>50, was removed from the baseline. The runtime worker/probe script
+  remains a separate P3 candidate.

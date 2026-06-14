@@ -1310,36 +1310,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py|C901|_assert_probe_result",
-        "limit": 10,
-        "message": "`_assert_probe_result` is too complex (51 > 10)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
-        "row": 68,
-        "symbol": "_assert_probe_result",
-        "value": 51
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py|PLR0912|_assert_probe_result",
-        "limit": 12,
-        "message": "Too many branches (50 > 12)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
-        "row": 68,
-        "symbol": "_assert_probe_result",
-        "value": 50
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py|PLR0915|_assert_probe_result",
-        "limit": 50,
-        "message": "Too many statements (140 > 50)",
-        "path": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
-        "row": 68,
-        "symbol": "_assert_probe_result",
-        "value": 140
-      },
-      {
-        "code": "C901",
         "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_grasp_cache_availability_preflight",
         "limit": 10,
         "message": "`_assert_grasp_cache_availability_preflight` is too complex (12 > 10)",
