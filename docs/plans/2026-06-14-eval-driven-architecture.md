@@ -927,7 +927,7 @@ the required simulator/backend are available.
 
 ## Documentation Updates
 
-Required when implementation begins:
+Completed documentation updates:
 
 - `ARCHITECTURE.md`: add eval-driven architecture layer and artifact flow.
 - `README.md`: clarify demo matrix versus eval suites if both are visible.
@@ -959,7 +959,7 @@ Potential new doc:
 
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: executed and closed 2026-06-15
 
 Task source: user prompt plus research and reduce-entropy packet
 
@@ -1029,9 +1029,6 @@ Execution:
 - worker: none required initially
 - worker-goal: none
 
-To execute: ask explicitly to execute
-`docs/plans/2026-06-14-eval-driven-architecture.md` with intuitive-flow.
-
 Review: 2026-06-15 grill batch accepted the command facade, Agibot convergence,
-and ADR routing decisions. Implementation still needs an explicit execute/go
-ahead request.
+and ADR routing decisions. The implementation ran through the durable
+`intuitive-flow` route and is recorded in the slice evidence above.

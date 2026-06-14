@@ -7,16 +7,16 @@ and pointers only, not a changelog or execution ledger.
 
 ## Current Focus
 
-Roboclaws is executing the eval-driven architecture plan. Slice 0 through Slice
-6 are verified: eval suites are visible as a first-class architecture
-layer, stale launch-axis documentation is cleaned, current cleanup/map-build
-MCP contracts no longer advertise `fixture_hints` as a callable active tool,
-and repo-native eval suite/sample/trial/result schema packets plus
-direct-runner household fixtures exist. Deterministic eval suites are available
-through `just agent::eval suite=smoke_regression budget=smoke` and
+Roboclaws has implemented the eval-driven architecture plan. Eval suites are
+visible as a first-class architecture layer, stale launch-axis documentation is
+cleaned, current cleanup/map-build MCP contracts no longer advertise
+`fixture_hints` as a callable active tool, and repo-native eval
+suite/sample/trial/result schema packets plus direct-runner household fixtures
+exist. Deterministic eval suites are available through
+`just agent::eval suite=smoke_regression budget=smoke` and
 `just agent::eval suite=map_build_consumer budget=smoke`; the repeated
-`cleanup_capability` suite now records `pass@k` and `pass^k` metrics. Eval
-suites write `eval_results.json` plus `eval_report.html` linked to product run
+`cleanup_capability` suite records `pass@k` and `pass^k` metrics. Eval suites
+write `eval_results.json` plus `eval_report.html` linked to product run
 artifacts. The `map_build_consumer` suite covers map-build Runtime Metric Map
 actionability, cleanup consumption of `runtime_map_prior`, and open-ended
 completion-claim versus artifact-readiness grading. Live eval execution is
@@ -71,7 +71,7 @@ work network before OpenClaw can be called healthy.
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
-- Active eval-driven architecture plan:
+- Implemented eval-driven architecture plan:
   `docs/plans/2026-06-14-eval-driven-architecture.md`
 - Active eval-suite ADR:
   `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`
