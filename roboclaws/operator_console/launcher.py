@@ -106,9 +106,7 @@ def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str,
     return env_map
 
 
-def provider_key_present(
-    route: ConsoleLaunchSelection, env: dict[str, str] | None = None
-) -> bool:
+def provider_key_present(route: ConsoleLaunchSelection, env: dict[str, str] | None = None) -> bool:
     env_map = os.environ if env is None else env
     if route.agent_engine_id == "claude-code":
         return _claude_provider_status(env_map)["ok"]
@@ -337,9 +335,7 @@ def route_readiness(
             provider_status = _provider_status(route, env_map)
             ok = provider_status["ok"]
             if not ok:
-                label = (
-                    route.to_payload().get("agent_engine_label") or route.agent_engine_id
-                )
+                label = route.to_payload().get("agent_engine_label") or route.agent_engine_id
                 message = str(provider_status["message"] or f"No {label} provider route found.")
                 kind = "needs_provider"
             elif provider_status.get("capability_blocker"):
@@ -448,9 +444,7 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     return state
 
 
-def _validate_override_keys(
-    route: ConsoleLaunchSelection, overrides: dict[str, str]
-) -> None:
+def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, str]) -> None:
     allowed = {
         "seed",
         "seeds",
@@ -534,9 +528,7 @@ def _normalized_launch_overrides(
     return normalized
 
 
-def _validate_env_overrides(
-    route: ConsoleLaunchSelection, env_overrides: dict[str, str]
-) -> None:
+def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[str, str]) -> None:
     if env_overrides and route.agent_engine_id not in {
         "codex-cli",
         "claude-code",
@@ -599,9 +591,7 @@ def _public_env_overrides(env_overrides: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _provider_status(
-    route: ConsoleLaunchSelection, env_map: dict[str, str]
-) -> dict[str, Any]:
+def _provider_status(route: ConsoleLaunchSelection, env_map: dict[str, str]) -> dict[str, Any]:
     if route.agent_engine_id == "codex-cli":
         return _with_evidence_lane_compatibility(
             route,

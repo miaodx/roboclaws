@@ -1046,9 +1046,9 @@ def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
     )
     taxonomy_engine_bullets = [
         line.strip()
-        for line in taxonomy.split("Current agent engines:", 1)[1].split(
-            "Validation-required maintainer engines", 1
-        )[0].splitlines()
+        for line in taxonomy.split("Current agent engines:", 1)[1]
+        .split("Validation-required maintainer engines", 1)[0]
+        .splitlines()
         if line.strip().startswith("- ")
     ]
 
@@ -1060,12 +1060,28 @@ def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
 
 
 def test_openclaw_demo_doc_stays_validation_required() -> None:
-    demo_doc = (REPO_ROOT / "docs" / "human" / "openclaw" / "demo.md").read_text(
-        encoding="utf-8"
-    )
+    demo_doc = (REPO_ROOT / "docs" / "human" / "openclaw" / "demo.md").read_text(encoding="utf-8")
 
     assert "validation-required maintainer route" in demo_doc
     assert "same public launch catalog" not in demo_doc
+
+
+def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
+    settings = (REPO_ROOT / "docs" / "human" / "molmospaces-settings.md").read_text(
+        encoding="utf-8"
+    )
+    legacy_arch = (
+        REPO_ROOT / "docs" / "human" / "molmospaces-cleanup-mode-architecture.md"
+    ).read_text(encoding="utf-8")
+
+    assert "just task::run" not in legacy_arch
+    assert "profile=world-labels" not in legacy_arch
+    assert "profile=world-labels-sanitized" not in legacy_arch
+    assert "profile=camera-raw" not in legacy_arch
+    assert "profile=camera-labels" not in legacy_arch
+    assert "openclaw-smoke-report" not in settings
+    assert "just molmo::openclaw-report" not in settings
+    assert "OpenClaw report recipes are maintainer-only validation routes" in settings
 
 
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:

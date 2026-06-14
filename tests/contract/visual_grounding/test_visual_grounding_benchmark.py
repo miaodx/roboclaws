@@ -569,8 +569,9 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
         "unit test matrix intentionally has one row"
     )
     detector_probe = result["detector_probe_recommendation"]
-    assert detector_probe["selected"][1]["benchmark_row_id"] == (
-        result["ranking"][0]["benchmark_row_id"]
+    assert (
+        detector_probe["selected"][1]["benchmark_row_id"]
+        == (result["ranking"][0]["benchmark_row_id"])
     )
     predictions = [
         json.loads(line)

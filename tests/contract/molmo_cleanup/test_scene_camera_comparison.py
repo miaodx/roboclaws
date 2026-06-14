@@ -196,6 +196,8 @@ def Xform "val_1"
     manifest["lanes"][ISAAC_LANE_ID]["views"][1]["usd_prim_path"] = (  # type: ignore[index]
         "/val_1/Geometry/bed_01"
     )
+
+
 def _native_isaac_diagnostics() -> dict[str, object]:
     return {
         "schema": "isaac_native_render_diagnostics_v1",
@@ -1160,7 +1162,6 @@ def test_render_domain_contract_probe_reads_mjcf_and_usda_contracts(tmp_path: Pa
     assert probe["isaac_shadow_disabled_prim_count"] == 1
 
 
-
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
     manifest = _manifest()
     _write_image(
@@ -1176,7 +1177,6 @@ def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_pat
 
     assert [entry["view_id"] for entry in entries] == ["room_01_room_2"]
     assert set(entries[0]["images"]) == {MOLMOSPACES_LANE_ID, ISAAC_LANE_ID}
-
 
 
 def test_scene_camera_comparison_manifest_is_json_serializable() -> None:

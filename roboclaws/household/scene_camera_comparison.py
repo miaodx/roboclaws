@@ -3061,6 +3061,7 @@ def _lane_lighting_tone_provenance(
         "native_render_summary": _native_render_summary(native),
     }
 
+
 def _isaac_lighting_summary(
     diagnostics: dict[str, Any],
     lighting_profile: dict[str, Any],
@@ -6326,11 +6327,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
 
 
 def _renderer_version(runtime: dict[str, Any]) -> str:
-    return str(
-        runtime.get("mujoco_version")
-        or runtime.get("isaac_lab_version")
-        or ""
-    )
+    return str(runtime.get("mujoco_version") or runtime.get("isaac_lab_version") or "")
 
 
 def _lighting_profile_id(lane: dict[str, Any]) -> str:
@@ -6745,9 +6742,7 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description=(
-            "Render the same MolmoSpaces scene anchors through MuJoCo and Isaac."
-        )
+        description=("Render the same MolmoSpaces scene anchors through MuJoCo and Isaac.")
     )
     parser.add_argument("--output-dir", type=Path, default=default_output_dir())
     parser.add_argument("--scene-usd-path", type=Path, required=True)

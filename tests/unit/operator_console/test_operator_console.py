@@ -38,31 +38,17 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-AGIBOT_CODEX_CLEANUP = (
-    "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
-)
+AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
 AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-ISAAC_CLAUDE_CLEANUP = (
-    "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
-)
-ISAAC_CODEX_CLEANUP = (
-    "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-)
-ISAAC_CODEX_MAP_BUILD = (
-    "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
-)
-MUJOCO_CLAUDE_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-)
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-)
-MUJOCO_CODEX_MAP_BUILD = (
-    "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
-)
+ISAAC_CLAUDE_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
+ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
+ISAAC_CODEX_MAP_BUILD = "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
 
 
 def _free_port() -> str:

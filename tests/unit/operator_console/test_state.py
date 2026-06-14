@@ -12,15 +12,9 @@ from roboclaws.operator_console.state import (
     resolve_display_run_dir,
 )
 
-MUJOCO_CLAUDE_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-)
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-)
-MUJOCO_CODEX_MAP_BUILD = (
-    "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
-)
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
 
 

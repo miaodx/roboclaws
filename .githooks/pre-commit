@@ -56,6 +56,8 @@ if [[ -n "$STAGED_PY" ]]; then
     echo "pre-commit: ruff format --check (staged .py files)"
     # shellcheck disable=SC2086
     "$RUFF" format --check $STAGED_PY
+    echo "pre-commit: Python quality ratchet"
+    python scripts/dev/check_python_quality_ratchet.py
 else
     echo "pre-commit: no staged .py files — skipping ruff"
 fi
@@ -110,11 +112,8 @@ infer_tests_for_path() {
         roboclaws/core/providers/*)
             add_test_target "tests/unit/providers"
             ;;
-        roboclaws/core/*|roboclaws/ai2thor/*)
+        roboclaws/core/*)
             add_test_target "tests/unit/core"
-            ;;
-        roboclaws/games/*)
-            add_test_target "tests/unit/games"
             ;;
         roboclaws/openclaw/*)
             add_test_target "tests/unit/openclaw"

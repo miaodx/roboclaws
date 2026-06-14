@@ -31,27 +31,17 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-ISAAC_CODEX_CLEANUP = (
-    "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-)
-ISAAC_CODEX_MAP_BUILD = (
-    "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
-)
-MUJOCO_CLAUDE_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-)
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-)
+ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
+ISAAC_CODEX_MAP_BUILD = "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
 MUJOCO_OPENAI_AGENTS_CLEANUP = (
     "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels"
 )
 
 
 def test_new_console_run_id_is_filesystem_and_docker_mount_safe() -> None:
-    run_id = _new_run_id(
-        get_selection(MUJOCO_CODEX_CLEANUP)
-    )
+    run_id = _new_run_id(get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert "/" not in run_id
     assert ":" not in run_id

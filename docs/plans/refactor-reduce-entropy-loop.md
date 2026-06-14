@@ -1,6 +1,6 @@
 ---
 refactor_scope: reduce-entropy-loop
-status: CONTINUE
+status: DONE
 accepted_severities:
   - P0
   - P1
@@ -12,7 +12,7 @@ last_verified: 2026-06-14
 
 ## Status
 
-CONTINUE
+DONE
 
 ## Target
 
@@ -55,15 +55,15 @@ discovery pass after each completed group.
   contract heads.
 - [x] Remove operator-console legacy route wrappers from normal code paths,
   without preserving historical run-history interpretation.
-- [ ] Add a Ruff complexity plus Pylint 800-line module-size ratchet with an
+- [x] Add a Ruff complexity plus Pylint 800-line module-size ratchet with an
   explicit baseline so new work cannot grow current complexity/size debt while
   existing large files are refactored deliberately.
-- [ ] Remove duplicate root-level Molmo checker/probe scripts that are
+- [x] Remove duplicate root-level Molmo checker/probe scripts that are
   byte-for-byte copies of the canonical `scripts/molmo_cleanup/` scripts.
-- [ ] Refresh stale human-facing command/profile guidance so current docs no
+- [x] Refresh stale human-facing command/profile guidance so current docs no
   longer surface `task::run`, one-axis cleanup profiles, or OpenClaw
   convenience wrappers as normal current entrypoints.
-- [ ] Refresh low-level test/tooling layout docs and pre-commit path inference
+- [x] Refresh low-level test/tooling layout docs and pre-commit path inference
   after the AI2-THOR/game/appliance retirement so retired or empty domains do
   not look current.
 
@@ -204,3 +204,45 @@ returns no P0/P1 or materially useful P2 candidates in this class.
   passed; `rg -n "ConsoleRoute|get_route\\(|list_console_routes|legacy_route_id|route_id" roboclaws/operator_console tests/unit/operator_console README.md ARCHITECTURE.md docs/human just scripts -g '!*.pyc'`
   finds only negative tests, local variable names, and unrelated provider-route
   health-check terminology.
+- 2026-06-14: Added the Python quality ratchet. `just verify::static` and the
+  pre-commit hook now run `scripts/dev/check_python_quality_ratchet.py`, which
+  compares Ruff `C901`, `PLR0912`, and `PLR0915` diagnostics plus
+  Pylint-compatible `max-module-lines=800` module sizes against
+  `scripts/dev/python_quality_baseline.json`. Existing debt is explicit while
+  new complexity violations, growth in existing violations, new oversized
+  modules, or line-count growth in oversized modules fail deterministically.
+  Current baseline after root Molmo shim removal: 217 Ruff complexity
+  violations and 61 oversized modules. Evidence:
+  `.venv/bin/python scripts/dev/check_python_quality_ratchet.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/scripts/test_python_quality_ratchet.py tests/contract/dev_tools/test_verify_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
+  passed.
+- 2026-06-14: Removed root-level Molmo checker/probe compatibility shims that
+  duplicated canonical scripts under `scripts/molmo_cleanup/`. The current
+  code, just recipes, tests, and human docs already reference the canonical
+  paths, and a dev-tools contract test now keeps those root shims removed.
+  Evidence: targeted symlink scan over `scripts/*.py` finds no symlink whose
+  target is `scripts/molmo_cleanup/`.
+- 2026-06-14: Refreshed stale command/profile guidance. The superseded cleanup
+  profile architecture doc now presents one-axis cleanup profiles only as
+  legacy/historical results and no longer contains copyable `just task::run` or
+  `profile=...` current command examples. `docs/human/molmospaces-settings.md`
+  removes OpenClaw smoke/live wrappers from normal report recipes and labels
+  OpenClaw reports as maintainer-only validation routes. `just/molmo.just`
+  marks the OpenClaw Molmo report wrappers private. Evidence: active search for
+  `task::run`, `profile=world-labels`, `profile=world-labels-sanitized`,
+  `profile=camera-raw`, `profile=camera-labels`, `openclaw-smoke-report`, and
+  `just molmo::openclaw-report` in human/root/just docs now returns only
+  retirement wording and negative tests.
+- 2026-06-14: Refreshed low-level tooling layout after retired AI2-THOR/game
+  surfaces. The pre-commit scoped-test inference no longer maps
+  `roboclaws/ai2thor/*` or `roboclaws/games/*` to empty retired test domains,
+  and contract coverage asserts those retired path rules stay absent. Evidence:
+  `rg -n -F -e 'roboclaws/ai2thor' -e 'roboclaws/games' -e 'tests/unit/games' .githooks/pre-commit tests/contract/dev_tools docs/human README.md ARCHITECTURE.md just/README.md AGENTS.md CLAUDE.md`
+  finds only negative tests.
+- 2026-06-14: Marked the reduce-entropy loop DONE after the accepted checklist
+  reached zero open items. Final verification:
+  `just verify::static` passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/scripts/test_python_quality_ratchet.py tests/contract/dev_tools/test_verify_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
+  passed. Final saturation audit:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs"`
+  surfaced only the expected historical/planning/generated/test surfaces and
+  no new P0/P1 or materially useful P2 candidate in this cleanup class.

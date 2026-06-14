@@ -12,6 +12,21 @@ MOLMO_JUST = JUST_DIR / "molmo.just"
 PRE_COMMIT_HOOK = REPO_ROOT / ".githooks" / "pre-commit"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+ROOT_MOLMO_SCRIPT_COMPAT_SHIMS = (
+    "check_molmo_planner_manipulation_probe.py",
+    "check_molmo_planner_proof_bundle_runner_result.py",
+    "check_molmo_realworld_cleanup_result.py",
+    "molmospaces_subprocess_worker.py",
+    "prepare_molmospaces_room.py",
+    "run_molmo_planner_manipulation_probe.py",
+    "run_molmo_planner_proof_bundle_from_requests.py",
+    "run_molmo_realworld_agent_mcp_smoke.py",
+    "run_molmospaces_grasp_cache_generation.py",
+    "run_molmospaces_grasp_filter_diagnostics.py",
+    "run_molmospaces_grasp_initial_contact_diagnostics.py",
+    "run_molmospaces_grasp_pose_policy_cache_generation.py",
+    "setup_molmospaces_grasp_generation.py",
+)
 
 
 def test_verify_module_is_registered() -> None:
@@ -26,14 +41,21 @@ def test_molmo_module_is_registered() -> None:
     assert re.search(r"^mod molmo\s+'just/molmo\.just'$", text, re.MULTILINE)
 
 
+def test_root_molmo_script_compat_shims_stay_removed() -> None:
+    for script_name in ROOT_MOLMO_SCRIPT_COMPAT_SHIMS:
+        assert not (REPO_ROOT / "scripts" / script_name).exists(), script_name
+
+
 def test_verify_layer_keeps_static_checks_out_of_harness_namespace() -> None:
     verify_text = VERIFY_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")
 
     assert '"$ruff_bin" check .' in verify_text
     assert '"$ruff_bin" format --check .' in verify_text
+    assert "python scripts/dev/check_python_quality_ratchet.py" in verify_text
     assert "git diff --check" in verify_text
     assert "ruff_bin" not in harness_text
+    assert "check_python_quality_ratchet.py" not in harness_text
     assert "git diff --check" not in harness_text
 
 
@@ -79,10 +101,19 @@ def test_pre_commit_runs_scoped_tests_by_default_with_full_fast_opt_in() -> None
     assert "infer_tests_for_path" in hook_text
     assert "roboclaws/operator_console/*)" in hook_text
     assert 'add_test_target "tests/unit/operator_console"' in hook_text
+    assert "python scripts/dev/check_python_quality_ratchet.py" in hook_text
     assert "FORCE_TESTS=1 set" in hook_text
     assert "run_full_fast_tests" in hook_text
     assert "pytest scoped targets: ${TEST_TARGETS[*]}" in hook_text
     assert "FORCE_TESTS=1 for full fast pytest" in dev_text
+
+
+def test_pre_commit_no_longer_infers_retired_domains() -> None:
+    hook_text = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+    assert "roboclaws/ai2thor" not in hook_text
+    assert "roboclaws/games" not in hook_text
+    assert "tests/unit/games" not in hook_text
 
 
 def test_molmo_apple2apple_grid_recipe_resolves_ci_python() -> None:
@@ -151,11 +182,9 @@ def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
         r"^quick-check driver=\"mcp-smoke\" profile=\"smoke\"",
         r"^review-report seeds=\"1 2 3\"",
         r"^mcp-smoke-report seed=\"7\"",
-        r"^openclaw-smoke-report seed=\"7\"",
         r"^camera-raw-fpv-report seed=\"7\"",
         r"^codex-report seed=\"7\"",
         r"^claude-report seed=\"7\"",
-        r"^openclaw-report seed=\"7\"",
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
@@ -168,11 +197,9 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
         'just molmo::household-cleanup-impl "{{driver}}" "{{profile}}"',
         "just molmo::household-cleanup-impl direct world-oracle-labels",
         "just molmo::household-cleanup-impl mcp-smoke world-oracle-labels",
-        "just molmo::household-cleanup-impl openclaw-smoke world-oracle-labels",
         "just molmo::household-cleanup-impl direct camera-raw-fpv",
         'just molmo::household-cleanup-impl codex-live "{{profile}}"',
         'just molmo::household-cleanup-impl claude-live "{{profile}}"',
-        'just molmo::household-cleanup-impl openclaw-live "{{profile}}"',
     )
     for call in expected_calls:
         assert call in text

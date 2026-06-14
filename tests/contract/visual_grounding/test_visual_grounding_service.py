@@ -456,9 +456,9 @@ def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> Non
 
 def test_dependency_metadata_does_not_expose_retired_qwen_vlm_extra() -> None:
     root_pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    sidecar_pyproject = (
-        REPO_ROOT / "sidecars" / "visual-grounding" / "pyproject.toml"
-    ).read_text(encoding="utf-8")
+    sidecar_pyproject = (REPO_ROOT / "sidecars" / "visual-grounding" / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
 
     for text in (root_pyproject, sidecar_pyproject):
         assert "qwen3vl" not in text.lower()

@@ -146,8 +146,7 @@ def legacy_contract_profile_metadata(profile_id: str) -> dict[str, Any]:
     except KeyError as exc:
         expected = ", ".join(legacy_contract_profile_names())
         raise ValueError(
-            f"unsupported legacy MCP contract profile {profile_id!r} "
-            f"(expected one of: {expected})"
+            f"unsupported legacy MCP contract profile {profile_id!r} (expected one of: {expected})"
         ) from exc
 
 

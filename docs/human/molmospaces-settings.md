@@ -406,15 +406,17 @@ just agent::run household-world.cleanup <agent-engine-or-private-driver> <eviden
 |------|--------|---------|
 | Driver | `direct` | Deterministic Python cleanup loop; no MCP server and no live LLM agent. |
 | Driver | `mcp-smoke` | Deterministic script through ADR-0003 MCP tools; drives the same tool-call path but does not launch Codex or Claude. |
-| Driver | `openclaw-smoke` | OpenClaw policy-labeled MCP smoke; proves OpenClaw-shaped artifact/checker wiring but does not launch Gateway. |
 | Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
 | Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
-| Driver | `openclaw-live` | Live OpenClaw Gateway connected to the cleanup MCP server. |
 | Preset | `smoke` | Synthetic contract sanity; world labels; semantic report. |
 | Evidence lane | `world-oracle-labels` | MolmoSpaces/RBY1M report; agent receives privileged structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
 | Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation authorization. |
 | Evidence lane | `camera-raw-fpv` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
 | Evidence lane | `camera-grounded-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates produced by `camera_labeler`. |
+
+OpenClaw smoke/live drivers are validation-required maintainer routes. Keep
+them out of normal operator runbooks until the off-work-network Gateway proof is
+green; see `docs/human/openclaw/demo.md` and `docs/human/openclaw/local.md`.
 
 `verify::*` remains the confidence-gate namespace: it runs focused tests and then
 delegates scenario execution to `harness::*`. `harness::*` remains the
@@ -433,11 +435,9 @@ Convenience report recipes:
 | `just molmo::quick-check` | `mcp-smoke smoke` | Cheap contract check; accepts `driver=` and `profile=` overrides. |
 | `just molmo::review-report` | `direct world-oracle-labels` | Canonical human review/status report. |
 | `just molmo::mcp-smoke-report` | `mcp-smoke world-oracle-labels` | Real visual MCP smoke without a live external agent. |
-| `just molmo::openclaw-smoke-report` | `openclaw-smoke world-oracle-labels` | OpenClaw-labeled visual artifact without live Gateway. |
 | `just molmo::camera-raw-report` | `direct camera-raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
 | `just molmo::codex-report` | `codex-live world-oracle-labels` | Live Codex agent report. |
 | `just molmo::claude-report` | `claude-live world-oracle-labels` | Live Claude Code agent report. |
-| `just molmo::openclaw-report` | `openclaw-live world-oracle-labels` | Live OpenClaw Gateway report. |
 
 For live Codex / Claude reports, repo-local `.env` keys are honored the same
 way as the direct navigation demos. Normal users configure keys only; command
@@ -467,8 +467,9 @@ just code::codex-provider-smoke
 
 Local public live-agent recipes support Codex and Claude Code only through the
 pinned coding-agent Docker toolchain and repo-local `.env`. Hosted CI does not
-support Codex, but may run supported Claude Code and OpenClaw routes. Use the
-same key set when comparing Kimi/MiMo results across machines:
+support Codex. OpenClaw stays outside normal hosted/current run guidance until
+the validation-required Gateway proof is green. Use the same key set when
+comparing Kimi/MiMo results across machines:
 
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
@@ -589,12 +590,6 @@ Real visual MCP smoke:
 just molmo::mcp-smoke-report
 ```
 
-Real visual OpenClaw-shaped smoke:
-
-```bash
-just molmo::openclaw-smoke-report
-```
-
 Raw camera evidence:
 
 ```bash
@@ -606,15 +601,16 @@ Live external-agent reports:
 ```bash
 just molmo::codex-report
 just molmo::claude-report
-just molmo::openclaw-report
 ```
 
-`openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
-on the work network unless the repo-local `.env` contains a supported MiMo,
-Kimi, or mify Anthropic key route. `codex-report` may run on the work network
-with the repo-local `codex-env` route configured in `.env`, or with explicit
-`ROBOCLAWS_CODEX_PROVIDER=mify` plus `XM_LLM_API_KEY`. Run
-`just dev::network-status` first if you are unsure which network you are on.
+OpenClaw report recipes are maintainer-only validation routes documented under
+`docs/human/openclaw/`; they are not part of the normal current entrypoint set.
+`claude-report` is blocked on the work network unless the repo-local `.env`
+contains a supported MiMo, Kimi, or mify Anthropic key route. `codex-report`
+may run on the work network with the repo-local `codex-env` route configured in
+`.env`, or with explicit `ROBOCLAWS_CODEX_PROVIDER=mify` plus
+`XM_LLM_API_KEY`. Run `just dev::network-status` first if you are unsure which
+network you are on.
 
 Planner proof-bundle dry run:
 

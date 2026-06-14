@@ -8,9 +8,7 @@ from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
 
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-)
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
 
 
 def test_latest_run_payload_uses_history_index_and_nested_attempt_artifacts(

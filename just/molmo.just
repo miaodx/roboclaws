@@ -1172,6 +1172,7 @@ mcp-smoke-report seed="7" output_dir="output/molmo/mcp-smoke-report" task="帮�
     just molmo::household-cleanup-impl mcp-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # OpenClaw-shaped/policy-labeled smoke with real MolmoSpaces/RBY1M visuals.
+[private]
 openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
     just molmo::household-cleanup-impl openclaw-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
@@ -1300,6 +1301,7 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
     "$python_bin" scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
+[private]
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" port="18788":
     just molmo::household-cleanup-impl openclaw-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" 0.0.0.0 "{{port}}"
 

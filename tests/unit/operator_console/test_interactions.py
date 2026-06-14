@@ -17,9 +17,7 @@ from roboclaws.operator_console.interactions import (
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
 
-MUJOCO_CODEX_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-)
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
 
 
 def _write_run(
@@ -117,10 +115,7 @@ def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path
     assert request["auto_start_allowed"] is True
     assert request["queue_reason"] == "parent_terminal_and_result_available"
     assert request["operator_session_id"].startswith("session-")
-    assert (
-        request["selection_id"]
-        == MUJOCO_CODEX_CLEANUP
-    )
+    assert request["selection_id"] == MUJOCO_CODEX_CLEANUP
     assert request["next_goal_packet"]["instruction"].startswith(
         "This is a linked follow-up Robot Run"
     )
