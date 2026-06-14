@@ -3060,10 +3060,12 @@ Severity: P1
 Entropy source: live-agent runtime workflow friction.
 
 Materiality: false confidence and real workflow friction. After metrics
-aggregation moved to `scripts/molmo_cleanup/openai_agents_metrics.py`,
+aggregation moved to `scripts/molmo_cleanup/openai_agents_metrics.py` and
+RAW-FPV budget-guard classification moved to
+`scripts/molmo_cleanup/openai_agents_budget.py`,
 `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` still has
-`_run_sdk_agent(...)` and `_raw_fpv_budget_failure(...)` C901 rows.
-`roboclaws/agents/drivers/openai_agents_live.py` still has
+`_run_sdk_agent(...)` as a C901 row. `roboclaws/agents/drivers/openai_agents_live.py`
+still has
 `_run_openai_agents(...)` PLR0915 plus `_camera_grounded_history_info(...)`
 and `_unwrap_mcp_text_content_payload(...)` C901 rows.
 
@@ -4420,3 +4422,22 @@ Stop this refactor loop when:
   from 97 to 96 Ruff complexity violations, with oversized modules unchanged
   at 59. The apple-to-apple runner dropped from 5332 to 5279 lines and now has
   one remaining grouped complexity row: `run_comparison(...)`.
+- 2026-06-14: Continued the OpenAI Agents residual runtime boundary candidate
+  by extracting RAW-FPV budget-guard trace parsing, repeated-failure
+  fingerprinting, candidate/observe budget reason selection, and terminal
+  `LiveAgentFailure` construction into
+  `scripts/molmo_cleanup/openai_agents_budget.py`.
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` keeps the existing
+  `_raw_fpv_budget_failure` private name as an imported delegate so current
+  budget-guard tests and runner code keep the same entrypoint. Evidence:
+  `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_budget.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py::test_openai_agents_budget_guard_classifies_raw_fpv_candidate_exhaustion tests/unit/agents/test_live_runtime.py::test_openai_agents_budget_guard_classifies_repeated_raw_fpv_failures tests/unit/agents/test_live_runtime.py::test_openai_agents_budget_guard_uses_current_context_not_cumulative_tokens -q`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py -q`
+  passed with 71 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 96 to 95 Ruff complexity violations, with oversized modules unchanged
+  at 59. The remaining OpenAI Agents residual rows are runner lifecycle
+  `_run_sdk_agent(...)` and the SDK adapter rows `_run_openai_agents(...)`,
+  `_camera_grounded_history_info(...)`, and
+  `_unwrap_mcp_text_content_payload(...)`.
