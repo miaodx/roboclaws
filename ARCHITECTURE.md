@@ -257,6 +257,11 @@ Every serious run should produce reviewable evidence:
   report-performance extractor, for maintainer comparisons of quality,
   call-count work, model work, normalized-estimate availability, and residual
   latency.
+- `cleanup_backend_evidence` inside `run_result.json` for normalized backend
+  provenance, runtime-metadata attachment status, diagnostic availability,
+  robot evidence, and artifact keys. Backend-specific legacy sections such as
+  `molmospaces_runtime` and `isaac_runtime` remain available for specialized
+  reports and checkers.
 - `runtime_metric_map.json` when a run builds or updates household world
   evidence.
 - `actionable_semantic_map_snapshot.json` when online runtime-map output or

@@ -743,6 +743,19 @@ Slice 5a verification evidence:
   aggregate result was `blocked=3`,
   `failure_classes={"model_or_provider_unavailable": 3}`.
 
+Backend entropy follow-up evidence:
+
+- Added a normalized `cleanup_backend_evidence` envelope to cleanup
+  `run_result.json` packets so eval/report/checker consumers can read common
+  backend provenance, runtime-metadata attachment status, diagnostic
+  availability, artifact keys, generated-mess counts, and robot evidence
+  without keying directly on `molmospaces_runtime` or `isaac_runtime`.
+- Preserved legacy backend-specific result keys for specialized reports and
+  checkers.
+- Confirmed deterministic eval output includes the envelope with
+  `just agent::eval suite=smoke_regression budget=smoke
+  stamp=codex-backend-evidence-final`.
+
 ### Slice 6: Failure Replay And Regression Loop
 
 Status: planning candidate.
