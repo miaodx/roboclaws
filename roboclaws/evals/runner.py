@@ -767,6 +767,32 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a Roboclaws eval suite.")
     parser.add_argument("overrides", nargs="*", help="key=value overrides.")
     args = parser.parse_args(argv)
+    if args.overrides and args.overrides[0] in {"promote-regression", "promote_regression"}:
+        try:
+            from roboclaws.evals.regression import promote_regression_sample_from_eval_result
+
+            overrides = _parse_key_value_args(args.overrides[1:])
+            eval_results_path = Path(overrides.pop("eval_results", overrides.pop("results", "")))
+            if not str(eval_results_path):
+                raise ValueError("promote-regression requires eval_results=<path>")
+            promotion = promote_regression_sample_from_eval_result(
+                eval_results_path,
+                source_sample_id=overrides.pop("source_sample_id", None),
+                source_trial_id=overrides.pop("source_trial_id", None),
+                regression_sample_id=overrides.pop("regression_sample_id", None),
+                review_label=overrides.pop("review_label", "eval-regression:accepted"),
+                sample_output_path=_optional_path(overrides.pop("sample_output_path", None)),
+                suite_path=_optional_path(overrides.pop("suite", None)),
+                suite_output_path=_optional_path(overrides.pop("suite_output_path", None)),
+                version=overrides.pop("version", None),
+            )
+            if overrides:
+                keys = ", ".join(sorted(overrides))
+                raise ValueError(f"unsupported promote-regression override(s): {keys}")
+        except ValueError as exc:
+            parser.exit(2, f"error: {exc}\n")
+        print(json.dumps(promotion, sort_keys=True))
+        return 0
     try:
         overrides = _parse_key_value_args(args.overrides)
         suite_ref = overrides.pop("suite", "smoke_regression")
@@ -792,6 +818,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.exit(2, f"error: {exc}\n")
     print(json.dumps({"results": str(run.results_path), "report": str(run.report_path)}))
     return 0
+
+
+def _optional_path(value: str | None) -> Path | None:
+    return Path(value) if value else None
 
 
 if __name__ == "__main__":

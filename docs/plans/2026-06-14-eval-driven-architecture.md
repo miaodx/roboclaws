@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-driven-architecture
-status: Active - Slice 0/1/2/3/4/5a verified; Slice 5 live runtime remains
+status: Active - Slice 0/1/2/3/4/5a/6 verified; Slice 5 live runtime remains
 created: 2026-06-14
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -722,6 +722,10 @@ Slice 5a verification evidence:
   Non-direct eval requests now preserve live-agent identity and produce blocked
   `model_or_provider_unavailable` result packets until live runtime integration
   lands.
+- Blocked live-agent eval packets now include
+  `roboclaws_live_eval_preflight_v1` runner metadata with provider route
+  readiness, required/missing env keys, route status, and local runtime
+  prerequisites.
 - `just dev::network-status` reported `network: work`; OpenClaw and
   system-provider Claude Code routes are guarded on this host.
 - `ruff check roboclaws/evals tests/unit/evals
@@ -758,7 +762,7 @@ Backend entropy follow-up evidence:
 
 ### Slice 6: Failure Replay And Regression Loop
 
-Status: planning candidate.
+Status: implemented and verified 2026-06-15.
 
 Scope:
 
@@ -772,6 +776,42 @@ Acceptance:
 - a failed report can be turned into a deterministic or live regression sample;
 - the sample records which private truth remains scorer-only;
 - regression samples are visible in suite manifests.
+
+Verification evidence:
+
+- Added `roboclaws.evals.regression` and
+  `just agent::eval promote-regression ...` for turning failed, blocked, or
+  inconclusive eval result bundles into durable eval sample definitions and
+  suite manifest entries.
+- Promotion metadata records source result links, source failure class, human
+  review label, and `private_truth_scope=grader_only` under
+  `private_goal_reference`; it is explicitly not agent input.
+- Documented review labels: `eval-regression:accepted`,
+  `eval-regression:needs-human-review`, and stop label
+  `eval-regression:do-not-promote`.
+- Verified the just facade routes `promote-regression` through
+  `roboclaws.cli.main eval`.
+- `ruff check roboclaws/evals tests/unit/evals/test_eval_runner.py` passed.
+- `ruff format --check roboclaws/evals tests/unit/evals/test_eval_runner.py`
+  passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals` passed.
+- `.venv/bin/python -m roboclaws.cli.main eval suite=smoke_regression
+  budget=smoke stamp=codex-slice6-promotion-source` passed and wrote
+  `output/evals/household_world_smoke_regression/codex-slice6-promotion-source/eval_results.json`.
+- `.venv/bin/python -m roboclaws.cli.main eval suite=cleanup_capability
+  budget=smoke stamp=codex-slice6-promotion-source-blocked
+  agent_engine=codex-cli provider_profile=codex-env` passed and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice6-promotion-source-blocked/eval_results.json`;
+  aggregate result was `blocked=3`,
+  `failure_classes={"model_or_provider_unavailable": 3}`.
+- `.venv/bin/python -m roboclaws.cli.main eval promote-regression
+  eval_results=output/evals/household_world_cleanup_capability/codex-slice6-promotion-source-blocked/eval_results.json
+  source_sample_id=cleanup.repeated_seed7
+  regression_sample_id=regression.cleanup_live_codex_unavailable
+  sample_output_path=output/evals/regression-promotion-smoke/regression_cleanup_live_codex_unavailable.json
+  suite_output_path=output/evals/regression-promotion-smoke/cleanup_capability_with_regression.json`
+  wrote output-local promotion artifacts whose sample kept
+  `private_truth_scope=grader_only`.
 
 ## Non-Goals
 

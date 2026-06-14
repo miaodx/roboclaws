@@ -30,3 +30,17 @@ The smoke budget writes `output/evals/<suite>/<stamp>/eval_results.json`,
 renders `eval_report.html`, and links each eval result back to the underlying
 product run artifacts. Repeated suites keep every trial result visible in the
 bundle and report `pass_at_k` plus `pass_caret_k`.
+
+Promote a failed, blocked, or inconclusive result into a durable regression
+sample with:
+
+```bash
+just agent::eval promote-regression \
+  eval_results=output/evals/<suite>/<stamp>/eval_results.json \
+  source_sample_id=<sample-id> \
+  regression_sample_id=regression.<name>
+```
+
+Use `sample_output_path=...` and `suite_output_path=...` for review-local dry
+runs. Promotion metadata keeps source artifacts and human review labels under
+`private_goal_reference` with `private_truth_scope=grader_only`.

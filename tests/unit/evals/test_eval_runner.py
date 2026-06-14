@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.evals.regression import promote_regression_sample_from_eval_result
 from roboclaws.evals.runner import run_eval_suite
 
 
@@ -120,6 +121,12 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
     assert result["identity"]["runner_class"] == "live-agent"
     assert result["identity"]["provider_profile"] == "codex-env"
     assert result["grader_outputs"]["runner"]["error_type"] == "LiveAgentEvalNotExecuted"
+    preflight = result["grader_outputs"]["runner"]["preflight"]
+    assert preflight["schema"] == "roboclaws_live_eval_preflight_v1"
+    assert preflight["provider_readiness"]["provider_profile"] == "codex-env"
+    assert preflight["provider_readiness"]["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
+    assert preflight["runtime_readiness"]["required_runtime"] == "docker-backed coding-agent CLI"
+    assert preflight["blocker"] == "repo_native_live_eval_execution_not_integrated"
     assert "live_agent_eval_runtime_not_implemented" in result["limitations"]
 
 
@@ -292,6 +299,43 @@ def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path)
     assert open_result["failure_class"] == "agent_no_completion_claim"
     assert open_result["grader_outputs"]["open_ended"]["completion_claim_present"] is False
     assert open_result["grader_outputs"]["open_ended"]["artifact_readiness"] == "missing"
+
+
+def test_failed_eval_result_promotes_to_regression_sample_and_suite(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "regression_cleanup_missing_report.json"
+    suite_output = tmp_path / "suites" / "smoke_regression_with_regression.json"
+
+    promotion = promote_regression_sample_from_eval_result(
+        run.results_path,
+        regression_sample_id="regression.cleanup_missing_report",
+        sample_output_path=sample_output,
+        suite_output_path=suite_output,
+        review_label="eval-regression:accepted",
+        version="2026-06-15",
+    )
+
+    assert promotion["schema"] == "roboclaws_eval_regression_promotion_v1"
+    assert promotion["source"]["failure_class"] == "artifact_missing"
+    sample = json.loads(sample_output.read_text())
+    assert sample["sample_id"] == "regression.cleanup_missing_report"
+    assert sample["trial_count"] == 1
+    assert sample["private_goal_reference"]["private_truth_scope"] == "grader_only"
+    regression = sample["private_goal_reference"]["regression_promotion"]
+    assert regression["review_label"] == "eval-regression:accepted"
+    assert regression["source_failure_class"] == "artifact_missing"
+    assert regression["agent_input_policy"] == "do_not_expose_private_goal_reference"
+    assert "run_result" in regression["source_artifacts"]
+    suite = json.loads(suite_output.read_text())
+    assert "regression.cleanup_missing_report" in suite["sample_ids"]
+    assert str(sample_output) in suite["sample_refs"]
+    assert suite["metadata"]["regression_sample_count"] == 1
+    assert suite["metadata"]["regression_promotions"][0]["private_truth_scope"] == "grader_only"
 
 
 def _passing_product_runner(**kwargs: Any) -> dict[str, Any]:

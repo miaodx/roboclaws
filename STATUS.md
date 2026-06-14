@@ -19,7 +19,10 @@ through `just agent::eval suite=smoke_regression budget=smoke` and
 suites write `eval_results.json` plus `eval_report.html` linked to product run
 artifacts. The `map_build_consumer` suite covers map-build Runtime Metric Map
 actionability, cleanup consumption of `runtime_map_prior`, and open-ended
-completion-claim versus artifact-readiness grading.
+completion-claim versus artifact-readiness grading. Failed, blocked, or
+inconclusive eval results can now be promoted into regression samples with
+`just agent::eval promote-regression ...` while keeping private scorer truth
+inside grader-only sample metadata.
 
 The household-world launch contract remains the active product shape:
 `surface=household-world` defaults to the no-preset open household task

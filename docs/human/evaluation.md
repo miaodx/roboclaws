@@ -56,11 +56,34 @@ lane, and missing live-provider fields explicitly.
 `pass^k` aggregate metrics. Live-agent eval identity can be requested with
 `agent_engine=... provider_profile=...`; until live eval runtime integration
 lands, those trials are recorded as blocked with provider/runtime failure
-classes instead of being silently downgraded to direct-runner proof.
+classes instead of being silently downgraded to direct-runner proof. Blocked
+live-agent packets include a `roboclaws_live_eval_preflight_v1` runner section
+with required provider env keys, missing env keys, route status, and local
+runtime prerequisites.
+
+Failed, blocked, or inconclusive eval results can be promoted into a durable
+regression sample with:
+
+```bash
+just agent::eval promote-regression \
+  eval_results=output/evals/<suite>/<stamp>/eval_results.json \
+  source_sample_id=<sample-id> \
+  regression_sample_id=regression.<name>
+```
+
+By default this writes a sample under `evals/household_world/samples/regressions/`
+and updates the source suite manifest. Use `sample_output_path=...` and
+`suite_output_path=...` for dry runs or review-local promotion artifacts. Human
+review labels are `eval-regression:accepted`,
+`eval-regression:needs-human-review`, and `eval-regression:do-not-promote`; the
+last label is a stop label and will not write a sample.
 
 Keep private scorer truth private. Generated mess sets, acceptable destinations,
 hidden target lists, and private manifests may feed graders and reports, but
 they must not appear in agent-facing MCP inputs or capability profile metadata.
 Cleanup evals should classify a live `fixture_hints` MCP call as a trajectory
 violation while allowing historical artifact fields with the same name to remain
-readable for reports and map-bundle compatibility.
+readable for reports and map-bundle compatibility. Regression promotion records
+source result links and human labels inside `private_goal_reference` with
+`private_truth_scope=grader_only`; that reference is grader input, not agent
+input.
