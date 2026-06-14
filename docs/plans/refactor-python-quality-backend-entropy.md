@@ -299,13 +299,11 @@ Rejected alternatives:
     into modules that keep Isaac imports inside the worker process.
   - Treat this as a post-facade backend-internal cleanup; do not change normal
     Roboclaws process imports or require real Isaac Lab for default verification.
-  - Status after 2026-06-14 loop: the main robot-view camera capture pipeline
-    is split into `scripts/isaac_lab_cleanup/isaac_camera_capture.py`, and the
-    standalone scene-camera probe capture is split into
-    `scripts/isaac_lab_cleanup/isaac_scene_camera_capture.py`; remaining worker
-    rows cover semantic-pose robot-view rerender, capture-quality overrides,
-    USD semantic labels, support-surface helpers, parse_args, and command
-    dispatch.
+  - Status after 2026-06-14 loop: the main robot-view camera capture pipeline,
+    standalone scene-camera probe capture, worker CLI/command dispatch,
+    capture-quality overrides, USD xform authoring, and USD semantic-label
+    helpers are split into focused modules. Remaining worker rows cover
+    support-surface helpers and semantic-pose robot-view rerender.
 
 - [ ] **R1: Continue reduce-entropy discovery after each completed group.**
   - Run the bounded high-noise summary and the quality-debt summary.
@@ -320,11 +318,11 @@ Discovery round: 2026-06-14 post-I1 Isaac camera-capture splits.
 
 Quality signal:
 
-- `python scripts/dev/check_python_quality_ratchet.py` passes at 149 Ruff
+- `python scripts/dev/check_python_quality_ratchet.py` passes at 148 Ruff
   complexity violations and 59 oversized modules.
 - `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`
   shows the largest implementation hotspots are
-  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7966 lines, 4
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7792 lines, 3
   complexity rows), `roboclaws/household/report.py` (7889 lines, 3 rows),
   `roboclaws/household/scene_camera_comparison.py` (6796 lines, 8 rows),
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` (3701 lines, 7
@@ -351,8 +349,8 @@ Entropy source: backend implementation depth and real workflow friction.
 
 Materiality: `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` remains
 the largest backend-specific module. After camera-capture extraction and the
-CLI/dispatch split, its remaining rows are separate families:
-`_usd_support_surface_union`, `_apply_scene_index_semantic_labels`, and
+CLI/dispatch, capture-quality, USD xform, and semantic-label splits, its
+remaining rows are separate families: `_usd_support_surface_union` and
 `_real_semantic_pose_robot_view_images`.
 
 Impact radius: workflow.
@@ -391,6 +389,12 @@ Progress:
   `scripts/isaac_lab_cleanup/isaac_usd_xform.py`. The worker imports
   `_set_usd_xform_translate` as the same private hook used by semantic-pose
   stage application tests. This removed the `_set_usd_xform_translate` C901 row.
+- 2026-06-14: Scene-index semantic-label application moved to
+  `scripts/isaac_lab_cleanup/isaac_semantic_labels.py`. The worker keeps
+  `_apply_scene_index_semantic_labels(...)` as a stable wrapper and still passes
+  the worker-local `_semantic_label_target_prims` hook so existing monkeypatch
+  tests stay valid. This removed the `_apply_scene_index_semantic_labels` C901
+  row.
 
 Suggested proof:
 
@@ -1299,3 +1303,19 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. The Isaac worker dropped
   from 8021 to 7966 lines and from 5 to 4 grouped complexity rows; the
   `_set_usd_xform_translate` C901 row was removed.
+- 2026-06-14: Continued I1 by extracting scene-index semantic-label
+  application into `scripts/isaac_lab_cleanup/isaac_semantic_labels.py`. The
+  worker keeps `_apply_scene_index_semantic_labels(...)` as the stable wrapper
+  and passes its private `_semantic_label_target_prims` hook into the helper,
+  preserving existing tests that monkeypatch target-prim resolution. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_semantic_labels.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+  passed; `ruff format --check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_semantic_labels.py`
+  passed; `python -m py_compile scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_semantic_labels.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+  passed with the existing Pillow deprecation warning from scene-camera image
+  saving; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 149 to 148 Ruff complexity
+  violations, with oversized modules unchanged at 59. The Isaac worker dropped
+  from 7966 to 7792 lines and from 4 to 3 grouped complexity rows; the
+  `_apply_scene_index_semantic_labels` C901 row was removed.

@@ -84,6 +84,15 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureRequest,
     capture_isaac_lab_scene_camera_views,
 )
+from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
+    apply_scene_index_semantic_labels,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
+    semantic_label_application_not_requested as _semantic_label_application_not_requested,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
+    semantic_label_target_prims as _semantic_label_target_prims,
+)
 from scripts.isaac_lab_cleanup.isaac_usd_xform import (
     set_usd_xform_translate as _set_usd_xform_translate,
 )
@@ -2361,195 +2370,12 @@ def _apply_scene_index_semantic_labels(
     sim_utils: Any,
     scene_index_diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    add_labels = getattr(sim_utils, "add_labels", None)
-    if not callable(get_current_stage) or not callable(add_labels):
-        return {
-            "status": "unavailable",
-            "applied_count": 0,
-            "failed_count": 0,
-            "missing_prim_count": 0,
-            "gprim_label_count": 0,
-            "mesh_label_count": 0,
-            "target_samples": [],
-            "reason": "Isaac semantic label utilities were unavailable.",
-        }
-    stage = get_current_stage()
-    if stage is None:
-        return {
-            "status": "unavailable",
-            "applied_count": 0,
-            "failed_count": 0,
-            "missing_prim_count": 0,
-            "gprim_label_count": 0,
-            "mesh_label_count": 0,
-            "target_samples": [],
-            "reason": "No current Isaac stage was available for semantic labels.",
-        }
-    index = _dict(scene_index_diagnostics)
-    entries = [
-        *(_dict(index.get("object_index")).values()),
-        *(_dict(index.get("receptacle_index")).values()),
-    ]
-    applied = 0
-    labeled_prim_count = 0
-    descendant_label_count = 0
-    gprim_label_count = 0
-    mesh_label_count = 0
-    missing = 0
-    failed: list[dict[str, str]] = []
-    target_samples: list[dict[str, str]] = []
-    for raw_entry in entries:
-        entry = _dict(raw_entry)
-        prim_path = str(entry.get("usd_prim_path") or "")
-        if not prim_path:
-            continue
-        prim = stage.GetPrimAtPath(prim_path)
-        if not prim or not prim.IsValid():
-            missing += 1
-            continue
-        labels = _scene_index_semantic_labels(entry, prim_path)
-        try:
-            targets = _semantic_label_target_prims(prim)
-            for target in targets:
-                for instance_name, label in labels.items():
-                    add_labels(target, labels=[label], instance_name=instance_name, overwrite=True)
-                labeled_prim_count += 1
-                if target != prim:
-                    descendant_label_count += 1
-                classification = _semantic_label_target_classification(target)
-                if classification["is_gprim"]:
-                    gprim_label_count += 1
-                if classification["type_name"] == "Mesh":
-                    mesh_label_count += 1
-                if len(target_samples) < 20:
-                    target_samples.append(
-                        {
-                            "source_prim_path": prim_path,
-                            "target_prim_path": classification["path"],
-                            "target_type": classification["type_name"],
-                            "target_kind": classification["kind"],
-                        }
-                    )
-            applied += 1
-        except Exception as exc:  # pragma: no cover - defensive around Isaac extension APIs
-            failed.append({"prim_path": prim_path, "error": str(exc)})
-    status = "applied" if applied and not failed else "partial" if applied else "unavailable"
-    return {
-        "schema": "isaac_scene_index_semantic_label_application_v1",
-        "status": status,
-        "applied_count": applied,
-        "labeled_prim_count": labeled_prim_count,
-        "descendant_label_count": descendant_label_count,
-        "gprim_label_count": gprim_label_count,
-        "mesh_label_count": mesh_label_count,
-        "failed_count": len(failed),
-        "missing_prim_count": missing,
-        "requested_prim_count": len(entries),
-        "failed": failed[:10],
-        "target_samples": target_samples,
-        "label_instances": ["class", "kind", "usd_prim_path"],
-        "reason": (
-            "Scene-index USD prims were labeled for Isaac camera segmentation."
-            if applied
-            else "No scene-index USD prims were labeled for Isaac camera segmentation."
-        ),
-    }
-
-
-def _semantic_label_target_classification(prim: Any) -> dict[str, Any]:
-    try:
-        from pxr import UsdGeom
-    except Exception:
-        UsdGeom = None
-
-    try:
-        path = str(prim.GetPath())
-    except Exception:
-        path = str(getattr(prim, "path", "") or "")
-    try:
-        type_name = str(prim.GetTypeName() or "")
-    except Exception:
-        type_name = str(getattr(prim, "type_name", "") or "")
-    is_gprim = False
-    if UsdGeom is not None:
-        try:
-            is_gprim = bool(prim.IsA(UsdGeom.Gprim))
-        except Exception:
-            is_gprim = False
-    if not is_gprim and type_name in {"Mesh", "Cube", "Sphere", "Capsule", "Cone", "Cylinder"}:
-        is_gprim = True
-    kind = "gprim" if is_gprim else "prim"
-    if type_name:
-        kind = f"{kind}:{type_name}"
-    return {
-        "path": path,
-        "type_name": type_name,
-        "kind": kind,
-        "is_gprim": is_gprim,
-    }
-
-
-def _semantic_label_target_prims(prim: Any) -> list[Any]:
-    try:
-        from pxr import Usd, UsdGeom
-    except Exception:
-        return [prim]
-
-    targets = _semantic_label_target_prims_once(prim, Usd=Usd, UsdGeom=UsdGeom)
-    if any(_prim_is_gprim(target, UsdGeom=UsdGeom) for target in targets):
-        return targets
-    try:
-        prim.Load()
-    except Exception:
-        return targets
-    return _semantic_label_target_prims_once(prim, Usd=Usd, UsdGeom=UsdGeom)
-
-
-def _semantic_label_target_prims_once(prim: Any, *, Usd: Any, UsdGeom: Any) -> list[Any]:
-    targets = [prim]
-    for descendant in Usd.PrimRange(prim):
-        if descendant == prim:
-            continue
-        if _prim_is_gprim(descendant, UsdGeom=UsdGeom):
-            targets.append(descendant)
-    return targets
-
-
-def _prim_is_gprim(prim: Any, *, UsdGeom: Any) -> bool:
-    try:
-        return bool(prim.IsA(UsdGeom.Gprim))
-    except Exception:
-        return False
-
-
-def _semantic_label_application_not_requested() -> dict[str, Any]:
-    return {
-        "schema": "isaac_scene_index_semantic_label_application_v1",
-        "status": "not_requested",
-        "applied_count": 0,
-        "labeled_prim_count": 0,
-        "descendant_label_count": 0,
-        "gprim_label_count": 0,
-        "mesh_label_count": 0,
-        "failed_count": 0,
-        "missing_prim_count": 0,
-        "requested_prim_count": 0,
-        "failed": [],
-        "target_samples": [],
-        "label_instances": [],
-        "reason": "Segmentation was not requested.",
-    }
-
-
-def _scene_index_semantic_labels(entry: dict[str, Any], prim_path: str) -> dict[str, str]:
-    category = str(entry.get("category") or entry.get("public_label") or Path(prim_path).name)
-    kind = str(entry.get("kind") or "scene_prim")
-    return {
-        "class": category,
-        "kind": kind,
-        "usd_prim_path": prim_path,
-    }
+    return apply_scene_index_semantic_labels(
+        stage_utils=stage_utils,
+        sim_utils=sim_utils,
+        scene_index_diagnostics=scene_index_diagnostics,
+        target_prim_resolver=_semantic_label_target_prims,
+    )
 
 
 def _camera_segmentation_view_diagnostics(
