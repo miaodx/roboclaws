@@ -3106,12 +3106,19 @@ Severity: P2
 
 Entropy source: camera-evidence false-confidence risk.
 
+Status: complete as of the 2026-06-14 RAW-FPV scoring split. Keep this
+section as evidence for the completed P2 slice; reopen only if fresh
+`camera-raw-fpv` scoring/report drift appears.
+
 Materiality: false confidence and real workflow friction.
 `camera-raw-fpv` remains a current public evidence lane in `ARCHITECTURE.md`
 and `just/README.md`.
 `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py::score_variant(...)`
-still carries C901 19, PLR0912 18, and PLR0915 72 while mixing schema
-failures, detection quality, duplicate accounting, and gate status decisions.
+now delegates to `scripts/molmo_cleanup/raw_fpv_perception_scoring.py`, where
+hidden-target recovery, visible-movable quality, duplicate accounting, schema
+failures, and gate-status assembly are isolated behind a focused scoring
+accumulator. The original C901 19, PLR0912 18, and PLR0915 72 rows are gone
+from the complexity summary.
 
 Impact radius: workflow.
 
@@ -3121,6 +3128,7 @@ one branch-heavy scorer that mixes evidence quality and gate decisions.
 Affected paths:
 
 - `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py`
+- `scripts/molmo_cleanup/raw_fpv_perception_scoring.py`
 - `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
 
 Owner skill: `intuitive-refactor`
@@ -3137,8 +3145,8 @@ Suggested proof:
 - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py -q`
 - `python scripts/dev/check_python_quality_ratchet.py`
 
-Execution risk: safe for scoring extraction; live camera/provider claims need
-a separate local run.
+Execution risk: safe for scoring extraction. The completed proof is static and
+unit-level; live camera/provider claims still need a separate local run.
 
 ### Current Candidate C: Agibot Context, Rehearsal, MCP Tools, And Proof Fallbacks
 
@@ -4492,3 +4500,19 @@ Stop this refactor loop when:
   `roboclaws/agents/drivers/openai_agents_live.py` no longer appears in the
   complexity-by-file summary, so the OpenAI Agents residual runtime boundary is
   complete for this loop.
+- 2026-06-14: Completed Candidate B by moving RAW-FPV perception probe scoring
+  into `scripts/molmo_cleanup/raw_fpv_perception_scoring.py`.
+  `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py::score_variant(...)`
+  is now a thin wrapper around the scoring accumulator, while hidden-target
+  recovery, visible-movable label quality, duplicate accounting, schema
+  failures, and live-like threshold assembly live in the focused module.
+  Evidence:
+  `ruff check scripts/molmo_cleanup/run_raw_fpv_perception_probe.py scripts/molmo_cleanup/raw_fpv_perception_scoring.py tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check scripts/molmo_cleanup/run_raw_fpv_perception_probe.py scripts/molmo_cleanup/raw_fpv_perception_scoring.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py -q`
+  passed with 21 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 91 to 88 Ruff complexity violations, with oversized modules unchanged
+  at 59. The RAW-FPV probe scorer no longer appears in the complexity-by-file
+  summary.

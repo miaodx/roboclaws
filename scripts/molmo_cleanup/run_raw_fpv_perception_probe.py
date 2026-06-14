@@ -31,6 +31,7 @@ from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
 )
+from scripts.molmo_cleanup.raw_fpv_perception_scoring import score_variant_metrics  # noqa: E402
 
 REPORT_SCHEMA = "raw_fpv_perception_probe_report_v1"
 PUBLIC_INPUT_SCHEMA = "raw_fpv_perception_probe_public_input_v1"
@@ -691,147 +692,19 @@ def score_variant(
     predictions: dict[str, dict[str, Any]],
     threshold: int,
 ) -> dict[str, Any]:
-    labels_by_frame: dict[str, list[ProbeLabel]] = {}
-    for label in labels:
-        labels_by_frame.setdefault(label.frame_id, []).append(label)
-
-    response_schema = (
-        VISUAL_LABELER_RESPONSE_SCHEMA
-        if variant_id == "raw_fpv_visual_labeler"
-        else RESPONSE_SCHEMA
+    return score_variant_metrics(
+        variant_id=variant_id,
+        frames=frames,
+        labels=labels,
+        predictions=predictions,
+        threshold=threshold,
+        response_schema=RESPONSE_SCHEMA,
+        visual_labeler_response_schema=VISUAL_LABELER_RESPONSE_SCHEMA,
+        failure_classes=FAILURE_CLASSES,
+        normalize_response=normalize_response,
+        score_candidate=score_candidate,
+        ratio=_ratio,
     )
-
-    evaluated_frames = []
-    strict_unique: set[str] = set()
-    coarse_unique: set[str] = set()
-    diagnostic_unique: set[str] = set()
-    visible_truth_objects = {label.object_id for label in labels if not label.hidden_target}
-    visible_matched_objects: set[str] = set()
-    visible_predicted_object_hits = 0
-    visible_duplicate_count = 0
-    category_tier_counts = {tier: 0 for tier in ("exact", "semantic", "coarse_family", "mismatch")}
-    coarse_locality_match_count = 0
-    surface_hint_only_count = 0
-    duplicate_count = 0
-    schema_failure_count = 0
-    failure_counts = {key: 0 for key in FAILURE_CLASSES}
-    candidate_count = 0
-
-    for frame in frames:
-        response = predictions.get(frame.frame_id) or {
-            "schema": response_schema,
-            "candidates": [],
-            "labels": [],
-        }
-        normalized = normalize_response(response, frame=frame, variant_id=variant_id)
-        schema_errors = normalized["schema_errors"]
-        if schema_errors:
-            schema_failure_count += len(schema_errors)
-            failure_counts["schema_failure"] += len(schema_errors)
-        frame_labels = labels_by_frame.get(frame.frame_id, [])
-        hidden_frame_labels = [label for label in frame_labels if label.hidden_target]
-        visible_frame_labels = [label for label in frame_labels if not label.hidden_target]
-        frame_scores = []
-        surface_hint_only_count += int(normalized.get("surface_hint_only_count") or 0)
-        for index, candidate in enumerate(normalized["candidates"]):
-            candidate_count += 1
-            score = score_candidate(candidate, hidden_frame_labels)
-            score["rank"] = index + 1
-            frame_scores.append(score)
-            matched_id = str(score.get("matched_object_id") or "")
-            if score["coarse_confirmable"] and matched_id:
-                if matched_id in diagnostic_unique:
-                    duplicate_count += 1
-                diagnostic_unique.add(matched_id)
-            if index > 0:
-                continue
-            if score["strict_bbox_confirmable"] and matched_id:
-                if matched_id in strict_unique:
-                    duplicate_count += 1
-                strict_unique.add(matched_id)
-            if score["coarse_confirmable"] and matched_id:
-                if matched_id in coarse_unique:
-                    duplicate_count += 1
-                coarse_unique.add(matched_id)
-            if not score["strict_bbox_confirmable"] and not score["coarse_confirmable"]:
-                reason = str(score.get("failure_class") or "")
-                if reason in failure_counts:
-                    failure_counts[reason] += 1
-            visible_score = score_candidate(
-                candidate,
-                visible_frame_labels,
-            )
-            visible_matched_id = str(visible_score.get("matched_object_id") or "")
-            if visible_score["coarse_confirmable"] and visible_matched_id:
-                visible_predicted_object_hits += 1
-                if visible_matched_id in visible_matched_objects:
-                    visible_duplicate_count += 1
-                visible_matched_objects.add(visible_matched_id)
-            tier = str(visible_score.get("category_match_tier") or "mismatch")
-            if tier in category_tier_counts:
-                category_tier_counts[tier] += 1
-            if visible_score.get("coarse_region_match"):
-                coarse_locality_match_count += 1
-        if not hidden_frame_labels:
-            failure_counts["missing_private_label"] += 1
-        evaluated_frames.append(
-            {
-                "frame_id": frame.frame_id,
-                "source_observation_id": frame.source_observation_id,
-                "candidate_count": len(normalized["candidates"]),
-                "schema_errors": schema_errors,
-                "label_count": len(frame_labels),
-                "hidden_target_label_count": len(hidden_frame_labels),
-                "visible_movable_label_count": len(visible_frame_labels),
-                "scores": frame_scores,
-            }
-        )
-
-    strict_count = len(strict_unique)
-    coarse_count = len(coarse_unique)
-    hidden_target_recovery = {
-        "variant_id": variant_id,
-        "truth_object_count": len({label.object_id for label in labels if label.hidden_target}),
-        "candidate_count": candidate_count,
-        "schema_failure_count": schema_failure_count,
-        "failure_class_counts": failure_counts,
-        "strict_bbox_unique_confirmable_count": strict_count,
-        "coarse_unique_confirmable_count": coarse_count,
-        "unique_confirmable_count": coarse_count,
-        "duplicate_count": duplicate_count,
-        "diagnostic_candidate_unique_confirmable_count": len(diagnostic_unique),
-        "live_like_top_candidate": {
-            "threshold": threshold,
-            "strict_bbox_unique_confirmable_count": strict_count,
-            "coarse_unique_confirmable_count": coarse_count,
-            "strict_bbox_threshold_met": strict_count >= threshold,
-            "coarse_threshold_met": coarse_count >= threshold,
-        },
-    }
-    visible_quality_status = "scoreable" if visible_truth_objects else "truth_sparse"
-    visible_movable_label_quality = {
-        "status": visible_quality_status,
-        "truth_object_count": len(visible_truth_objects),
-        "truth_label_count": sum(1 for label in labels if not label.hidden_target),
-        "predicted_object_hit_count": visible_predicted_object_hits,
-        "predicted_object_label_count": candidate_count,
-        "unique_matched_object_count": len(visible_matched_objects),
-        "recall": _ratio(len(visible_matched_objects), len(visible_truth_objects)),
-        "precision": _ratio(visible_predicted_object_hits, candidate_count),
-        "category_match_tiers": category_tier_counts,
-        "coarse_locality_match_count": coarse_locality_match_count,
-        "duplicate_rate": _ratio(visible_duplicate_count, visible_predicted_object_hits),
-        "schema_failure_rate": _ratio(schema_failure_count, max(1, candidate_count)),
-        "surface_hint_only_count": surface_hint_only_count,
-        "fixtures_surfaces_scored_as_hints_only": True,
-    }
-    return {
-        "variant_id": variant_id,
-        **hidden_target_recovery,
-        "visible_movable_label_quality": visible_movable_label_quality,
-        "hidden_target_recovery": hidden_target_recovery,
-        "evaluated_frames": evaluated_frames,
-    }
 
 
 def normalize_response(

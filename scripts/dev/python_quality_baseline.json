@@ -143,7 +143,7 @@
         "path": "scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py"
       },
       {
-        "lines": 1969,
+        "lines": 1842,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py"
       },
@@ -797,36 +797,6 @@
         "row": 2033,
         "symbol": "_install_grasp_collision_diagnostics",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py|C901|score_variant",
-        "limit": 10,
-        "message": "`score_variant` is too complex (19 > 10)",
-        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py",
-        "row": 686,
-        "symbol": "score_variant",
-        "value": 19
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py|PLR0912|score_variant",
-        "limit": 12,
-        "message": "Too many branches (18 > 12)",
-        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py",
-        "row": 686,
-        "symbol": "score_variant",
-        "value": 18
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py|PLR0915|score_variant",
-        "limit": 50,
-        "message": "Too many statements (72 > 50)",
-        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py",
-        "row": 686,
-        "symbol": "score_variant",
-        "value": 72
       },
       {
         "code": "PLR0915",
