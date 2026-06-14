@@ -717,3 +717,20 @@ Stop this refactor loop when:
   grouped complexity rows for
   `check_molmo_planner_proof_bundle_runner_result.py` were removed from the
   baseline.
+- 2026-06-14: Continued the live cleanup checker split by extracting waypoint
+  honesty checks into
+  `scripts/molmo_cleanup/realworld_waypoint_honesty_checker.py`. The main
+  checker keeps `_assert_waypoint_honesty(...)` and
+  `_post_place_observe_count_allowing_public_state_queries(...)` as private
+  compatibility hooks for existing tests, while the helper owns public
+  waypoint-source validation, scan-only worklist allowance, minimal/static
+  cleanup-loop trace checks, and post-place observation accounting. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/molmo_cleanup/realworld_waypoint_honesty_checker.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 178 to 175 Ruff complexity
+  violations, with oversized modules unchanged at 59. The live cleanup checker
+  grouped complexity count dropped from 9 to 6 violations, and the
+  `_assert_waypoint_honesty` C901 / PLR0912 / PLR0915 rows were removed from
+  the main checker baseline.

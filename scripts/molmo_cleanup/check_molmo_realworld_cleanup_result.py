@@ -43,7 +43,6 @@ from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_NAME,
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_POLICY_TRACE_SCHEMA,
-    CLEANUP_WORKLIST_SCHEMA,
     MODEL_DECLARED_OBSERVATIONS_SCHEMA,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REAL_ROBOT_READINESS_SCHEMA,
@@ -78,6 +77,10 @@ from scripts.molmo_cleanup.realworld_agent_view_checker import (
 )
 from scripts.molmo_cleanup.realworld_agent_view_checker import (
     assert_runtime_metric_map as _assert_runtime_metric_map,
+)
+from scripts.molmo_cleanup.realworld_waypoint_honesty_checker import (
+    assert_waypoint_honesty,
+    post_place_observe_count_allowing_public_state_queries,
 )
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
@@ -2021,102 +2024,12 @@ def _assert_planner_cleanup_bridge(
 
 
 def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
-    agent_view = data.get("agent_view") or {}
-    metric_map = agent_view.get("metric_map") or {}
-    assert metric_map.get("schema") == REAL_ROBOT_MAP_BUNDLE_SCHEMA, metric_map
-    assert metric_map.get("public_contract_note"), metric_map
-    forbidden_words = ("mess", "target", "acceptable")
-    waypoints = metric_map.get("inspection_waypoints") or []
-    assert waypoints, metric_map
-    for waypoint in waypoints:
-        allowed_sources = {
-            "static_map_coverage",
-            "fixture_coverage",
-            "static_map_fixture_coverage",
-            "agibot_robot_map_9_static_rehearsal",
-        }
-        if metric_map.get("mode") == "minimal":
-            allowed_sources.add("generated_exploration_candidate")
-            allowed_sources.add("generated_target_inspection_candidate")
-        assert waypoint.get("waypoint_source") in allowed_sources, waypoint
-        assert waypoint.get("purpose"), waypoint
-        if waypoint.get("waypoint_source") == "generated_target_inspection_candidate":
-            assert waypoint.get("purpose") == "target_inspection", waypoint
-            assert waypoint.get("verified_navigation") is True, waypoint
-            assert waypoint.get("source_observation_id"), waypoint
-            assert waypoint.get("source_target_candidate_id"), waypoint
-            provenance = waypoint.get("candidate_provenance") or {}
-            assert provenance.get("source") == "server_verified_standoff_from_visible_evidence", (
-                waypoint
-            )
-        else:
-            label_text = (
-                f"{waypoint.get('waypoint_source', '')} {waypoint.get('purpose', '')}".lower()
-            )
-            assert not any(word in label_text for word in forbidden_words), waypoint
-    worklist = agent_view.get("cleanup_worklist") or {}
-    assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
-    trace = data.get("cleanup_policy_trace") or {}
-    open_ended_scan_only = (
-        _is_open_ended_intent(data) and int(trace.get("cleanup_action_count") or 0) == 0
+    assert_waypoint_honesty(
+        data,
+        report_text,
+        open_ended_intent=_is_open_ended_intent(data),
+        semantic_sweep_or_map_build=_is_semantic_sweep_or_map_build(data),
     )
-    semantic_sweep_scan_only = (
-        _is_semantic_sweep_or_map_build(data) and int(trace.get("cleanup_action_count") or 0) == 0
-    )
-    if open_ended_scan_only or semantic_sweep_scan_only:
-        assert isinstance(worklist.get("objects") or [], list), worklist
-    else:
-        assert worklist.get("objects"), worklist
-    assert worklist.get("waypoints"), worklist
-    assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
-    if metric_map.get("mode") == "minimal":
-        assert trace.get("waypoint_source") == "generated_exploration_candidate", trace
-        if _is_semantic_sweep_or_map_build(data):
-            assert trace.get("first_cleanup_before_full_survey") is False, trace
-            assert trace.get("loop_style") == "scan_only", trace
-            assert trace.get("cleanup_action_count") == 0, trace
-        elif _is_open_ended_intent(data) and int(trace.get("cleanup_action_count") or 0) == 0:
-            assert trace.get("loop_style") == "scan_only", trace
-        else:
-            assert trace.get("loop_style") in {
-                "survey_first_cleanup_loop",
-                "interleaved_cleanup_loop",
-            }, trace
-            if trace.get("loop_style") == "survey_first_cleanup_loop":
-                assert trace.get("first_cleanup_before_full_survey") is False, trace
-            else:
-                assert trace.get("first_cleanup_before_full_survey") is True, trace
-            assert int(trace.get("cleanup_action_count") or 0) > 0, trace
-            placed_object_count = int(trace.get("placed_object_count") or 0)
-            post_place_observe_count = int(trace.get("post_place_observe_count") or 0)
-            observed_waypoint_count = int(trace.get("observed_waypoint_count") or 0)
-            total_waypoints = int(trace.get("total_waypoints") or 0)
-            if trace.get("post_place_observe_complete") is not True:
-                post_place_observe_count = max(
-                    post_place_observe_count,
-                    _post_place_observe_count_allowing_public_state_queries(trace),
-                )
-            assert placed_object_count > 0, trace
-            assert total_waypoints > 0, trace
-            assert observed_waypoint_count >= total_waypoints, trace
-            assert post_place_observe_count >= placed_object_count, trace
-        assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
-        assert "generated_exploration_candidate" in report_text, report_text[:500]
-        return
-    assert trace.get("waypoint_source") == "static_map_fixture_coverage", trace
-    assert trace.get("loop_style") == "interleaved_cleanup_loop", trace
-    assert _trace_started_cleanup_after_first_actionable_observation(trace), trace
-    placed_object_count = int(trace.get("placed_object_count") or 0)
-    post_place_observe_count = int(trace.get("post_place_observe_count") or 0)
-    if trace.get("post_place_observe_complete") is not True:
-        post_place_observe_count = max(
-            post_place_observe_count,
-            _post_place_observe_count_allowing_public_state_queries(trace),
-        )
-    assert post_place_observe_count >= placed_object_count, trace
-    assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
-    assert "static_map_fixture_coverage" in report_text, report_text[:500]
-    assert "post_place_observe" in report_text, report_text[:500]
 
 
 def _is_open_ended_intent(data: dict[str, Any]) -> bool:
@@ -2125,36 +2038,8 @@ def _is_open_ended_intent(data: dict[str, Any]) -> bool:
     return intent == "open-ended"
 
 
-def _trace_started_cleanup_after_first_actionable_observation(trace: dict[str, Any]) -> bool:
-    first_cleanup = trace.get("first_cleanup_index")
-    first_actionable = trace.get("first_actionable_observation_index")
-    if first_cleanup is not None or first_actionable is not None:
-        try:
-            return int(first_cleanup) == int(first_actionable) + 1
-        except (TypeError, ValueError):
-            return False
-    return trace.get("first_cleanup_before_full_survey") is True
-
-
 def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any]) -> int:
-    pending = 0
-    count = 0
-    for event in trace.get("events") or []:
-        if not isinstance(event, dict):
-            continue
-        tool = str(event.get("tool") or "")
-        role = str(event.get("role") or "")
-        if tool in {"place", "place_inside"} and role == "cleanup_action":
-            pending += 1
-            continue
-        if tool == "observe" and pending > 0:
-            count += 1
-            pending -= 1
-            continue
-        if pending > 0 and role in {"coverage_scan_navigation", "cleanup_action"}:
-            if tool != "close_receptacle":
-                pending = 0
-    return count
+    return post_place_observe_count_allowing_public_state_queries(trace)
 
 
 def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:
