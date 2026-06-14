@@ -41,7 +41,7 @@ default:
 # Private household-world cleanup implementation runner. Public callers should
 # enter through `run::surface`; maintainers should enter through `agent::run`.
 [private]
-household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" skill_name="" goal_contract_json="" goal_contract_path="":
+household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -74,6 +74,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     skill_name="{{skill_name}}"
     goal_contract_json="{{goal_contract_json}}"
     goal_contract_path="{{goal_contract_path}}"
+    run_dir_override="{{run_dir_override}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so maintainer callers can use key=value style.
@@ -119,6 +120,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     goal_contract_json="${goal_contract_json#goal-contract-json=}"
     goal_contract_path="${goal_contract_path#goal_contract_path=}"
     goal_contract_path="${goal_contract_path#goal-contract-path=}"
+    run_dir_override="${run_dir_override#run_dir=}"
+    run_dir_override="${run_dir_override#run-dir=}"
+    run_dir_override="${run_dir_override:-${ROBOCLAWS_MOLMO_RUN_DIR_OVERRIDE:-}}"
     goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"
     goal_contract_path="${goal_contract_path:-${ROBOCLAWS_GOAL_CONTRACT_PATH:-}}"
     python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-.venv/bin/python}"
@@ -133,8 +137,11 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
         "$min_generated_mess_count_override" "$generated_mess_object_ids"
         "$task_name" "$operator_messages_path" "$task_intent_mode"
       )
-      if [[ -n "$skill_name" || -n "$goal_contract_json" || -n "$goal_contract_path" ]]; then
+      if [[ -n "$skill_name" || -n "$goal_contract_json" || -n "$goal_contract_path" || -n "$run_dir_override" ]]; then
         trace_args+=("$skill_name" "$goal_contract_json" "$goal_contract_path")
+      fi
+      if [[ -n "$run_dir_override" ]]; then
+        trace_args+=("$run_dir_override")
       fi
       printf 'just\tmolmo::household-cleanup-impl'
       for arg in "${trace_args[@]}"; do
@@ -525,6 +532,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
         fi
         seed="$seeds"
         run_dir="${run_root}/seed-${seed}"
+        if [[ -n "$run_dir_override" ]]; then
+          run_dir="$run_dir_override"
+        fi
         mkdir -p "$run_dir"
         policy="${driver%-live}_agent"
         if [[ "$driver" == "openai-agents-live" ]]; then

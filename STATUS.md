@@ -8,7 +8,7 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws is executing the eval-driven architecture plan. Slice 0 through Slice
-5a are verified: eval suites are visible as a first-class architecture
+6 are verified: eval suites are visible as a first-class architecture
 layer, stale launch-axis documentation is cleaned, current cleanup/map-build
 MCP contracts no longer advertise `fixture_hints` as a callable active tool,
 and repo-native eval suite/sample/trial/result schema packets plus
@@ -22,9 +22,11 @@ actionability, cleanup consumption of `runtime_map_prior`, and open-ended
 completion-claim versus artifact-readiness grading. Live eval execution is
 opt-in with `live_execution=run`; default non-direct eval requests still record
 blocked identity/preflight packets so provider-backed work is not launched by
-accident. Failed, blocked, or inconclusive eval results can now be promoted into
-regression samples with `just agent::eval promote-regression ...` while keeping
-private scorer truth inside grader-only sample metadata.
+accident. Codex CLI live eval runs pass a fixed product `run_dir` through the
+public launch route and poll detached live artifacts before grading. Failed,
+blocked, or inconclusive eval results can now be promoted into regression
+samples with `just agent::eval promote-regression ...` while keeping private
+scorer truth inside grader-only sample metadata.
 
 The household-world launch contract remains the active product shape:
 `surface=household-world` defaults to the no-preset open household task
@@ -48,20 +50,22 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Continue `docs/plans/2026-06-14-eval-driven-architecture.md` by deciding
-whether the current opt-in live eval bridge is enough for Slice 5, or whether
-Codex CLI / Claude Code detached-run completion polling should also be added.
+Finish the eval-driven architecture plan with a completion audit: rerun the
+final focused eval/doc gates, decide whether any live-provider validation must
+remain a local environment-dependent follow-up, then mark the plan complete or
+record the remaining blocker explicitly.
 
 ## Current Blocker
 
-No current implementation blocker for deterministic eval work. Opt-in
-OpenAI Agents SDK live eval execution reaches the live product route on this
-host, but the latest proof was blocked by provider 502 responses and correctly
-classified as `model_or_provider_unavailable`. Default non-direct eval requests
-remain blocked identity/preflight packets instead of being downgraded. The only
-known validation blocker is OpenClaw Gateway: this host is on the work network,
-so Gateway proof must run separately off the work network before OpenClaw can be
-called healthy.
+No current implementation blocker for deterministic eval work. Opt-in live eval
+execution reaches the live product route on this host, and Codex CLI detached
+live routes now have eval-side artifact polling. The latest real provider proof
+was blocked by provider 502 responses and correctly classified as
+`model_or_provider_unavailable`. Default non-direct eval requests remain blocked
+identity/preflight packets instead of being downgraded. Remaining validation
+blockers are external: a successful live-agent `pass^k` proof needs a healthy
+provider/runtime route, and OpenClaw Gateway proof must run separately off the
+work network before OpenClaw can be called healthy.
 
 ## Human Review Surface
 

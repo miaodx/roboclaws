@@ -202,6 +202,87 @@ def test_eval_runner_classifies_live_provider_failures_as_blocked(tmp_path: Path
     assert result["grader_outputs"]["runner"]["status"] == "blocked"
 
 
+def test_live_surface_product_discovers_timestamped_run_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    command_log: list[list[str]] = []
+
+    def fake_run(
+        command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        command_log.append(command)
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        timestamped_run_dir = output_dir / "0615_0305" / "seed-7"
+        _write_product_artifacts(timestamped_run_dir, completion_status="success")
+        (timestamped_run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(timestamped_run_dir, completion_status="success")) + "\n"
+        )
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    result = live_runtime.run_live_surface_product(**_live_surface_kwargs(tmp_path / "trial-0000"))
+
+    assert command_log
+    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0305/seed-7")
+    assert (tmp_path / "trial-0000" / "live_eval_command.json").exists()
+
+
+def test_live_surface_product_waits_for_detached_codex_status(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    sleeps: list[float] = []
+    status_reads = 0
+
+    def fake_run(
+        command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0310" / "seed-7"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "live_status.json").write_text('{"phase": "queued"}\n')
+        return _completed_process(returncode=0)
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        run_dir = tmp_path / "trial-0000" / "surface-run" / "0615_0310" / "seed-7"
+        nonlocal status_reads
+        status_reads += 1
+        if status_reads == 2:
+            _write_product_artifacts(run_dir, completion_status="success")
+            (run_dir / "run_result.json").write_text(
+                json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+            )
+            (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
+
+    clock = {"now": 0.0}
+
+    def fake_monotonic() -> float:
+        clock["now"] += 0.25
+        return clock["now"]
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
+    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
+
+    result = live_runtime.run_live_surface_product(
+        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=5.0)
+    )
+
+    assert sleeps
+    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0310/seed-7")
+
+
 def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
     seen_kwargs: list[dict[str, Any]] = []
 
@@ -508,6 +589,34 @@ def _missing_artifact_product_runner(**kwargs: Any) -> dict[str, Any]:
 
 def _blocked_product_runner(**kwargs: Any) -> dict[str, Any]:
     raise ModuleNotFoundError("No module named 'molmospaces'")
+
+
+def _live_surface_kwargs(run_dir: Path, *, live_timeout_s: float | None = None) -> dict[str, Any]:
+    return {
+        "output_dir": run_dir,
+        "seed": 7,
+        "task_prompt": "帮我收拾这个房间",
+        "backend": "api_semantic_synthetic",
+        "cleanup_profile": "smoke",
+        "scene_source": "procthor-10k-val",
+        "scene_index": 0,
+        "agent_engine": "codex-cli",
+        "provider_profile": "codex-env",
+        "model": None,
+        "live_timeout_s": live_timeout_s,
+    }
+
+
+def _completed_process(*, returncode: int, stdout: str = "", stderr: str = "") -> Any:
+    return type(
+        "Completed",
+        (),
+        {
+            "returncode": returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+        },
+    )()
 
 
 def _write_product_artifacts(

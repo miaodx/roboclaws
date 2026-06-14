@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -27,6 +28,7 @@ from roboclaws.launch.intents import TASK_INTENT_SPECS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ProductRun = Callable[..., dict[str, Any]]
+DEFAULT_DETACHED_LIVE_TIMEOUT_S = 3600.0
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,14 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
     sample_run_dir = live_surface_run_dir(kwargs, output_dir=sample_run_root)
     command = live_surface_command(kwargs, output_dir=sample_run_root)
     env = live_surface_env(kwargs, base_env=os.environ)
+    started = time.monotonic()
+    record: dict[str, Any] = {
+        "command": command,
+        "returncode": None,
+        "stdout": "",
+        "stderr": "",
+        "effective_run_dir": str(sample_run_dir),
+    }
     try:
         completed = subprocess.run(
             command,
@@ -128,27 +138,47 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             timeout=kwargs.get("live_timeout_s"),
         )
     except subprocess.TimeoutExpired as exc:
+        record.update(
+            {
+                "returncode": "timeout",
+                "stdout": exc.stdout or "",
+                "stderr": exc.stderr or "",
+                "timeout_s": kwargs.get("live_timeout_s"),
+            }
+        )
+        _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
         raise TimeoutError(
             f"live eval trial timed out after {kwargs.get('live_timeout_s')}s"
         ) from exc
-    (run_dir / "live_eval_command.json").write_text(
-        json.dumps(
-            {
-                "command": command,
-                "returncode": completed.returncode,
-                "stdout": completed.stdout,
-                "stderr": completed.stderr,
-                "effective_run_dir": str(sample_run_dir),
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
+
+    sample_run_dir = discover_live_surface_run_dir(
+        kwargs,
+        output_dir=sample_run_root,
+        fallback_run_dir=sample_run_dir,
+        stdout=completed.stdout,
+    )
+    record.update(
+        {
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "effective_run_dir": str(sample_run_dir),
+            "live_status": _load_json(sample_run_dir / "live_status.json"),
+        }
     )
     if completed.returncode != 0:
+        _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
         message = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(f"live surface run failed with exit {completed.returncode}: {message}")
+    sample_run_dir = wait_for_live_surface_completion(
+        kwargs,
+        output_dir=sample_run_root,
+        effective_run_dir=sample_run_dir,
+        elapsed_s=time.monotonic() - started,
+    )
+    record["effective_run_dir"] = str(sample_run_dir)
+    record["live_status"] = _load_json(sample_run_dir / "live_status.json")
+    _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
     run_result_path = sample_run_dir / "run_result.json"
     run_result = _load_json(run_result_path)
     if not run_result:
@@ -176,6 +206,7 @@ def live_surface_command(kwargs: dict[str, Any], *, output_dir: Path) -> list[st
         f"evidence_lane={evidence_lane}",
         f"seed={kwargs['seed']}",
         f"output_dir={output_dir}",
+        f"run_dir={live_surface_run_dir(kwargs, output_dir=output_dir)}",
         f"scene_source={kwargs['scene_source']}",
         f"scene_index={kwargs['scene_index']}",
     ]
@@ -203,9 +234,84 @@ def live_surface_command(kwargs: dict[str, Any], *, output_dir: Path) -> list[st
 
 
 def live_surface_run_dir(kwargs: dict[str, Any], *, output_dir: Path) -> Path:
-    """Return the current artifact directory shape for public surface runs."""
+    """Return the preferred artifact directory for one public surface run."""
 
     return output_dir / f"seed-{int(kwargs['seed'])}"
+
+
+def discover_live_surface_run_dir(
+    kwargs: dict[str, Any],
+    *,
+    output_dir: Path,
+    fallback_run_dir: Path,
+    stdout: str = "",
+) -> Path:
+    """Return the actual artifact directory created by the public live route."""
+
+    seed_leaf = f"seed-{int(kwargs['seed'])}"
+    candidates = [fallback_run_dir]
+    stdout_dir = _live_surface_run_dir_from_stdout(stdout)
+    if stdout_dir is not None:
+        candidates.append(stdout_dir)
+    candidates.extend(
+        sorted(
+            (candidate for candidate in output_dir.glob(f"*/{seed_leaf}") if candidate.is_dir()),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+    )
+    candidates.extend(
+        sorted(
+            (candidate for candidate in output_dir.glob(seed_leaf) if candidate.is_dir()),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+    )
+    for candidate in candidates:
+        if _live_surface_run_dir_has_evidence(candidate):
+            return candidate
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return fallback_run_dir
+
+
+def wait_for_live_surface_completion(
+    kwargs: dict[str, Any],
+    *,
+    output_dir: Path,
+    effective_run_dir: Path,
+    elapsed_s: float = 0.0,
+    poll_s: float = 1.0,
+) -> Path:
+    """Wait for a detached live product route to finish when the route returns early."""
+
+    if (effective_run_dir / "run_result.json").is_file():
+        return effective_run_dir
+    status = _load_json(effective_run_dir / "live_status.json")
+    _raise_for_terminal_live_status(effective_run_dir, status)
+    if not _live_surface_route_can_detach(kwargs):
+        return effective_run_dir
+
+    timeout_s = kwargs.get("live_timeout_s")
+    if timeout_s is None:
+        timeout_s = DEFAULT_DETACHED_LIVE_TIMEOUT_S
+    remaining_s = max(float(timeout_s) - max(elapsed_s, 0.0), 0.0)
+    deadline = time.monotonic() + remaining_s
+    while time.monotonic() <= deadline:
+        effective_run_dir = discover_live_surface_run_dir(
+            kwargs,
+            output_dir=output_dir,
+            fallback_run_dir=effective_run_dir,
+        )
+        if (effective_run_dir / "run_result.json").is_file():
+            return effective_run_dir
+        status = _load_json(effective_run_dir / "live_status.json")
+        _raise_for_terminal_live_status(effective_run_dir, status)
+        time.sleep(max(poll_s, 0.05))
+    raise TimeoutError(
+        f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
+    )
 
 
 def live_product_run_kwargs(
@@ -385,3 +491,44 @@ def _load_json(path: Path) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _live_surface_run_dir_has_evidence(path: Path) -> bool:
+    return (
+        (path / "run_result.json").is_file()
+        or (path / "live_status.json").is_file()
+        or (path / "trace.jsonl").is_file()
+    )
+
+
+def _live_surface_run_dir_from_stdout(stdout: str) -> Path | None:
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("Artifacts"):
+            continue
+        _, _, value = line.partition(":")
+        path = value.strip()
+        if path:
+            return Path(path)
+    return None
+
+
+def _live_surface_route_can_detach(kwargs: dict[str, Any]) -> bool:
+    return str(kwargs.get("agent_engine") or "") == "codex-cli"
+
+
+def _raise_for_terminal_live_status(run_dir: Path, status: dict[str, Any]) -> None:
+    if not status:
+        return
+    exit_status = status.get("exit_status")
+    if exit_status in {None, 0}:
+        return
+    reason = str(status.get("reason") or status.get("provider_reason") or "").strip()
+    detail = f": {reason}" if reason else ""
+    raise RuntimeError(
+        f"detached live surface run failed with exit {exit_status} at {run_dir}{detail}"
+    )

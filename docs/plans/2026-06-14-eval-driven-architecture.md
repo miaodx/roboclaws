@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-driven-architecture
-status: Active - Slice 0/1/2/3/4/5a/6 verified; Slice 5 live runtime remains
+status: Active - Slice 0/1/2/3/4/5/6 verified; final completion audit remains
 created: 2026-06-14
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -694,9 +694,11 @@ Slice 4 verification evidence:
 
 ### Slice 5: Live-Agent Repetition And `pass^k`
 
-Status: partially implemented and verified 2026-06-15; opt-in OpenAI Agents
-SDK live execution reaches the product route, while Codex CLI / Claude Code
-detached-run completion polling remains a follow-up integration gap.
+Status: implemented and verified 2026-06-15. Opt-in live execution reaches the
+public product route, Codex CLI detached runs are polled for completion, and
+blocked live/provider requirements stay classified separately from agent
+behavior failures. A successful real provider-backed live trial is still an
+environment-dependent validation item, not claimed by this slice.
 
 Scope:
 
@@ -712,7 +714,7 @@ Acceptance:
 - repeated trials aggregate without hiding individual failures;
 - blocked local/live requirements are honest, not silently downgraded.
 
-Slice 5a verification evidence:
+Slice 5 verification evidence:
 
 - Added the deterministic `cleanup_capability` suite with
   `cleanup.repeated_seed7` and `trial_count=3`.
@@ -730,6 +732,10 @@ Slice 5a verification evidence:
   `live_timeout_s=...` CLI overrides. The live bridge calls the public
   `run::surface` route for selected live eval trials, loads the resulting
   product run artifacts, and grades the effective `seed-<n>` run directory.
+- Codex CLI live eval runs now pass a fixed `run_dir=...` through
+  `run::surface -> agent::run -> molmo::household-cleanup-impl`, discover
+  timestamped product run directories when needed, and poll detached
+  `live_status.json` / `run_result.json` artifacts before grading.
 - Live provider/model service failures are classified as blocked
   `model_or_provider_unavailable` results, separate from agent behavior
   failures and harness bugs.
@@ -741,7 +747,42 @@ Slice 5a verification evidence:
   tests/contract/dev_tools/test_eval_just_recipe.py` passed.
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals
   tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world
+  preset=cleanup agent_engine=codex-cli provider_profile=codex-env
+  evidence_lane=world-oracle-labels seed=7
+  output_dir=/tmp/roboclaws-eval-surface-test
+  run_dir=/tmp/roboclaws-eval-surface-test/seed-7 run_preset=smoke`
+  confirmed the fixed eval run directory reaches
+  `molmo::household-cleanup-impl`.
+- `ruff check roboclaws/evals/live_runtime.py
+  tests/unit/evals/test_eval_runner.py
+  tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `ruff format --check roboclaws/evals/live_runtime.py
+  tests/unit/evals/test_eval_runner.py
+  tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q
+  tests/unit/evals/test_eval_runner.py
+  tests/contract/dev_tools/test_eval_just_recipe.py` passed.
+- `python scripts/dev/check_python_quality_ratchet.py` passed.
 - `git diff --check` passed.
+- `just agent::eval suite=cleanup_capability budget=smoke
+  stamp=codex-slice5-detached-poll` passed and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice5-detached-poll/eval_results.json`;
+  aggregate result was `passed=3`, `failed=0`, `blocked=0`,
+  `pass_at_k[3]=1.0`, and `pass_caret_k[3]=1.0`.
+- `just agent::eval suite=cleanup_capability budget=smoke
+  stamp=codex-slice5-live-blocked3 agent_engine=codex-cli
+  provider_profile=codex-env` passed and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice5-live-blocked3/eval_results.json`;
+  aggregate result was `blocked=3`, `failed=0`,
+  `failure_classes={"model_or_provider_unavailable": 3}`.
+- `just agent::eval suite=cleanup_capability budget=smoke
+  stamp=codex-slice5c-live-blocked agent_engine=codex-cli
+  provider_profile=codex-env` passed and wrote
+  `output/evals/household_world_cleanup_capability/codex-slice5c-live-blocked/eval_results.json`;
+  aggregate result was `blocked=3`,
+  `failure_classes={"model_or_provider_unavailable": 3}`, with
+  `blocker=live_execution_not_requested` in the runner preflight.
 - `just agent::eval suite=cleanup_capability budget=smoke stamp=codex-slice5-repeat2`
   passed and wrote
   `output/evals/household_world_cleanup_capability/codex-slice5-repeat2/eval_results.json`;
@@ -961,8 +1002,8 @@ Acceptance:
   parked-work surfaces no longer point future agents at retired public axes;
   active cleanup contracts no longer advertise `fixture_hints` as a callable
   cleanup MCP tool.
-- BLOCKED_NEEDS_LOCAL_VALIDATION: live-agent `pass^k` proof until provider,
-  Docker, simulator, and budget are available.
+- BLOCKED_NEEDS_LOCAL_VALIDATION: successful live-agent `pass^k` proof until a
+  provider, Docker, simulator, and budget are available and healthy.
 - INTERMEDIATE_ONLY: docs/schema-only checkpoint if implementation is split.
 - No regressions: existing `run::surface`, `agent-validation-matrix`, and
   current harness recipes continue to work; OpenClaw remains

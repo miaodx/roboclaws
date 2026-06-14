@@ -57,13 +57,21 @@ lane, and missing live-provider fields explicitly.
 `agent_engine=... provider_profile=...`; by default those trials are recorded
 as blocked identity/preflight packets so provider-backed work is not launched
 by accident. Use `live_execution=run` only when you intend to run the selected
-live provider route:
+live provider route. The live bridge calls the public `run::surface` product
+route, pins an eval-owned `run_dir`, discovers timestamped product artifacts
+when needed, and waits for detached Codex CLI cleanup artifacts before grading:
 
 ```bash
 just agent::eval suite=cleanup_capability budget=smoke \
   agent_engine=openai-agents-sdk provider_profile=codex-env \
   live_execution=run live_timeout_s=120
 ```
+
+For Codex CLI live evals, the eval runner passes a fixed product `run_dir`
+through the public `run::surface` route and waits for detached live artifacts
+before grading. The eval result still records blocked provider/runtime
+conditions separately from agent behavior when the selected live route cannot
+finish.
 
 Blocked live-agent packets include either `roboclaws_live_eval_preflight_v1`
 runner metadata, or a live product-route failure classified separately from

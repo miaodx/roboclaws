@@ -45,6 +45,34 @@ def test_agent_eval_public_facade_routes_promotion_cli() -> None:
     assert "regression_sample_id=regression.cleanup_demo" in trace
 
 
+def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
+    route, plan_trace = _trace_surface_run_with_plan(
+        "surface=household-world",
+        "preset=cleanup",
+        "agent_engine=codex-cli",
+        "provider_profile=codex-env",
+        "evidence_lane=world-oracle-labels",
+        "seed=7",
+        "output_dir=/tmp/roboclaws-eval-surface-test",
+        "run_dir=/tmp/roboclaws-eval-surface-test/seed-7",
+        "run_preset=smoke",
+    )
+
+    assert route[:5] == [
+        "just",
+        "molmo::household-cleanup-impl",
+        "codex-live",
+        "smoke",
+        "7",
+    ]
+    assert route[-1] == "/tmp/roboclaws-eval-surface-test/seed-7"
+    assert (
+        "target=just agent::run household-world.cleanup codex-cli smoke "
+        "seed=7 output_dir=/tmp/roboclaws-eval-surface-test "
+        "run_dir=/tmp/roboclaws-eval-surface-test/seed-7"
+    ) in " ".join(plan_trace)
+
+
 def _trace_agent_eval(*args: str) -> list[str]:
     binary = _just_bin()
     env = os.environ.copy()
@@ -59,6 +87,22 @@ def _trace_agent_eval(*args: str) -> list[str]:
         text=True,
     )
     return result.stdout.strip().split("\t")
+
+
+def _trace_surface_run_with_plan(*args: str) -> tuple[list[str], list[str]]:
+    binary = _just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "run::surface", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t"), result.stderr.strip().split("\t")
 
 
 def _just_bin() -> str:
