@@ -8,6 +8,7 @@ import datetime as dt
 import json
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -40,7 +41,7 @@ from roboclaws.household.realworld_mcp_server import (
     RealWorldMolmoCleanupMCPServer,
     make_molmo_realworld_cleanup_mcp,
 )
-from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.scenario import CleanupScenario, build_cleanup_scenario
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
@@ -55,6 +56,18 @@ from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_art
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 AGIBOT_GDK_BACKEND = "agibot_gdk"
+
+
+@dataclass(frozen=True)
+class _ServerBackendSetup:
+    base_contract: Any
+    scenario: CleanupScenario
+    selected_bundle_dir: Path | None
+    runtime_map_prior: dict[str, Any] | None
+    agibot_contract: AgibotCleanupMCPContract | None
+    perception_mode: str
+    map_mode: str
+    cleanup_profile: str | None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -272,6 +285,222 @@ def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
     return runtime_metric_map_from_prior_artifact(payload)
 
 
+def _prepare_server_backend_setup(
+    *,
+    output_dir: Path,
+    seed: int,
+    backend: str,
+    generated_mess_count: int,
+    generated_mess_object_ids: tuple[str, ...],
+    map_bundle_dir: str | Path | None,
+    require_map_bundle: bool,
+    perception_mode: str,
+    include_robot: bool,
+    robot_name: str,
+    record_robot_views: bool,
+    scene_source: str,
+    scene_index: int,
+    isaac_scene_usd_path: str | Path | None,
+    cleanup_profile: str | None,
+    runtime_map_prior_path: str | Path | None,
+    map_mode: str,
+    context_json: str | Path | None,
+    runner_python: str | Path | None,
+    runner_script: str | Path | None,
+    agibot_map_artifact_dir: str | Path | None,
+    real_movement_enabled: bool,
+    task_prompt: str,
+) -> _ServerBackendSetup:
+    selected_bundle_dir = selected_nav2_map_bundle_dir(
+        map_bundle_dir,
+        required=require_map_bundle,
+    )
+    runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
+    if backend == AGIBOT_GDK_BACKEND:
+        return _prepare_agibot_backend_setup(
+            output_dir=output_dir,
+            seed=seed,
+            context_json=context_json,
+            runner_python=runner_python,
+            runner_script=runner_script,
+            agibot_map_artifact_dir=agibot_map_artifact_dir,
+            real_movement_enabled=real_movement_enabled,
+            task_prompt=task_prompt,
+            include_robot=include_robot,
+            record_robot_views=record_robot_views,
+            selected_bundle_dir=selected_bundle_dir,
+            runtime_map_prior=runtime_map_prior,
+        )
+    validate_cleanup_run_options(
+        backend_name=backend,
+        include_robot=include_robot,
+        record_robot_views=record_robot_views,
+        generated_mess_count=generated_mess_count,
+        map_mode=map_mode,
+        allowed_map_modes=REALWORLD_MAP_MODES,
+    )
+    return _prepare_generic_backend_setup(
+        output_dir=output_dir,
+        seed=seed,
+        backend=backend,
+        generated_mess_count=generated_mess_count,
+        generated_mess_object_ids=generated_mess_object_ids,
+        scene_source=scene_source,
+        scene_index=scene_index,
+        include_robot=include_robot,
+        robot_name=robot_name,
+        selected_bundle_dir=selected_bundle_dir,
+        isaac_scene_usd_path=isaac_scene_usd_path,
+        runtime_map_prior=runtime_map_prior,
+        perception_mode=perception_mode,
+        map_mode=map_mode,
+        cleanup_profile=cleanup_profile,
+    )
+
+
+def _prepare_agibot_backend_setup(
+    *,
+    output_dir: Path,
+    seed: int,
+    context_json: str | Path | None,
+    runner_python: str | Path | None,
+    runner_script: str | Path | None,
+    agibot_map_artifact_dir: str | Path | None,
+    real_movement_enabled: bool,
+    task_prompt: str,
+    include_robot: bool,
+    record_robot_views: bool,
+    selected_bundle_dir: Path | None,
+    runtime_map_prior: dict[str, Any] | None,
+) -> _ServerBackendSetup:
+    if context_json is None or str(context_json) == "":
+        raise ValueError("backend=agibot_gdk requires --context-json")
+    if include_robot:
+        raise ValueError("robot inclusion requires a visual subprocess backend")
+    if record_robot_views:
+        raise ValueError(
+            "record_robot_views requires a visual subprocess backend and include_robot"
+        )
+    scenario = build_cleanup_scenario(seed=seed)
+    agibot_contract = AgibotCleanupMCPContract(
+        run_dir=output_dir,
+        context_json=Path(context_json),
+        runner_script=Path(runner_script) if runner_script is not None else None,
+        runner_python=runner_python,
+        real_movement_enabled=real_movement_enabled,
+        agibot_map_artifact_dir=Path(agibot_map_artifact_dir)
+        if agibot_map_artifact_dir is not None
+        else None,
+        scenario=scenario,
+        task_prompt=task_prompt,
+    )
+    return _ServerBackendSetup(
+        base_contract=agibot_contract.contract,
+        scenario=scenario,
+        selected_bundle_dir=selected_bundle_dir,
+        runtime_map_prior=runtime_map_prior,
+        agibot_contract=agibot_contract,
+        perception_mode=agibot_contract.perception_mode,
+        map_mode=agibot_contract.map_mode,
+        cleanup_profile=None,
+    )
+
+
+def _prepare_generic_backend_setup(
+    *,
+    output_dir: Path,
+    seed: int,
+    backend: str,
+    generated_mess_count: int,
+    generated_mess_object_ids: tuple[str, ...],
+    scene_source: str,
+    scene_index: int,
+    include_robot: bool,
+    robot_name: str,
+    selected_bundle_dir: Path | None,
+    isaac_scene_usd_path: str | Path | None,
+    runtime_map_prior: dict[str, Any] | None,
+    perception_mode: str,
+    map_mode: str,
+    cleanup_profile: str | None,
+) -> _ServerBackendSetup:
+    base_contract = build_cleanup_backend_session(
+        backend_name=backend,
+        run_dir=output_dir,
+        seed=seed,
+        include_robot=include_robot,
+        robot_name=robot_name,
+        generated_mess_count=generated_mess_count,
+        generated_mess_object_ids=generated_mess_object_ids,
+        scene_source=scene_source,
+        scene_index=scene_index,
+        map_bundle_dir=selected_bundle_dir,
+        isaac_scene_usd_path=isaac_scene_usd_path,
+    )
+    return _ServerBackendSetup(
+        base_contract=base_contract,
+        scenario=base_contract.scenario,
+        selected_bundle_dir=selected_bundle_dir,
+        runtime_map_prior=runtime_map_prior,
+        agibot_contract=None,
+        perception_mode=perception_mode,
+        map_mode=map_mode,
+        cleanup_profile=cleanup_profile,
+    )
+
+
+def _run_server_until_done(
+    *,
+    server: RealWorldMolmoCleanupMCPServer,
+    output_dir: Path,
+    url: str,
+    poll_interval_s: float,
+) -> dict[str, Any]:
+    terminated_by = "unknown"
+    error: str | None = None
+    try:
+        server.run_in_thread()
+        server.write_runtime_event("direct_molmo_realworld_cleanup_server_started", mcp_url=url)
+        while not server.done_event.wait(poll_interval_s):
+            pass
+        terminated_by = "agent_done"
+    except KeyboardInterrupt:
+        terminated_by = "keyboard_interrupt"
+        server.write_runtime_event("keyboard_interrupt")
+    except Exception as exc:
+        terminated_by = "error"
+        error = str(exc)
+        server.write_runtime_event("direct_molmo_realworld_cleanup_server_error", error=error)
+        raise
+    finally:
+        result = _server_result(
+            output_dir=output_dir,
+            terminated_by=terminated_by,
+            error=error,
+        )
+        server.write_runtime_event(
+            "direct_molmo_realworld_cleanup_server_finished",
+            terminated_by=terminated_by,
+            error=error,
+        )
+        server.close()
+    return result
+
+
+def _server_result(
+    *,
+    output_dir: Path,
+    terminated_by: str,
+    error: str | None,
+) -> dict[str, Any]:
+    return {
+        "terminated_by": terminated_by,
+        "output_dir": str(output_dir),
+        "run_result": str(output_dir / "run_result.json"),
+        "error": error,
+    }
+
+
 def run_molmo_realworld_cleanup_agent_server(
     *,
     output_dir: Path,
@@ -317,143 +546,82 @@ def run_molmo_realworld_cleanup_agent_server(
     output_dir.mkdir(parents=True, exist_ok=True)
     if backend == AGIBOT_GDK_BACKEND:
         generated_mess_count = 0
-    else:
-        validate_cleanup_run_options(
-            backend_name=backend,
-            include_robot=include_robot,
-            record_robot_views=record_robot_views,
-            generated_mess_count=generated_mess_count,
-            map_mode=map_mode,
-            allowed_map_modes=REALWORLD_MAP_MODES,
-        )
-    selected_bundle_dir = selected_nav2_map_bundle_dir(
-        map_bundle_dir,
-        required=require_map_bundle,
+    backend_setup = _prepare_server_backend_setup(
+        output_dir=output_dir,
+        seed=seed,
+        backend=backend,
+        generated_mess_count=generated_mess_count,
+        generated_mess_object_ids=generated_mess_object_ids,
+        map_bundle_dir=map_bundle_dir,
+        require_map_bundle=require_map_bundle,
+        perception_mode=perception_mode,
+        include_robot=include_robot,
+        robot_name=robot_name,
+        record_robot_views=record_robot_views,
+        scene_source=scene_source,
+        scene_index=scene_index,
+        isaac_scene_usd_path=isaac_scene_usd_path,
+        cleanup_profile=cleanup_profile,
+        runtime_map_prior_path=runtime_map_prior_path,
+        map_mode=map_mode,
+        context_json=context_json,
+        runner_python=runner_python,
+        runner_script=runner_script,
+        agibot_map_artifact_dir=agibot_map_artifact_dir,
+        real_movement_enabled=real_movement_enabled,
+        task_prompt=task_prompt,
     )
-    runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
-    agibot_contract: AgibotCleanupMCPContract | None = None
-    if backend == AGIBOT_GDK_BACKEND:
-        if context_json is None or str(context_json) == "":
-            raise ValueError("backend=agibot_gdk requires --context-json")
-        if include_robot:
-            raise ValueError("robot inclusion requires a visual subprocess backend")
-        if record_robot_views:
-            raise ValueError(
-                "record_robot_views requires a visual subprocess backend and include_robot"
-            )
-        scenario = build_cleanup_scenario(seed=seed)
-        agibot_contract = AgibotCleanupMCPContract(
-            run_dir=output_dir,
-            context_json=Path(context_json),
-            runner_script=Path(runner_script) if runner_script is not None else None,
-            runner_python=runner_python,
-            real_movement_enabled=real_movement_enabled,
-            agibot_map_artifact_dir=Path(agibot_map_artifact_dir)
-            if agibot_map_artifact_dir is not None
-            else None,
-            scenario=scenario,
-            task_prompt=task_prompt,
-        )
-        base_contract = agibot_contract.contract
-        perception_mode = agibot_contract.perception_mode
-        map_mode = agibot_contract.map_mode
-        cleanup_profile = None
-    else:
-        base_contract = build_cleanup_backend_session(
-            backend_name=backend,
-            run_dir=output_dir,
-            seed=seed,
-            include_robot=include_robot,
-            robot_name=robot_name,
-            generated_mess_count=generated_mess_count,
-            generated_mess_object_ids=generated_mess_object_ids,
-            scene_source=scene_source,
-            scene_index=scene_index,
-            map_bundle_dir=selected_bundle_dir,
-            isaac_scene_usd_path=isaac_scene_usd_path,
-        )
-        scenario = base_contract.scenario
-
-    server: RealWorldMolmoCleanupMCPServer | None = None
-    terminated_by = "unknown"
-    error: str | None = None
     url = mcp_url(host, port)
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
     )
     task_intent = household_intent_from_goal_contract(goal_contract)
-
-    try:
-        server = make_molmo_realworld_cleanup_mcp(
-            run_dir=output_dir,
-            scenario=scenario,
-            base_contract=base_contract,
-            contract=agibot_contract,
-            host=host,
-            port=port,
-            policy=policy,
-            task_name=task_name,
-            task_prompt=task_prompt,
-            fixture_hint_mode="room_only",
-            perception_mode=perception_mode,
-            map_bundle_dir=selected_bundle_dir,
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=output_dir,
+        scenario=backend_setup.scenario,
+        base_contract=backend_setup.base_contract,
+        contract=backend_setup.agibot_contract,
+        host=host,
+        port=port,
+        policy=policy,
+        task_name=task_name,
+        task_prompt=task_prompt,
+        fixture_hint_mode="room_only",
+        perception_mode=backend_setup.perception_mode,
+        map_bundle_dir=backend_setup.selected_bundle_dir,
+        record_robot_views=record_robot_views,
+        cleanup_profile=backend_setup.cleanup_profile,
+        runtime_map_prior=backend_setup.runtime_map_prior,
+        runtime_map_prior_source=str(runtime_map_prior_path or ""),
+        map_mode=backend_setup.map_mode,
+        visual_grounding=visual_grounding,
+        visual_grounding_base_url=visual_grounding_base_url,
+        visual_grounding_timeout_s=visual_grounding_timeout_s,
+        task_intent_mode=task_intent_mode,
+        goal_contract=goal_contract,
+        operator_messages_path=operator_messages_path,
+        agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
+        robot_view_capture_policy=robot_view_capture_policy,
+        rerun_command=rerun_command,
+    )
+    if print_setup_text:
+        print_setup(
+            output_dir,
+            url,
+            policy,
+            backend=backend,
+            perception_mode=backend_setup.perception_mode,
             record_robot_views=record_robot_views,
-            cleanup_profile=cleanup_profile,
-            runtime_map_prior=runtime_map_prior,
-            runtime_map_prior_source=str(runtime_map_prior_path or ""),
-            map_mode=map_mode,
-            visual_grounding=visual_grounding,
-            visual_grounding_base_url=visual_grounding_base_url,
-            visual_grounding_timeout_s=visual_grounding_timeout_s,
+            cleanup_profile=backend_setup.cleanup_profile,
             task_intent_mode=task_intent_mode,
-            goal_contract=goal_contract,
-            operator_messages_path=operator_messages_path,
-            agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
-            robot_view_capture_policy=robot_view_capture_policy,
-            rerun_command=rerun_command,
+            task_intent=task_intent,
         )
-        server.run_in_thread()
-        server.write_runtime_event("direct_molmo_realworld_cleanup_server_started", mcp_url=url)
-        if print_setup_text:
-            print_setup(
-                output_dir,
-                url,
-                policy,
-                backend=backend,
-                perception_mode=perception_mode,
-                record_robot_views=record_robot_views,
-                cleanup_profile=cleanup_profile,
-                task_intent_mode=task_intent_mode,
-                task_intent=task_intent,
-            )
-        while not server.done_event.wait(poll_interval_s):
-            pass
-        terminated_by = "agent_done"
-    except KeyboardInterrupt:
-        terminated_by = "keyboard_interrupt"
-        if server is not None:
-            server.write_runtime_event("keyboard_interrupt")
-    except Exception as exc:
-        terminated_by = "error"
-        error = str(exc)
-        if server is not None:
-            server.write_runtime_event("direct_molmo_realworld_cleanup_server_error", error=error)
-        raise
-    finally:
-        result = {
-            "terminated_by": terminated_by,
-            "output_dir": str(output_dir),
-            "run_result": str(output_dir / "run_result.json"),
-            "error": error,
-        }
-        if server is not None:
-            server.write_runtime_event(
-                "direct_molmo_realworld_cleanup_server_finished",
-                terminated_by=terminated_by,
-                error=error,
-            )
-            server.close()
-    return result
+    return _run_server_until_done(
+        server=server,
+        output_dir=output_dir,
+        url=url,
+        poll_interval_s=poll_interval_s,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

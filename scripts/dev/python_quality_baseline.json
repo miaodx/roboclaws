@@ -350,36 +350,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/cli/household_agent_server.py|C901|run_molmo_realworld_cleanup_agent_server",
-        "limit": 10,
-        "message": "`run_molmo_realworld_cleanup_agent_server` is too complex (13 > 10)",
-        "path": "roboclaws/cli/household_agent_server.py",
-        "row": 275,
-        "symbol": "run_molmo_realworld_cleanup_agent_server",
-        "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/cli/household_agent_server.py|PLR0912|run_molmo_realworld_cleanup_agent_server",
-        "limit": 12,
-        "message": "Too many branches (15 > 12)",
-        "path": "roboclaws/cli/household_agent_server.py",
-        "row": 275,
-        "symbol": "run_molmo_realworld_cleanup_agent_server",
-        "value": 15
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/cli/household_agent_server.py|PLR0915|run_molmo_realworld_cleanup_agent_server",
-        "limit": 50,
-        "message": "Too many statements (56 > 50)",
-        "path": "roboclaws/cli/household_agent_server.py",
-        "row": 275,
-        "symbol": "run_molmo_realworld_cleanup_agent_server",
-        "value": 56
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/household/agibot_contract_rehearsal.py|C901|_run_cleanup_action_rehearsal",
         "limit": 10,
         "message": "`_run_cleanup_action_rehearsal` is too complex (11 > 10)",

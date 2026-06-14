@@ -2875,3 +2875,25 @@ Stop this refactor loop when:
   `visual_grounding.py`; the remaining visual-grounding rows are
   `HttpVisualGroundingClient.request_candidates(...)` and
   `scripts/visual_grounding/adapters.py::_yolo_candidates_from_model(...)`.
+- 2026-06-14: Continued backend/server consistency cleanup by splitting the
+  household MCP agent-server setup and lifecycle path in
+  `roboclaws/cli/household_agent_server.py`. Backend preparation now has
+  named generic-facade and Agibot-specific setup helpers, and server
+  start/wait/error/finalize handling is isolated from public CLI option
+  orchestration. The public
+  `run_molmo_realworld_cleanup_agent_server(...)` signature, CLI flags,
+  result fields, Agibot contract setup, and cleanup backend facade behavior are
+  unchanged. Evidence:
+  `ruff check roboclaws/cli/household_agent_server.py --select C901,PLR0912,PLR0915`
+  passed; `ruff check roboclaws/cli/household_agent_server.py tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+  passed; `ruff format --check roboclaws/cli/household_agent_server.py tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+  passed; `python -m py_compile roboclaws/cli/household_agent_server.py`
+  passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q`
+  passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 116 to
+  113 Ruff complexity violations, with oversized modules unchanged at 59.
+  `roboclaws/cli/household_agent_server.py` no longer appears in the
+  complexity-by-file summary.
