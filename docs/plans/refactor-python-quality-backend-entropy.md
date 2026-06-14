@@ -145,7 +145,7 @@ Rejected alternatives:
     not a mandatory base abstraction.
   - Do not import Isaac packages in the normal Roboclaws process.
 
-- [ ] **Q1: Add a quality-debt selection report to the ratchet.**
+- [x] **Q1: Add a quality-debt selection report to the ratchet.**
   - Extend `scripts/dev/check_python_quality_ratchet.py` with a read-only
     summary mode such as `--summary` or `--top-debt`.
   - Show top oversized modules, highest individual complexity entries, and
@@ -296,3 +296,23 @@ Stop this refactor loop when:
   passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_cleanup_backend_contract.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q`
   passed; `python scripts/dev/check_python_quality_ratchet.py` passed with 217
   Ruff violations and 61 oversized modules at or below baseline.
+- 2026-06-14: Added the read-only quality-debt summary mode to
+  `scripts/dev/check_python_quality_ratchet.py`. `--summary` now reports total
+  Ruff complexity and oversized-module counts, top oversized modules, highest
+  individual complexity entries, and complexity grouped by file while keeping
+  the default gate output unchanged. Current top-five summary begins with
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`,
+  `roboclaws/household/report.py`,
+  `roboclaws/household/realworld_contract.py`,
+  `roboclaws/household/scene_camera_comparison.py`, and
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` for file
+  size, and
+  `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` remains the
+  highest grouped complexity file. Evidence:
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/scripts/test_python_quality_ratchet.py -q`
+  passed; `ruff check scripts/dev/check_python_quality_ratchet.py tests/unit/scripts/test_python_quality_ratchet.py`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed with 217
+  Ruff violations and 61 oversized modules at or below baseline;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 5`
+  passed. No baseline refresh was run because this slice adds selection
+  visibility but does not pay down existing debt.
