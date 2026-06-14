@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-driven-architecture
-status: Active - Slice 0/1 verified; Slice 2 next
+status: Active - Slice 0/1/2/3 verified; Slice 4 next
 created: 2026-06-14
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -549,7 +549,7 @@ Slice 0/1 verification evidence:
 
 ### Slice 2: Eval Schema And Result Packet
 
-Status: planning candidate.
+Status: implemented and verified 2026-06-15.
 
 Scope:
 
@@ -564,9 +564,31 @@ Acceptance:
 - missing relevant identity fields are represented explicitly;
 - no live provider or simulator proof is required yet.
 
+Slice 2 verification evidence:
+
+- Added `roboclaws.evals.models` with `eval_suite`, `eval_sample`,
+  `eval_trial`, and `eval_result` schema models, explicit
+  `unavailable` / `not_applicable` missing-value sentinels, normalized failure
+  classes, and JSON fixture loading helpers.
+- Added direct-runner household fixtures under `evals/household_world/`,
+  including `suites/smoke_regression.json`,
+  `samples/cleanup/smoke_seed7.json`, and
+  `samples/map_build/baseline_seed7.json`.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals/test_eval_models.py`
+  passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools` passed.
+- `ruff check .` passed.
+- `git diff --check` passed.
+- Focused `ruff format --check roboclaws/evals tests/unit/evals` passed.
+- `just agent::harness agent-validation recommend plan=docs/plans/2026-06-14-eval-driven-architecture.md budget=focused`
+  passed and wrote
+  `output/agent-validation-matrix/20260614T170543Z/validation_matrix.json` and
+  `output/agent-validation-matrix/20260614T170543Z/validation_matrix.html`.
+
 ### Slice 3: Deterministic Household Eval Runner
 
-Status: planning candidate.
+Status: implemented and verified 2026-06-15.
 
 Scope:
 
@@ -584,6 +606,28 @@ Acceptance:
 - failures carry normalized `failure_class`;
 - existing `just run::surface` and `agent-validation-matrix` contracts remain
   unchanged.
+
+Slice 3 verification evidence:
+
+- Added `roboclaws.evals.runner`, a repo-native deterministic suite runner
+  that loads suite/sample fixtures, runs direct-runner product artifacts,
+  applies artifact/privacy/trajectory/outcome/efficiency graders, writes
+  `eval_results.json`, and renders `eval_report.html`.
+- Added `just agent::eval ...` as the maintainer eval facade, routed through
+  `python -m roboclaws.cli.main eval`.
+- Added focused runner tests for passing bundles, artifact failures, and
+  environment-blocked failure classification.
+- `just agent::eval suite=smoke_regression budget=smoke stamp=codex-check-2 output_dir=output/evals-codex-check`
+  passed and wrote
+  `output/evals-codex-check/household_world_smoke_regression/codex-check-2/eval_results.json`
+  plus `eval_report.html`; aggregate result was `pass_at_1=1.0`, `passed=1`,
+  `failed=0`, `blocked=0`.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed.
+- `ruff check .`, `git diff --check`, and focused
+  `ruff format --check roboclaws/evals tests/unit/evals tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed.
 
 ### Slice 4: Map-Build And Open-Ended Eval Coverage
 

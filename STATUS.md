@@ -7,11 +7,15 @@ and pointers only, not a changelog or execution ledger.
 
 ## Current Focus
 
-Roboclaws is executing the eval-driven architecture plan. Slice 0 and Slice 1
-are verified: eval suites are visible as a first-class architecture layer,
-stale launch-axis documentation is cleaned, and current cleanup/map-build MCP
-contracts no longer advertise `fixture_hints` as a callable active tool while
-historical artifact compatibility remains intact.
+Roboclaws is executing the eval-driven architecture plan. Slice 0 through Slice
+3 are verified: eval suites are visible as a first-class architecture
+layer, stale launch-axis documentation is cleaned, current cleanup/map-build
+MCP contracts no longer advertise `fixture_hints` as a callable active tool,
+and repo-native eval suite/sample/trial/result schema packets plus
+direct-runner household fixtures exist. The first deterministic eval runner is
+available through `just agent::eval suite=smoke_regression budget=smoke` and
+writes `eval_results.json` plus `eval_report.html` linked to product run
+artifacts.
 
 The household-world launch contract remains the active product shape:
 `surface=household-world` defaults to the no-preset open household task
@@ -35,10 +39,10 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Continue `docs/plans/2026-06-14-eval-driven-architecture.md` with Slice 2:
-define the eval suite/sample/trial/result schemas, result identity, failure
-taxonomy, and direct-runner sample fixtures. Do not start the deterministic
-eval runner until the schema/result packet slice is green.
+Continue `docs/plans/2026-06-14-eval-driven-architecture.md` with Slice 4:
+add map-build consumer and initial open-ended eval coverage so evals can catch
+missing or unusable Runtime Metric Map artifacts and distinguish completion
+claims from artifact readiness.
 
 ## Current Blocker
 

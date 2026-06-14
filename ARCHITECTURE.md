@@ -201,7 +201,10 @@ because current cleanup MCP servers no longer expose that tool. Historical
 and compatibility checks.
 
 The first implementation is intentionally repo-native under `evals/` and
-`roboclaws/evals/`. Do not add a third-party eval framework until deterministic
+`roboclaws/evals/`. The schema layer defines `eval_suite`, `eval_sample`,
+`eval_trial`, and `eval_result` packets plus direct-runner fixtures; the first
+deterministic runner is exposed as `just agent::eval suite=smoke_regression
+budget=smoke`. Do not add a third-party eval framework until deterministic
 household suites have proven the sample, artifact, grader, privacy, and result
 packet contracts that Roboclaws needs.
 

@@ -1,0 +1,39 @@
+{
+  "schema": "roboclaws_eval_sample_v1",
+  "sample_id": "map_build.baseline_seed7",
+  "version": "2026-06-15",
+  "surface": "household-world",
+  "intent": "map-build",
+  "preset": "map-build",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "evidence_lane": "world-oracle-labels",
+  "camera_labeler": "not_applicable",
+  "scenario_setup": "baseline",
+  "seed": 7,
+  "prompt": "not_applicable",
+  "goal_contract_hash": "unavailable",
+  "allowed_agent_engines": [
+    "direct-runner"
+  ],
+  "provider_profiles": [
+    "not_applicable"
+  ],
+  "trial_count": 1,
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory"
+  ],
+  "private_goal_reference": {
+    "schema": "household_eval_private_goal_reference_v1",
+    "private_truth_scope": "grader_only",
+    "expected_runtime_metric_map": true
+  },
+  "launch_overrides": {
+    "agent_engine": "direct-runner",
+    "evidence_lane": "world-oracle-labels",
+    "seed": 7,
+    "scenario_setup": "baseline"
+  }
+}

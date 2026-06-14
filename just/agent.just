@@ -62,6 +62,7 @@ run dispatch_target agent_engine mode="" *overrides:
         implementation_task_name="$dispatch_target"
         ;;
     esac
+
     case "$agent_engine" in
       codex-cli)
         driver="codex"
@@ -957,3 +958,27 @@ gateway action="up" token_file=".openclaw-token" provider="kimi" agents="2":
         exit 1
         ;;
     esac
+
+# Run a repo-native eval suite.
+eval *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x .venv/bin/python ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
+    fi
+    if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
+      printf 'cmd\t%s\t-m\troboclaws.cli.main\teval' "$python_bin"
+      for arg in "$@"; do
+        printf '\t%s' "$arg"
+      done
+      printf '\n'
+      exit 0
+    fi
+    exec "$python_bin" -m roboclaws.cli.main eval "$@"

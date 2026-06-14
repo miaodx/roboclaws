@@ -33,6 +33,23 @@ setup, seed, prompt or goal hash, agent engine, provider/model, skill source,
 MCP profile/tool surface, runtime limits, budgets, and artifact schema versions.
 Missing relevant fields should be explicit `unavailable` or `not_applicable`.
 
+The current repo-native schema package is `roboclaws.evals`. Versioned suite and
+sample definitions live under `evals/<capability>/`, starting with
+`evals/household_world/`.
+
+The first deterministic runner is available through:
+
+```bash
+just agent::eval suite=smoke_regression budget=smoke
+```
+
+It runs the direct-runner household smoke suite without provider keys, writes
+`output/evals/<suite>/<stamp>/eval_results.json`, and renders
+`eval_report.html` with links to the underlying product run artifacts. Smoke
+budget uses the synthetic cleanup backend for local determinism while eval
+identity still records the sample's public surface, world, backend, evidence
+lane, and missing live-provider fields explicitly.
+
 Keep private scorer truth private. Generated mess sets, acceptable destinations,
 hidden target lists, and private manifests may feed graders and reports, but
 they must not appear in agent-facing MCP inputs or capability profile metadata.
