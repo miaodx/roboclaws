@@ -225,7 +225,7 @@ class EvalTrial:
         skill_name: str = MISSING_UNAVAILABLE,
         prompt_source: str = MISSING_UNAVAILABLE,
         mcp_profile: str = MISSING_UNAVAILABLE,
-        tool_surface: tuple[str, ...] | list[str] = (),
+        tool_surface: tuple[str, ...] | list[str] = (MISSING_UNAVAILABLE,),
         budgets: dict[str, Any] | None = None,
         runtime: dict[str, Any] | None = None,
         limitations: tuple[str, ...] | list[str] = (),
@@ -266,7 +266,7 @@ class EvalTrial:
             skill_name=skill_name,
             prompt_source=prompt_source,
             mcp_profile=mcp_profile,
-            tool_surface=tuple(str(item) for item in tool_surface),
+            tool_surface=_normalize_tool_surface(tool_surface),
             budgets=_normalized_budgets(budgets, repetition_index=repetition_index),
             runtime=_normalized_runtime(runtime),
             limitations=tuple(str(item) for item in limitations),
@@ -306,7 +306,7 @@ class EvalTrial:
             skill_name=_required_string(payload, "skill_name"),
             prompt_source=_required_string(payload, "prompt_source"),
             mcp_profile=_required_string(payload, "mcp_profile"),
-            tool_surface=_tuple_of_strings(payload, "tool_surface", allow_empty=True),
+            tool_surface=_tuple_of_strings(payload, "tool_surface"),
             budgets=_normalized_budgets(
                 _required_mapping(payload, "budgets"),
                 repetition_index=repetition_index,
@@ -530,6 +530,11 @@ def _normalized_runtime(runtime: dict[str, Any] | None) -> dict[str, Any]:
     }
     payload.update(dict(runtime or {}))
     return payload
+
+
+def _normalize_tool_surface(tool_surface: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    items = tuple(str(item) for item in tool_surface)
+    return items or (MISSING_UNAVAILABLE,)
 
 
 def _normalized_artifact_schema_versions(

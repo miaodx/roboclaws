@@ -573,7 +573,8 @@ Slice 2 verification evidence:
 - Added direct-runner household fixtures under `evals/household_world/`,
   including `suites/smoke_regression.json`,
   `samples/cleanup/smoke_seed7.json`, and
-  `samples/map_build/baseline_seed7.json`.
+  `samples/map_build/baseline_seed7.json`. The map-build fixture is explicitly
+  marked `parked_for_slice_4` until a map-build suite consumes it.
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals/test_eval_models.py`
   passed.
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit` passed.
@@ -617,17 +618,21 @@ Slice 3 verification evidence:
   `python -m roboclaws.cli.main eval`.
 - Added focused runner tests for passing bundles, artifact failures, and
   environment-blocked failure classification.
-- `just agent::eval suite=smoke_regression budget=smoke stamp=codex-check-2 output_dir=output/evals-codex-check`
+- `just agent::eval suite=smoke_regression budget=smoke stamp=codex-smoke-final`
   passed and wrote
-  `output/evals-codex-check/household_world_smoke_regression/codex-check-2/eval_results.json`
+  `output/evals/household_world_smoke_regression/codex-smoke-final/eval_results.json`
   plus `eval_report.html`; aggregate result was `pass_at_1=1.0`, `passed=1`,
   `failed=0`, `blocked=0`.
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals` passed.
-- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools`
   passed.
-- `ruff check .`, `git diff --check`, and focused
-  `ruff format --check roboclaws/evals tests/unit/evals tests/contract/dev_tools/test_task_agent_just_recipes.py`
-  passed.
+- `python scripts/dev/check_python_quality_ratchet.py`, `git diff --check`,
+  and focused `ruff check` / `ruff format --check` for eval, CLI, and
+  dev-tools test paths passed.
+- `just agent::harness agent-validation recommend plan=docs/plans/2026-06-14-eval-driven-architecture.md budget=focused`
+  passed and wrote
+  `output/agent-validation-matrix/20260614T173031Z/validation_matrix.json` and
+  `output/agent-validation-matrix/20260614T173031Z/validation_matrix.html`.
 
 ### Slice 4: Map-Build And Open-Ended Eval Coverage
 

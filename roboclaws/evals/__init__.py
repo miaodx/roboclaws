@@ -15,7 +15,6 @@ from roboclaws.evals.models import (
     load_eval_sample,
     load_eval_suite,
 )
-from roboclaws.evals.runner import EvalSuiteRun, run_eval_suite
 
 __all__ = [
     "EVAL_RESULT_SCHEMA",
@@ -29,8 +28,6 @@ __all__ = [
     "EvalSample",
     "EvalSuite",
     "EvalTrial",
-    "EvalSuiteRun",
     "load_eval_sample",
     "load_eval_suite",
-    "run_eval_suite",
 ]

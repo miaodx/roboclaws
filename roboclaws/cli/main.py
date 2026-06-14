@@ -6,7 +6,6 @@ import sys
 
 from roboclaws.cli.agent_server import main as agent_server_main
 from roboclaws.cli.task_run import die, surface_run_main
-from roboclaws.evals.runner import main as eval_main
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -14,6 +13,8 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) >= 2 and args[0] == "run" and args[1] == "surface":
         return surface_run_main(args[2:])
     if args and args[0] == "eval":
+        from roboclaws.evals.runner import main as eval_main
+
         return eval_main(args[1:])
     if args and args[0] == "agent-server":
         return agent_server_main(args[1:])

@@ -19,6 +19,7 @@
   "provider_profiles": [
     "not_applicable"
   ],
+  "suite_status": "parked_for_slice_4",
   "trial_count": 1,
   "required_graders": [
     "artifacts",

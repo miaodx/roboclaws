@@ -185,6 +185,26 @@ def test_eval_result_from_mapping_validates_status_and_normalizes_artifact_schem
         EvalResult.from_mapping(payload)
 
 
+def test_eval_identity_uses_explicit_tool_surface_sentinel() -> None:
+    sample = EvalSample.from_mapping(_minimal_sample_payload())
+    suite = EvalSuite.from_mapping(_minimal_suite_payload(sample.sample_id))
+    trial = EvalTrial.from_sample(
+        sample,
+        suite=suite,
+        trial_id="trial-1",
+        repetition_index=0,
+        agent_engine="direct-runner",
+        runner_class="direct_runner",
+    )
+
+    assert trial.tool_surface == (MISSING_UNAVAILABLE,)
+
+    payload = trial.to_dict()
+    payload["tool_surface"] = []
+    with pytest.raises(ValueError, match="tool_surface must not be empty"):
+        EvalTrial.from_mapping(payload)
+
+
 def test_eval_trial_from_sample_rejects_disallowed_agent_engine() -> None:
     sample = EvalSample.from_mapping(_minimal_sample_payload())
     suite = EvalSuite.from_mapping(_minimal_suite_payload(sample.sample_id))
@@ -245,11 +265,20 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     sample_paths = sorted((REPO_ROOT / "evals" / "household_world" / "samples").glob("*/*.json"))
 
     assert sample_paths
+    suite = load_eval_suite(SMOKE_SUITE)
     loaded = [load_eval_sample(path) for path in sample_paths]
     assert {sample.sample_id for sample in loaded} == {
         "cleanup.smoke_seed7",
         "map_build.baseline_seed7",
     }
+    suite_sample_ids = set(suite.sample_ids)
+    parked_samples = {
+        sample.sample_id
+        for sample, path in zip(loaded, sample_paths, strict=True)
+        if sample.sample_id not in suite_sample_ids
+        and json.loads(path.read_text(encoding="utf-8")).get("suite_status") == "parked_for_slice_4"
+    }
+    assert parked_samples == {"map_build.baseline_seed7"}
 
 
 def _minimal_suite_payload(sample_id: str) -> dict:
