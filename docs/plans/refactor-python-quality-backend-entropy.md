@@ -137,7 +137,7 @@ Rejected alternatives:
   - Keep `isaac_scene_index.json` creation covered by the backend artifact
     attachment path.
 
-- [ ] **B4: Normalize subprocess worker command execution.**
+- [x] **B4: Normalize subprocess worker command execution.**
   - Extract shared process-runner concerns used by MolmoSpaces and Isaac Lab:
     command assembly, timeout lookup, JSON parsing, environment preparation,
     and error formatting.
@@ -316,3 +316,18 @@ Stop this refactor loop when:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 5`
   passed. No baseline refresh was run because this slice adds selection
   visibility but does not pay down existing debt.
+- 2026-06-14: Normalized the one-shot subprocess worker runner shared by
+  MolmoSpaces and Isaac Lab. Added `roboclaws/household/worker_runner.py` for
+  worker command assembly, missing-runtime errors, timeout/env helpers,
+  non-zero exit formatting, stderr reading, and last-JSON parsing. The
+  MolmoSpaces one-shot path and Isaac Lab wrapper now call the shared runner,
+  while MolmoSpaces persistent-worker behavior remains Molmo-specific by
+  design. Evidence:
+  `ruff check roboclaws/household/worker_runner.py roboclaws/household/subprocess_backend.py roboclaws/household/isaac_lab_backend.py tests/unit/molmo_cleanup/test_worker_runner.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_worker_runner.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+  passed with one existing Pillow deprecation warning from the Isaac worker
+  tests; `python scripts/dev/check_python_quality_ratchet.py` passed with 217
+  Ruff violations and 61 oversized modules at or below baseline;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 5`
+  passed. No baseline refresh was run because the ratcheted debt counts did not
+  decrease.
