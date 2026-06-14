@@ -33,7 +33,7 @@
         "path": "roboclaws/household/planner_task_feasibility.py"
       },
       {
-        "lines": 1159,
+        "lines": 1067,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_cleanup.py"
       },
@@ -584,39 +584,9 @@
         "limit": 10,
         "message": "`_maybe_clean_visible_object` is too complex (12 > 10)",
         "path": "roboclaws/household/realworld_cleanup.py",
-        "row": 807,
+        "row": 715,
         "symbol": "_maybe_clean_visible_object",
         "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/realworld_cleanup.py|C901|run_realworld_cleanup",
-        "limit": 10,
-        "message": "`run_realworld_cleanup` is too complex (18 > 10)",
-        "path": "roboclaws/household/realworld_cleanup.py",
-        "row": 237,
-        "symbol": "run_realworld_cleanup",
-        "value": 18
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/realworld_cleanup.py|PLR0912|run_realworld_cleanup",
-        "limit": 12,
-        "message": "Too many branches (19 > 12)",
-        "path": "roboclaws/household/realworld_cleanup.py",
-        "row": 237,
-        "symbol": "run_realworld_cleanup",
-        "value": 19
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/realworld_cleanup.py|PLR0915|run_realworld_cleanup",
-        "limit": 50,
-        "message": "Too many statements (68 > 50)",
-        "path": "roboclaws/household/realworld_cleanup.py",
-        "row": 237,
-        "symbol": "run_realworld_cleanup",
-        "value": 68
       },
       {
         "code": "C901",

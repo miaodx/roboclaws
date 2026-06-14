@@ -206,7 +206,7 @@ Rejected alternatives:
     `private_evaluation.json`, `advisory_evaluation.json`, and `report.html`
     schemas stable.
 
-- [ ] **C1.55: Split residual direct cleanup loop orchestration.**
+- [x] **C1.55: Split residual direct cleanup loop orchestration.**
   - Target `roboclaws/household/realworld_cleanup.py`.
   - Extract route/setup normalization, policy selection, waypoint scan loop,
     minimal-map deferred cleanup, done fallback, and snapshot/robot-view stages
@@ -1117,3 +1117,20 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. The MolmoSpaces worker
   dropped from five grouped complexity rows to zero and from 4018 to 3996 lines
   in the oversized-module baseline.
+- 2026-06-14: Implemented C1.55 by extracting the direct cleanup scan loop,
+  policy selection, semantic-sweep camera schedule, minimal-map deferred
+  cleanup pass, robot-view before/after recording, and direct done fallback
+  into `roboclaws/household/realworld_direct_cleanup_loop.py`. The public
+  `run_realworld_cleanup(...)` API and artifact finalization remain in
+  `realworld_cleanup.py`; private cleanup helpers are injected through
+  `DirectCleanupLoopHooks` to avoid a circular import while keeping the loop
+  behavior explicit. Evidence:
+  `ruff check roboclaws/household/realworld_cleanup.py roboclaws/household/realworld_direct_cleanup_loop.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 162 to 159 Ruff complexity
+  violations, with oversized modules unchanged at 59.
+  `run_realworld_cleanup` no longer has C901, PLR0912, or PLR0915 rows in the
+  baseline, and `realworld_cleanup.py` dropped from 1159 to 1067 lines in the
+  oversized-module baseline.
