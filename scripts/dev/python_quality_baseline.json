@@ -38,7 +38,7 @@
         "path": "roboclaws/household/realworld_cleanup.py"
       },
       {
-        "lines": 6602,
+        "lines": 6424,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_contract.py"
       },
@@ -624,7 +624,7 @@
         "limit": 10,
         "message": "`_runtime_public_semantic_anchors` is too complex (13 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 2100,
+        "row": 2098,
         "symbol": "RealWorldCleanupContract._runtime_public_semantic_anchors",
         "value": 13
       },
@@ -634,7 +634,7 @@
         "limit": 10,
         "message": "`declare_visual_candidates` is too complex (12 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 897,
+        "row": 895,
         "symbol": "RealWorldCleanupContract.declare_visual_candidates",
         "value": 12
       },
@@ -644,39 +644,9 @@
         "limit": 10,
         "message": "`_inspection_waypoints_from_bundle_projection` is too complex (11 > 10)",
         "path": "roboclaws/household/realworld_contract.py",
-        "row": 5725,
+        "row": 5547,
         "symbol": "_inspection_waypoints_from_bundle_projection",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/realworld_contract.py|C901|cleanup_policy_trace_from_events",
-        "limit": 10,
-        "message": "`cleanup_policy_trace_from_events` is too complex (17 > 10)",
-        "path": "roboclaws/household/realworld_contract.py",
-        "row": 5101,
-        "symbol": "cleanup_policy_trace_from_events",
-        "value": 17
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/realworld_contract.py|PLR0912|cleanup_policy_trace_from_events",
-        "limit": 12,
-        "message": "Too many branches (18 > 12)",
-        "path": "roboclaws/household/realworld_contract.py",
-        "row": 5101,
-        "symbol": "cleanup_policy_trace_from_events",
-        "value": 18
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/realworld_contract.py|PLR0915|cleanup_policy_trace_from_events",
-        "limit": 50,
-        "message": "Too many statements (64 > 50)",
-        "path": "roboclaws/household/realworld_contract.py",
-        "row": 5101,
-        "symbol": "cleanup_policy_trace_from_events",
-        "value": 64
       },
       {
         "code": "PLR0915",

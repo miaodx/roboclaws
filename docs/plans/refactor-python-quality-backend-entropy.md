@@ -175,6 +175,17 @@ Rejected alternatives:
     metric map, backend-specific runtime evidence, and waypoint honesty.
   - Preserve CLI flags and current `just verify` / `just harness` behavior.
 
+- [ ] **C1.1: Split remaining live checker Agibot and minimal-map families.**
+  - Target `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+    and focused helper modules under `scripts/molmo_cleanup/`.
+  - Extract Agibot semantic-map build, Agibot G2 hardware, and minimal-map
+    assertion families while keeping current private checker entrypoints as
+    imports or aliases for tests.
+  - Keep `parse_args` as a parked CLI-shape row unless it can be bundled with a
+    material checker split.
+  - Preserve current `just verify` / `just harness` behavior and checker
+    contract tests.
+
 - [x] **C1.5: Split direct cleanup orchestration from artifact/result assembly.**
   - Target `roboclaws/household/realworld_cleanup.py`.
   - Extract the post-loop artifact writer, run-result payload builder, profile
@@ -183,6 +194,15 @@ Rejected alternatives:
   - Keep public `run_result.json`, `agent_view.json`, `runtime_metric_map.json`,
     `private_evaluation.json`, `advisory_evaluation.json`, and `report.html`
     schemas stable.
+
+- [ ] **C1.55: Split residual direct cleanup loop orchestration.**
+  - Target `roboclaws/household/realworld_cleanup.py`.
+  - Extract route/setup normalization, policy selection, waypoint scan loop,
+    minimal-map deferred cleanup, done fallback, and snapshot/robot-view stages
+    from `run_realworld_cleanup` only where the helper names make the flow more
+    obvious.
+  - Keep `run_realworld_cleanup(...)` as the public direct-run API and preserve
+    artifact schemas.
 
 - [x] **C1.6: Split live MCP cleanup done finalization from server orchestration.**
   - Target `roboclaws/household/realworld_mcp_server.py`.
@@ -202,6 +222,14 @@ Rejected alternatives:
   - Runtime metric map and cleanup worklist payload assembly are split into
     `roboclaws/household/realworld_contract_payloads.py`.
   - Keep public payload schemas stable.
+
+- [x] **C2.5: Split cleanup policy trace event classification and summary.**
+  - Target `roboclaws/household/realworld_contract.py` and a focused policy
+    trace helper module.
+  - Extract event iteration, waypoint accounting, post-place observation
+    accounting, loop-style classification, and final summary payload assembly.
+  - Preserve the `cleanup_policy_trace_from_events(...)` public helper and the
+    `CLEANUP_POLICY_TRACE_SCHEMA` payload shape.
 
 - [ ] **C3: Split cleanup report sections from shared HTML wrapper.**
   - Target `roboclaws/household/report.py`.
@@ -237,6 +265,11 @@ Rejected alternatives:
     result/report packaging.
   - Keep blocked-capability evidence valid by default; strict planner-backed
     proof remains a local-runtime gate.
+  - Status after 2026-06-14 loop: parent-process result packaging,
+    task-sampler diagnostics, and `_execute_policy_probe(...)` stage splitting
+    are complete. The remaining C901 11 rows for exact cleanup-task
+    configuration and grasp-collision diagnostics are parked as micro residual
+    unless bundled with a larger runtime-diagnostics slice.
 
 - [x] **M1: Split map bundle validation and snapshot contract checks.**
   - Target `roboclaws/maps/bundle.py` and
@@ -262,6 +295,249 @@ Rejected alternatives:
     live source drift, stale surface, real workflow friction, or recurring
     rediscovery.
   - Mark saturation instead of inventing lower-value cleanup.
+
+## Current Candidate Packet
+
+Discovery round: 2026-06-14 post-checker/backend quality loop.
+
+Quality signal:
+
+- `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
+  reports 175 Ruff complexity violations and 59 oversized modules.
+- Top grouped complexity remains
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` with 14 rows.
+- `roboclaws/household/realworld_cleanup.py::run_realworld_cleanup` remains
+  C901 18, PLR0912 19, PLR0915 68 after the facade and finalizer slices.
+- `roboclaws/household/realworld_contract.py::cleanup_policy_trace_from_events`
+  remains C901 17, PLR0912 18, PLR0915 64.
+- `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` has six
+  grouped complexity rows after the agent-view and waypoint-honesty splits.
+
+Materiality gate:
+
+- Candidate probe file: `.tmp/reduce_entropy_candidates_2026_06_14.json`
+  during discovery only.
+- Gate result: five eligible candidates, one rejected parked observation.
+- Implementation update: Candidate 3, contract policy trace split, shipped in
+  this flow slice. Remaining active candidates from this packet are Candidate
+  1, Candidate 2, Candidate 4, and Candidate 5.
+- The gate rejected the planner-manipulation probe micro residual because the
+  remaining two C901 11 rows are too small to count as a standalone open-ended
+  entropy group.
+- Requested group count was treated as a maximum, not a quota.
+
+### Candidate 1: Isaac Worker Camera/Runtime Split
+
+Severity: P1
+
+Entropy source: backend implementation depth and real workflow friction.
+
+Materiality: `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is still
+8685 lines with 14 complexity rows, including camera capture, scene-camera
+capture, semantic-pose robot-view image capture, `main`, and `parse_args`.
+This is the largest backend-specific module and still forces maintainers to
+rediscover which code can be exercised without importing real Isaac Lab.
+
+Impact radius: workflow.
+
+Maintainer test: a backend change should be reviewable through fake-worker
+tests and module-local helpers without rereading the entire worker process.
+
+Affected paths:
+
+- `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`
+- `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make backend implementation details explicit and local.
+
+Pattern hint: Adapter/module boundary; keep Isaac imports inside worker-owned
+helpers and keep the normal Roboclaws process import-safe.
+
+Suggested proof:
+
+- `ruff check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `ruff format --check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe for fake-worker slices; real Isaac capture claims remain
+local-environment-sensitive and need explicit local simulator proof.
+
+### Candidate 2: Direct Cleanup Orchestration Residual
+
+Severity: P1
+
+Entropy source: residual orchestration complexity.
+
+Materiality: `run_realworld_cleanup(...)` still mixes option validation,
+backend/session setup, planner-proof attachment, policy selection, waypoint
+scan loop, minimal-map deferred cleanup, done fallback, snapshots, robot-view
+recording, and finalizer invocation.
+
+Impact radius: module.
+
+Maintainer test: a direct-run behavior change should land in a named stage
+helper without requiring the reviewer to re-derive the full run lifecycle.
+
+Affected paths:
+
+- `roboclaws/household/realworld_cleanup.py`
+- `roboclaws/household/realworld_run_artifacts.py`
+- `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py`
+- `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make the orchestration reader obvious.
+
+Pattern hint: Pipeline/staged orchestration; direct helpers are clearer than a
+new class unless state starts to escape the function.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/realworld_cleanup.py roboclaws/household/realworld_run_artifacts.py`
+- `ruff format --check roboclaws/household/realworld_cleanup.py roboclaws/household/realworld_run_artifacts.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe if public artifacts remain schema-stable.
+
+### Candidate 3: Contract Policy Trace Split
+
+Severity: P1
+
+Entropy source: verifier-visible contract complexity.
+
+Materiality: `cleanup_policy_trace_from_events(...)` drives report/checker
+evidence for loop style, waypoint coverage, cleanup action counts, and
+post-place observation accounting, but still contains event role classification,
+waypoint accounting, summary derivation, and payload assembly in one function.
+
+Impact radius: module.
+
+Maintainer test: trace evidence should fail narrowly when role classification
+or coverage accounting changes instead of hiding inside one branch-heavy helper.
+
+Affected paths:
+
+- `roboclaws/household/realworld_contract.py`
+- likely new `roboclaws/household/realworld_policy_trace.py`
+- `roboclaws/household/realworld_run_artifacts.py`
+- `roboclaws/household/realworld_mcp_run_artifacts.py`
+- `tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: split public contract evidence into named facts.
+
+Pattern hint: no heavy pattern; an event-accumulator dataclass plus pure
+summary helpers is likely enough.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/realworld_contract.py roboclaws/household/realworld_policy_trace.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+- `ruff format --check roboclaws/household/realworld_contract.py roboclaws/household/realworld_policy_trace.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe if `CLEANUP_POLICY_TRACE_SCHEMA` remains stable.
+
+### Candidate 4: Live Checker Agibot/Minimal-Map Split
+
+Severity: P1
+
+Entropy source: false-confidence risk in the live artifact checker.
+
+Materiality: the checker remains the trust gate for cleanup/map-build
+artifacts. Remaining large assertion families cover Agibot semantic-map build,
+Agibot G2 hardware evidence, minimal-map evidence, and CLI parsing.
+
+Impact radius: workflow.
+
+Maintainer test: artifact checker changes should be reviewable by assertion
+family so Agibot and minimal-map gate regressions cannot hide in the monolithic
+checker file.
+
+Affected paths:
+
+- `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- likely new `scripts/molmo_cleanup/realworld_agibot_map_build_checker.py`
+- likely new `scripts/molmo_cleanup/realworld_minimal_map_checker.py`
+- `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: make each live gate explain one artifact family.
+
+Pattern hint: assertion pipeline modules, matching the already-extracted
+agent-view and waypoint-honesty checker modules.
+
+Suggested proof:
+
+- `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/molmo_cleanup/realworld_agibot_map_build_checker.py scripts/molmo_cleanup/realworld_minimal_map_checker.py`
+- `ruff format --check` for the touched checker files
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe if private checker hook names used by tests remain as
+aliases.
+
+### Candidate 5: Report Proof/Robot/Action-Evidence Sections
+
+Severity: P2
+
+Entropy source: report review friction.
+
+Materiality: `roboclaws/household/report.py` is still 7889 lines after map and
+timing extraction. The remaining complexity rows include
+`_action_evidence_summary(...)` and
+`_grasp_cache_availability_preflight_section(...)`, both tied to proof/robot
+review surfaces.
+
+Impact radius: module.
+
+Maintainer test: changing proof or robot evidence rendering should not require
+rereading the shared HTML wrapper.
+
+Affected paths:
+
+- `roboclaws/household/report.py`
+- likely new `roboclaws/household/report_sections_proof.py`
+- likely new `roboclaws/household/report_sections_robot.py`
+- `tests/contract/reports/test_molmo_cleanup_report.py`
+
+Owner skill: `intuitive-refactor`
+
+Zen hint: keep repeated report sections in the modules that name their review
+surface.
+
+Pattern hint: simple section modules, continuing the map/timing section pattern.
+
+Suggested proof:
+
+- `ruff check roboclaws/household/report.py roboclaws/household/report_sections_proof.py roboclaws/household/report_sections_robot.py tests/contract/reports/test_molmo_cleanup_report.py`
+- `ruff format --check` for the touched report files
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`
+- `python scripts/dev/check_python_quality_ratchet.py`
+
+Execution risk: safe if rendered HTML assertions stay behavior-focused and no
+visual redesign is attempted.
+
+### Parked Observation: Planner Manipulation Probe Micro Residual
+
+Remaining rows:
+
+- `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py::_configure_exact_cleanup_task`
+  C901 11.
+- `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py::_install_grasp_collision_diagnostics`
+  C901 11.
+
+Parked reason: after the result packaging, task-sampler diagnostics, and
+`_execute_policy_probe(...)` slices, the remaining rows are micro residual.
+They should not count as a standalone open-ended entropy group unless a later
+runtime-diagnostics slice bundles them with material workflow friction.
 
 ## Parked Cross-Seam / Future Ideas
 
@@ -734,3 +1010,17 @@ Stop this refactor loop when:
   grouped complexity count dropped from 9 to 6 violations, and the
   `_assert_waypoint_honesty` C901 / PLR0912 / PLR0915 rows were removed from
   the main checker baseline.
+- 2026-06-14: Implemented C2.5 by extracting cleanup policy trace construction
+  into `roboclaws/household/realworld_policy_trace.py`. The public
+  `realworld_contract.cleanup_policy_trace_from_events(...)` entrypoint now
+  delegates to a focused event accumulator and pure payload helpers while
+  preserving `CLEANUP_POLICY_TRACE_SCHEMA` and existing trace fields. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py roboclaws/household/realworld_policy_trace.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `ruff format --check roboclaws/household/realworld_contract.py roboclaws/household/realworld_policy_trace.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 175 to 172 Ruff complexity
+  violations, with oversized modules unchanged at 59. The
+  `cleanup_policy_trace_from_events` C901 / PLR0912 / PLR0915 rows were removed
+  from `roboclaws/household/realworld_contract.py`, and that module dropped
+  from 6602 to 6424 lines at the time of the baseline refresh.

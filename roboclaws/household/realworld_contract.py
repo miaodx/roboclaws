@@ -19,16 +19,14 @@ from roboclaws.household.raw_fpv_guidance import (
     raw_fpv_visual_candidate_recovery,
     raw_fpv_visual_candidate_recovery_hint,
 )
+from roboclaws.household.realworld_policy_trace import (
+    cleanup_policy_trace_from_events as _cleanup_policy_trace_from_events,
+)
 from roboclaws.household.robot_view_pose import room_for_point
 from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
-from roboclaws.household.semantic_timeline import (
-    CLOSE_RECEPTACLE_PHASE,
-    PLACE_INSIDE_PHASE,
-    PLACE_PHASE,
-    SEMANTIC_LOOP_VARIANT,
-)
+from roboclaws.household.semantic_timeline import SEMANTIC_LOOP_VARIANT
 from roboclaws.household.target_query import resolve_target_query
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
@@ -5102,155 +5100,12 @@ def cleanup_policy_trace_from_events(
     trace_events: list[dict[str, Any]],
     agent_view: dict[str, Any],
 ) -> dict[str, Any]:
-    metric_map = agent_view.get("metric_map") or {}
-    inspection_waypoints = metric_map.get("inspection_waypoints") or []
-    if metric_map.get("mode") == MINIMAL_MAP_MODE:
-        coverage_waypoints = [
-            item
-            for item in inspection_waypoints
-            if item.get("waypoint_source") == "generated_exploration_candidate"
-        ]
-        target_inspection_waypoints = [
-            item
-            for item in inspection_waypoints
-            if item.get("waypoint_source") == "generated_target_inspection_candidate"
-        ]
-    else:
-        coverage_waypoints = list(inspection_waypoints)
-        target_inspection_waypoints = [
-            item
-            for item in inspection_waypoints
-            if item.get("waypoint_source") == "generated_target_inspection_candidate"
-        ]
-    coverage_waypoint_ids = {str(item.get("waypoint_id") or "") for item in coverage_waypoints}
-    target_inspection_waypoint_ids = {
-        str(item.get("waypoint_id") or "") for item in target_inspection_waypoints
-    }
-    total_waypoints = len(coverage_waypoints)
-    visited_waypoints: set[str] = set()
-    visited_target_inspection_waypoints: set[str] = set()
-    events = []
-    previous_success_tool = ""
-    first_cleanup_index: int | None = None
-    first_actionable_observation_index: int | None = None
-    observed_waypoints_at_first_cleanup = 0
-    scan_observe_count = 0
-    post_place_observe_count = 0
-    pending_post_place_observes = 0
-    cleanup_action_count = 0
-    placed_object_count = 0
-    for raw in trace_events:
-        if raw.get("event") != "response":
-            continue
-        tool = str(raw.get("tool") or "")
-        response = raw.get("response") if isinstance(raw.get("response"), dict) else {}
-        if not response.get("ok"):
-            continue
-        role = _policy_event_role(
-            tool,
-            previous_success_tool,
-            pending_post_place_observe=pending_post_place_observes > 0,
-        )
-        waypoint_id = str(response.get("waypoint_id") or "")
-        if waypoint_id and waypoint_id in coverage_waypoint_ids:
-            visited_waypoints.add(waypoint_id)
-        if waypoint_id and waypoint_id in target_inspection_waypoint_ids:
-            visited_target_inspection_waypoints.add(waypoint_id)
-        if role == "coverage_scan_observe":
-            scan_observe_count += 1
-            if first_actionable_observation_index is None and _response_has_actionable_detection(
-                response
-            ):
-                first_actionable_observation_index = len(events)
-        if role == "post_place_observe":
-            post_place_observe_count += 1
-            pending_post_place_observes = max(0, pending_post_place_observes - 1)
-        if role == "cleanup_action":
-            cleanup_action_count += 1
-            if tool in {PLACE_PHASE, PLACE_INSIDE_PHASE}:
-                placed_object_count += 1
-                pending_post_place_observes += 1
-            if first_cleanup_index is None:
-                first_cleanup_index = len(events)
-                observed_waypoints_at_first_cleanup = len(visited_waypoints)
-        events.append(
-            {
-                "index": len(events) + 1,
-                "tool": tool,
-                "role": role,
-                "waypoint_id": waypoint_id,
-                "object_id": response.get("object_id", ""),
-                "fixture_id": response.get("fixture_id", response.get("receptacle_id", "")),
-            }
-        )
-        previous_success_tool = _terminal_policy_tool(tool, response)
-    first_cleanup_before_full_survey = (
-        cleanup_action_count > 0 and observed_waypoints_at_first_cleanup < total_waypoints
+    return _cleanup_policy_trace_from_events(
+        trace_events,
+        agent_view,
+        schema=CLEANUP_POLICY_TRACE_SCHEMA,
+        minimal_map_mode=MINIMAL_MAP_MODE,
     )
-    if cleanup_action_count == 0:
-        loop_style = "scan_only"
-    elif metric_map.get("mode") == MINIMAL_MAP_MODE and not first_cleanup_before_full_survey:
-        loop_style = "survey_first_cleanup_loop"
-    elif first_cleanup_before_full_survey:
-        loop_style = "interleaved_cleanup_loop"
-    elif _cleanup_started_after_first_actionable_observation(
-        first_cleanup_index=first_cleanup_index,
-        first_actionable_observation_index=first_actionable_observation_index,
-    ):
-        loop_style = "interleaved_cleanup_loop"
-    else:
-        loop_style = "survey_first_cleanup_loop"
-    waypoint_source = (
-        "generated_exploration_candidate"
-        if metric_map.get("mode") == MINIMAL_MAP_MODE
-        else "static_map_fixture_coverage"
-    )
-    return {
-        "schema": CLEANUP_POLICY_TRACE_SCHEMA,
-        "waypoint_source": waypoint_source,
-        "loop_style": loop_style,
-        "total_waypoints": total_waypoints,
-        "observed_waypoint_count": len(visited_waypoints),
-        "target_inspection_waypoint_count": len(target_inspection_waypoint_ids),
-        "observed_target_inspection_waypoint_count": len(visited_target_inspection_waypoints),
-        "scan_observe_count": scan_observe_count,
-        "cleanup_action_count": cleanup_action_count,
-        "placed_object_count": placed_object_count,
-        "post_place_observe_count": post_place_observe_count,
-        "post_place_observe_complete": post_place_observe_count >= placed_object_count,
-        "first_actionable_observation_index": (
-            None
-            if first_actionable_observation_index is None
-            else first_actionable_observation_index + 1
-        ),
-        "first_cleanup_index": None if first_cleanup_index is None else first_cleanup_index + 1,
-        "first_cleanup_before_full_survey": first_cleanup_before_full_survey,
-        "events": events,
-        "public_contract_note": (
-            "Waypoint scans are static-map coverage checks. Cleanup actions use "
-            "observed_* handles discovered by observe or camera-model policy."
-        ),
-    }
-
-
-def _response_has_actionable_detection(response: dict[str, Any]) -> bool:
-    detections = [
-        *(response.get("visible_object_detections") or []),
-        *(response.get("camera_model_candidates") or []),
-    ]
-    return any(
-        isinstance(item, dict) and bool(item.get("cleanup_recommended")) for item in detections
-    )
-
-
-def _cleanup_started_after_first_actionable_observation(
-    *,
-    first_cleanup_index: int | None,
-    first_actionable_observation_index: int | None,
-) -> bool:
-    if first_cleanup_index is None or first_actionable_observation_index is None:
-        return False
-    return first_cleanup_index == first_actionable_observation_index + 1
 
 
 def real_robot_readiness_from_events(
@@ -5320,39 +5175,6 @@ def real_robot_readiness_from_events(
     )
     _assert_no_forbidden_agent_view_keys(evidence)
     return evidence
-
-
-def _policy_event_role(
-    tool: str,
-    previous_success_tool: str,
-    *,
-    pending_post_place_observe: bool = False,
-) -> str:
-    if tool == "navigate_to_waypoint":
-        return "coverage_scan_navigation"
-    if tool == "observe":
-        return (
-            "post_place_observe"
-            if pending_post_place_observe
-            or previous_success_tool in {PLACE_PHASE, PLACE_INSIDE_PHASE, CLOSE_RECEPTACLE_PHASE}
-            else ("coverage_scan_observe")
-        )
-    if tool in {
-        "navigate_to_object",
-        "navigate_to_visual_candidate",
-        "pick",
-        "navigate_to_receptacle",
-        "open_receptacle",
-        "place",
-        "place_inside",
-        "close_receptacle",
-    }:
-        return "cleanup_action"
-    return "setup_or_completion"
-
-
-def _terminal_policy_tool(tool: str, response: dict[str, Any]) -> str:
-    return tool
 
 
 def _map_bundle_fields_present(metric_map: dict[str, Any]) -> bool:
