@@ -252,7 +252,9 @@ Rejected alternatives:
     preflight sections now live in
     `roboclaws/household/report_sections_grasp_cache.py`; proof-bundle runner
     command, preflight, mitigation, warmup, and rerun artifact sections now live
-    in `roboclaws/household/report_sections_proof_bundle.py`.
+    in `roboclaws/household/report_sections_proof_bundle.py`; Agent View,
+    runtime-map/worklist, cleanup-policy trace, and real-robot readiness
+    sections now live in `roboclaws/household/report_sections_agent.py`.
   - Continue with proof/robot/agent report families only as separate verified
     slices; do not mix planner-probe report renderers into this cleanup-report
     slice.
@@ -328,7 +330,7 @@ Quality signal:
   complexity violations and 59 oversized modules.
 - `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`
   shows the largest implementation hotspots are
-  `roboclaws/household/report.py` (7351 lines, 0 complexity rows),
+  `roboclaws/household/report.py` (6930 lines, 0 complexity rows),
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7635 lines, 0
   complexity rows),
   `roboclaws/household/scene_camera_comparison.py` (6796 lines, 8 rows),
@@ -431,11 +433,11 @@ Severity: P1
 
 Entropy source: report review friction and recurring rediscovery.
 
-Materiality: `roboclaws/household/report.py` is still 7351 lines after map,
-timing, action-evidence, grasp-cache preflight, and light proof-bundle runner
-section extraction. It now has zero grouped complexity rows, while proof
-selection/results, robot, agent, Agibot, and SDK runner sections still share
-the same namespace.
+Materiality: `roboclaws/household/report.py` is still 6930 lines after map,
+timing, action-evidence, grasp-cache preflight, light proof-bundle runner, and
+agent-view section extraction. It now has zero grouped complexity rows, while
+proof selection/results, robot, Agibot, and SDK runner sections still share the
+same namespace.
 
 Impact radius: module.
 
@@ -1417,3 +1419,17 @@ Stop this refactor loop when:
   passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
   quality baseline stayed at 142 Ruff complexity violations and 59 oversized
   modules, while `report.py` dropped from 7637 to 7351 lines.
+- 2026-06-14: Continued C3 by extracting Agent View, runtime metric map,
+  cleanup worklist, skill scratchpad, cleanup policy trace, and real-robot
+  readiness rendering into `roboclaws/household/report_sections_agent.py`.
+  `report.py` now imports `agent_view_section(...)`,
+  `cleanup_policy_trace_section(...)`, and
+  `real_robot_readiness_section(...)` instead of carrying those public
+  evidence tables inline. Evidence:
+  `ruff check roboclaws/household/report.py roboclaws/household/report_sections_agent.py tests/contract/reports/test_molmo_cleanup_report.py`
+  passed; `ruff format --check roboclaws/household/report.py roboclaws/household/report_sections_agent.py`
+  passed; `python -m py_compile roboclaws/household/report.py roboclaws/household/report_sections_agent.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline stayed at 142 Ruff complexity violations and 59 oversized
+  modules, while `report.py` dropped from 7351 to 6930 lines.

@@ -48,7 +48,7 @@
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
       {
-        "lines": 7351,
+        "lines": 6930,
         "max_module_lines": 800,
         "path": "roboclaws/household/report.py"
       },
