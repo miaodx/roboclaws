@@ -8,7 +8,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -44,6 +44,7 @@ from roboclaws.household.robot_view_pose import (
     room_for_point,
     room_outline_clearance,
 )
+from scripts.molmo_cleanup.molmospaces_worker_cli import build_arg_parser
 
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
@@ -51,182 +52,52 @@ HELD_LOCATION_ID = "held_by_agent"
 DEFAULT_RENDER_WIDTH = 540
 DEFAULT_RENDER_HEIGHT = 360
 _MODEL_DATA_CACHE: dict[tuple[str, str], tuple[mujoco.MjModel, mujoco.MjData]] = {}
+_STATE_MUTATING_COMMANDS = {
+    "observe",
+    "navigate_to_object",
+    "navigate_to_waypoint",
+    "navigate_to_receptacle",
+    "frame_comparison_object",
+    "pick",
+    "open_receptacle",
+    "close_receptacle",
+    "place",
+    "place_inside",
+}
+type _WorkerCommandHandler = Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="MolmoSpaces JSON worker for roboclaws.")
-    parser.add_argument("--state-path", type=Path, required=True)
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    init = subparsers.add_parser("init")
-    init.add_argument("--seed", type=int, default=7)
-    init.add_argument("--scene-source", default="procthor-10k-val")
-    init.add_argument("--scene-index", type=int, default=0)
-    init.add_argument("--include-robot", action="store_true")
-    init.add_argument("--robot-name", default="rby1m")
-    init.add_argument("--generated-mess-count", type=int, default=5)
-    init.add_argument(
-        "--generated-mess-object-id",
-        action="append",
-        help="Private run-control object id to include in the generated mess set. Repeatable.",
-    )
-    init.add_argument(
-        "--generated-mess-manifest-path",
-        type=Path,
-        help="Private backend-neutral generated mess manifest to apply during init.",
-    )
-
-    subparsers.add_parser("observe")
-    subparsers.add_parser("locations")
-
-    snapshot = subparsers.add_parser("snapshot")
-    snapshot.add_argument("--output-path", type=Path, required=True)
-    snapshot.add_argument("--title", default="")
-    snapshot.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
-    snapshot.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
-
-    robot_views = subparsers.add_parser("robot_views")
-    robot_views.add_argument("--output-dir", type=Path, required=True)
-    robot_views.add_argument("--label", required=True)
-    robot_views.add_argument("--focus-object-id")
-    robot_views.add_argument("--focus-receptacle-id")
-    robot_views.add_argument("--camera-yaw-offset-deg", type=float, default=0.0)
-    robot_views.add_argument("--camera-pitch-offset-deg", type=float, default=0.0)
-    robot_views.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
-    robot_views.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
-
-    camera_views = subparsers.add_parser("camera_views")
-    camera_views.add_argument("--output-dir", type=Path, required=True)
-    camera_views.add_argument("--view-specs-path", type=Path)
-    camera_views.add_argument("--camera-request-path", type=Path)
-    camera_views.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
-    camera_views.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
-
-    navigate_object = subparsers.add_parser("navigate_to_object")
-    navigate_object.add_argument("--object-id", required=True)
-
-    navigate_waypoint = subparsers.add_parser("navigate_to_waypoint")
-    navigate_waypoint.add_argument("--waypoint-json", required=True)
-
-    navigate_receptacle = subparsers.add_parser("navigate_to_receptacle")
-    navigate_receptacle.add_argument("--receptacle-id", required=True)
-
-    frame_comparison_object_parser = subparsers.add_parser("frame_comparison_object")
-    frame_comparison_object_parser.add_argument("--object-id", required=True)
-
-    pick = subparsers.add_parser("pick")
-    pick.add_argument("--object-id", required=True)
-
-    open_receptacle_parser = subparsers.add_parser("open_receptacle")
-    open_receptacle_parser.add_argument("--receptacle-id", required=True)
-
-    close_receptacle_parser = subparsers.add_parser("close_receptacle")
-    close_receptacle_parser.add_argument("--receptacle-id", required=True)
-
-    place = subparsers.add_parser("place")
-    place.add_argument("--receptacle-id", required=True)
-
-    place_inside_parser = subparsers.add_parser("place_inside")
-    place_inside_parser.add_argument("--receptacle-id", required=True)
-
-    done = subparsers.add_parser("done")
-    done.add_argument("--reason", default="")
-
-    subparsers.add_parser("serve")
-
-    args = parser.parse_args(argv)
+    args = _parse_args(argv)
     if args.command == "serve":
         serve(args.state_path)
         return
     if args.command == "init":
-        result = init_state(
-            state_path=args.state_path,
-            seed=args.seed,
-            scene_source=args.scene_source,
-            scene_index=args.scene_index,
-            include_robot=args.include_robot,
-            robot_name=args.robot_name,
-            generated_mess_count=args.generated_mess_count,
-            generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
-            generated_mess_manifest_path=args.generated_mess_manifest_path,
-        )
+        result = _init_command(args)
     else:
-        state = _read_state(args.state_path)
-        if args.command == "observe":
-            result = observe(state)
-            _write_state(args.state_path, state)
-        elif args.command == "locations":
-            result = _ok("locations", final_locations=_read_locations(state))
-        elif args.command == "snapshot":
-            result = write_snapshot(
-                state,
-                args.output_path,
-                args.title,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        elif args.command == "robot_views":
-            result = write_robot_views(
-                state,
-                args.output_dir,
-                args.label,
-                focus_object_id=args.focus_object_id,
-                focus_receptacle_id=args.focus_receptacle_id,
-                camera_yaw_offset_deg=args.camera_yaw_offset_deg,
-                camera_pitch_offset_deg=args.camera_pitch_offset_deg,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        elif args.command == "camera_views":
-            camera_request = _load_camera_request_from_args(
-                view_specs_path=args.view_specs_path,
-                camera_request_path=args.camera_request_path,
-                width=args.render_width,
-                height=args.render_height,
-            )
-            result = write_camera_views(
-                state,
-                args.output_dir,
-                camera_request,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        elif args.command == "navigate_to_object":
-            result = navigate_to_object(state, args.object_id)
-            _write_state(args.state_path, state)
-        elif args.command == "navigate_to_waypoint":
-            result = navigate_to_waypoint(
-                state,
-                _json_object_from_text(args.waypoint_json),
-            )
-            _write_state(args.state_path, state)
-        elif args.command == "navigate_to_receptacle":
-            result = navigate_to_receptacle(state, args.receptacle_id)
-            _write_state(args.state_path, state)
-        elif args.command == "frame_comparison_object":
-            result = frame_comparison_object(state, args.object_id)
-            _write_state(args.state_path, state)
-        elif args.command == "pick":
-            result = pick_object(state, args.object_id)
-            _write_state(args.state_path, state)
-        elif args.command == "open_receptacle":
-            result = open_receptacle(state, args.receptacle_id)
-            _write_state(args.state_path, state)
-        elif args.command == "close_receptacle":
-            result = close_receptacle(state, args.receptacle_id)
-            _write_state(args.state_path, state)
-        elif args.command == "place":
-            result = place_object(state, args.receptacle_id)
-            _write_state(args.state_path, state)
-        elif args.command == "place_inside":
-            result = place_inside_object(state, args.receptacle_id)
-            _write_state(args.state_path, state)
-        elif args.command == "done":
-            result = done_cleanup(state, args.reason)
-        else:
-            raise AssertionError(args.command)
-
+        result = _run_worker_command(args.state_path, args.command, _cli_command_kwargs(args))
     print(json.dumps(result, sort_keys=True))
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    return build_arg_parser(
+        default_render_width=DEFAULT_RENDER_WIDTH,
+        default_render_height=DEFAULT_RENDER_HEIGHT,
+    ).parse_args(argv)
+
+
+def _init_command(args: argparse.Namespace) -> dict[str, Any]:
+    return init_state(
+        state_path=args.state_path,
+        seed=args.seed,
+        scene_source=args.scene_source,
+        scene_index=args.scene_index,
+        include_robot=args.include_robot,
+        robot_name=args.robot_name,
+        generated_mess_count=args.generated_mess_count,
+        generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
+        generated_mess_manifest_path=args.generated_mess_manifest_path,
+    )
 
 
 def serve(state_path: Path) -> None:
@@ -270,80 +141,187 @@ def run_state_command(
     command: str,
     kwargs: dict[str, Any],
 ) -> dict[str, Any]:
+    return _run_worker_command(state_path, command, kwargs)
+
+
+def _run_worker_command(
+    state_path: Path,
+    command: str,
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
     state = _read_state(state_path)
-    if command == "observe":
-        result = observe(state)
+    result, should_write = _run_loaded_state_command(state, command, kwargs)
+    if should_write:
         _write_state(state_path, state)
-    elif command == "locations":
-        result = _ok("locations", final_locations=_read_locations(state))
-    elif command == "snapshot":
-        result = write_snapshot(
-            state,
-            Path(str(kwargs["output_path"])),
-            str(kwargs.get("title") or ""),
-            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
-            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
-        )
-    elif command == "robot_views":
-        result = write_robot_views(
-            state,
-            Path(str(kwargs["output_dir"])),
-            str(kwargs["label"]),
-            focus_object_id=_optional_str(kwargs.get("focus_object_id")),
-            focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
-            camera_yaw_offset_deg=_float_or_zero(kwargs.get("camera_yaw_offset_deg")),
-            camera_pitch_offset_deg=_float_or_zero(kwargs.get("camera_pitch_offset_deg")),
-            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
-            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
-        )
-    elif command == "camera_views":
-        camera_request = _load_camera_request_from_kwargs(
-            kwargs,
-            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
-            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
-        )
-        result = write_camera_views(
-            state,
-            Path(str(kwargs["output_dir"])),
-            camera_request,
-            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
-            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
-        )
-    elif command == "navigate_to_object":
-        result = navigate_to_object(state, str(kwargs["object_id"]))
-        _write_state(state_path, state)
-    elif command == "navigate_to_waypoint":
-        result = navigate_to_waypoint(
-            state,
-            _json_object_from_text(str(kwargs["waypoint_json"])),
-        )
-        _write_state(state_path, state)
-    elif command == "navigate_to_receptacle":
-        result = navigate_to_receptacle(state, str(kwargs["receptacle_id"]))
-        _write_state(state_path, state)
-    elif command == "frame_comparison_object":
-        result = frame_comparison_object(state, str(kwargs["object_id"]))
-        _write_state(state_path, state)
-    elif command == "pick":
-        result = pick_object(state, str(kwargs["object_id"]))
-        _write_state(state_path, state)
-    elif command == "open_receptacle":
-        result = open_receptacle(state, str(kwargs["receptacle_id"]))
-        _write_state(state_path, state)
-    elif command == "close_receptacle":
-        result = close_receptacle(state, str(kwargs["receptacle_id"]))
-        _write_state(state_path, state)
-    elif command == "place":
-        result = place_object(state, str(kwargs["receptacle_id"]))
-        _write_state(state_path, state)
-    elif command == "place_inside":
-        result = place_inside_object(state, str(kwargs["receptacle_id"]))
-        _write_state(state_path, state)
-    elif command == "done":
-        result = done_cleanup(state, str(kwargs.get("reason") or ""))
-    else:
-        raise ValueError(f"unknown MolmoSpaces worker command: {command!r}")
     return result
+
+
+def _run_loaded_state_command(
+    state: dict[str, Any],
+    command: str,
+    kwargs: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    handler = _WORKER_COMMAND_HANDLERS.get(command)
+    if handler is None:
+        raise ValueError(f"unknown MolmoSpaces worker command: {command!r}")
+    return handler(state, kwargs), command in _STATE_MUTATING_COMMANDS
+
+
+def _cli_command_kwargs(args: argparse.Namespace) -> dict[str, Any]:
+    command = str(args.command)
+    if command == "snapshot":
+        return {
+            "output_path": args.output_path,
+            "title": args.title,
+            "render_width": args.render_width,
+            "render_height": args.render_height,
+        }
+    if command == "robot_views":
+        return {
+            "output_dir": args.output_dir,
+            "label": args.label,
+            "focus_object_id": args.focus_object_id,
+            "focus_receptacle_id": args.focus_receptacle_id,
+            "camera_yaw_offset_deg": args.camera_yaw_offset_deg,
+            "camera_pitch_offset_deg": args.camera_pitch_offset_deg,
+            "render_width": args.render_width,
+            "render_height": args.render_height,
+        }
+    if command == "camera_views":
+        return {
+            "output_dir": args.output_dir,
+            "view_specs_path": args.view_specs_path,
+            "camera_request_path": args.camera_request_path,
+            "render_width": args.render_width,
+            "render_height": args.render_height,
+        }
+    if command in {"navigate_to_object", "frame_comparison_object", "pick"}:
+        return {"object_id": args.object_id}
+    if command == "navigate_to_waypoint":
+        return {"waypoint_json": args.waypoint_json}
+    if command in {
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "close_receptacle",
+        "place",
+        "place_inside",
+    }:
+        return {"receptacle_id": args.receptacle_id}
+    if command == "done":
+        return {"reason": args.reason}
+    return {}
+
+
+def _snapshot_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return write_snapshot(
+        state,
+        Path(str(kwargs["output_path"])),
+        str(kwargs.get("title") or ""),
+        width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
+        height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
+    )
+
+
+def _robot_views_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return write_robot_views(
+        state,
+        Path(str(kwargs["output_dir"])),
+        str(kwargs["label"]),
+        focus_object_id=_optional_str(kwargs.get("focus_object_id")),
+        focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
+        camera_yaw_offset_deg=_float_or_zero(kwargs.get("camera_yaw_offset_deg")),
+        camera_pitch_offset_deg=_float_or_zero(kwargs.get("camera_pitch_offset_deg")),
+        width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
+        height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
+    )
+
+
+def _camera_views_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    width = _positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH)
+    height = _positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT)
+    camera_request = _load_camera_request_from_kwargs(kwargs, width=width, height=height)
+    return write_camera_views(
+        state,
+        Path(str(kwargs["output_dir"])),
+        camera_request,
+        width=width,
+        height=height,
+    )
+
+
+def _observe_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    del kwargs
+    return observe(state)
+
+
+def _locations_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    del kwargs
+    return _ok("locations", final_locations=_read_locations(state))
+
+
+def _navigate_to_object_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return navigate_to_object(state, str(kwargs["object_id"]))
+
+
+def _navigate_to_waypoint_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return navigate_to_waypoint(state, _json_object_from_text(str(kwargs["waypoint_json"])))
+
+
+def _navigate_to_receptacle_command(
+    state: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    return navigate_to_receptacle(state, str(kwargs["receptacle_id"]))
+
+
+def _frame_comparison_object_command(
+    state: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    return frame_comparison_object(state, str(kwargs["object_id"]))
+
+
+def _pick_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return pick_object(state, str(kwargs["object_id"]))
+
+
+def _open_receptacle_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return open_receptacle(state, str(kwargs["receptacle_id"]))
+
+
+def _close_receptacle_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return close_receptacle(state, str(kwargs["receptacle_id"]))
+
+
+def _place_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return place_object(state, str(kwargs["receptacle_id"]))
+
+
+def _place_inside_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return place_inside_object(state, str(kwargs["receptacle_id"]))
+
+
+def _done_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    return done_cleanup(state, str(kwargs.get("reason") or ""))
+
+
+_WORKER_COMMAND_HANDLERS: dict[str, _WorkerCommandHandler] = {
+    "observe": _observe_command,
+    "locations": _locations_command,
+    "snapshot": _snapshot_command,
+    "robot_views": _robot_views_command,
+    "camera_views": _camera_views_command,
+    "navigate_to_object": _navigate_to_object_command,
+    "navigate_to_waypoint": _navigate_to_waypoint_command,
+    "navigate_to_receptacle": _navigate_to_receptacle_command,
+    "frame_comparison_object": _frame_comparison_object_command,
+    "pick": _pick_command,
+    "open_receptacle": _open_receptacle_command,
+    "close_receptacle": _close_receptacle_command,
+    "place": _place_command,
+    "place_inside": _place_inside_command,
+    "done": _done_command,
+}
 
 
 def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:

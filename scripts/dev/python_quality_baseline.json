@@ -103,7 +103,7 @@
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
       },
       {
-        "lines": 4018,
+        "lines": 3996,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py"
       },
@@ -1307,56 +1307,6 @@
         "row": 431,
         "symbol": "_label_full_trace",
         "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|C901|main",
-        "limit": 10,
-        "message": "`main` is too complex (18 > 10)",
-        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-        "row": 56,
-        "symbol": "main",
-        "value": 18
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|C901|run_state_command",
-        "limit": 10,
-        "message": "`run_state_command` is too complex (16 > 10)",
-        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-        "row": 268,
-        "symbol": "run_state_command",
-        "value": 16
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|PLR0912|main",
-        "limit": 12,
-        "message": "Too many branches (19 > 12)",
-        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-        "row": 56,
-        "symbol": "main",
-        "value": 19
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|PLR0912|run_state_command",
-        "limit": 12,
-        "message": "Too many branches (16 > 12)",
-        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-        "row": 268,
-        "symbol": "run_state_command",
-        "value": 16
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|PLR0915|main",
-        "limit": 50,
-        "message": "Too many statements (106 > 50)",
-        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-        "row": 56,
-        "symbol": "main",
-        "value": 106
       },
       {
         "code": "C901",

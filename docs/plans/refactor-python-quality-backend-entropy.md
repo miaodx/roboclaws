@@ -157,7 +157,7 @@ Rejected alternatives:
   - Preserve synthetic fallback snapshots, visual-backend robot-view artifacts,
     public artifact schemas, and fake Isaac tests.
 
-- [ ] **B6: Normalize MolmoSpaces worker command dispatch.**
+- [x] **B6: Normalize MolmoSpaces worker command dispatch.**
   - Target `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`.
   - Replace the duplicated one-shot `main(...)` command branch and persistent
     `run_state_command(...)` branch with one backend command dispatch table or
@@ -336,7 +336,7 @@ Materiality gate:
 - Implementation update: earlier candidates for contract policy trace and live
   checker Agibot/minimal-map splitting have shipped in this flow.
 - Remaining active candidates from this packet are Candidate 1, Candidate 2,
-  Candidate 5, and new Candidate 6.
+  and Candidate 5.
 - Requested group count was treated as a maximum, not a quota.
 
 ### Candidate 1: Isaac Worker Camera/Runtime Split
@@ -543,6 +543,8 @@ Execution risk: safe if rendered HTML assertions stay behavior-focused and no
 visual redesign is attempted.
 
 ### Candidate 6: MolmoSpaces Worker Command Dispatch
+
+Status: implemented 2026-06-14.
 
 Severity: P1
 
@@ -1100,3 +1102,18 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. The live cleanup checker
   dropped from 2258 to 1914 lines, and the Agibot/minimal-map C901/PLR0912/
   PLR0915 rows were removed from the main checker baseline.
+- 2026-06-14: Implemented B6 by centralizing MolmoSpaces worker command
+  dispatch. The worker now uses a single state-command handler table for both
+  one-shot CLI execution and persistent `serve` / `run_state_command(...)`
+  requests, with state writeback controlled by one explicit mutating-command
+  set. Pure argparse setup moved to
+  `scripts/molmo_cleanup/molmospaces_worker_cli.py`, keeping MuJoCo/state
+  behavior in `molmospaces_subprocess_worker.py`. Evidence:
+  `ruff check scripts/molmo_cleanup/molmospaces_subprocess_worker.py scripts/molmo_cleanup/molmospaces_worker_cli.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 167 to 162 Ruff complexity
+  violations, with oversized modules unchanged at 59. The MolmoSpaces worker
+  dropped from five grouped complexity rows to zero and from 4018 to 3996 lines
+  in the oversized-module baseline.
