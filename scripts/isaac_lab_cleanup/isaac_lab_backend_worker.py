@@ -70,6 +70,11 @@ from scripts.isaac_lab_cleanup.isaac_camera_capture import (
     IsaacCameraCaptureRequest,
     capture_isaac_lab_camera_views,
 )
+from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
+    IsaacSceneCameraCaptureHooks,
+    IsaacSceneCameraCaptureRequest,
+    capture_isaac_lab_scene_camera_views,
+)
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
@@ -2336,136 +2341,32 @@ def _capture_isaac_lab_scene_camera_views(
     simulation_app: Any,
     semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    import isaaclab.sim as sim_utils
-    import isaacsim.core.utils.stage as stage_utils
-    import numpy as np
-    import torch
-    from isaaclab.sensors.camera import Camera, CameraCfg
-
-    opened = stage_utils.open_stage(str(scene_usd))
-    if opened is False:
-        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
-    _wait_for_stage_load(stage_utils, simulation_app)
-    _load_current_stage_payloads(stage_utils)
-    pose_apply = _apply_semantic_pose_state_to_stage(
-        stage_utils=stage_utils,
-        semantic_pose_state=semantic_pose_state,
-    )
-    scene_bounds = _current_stage_bounds(stage_utils)
-    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
-    resolution = camera_request["render_resolution"]
-    width = int(resolution["width"])
-    height = int(resolution["height"])
-    lighting_diagnostics = _ensure_capture_lighting(
-        stage_utils,
-        profile=camera_request.get("lighting_profile"),
-    )
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
-    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
-    color_profile = camera_request.get("color_profile") or {}
-    focal_length = float(lens.get("focal_length_mm", 24.0))
-    horizontal_aperture = _horizontal_aperture_from_lens(
-        lens,
-        width=width,
-        height=height,
-        focal_length=focal_length,
-    )
-    sim_utils.create_prim("/World/RoboclawsSceneProbeCameraRig", "Xform")
-    camera = Camera(
-        cfg=CameraCfg(
-            prim_path="/World/RoboclawsSceneProbeCameraRig/Camera",
-            update_period=0.0,
-            height=height,
+    return capture_isaac_lab_scene_camera_views(
+        request=IsaacSceneCameraCaptureRequest(
+            scene_usd=scene_usd,
+            camera_request=camera_request,
+            output_dir=output_dir,
             width=width,
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=focal_length,
-                focus_distance=4.0,
-                horizontal_aperture=horizontal_aperture,
-            ),
-        )
+            height=height,
+            simulation_app=simulation_app,
+            semantic_pose_state=_dict(semantic_pose_state),
+            renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        ),
+        hooks=IsaacSceneCameraCaptureHooks(
+            normalize_camera_control_request=normalize_camera_control_request,
+            wait_for_stage_load=_wait_for_stage_load,
+            load_current_stage_payloads=_load_current_stage_payloads,
+            apply_semantic_pose_state_to_stage=_apply_semantic_pose_state_to_stage,
+            current_stage_bounds=_current_stage_bounds,
+            ensure_capture_lighting=_ensure_capture_lighting,
+            horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+            isaac_native_render_diagnostics=_isaac_native_render_diagnostics,
+            camera_render_product_paths=_camera_render_product_paths,
+            isaac_scene_camera_view_spec=_isaac_scene_camera_view_spec,
+            rgb_tensor_to_uint8=_rgb_tensor_to_uint8,
+            image_has_variance=_image_has_variance,
+        ),
     )
-    sim.reset()
-    native_render_diagnostics = _isaac_native_render_diagnostics(
-        renderer_mode=REAL_SMOKE_RENDERER_MODE,
-        capture_method="isaac_lab_camera_rgb_scene_probe",
-        view_kind="scene_camera_views",
-        render_resolution={"width": width, "height": height},
-        camera_prim_paths=["/World/RoboclawsSceneProbeCameraRig/Camera"],
-        render_product_paths=_camera_render_product_paths(camera),
-        isaac_lab_isp_active=False,
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    saved: dict[str, str] = {}
-    shapes: dict[str, list[int]] = {}
-    color_diagnostics: dict[str, dict[str, Any]] = {}
-    views: list[dict[str, Any]] = []
-    total_render_steps = 0
-    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
-        spec = _isaac_scene_camera_view_spec(
-            raw_spec,
-            index=index,
-            stage_utils=stage_utils,
-        )
-        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
-        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
-        camera.set_world_poses_from_view(position, target)
-        rgb_image = None
-        for _ in range(24):
-            sim.step()
-            total_render_steps += 1
-            camera.update(dt=sim.get_physics_dt())
-            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                break
-        if rgb_image is None:
-            raise RuntimeError(
-                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
-            )
-        if not _image_has_variance(rgb_image, np=np):
-            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
-        rgb_image, color_diagnostic = apply_camera_color_profile(
-            rgb_image,
-            np=np,
-            profile=color_profile,
-            backend="isaaclab-prepared-usd",
-            view_id=str(spec["view_id"]),
-        )
-        output_path = output_dir / f"{spec['view_id']}.png"
-        Image.fromarray(rgb_image, mode="RGB").save(output_path)
-        saved[str(spec["view_id"])] = str(output_path)
-        shapes[str(spec["view_id"])] = list(rgb_image.shape)
-        color_diagnostics[str(spec["view_id"])] = color_diagnostic
-        views.append(
-            {
-                **spec,
-                "image_path": str(output_path),
-                "shape": list(rgb_image.shape),
-            }
-        )
-    return {
-        "schema": "isaac_scene_camera_views_v1",
-        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
-        "camera_request_schema": camera_request.get("schema"),
-        "calibration_status": camera_request.get("calibration_status"),
-        "lighting_profile": camera_request.get("lighting_profile") or {},
-        "color_profile": color_profile,
-        "color_management": color_diagnostics,
-        "lighting_diagnostics": lighting_diagnostics,
-        "native_render_diagnostics": native_render_diagnostics,
-        "lens": camera_request.get("lens") or {},
-        "derived_lens": {
-            "focal_length_mm": focal_length,
-            "horizontal_aperture_mm": horizontal_aperture,
-        },
-        "render_steps": total_render_steps,
-        "scene_bounds": scene_bounds,
-        "semantic_pose_stage_application": pose_apply,
-        "views": views,
-        "images": saved,
-        "shapes": shapes,
-    }
 
 
 def _apply_semantic_pose_state_to_stage(

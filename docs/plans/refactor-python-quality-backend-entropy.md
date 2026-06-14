@@ -300,10 +300,12 @@ Rejected alternatives:
   - Treat this as a post-facade backend-internal cleanup; do not change normal
     Roboclaws process imports or require real Isaac Lab for default verification.
   - Status after 2026-06-14 loop: the main robot-view camera capture pipeline
-    is split into `scripts/isaac_lab_cleanup/isaac_camera_capture.py`; remaining
-    worker rows cover scene-camera capture, semantic-pose robot-view rerender,
-    capture-quality overrides, USD semantic labels, support-surface helpers,
-    parse_args, and command dispatch.
+    is split into `scripts/isaac_lab_cleanup/isaac_camera_capture.py`, and the
+    standalone scene-camera probe capture is split into
+    `scripts/isaac_lab_cleanup/isaac_scene_camera_capture.py`; remaining worker
+    rows cover semantic-pose robot-view rerender, capture-quality overrides,
+    USD semantic labels, support-surface helpers, parse_args, and command
+    dispatch.
 
 - [ ] **R1: Continue reduce-entropy discovery after each completed group.**
   - Run the bounded high-noise summary and the quality-debt summary.
@@ -1168,3 +1170,19 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. The Isaac worker dropped
   from 8685 to 8490 lines and from 14 to 11 grouped complexity rows; the
   `_capture_isaac_lab_camera_views` C901 / PLR0912 / PLR0915 rows were removed.
+- 2026-06-14: Continued I1 by extracting the standalone Isaac scene-camera
+  probe capture path into `scripts/isaac_lab_cleanup/isaac_scene_camera_capture.py`.
+  The worker keeps `_capture_isaac_lab_scene_camera_views(...)` as the stable
+  wrapper and passes the existing camera-control, USD-stage, RGB tensor, and
+  native-render diagnostics helpers through `IsaacSceneCameraCaptureHooks`.
+  Evidence:
+  `ruff check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_scene_camera_capture.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+  passed with the existing Pillow deprecation warning from scene-camera image
+  saving; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 156 to 155 Ruff complexity
+  violations, with oversized modules unchanged at 59. The Isaac worker dropped
+  from 8490 to 8391 lines and from 11 to 10 grouped complexity rows; the
+  `_capture_isaac_lab_scene_camera_views` PLR0915 row was removed.
