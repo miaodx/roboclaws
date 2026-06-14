@@ -148,7 +148,7 @@
         "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py"
       },
       {
-        "lines": 5844,
+        "lines": 5332,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py"
       },
@@ -880,53 +880,13 @@
       },
       {
         "code": "C901",
-        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_material_response_probe_history",
-        "limit": 10,
-        "message": "`_material_response_probe_history` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 3967,
-        "symbol": "_material_response_probe_history",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_object_gate_classification",
         "limit": 10,
         "message": "`_object_gate_classification` is too complex (12 > 10)",
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 2302,
+        "row": 2303,
         "symbol": "_object_gate_classification",
         "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_texture_material_target_summary",
-        "limit": 10,
-        "message": "`_texture_material_target_summary` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 4222,
-        "symbol": "_texture_material_target_summary",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_tone_color_probe_history",
-        "limit": 10,
-        "message": "`_tone_color_probe_history` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 4052,
-        "symbol": "_tone_color_probe_history",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_usd_preview_surface_material_model_check",
-        "limit": 10,
-        "message": "`_usd_preview_surface_material_model_check` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 4309,
-        "symbol": "_usd_preview_surface_material_model_check",
-        "value": 11
       },
       {
         "code": "PLR0915",
@@ -934,7 +894,7 @@
         "limit": 50,
         "message": "Too many statements (76 > 50)",
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 261,
+        "row": 262,
         "symbol": "run_comparison",
         "value": 76
       },

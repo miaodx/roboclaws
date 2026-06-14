@@ -35,6 +35,7 @@ from scripts.isaac_lab_cleanup.isaac_lab_backend_worker import (
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
 )
+from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
 
 SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
@@ -3869,99 +3870,25 @@ def _probe_manifest_summary(
     manifest_path: Path,
     output_dir: Path | None = None,
 ) -> dict[str, Any]:
-    summary = _dict(payload.get("summary"))
-    scene = _dict(payload.get("scene"))
-    render = _dict(summary.get("render_contract_diagnostics"))
-    camera = _dict(summary.get("camera_contract_diagnostics"))
-    residual = _dict(summary.get("residual_triage"))
-    domain_checks = _dict(summary.get("render_domain_checks"))
-    check_by_id = {
-        str(item.get("check_id")): item
-        for item in domain_checks.get("checks") or []
-        if isinstance(item, dict) and item.get("check_id")
-    }
-    tone_color = _dict(check_by_id.get("tone_color_response"))
-    fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
-    fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
-    rel_path = output_relpath(manifest_path, output_dir or manifest_path.parent)
-    return {
-        "status": "loaded",
-        "path": rel_path,
-        "scene": {
-            "scene_source": scene.get("scene_source"),
-            "scene_index": scene.get("scene_index"),
-            "seed": scene.get("seed"),
-            "generated_mess_count": scene.get("generated_mess_count"),
-            "render_width": scene.get("render_width"),
-            "render_height": scene.get("render_height"),
-            "scene_usd_path": scene.get("scene_usd_path"),
-        },
-        "location_count": summary.get("location_count"),
-        "fpv_mean_abs_rgb_avg": summary.get("fpv_mean_abs_rgb_avg"),
-        "chase_mean_abs_rgb_avg": summary.get("chase_mean_abs_rgb_avg"),
-        "camera_contract_status": camera.get("status"),
-        "fpv_lens_status": fpv_lens.get("status"),
-        "fpv_world_pose_status": fpv_pose.get("status"),
-        "render_contract_status": render.get("status"),
-        "mujoco_light_count": render.get("mujoco_light_count"),
-        "isaac_light_count": render.get("isaac_light_count"),
-        "isaac_shadow_disabled_prim_count": render.get("isaac_shadow_disabled_prim_count"),
-        "residual_status": residual.get("status"),
-        "fpv_residual_classes": _dict_path(residual, ("views", "fpv", "residual_classes")),
-        "tone_color_status": tone_color.get("status"),
-        "comparison_rgb_gain_applied": tone_color.get("comparison_rgb_gain_applied"),
-        "comparison_rgb_gain": tone_color.get("comparison_rgb_gain"),
-    }
+    return material_checks.probe_manifest_summary(
+        payload,
+        manifest_path=manifest_path,
+        output_dir=output_dir,
+    )
 
 
 def _comparison_probe_comparable(
     baseline: dict[str, Any],
     probe: dict[str, Any],
 ) -> bool:
-    baseline_scene = _dict(baseline.get("scene"))
-    probe_scene = _dict(probe.get("scene"))
-    keys = ("scene_source", "scene_index", "seed", "render_width", "render_height")
-    if any(baseline_scene.get(key) != probe_scene.get(key) for key in keys):
-        return False
-    if probe.get("camera_contract_status") != baseline.get("camera_contract_status"):
-        return False
-    pose_status = probe.get("fpv_world_pose_status")
-    baseline_pose_status = baseline.get("fpv_world_pose_status")
-    if pose_status and baseline_pose_status and pose_status != baseline_pose_status:
-        return False
-    lens_status = probe.get("fpv_lens_status")
-    baseline_lens_status = baseline.get("fpv_lens_status")
-    if lens_status and baseline_lens_status and lens_status != baseline_lens_status:
-        return False
-    return True
+    return material_checks.comparison_probe_comparable(baseline, probe)
 
 
 def _comparison_probe_delta(
     baseline: dict[str, Any],
     probe: dict[str, Any],
 ) -> dict[str, Any]:
-    baseline_fpv = _float_or_none(baseline.get("fpv_mean_abs_rgb_avg"))
-    probe_fpv = _float_or_none(probe.get("fpv_mean_abs_rgb_avg"))
-    baseline_chase = _float_or_none(baseline.get("chase_mean_abs_rgb_avg"))
-    probe_chase = _float_or_none(probe.get("chase_mean_abs_rgb_avg"))
-    fpv_delta = (
-        round(float(probe_fpv - baseline_fpv), 4)
-        if baseline_fpv is not None and probe_fpv is not None
-        else None
-    )
-    chase_delta = (
-        round(float(probe_chase - baseline_chase), 4)
-        if baseline_chase is not None and probe_chase is not None
-        else None
-    )
-    return {
-        "fpv_mean_abs_rgb_delta": fpv_delta,
-        "chase_mean_abs_rgb_delta": chase_delta,
-        "fpv_improvement": fpv_delta is not None and fpv_delta < -1.0,
-        "fpv_worse": fpv_delta is not None and fpv_delta > 1.0,
-        "chase_improvement": chase_delta is not None and chase_delta < -1.0,
-        "chase_worse": chase_delta is not None and chase_delta > 1.0,
-    }
+    return material_checks.comparison_probe_delta(baseline, probe)
 
 
 def _material_response_probe_history(
@@ -3970,83 +3897,11 @@ def _material_response_probe_history(
     output_dir: Path,
     probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
-    paths = [Path(path) for path in probe_manifest_paths or []]
-    if not paths:
-        return {
-            "schema": "robot_camera_material_response_probe_history_v1",
-            "status": "not_attached",
-            "probe_count": 0,
-            "probes": [],
-        }
-    baseline = _probe_manifest_summary(
-        manifest, manifest_path=output_dir / "comparison_manifest.json"
+    return material_checks.material_response_probe_history(
+        manifest,
+        output_dir=output_dir,
+        probe_manifest_paths=probe_manifest_paths,
     )
-    probes = []
-    comparable_count = 0
-    improved_count = 0
-    worsened_count = 0
-    neutral_count = 0
-    for path in paths:
-        probe = _load_material_response_probe_manifest(path, output_dir=output_dir)
-        if probe.get("status") == "loaded":
-            comparable = _comparison_probe_comparable(baseline, probe)
-            probe["comparable_to_current"] = comparable
-            if comparable:
-                comparable_count += 1
-            delta = _comparison_probe_delta(baseline, probe)
-            probe["delta_vs_current"] = delta
-            if delta.get("fpv_improvement") is True:
-                improved_count += 1
-            if delta.get("fpv_worse") is True:
-                worsened_count += 1
-            if (
-                comparable
-                and delta.get("fpv_improvement") is not True
-                and delta.get("fpv_worse") is not True
-            ):
-                neutral_count += 1
-        probes.append(probe)
-    if improved_count:
-        status = "prior_probe_improved"
-    elif worsened_count and comparable_count:
-        status = "prior_probes_worse"
-    elif comparable_count:
-        status = "prior_probes_no_fpv_gain"
-    else:
-        status = "no_comparable_probe"
-    return {
-        "schema": "robot_camera_material_response_probe_history_v1",
-        "status": status,
-        "baseline": baseline,
-        "probe_count": len(probes),
-        "comparable_probe_count": comparable_count,
-        "improved_probe_count": improved_count,
-        "worsened_probe_count": worsened_count,
-        "neutral_probe_count": neutral_count,
-        "probes": probes,
-        "interpretation": (
-            "Historical material-response probes are comparison evidence only. They "
-            "separate texture colorspace, PreviewSurface roughness/specular response, "
-            "and tone/material effects from the head-camera contract."
-        ),
-    }
-
-
-def _load_material_response_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {
-            "status": "missing_manifest",
-            "path": output_relpath(path, output_dir),
-        }
-    try:
-        payload = _read_json(path)
-    except (OSError, json.JSONDecodeError) as exc:
-        return {
-            "status": "read_failed",
-            "path": output_relpath(path, output_dir),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
 
 
 def _tone_color_probe_history(
@@ -4055,255 +3910,25 @@ def _tone_color_probe_history(
     output_dir: Path,
     probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
-    paths = [Path(path) for path in probe_manifest_paths or []]
-    if not paths:
-        return {
-            "schema": "robot_camera_tone_color_probe_history_v1",
-            "status": "not_attached",
-            "probe_count": 0,
-            "probes": [],
-        }
-    baseline = _probe_manifest_summary(
-        manifest, manifest_path=output_dir / "comparison_manifest.json"
+    return material_checks.tone_color_probe_history(
+        manifest,
+        output_dir=output_dir,
+        probe_manifest_paths=probe_manifest_paths,
     )
-    probes = []
-    comparable_count = 0
-    improved_count = 0
-    worsened_count = 0
-    neutral_count = 0
-    for path in paths:
-        probe = _load_tone_color_probe_manifest(path, output_dir=output_dir)
-        if probe.get("status") == "loaded":
-            comparable = _comparison_probe_comparable(baseline, probe)
-            probe["comparable_to_current"] = comparable
-            if comparable:
-                comparable_count += 1
-            delta = _comparison_probe_delta(baseline, probe)
-            probe["delta_vs_current"] = delta
-            if comparable and delta.get("fpv_improvement") is True:
-                improved_count += 1
-            if comparable and delta.get("fpv_worse") is True:
-                worsened_count += 1
-            if (
-                comparable
-                and delta.get("fpv_improvement") is not True
-                and delta.get("fpv_worse") is not True
-            ):
-                neutral_count += 1
-        probes.append(probe)
-    if improved_count:
-        status = "prior_probe_improved"
-    elif worsened_count and comparable_count:
-        status = "prior_probes_worse"
-    elif comparable_count:
-        status = "prior_probes_no_fpv_gain"
-    else:
-        status = "no_comparable_probe"
-    return {
-        "schema": "robot_camera_tone_color_probe_history_v1",
-        "status": status,
-        "baseline": baseline,
-        "probe_count": len(probes),
-        "comparable_probe_count": comparable_count,
-        "improved_probe_count": improved_count,
-        "worsened_probe_count": worsened_count,
-        "neutral_probe_count": neutral_count,
-        "probes": probes,
-        "interpretation": (
-            "Historical tone/color probes are comparison evidence only. They show whether "
-            "RGB gain or tone calibration reduces FPV residuals under the same head-camera "
-            "contract before any default renderer or policy-input change."
-        ),
-    }
-
-
-def _load_tone_color_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {
-            "status": "missing_manifest",
-            "path": output_relpath(path, output_dir),
-        }
-    try:
-        payload = _read_json(path)
-    except (OSError, json.JSONDecodeError) as exc:
-        return {
-            "status": "read_failed",
-            "path": output_relpath(path, output_dir),
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
 
 
 def _texture_colorspace_material_response_check(
     per_location: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    deltas = [_dict(item.get("target_contract_delta")) for item in per_location]
-    delta_statuses = [str(item.get("status") or "") for item in deltas]
-    delta_counts = {
-        name: delta_statuses.count(name) for name in sorted(set(delta_statuses)) if name
-    }
-    bindings = [_dict(item.get("target_usd_binding")) for item in per_location]
-    missing_ref_count = sum(
-        int(binding.get("missing_referenced_asset_count") or 0) for binding in bindings
-    )
-    exact_public_id_count = sum(
-        1 for binding in bindings if binding.get("match_strategy") == "exact_public_id"
-    )
-    target_summaries = [_texture_material_target_summary(item) for item in per_location]
-    target_statuses = [str(item.get("material_response_status") or "") for item in target_summaries]
-    target_status_counts = {
-        name: target_statuses.count(name) for name in sorted(set(target_statuses)) if name
-    }
-    high_residual_targets = [
-        item
-        for item in target_summaries
-        if item.get("fpv_residual_class") != "low_residual"
-        or float(item.get("fpv_mean_abs_rgb") or 0.0) > 35.0
-    ]
-    high_residual_targets.sort(
-        key=lambda item: float(item.get("fpv_mean_abs_rgb") or 0.0),
-        reverse=True,
-    )
-    texture_name_match_count = 0
-    texture_path_basename_match_count = 0
-    texture_path_full_delta_count = 0
-    for item in per_location:
-        mujoco = _dict(item.get("mujoco_target_contract"))
-        isaac = _dict(item.get("isaac_target_contract"))
-        mujoco_names = {Path(str(value)).name for value in mujoco.get("texture_files") or []}
-        isaac_names = {Path(str(value)).name for value in isaac.get("texture_files") or []}
-        if mujoco_names or isaac_names:
-            texture_name_match_count += int(mujoco_names == isaac_names)
-        mujoco_paths = {str(value) for value in mujoco.get("texture_files") or []}
-        isaac_paths = {str(value) for value in isaac.get("texture_files") or []}
-        if mujoco_names and mujoco_names == isaac_names:
-            texture_path_basename_match_count += 1
-            if mujoco_paths != isaac_paths:
-                texture_path_full_delta_count += 1
-    high_priority_count = sum(
-        count
-        for name, count in delta_counts.items()
-        if name in {"material_or_texture_name_delta", "missing_object_binding_evidence"}
-    )
-    if high_priority_count or missing_ref_count:
-        status = "target_material_texture_or_binding_gap"
-    elif texture_path_full_delta_count:
-        status = "texture_basenames_match_paths_or_colorspace_unverified"
-    elif delta_counts.get("material_texture_names_match") == len(per_location):
-        status = "material_texture_names_match_no_render_gap"
-    else:
-        status = "material_texture_response_unverified"
-    return {
-        "check_id": "texture_colorspace_material_response",
-        "status": status,
-        "target_location_count": len(per_location),
-        "target_contract_delta_counts": delta_counts,
-        "exact_public_id_binding_count": exact_public_id_count,
-        "missing_referenced_asset_count": missing_ref_count,
-        "texture_name_match_count": texture_name_match_count,
-        "texture_path_basename_match_count": texture_path_basename_match_count,
-        "texture_path_full_delta_count": texture_path_full_delta_count,
-        "material_response_status_counts": target_status_counts,
-        "texture_backing_mismatch_count": sum(
-            1 for item in target_summaries if item.get("texture_backing_mismatch")
-        ),
-        "rgba_diffuse_color_mismatch_count": sum(
-            1 for item in target_summaries if item.get("rgba_diffuse_color_mismatch")
-        ),
-        "high_residual_target_count": len(high_residual_targets),
-        "high_residual_targets": high_residual_targets[:5],
-        "recommended_next_action": (
-            "For high-residual FPV views, compare texture color space, sampler behavior, "
-            "material albedo, and roughness/specular response even when texture basenames match."
-        ),
-    }
+    return material_checks.texture_colorspace_material_response_check(per_location)
 
 
 def _texture_material_target_summary(item: dict[str, Any]) -> dict[str, Any]:
-    target = _dict(item.get("target"))
-    binding = _dict(item.get("target_usd_binding"))
-    delta = _dict(item.get("target_contract_delta"))
-    mujoco = _dict(item.get("mujoco_target_contract"))
-    isaac = _dict(item.get("isaac_target_contract"))
-    mujoco_visuals = [_dict(value) for value in mujoco.get("visuals") or []]
-    isaac_bindings = [_dict(value) for value in isaac.get("bindings") or []]
-    mujoco_texture_files = [str(value) for value in mujoco.get("texture_files") or []]
-    isaac_texture_files = [str(value) for value in isaac.get("texture_files") or []]
-    mujoco_texture_basenames = _path_basenames(mujoco_texture_files)
-    isaac_texture_basenames = _path_basenames(isaac_texture_files)
-    mujoco_texture_backed_visual_count = sum(
-        1 for value in mujoco_visuals if value.get("texture") or value.get("texture_file")
-    )
-    mujoco_rgba_visual_count = sum(1 for value in mujoco_visuals if value.get("rgba"))
-    isaac_diffuse_texture_binding_count = sum(
-        1
-        for value in isaac_bindings
-        if value.get("has_diffuse_texture") or value.get("diffuse_texture_files")
-    )
-    isaac_diffuse_color_binding_count = sum(
-        1 for value in isaac_bindings if value.get("diffuse_color")
-    )
-    texture_backing_mismatch = (
-        mujoco_texture_backed_visual_count != isaac_diffuse_texture_binding_count
-    )
-    rgba_diffuse_color_mismatch = mujoco_rgba_visual_count != isaac_diffuse_color_binding_count
-    texture_full_path_delta = set(mujoco_texture_files) != set(isaac_texture_files)
-    indicators: list[str] = []
-    if delta.get("status") != "material_texture_names_match":
-        indicators.append("material_texture_binding_gap")
-    if int(binding.get("missing_referenced_asset_count") or 0) > 0:
-        indicators.append("missing_referenced_assets")
-    if mujoco_texture_basenames == isaac_texture_basenames and texture_full_path_delta:
-        indicators.append("texture_full_path_or_source_delta")
-    if texture_backing_mismatch:
-        indicators.append("texture_backing_count_delta")
-    if rgba_diffuse_color_mismatch:
-        indicators.append("rgba_vs_usd_diffuse_color_count_delta")
-    residual_class = str(item.get("fpv_residual_class") or "")
-    if not indicators and residual_class not in {"", "low_residual"}:
-        indicators.append("residual_after_material_texture_name_match")
-    if "material_texture_binding_gap" in indicators or "missing_referenced_assets" in indicators:
-        status = "material_texture_binding_gap"
-    elif "texture_full_path_or_source_delta" in indicators:
-        status = "texture_path_or_colorspace_unverified"
-    elif texture_backing_mismatch or rgba_diffuse_color_mismatch:
-        status = "material_source_mix_delta"
-    elif residual_class not in {"", "low_residual"}:
-        status = "visual_residual_with_material_names_match"
-    else:
-        status = "material_response_low_priority"
-    return {
-        "target_id": target.get("target_id"),
-        "target_kind": target.get("kind"),
-        "fpv_mean_abs_rgb": item.get("fpv_mean_abs_rgb"),
-        "fpv_residual_class": item.get("fpv_residual_class"),
-        "fpv_edge_abs_diff": item.get("fpv_edge_abs_diff"),
-        "fpv_rgb_gain_oracle_mean_abs_rgb_after_gain": item.get(
-            "fpv_rgb_gain_oracle_mean_abs_rgb_after_gain"
-        ),
-        "fpv_mujoco_mean_luminance": item.get("fpv_mujoco_mean_luminance"),
-        "fpv_isaac_mean_luminance": item.get("fpv_isaac_mean_luminance"),
-        "target_contract_status": delta.get("status"),
-        "usd_match_strategy": binding.get("match_strategy"),
-        "missing_referenced_asset_count": binding.get("missing_referenced_asset_count"),
-        "mujoco_visual_count": mujoco.get("visual_geom_count"),
-        "mujoco_texture_backed_visual_count": mujoco_texture_backed_visual_count,
-        "mujoco_rgba_visual_count": mujoco_rgba_visual_count,
-        "isaac_material_binding_count": isaac.get("material_binding_count"),
-        "isaac_diffuse_texture_binding_count": isaac_diffuse_texture_binding_count,
-        "isaac_diffuse_color_binding_count": isaac_diffuse_color_binding_count,
-        "mujoco_texture_basenames": mujoco_texture_basenames,
-        "isaac_texture_basenames": isaac_texture_basenames,
-        "texture_full_path_delta": texture_full_path_delta,
-        "texture_backing_mismatch": texture_backing_mismatch,
-        "rgba_diffuse_color_mismatch": rgba_diffuse_color_mismatch,
-        "material_response_status": status,
-        "material_response_indicators": indicators,
-    }
+    return material_checks.texture_material_target_summary(item)
 
 
 def _path_basenames(values: list[str]) -> list[str]:
-    return sorted({Path(str(value)).name for value in values if value})
+    return material_checks.path_basenames(values)
 
 
 def _usd_preview_surface_material_model_check(
@@ -4313,153 +3938,16 @@ def _usd_preview_surface_material_model_check(
     per_location: list[dict[str, Any]],
     probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
-    probe_history = _material_response_probe_history(
-        manifest,
+    return material_checks.usd_preview_surface_material_model_check(
+        manifest=manifest,
         output_dir=output_dir,
+        per_location=per_location,
         probe_manifest_paths=probe_manifest_paths,
     )
-    isaac_binding_count = 0
-    preview_surface_binding_count = 0
-    diffuse_texture_binding_count = 0
-    mujoco_visual_count = 0
-    mujoco_rgba_visual_count = 0
-    preview_input_statuses: list[str] = []
-    target_summaries = [_preview_surface_target_summary(item) for item in per_location]
-    high_residual_targets = [
-        item
-        for item in target_summaries
-        if item.get("fpv_residual_class") != "low_residual"
-        or float(item.get("fpv_mean_abs_rgb") or 0.0) > 35.0
-    ]
-    high_residual_targets.sort(
-        key=lambda item: float(item.get("fpv_mean_abs_rgb") or 0.0),
-        reverse=True,
-    )
-    for item in per_location:
-        isaac = _dict(item.get("isaac_target_contract"))
-        for binding in isaac.get("bindings") or []:
-            if not isinstance(binding, dict):
-                continue
-            isaac_binding_count += 1
-            preview_surface_binding_count += int(bool(binding.get("has_preview_surface")))
-            diffuse_texture_binding_count += int(bool(binding.get("has_diffuse_texture")))
-            preview_inputs = _dict(binding.get("preview_surface_inputs"))
-            preview_input_statuses.extend(
-                key
-                for key in ("roughness", "opacity", "metallic", "specular")
-                if preview_inputs.get(key) is not None
-            )
-        mujoco = _dict(item.get("mujoco_target_contract"))
-        for visual in mujoco.get("visuals") or []:
-            if not isinstance(visual, dict):
-                continue
-            mujoco_visual_count += 1
-            mujoco_rgba_visual_count += int(bool(visual.get("rgba")))
-    if isaac_binding_count == 0 or mujoco_visual_count == 0:
-        status = "preview_surface_material_evidence_missing"
-    elif preview_surface_binding_count < isaac_binding_count:
-        status = "usd_preview_surface_binding_gap"
-    else:
-        status = "usd_preview_surface_vs_mujoco_material_model_delta"
-    if probe_history.get("improved_probe_count"):
-        next_action = (
-            "A material-response probe improved FPV under the frozen head-camera "
-            "contract, but keep it comparison-only until the same material conversion "
-            "direction is validated across more targets, scenes, and seeds. Do not "
-            "promote broad raw/colorspace or roughness edits from mixed probe history."
-        )
-    elif probe_history.get("worsened_probe_count") and probe_history.get("neutral_probe_count"):
-        next_action = (
-            "Do not promote global material-response edits yet: prior raw/colorspace or "
-            "combined probes worsened FPV, while roughness-only evidence is below the "
-            "improvement threshold. Continue with target-specific material probes or a "
-            "broader corpus before changing defaults."
-        )
-    elif probe_history.get("worsened_probe_count"):
-        next_action = (
-            "Do not promote the already-worse material-response probe directly; split "
-            "texture sourceColorSpace, PreviewSurface roughness, and target-specific "
-            "sampler/material changes in comparison-only probes."
-        )
-    else:
-        next_action = (
-            "Inspect USD PreviewSurface diffuse texture/color, roughness, opacity, and "
-            "specular conversion against the MJCF material RGBA/texture inputs before "
-            "changing the camera contract."
-        )
-    return {
-        "check_id": "usd_preview_surface_material_model",
-        "status": status,
-        "isaac_material_binding_count": isaac_binding_count,
-        "isaac_preview_surface_binding_count": preview_surface_binding_count,
-        "isaac_diffuse_texture_binding_count": diffuse_texture_binding_count,
-        "mujoco_visual_count": mujoco_visual_count,
-        "mujoco_rgba_visual_count": mujoco_rgba_visual_count,
-        "preview_surface_input_counts": {
-            name: preview_input_statuses.count(name) for name in sorted(set(preview_input_statuses))
-        },
-        "high_residual_target_count": len(high_residual_targets),
-        "high_residual_targets": high_residual_targets[:5],
-        "probe_history": probe_history,
-        "recommended_next_action": next_action,
-    }
 
 
 def _preview_surface_target_summary(item: dict[str, Any]) -> dict[str, Any]:
-    target = _dict(item.get("target"))
-    mujoco = _dict(item.get("mujoco_target_contract"))
-    isaac = _dict(item.get("isaac_target_contract"))
-    visuals = [_dict(value) for value in mujoco.get("visuals") or []]
-    bindings = [_dict(value) for value in isaac.get("bindings") or []]
-    isaac_preview_inputs = [
-        _dict(binding.get("preview_surface_inputs"))
-        for binding in bindings
-        if binding.get("has_preview_surface")
-    ]
-    texture_source_color_spaces = sorted(
-        {
-            str(binding.get("texture_source_color_space"))
-            for binding in bindings
-            if binding.get("texture_source_color_space")
-        }
-    )
-    texture_scales = [
-        binding.get("texture_scale") for binding in bindings if binding.get("texture_scale")
-    ]
-    texture_fallbacks = [
-        binding.get("texture_fallback") for binding in bindings if binding.get("texture_fallback")
-    ]
-    mujoco_rgba_values = [visual.get("rgba") for visual in visuals if visual.get("rgba")]
-    isaac_diffuse_colors = [
-        binding.get("diffuse_color") for binding in bindings if binding.get("diffuse_color")
-    ]
-    return {
-        "target_id": target.get("target_id"),
-        "target_kind": target.get("kind"),
-        "fpv_mean_abs_rgb": item.get("fpv_mean_abs_rgb"),
-        "fpv_residual_class": item.get("fpv_residual_class"),
-        "fpv_mujoco_mean_luminance": item.get("fpv_mujoco_mean_luminance"),
-        "fpv_isaac_mean_luminance": item.get("fpv_isaac_mean_luminance"),
-        "mujoco_materials": mujoco.get("materials"),
-        "mujoco_textures": mujoco.get("textures"),
-        "mujoco_rgba_values": mujoco_rgba_values[:5],
-        "isaac_materials": isaac.get("materials"),
-        "isaac_diffuse_texture_basenames": _path_basenames(
-            [str(value) for value in isaac.get("texture_files") or []]
-        ),
-        "isaac_diffuse_colors": isaac_diffuse_colors[:5],
-        "isaac_preview_surface_inputs": isaac_preview_inputs[:5],
-        "isaac_texture_source_color_spaces": texture_source_color_spaces,
-        "isaac_texture_scales": texture_scales[:5],
-        "isaac_texture_fallbacks": texture_fallbacks[:5],
-        "isaac_texture_wrap_modes": sorted(
-            {
-                f"{binding.get('texture_wrap_s')}/{binding.get('texture_wrap_t')}"
-                for binding in bindings
-                if binding.get("texture_wrap_s") or binding.get("texture_wrap_t")
-            }
-        ),
-    }
+    return material_checks.preview_surface_target_summary(item)
 
 
 def _tone_color_response_check(
