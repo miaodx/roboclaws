@@ -1,9 +1,9 @@
 ---
 plan_scope: eval-driven-architecture
-status: DRAFT
+status: Active - Slice 0/1 verified; Slice 2 next
 created: 2026-06-14
 last_reviewed: 2026-06-15
-implementation_allowed: false
+implementation_allowed: true
 source:
   - user request to make Roboclaws eval-driven and AI-native
   - intuitive-reduce-entropy selection packet
@@ -451,7 +451,7 @@ turn low-impact polish into standalone work. The selected directions are:
 
 ### Slice 0: Architecture And Docs
 
-Status: planning candidate.
+Status: implemented and verified 2026-06-15.
 
 Scope:
 
@@ -489,7 +489,7 @@ Acceptance:
 
 ### Slice 1: Active Contract Boundary Cleanup
 
-Status: planning candidate.
+Status: implemented and verified 2026-06-15.
 
 Scope:
 
@@ -514,6 +514,38 @@ Acceptance:
 - Agibot map-build active agent instructions and MCP policy no longer require a
   fixture-hints-first tool habit;
 - historical artifact/report/bundle compatibility is preserved.
+
+Slice 0/1 verification evidence:
+
+- `ruff check .` passed.
+- `git diff --check` passed.
+- Focused `ruff format --check` for the changed Agibot/checker/report files
+  passed. Repo-wide `ruff format --check .` remains blocked by preexisting
+  formatting drift in `roboclaws/household/realworld_run_artifacts.py`,
+  `roboclaws/household/worker_runner.py`,
+  `scripts/dev/check_python_quality_ratchet.py`,
+  `scripts/molmo_cleanup/isaac_runtime_checker.py`, and
+  `tests/unit/molmo_cleanup/test_worker_runner.py`.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
+  passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`
+  passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_writes_simulated_report`
+  passed.
+- Focused cleanup/Agibot fixture-hints boundary tests passed:
+  `test_realworld_mcp_rejects_removed_fixture_hints_tool`,
+  `test_realworld_mcp_smoke_writes_agent_artifacts`,
+  `test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract`, and
+  `test_household_goal_contract_tool_plans_do_not_advertise_fixture_hints`.
+- `python scripts/dev/check_python_quality_ratchet.py` passed with 83 Ruff
+  violations at or below baseline and 59 oversized modules at or below
+  baseline.
+- `just agent::harness agent-validation recommend plan=docs/plans/2026-06-14-eval-driven-architecture.md budget=focused`
+  passed and wrote
+  `output/agent-validation-matrix/20260614T164931Z/validation_matrix.json` and
+  `output/agent-validation-matrix/20260614T164931Z/validation_matrix.html`.
 
 ### Slice 2: Eval Schema And Result Packet
 

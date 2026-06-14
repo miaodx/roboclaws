@@ -33,6 +33,19 @@ class AgibotCleanupBackendSession:
     def object_locations(self) -> dict[str, str]:
         return self.scenario.object_locations()
 
+    def supports_visual_snapshots(self) -> bool:
+        return False
+
+    def write_visual_snapshot(self, output_path: Path, *, title: str) -> Path | None:
+        del output_path, title
+        return None
+
+    def supports_robot_views(self) -> bool:
+        return False
+
+    def close(self) -> None:
+        return None
+
 
 class AgibotCleanupMCPContract:
     """Agibot adapter-backed implementation of the shared cleanup MCP contract."""
@@ -73,7 +86,6 @@ class AgibotCleanupMCPContract:
     def public_tool_names(self) -> list[str]:
         return [
             "metric_map",
-            "fixture_hints",
             "navigate_to_room",
             "navigate_to_waypoint",
             "observe",
@@ -417,7 +429,6 @@ class AgibotCleanupMCPContract:
             "allowed_inputs": [
                 "metric_map",
                 "runtime_metric_map",
-                "fixture_hints",
                 "raw_fpv_observations",
                 "navigation_status",
             ],

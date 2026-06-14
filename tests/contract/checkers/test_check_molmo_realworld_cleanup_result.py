@@ -410,7 +410,6 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     )
     try:
         server.call_tool("metric_map")
-        server.call_tool("fixture_hints")
         server.call_tool("observe")
         server.call_tool("done", reason="checker fixture complete")
     finally:
@@ -3519,7 +3518,6 @@ def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
     )
     try:
         server.call_tool("metric_map")
-        server.call_tool("fixture_hints")
         server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
         server.call_tool("observe")
         server.call_tool("done", reason="checker fixture complete")

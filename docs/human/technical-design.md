@@ -74,14 +74,30 @@ Agent engines are product runtimes, not tasks:
 - deterministic direct runner;
 - Docker-backed Codex CLI;
 - Docker-backed Claude Code;
-- OpenAI Agents SDK;
-- OpenClaw Gateway;
-- script runner for proof/dry-run paths.
+- OpenAI Agents SDK.
+
+OpenClaw Gateway is a validation-required maintainer route until the
+off-work-network Gateway proof is green. Script-style proof and dry-run paths
+belong under direct runners, harness recipes, or backend adapters; they are not
+public agent engines.
 
 Reusable behavior belongs in skills. The maintained cleanup skill drives
 `preset=cleanup`; the `household-open-task` skill drives no-preset household
 goals and `preset=map-build`. The goal contract and checker policy decide what
 completion means for a run.
+
+## Evaluation Strategy
+
+Evaluation is a first-class maintainer layer above individual reports. Product
+runs still use `just run::surface ...`; the validation matrix selects which
+gates a plan or diff must run; eval suites run versioned samples, repeated
+trials, deterministic graders, aggregate metrics, and failure replay. Harness
+recipes remain lower-level execution mechanics.
+
+The first eval command shape is `just agent::eval ...`. Eval samples must reuse
+the current household surfaces, MCP tools, public/private evidence split, and
+Base Navigation Map / Runtime Metric Map contracts instead of introducing a
+parallel task taxonomy.
 
 ## Current Non-Goals
 

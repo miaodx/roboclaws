@@ -187,11 +187,27 @@ def _assumptions_for_intent(intent_id: str, prompt: str) -> tuple[str, ...]:
 
 def _tool_plan_for_intent(intent_id: str) -> tuple[str, ...]:
     if intent_id == "cleanup":
-        return ("metric_map", "fixture_hints", "navigate/observe", "pick/place if needed", "done")
+        return (
+            "metric_map and runtime_metric_map public anchors",
+            "navigate_to_waypoint/observe",
+            "resolve_target_query and public target candidates",
+            "pick/place if needed",
+            "done",
+        )
     if intent_id == "map-build":
-        return ("metric_map", "fixture_hints", "navigate/observe sweep", "done")
+        return (
+            "metric_map inspection waypoints",
+            "navigate_to_waypoint/observe sweep",
+            "runtime_metric_map public evidence",
+            "done",
+        )
     if intent_id == "open-ended":
-        return ("metric_map/fixture_hints as needed", "observe as needed", "done with claim")
+        return (
+            "metric_map as needed",
+            "resolve_target_query and observe as needed",
+            "task-relevant public action tools if needed",
+            "done with claim",
+        )
     return ("run intent-specific tools", "done")
 
 

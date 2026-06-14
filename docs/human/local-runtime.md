@@ -52,10 +52,12 @@ Common examples:
 
 | Run type | Typical output |
 | --- | --- |
-| Semantic map build | `output/household/semantic-map-build/<driver>-*/` |
-| Household cleanup | `output/household/household-cleanup/<driver>-*/` |
-| Molmo cleanup | `output/molmo/<driver-or-profile>/<stamp>/seed-7/` |
-| Molmo live CI rehearsal | `output/molmo/ci-rehearsal/<model>/` |
-| Molmo planner proof bundle | `output/molmo/planner-proof*/` |
+| Product household run | `output/molmo/<recipe-or-run>/<stamp>/seed-7/` or the explicit `output_dir=...` passed to `just run::surface` |
+| Validation matrix | `output/agent-validation-matrix/<stamp>/` |
+| Future eval suite | `output/evals/<suite>/<stamp>/` with eval results plus links to product run artifacts |
+| Planner proof bundle | `output/molmo/planner-proof*/` |
+| Historical semantic-map/cleanup roots | `output/household/semantic-map-build/<driver>-*/`, `output/household/household-cleanup/<driver>-*/` |
 
 Each report directory is meant to be reviewable without re-running the model.
+Historical roots may appear in old reports and tests, but new eval evidence
+should be found through the eval-suite output and its linked product artifacts.

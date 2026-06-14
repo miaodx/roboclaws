@@ -8,12 +8,12 @@
         "path": "roboclaws/agents/drivers/openai_agents_live.py"
       },
       {
-        "lines": 2359,
+        "lines": 2357,
         "max_module_lines": 800,
         "path": "roboclaws/household/agibot_contract_rehearsal.py"
       },
       {
-        "lines": 1260,
+        "lines": 1080,
         "max_module_lines": 800,
         "path": "roboclaws/household/agibot_map_build_mcp_server.py"
       },
@@ -352,31 +352,11 @@
         "code": "PLR0915",
         "key": "roboclaws/household/agibot_contract_rehearsal.py|PLR0915|run_molmospaces_agibot_contract_rehearsal",
         "limit": 50,
-        "message": "Too many statements (96 > 50)",
+        "message": "Too many statements (95 > 50)",
         "path": "roboclaws/household/agibot_contract_rehearsal.py",
         "row": 70,
         "symbol": "run_molmospaces_agibot_contract_rehearsal",
-        "value": 96
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/agibot_map_build_mcp_server.py|C901|AgibotSemanticMapBuildMCPServer._dispatch_tool",
-        "limit": 10,
-        "message": "`_dispatch_tool` is too complex (12 > 10)",
-        "path": "roboclaws/household/agibot_map_build_mcp_server.py",
-        "row": 325,
-        "symbol": "AgibotSemanticMapBuildMCPServer._dispatch_tool",
-        "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/agibot_map_build_mcp_server.py|C901|AgibotSemanticMapBuildMCPServer._register_tools",
-        "limit": 10,
-        "message": "`_register_tools` is too complex (16 > 10)",
-        "path": "roboclaws/household/agibot_map_build_mcp_server.py",
-        "row": 196,
-        "symbol": "AgibotSemanticMapBuildMCPServer._register_tools",
-        "value": 16
+        "value": 95
       },
       {
         "code": "C901",
@@ -982,11 +962,11 @@
         "code": "PLR0915",
         "key": "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py|PLR0915|test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace",
         "limit": 50,
-        "message": "Too many statements (57 > 50)",
+        "message": "Too many statements (52 > 50)",
         "path": "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py",
-        "row": 324,
+        "row": 347,
         "symbol": "test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace",
-        "value": 57
+        "value": 52
       },
       {
         "code": "PLR0915",

@@ -1,19 +1,22 @@
 # Project Status
 
-Last updated: 2026-06-12
+Last updated: 2026-06-15
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
 
 ## Current Focus
 
-Roboclaws has completed the household-world launch contract saturation:
-`surface=household-world` now defaults to the no-preset open household task
+Roboclaws is executing the eval-driven architecture plan. Slice 0 and Slice 1
+are verified: eval suites are visible as a first-class architecture layer,
+stale launch-axis documentation is cleaned, and current cleanup/map-build MCP
+contracts no longer advertise `fixture_hints` as a callable active tool while
+historical artifact compatibility remains intact.
+
+The household-world launch contract remains the active product shape:
+`surface=household-world` defaults to the no-preset open household task
 contract, with `preset=map-build` and `preset=cleanup` for standard jobs, plus
-the `surface=planner-proof` confidence route. The
-AI2-THOR/direct-VLM public-surface retirement is implemented and verified; the
-active code, docs, tests, skills, CI, and public command facade now center on
-household-world / planner-proof.
+the `surface=planner-proof` confidence route.
 
 The active visual-grounding sidecar contract is now detector-only: hosted VLM
 refiner/direct-producer camera labelers are retired from active code, command
@@ -21,7 +24,9 @@ examples, tests, and benchmark promotion. OpenClaw remains available only as a
 guarded validation-required maintainer route until an off-work-network Gateway
 proof runs.
 
-The implemented source of truth is
+The active source of truth is
+`docs/plans/2026-06-14-eval-driven-architecture.md`, backed by ADR-0140. The
+implemented household launch contract is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
 ADR-0136. The implemented visual-grounding cleanup is
 `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`,
@@ -30,11 +35,10 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Use the canonical launch shape for new work:
-`just run::surface surface=household-world ... prompt=...` for open tasks, or
-`preset=map-build|cleanup` for standard jobs. Pick the next implementation task
-from `TODOS.md`, `docs/plans/`, or the issue tracker rather than reopening the
-completed launch-contract or VLM-sidecar retirement work.
+Continue `docs/plans/2026-06-14-eval-driven-architecture.md` with Slice 2:
+define the eval suite/sample/trial/result schemas, result identity, failure
+taxonomy, and direct-runner sample fixtures. Do not start the deterministic
+eval runner until the schema/result packet slice is green.
 
 ## Current Blocker
 
@@ -48,6 +52,10 @@ OpenClaw can be called healthy.
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
+- Active eval-driven architecture plan:
+  `docs/plans/2026-06-14-eval-driven-architecture.md`
+- Active eval-suite ADR:
+  `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`
 - Implemented household map/launch/open-ended plan:
   `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`
 - Active launch contract ADR:

@@ -37,24 +37,6 @@ Each entry should answer:
   - Try now: Yes, if scoped to existing public trace fields. Broader Gateway
     changes need a separate design pass.
 
-- **OpenClaw `minimal+alsoAllow:[bundle-mcp]` vs `coding` profile benchmark**
-  - Created: 2026-05-11.
-  - Updated: 2026-06-11.
-  - Status: Parked local OpenClaw benchmark.
-  - Why: Roboclaws currently keeps `minimal+alsoAllow:[bundle-mcp]` as the
-    safer default because `coding` exposes broader tools. A focused benchmark
-    could prove whether `coding` is acceptable for photo and territory probes
-    and remove or confirm the `alsoAllow` workaround.
-  - Next action: Run comparable photo and territory probes under both profiles,
-    then update the profile verdict.
-  - Evidence:
-    `docs/ai/openclaw/tool-profiles.md`;
-    `docs/human/openclaw/gateway-internals.md`;
-    `scripts/openclaw/openclaw-bootstrap.sh`;
-    `tests/contract/openclaw/test_openclaw_bootstrap.py`.
-  - Try now: Partially. Benchmark planning is safe; real evidence needs local
-    OpenClaw Gateway access and must honor the work-network guard.
-
 - **LeRobotDataset rollout export**
   - Created: 2026-05-11.
   - Updated: 2026-06-11.
@@ -79,11 +61,12 @@ Each entry should answer:
     isolation, shared simulation, and scoring problems that single-agent live
     routes hide.
   - Next action: Write a small design packet that builds on `LiveAgentRuntime`
-    instead of adding another launch path.
+    and future eval-suite repetition semantics instead of adding another launch
+    path.
   - Evidence:
     `docs/plans/live-agent-runtime-sdk-spike.md`;
     `roboclaws/agents/live_runtime.py`;
-    `examples/games/territory_game.py`.
+    `docs/plans/2026-06-14-eval-driven-architecture.md`.
   - Try now: No for implementation. Start with planning or a bounded harness
     spike.
 
@@ -125,22 +108,6 @@ Each entry should answer:
   - Try now: Partially. Planning is ready; implementation needs a scoped
     feature contract.
 
-- **Memory-depth ablation for territory control**
-  - Created: 2026-05-11.
-  - Updated: 2026-06-11.
-  - Status: Parked experiment.
-  - Why: Territory control is short-horizon enough that SOUL, MEMORY, FTS, or
-    vector memory may add overhead without measurable benefit. A fixed ablation
-    would prevent memory features from being cargo-culted into the game path.
-  - Next action: Define a small fixed configuration set and compare score,
-    coverage, tool calls, latency, and cost across memory depths.
-  - Evidence:
-    `examples/games/territory_game.py`;
-    `docs/human/openclaw/gateway-internals.md`;
-    `docs/retrospectives/phase-2.6.md`.
-  - Try now: Partially. Harness design is safe; meaningful results need VLM or
-    Gateway runs.
-
 - **Supported access to encrypted model reasoning**
   - Created: 2026-05-11.
   - Updated: 2026-06-11.
@@ -157,16 +124,18 @@ Each entry should answer:
 
 - **Weekly coding-agent model/settings benchmark**
   - Created: 2026-05-11.
-  - Updated: 2026-06-11.
-  - Status: Parked benchmark design.
+  - Updated: 2026-06-15.
+  - Status: Parked eval-suite design.
   - Why: Coding-agent defaults drift as models, provider routes, and reasoning
     settings change. A stable weekly suite would make default recommendations
     evidence-based instead of anecdotal.
-  - Next action: Define a small stable suite, model/settings matrix, cost
-    budget, and published report shape. Reuse agent-validation where possible.
+  - Next action: Fold this into the eval-suite architecture as a live-agent
+    repetition slice with model/settings matrix, cost budget, `pass@k` /
+    `pass^k`, and published report shape.
   - Evidence:
     `skills/agent-validation-matrix/SKILL.md`;
     `docs/plans/2026-06-11-agent-validation-matrix-skill.md`;
+    `docs/plans/2026-06-14-eval-driven-architecture.md`;
     `just/README.md`.
   - Try now: Yes for benchmark design; recurring live execution needs provider
     budget and local-network constraints.

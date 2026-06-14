@@ -313,6 +313,7 @@ class LiveCodexCleanupRunner:
         self._write_status("running-codex")
         self._mark_timing("codex_exec_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
+        skill_name = getattr(self.args, "skill_name", None) or "molmo-realworld-cleanup"
         env = os.environ.copy()
         self._configure_provider_timing_proxy(env)
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
@@ -323,11 +324,11 @@ class LiveCodexCleanupRunner:
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
             task_name=task_name,
-            skill_name=self.args.skill_name,
+            skill_name=skill_name,
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", task_name)
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", self.args.skill_name)
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", skill_name)
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
         agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)
@@ -337,7 +338,6 @@ class LiveCodexCleanupRunner:
             if container_isolated
             else str(last_message_host_path)
         )
-
         for server_name in (CODEX_CLEANUP_MCP_SERVER_NAME, "roboclaws"):
             subprocess.run(
                 [self.args.codex_bin, "mcp", "remove", server_name],

@@ -11,6 +11,7 @@ AI agents should also read these docs when they need human-facing context.
 - [Contributing](contributing.md)
 - [UT and CI design](ut_ci_design.md)
 - [Agent/task command taxonomy](agent-task-command-taxonomy.md)
+- [Evaluation suites](evaluation.md)
 - [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)
 - [Architecture hygiene review](architecture-hygiene-review.md)
 - [Technical design](technical-design.md)

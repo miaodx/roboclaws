@@ -4548,3 +4548,32 @@ Stop this refactor loop when:
   in the complexity-by-file summary. Remaining Candidate C work is limited to
   Agibot contract rehearsal, Agibot map-build MCP tool registration, and
   planner-proof fallback rows.
+- 2026-06-15: Continued Candidate C by moving Agibot map-build MCP public tool
+  registration and dispatch into `roboclaws/household/agibot_map_build_mcp_tools.py`.
+  `fixture_hints` is no longer a public Agibot map-build or shared cleanup MCP
+  tool; historical map/report artifacts still carry fixture hints where
+  compatibility needs them. The Agibot cleanup backend marker now implements
+  the shared backend-session optional capability methods used by the MCP server.
+  Evidence:
+  `ruff check roboclaws/household/agibot_map_build_mcp_server.py roboclaws/household/agibot_map_build_mcp_tools.py roboclaws/household/agibot_cleanup_contract.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 85 to
+  83 Ruff complexity violations, with oversized modules unchanged at 59.
+  Remaining Candidate C work is limited to Agibot contract rehearsal and
+  planner-proof fallback rows.
+- 2026-06-15: Continued Candidate C by aligning MolmoSpaces Agibot contract
+  rehearsal with the current MCP boundary: `fixture_hints` remains a preflight
+  artifact/context payload, but is no longer recorded as a public tool event or
+  listed in the simulated runner task input's public tool sequence. Evidence:
+  `ruff check roboclaws/household/agibot_contract_rehearsal.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_writes_simulated_report -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline stayed at 83 Ruff
+  complexity violations and 59 oversized modules, while
+  `run_molmospaces_agibot_contract_rehearsal` dropped from 96 to 95 statements
+  and the module dropped from 2359 to 2357 lines. Remaining Candidate C work is
+  limited to broader Agibot contract rehearsal complexity and planner-proof
+  fallback rows.

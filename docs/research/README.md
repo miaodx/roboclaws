@@ -1,19 +1,22 @@
 # Research Reports
 
-This directory contains technical research documents that inform Roboclaws project decisions. These reports serve as decision context during periodic project reviews and will be updated as the landscape evolves.
+This directory contains technical research documents that inform Roboclaws
+project decisions. Reports are not all current guidance: some capture historical
+AI2-THOR or game-era decisions that ADR-0137 and the household-world launch
+contract have since superseded.
 
 ## Report Index
 
-| # | File | Topic | Key Conclusion |
-|---|------|-------|---------------|
-| 01 | [openclaw-isaaclab-feasibility](01-openclaw-isaaclab-feasibility.md) | OpenClaw + Isaac Lab feasibility | Technically feasible but not for quick PoC; deferred to Phase 3 |
-| 02 | [ai2thor-multiagent-foundations](02-ai2thor-multiagent-foundations.md) | AI2-THOR multi-agent API + OpenClaw integration | Native multi-agent works on iTHOR; ProcTHOR has bugs |
-| 03 | [simulation-platforms-2026](03-simulation-platforms-2026.md) | 2026 simulation platform landscape | MolmoSpaces lacks multi-agent; AI2-THOR is fastest path |
-| 04 | [openclaw-robotics-ecosystem](04-openclaw-robotics-ecosystem.md) | OpenClaw robotics ecosystem mapping | 6 active repos; multi-agent sim control is an open gap |
-| 05 | [real-model-smoke-validation](05-real-model-smoke-validation.md) | Issue #50 local-dev validation | Territory terminates early, coverage fails, follow-up tracked in #52 |
-| 06 | [visual-grounding-perception-producer](06-visual-grounding-perception-producer.md) | Edge visual-grounding perception producer | Separate producer service; fast proposer first, optional verifier only when measured quality requires it |
-| 07 | [agent-sdk-vs-frameworks-for-coding-loop](07-agent-sdk-vs-frameworks-for-coding-loop.md) | OpenAI Agents SDK vs. Claude Agent SDK vs. other frameworks, for the code-holds-the-loop MCP robot agent | Decisive axis is loop ownership, not provider compat; thin DIY loop on the MCP Python SDK (or PydanticAI) beats both vendor SDKs for this use case; OpenAI Agents SDK preferred of the two; resilience must be engineered regardless |
-| 08 | [agent-evaluation-harness-research](08-agent-evaluation-harness-research.md) | OpenAI, Anthropic, Cursor, eval frameworks, and agent benchmark patterns | Use public benchmarks for calibration, but build a repo-native versioned eval suite with samples, trials, trace/state graders, identity packets, `pass^k`, and failure replay |
+| # | Status | File | Topic | Key Conclusion |
+|---|--------|------|-------|---------------|
+| 01 | Historical | [openclaw-isaaclab-feasibility](01-openclaw-isaaclab-feasibility.md) | OpenClaw + Isaac Lab feasibility | Technically feasible but not for quick PoC; use current backend gates before treating it as roadmap guidance. |
+| 02 | Superseded by ADR-0137 | [ai2thor-multiagent-foundations](02-ai2thor-multiagent-foundations.md) | AI2-THOR multi-agent API + OpenClaw integration | AI2-THOR findings remain historical; AI2-THOR is no longer a current public launch axis. |
+| 03 | Partly superseded by household-world direction | [simulation-platforms-2026](03-simulation-platforms-2026.md) | 2026 simulation platform landscape | Platform survey remains useful context, but the active direction is MolmoSpaces/MuJoCo plus explicit backend gates. |
+| 04 | Historical context | [openclaw-robotics-ecosystem](04-openclaw-robotics-ecosystem.md) | OpenClaw robotics ecosystem mapping | OpenClaw remains validation-required until off-work-network Gateway proof is green. |
+| 05 | Superseded by retired game/public-surface cleanup | [real-model-smoke-validation](05-real-model-smoke-validation.md) | Issue #50 local-dev validation | Territory/coverage findings are history, not current product strategy. |
+| 06 | Current background | [visual-grounding-perception-producer](06-visual-grounding-perception-producer.md) | Edge visual-grounding perception producer | Separate producer service; fast proposer first, optional verifier only when measured quality requires it. |
+| 07 | Current background | [agent-sdk-vs-frameworks-for-coding-loop](07-agent-sdk-vs-frameworks-for-coding-loop.md) | OpenAI Agents SDK vs. Claude Agent SDK vs. other frameworks, for the code-holds-the-loop MCP robot agent | Decisive axis is loop ownership, not provider compat; thin DIY loop on the MCP Python SDK (or PydanticAI) beats both vendor SDKs for this use case; OpenAI Agents SDK preferred of the two; resilience must be engineered regardless. |
+| 08 | Current decision context | [agent-evaluation-harness-research](08-agent-evaluation-harness-research.md) | OpenAI, Anthropic, Cursor, eval frameworks, and agent benchmark patterns | Use public benchmarks for calibration, but build a repo-native versioned eval suite with samples, trials, trace/state graders, identity packets, `pass^k`, and failure replay. |
 
 ## See Also
 
