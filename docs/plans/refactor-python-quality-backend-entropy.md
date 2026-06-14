@@ -2839,3 +2839,20 @@ Stop this refactor loop when:
   `roboclaws/operator_console/server.py` no longer appears in the
   complexity-by-file summary; the operator-console readiness candidate remains
   open for `route_readiness(...)` and adjacent route/state helpers.
+- 2026-06-14: Continued the operator-console readiness/routing candidate by
+  extracting readiness gate evaluation into
+  `roboclaws/operator_console/readiness.py`. The new module owns provider-key,
+  Isaac preflight, MCP port, request-field, and operator real-movement gate row
+  evaluation; `roboclaws/operator_console/launcher.py` keeps the public
+  `route_readiness(...)` function and lock/provider orchestration so existing
+  imports and API payloads remain stable. Evidence:
+  `ruff check roboclaws/operator_console/launcher.py roboclaws/operator_console/readiness.py tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_operator_console.py`
+  passed; `ruff format --check roboclaws/operator_console/launcher.py roboclaws/operator_console/readiness.py tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_operator_console.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console -q`
+  passed; `python -m py_compile roboclaws/operator_console/launcher.py roboclaws/operator_console/readiness.py`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 124 to
+  121 Ruff complexity violations, with oversized modules unchanged at 59.
+  `route_readiness(...)` no longer appears in the quality summary; `launcher.py`
+  keeps three residual C901 rows for `build_launch_argv(...)`,
+  `_validate_env_overrides(...)`, and `_docker_container_ids_with_mount(...)`.

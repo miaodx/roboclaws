@@ -68,7 +68,7 @@
         "path": "roboclaws/maps/actionable_snapshot.py"
       },
       {
-        "lines": 1113,
+        "lines": 1024,
         "max_module_lines": 800,
         "path": "roboclaws/operator_console/launcher.py"
       },
@@ -754,7 +754,7 @@
         "limit": 10,
         "message": "`_docker_container_ids_with_mount` is too complex (13 > 10)",
         "path": "roboclaws/operator_console/launcher.py",
-        "row": 942,
+        "row": 875,
         "symbol": "_docker_container_ids_with_mount",
         "value": 13
       },
@@ -764,7 +764,7 @@
         "limit": 10,
         "message": "`_validate_env_overrides` is too complex (13 > 10)",
         "path": "roboclaws/operator_console/launcher.py",
-        "row": 531,
+        "row": 464,
         "symbol": "_validate_env_overrides",
         "value": 13
       },
@@ -774,39 +774,9 @@
         "limit": 10,
         "message": "`build_launch_argv` is too complex (12 > 10)",
         "path": "roboclaws/operator_console/launcher.py",
-        "row": 118,
+        "row": 115,
         "symbol": "build_launch_argv",
         "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/operator_console/launcher.py|C901|route_readiness",
-        "limit": 10,
-        "message": "`route_readiness` is too complex (20 > 10)",
-        "path": "roboclaws/operator_console/launcher.py",
-        "row": 285,
-        "symbol": "route_readiness",
-        "value": 20
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/operator_console/launcher.py|PLR0912|route_readiness",
-        "limit": 12,
-        "message": "Too many branches (22 > 12)",
-        "path": "roboclaws/operator_console/launcher.py",
-        "row": 285,
-        "symbol": "route_readiness",
-        "value": 22
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/operator_console/launcher.py|PLR0915|route_readiness",
-        "limit": 50,
-        "message": "Too many statements (75 > 50)",
-        "path": "roboclaws/operator_console/launcher.py",
-        "row": 285,
-        "symbol": "route_readiness",
-        "value": 75
       },
       {
         "code": "C901",

@@ -6,7 +6,6 @@ import json
 import os
 import re
 import signal
-import socket
 import subprocess
 import time
 from dataclasses import dataclass
@@ -29,15 +28,13 @@ from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
+from roboclaws.operator_console.readiness import route_gate_rows
 from roboclaws.operator_console.routes import (
     ConsoleLaunchSelection,
-    accepted_isaac_preflight,
     get_selection,
 )
 from roboclaws.operator_console.state import resolve_display_run_dir
 
-DEFAULT_MCP_HOST = "127.0.0.1"
-DEFAULT_MCP_PORT = 18788
 ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
 RUN_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -304,111 +301,25 @@ def route_readiness(
     env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
     gate_map = gates or {}
-    gate_rows: list[dict[str, Any]] = []
-    blocker = ""
-    lock = ResourceLock(root, route.lock_name)
-    lock_state = lock.read()
-    if _release_terminal_owner_lock(root, lock_state):
-        lock_state = lock.read()
-    attachable_run = _attachable_run_payload(root, lock_state)
-    lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
-    real_movement_enabled = _truthy_override(override_map.get("real_movement_enabled"))
-    if lock_active:
-        if attachable_run:
-            blocker = (
-                f"Backend lock is held by run {attachable_run['run_id']}. "
-                "Attach to the existing run or wait for it to finish."
-            )
-        else:
-            blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
-        blocker_kind = "locked"
-    else:
-        blocker_kind = ""
-    for gate in route.gates:
-        ok = True
-        message = "Ready"
-        evidence = ""
-        kind = "ready"
-        severity = gate.severity
-        blocks_start = gate.required
-        if gate.kind == "provider_key":
-            provider_status = _provider_status(route, env_map)
-            ok = provider_status["ok"]
-            if not ok:
-                label = route.to_payload().get("agent_engine_label") or route.agent_engine_id
-                message = str(provider_status["message"] or f"No {label} provider route found.")
-                kind = "needs_provider"
-            elif provider_status.get("capability_blocker"):
-                ok = False
-                message = str(provider_status["capability_blocker"])
-                kind = "unsupported_evidence_lane"
-        elif gate.kind == "isaac_preflight":
-            accepted = accepted_isaac_preflight(root)
-            ok = accepted is not None
-            evidence = str(accepted or "")
-            if not ok:
-                message = (
-                    "No accepted Isaac runtime preflight or smoke marker found. "
-                    "Launch can start; backend diagnostics will report concrete runtime failures."
-                )
-                kind = "isaac_runtime_unverified"
-        elif gate.kind == "mcp_port_free":
-            host = _override_host(override_map)
-            port = _override_port(override_map)
-            ok = _tcp_port_free(host, port)
-            evidence = f"{host}:{port}"
-            if not ok:
-                message = (
-                    f"MCP port {host}:{port} is already accepting connections. "
-                    "Pick another port or stop the existing server."
-                )
-                kind = "mcp_port_in_use"
-        elif gate.kind == "request_field":
-            ok = bool(override_map.get(gate.id))
-            if not ok:
-                message = "Attach a completed Agibot map context JSON."
-                kind = "needs_agibot_context"
-        elif gate.kind == "operator_gate":
-            blocks_start = real_movement_enabled
-            ok = gate_map.get(gate.id) is True
-            if not ok:
-                if real_movement_enabled:
-                    message = (
-                        "Real movement is enabled; localization, run enablement, "
-                        "and E-stop/manual-stop readiness must be accepted before launch."
-                    )
-                    kind = "needs_real_movement_gate"
-                else:
-                    message = (
-                        "Dry-run launch can start; this evidence is required for real movement."
-                    )
-                    kind = "real_movement_gate_pending"
-        if ok:
-            kind = "ready"
-        if not ok and blocks_start and not blocker:
-            blocker = message
-            blocker_kind = kind
-        gate_rows.append(
-            {
-                "id": gate.id,
-                "label": gate.label,
-                "status": "ready" if ok else "needs_action",
-                "kind": kind,
-                "severity": severity,
-                "required": blocks_start,
-                "blocks_start": blocks_start,
-                "message": message,
-                "evidence": evidence,
-                "help_text": gate.help_text,
-            }
-        )
+    lock_state, attachable_run, blocker, blocker_kind = _route_lock_readiness(root, route)
+    provider_status = _provider_status(route, env_map)
+    gate_rows, gate_blocker, gate_blocker_kind = route_gate_rows(
+        root,
+        route,
+        override_map,
+        gate_map,
+        provider_status,
+    )
+    if not blocker and gate_blocker:
+        blocker = gate_blocker
+        blocker_kind = gate_blocker_kind
     return {
         "can_start": not blocker,
         "blocker": blocker,
         "blocker_kind": blocker_kind,
         "lock": lock_state.to_payload(),
         "attachable_run": attachable_run,
-        "provider": _provider_status(route, env_map),
+        "provider": provider_status,
         "gates": gate_rows,
     }
 
@@ -442,6 +353,28 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     if lock_name:
         ResourceLock(root, lock_name).release(run_id=run_id, force=True)
     return state
+
+
+def _route_lock_readiness(
+    root: Path,
+    route: ConsoleLaunchSelection,
+) -> tuple[Any, dict[str, Any] | None, str, str]:
+    lock = ResourceLock(root, route.lock_name)
+    lock_state = lock.read()
+    if _release_terminal_owner_lock(root, lock_state):
+        lock_state = lock.read()
+    attachable_run = _attachable_run_payload(root, lock_state)
+    lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
+    if not lock_active:
+        return lock_state, attachable_run, "", ""
+    if attachable_run:
+        blocker = (
+            f"Backend lock is held by run {attachable_run['run_id']}. "
+            "Attach to the existing run or wait for it to finish."
+        )
+    else:
+        blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
+    return lock_state, attachable_run, blocker, "locked"
 
 
 def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, str]) -> None:
@@ -1058,15 +991,6 @@ def _clean_dotenv_value(value: str) -> str:
     return clean
 
 
-def _override_host(overrides: dict[str, str]) -> str:
-    host = str(overrides.get("host") or DEFAULT_MCP_HOST).strip()
-    return host or DEFAULT_MCP_HOST
-
-
-def _override_port(overrides: dict[str, str]) -> int:
-    return _parse_port(str(overrides.get("port") or DEFAULT_MCP_PORT))
-
-
 def _parse_port(value: str) -> int:
     try:
         port = int(str(value).strip())
@@ -1085,19 +1009,6 @@ def _parse_nonnegative_int(raw: str, key: str) -> int:
     if value < 0:
         raise ConsoleLaunchError(f"{key} must be >= 0")
     return value
-
-
-def _truthy_override(raw: str | None) -> bool:
-    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _tcp_port_free(host: str, port: int) -> bool:
-    probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-    try:
-        with socket.create_connection((probe_host, port), timeout=0.2):
-            return False
-    except OSError:
-        return True
 
 
 def _new_run_id(route: ConsoleLaunchSelection) -> str:
