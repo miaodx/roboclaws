@@ -48,7 +48,7 @@
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
       {
-        "lines": 7889,
+        "lines": 7838,
         "max_module_lines": 800,
         "path": "roboclaws/household/report.py"
       },
@@ -630,33 +630,13 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/household/report.py|C901|_action_evidence_summary",
-        "limit": 10,
-        "message": "`_action_evidence_summary` is too complex (16 > 10)",
-        "path": "roboclaws/household/report.py",
-        "row": 6745,
-        "symbol": "_action_evidence_summary",
-        "value": 16
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/household/report.py|C901|_grasp_cache_availability_preflight_section",
         "limit": 10,
         "message": "`_grasp_cache_availability_preflight_section` is too complex (11 > 10)",
         "path": "roboclaws/household/report.py",
-        "row": 2416,
+        "row": 2417,
         "symbol": "_grasp_cache_availability_preflight_section",
         "value": 11
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/report.py|PLR0912|_action_evidence_summary",
-        "limit": 12,
-        "message": "Too many branches (15 > 12)",
-        "path": "roboclaws/household/report.py",
-        "row": 6745,
-        "symbol": "_action_evidence_summary",
-        "value": 15
       },
       {
         "code": "C901",

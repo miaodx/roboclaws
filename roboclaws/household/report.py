@@ -19,6 +19,7 @@ from roboclaws.household.planner_proof_quality import (
     planner_proof_quality_summary,
 )
 from roboclaws.household.planner_task_feasibility import grasp_feasibility_signature_counts
+from roboclaws.household.report_sections_action import action_evidence_summary
 from roboclaws.household.report_sections_map import (
     map_evidence_refresh_summary_section,
 )
@@ -6466,7 +6467,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
             f'<p class="pose">{html.escape(pose_text)}</p>'
             f"{_semantic_phase_summary(semantic_phase)}"
             f"{_observation_role_summary(step, previous_action)}"
-            f"{_action_evidence_summary(step)}"
+            f"{action_evidence_summary(step)}"
             f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
             f"{_robot_view_provenance_summary(step)}"
@@ -6740,58 +6741,6 @@ def _focus_summary(step: dict[str, Any], focus: dict[str, Any]) -> str:
     if focus.get("provenance"):
         bits.append(_badge("Focus provenance", focus["provenance"]))
     return '<div class="focus-badges">' + "".join(bits) + "</div>"
-
-
-def _action_evidence_summary(step: dict[str, Any]) -> str:
-    evidence = step.get("action_evidence")
-    if not isinstance(evidence, dict) or not evidence:
-        return ""
-    bits = []
-    if evidence.get("agent_tool"):
-        bits.append(_badge("Agent tool", evidence["agent_tool"]))
-    if evidence.get("source_observation_id"):
-        bits.append(_badge("Source observe", evidence["source_observation_id"]))
-    bbox = _format_bbox(evidence.get("source_image_bbox"))
-    if bbox:
-        bits.append(_badge("Source FPV bbox", bbox))
-    if evidence.get("reviewability_status"):
-        bits.append(_badge("BBox review", evidence["reviewability_status"]))
-    if evidence.get("locality_status"):
-        bits.append(_badge("Locality", evidence["locality_status"]))
-    if evidence.get("candidate_state"):
-        bits.append(_badge("Candidate state", evidence["candidate_state"]))
-    if evidence.get("actionability_status"):
-        bits.append(_badge("Authorization", evidence["actionability_status"]))
-    if evidence.get("grounding_status"):
-        grounding = str(evidence["grounding_status"])
-        if evidence.get("grounding_confidence") is not None:
-            grounding += f" ({evidence['grounding_confidence']})"
-        bits.append(_badge("Grounding", grounding))
-    if evidence.get("resolved_object_id"):
-        bits.append(_badge("Resolved handle", evidence["resolved_object_id"]))
-    if evidence.get("backend_primitive"):
-        bits.append(_badge("Backend primitive", evidence["backend_primitive"]))
-    if evidence.get("declared_category"):
-        bits.append(_badge("Declared category", evidence["declared_category"]))
-    if evidence.get("target_fixture_id"):
-        bits.append(_badge("Public target", evidence["target_fixture_id"]))
-    note = str(evidence.get("evidence_note") or evidence.get("grounding_basis") or "")
-    note_html = f'<p class="note action-evidence-note">{html.escape(note)}</p>' if note else ""
-    if not bits and not note_html:
-        return ""
-    return '<div class="action-evidence-badges">' + "".join(bits) + f"</div>{note_html}"
-
-
-def _format_bbox(value: Any) -> str:
-    if not isinstance(value, (list, tuple)) or len(value) != 4:
-        return ""
-    return "[" + ", ".join(_format_bbox_value(item) for item in value) + "]"
-
-
-def _format_bbox_value(value: Any) -> str:
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value)
 
 
 def _robot_evidence_summary(step: dict[str, Any]) -> str:
