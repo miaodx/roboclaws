@@ -1906,27 +1906,49 @@ def test_isaac_robot_view_focus_prefers_object_pose() -> None:
     assert focus["visibility"]["status"] == "segmentation_unavailable"
 
 
-def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    translations: list[object] = []
-    rotations: list[object] = []
-    camera_transforms: list[tuple[str, object]] = []
+class _FakeRobotPosePrim:
+    def __init__(self, path: str) -> None:
+        self.path = path
 
-    class _FakePrim:
-        def __init__(self, path: str) -> None:
-            self.path = path
+    def IsValid(self) -> bool:
+        return True
 
-        def IsValid(self) -> bool:
-            return True
 
-    class _FakeStage:
-        def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path in {"/World/robot_0", "/World/robot_0/head_camera"}
-            return _FakePrim(path)
+class _FakeRobotPoseStage:
+    def GetPrimAtPath(self, path: str) -> _FakeRobotPosePrim:
+        assert path in {"/World/robot_0", "/World/robot_0/head_camera"}
+        return _FakeRobotPosePrim(path)
 
+
+class _RecordingHeadCameraOp:
+    def __init__(self, name: str, camera_transforms: list[tuple[str, object]]) -> None:
+        self.name = name
+        self.camera_transforms = camera_transforms
+
+    def Set(self, value: object) -> None:
+        self.camera_transforms.append((self.name, value))
+
+
+class _FakeRobotPoseGf:
+    @staticmethod
+    def Vec3d(*values: float) -> tuple[float, float, float]:
+        return (float(values[0]), float(values[1]), float(values[2]))
+
+    @staticmethod
+    def Vec3f(*values: float) -> tuple[float, float, float]:
+        return (float(values[0]), float(values[1]), float(values[2]))
+
+    @staticmethod
+    def Quatf(real: float, imaginary: object) -> tuple[float, object]:
+        return (float(real), imaginary)
+
+
+def _robot_pose_xform_common_api_type(
+    translations: list[object],
+    rotations: list[object],
+) -> type:
     class _FakeXformCommonAPI:
-        def __init__(self, prim: _FakePrim) -> None:
+        def __init__(self, prim: _FakeRobotPosePrim) -> None:
             self.prim = prim
 
         def SetTranslate(self, value: object) -> None:
@@ -1935,67 +1957,73 @@ def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
         def SetRotate(self, value: object) -> None:
             rotations.append(value)
 
-    class _FakeOp:
-        def __init__(self, name: str) -> None:
-            self.name = name
+    return _FakeXformCommonAPI
 
-        def Set(self, value: object) -> None:
-            camera_transforms.append((self.name, value))
 
+def _head_camera_xformable_type(camera_transforms: list[tuple[str, object]]) -> type:
     class _FakeXformable:
-        def __init__(self, prim: _FakePrim) -> None:
+        def __init__(self, prim: _FakeRobotPosePrim) -> None:
             self.prim = prim
 
         def ClearXformOpOrder(self) -> None:
             camera_transforms.append(("clear", self.prim.path))
 
-        def AddTranslateOp(self) -> _FakeOp:
-            return _FakeOp("translate")
+        def AddTranslateOp(self) -> _RecordingHeadCameraOp:
+            return _RecordingHeadCameraOp("translate", camera_transforms)
 
-        def AddOrientOp(self) -> _FakeOp:
-            return _FakeOp("orient")
+        def AddOrientOp(self) -> _RecordingHeadCameraOp:
+            return _RecordingHeadCameraOp("orient", camera_transforms)
 
-        def AddScaleOp(self) -> _FakeOp:
-            return _FakeOp("scale")
+        def AddScaleOp(self) -> _RecordingHeadCameraOp:
+            return _RecordingHeadCameraOp("scale", camera_transforms)
 
-    class _FakeGf:
-        @staticmethod
-        def Vec3d(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
+    return _FakeXformable
 
-        @staticmethod
-        def Vec3f(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
 
-        @staticmethod
-        def Quatf(real: float, imaginary: object) -> tuple[float, object]:
-            return (float(real), imaginary)
-
+def _install_robot_pose_pxr(
+    monkeypatch: pytest.MonkeyPatch,
+    translations: list[object],
+    rotations: list[object],
+    camera_transforms: list[tuple[str, object]],
+) -> None:
     fake_pxr = types.SimpleNamespace(
-        Gf=_FakeGf,
+        Gf=_FakeRobotPoseGf,
         UsdGeom=types.SimpleNamespace(
-            XformCommonAPI=_FakeXformCommonAPI,
-            Xformable=_FakeXformable,
+            XformCommonAPI=_robot_pose_xform_common_api_type(translations, rotations),
+            Xformable=_head_camera_xformable_type(camera_transforms),
         ),
     )
     monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
-    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeRobotPoseGf)
     monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
 
+
+def _shared_robot_pose_state() -> dict[str, object]:
+    return {
+        "robot_pose": {
+            "x": 6.37057,
+            "y": 8.8752,
+            "z": 0.0,
+            "theta": math.pi / 2.0,
+            "head_pitch": 0.653613,
+            "head_pitch_source": "target_framing_head_pitch",
+            "pose_source": "roboclaws_shared_scene_frame_support_pose",
+        }
+    }
+
+
+def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+    rotations: list[object] = []
+    camera_transforms: list[tuple[str, object]] = []
+    _install_robot_pose_pxr(monkeypatch, translations, rotations, camera_transforms)
+
     result = isaac_lab_backend_worker._position_robot_for_head_camera_view(
-        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeRobotPoseStage()),
         scene_bounds=None,
-        semantic_pose_state={
-            "robot_pose": {
-                "x": 6.37057,
-                "y": 8.8752,
-                "z": 0.0,
-                "theta": math.pi / 2.0,
-                "head_pitch": 0.653613,
-                "head_pitch_source": "target_framing_head_pitch",
-                "pose_source": "roboclaws_shared_scene_frame_support_pose",
-            }
-        },
+        semantic_pose_state=_shared_robot_pose_state(),
     )
 
     assert translations == [pytest.approx((6.37057, 8.8752, 0.0))]

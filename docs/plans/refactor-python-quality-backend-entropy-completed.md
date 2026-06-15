@@ -209,6 +209,11 @@ logs before choosing the next slice.
   oversized modules unchanged at 62. Proof: focused Isaac backend tests, ruff,
   format check, and ratchet.
 
+- 2026-06-16: Isaac head-camera robot-pose test moved fake robot prim/stage,
+  PXR install, head-camera xform ops, and shared robot-pose state into focused
+  helpers. Metric: 7 -> 6 complexity rows; oversized modules unchanged at 62.
+  Proof: focused Isaac backend test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
