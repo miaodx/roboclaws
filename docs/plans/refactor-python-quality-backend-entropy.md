@@ -5214,3 +5214,17 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this direct
   cleanup orchestration patch so the unrelated staged `eval-harness` rename was
   not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py::_install_grasp_collision_diagnostics(...)`
+  into grasp-load and noncolliding-mask diagnostic hook installers. The
+  monkeypatch targets, `__roboclaws_original__` guard, hook names,
+  `grasp_load_attempts`, `grasp_collision_checks`, elapsed timing, exception
+  re-raise behavior, and task-sampler failure diagnostic refresh timing remain
+  unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py::test_runner_records_grasp_collision_diagnostics`
+  passed with 1 test. The quality baseline was refreshed from 35 to 34 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this planner
+  manipulation probe diagnostic patch so the unrelated staged `eval-harness`
+  rename was not blessed into the baseline.

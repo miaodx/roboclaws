@@ -128,7 +128,7 @@
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
       },
       {
-        "lines": 2904,
+        "lines": 2923,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py"
       },
@@ -356,16 +356,6 @@
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
         "row": 1567,
         "symbol": "_configure_exact_cleanup_task",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_install_grasp_collision_diagnostics",
-        "limit": 10,
-        "message": "`_install_grasp_collision_diagnostics` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 2033,
-        "symbol": "_install_grasp_collision_diagnostics",
         "value": 11
       },
       {
