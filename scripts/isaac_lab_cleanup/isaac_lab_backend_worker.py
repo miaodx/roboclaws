@@ -5,7 +5,6 @@ import argparse
 import json
 import math
 import os
-import re
 import sys
 import traceback
 from collections import Counter
@@ -28,12 +27,6 @@ from roboclaws.household.camera_control import (
     normalize_camera_control_request,
 )
 from roboclaws.household.color_management import apply_camera_color_profile
-from roboclaws.household.generated_mess import (
-    GENERATED_MESS_MANIFEST_SCHEMA,
-    generated_mess_success_threshold,
-    select_generated_mess_targets,
-    targets_from_generated_mess_manifest,
-)
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -47,7 +40,6 @@ from roboclaws.household.robot_view_camera_control import (
     robot_mounted_head_camera_control_contract,
 )
 from roboclaws.household.robot_view_pose import resolve_cleanup_robot_pose
-from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.scoring import score_cleanup
 from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
@@ -56,8 +48,6 @@ from roboclaws.household.types import (
     CleanupObject,
     CleanupReceptacle,
     CleanupScenario,
-    PrivateScoringManifest,
-    TargetRule,
 )
 from scripts.isaac_lab_cleanup.isaac_camera_capture import (
     IsaacCameraCaptureHooks,
@@ -247,11 +237,45 @@ from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
 from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
     write_generated_runtime_smoke_usd as _write_generated_runtime_smoke_usd,
 )
+from scripts.isaac_lab_cleanup.isaac_scenario_builders import (
+    CANONICAL_CLEANUP_CATEGORY_ALIASES,
+    SCENE_CLEANUP_TARGET_ALIASES,
+    SCENE_STRICT_CLEANUP_TARGET_ALIASES,
+    canonical_cleanup_category,
+    cleanup_receptacle_from_fixture,
+    cleanup_receptacle_from_scene_index,
+    cleanup_receptacle_index_for_mess_generation,
+    effective_scene_index,
+    first_fixture_matching,
+    first_receptacle_matching_aliases,
+    initial_receptacle_id,
+    limit_scenario_to_generated_mess_count,
+    load_generated_mess_manifest,
+    map_aligned_target_specs,
+    scenario_for_init,
+    scenario_from_generated_mess_manifest_or_limit,
+    scenario_from_map_bundle,
+    scenario_from_scene_index,
+    scenario_without_private_targets,
+    scene_cleanup_object_category,
+    scene_entry_tokens,
+    scene_index_from_usd_path,
+    scene_object_category,
+    scene_object_name,
+    scene_source_receptacle_id,
+    scene_specific_scenario_if_needed,
+    scene_target_receptacle_id,
+)
+from scripts.isaac_lab_cleanup.isaac_scenario_builders import (
+    scenario_from_state as _scenario_from_state_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_scenario_builders import (
+    scenario_source as _scenario_source_impl,
+)
 from scripts.isaac_lab_cleanup.isaac_scene_bindings import (
     SCENE_BINDING_SCHEMA as _SCENE_BINDING_SCHEMA,
 )
 from scripts.isaac_lab_cleanup.isaac_scene_bindings import (
-    _scene_match_tokens,
     bind_public_scene_item,
     scene_binding_diagnostics,
     scene_index_match,
@@ -414,17 +438,6 @@ _usd_support_surface_union = usd_support_surface_union_entry
 SEGMENTATION_SCHEMA = _SEGMENTATION_SCHEMA
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = _ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA
 ISAAC_SEGMENTATION_DATA_TYPES = _ISAAC_SEGMENTATION_DATA_TYPES
-MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS = {
-    "sink",
-    "shelvingunit",
-    "desk",
-    "fridge",
-    "tvstand",
-    "bed",
-    "sofa",
-    "diningtable",
-    "countertop",
-}
 MAX_SEGMENTATION_CANDIDATES = _MAX_SEGMENTATION_CANDIDATES
 RBY1M_CHASE_CAMERA_OFFSET_M = _RBY1M_CHASE_CAMERA_OFFSET_M
 RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = _RBY1M_CHASE_CAMERA_TARGET_OFFSET_M
@@ -4343,50 +4356,11 @@ def _public_state(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
-    private = PrivateScoringManifest.from_dict(state["private_manifest"])
-    public = state["scenario"]
-    objects = tuple(
-        CleanupObject(
-            object_id=str(item["object_id"]),
-            name=str(item["name"]),
-            category=str(item["category"]),
-            location_id=str(item["location_id"]),
-            pickupable=bool(item.get("pickupable", True)),
-        )
-        for item in public.get("objects", [])
-    )
-    receptacles = tuple(
-        CleanupReceptacle(
-            receptacle_id=str(item["receptacle_id"]),
-            name=str(item["name"]),
-            room_area=str(item.get("room_area") or "unknown"),
-            kind=str(item.get("kind") or "receptacle"),
-            category=str(item["category"]) if item.get("category") is not None else None,
-        )
-        for item in public.get("receptacles", [])
-    )
-    return CleanupScenario(
-        scenario_id=str(public["scenario_id"]),
-        task=str(public["task"]),
-        seed=int(public["seed"]),
-        objects=objects,
-        receptacles=receptacles,
-        private_manifest=private,
-    )
+    return _scenario_from_state_impl(state)
 
 
 def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
-    if path is None:
-        return {}
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict):
-        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
-    if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
-        raise ValueError(
-            "generated mess manifest schema mismatch: "
-            f"{manifest.get('schema')} != {GENERATED_MESS_MANIFEST_SCHEMA}"
-        )
-    return manifest
+    return load_generated_mess_manifest(path)
 
 
 def _scenario_for_init(
@@ -4394,45 +4368,19 @@ def _scenario_for_init(
     *,
     generated_mess_manifest: dict[str, Any] | None = None,
 ) -> CleanupScenario:
-    if args.scene_usd_path is not None:
-        generated_mess_manifest = None
-    if args.map_bundle_dir is None:
-        return _scenario_from_generated_mess_manifest_or_limit(
-            build_cleanup_scenario(seed=args.seed),
-            generated_mess_count=args.generated_mess_count,
-            generated_mess_manifest=generated_mess_manifest,
-        )
-    return _scenario_from_generated_mess_manifest_or_limit(
-        _scenario_from_map_bundle(
-            args.map_bundle_dir,
-            seed=args.seed,
-            generated_mess_count=args.generated_mess_count,
-        ),
-        generated_mess_count=args.generated_mess_count,
-        generated_mess_manifest=generated_mess_manifest,
-    )
+    return scenario_for_init(args, generated_mess_manifest=generated_mess_manifest)
 
 
 def _scenario_source(args: argparse.Namespace) -> str:
-    return "nav2_map_bundle" if args.map_bundle_dir is not None else "default_cleanup_scenario"
+    return _scenario_source_impl(args)
 
 
 def _effective_scene_index(args: argparse.Namespace) -> int:
-    scene_usd_path = getattr(args, "scene_usd_path", None)
-    inferred = _scene_index_from_usd_path(scene_usd_path)
-    if inferred is not None:
-        return inferred
-    return int(getattr(args, "scene_index", 0) or 0)
+    return effective_scene_index(args)
 
 
 def _scene_index_from_usd_path(path: Any) -> int | None:
-    if path is None:
-        return None
-    for part in reversed(Path(path).parts):
-        match = re.search(r"(?:^|_)val_?(\d+)(?:_|$)", part)
-        if match:
-            return int(match.group(1))
-    return None
+    return scene_index_from_usd_path(path)
 
 
 def _scene_specific_scenario_if_needed(
@@ -4444,19 +4392,13 @@ def _scene_specific_scenario_if_needed(
     receptacle_index: dict[str, dict[str, Any]],
     real_smoke: dict[str, Any] | None,
 ) -> CleanupScenario | None:
-    if real_smoke is None or args.scene_usd_path is None:
-        return None
-    if not generated_mess_manifest and scene_binding_diagnostics.get("status") == "selected_bound":
-        return None
-    return _scenario_from_scene_index(
-        scene_source=args.scene_source,
-        scene_index=args.scene_index,
-        seed=args.seed,
-        generated_mess_count=args.generated_mess_count,
-        generated_mess_object_ids=tuple(getattr(args, "generated_mess_object_id", None) or ()),
+    return scene_specific_scenario_if_needed(
+        args=args,
         generated_mess_manifest=generated_mess_manifest,
+        scene_binding_diagnostics=scene_binding_diagnostics,
         object_index=object_index,
         receptacle_index=receptacle_index,
+        real_smoke=real_smoke,
     )
 
 
@@ -4471,165 +4413,59 @@ def _scenario_from_scene_index(
     object_index: dict[str, dict[str, Any]],
     receptacle_index: dict[str, dict[str, Any]],
 ) -> CleanupScenario | None:
-    cleanup_receptacle_index = _cleanup_receptacle_index_for_mess_generation(receptacle_index)
-    receptacles = tuple(
-        _cleanup_receptacle_from_scene_index(handle, entry)
-        for handle, entry in sorted(cleanup_receptacle_index.items())
-    )
-    if not receptacles:
-        return None
-
-    selectable_objects: list[dict[str, Any]] = []
-    for handle, entry in sorted(object_index.items()):
-        target_id = _scene_target_receptacle_id(entry, cleanup_receptacle_index)
-        if not target_id:
-            continue
-        source_id = _scene_source_receptacle_id(
-            entry,
-            cleanup_receptacle_index,
-            target_id=target_id,
-        )
-        selectable_objects.append(
-            {
-                "object_id": handle,
-                "name": _scene_object_name(handle, entry),
-                "category": _scene_cleanup_object_category(entry),
-                "location_id": source_id,
-            }
-        )
-
-    receptacle_payloads = [receptacle.to_public_dict() for receptacle in receptacles]
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if generated_mess_count == 0:
-        selected = []
-    elif generated_mess_manifest:
-        selected = targets_from_generated_mess_manifest(
-            selectable_objects,
-            receptacle_payloads,
-            generated_mess_manifest,
-            target_count=int(generated_mess_count),
-        )
-    else:
-        selected = select_generated_mess_targets(
-            selectable_objects,
-            receptacle_payloads,
-            target_count=int(generated_mess_count),
-            seed=seed,
-            object_ids=generated_mess_object_ids or None,
-        )
-
-    objects = tuple(
-        CleanupObject(
-            object_id=str(item["object_id"]),
-            name=str(item["name"]),
-            category=str(item["category"]),
-            location_id=str(item.get("start_receptacle_id") or item["location_id"]),
-        )
-        for item in selected
-    )
-    targets = tuple(
-        TargetRule(
-            object_id=str(item["object_id"]),
-            valid_receptacle_ids=(str(item["target_receptacle_id"]),),
-        )
-        for item in selected
-    )
-
-    scenario_id = f"isaac-scene-index-{scene_source}-{scene_index}-{seed}-{len(targets)}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task="Clean up this Isaac-loaded MolmoSpaces scene using scene-indexed objects.",
+    return scenario_from_scene_index(
+        scene_source=scene_source,
+        scene_index=scene_index,
         seed=seed,
-        objects=tuple(objects),
-        receptacles=receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=targets,
-            success_threshold=generated_mess_success_threshold(len(targets)),
-        ),
+        generated_mess_count=generated_mess_count,
+        generated_mess_object_ids=generated_mess_object_ids,
+        generated_mess_manifest=generated_mess_manifest,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
     )
 
 
 def _cleanup_receptacle_index_for_mess_generation(
     receptacle_index: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    cleanup = {
-        handle: entry
-        for handle, entry in receptacle_index.items()
-        if _norm(_scene_object_category(entry)) in MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS
-    }
-    return cleanup or receptacle_index
+    return cleanup_receptacle_index_for_mess_generation(receptacle_index)
 
 
 def _cleanup_receptacle_from_scene_index(
     handle: str,
     entry: dict[str, Any],
 ) -> CleanupReceptacle:
-    category = _scene_object_category(entry)
-    return CleanupReceptacle(
-        receptacle_id=handle,
-        name=str(entry.get("public_label") or category or handle),
-        room_area="isaac_scene",
-        kind=str(entry.get("kind") or "receptacle"),
-        category=category,
-    )
+    return cleanup_receptacle_from_scene_index(handle, entry)
 
 
 def _scene_object_name(handle: str, entry: dict[str, Any]) -> str:
-    category = _scene_object_category(entry)
-    asset_id = str(entry.get("asset_id") or "").strip()
-    if category and asset_id:
-        return f"{category} ({asset_id})"
-    return str(entry.get("public_label") or category or handle)
+    return scene_object_name(handle, entry)
 
 
 def _scene_object_category(entry: dict[str, Any]) -> str:
-    return str(entry.get("category") or entry.get("asset_id") or "object")
+    return scene_object_category(entry)
 
 
 def _scene_cleanup_object_category(entry: dict[str, Any]) -> str:
-    category = _scene_object_category(entry)
-    tokens = _scene_entry_tokens("", entry)
-    for category_aliases, _target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
-        matched_aliases = tuple(alias for alias in category_aliases if alias in tokens)
-        if matched_aliases:
-            return _canonical_cleanup_category(category, matched_aliases)
-    return category
+    return scene_cleanup_object_category(entry)
 
 
 def _canonical_cleanup_category(category: str, aliases: tuple[str, ...]) -> str:
-    category_norm = _norm(category)
-    for canonical, accepted in _CANONICAL_CLEANUP_CATEGORY_ALIASES:
-        accepted_norms = {_norm(item) for item in accepted}
-        alias_matches = any(_norm(alias) in accepted_norms for alias in aliases)
-        if category_norm in accepted_norms or alias_matches:
-            return canonical
-    return category
+    return canonical_cleanup_category(category, aliases)
 
 
 def _scene_target_receptacle_id(
     entry: dict[str, Any],
     receptacle_index: dict[str, dict[str, Any]],
 ) -> str:
-    entry_tokens = _scene_entry_tokens("", entry)
-    for category_aliases, target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
-        if any(alias in entry_tokens for alias in category_aliases):
-            target_id = _first_receptacle_matching_aliases(receptacle_index, target_aliases)
-            if target_id:
-                return target_id
-    return ""
+    return scene_target_receptacle_id(entry, receptacle_index)
 
 
 def _first_receptacle_matching_aliases(
     receptacle_index: dict[str, dict[str, Any]],
     aliases: tuple[str, ...],
 ) -> str:
-    for handle, entry in sorted(receptacle_index.items()):
-        tokens = _scene_entry_tokens(handle, entry)
-        if any(alias in tokens for alias in aliases):
-            return handle
-    return ""
+    return first_receptacle_matching_aliases(receptacle_index, aliases)
 
 
 def _scene_source_receptacle_id(
@@ -4638,72 +4474,16 @@ def _scene_source_receptacle_id(
     *,
     target_id: str,
 ) -> str:
-    parent = str(entry.get("parent") or "")
-    if parent and parent in receptacle_index and parent != target_id:
-        return parent
-    for handle in sorted(receptacle_index):
-        if handle != target_id:
-            return handle
-    return target_id
+    return scene_source_receptacle_id(entry, receptacle_index, target_id=target_id)
 
 
 def _scene_entry_tokens(handle: str, entry: dict[str, Any]) -> set[str]:
-    return _scene_match_tokens(
-        handle,
-        entry.get("metadata_handle"),
-        entry.get("public_label"),
-        entry.get("category"),
-        entry.get("metadata_object_id"),
-        entry.get("asset_id"),
-    )
+    return scene_entry_tokens(handle, entry)
 
 
-_SCENE_CLEANUP_TARGET_ALIASES = (
-    (
-        ("dish", "cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"),
-        ("sink", "countertop"),
-    ),
-    (
-        ("book", "newspaper", "notebook", "paper", "magazine"),
-        ("shelvingunit", "bookshelf", "shelf", "desk"),
-    ),
-    (
-        ("food", "apple", "bread", "egg", "potato", "lettuce", "tomato", "banana", "orange"),
-        ("fridge", "refrigerator"),
-    ),
-    (
-        ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
-        ("tvstand", "televisionstand"),
-    ),
-    (("pillow", "teddybear", "cushion"), ("bed", "sofa")),
-    (("linen", "towel", "cloth", "blanket", "shirt", "clothing"), ("laundryhamper", "hamper")),
-    (("toy", "toycar", "ball", "basketball", "soccer"), ("toybin",)),
-)
-
-_SCENE_STRICT_CLEANUP_TARGET_ALIASES = (
-    (("cup", "mug", "plate", "bowl"), ("sink",)),
-    (("book", "newspaper"), ("shelvingunit", "desk")),
-    (("apple", "bread", "egg", "potato", "lettuce"), ("fridge", "refrigerator")),
-    (("remotecontrol",), ("tvstand", "televisionstand")),
-    (("pillow", "teddybear"), ("bed", "sofa")),
-)
-
-_CANONICAL_CLEANUP_CATEGORY_ALIASES = (
-    ("Plate", ("dish", "plate", "bowl", "cup", "mug", "utensil", "fork", "knife", "spoon")),
-    ("Book", ("book", "newspaper", "notebook", "paper", "magazine")),
-    (
-        "Potato",
-        ("food", "apple", "bread", "egg", "potato", "lettuce", "tomato", "banana", "orange"),
-    ),
-    (
-        "RemoteControl",
-        ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
-    ),
-    ("TeddyBear", ("teddybear", "teddy", "plush")),
-    ("Pillow", ("pillow", "cushion")),
-    ("Towel", ("linen", "towel", "cloth", "blanket", "shirt", "clothing")),
-    ("ToyCar", ("toy", "toycar", "ball", "basketball", "soccer")),
-)
+_SCENE_CLEANUP_TARGET_ALIASES = SCENE_CLEANUP_TARGET_ALIASES
+_SCENE_STRICT_CLEANUP_TARGET_ALIASES = SCENE_STRICT_CLEANUP_TARGET_ALIASES
+_CANONICAL_CLEANUP_CATEGORY_ALIASES = CANONICAL_CLEANUP_CATEGORY_ALIASES
 
 
 def _scenario_from_generated_mess_manifest_or_limit(
@@ -4712,61 +4492,10 @@ def _scenario_from_generated_mess_manifest_or_limit(
     generated_mess_count: int,
     generated_mess_manifest: dict[str, Any] | None = None,
 ) -> CleanupScenario:
-    if not generated_mess_manifest:
-        return _limit_scenario_to_generated_mess_count(
-            scenario,
-            generated_mess_count=generated_mess_count,
-        )
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if generated_mess_count == 0:
-        return _scenario_without_private_targets(
-            scenario,
-            scenario_id=f"{scenario.scenario_id}-canonical-mess-0",
-            objects=(),
-        )
-    objects = [item.to_public_dict() for item in scenario.objects]
-    receptacles = [item.to_public_dict() for item in scenario.receptacles]
-    selected = targets_from_generated_mess_manifest(
-        objects,
-        receptacles,
-        generated_mess_manifest,
-        target_count=int(generated_mess_count),
-    )
-    target_ids = {str(item["object_id"]) for item in selected}
-    source_objects = {item.object_id: item for item in scenario.objects}
-    selected_objects = []
-    for target in selected:
-        object_id = str(target["object_id"])
-        source = source_objects[object_id]
-        selected_objects.append(
-            CleanupObject(
-                object_id=source.object_id,
-                name=source.name,
-                category=source.category,
-                location_id=str(target.get("start_receptacle_id") or source.location_id),
-                pickupable=source.pickupable,
-            )
-        )
-    targets = tuple(
-        TargetRule(
-            object_id=str(item["object_id"]),
-            valid_receptacle_ids=tuple(str(value) for value in item["valid_receptacle_ids"]),
-        )
-        for item in selected
-    )
-    scenario_id = f"{scenario.scenario_id}-canonical-mess-{len(targets)}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=tuple(item for item in selected_objects if item.object_id in target_ids),
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=targets,
-            success_threshold=generated_mess_success_threshold(len(targets)),
-        ),
+    return scenario_from_generated_mess_manifest_or_limit(
+        scenario,
+        generated_mess_count=generated_mess_count,
+        generated_mess_manifest=generated_mess_manifest,
     )
 
 
@@ -4775,34 +4504,9 @@ def _limit_scenario_to_generated_mess_count(
     *,
     generated_mess_count: int,
 ) -> CleanupScenario:
-    count = int(generated_mess_count)
-    if count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if count == 0:
-        return _scenario_without_private_targets(
-            scenario,
-            scenario_id=f"{scenario.scenario_id}-isaac-0",
-            objects=(),
-        )
-    targets = tuple(scenario.private_manifest.targets[:count])
-    if not targets:
-        return scenario
-    target_object_ids = {target.object_id for target in targets}
-    objects = tuple(item for item in scenario.objects if item.object_id in target_object_ids)
-    if not objects:
-        return scenario
-    scenario_id = f"{scenario.scenario_id}-isaac-{len(targets)}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=objects,
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=targets,
-            success_threshold=len(targets),
-        ),
+    return limit_scenario_to_generated_mess_count(
+        scenario,
+        generated_mess_count=generated_mess_count,
     )
 
 
@@ -4812,17 +4516,10 @@ def _scenario_without_private_targets(
     scenario_id: str,
     objects: tuple[CleanupObject, ...],
 ) -> CleanupScenario:
-    return CleanupScenario(
+    return scenario_without_private_targets(
+        scenario,
         scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
         objects=objects,
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=(),
-            success_threshold=0,
-        ),
     )
 
 
@@ -4832,128 +4529,23 @@ def _scenario_from_map_bundle(
     seed: int,
     generated_mess_count: int,
 ) -> CleanupScenario:
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
-    raw_fixtures = [dict(item) for item in semantics.get("fixtures") or []]
-    if not raw_fixtures:
-        return build_cleanup_scenario(seed=seed)
-
-    receptacles = tuple(_cleanup_receptacle_from_fixture(item) for item in raw_fixtures)
-    target_specs = _map_aligned_target_specs(raw_fixtures)
-    if not target_specs:
-        return build_cleanup_scenario(seed=seed)
-
-    count = max(1, int(generated_mess_count))
-    objects: list[CleanupObject] = []
-    targets: list[TargetRule] = []
-    for index in range(count):
-        spec = target_specs[index % len(target_specs)]
-        cycle = index // len(target_specs) + 1
-        object_id = spec["object_id"] if cycle == 1 else f"{spec['object_id']}_{cycle}"
-        source_id = str(spec["source_fixture_id"])
-        target_id = str(spec["target_fixture_id"])
-        objects.append(
-            CleanupObject(
-                object_id=object_id,
-                name=str(spec["name"]),
-                category=str(spec["category"]),
-                location_id=source_id,
-            )
-        )
-        targets.append(TargetRule(object_id=object_id, valid_receptacle_ids=(target_id,)))
-
-    scenario_id = f"isaac-map-aligned-{bundle_dir.name}-{seed}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task="Clean up this room by putting misplaced objects in appropriate places.",
+    return scenario_from_map_bundle(
+        bundle_dir,
         seed=seed,
-        objects=tuple(objects),
-        receptacles=receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=tuple(targets),
-            success_threshold=len(targets),
-        ),
+        generated_mess_count=generated_mess_count,
     )
 
 
 def _initial_receptacle_id(scenario: CleanupScenario) -> str:
-    if scenario.objects:
-        return scenario.objects[0].location_id
-    if scenario.receptacles:
-        return scenario.receptacles[0].receptacle_id
-    return "floor_01"
+    return initial_receptacle_id(scenario)
 
 
 def _cleanup_receptacle_from_fixture(fixture: dict[str, Any]) -> CleanupReceptacle:
-    fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-    category = str(fixture.get("category") or fixture.get("name") or fixture_id)
-    return CleanupReceptacle(
-        receptacle_id=fixture_id,
-        name=str(fixture.get("name") or fixture_id),
-        room_area=str(fixture.get("room_id") or fixture.get("room_area") or "unknown"),
-        kind="receptacle",
-        category=category,
-    )
+    return cleanup_receptacle_from_fixture(fixture)
 
 
 def _map_aligned_target_specs(fixtures: list[dict[str, Any]]) -> list[dict[str, str]]:
-    candidates = [
-        {
-            "object_id": "mug_01",
-            "name": "ceramic mug",
-            "category": "dish",
-            "target_aliases": ("sink", "countertop"),
-            "source_aliases": ("sofa", "diningtable", "desk", "bed"),
-        },
-        {
-            "object_id": "plate_01",
-            "name": "dinner plate",
-            "category": "dish",
-            "target_aliases": ("sink", "countertop"),
-            "source_aliases": ("diningtable", "sofa", "desk", "bed"),
-        },
-        {
-            "object_id": "book_01",
-            "name": "paperback book",
-            "category": "book",
-            "target_aliases": ("shelvingunit", "bookshelf", "shelf", "desk"),
-            "source_aliases": ("sofa", "diningtable", "bed"),
-        },
-        {
-            "object_id": "apple_01",
-            "name": "apple",
-            "category": "food",
-            "target_aliases": ("fridge", "refrigerator"),
-            "source_aliases": ("desk", "diningtable", "countertop"),
-        },
-        {
-            "object_id": "remote_01",
-            "name": "TV remote",
-            "category": "electronics",
-            "target_aliases": ("tvstand", "tv stand", "stand"),
-            "source_aliases": ("bed", "desk", "diningtable", "sofa"),
-        },
-    ]
-    specs = []
-    for candidate in candidates:
-        target = _first_fixture_matching(fixtures, candidate["target_aliases"])
-        source = _first_fixture_matching(
-            fixtures,
-            candidate["source_aliases"],
-            exclude_fixture_id=str(target.get("fixture_id") or "") if target else "",
-        )
-        if target is None or source is None:
-            continue
-        specs.append(
-            {
-                "object_id": str(candidate["object_id"]),
-                "name": str(candidate["name"]),
-                "category": str(candidate["category"]),
-                "source_fixture_id": str(source["fixture_id"]),
-                "target_fixture_id": str(target["fixture_id"]),
-            }
-        )
-    return specs
+    return map_aligned_target_specs(fixtures)
 
 
 def _first_fixture_matching(
@@ -4962,18 +4554,7 @@ def _first_fixture_matching(
     *,
     exclude_fixture_id: str = "",
 ) -> dict[str, Any] | None:
-    for alias in aliases:
-        alias_norm = _norm(alias)
-        for fixture in fixtures:
-            fixture_id = str(fixture.get("fixture_id") or "")
-            if fixture_id == exclude_fixture_id:
-                continue
-            text = _norm(
-                " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
-            )
-            if alias_norm and alias_norm in text:
-                return fixture
-    return None
+    return first_fixture_matching(fixtures, aliases, exclude_fixture_id=exclude_fixture_id)
 
 
 def _norm(value: Any) -> str:
