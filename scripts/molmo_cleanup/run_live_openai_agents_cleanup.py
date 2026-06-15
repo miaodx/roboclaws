@@ -18,7 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.agents.drivers.household_live import (
+    add_household_cleanup_live_runner_args,
+    household_cleanup_server_argv,
+)
 from roboclaws.agents.drivers.openai_agents_live import (
     DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
     DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
@@ -131,13 +134,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--repo-root", type=Path, required=True)
-    parser.add_argument("--status-path", type=Path, required=True)
-    parser.add_argument("--client-url", required=True)
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--lock-path", type=Path, required=True)
+    add_household_cleanup_live_runner_args(parser, policy_default="openai_agents_agent")
     parser.add_argument("--provider-profile", default="codex-env")
     parser.add_argument("--model", default="")
     parser.add_argument(
@@ -274,18 +271,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Delay between Agent SDK model-service retry attempts.",
     )
-    parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
-    parser.add_argument("--kickoff-prompt", required=True)
-    parser.add_argument("--backend", required=True)
-    parser.add_argument("--task-name", default="household-cleanup")
-    parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
-    parser.add_argument("--policy", default="openai_agents_agent")
-    parser.add_argument("--task", required=True)
-    parser.add_argument("--min-generated-mess-count", required=True)
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("--server-arg", action="append", default=[])
-    parser.add_argument("--checker-visual-arg", action="append", default=[])
     return parser.parse_args(argv)
 
 

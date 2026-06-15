@@ -19,7 +19,10 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.agents.drivers.household_live import (
+    add_household_cleanup_live_runner_args,
+    household_cleanup_server_argv,
+)
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
 from roboclaws.agents.provider_timing_proxy import (
     PROVIDER_TIMING_PROXY_UPSTREAM_ENV,
@@ -30,7 +33,6 @@ from roboclaws.agents.provider_timing_proxy import (
     stop_provider_timing_proxy,
 )
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
-from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT
 from roboclaws.household.visual_backend_slots import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     VisualBackendSlotError,
@@ -106,13 +108,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Own the server, Codex exec, checker, and status files for one live run.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--repo-root", type=Path, required=True)
-    parser.add_argument("--status-path", type=Path, required=True)
-    parser.add_argument("--client-url", required=True)
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--lock-path", type=Path, required=True)
+    add_household_cleanup_live_runner_args(parser)
     parser.add_argument("--tmux-session", required=True)
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
@@ -126,19 +122,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "failing this live run. Set to 0 to disable."
         ),
     )
-    parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
-    parser.add_argument("--kickoff-prompt", required=True)
-    parser.add_argument("--backend", required=True)
-    parser.add_argument("--task-name", default="household-cleanup")
-    parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
-    parser.add_argument("--policy", required=True)
-    parser.add_argument("--task", required=True)
-    parser.add_argument("--min-generated-mess-count", required=True)
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("--server-arg", action="append", default=[])
     parser.add_argument("--codex-model-arg", action="append", default=[])
-    parser.add_argument("--checker-visual-arg", action="append", default=[])
     return parser.parse_args(argv)
 
 
