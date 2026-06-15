@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-15
+last_verified: 2026-06-16
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -18,13 +18,13 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest committed Candidate A
-test-helper slices:
+--summary --top 40` on 2026-06-16, after the latest committed complexity
+ratchet slices:
 
-- 17 Ruff complexity violations.
+- 0 Ruff complexity violations.
 - 62 oversized modules.
-- Remaining complexity is test-heavy; remaining file-size debt is split between
-  large production modules and large behavior tests.
+- Remaining work is file-size and ownership-boundary debt split between large
+  production modules and large behavior tests.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
@@ -115,11 +115,12 @@ and backend/report/evidence boundaries that prevent branching from returning.
 
 ### A: Behavior-Test Fixture Builders
 
-Severity: P1. Remaining complexity is now mostly in tests, led by
-`test_isaac_lab_backend.py`, `test_molmo_cleanup_report.py`,
-`test_molmo_realworld_contract.py`, checker tests, and apple-to-apple tests.
-Use fixture builders and focused assertion helpers; do not split only for line
-count. Owner: `intuitive-tests`. Proof: focused pytest, ruff, ratchet summary.
+Severity: P2 unless a file crosses the hard ceiling or blocks a product
+boundary. Ruff complexity rows are currently zero, but several large behavior
+test modules still obscure setup ownership. Use fixture builders and focused
+assertion helpers only when they make the tested behavior easier to scan; do
+not split only for line count. Owner: `intuitive-tests`. Proof: focused pytest,
+ruff, ratchet summary.
 
 ### B: Contract And Report Hard-Ceiling Split
 
