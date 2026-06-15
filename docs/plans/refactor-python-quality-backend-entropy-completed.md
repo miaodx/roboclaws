@@ -242,6 +242,13 @@ logs before choosing the next slice.
   lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
   Proof: focused Isaac backend tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac public scene-binding diagnostics and matcher logic moved
+  from the backend worker into `isaac_scene_bindings.py`, keeping worker-private
+  aliases for current tests and callers. Metric: `isaac_lab_backend_worker.py`
+  7636 -> 7339 lines; Ruff complexity stayed at 0 and oversized modules stayed
+  at 62. Proof: focused Isaac scene-binding tests, ruff, format check, and
+  ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
