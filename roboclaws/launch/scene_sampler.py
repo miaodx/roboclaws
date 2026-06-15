@@ -263,6 +263,95 @@ def eval_projection_metadata() -> dict[str, Any]:
     }
 
 
+def eval_suite_payload() -> dict[str, Any]:
+    """Return generated scene-sampler eval suite JSON from admitted rows."""
+
+    rows = eval_sampler_rows()
+    return {
+        "schema": "roboclaws_eval_suite_v1",
+        "suite_id": "household_world.scene_sampler_stress",
+        "version": "2026-06-15",
+        "capability": "household_world_scene_sampling",
+        "sample_ids": [eval_sample_id(row) for row in rows],
+        "sample_refs": [eval_sample_ref(row) for row in rows],
+        "required_graders": [
+            "artifacts",
+            "privacy",
+            "trajectory",
+            "sampler_admission",
+            "outcome",
+        ],
+        "thresholds": {
+            "pass_at_1": 1.0,
+            "private_truth_leak_count": 0,
+            "trajectory_policy_violation_count": 0,
+        },
+        "metadata": {
+            "runner_scope": "direct-runner source-aware MolmoSpaces map-build stress projection",
+            "live_provider_required": False,
+            "sampler_projection": eval_projection_metadata(),
+        },
+    }
+
+
+def eval_sample_payload(row: SceneSamplerRow) -> dict[str, Any]:
+    """Return generated scene-sampler eval sample JSON for one admitted row."""
+
+    if not row.eval_ready or row.scene_index is None:
+        raise ValueError("eval sample payload requires an eval-ready sampler row")
+    return {
+        "schema": "roboclaws_eval_sample_v1",
+        "sample_id": eval_sample_id(row),
+        "version": "2026-06-15",
+        "surface": "household-world",
+        "intent": "map-build",
+        "preset": "map-build",
+        "world": row.world_id,
+        "backend": row.backend,
+        "evidence_lane": "world-oracle-labels",
+        "camera_labeler": "not_applicable",
+        "scenario_setup": "baseline",
+        "seed": 7,
+        "prompt": "not_applicable",
+        "goal_contract_hash": "unavailable",
+        "allowed_agent_engines": ["direct-runner"],
+        "provider_profiles": ["not_applicable"],
+        "trial_count": 1,
+        "required_graders": [
+            "artifacts",
+            "privacy",
+            "trajectory",
+            "sampler_admission",
+            "outcome",
+        ],
+        "private_goal_reference": {
+            "schema": "household_eval_private_goal_reference_v1",
+            "private_truth_scope": "grader_only",
+            "expected_runtime_metric_map": True,
+        },
+        "grader_config": {
+            "min_public_semantic_anchors": 1,
+            "min_generated_exploration_candidates": 1,
+            "require_runtime_metric_map_schema": "runtime_metric_map_v1",
+            "require_private_truth_absent": True,
+            "require_source_map_not_mutated": True,
+            "sampler_admission": {
+                "schema": "molmospaces_scene_sampler_admission_v1",
+                "scene_family": row.scene_family,
+                "scene_split": row.scene_split,
+                "scene_source": row.scene_source,
+                "scene_index": row.scene_index,
+                "room_count": row.room_count,
+                "waypoint_count": row.waypoint_count,
+                "category_provenance": row.category_provenance,
+                "category_manifest": row.category_manifest,
+                "generator_version": SAMPLER_GENERATOR_VERSION,
+            },
+        },
+        "launch_overrides": _eval_sample_launch_overrides(row),
+    }
+
+
 def readiness_report() -> dict[str, Any]:
     """Return per-source UI/eval readiness counts for scanner artifacts."""
 
@@ -621,6 +710,18 @@ def _ready_row(scene_index: int) -> SceneSamplerRow:
         quality_score=_quality_score(preview),
         coverage_score=_coverage_score(room_count=len(room_ids), waypoint_count=waypoint_count),
     )
+
+
+def _eval_sample_launch_overrides(row: SceneSamplerRow) -> dict[str, Any]:
+    overrides: dict[str, Any] = {
+        "agent_engine": "direct-runner",
+        "evidence_lane": "world-oracle-labels",
+        "seed": 7,
+        "scenario_setup": "baseline",
+        "scene_source": row.scene_source,
+        "scene_index": int(row.scene_index),
+    }
+    return overrides
 
 
 def _blocked_source_row(scene_source: str) -> SceneSamplerRow:

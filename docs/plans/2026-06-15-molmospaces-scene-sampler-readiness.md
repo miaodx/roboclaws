@@ -93,6 +93,11 @@ First slice implemented on 2026-06-15.
   selection-gap projections before a real scanner run. For example, expanding
   `procthor-10k-val` to `--candidate-range 0:19` gives enough source-aware
   candidate ids to cover the current eval-stress gap.
+- Readiness export now writes a generated eval dry-run under
+  `generated_eval/`: `scene_sampler_stress.json` plus one sample JSON per
+  admitted eval row. These generated payloads match the committed fixtures
+  today and give future scanner admission a deterministic way to materialize
+  new eval rows.
 
 Verification run on 2026-06-15:
 
@@ -222,6 +227,9 @@ Next Flow implementation slices:
      partial, and blocked counts per `scene_source`.
    - Keep static suite/sample JSON unless dynamic `sample_manifest` support
      becomes necessary during implementation.
+   - Generated eval dry-run artifacts are available from the readiness exporter
+     and should be used to compare or refresh committed static suite/sample JSON
+     after new scanner-admitted rows exist.
    - Keep `sampler_admission` deterministic and reject heuristic category
      provenance such as `heuristic_room_label`, `heuristic_room_count`, and
      `room_area_fallback`.

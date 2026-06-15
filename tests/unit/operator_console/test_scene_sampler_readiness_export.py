@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from scripts.operator_console.export_scene_sampler_readiness import (
     _candidate_indices,
     export_readiness_artifacts,
     main,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
@@ -17,6 +20,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     artifacts = result["artifacts"]
     assert set(artifacts) == {
         "candidate_readiness",
+        "generated_eval_samples",
+        "generated_eval_suite",
         "manifest",
         "eval_projection",
         "readiness_report",
@@ -31,6 +36,9 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     )
     candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
     selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
+    generated_suite = json.loads(
+        (tmp_path / "generated_eval/scene_sampler_stress.json").read_text()
+    )
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
@@ -50,6 +58,25 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
     assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
     assert selection["sources"]["ithor"]["ui_needed_count"] == 3
+    assert generated_suite == json.loads(
+        (
+            REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert len(artifacts["generated_eval_samples"]) == 5
+    generated_sample = json.loads(
+        (
+            tmp_path
+            / "generated_eval/samples/scene_sampler/procthor-10k-val_0_map_build.json"
+        ).read_text(encoding="utf-8")
+    )
+    committed_sample = json.loads(
+        (
+            REPO_ROOT
+            / "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert generated_sample == committed_sample
 
 
 def test_scene_sampler_readiness_export_can_require_ui_supported_source(tmp_path) -> None:

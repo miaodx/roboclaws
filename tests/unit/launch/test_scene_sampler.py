@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import json
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +16,10 @@ from roboclaws.launch.scene_sampler import (
     candidate_readiness_report,
     eval_projection_metadata,
     eval_sample_id,
+    eval_sample_payload,
+    eval_sample_ref,
     eval_sampler_rows,
+    eval_suite_payload,
     legacy_molmospaces_world_ids,
     parse_molmospaces_world_id,
     readiness_report,
@@ -30,6 +35,8 @@ from roboclaws.launch.worlds import (
     MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS,
     WORLD_SPECS,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
@@ -133,6 +140,31 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
         assert source_projection["status"] == "partial_or_blocked"
         assert source_projection["blocked_rows"][0]["readiness_status"] == READINESS_BLOCKED
         assert source_projection["blocked_rows"][0]["failure_class"] == "environment_blocked"
+
+
+def test_scene_sampler_eval_suite_payload_matches_committed_fixture() -> None:
+    fixture = json.loads(
+        (
+            REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert eval_suite_payload() == fixture
+
+
+def test_scene_sampler_eval_sample_payloads_match_committed_fixtures() -> None:
+    for row in eval_sampler_rows():
+        fixture_path = REPO_ROOT / eval_sample_ref(row)
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+        assert eval_sample_payload(row) == fixture
+
+
+def test_scene_sampler_eval_sample_payload_rejects_non_eval_rows() -> None:
+    rejected = next(row for row in sampler_rows() if row.scene_index == 1)
+
+    with pytest.raises(ValueError, match="eval-ready sampler row"):
+        eval_sample_payload(rejected)
 
 
 def test_scene_sampler_rejects_heuristic_room_category_provenance() -> None:

@@ -17,6 +17,9 @@ else:
 from roboclaws.launch.scene_sampler import (  # noqa: E402
     candidate_readiness_report,
     eval_projection_metadata,
+    eval_sample_payload,
+    eval_sampler_rows,
+    eval_suite_payload,
     readiness_report,
     sampler_manifest,
     selection_gap_report,
@@ -42,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         write_source_availability=not args.no_source_availability,
         write_candidate_readiness=not args.no_candidate_readiness,
         write_selection_gaps=not args.no_selection_gaps,
+        write_generated_eval=not args.no_generated_eval,
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
         required_selection_capacity_sources=tuple(args.require_selection_capacity_sources),
@@ -65,6 +69,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-source-availability", action="store_true")
     parser.add_argument("--no-candidate-readiness", action="store_true")
     parser.add_argument("--no-selection-gaps", action="store_true")
+    parser.add_argument("--no-generated-eval", action="store_true")
     parser.add_argument(
         "--candidate-index",
         action="append",
@@ -134,6 +139,7 @@ def export_readiness_artifacts(
     write_source_availability: bool = True,
     write_candidate_readiness: bool = True,
     write_selection_gaps: bool = True,
+    write_generated_eval: bool = True,
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
     required_selection_capacity_sources: tuple[str, ...] = (),
@@ -175,6 +181,21 @@ def export_readiness_artifacts(
         selection_path = output_dir / "scene_sampler_selection_gaps.json"
         _write_json(selection_path, selection)
         artifacts["selection_gaps"] = str(selection_path)
+    if write_generated_eval:
+        generated_eval_dir = output_dir / "generated_eval"
+        generated_samples_dir = generated_eval_dir / "samples" / "scene_sampler"
+        generated_samples_dir.mkdir(parents=True, exist_ok=True)
+        generated_suite_path = generated_eval_dir / "scene_sampler_stress.json"
+        _write_json(generated_suite_path, eval_suite_payload())
+        sample_paths = []
+        for row in eval_sampler_rows():
+            sample_path = generated_samples_dir / (
+                f"{row.scene_source}_{row.scene_index}_map_build.json"
+            )
+            _write_json(sample_path, eval_sample_payload(row))
+            sample_paths.append(str(sample_path))
+        artifacts["generated_eval_suite"] = str(generated_suite_path)
+        artifacts["generated_eval_samples"] = sample_paths
     failures = _threshold_failures(
         readiness,
         selection,
