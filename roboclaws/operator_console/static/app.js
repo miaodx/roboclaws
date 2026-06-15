@@ -1071,7 +1071,6 @@ function effectiveReadiness(route) {
 
 function applyLocalGateEvidence(gate) {
   const localReady =
-    (gate.id === "context_json" && Boolean(els.contextInput.value.trim())) ||
     (gate.id === "localization_ready" && els.localizationGate.checked) ||
     (gate.id === "run_enabled" && els.enablementGate.checked) ||
     (gate.id === "estop_ready" && els.estopGate.checked);

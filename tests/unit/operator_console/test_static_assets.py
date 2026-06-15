@@ -121,6 +121,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Use Steer or Ask Why" in app
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
+    assert 'gate.id === "context_json" && Boolean(els.contextInput.value.trim())' not in app
     assert "checkerStatus.message" in app
     assert "state.evidenceLanes" in app
     assert "payload.evidence_lanes" in app

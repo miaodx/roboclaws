@@ -90,17 +90,58 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
         gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
         env=CODEX_ENV,
     )
+    assert agibot["can_start"] is False
+    context_gate = next(gate for gate in agibot["gates"] if gate["id"] == "context_json")
+    assert context_gate["status"] == "needs_action"
+    assert "was not found" in context_gate["message"]
+
+    context_path = tmp_path / "context.json"
+    context_path.write_text("{}", encoding="utf-8")
+    agibot = route_readiness(
+        tmp_path,
+        get_selection(AGIBOT_CODEX_MAP_BUILD),
+        overrides={"context_json": str(context_path), "port": _free_port()},
+        gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
+        env=CODEX_ENV,
+    )
     assert agibot["can_start"] is True
+    context_gate = next(gate for gate in agibot["gates"] if gate["id"] == "context_json")
+    assert context_gate["status"] == "ready"
+    assert context_gate["evidence"] == str(context_path)
+    relative = route_readiness(
+        tmp_path,
+        get_selection(AGIBOT_CODEX_MAP_BUILD),
+        overrides={"context_json": "context.json", "port": _free_port()},
+        gates={"localization_ready": True, "run_enabled": True, "estop_ready": True},
+        env=CODEX_ENV,
+    )
+    assert relative["can_start"] is True
+    context_gate = next(gate for gate in relative["gates"] if gate["id"] == "context_json")
+    assert context_gate["evidence"] == str(context_path)
     run_gate = next(gate for gate in agibot["gates"] if gate["id"] == "run_enabled")
     assert run_gate["severity"] == "capability"
     assert run_gate["blocks_start"] is False
     assert "Dry-run launch can start" in run_gate["message"]
 
+    invalid_context = tmp_path / "invalid-context.json"
+    invalid_context.write_text("{", encoding="utf-8")
+    invalid = route_readiness(
+        tmp_path,
+        get_selection(AGIBOT_CODEX_MAP_BUILD),
+        overrides={"context_json": str(invalid_context), "port": _free_port()},
+        gates={"localization_ready": True, "run_enabled": True, "estop_ready": True},
+        env=CODEX_ENV,
+    )
+    assert invalid["can_start"] is False
+    context_gate = next(gate for gate in invalid["gates"] if gate["id"] == "context_json")
+    assert context_gate["status"] == "needs_action"
+    assert "not readable JSON" in context_gate["message"]
+
     movement = route_readiness(
         tmp_path,
         get_selection(AGIBOT_CODEX_MAP_BUILD),
         overrides={
-            "context_json": str(tmp_path / "context.json"),
+            "context_json": str(context_path),
             "port": _free_port(),
             "real_movement_enabled": "true",
         },
