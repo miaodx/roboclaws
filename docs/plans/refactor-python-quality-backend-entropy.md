@@ -5079,3 +5079,17 @@ Stop this refactor loop when:
   ratchet write/ok proof used a temporary clean worktree containing only this
   diagnostic-script split so the unrelated staged `eval-harness` rename was not
   blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py::test_runner_writes_dry_run_manifest_and_report_from_inline_requests(...)`
+  into focused manifest, command, and artifact/report assertion helpers. The
+  dry-run fixture, runner call, manifest expectations, probe command checks,
+  and report text assertions remain unchanged. Evidence:
+  `ruff check tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  passed; `ruff format tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  passed with 22 tests. The quality baseline was refreshed from 46 to 45 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this test
+  split so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.

@@ -288,7 +288,7 @@
         "path": "tests/unit/operator_console/test_state.py"
       },
       {
-        "lines": 1775,
+        "lines": 1786,
         "max_module_lines": 800,
         "path": "tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py"
       }
@@ -752,16 +752,6 @@
         "row": 20,
         "symbol": "test_static_app_has_route_specific_field_groups",
         "value": 113
-      },
-      {
-        "code": "PLR0915",
-        "key": "tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py|PLR0915|test_runner_writes_dry_run_manifest_and_report_from_inline_requests",
-        "limit": 50,
-        "message": "Too many statements (55 > 50)",
-        "path": "tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py",
-        "row": 30,
-        "symbol": "test_runner_writes_dry_run_manifest_and_report_from_inline_requests",
-        "value": 55
       }
     ]
   },
