@@ -1,0 +1,264 @@
+{
+  "schema": "roboclaws_eval_suite_v1",
+  "suite_id": "household_world.scene_sampler_stress",
+  "version": "2026-06-15",
+  "capability": "household_world_scene_sampling",
+  "sample_ids": [
+    "scene_sampler.procthor-10k-val.0.map_build",
+    "scene_sampler.procthor-10k-val.2.map_build",
+    "scene_sampler.procthor-10k-val.3.map_build",
+    "scene_sampler.procthor-10k-val.5.map_build",
+    "scene_sampler.procthor-10k-val.9.map_build"
+  ],
+  "sample_refs": [
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_2_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_3_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_5_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_9_map_build.json"
+  ],
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "sampler_admission",
+    "outcome"
+  ],
+  "thresholds": {
+    "pass_at_1": 1.0,
+    "private_truth_leak_count": 0,
+    "trajectory_policy_violation_count": 0
+  },
+  "metadata": {
+    "runner_scope": "direct-runner source-aware MolmoSpaces map-build stress projection",
+    "live_provider_required": false,
+    "sampler_projection": {
+      "schema": "molmospaces_scene_sampler_projection_v1",
+      "projection": "eval_stress",
+      "generator_version": "2026-06-15.preview-readiness-v1",
+      "scene_sources": {
+        "procthor-10k-val": {
+          "target_count": 10,
+          "ready_count": 5,
+          "status": "partial_or_blocked",
+          "sample_ids": [
+            "scene_sampler.procthor-10k-val.0.map_build",
+            "scene_sampler.procthor-10k-val.2.map_build",
+            "scene_sampler.procthor-10k-val.3.map_build",
+            "scene_sampler.procthor-10k-val.5.map_build",
+            "scene_sampler.procthor-10k-val.9.map_build"
+          ],
+          "blocked_rows": [
+            {
+              "scene_family": "procthor-10k",
+              "scene_split": "val",
+              "scene_source": "procthor-10k-val",
+              "scene_index": 1,
+              "backend": "mujoco",
+              "readiness_status": "rejected",
+              "lanes": [],
+              "world_id": "molmospaces/val_1",
+              "legacy_world_id": "molmospaces/val_1",
+              "room_count": 2,
+              "waypoint_count": 4,
+              "category_provenance": "prepared_visual_label_manifest",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "preview_assets": [
+                {
+                  "view": "fpv",
+                  "path": "/previews/molmospaces-val_1-fpv.png"
+                },
+                {
+                  "view": "map",
+                  "path": "/previews/molmospaces-val_1-map.png"
+                },
+                {
+                  "view": "chase",
+                  "path": "/previews/molmospaces-val_1-chase.png"
+                },
+                {
+                  "view": "topdown",
+                  "path": "/previews/molmospaces-val_1-topdown.png"
+                }
+              ],
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "failure_class": "map_actionability_failure",
+              "quality_score": 1.0,
+              "coverage_score": 0.2,
+              "generator_version": "2026-06-15.preview-readiness-v1"
+            },
+            {
+              "scene_family": "procthor-10k",
+              "scene_split": "val",
+              "scene_source": "procthor-10k-val",
+              "scene_index": 4,
+              "backend": "mujoco",
+              "readiness_status": "rejected",
+              "lanes": [],
+              "world_id": "molmospaces/val_4",
+              "legacy_world_id": "molmospaces/val_4",
+              "room_count": 4,
+              "waypoint_count": 8,
+              "category_provenance": "prepared_visual_label_manifest",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "preview_assets": [
+                {
+                  "view": "fpv",
+                  "path": "/previews/molmospaces-val_4-fpv.png"
+                },
+                {
+                  "view": "map",
+                  "path": "/previews/molmospaces-val_4-map.png"
+                },
+                {
+                  "view": "chase",
+                  "path": "/previews/molmospaces-val_4-chase.png"
+                },
+                {
+                  "view": "topdown",
+                  "path": "/previews/molmospaces-val_4-topdown.png"
+                }
+              ],
+              "selected_reason": "preview_not_reviewable",
+              "blocked_reason": "preview_not_reviewable",
+              "failure_class": "map_actionability_failure",
+              "quality_score": 0.75,
+              "coverage_score": 0.4,
+              "generator_version": "2026-06-15.preview-readiness-v1"
+            },
+            {
+              "scene_family": "procthor-10k",
+              "scene_split": "val",
+              "scene_source": "procthor-10k-val",
+              "scene_index": 7,
+              "backend": "mujoco",
+              "readiness_status": "rejected",
+              "lanes": [],
+              "world_id": "molmospaces/val_7",
+              "legacy_world_id": "molmospaces/val_7",
+              "room_count": 2,
+              "waypoint_count": 4,
+              "category_provenance": "prepared_visual_label_manifest",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "preview_assets": [
+                {
+                  "view": "fpv",
+                  "path": "/previews/molmospaces-val_7-fpv.png"
+                },
+                {
+                  "view": "map",
+                  "path": "/previews/molmospaces-val_7-map.png"
+                },
+                {
+                  "view": "chase",
+                  "path": "/previews/molmospaces-val_7-chase.png"
+                },
+                {
+                  "view": "topdown",
+                  "path": "/previews/molmospaces-val_7-topdown.png"
+                }
+              ],
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "failure_class": "map_actionability_failure",
+              "quality_score": 1.0,
+              "coverage_score": 0.2,
+              "generator_version": "2026-06-15.preview-readiness-v1"
+            }
+          ]
+        },
+        "ithor": {
+          "target_count": 10,
+          "ready_count": 0,
+          "status": "partial_or_blocked",
+          "sample_ids": [],
+          "blocked_rows": [
+            {
+              "scene_family": "ithor",
+              "scene_split": "not_applicable",
+              "scene_source": "ithor",
+              "scene_index": null,
+              "backend": "mujoco",
+              "readiness_status": "blocked",
+              "lanes": [],
+              "world_id": "molmospaces/ithor/blocked",
+              "legacy_world_id": "",
+              "room_count": 0,
+              "waypoint_count": 0,
+              "category_provenance": "unavailable",
+              "category_manifest": "",
+              "preview_assets": [],
+              "selected_reason": "blocked_until_assets_and_preview_readiness_exist",
+              "blocked_reason": "MolmoSpaces source assets or loader metadata are not locally verified by the no-download sampler fixture; run scene preparation before admission.",
+              "failure_class": "environment_blocked",
+              "quality_score": 0.0,
+              "coverage_score": 0.0,
+              "generator_version": "2026-06-15.preview-readiness-v1"
+            }
+          ]
+        },
+        "procthor-objaverse-val": {
+          "target_count": 10,
+          "ready_count": 0,
+          "status": "partial_or_blocked",
+          "sample_ids": [],
+          "blocked_rows": [
+            {
+              "scene_family": "procthor-objaverse",
+              "scene_split": "val",
+              "scene_source": "procthor-objaverse-val",
+              "scene_index": null,
+              "backend": "mujoco",
+              "readiness_status": "blocked",
+              "lanes": [],
+              "world_id": "molmospaces/procthor-objaverse-val/blocked",
+              "legacy_world_id": "",
+              "room_count": 0,
+              "waypoint_count": 0,
+              "category_provenance": "unavailable",
+              "category_manifest": "",
+              "preview_assets": [],
+              "selected_reason": "blocked_until_assets_and_preview_readiness_exist",
+              "blocked_reason": "MolmoSpaces source assets or loader metadata are not locally verified by the no-download sampler fixture; run scene preparation before admission.",
+              "failure_class": "environment_blocked",
+              "quality_score": 0.0,
+              "coverage_score": 0.0,
+              "generator_version": "2026-06-15.preview-readiness-v1"
+            }
+          ]
+        },
+        "holodeck-objaverse-val": {
+          "target_count": 10,
+          "ready_count": 0,
+          "status": "partial_or_blocked",
+          "sample_ids": [],
+          "blocked_rows": [
+            {
+              "scene_family": "holodeck-objaverse",
+              "scene_split": "val",
+              "scene_source": "holodeck-objaverse-val",
+              "scene_index": null,
+              "backend": "mujoco",
+              "readiness_status": "blocked",
+              "lanes": [],
+              "world_id": "molmospaces/holodeck-objaverse-val/blocked",
+              "legacy_world_id": "",
+              "room_count": 0,
+              "waypoint_count": 0,
+              "category_provenance": "unavailable",
+              "category_manifest": "",
+              "preview_assets": [],
+              "selected_reason": "blocked_until_assets_and_preview_readiness_exist",
+              "blocked_reason": "MolmoSpaces source assets or loader metadata are not locally verified by the no-download sampler fixture; run scene preparation before admission.",
+              "failure_class": "environment_blocked",
+              "quality_score": 0.0,
+              "coverage_score": 0.0,
+              "generator_version": "2026-06-15.preview-readiness-v1"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

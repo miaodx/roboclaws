@@ -414,6 +414,101 @@ def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> N
     assert result["grader_outputs"]["outcome"]["schema_ok"] is False
 
 
+def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="semantic_sweep_complete",
+            generated_exploration_candidate_count=20,
+        )
+        return _run_result(
+            run_dir,
+            completion_status="semantic_sweep_complete",
+            semantic_sweep=True,
+        )
+
+    run = run_eval_suite(
+        "scene_sampler_stress",
+        output_root=tmp_path,
+        stamp="scene-sampler",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["sample_count"] == 5
+    assert payload["aggregate"]["passed"] == 5
+    assert payload["aggregate"]["failed"] == 0
+    result = payload["results"][0]
+    assert result["grader_outputs"]["sampler_admission"]["status"] == "passed"
+    assert result["grader_outputs"]["sampler_admission"]["scene_source"] == "procthor-10k-val"
+    assert result["grader_outputs"]["sampler_admission"]["category_provenance"] == (
+        "prepared_visual_label_manifest"
+    )
+
+
+def test_sampler_admission_rejects_heuristic_category_provenance(tmp_path: Path) -> None:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = "scene_sampler.heuristic_rejected"
+    sample["grader_config"]["sampler_admission"]["category_provenance"] = "room_area_fallback"
+    sample_path = tmp_path / "heuristic_scene_sampler_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / "heuristic_scene_sampler_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": "household_world.scene_sampler_heuristic_rejected",
+                "version": "2026-06-15",
+                "capability": "household_world_scene_sampling",
+                "sample_ids": [sample["sample_id"]],
+                "sample_refs": [str(sample_path)],
+                "required_graders": [
+                    "artifacts",
+                    "privacy",
+                    "trajectory",
+                    "sampler_admission",
+                    "outcome",
+                ],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="semantic_sweep_complete",
+            generated_exploration_candidate_count=20,
+        )
+        return _run_result(
+            run_dir,
+            completion_status="semantic_sweep_complete",
+            semantic_sweep=True,
+        )
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp="heuristic-rejected",
+        product_runner=product_runner,
+    )
+
+    result = json.loads(run.results_path.read_text())["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "map_actionability_failure"
+    assert result["grader_outputs"]["sampler_admission"]["failures"] == [
+        "untrusted_room_category_provenance"
+    ]
+
+
 def test_cleanup_consumer_fails_when_runtime_map_dependency_is_missing(tmp_path: Path) -> None:
     launched_samples: list[str] = []
 
@@ -624,6 +719,7 @@ def _write_product_artifacts(
     *,
     completion_status: str,
     include_goal_contract: bool = False,
+    generated_exploration_candidate_count: int = 1,
 ) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run_result.json").write_text("{}\n")
@@ -634,7 +730,10 @@ def _write_product_artifacts(
             {
                 "schema": "runtime_metric_map_v1",
                 "public_semantic_anchors": [{"anchor_id": "anchor_fridge"}],
-                "generated_exploration_candidates": [{"waypoint_id": "generated_exploration_001"}],
+                "generated_exploration_candidates": [
+                    {"waypoint_id": f"generated_exploration_{index:03d}"}
+                    for index in range(1, generated_exploration_candidate_count + 1)
+                ],
                 "private_truth_included": False,
                 "source_map_mutated": False,
             }

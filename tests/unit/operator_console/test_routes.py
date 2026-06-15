@@ -185,7 +185,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "world-oracle-labels",
         ),
         (
-            "molmospaces/val_1",
+            "molmospaces/val_2",
             "mujoco",
             "open-ended",
             "codex-cli",
@@ -256,7 +256,7 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
         assert f"molmospaces/val_0::mujoco::map-build::direct-runner::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::open-task::codex-cli::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::open-task::openai-agents-sdk::{lane}" in enabled_ids
-        assert f"molmospaces/val_1::mujoco::open-task::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_2::mujoco::open-task::codex-cli::{lane}" in enabled_ids
         assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
 
     grounded = get_selection(
@@ -304,14 +304,16 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     assert not any(route_id.startswith("molmospaces/val_6::") for route_id in all_ids)
     assert not any(route_id.startswith("molmospaces/val_8::") for route_id in all_ids)
 
-    assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels" in disabled
+    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" not in all_ids
+    assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels" not in all_ids
+
+    assert "molmospaces/val_2::mujoco::cleanup::codex-cli::world-oracle-labels" in disabled
     assert (
         "at least 5 generated cleanup targets"
-        in disabled["molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels"]
+        in disabled["molmospaces/val_2::mujoco::cleanup::codex-cli::world-oracle-labels"]
     )
-    assert "molmospaces/val_1::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
-    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
-    assert "molmospaces/val_1::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_2::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_2::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
     assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
     assert (
         "molmospaces/val_0::mujoco::open-task::openai-agents-sdk::world-oracle-labels"

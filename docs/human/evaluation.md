@@ -50,6 +50,7 @@ just agent::eval execute since=origin/main budget=focused
 just agent::eval suite=smoke_regression budget=smoke
 just agent::eval suite=map_build_consumer budget=smoke
 just agent::eval suite=cleanup_capability budget=smoke
+just agent::eval suite=scene_sampler_stress budget=smoke
 ```
 
 These suites run direct-runner household samples without provider keys, write
@@ -79,6 +80,16 @@ through the public `run::surface` route and waits for detached live artifacts
 before grading. The eval result still records blocked provider/runtime
 conditions separately from agent behavior when the selected live route cannot
 finish.
+
+`scene_sampler_stress` is the static eval projection for source-aware
+MolmoSpaces scene sampling. It currently admits prepared `procthor-10k-val`
+map-build samples and records partial or blocked metadata for scene sources
+that do not yet have ten eval-ready samples. Its `sampler_admission` grader
+checks the sampler metadata carried by each sample: split-qualified
+`scene_source`, scene index, readiness status, room/navigation-area count,
+waypoint count, room-category provenance, selected reason, generator version,
+and blocked/partial projection metadata. The grader is deterministic and must
+not call live providers.
 
 Blocked live-agent packets include either `roboclaws_live_eval_preflight_v1`
 runner metadata, or a live product-route failure classified separately from

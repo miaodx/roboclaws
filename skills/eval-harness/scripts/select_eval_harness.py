@@ -127,6 +127,19 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "id": "scene_sampler",
+        "label": "MolmoSpaces scene sampler",
+        "patterns": (
+            r"scene[-_]sampler",
+            r"scene sampling",
+            r"scene_source",
+            r"molmospaces/.*/",
+            r"procthor-objaverse",
+            r"holodeck-objaverse",
+            r"\bithor\b",
+        ),
+    },
+    {
         "id": "launch_catalog",
         "label": "Launch catalog or product route",
         "patterns": (

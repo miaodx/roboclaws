@@ -41,19 +41,11 @@ ISAAC_UNSUPPORTED_EVIDENCE_LANES = (CAMERA_GROUNDED_LABELS_LANE,)
 MOLMOSPACES_DEFAULT_CLEANUP_TARGET_COUNT = 5
 MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS = (
     "molmospaces/val_0",
-    "molmospaces/val_2",
-    "molmospaces/val_3",
-    "molmospaces/val_4",
     "molmospaces/val_9",
 )
 MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS = (
     "molmospaces/val_0",
-    "molmospaces/val_1",
     "molmospaces/val_2",
-    "molmospaces/val_3",
-    "molmospaces/val_4",
-    "molmospaces/val_5",
-    "molmospaces/val_7",
     "molmospaces/val_9",
 )
 
@@ -299,6 +291,7 @@ def list_worlds(*, include_hidden: bool = False) -> tuple[dict[str, Any], ...]:
                 "resource_kind": world.resource_kind,
                 "availability": world.availability,
                 "preview_assets": _preview_assets_payload(world.preview_assets),
+                "sampler_metadata": dict(world.sampler_metadata or {}),
             }
         )
     return tuple(rows)

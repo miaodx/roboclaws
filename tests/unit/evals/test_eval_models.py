@@ -25,6 +25,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "smoke_regression.json"
 MAP_BUILD_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "map_build_consumer.json"
 CLEANUP_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "cleanup_capability.json"
+SCENE_SAMPLER_SUITE = (
+    REPO_ROOT / "evals" / "household_world" / "suites" / "scene_sampler_stress.json"
+)
 
 
 def test_direct_runner_eval_sample_and_result_round_trip(tmp_path: Path) -> None:
@@ -271,6 +274,7 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
         load_eval_suite(SMOKE_SUITE),
         load_eval_suite(MAP_BUILD_SUITE),
         load_eval_suite(CLEANUP_SUITE),
+        load_eval_suite(SCENE_SAMPLER_SUITE),
     ]
     loaded = [load_eval_sample(path) for path in sample_paths]
     assert {sample.sample_id for sample in loaded} == {
@@ -279,9 +283,24 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
         "cleanup.smoke_seed7",
         "map_build.baseline_seed7",
         "open_ended.drink_seed7",
+        "scene_sampler.procthor-10k-val.0.map_build",
+        "scene_sampler.procthor-10k-val.2.map_build",
+        "scene_sampler.procthor-10k-val.3.map_build",
+        "scene_sampler.procthor-10k-val.5.map_build",
+        "scene_sampler.procthor-10k-val.9.map_build",
     }
     suite_sample_ids = {sample_id for suite in suites for sample_id in suite.sample_ids}
     assert {sample.sample_id for sample in loaded} <= suite_sample_ids
+
+    scene_suite = suites[-1]
+    assert scene_suite.suite_id == "household_world.scene_sampler_stress"
+    assert "sampler_admission" in scene_suite.required_graders
+    projection = scene_suite.metadata["sampler_projection"]
+    assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
+    assert projection["scene_sources"]["procthor-10k-val"]["target_count"] == 10
+    assert projection["scene_sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
+        "environment_blocked"
+    )
 
 
 def _minimal_suite_payload(sample_id: str) -> dict:

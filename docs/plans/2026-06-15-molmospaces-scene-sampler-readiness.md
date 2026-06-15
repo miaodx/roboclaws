@@ -1,9 +1,9 @@
 ---
 plan_scope: molmospaces-scene-sampler-readiness
-status: Preflighted draft
+status: First slice implemented
 created: 2026-06-15
 last_reviewed: 2026-06-15
-implementation_allowed: false
+implementation_allowed: true
 source:
   - user request to expose a smaller UI sample set and a larger eval-harness stress set
   - discussion that current `molmospaces/val_*` samples only cover `procthor-10k-val`
@@ -22,6 +22,52 @@ related_context:
 ---
 
 # MolmoSpaces Scene Sampler Readiness
+
+## Implementation Status
+
+First slice implemented on 2026-06-15.
+
+- Canonical sampler source: `roboclaws/launch/scene_sampler.py`.
+- Prepared selected-sample room label manifest:
+  `data/molmospaces/scene_sampler_room_labels.json`.
+- Operator-console UI projection: `procthor-10k-val` samples `0`, `2`, and
+  `9` are visible by default.
+- Preserved launch aliases: existing `molmospaces/val_0`, `val_1`, `val_2`,
+  `val_3`, `val_4`, `val_5`, `val_7`, and `val_9` remain launchable as
+  explicit `procthor-10k-val` aliases; non-UI aliases are hidden from the
+  default console scene rail.
+- Static eval stress projection: `procthor-10k-val` samples `0`, `2`, `3`,
+  `5`, and `9` are admitted. The target remains ten samples, so this source is
+  recorded as partial rather than complete.
+- Rejected current aliases: `val_1` and `val_7` have fewer than three public
+  navigation areas; `val_4` is rejected because its FPV preview is
+  low-detail/non-reviewable.
+- Cross-source rows for `ithor`, `procthor-objaverse-val`, and
+  `holodeck-objaverse-val` are normalized `environment_blocked` rows until
+  local assets and preview readiness are prepared.
+- Eval harness selection now includes `scene-sampler-stress-eval-suite` for
+  scene-sampler, launch-catalog, or eval-harness signals.
+
+Verification run on 2026-06-15:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_cross_environment_semantic_map_parity.py tests/contract/maps/test_actionable_semantic_map_snapshot.py -q
+ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaws/evals/runner.py roboclaws/operator_console/routes.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_harness_selector.py skills/eval-harness/scripts/select_eval_harness.py skills/eval-harness/scripts/eval_harness_rows.py
+just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/roboclaws-scene-sampler-eval-rerun
+just agent::eval suite=map_build_consumer budget=focused output_dir=/tmp/roboclaws-map-build-consumer-eval
+just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused output_dir=/tmp/roboclaws-scene-sampler-harness
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline output_dir=/tmp/roboclaws-scene-sampler-product
+```
+
+Known partial scope:
+
+- This first slice does not run a live provider or implicit VLM labeler.
+- Non-`procthor-10k-val` sources are blocked rows, not supported UI sources.
+- The eval-stress target of ten samples per source is not complete yet.
+- The static smoke eval verifies runtime-map artifact readiness and sampler
+  admission metadata; full scene-specific runtime output remains a product-run
+  or later scanner proof.
 
 ## Goal
 
@@ -266,6 +312,10 @@ scene_source=holodeck-objaverse-val  samples: <3 passing indices or blocked>
 Those exact indices are placeholders. The implementation should run the
 readiness scanner and choose the first three high-quality, diverse samples that
 pass gates, then write the chosen indices into the manifest.
+
+Implemented first-slice indices differ from the placeholder because `val_4` has
+a low-detail FPV preview: UI uses `0`, `2`, and `9`; eval stress uses `0`, `2`,
+`3`, `5`, and `9`.
 
 ## Fuller Demo
 
