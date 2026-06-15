@@ -52,6 +52,7 @@ user-scoped cleanup request.
 just agent::run <dispatch-target> <agent-engine> [evidence-lane|mode] [key=value ...]
 just agent::verify <target> [args ...]
 just agent::harness <target> [args ...]
+just agent::eval recommend|execute|suite=<suite>|promote-regression ...
 just agent::mcp up|down
 just agent::gateway up|down|pull-image
 ```
@@ -67,12 +68,12 @@ These layers are maintainer surfaces, not ordinary product-run axes:
 
 | Layer | Command Shape | Use |
 | --- | --- | --- |
-| Validation matrix | `just agent::harness agent-validation recommend|execute ...` | Selects and records gates for a plan, diff, or explicit axis set. |
+| Eval harness | `just agent::eval recommend|execute ...` | Selects and records deterministic gates, product rows, eval-suite rows, live-agent eval rows, blockers, and regression-promotion guidance for a plan, diff, or explicit request. |
 | Eval suite | `just agent::eval suite=<suite> ...` | Runs versioned samples, trials, graders, aggregate metrics, and failure replay. |
-| Harness recipe | `harness::*` or lower private modules | Executes specialist proofs used by product, validation, or eval flows. |
+| Harness recipe | `harness::*` or lower private modules | Executes specialist proofs used by product or eval flows. |
 
-The validation matrix answers "what should this change validate?" Eval suites
-answer "is this capability improving across a stable benchmark?" Harness
+The eval harness answers "what should this change validate and evaluate?" Eval
+suites answer "is this capability improving across a stable benchmark?" Harness
 recipes answer "how do we execute this low-level proof?"
 
 ## Evidence Lanes

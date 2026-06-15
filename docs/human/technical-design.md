@@ -89,10 +89,11 @@ completion means for a run.
 ## Evaluation Strategy
 
 Evaluation is a first-class maintainer layer above individual reports. Product
-runs still use `just run::surface ...`; the validation matrix selects which
-gates a plan or diff must run; eval suites run versioned samples, repeated
-trials, deterministic graders, aggregate metrics, and failure replay. Harness
-recipes remain lower-level execution mechanics.
+runs still use `just run::surface ...`; the eval harness selects which
+deterministic gates, product rows, eval suites, and live-agent evals a plan or
+diff must run; eval suites run versioned samples, repeated trials,
+deterministic graders, aggregate metrics, and failure replay. Harness recipes
+remain lower-level execution mechanics.
 
 The first eval command shape is `just agent::eval ...`. Eval samples must reuse
 the current household surfaces, MCP tools, public/private evidence split, and

@@ -447,7 +447,7 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
   `cleanup_room()`. `surface=household-world intent=map-build` creates world
   evidence; `surface=household-world intent=cleanup` consumes household world
   evidence and does not own mapping.
-- `household_world_v1` should exclude manipulation tools such as `pick`,
+- `household_world` should exclude manipulation tools such as `pick`,
   `place`, `open_receptacle`, and `close_receptacle`.
 - Small movable cleanup objects belong in runtime observations/worklists, not
   static map semantics.
