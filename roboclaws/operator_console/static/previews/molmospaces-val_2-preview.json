@@ -1,6 +1,6 @@
 {
   "backend": "mujoco",
-  "generated_at": "2026-06-15T07:28:36Z",
+  "generated_at": "2026-06-15T07:31:17Z",
   "render_resolution": {
     "height": 560,
     "width": 900
@@ -177,11 +177,11 @@
         ],
         "height": 560,
         "max_channel_range": 236.0,
-        "max_stddev": 27.594,
+        "max_stddev": 28.65,
         "mean_rgb": [
-          232.845,
-          233.891,
-          234.988
+          231.313,
+          233.08,
+          233.769
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
         "visual_status": "reviewable",

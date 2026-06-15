@@ -1,6 +1,6 @@
 {
   "backend": "mujoco",
-  "generated_at": "2026-06-11T08:08:52Z",
+  "generated_at": "2026-06-15T07:30:57Z",
   "render_resolution": {
     "height": 560,
     "width": 900
@@ -68,7 +68,7 @@
         ],
         "height": 560,
         "max_channel_range": 241.0,
-        "max_stddev": 76.019,
+        "max_stddev": 76.02,
         "mean_rgb": [
           173.529,
           174.52,
@@ -177,11 +177,11 @@
         ],
         "height": 560,
         "max_channel_range": 236.0,
-        "max_stddev": 20.256,
+        "max_stddev": 21.349,
         "mean_rgb": [
-          234.217,
-          234.245,
-          240.589
+          233.701,
+          233.666,
+          240.147
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
         "visual_status": "reviewable",
@@ -209,6 +209,50 @@
         "topdown_azimuth_deg": 90.0
       },
       "semantic_map_fallback": false,
+      "semantic_projection": {
+        "projected_waypoint_bounds": {
+          "max_x": 7.973,
+          "max_y": 8.4711,
+          "min_x": 2.99,
+          "min_y": 0.897
+        },
+        "projected_waypoints": [
+          {
+            "projection": "room_remapped",
+            "room_id": "room_2",
+            "waypoint_id": "generated_exploration_001",
+            "x": 2.99,
+            "y": 1.4949
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_2",
+            "waypoint_id": "generated_exploration_002",
+            "x": 2.99,
+            "y": 8.4711
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_3",
+            "waypoint_id": "generated_exploration_003",
+            "x": 7.973,
+            "y": 0.897
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_3",
+            "waypoint_id": "generated_exploration_004",
+            "x": 7.973,
+            "y": 5.083
+          }
+        ],
+        "raw_scene_waypoint_count": 0,
+        "rendered_waypoint_count": 4,
+        "room_remapped_waypoint_count": 4,
+        "schema": "operator_console_semantic_map_projection_v1",
+        "skipped_waypoint_count": 0,
+        "waypoint_count": 4
+      },
       "view": "semantic_map_aligned_preview"
     },
     "topdown": {
