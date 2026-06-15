@@ -913,6 +913,23 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
 
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
+    waypoint, navigation, observation = _first_detection_waypoint(contract, metric_map)
+    agent_view = contract.agent_view_payload()
+    runtime_map = agent_view["runtime_metric_map"]
+
+    _assert_minimal_static_map_privacy(metric_map, fixture_hints, waypoint)
+    assert navigation["ok"] is True
+    assert observation["visible_object_detections"]
+    _assert_minimal_runtime_map_candidates(runtime_map, waypoint)
+    _assert_minimal_runtime_map_public_anchors(runtime_map, waypoint)
+    _assert_minimal_agent_view_observed_object_anchors(agent_view, runtime_map)
+    _assert_no_forbidden_keys(agent_view)
+
+
+def _first_detection_waypoint(
+    contract: RealWorldCleanupContract,
+    metric_map: dict,
+) -> tuple[dict, dict, dict]:
     waypoint = metric_map["inspection_waypoints"][0]
     navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -922,9 +939,14 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
         waypoint = candidate
         navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         observation = contract.observe()
-    agent_view = contract.agent_view_payload()
-    runtime_map = agent_view["runtime_metric_map"]
+    return waypoint, navigation, observation
 
+
+def _assert_minimal_static_map_privacy(
+    metric_map: dict,
+    fixture_hints: dict,
+    waypoint: dict,
+) -> None:
     assert metric_map["mode"] == MINIMAL_MAP_MODE
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
@@ -940,8 +962,9 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     assert waypoint["candidate_provenance"]["source_fixtures_hidden"] is True
     assert waypoint["candidate_provenance"]["source_waypoint_hidden"] is True
     assert "source_waypoint_id" not in waypoint["candidate_provenance"]
-    assert navigation["ok"] is True
-    assert observation["visible_object_detections"]
+
+
+def _assert_minimal_runtime_map_candidates(runtime_map: dict, waypoint: dict) -> None:
     assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
     assert runtime_map["minimal_map_mode"] is True
     assert runtime_map["static_map"]["rooms"]
@@ -975,6 +998,9 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     assert target_search["viewpoint_budget"]["unvisited_waypoint_count"] >= 1
     assert target_search["inspection_observations"]
     assert target_search["private_truth_included"] is False
+
+
+def _assert_minimal_runtime_map_public_anchors(runtime_map: dict, waypoint: dict) -> None:
     assert runtime_map["public_semantic_anchors"]
     waypoint_anchor = next(
         item
@@ -993,12 +1019,17 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     )
     assert fixture_anchor["anchor_id"].startswith("anchor_fixture_")
     assert fixture_anchor["source_observation_id"]
+
+
+def _assert_minimal_agent_view_observed_object_anchors(
+    agent_view: dict,
+    runtime_map: dict,
+) -> None:
     assert runtime_map["observed_objects"]
     assert runtime_map["observed_objects"][0]["source_fixture_id"].startswith("anchor_fixture_")
     assert agent_view["observed_objects"][0]["support_estimate"]["fixture_id"].startswith(
         "anchor_fixture_"
     )
-    _assert_no_forbidden_keys(agent_view)
 
 
 def test_target_candidates_force_adaptive_public_reinspection_path() -> None:

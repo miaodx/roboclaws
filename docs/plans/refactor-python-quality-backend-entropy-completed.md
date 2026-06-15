@@ -167,6 +167,12 @@ logs before choosing the next slice.
   complexity rows; oversized modules unchanged at 62. Proof: focused Isaac
   backend test, ruff, format check, and ratchet.
 
+- 2026-06-16: Minimal-map privacy/generated-candidate contract test split
+  first-observation lookup, static-map privacy checks, target-candidate search
+  checks, public-anchor checks, and observed-object anchor checks into focused
+  helpers. Metric: 15 -> 14 complexity rows; oversized modules unchanged at
+  62. Proof: focused realworld-contract test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
