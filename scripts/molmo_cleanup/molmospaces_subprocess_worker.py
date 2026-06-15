@@ -328,6 +328,48 @@ from scripts.molmo_cleanup.molmospaces_worker_outputs import (
 from scripts.molmo_cleanup.molmospaces_worker_outputs import (
     write_snapshot as _write_snapshot_impl,
 )
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    WorkerCommandHandler,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    cli_command_kwargs as _cli_command_kwargs_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    count_tool_request as _count_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    error_response as _error_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    float_or_zero as _float_or_zero_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    json_object_from_text as _json_object_from_text_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    ok_response as _ok_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    optional_str as _optional_str_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    positive_int as _positive_int_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    read_state as _read_state_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    run_loaded_state_command as _run_loaded_state_command_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    run_worker_command as _run_worker_command_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    serve_worker as _serve_worker_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_protocol import (
+    write_state as _write_state_impl_protocol,
+)
 
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
@@ -346,7 +388,7 @@ _STATE_MUTATING_COMMANDS = {
     "place",
     "place_inside",
 }
-type _WorkerCommandHandler = Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]
+type _WorkerCommandHandler = WorkerCommandHandler
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -383,39 +425,11 @@ def _init_command(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def serve(state_path: Path) -> None:
-    """Serve JSON-line worker requests while keeping MuJoCo state warm."""
-    print(json.dumps({"ok": True, "event": "ready", "tool": "serve"}, sort_keys=True), flush=True)
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        request: Any = {}
-        try:
-            request = json.loads(line)
-            if not isinstance(request, dict):
-                raise ValueError("request must be a JSON object")
-            request_id = request.get("id")
-            command = str(request.get("command") or "")
-            kwargs = request.get("kwargs") or {}
-            if not isinstance(kwargs, dict):
-                raise ValueError("request kwargs must be a JSON object")
-            if command == "shutdown":
-                response = {
-                    "id": request_id,
-                    "ok": True,
-                    "result": _ok("shutdown"),
-                }
-                print(json.dumps(response, sort_keys=True), flush=True)
-                break
-            result = run_state_command(state_path, command, kwargs)
-            response = {"id": request_id, "ok": True, "result": result}
-        except Exception as exc:
-            response = {
-                "id": request.get("id") if isinstance(request, dict) else None,
-                "ok": False,
-                "error_type": type(exc).__name__,
-                "error": str(exc),
-            }
-        print(json.dumps(response, sort_keys=True), flush=True)
+    _serve_worker_impl(
+        state_path,
+        run_state_command=run_state_command,
+        ok=_ok,
+    )
 
 
 def run_state_command(
@@ -431,11 +445,14 @@ def _run_worker_command(
     command: str,
     kwargs: dict[str, Any],
 ) -> dict[str, Any]:
-    state = _read_state(state_path)
-    result, should_write = _run_loaded_state_command(state, command, kwargs)
-    if should_write:
-        _write_state(state_path, state)
-    return result
+    return _run_worker_command_impl(
+        state_path,
+        command,
+        kwargs,
+        read_state=_read_state,
+        write_state=_write_state,
+        run_loaded_state_command=_run_loaded_state_command,
+    )
 
 
 def _run_loaded_state_command(
@@ -443,55 +460,17 @@ def _run_loaded_state_command(
     command: str,
     kwargs: dict[str, Any],
 ) -> tuple[dict[str, Any], bool]:
-    handler = _WORKER_COMMAND_HANDLERS.get(command)
-    if handler is None:
-        raise ValueError(f"unknown MolmoSpaces worker command: {command!r}")
-    return handler(state, kwargs), command in _STATE_MUTATING_COMMANDS
+    return _run_loaded_state_command_impl(
+        state,
+        command,
+        kwargs,
+        handlers=_WORKER_COMMAND_HANDLERS,
+        mutating_commands=_STATE_MUTATING_COMMANDS,
+    )
 
 
 def _cli_command_kwargs(args: argparse.Namespace) -> dict[str, Any]:
-    command = str(args.command)
-    if command == "snapshot":
-        return {
-            "output_path": args.output_path,
-            "title": args.title,
-            "render_width": args.render_width,
-            "render_height": args.render_height,
-        }
-    if command == "robot_views":
-        return {
-            "output_dir": args.output_dir,
-            "label": args.label,
-            "focus_object_id": args.focus_object_id,
-            "focus_receptacle_id": args.focus_receptacle_id,
-            "camera_yaw_offset_deg": args.camera_yaw_offset_deg,
-            "camera_pitch_offset_deg": args.camera_pitch_offset_deg,
-            "render_width": args.render_width,
-            "render_height": args.render_height,
-        }
-    if command == "camera_views":
-        return {
-            "output_dir": args.output_dir,
-            "view_specs_path": args.view_specs_path,
-            "camera_request_path": args.camera_request_path,
-            "render_width": args.render_width,
-            "render_height": args.render_height,
-        }
-    if command in {"navigate_to_object", "frame_comparison_object", "pick"}:
-        return {"object_id": args.object_id}
-    if command == "navigate_to_waypoint":
-        return {"waypoint_json": args.waypoint_json}
-    if command in {
-        "navigate_to_receptacle",
-        "open_receptacle",
-        "close_receptacle",
-        "place",
-        "place_inside",
-    }:
-        return {"receptacle_id": args.receptacle_id}
-    if command == "done":
-        return {"reason": args.reason}
-    return {}
+    return _cli_command_kwargs_impl(args)
 
 
 def _snapshot_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -2890,32 +2869,19 @@ def _apply_qpos(data: mujoco.MjData, qpos: list[float]) -> None:
 
 
 def _optional_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value)
-    return text if text else None
+    return _optional_str_impl(value)
 
 
 def _positive_int(value: Any, default: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return default
-    return parsed if parsed > 0 else default
+    return _positive_int_impl(value, default)
 
 
 def _float_or_zero(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
+    return _float_or_zero_impl(value)
 
 
 def _json_object_from_text(text: str) -> dict[str, Any]:
-    payload = json.loads(text)
-    if not isinstance(payload, dict):
-        raise ValueError("expected JSON object")
-    return payload
+    return _json_object_from_text_impl(text)
 
 
 def _render_dimensions(width: int, height: int) -> tuple[int, int]:
@@ -2951,27 +2917,25 @@ def _xyz(values: Any) -> list[float]:
 
 
 def _read_state(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return _read_state_impl(path)
 
 
 def _write_state(path: Path, state: dict[str, Any]) -> None:
-    _refresh_runtime_render_state(state)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_state_impl_protocol(
+        path, state, refresh_runtime_render_state=_refresh_runtime_render_state
+    )
 
 
 def _count(state: dict[str, Any], tool: str) -> None:
-    counts = state.setdefault("tool_event_counts", {})
-    key = f"{tool}:request"
-    counts[key] = int(counts.get(key, 0)) + 1
+    _count_impl(state, tool)
 
 
 def _ok(tool: str, **payload: Any) -> dict[str, Any]:
-    return {"ok": True, "tool": tool, "status": "ok", **payload}
+    return _ok_impl(tool, **payload)
 
 
 def _error(tool: str, error_reason: str, **payload: Any) -> dict[str, Any]:
-    return {"ok": False, "tool": tool, "status": "error", "error_reason": error_reason, **payload}
+    return _error_impl(tool, error_reason, **payload)
 
 
 if __name__ == "__main__":

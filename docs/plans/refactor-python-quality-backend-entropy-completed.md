@@ -457,6 +457,15 @@ logs before choosing the next slice.
   Proof: focused Molmo subprocess backend/operator-console tests, ruff, format
   check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces worker JSON-line serving, loaded-state command
+  dispatch, CLI-kwargs normalization, scalar parsing, state IO, counters, and
+  ok/error envelopes moved from the subprocess worker into
+  `molmospaces_worker_protocol.py`, with worker-private wrappers preserving
+  CLI/serve call shapes and tests. Metric: `molmospaces_subprocess_worker.py`
+  2978 -> 2942 lines; Ruff complexity stayed at 0 and oversized modules
+  stayed at 62. Proof: focused Molmo subprocess backend tests, ruff, format
+  check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
