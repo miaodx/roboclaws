@@ -10,7 +10,6 @@ from roboclaws.launch.agent_engines import agent_engine_spec
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS
 from roboclaws.operator_console.launcher import ConsoleLaunchError, build_launch_argv
 from roboclaws.operator_console.routes import (
-    MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS,
     MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS,
     get_selection,
     list_console_combinations,
@@ -24,7 +23,6 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
 MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
 MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
 
@@ -37,8 +35,8 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     )
     assert "molmospaces/val_6" not in worlds
     assert "molmospaces/val_8" not in worlds
-    assert worlds["molmospaces/val_0"]["available_backends"] == ["mujoco", "isaaclab"]
-    assert worlds["molmospaces/val_9"]["available_backends"] == ["mujoco", "isaaclab"]
+    assert worlds["molmospaces/val_0"]["available_backends"] == ["mujoco"]
+    assert worlds["molmospaces/val_9"]["available_backends"] == ["mujoco"]
     assert worlds["molmospaces/val_9"]["preview_assets"] == {
         "fpv": {
             "path": "/previews/molmospaces-val_9-fpv.png",
@@ -88,6 +86,7 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
         },
     }
     assert worlds["agibot-g2/map-12"]["available_backends"] == ["agibot-gdk"]
+    assert worlds["b1-map12"]["available_backends"] == ["isaaclab"]
     assert worlds["b1-map12"]["default_backend"] == "isaaclab"
 
 
@@ -347,7 +346,11 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
         "at least 5 generated cleanup targets"
         in disabled["molmospaces/val_2::mujoco::cleanup::codex-cli::world-oracle-labels"]
     )
-    assert "molmospaces/val_2::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+    assert not any(
+        "::isaaclab::" in route_id
+        for route_id in all_ids
+        if route_id.startswith("molmospaces/")
+    )
     assert "molmospaces/val_2::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
     assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
     assert (
@@ -365,33 +368,22 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
             and route.evidence_lane == "world-oracle-labels"
         )
     }
-    enabled_isaac_cleanup_worlds = {
-        route.world_id
-        for route in list_console_combinations(include_disabled=False)
-        if (
-            route.backend_id == "isaaclab"
-            and route.intent_id == "cleanup"
-            and route.agent_engine_id == "codex-cli"
-            and route.evidence_lane == "world-oracle-labels"
-        )
-    }
     assert enabled_mujoco_cleanup_worlds == set(MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS)
-    assert enabled_isaac_cleanup_worlds == set(MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS)
 
 
-def test_console_keeps_unsupported_lane_visible_but_disabled() -> None:
+def test_console_keeps_b1_unsupported_isaac_lane_visible_but_disabled() -> None:
     disabled = {
         route.id: route.disabled_reason
         for route in list_console_combinations()
         if not route.enabled
     }
 
-    reason = disabled["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"]
+    reason = disabled["b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"]
     assert "not wired yet" in reason
-    assert "molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels" not in {
+    assert "b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels" not in {
         route.id for route in list_console_combinations(include_disabled=False)
     }
-    assert "molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-raw-fpv" in {
+    assert "b1-map12::isaaclab::open-task::codex-cli::camera-raw-fpv" in {
         route.id for route in list_console_combinations(include_disabled=False)
     }
 
@@ -409,15 +401,12 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
         "Map-build"
         in reasons["molmospaces/val_0::mujoco::map-build::claude-code::world-oracle-labels"]
     )
-    assert (
-        "not wired yet"
-        in reasons["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"]
-    )
+    b1_camera_grounded = "b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"
+    assert "not wired yet" in reasons[b1_camera_grounded]
 
 
 def test_payload_exposes_orthogonal_ui_metadata() -> None:
     mujoco = get_selection(MUJOCO_CODEX_CLEANUP).to_payload()
-    isaac = get_selection(ISAAC_CODEX_CLEANUP).to_payload()
     agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
     b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
 
@@ -431,14 +420,13 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
 
-    assert isaac["field_groups"] == ["common", "isaac"]
-    assert "grounding" in isaac["view_modes"]
-
     assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
     assert "context_json" in agibot["required_overrides"]
     assert "grounding" in agibot["view_modes"]
 
     assert b1["default_intent"] == "open-ended"
+    assert b1["field_groups"] == ["common", "isaac"]
+    assert "grounding" in b1["view_modes"]
     assert "map_bundle=b1-map12-room-semantics" in b1["argv_preview"]
     assert "robot_views=on" in b1["argv_preview"]
 

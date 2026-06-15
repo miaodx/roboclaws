@@ -65,9 +65,6 @@ def _surface_overrides(overrides: tuple[str, ...]) -> list[str]:
         if override == "backend=molmospaces_subprocess":
             normalized_overrides.append("world=molmospaces/val_0")
             normalized_overrides.append("backend=mujoco")
-        elif override == "backend=isaaclab_subprocess":
-            normalized_overrides.append("world=molmospaces/val_0")
-            normalized_overrides.append("backend=isaaclab")
         elif override == "backend=agibot_gdk":
             normalized_overrides.append("world=agibot-g2/map-12")
             normalized_overrides.append("backend=agibot-gdk")

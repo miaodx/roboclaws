@@ -1,9 +1,14 @@
 ---
 plan_scope: separate-digital-twin-isaac-from-molmospaces-mainline
-status: Reviewed
+refactor_scope: separate-digital-twin-isaac-from-molmospaces-mainline
+status: DONE
+accepted_severities:
+  - P1
+  - P2
 created: 2026-06-15
 last_reviewed: 2026-06-15
-implementation_allowed: false
+last_verified: 2026-06-15
+implementation_allowed: true
 source:
   - user request to reduce MolmoSpaces backend entropy around Isaac and Genesis
   - user clarification that digital twin still runs in Isaac and must remain supported
@@ -29,9 +34,11 @@ related_context:
 
 ## Status
 
-Reviewed by `intuitive-reduce-entropy`. This plan is not yet approved for code
-implementation. Reviewed by `grill-with-docs-batch`; accepted grill decisions
-are recorded below.
+DONE
+
+Reviewed by `intuitive-reduce-entropy` and `grill-with-docs-batch`; accepted
+grill decisions are recorded below. Execution via `intuitive-refactor` finished
+on 2026-06-15.
 
 ## Goal
 
@@ -515,7 +522,125 @@ Optional tracking: none.
 
 Approval: LGTM/approve/go ahead approves; edits request revision.
 
-## Recommended Next Step
+## Execution Log
 
-Hand this reviewed plan to `intuitive-preflight` or `intuitive-flow` for
-execution.
+### 2026-06-15 Intuitive-Refactor Slice
+
+- Changed MolmoSpaces launch world metadata so available backends are only
+  `("mujoco",)`.
+- Kept `b1-map12` on `backend=isaaclab` and passed `world=b1-map12` through to
+  private dispatch when lowering to `isaaclab_subprocess`.
+- Removed enabled and disabled MolmoSpaces Isaac rows from the operator-console
+  route matrix; B1 keeps Isaac field groups, locks, gates, and open-task route
+  support.
+- Rejected generic MolmoSpaces `agent::run ... backend=isaaclab_subprocess`
+  and direct `molmo::household-world-impl ... backend=isaaclab_subprocess`
+  shortcuts unless the resolved launch world is B1.
+- Removed active `molmo-isaac-*` harness recipe names. Kept generic
+  `isaac-runtime-preflight`, generic `isaac-runtime-smoke`, and
+  `b1-map12-navigation-smoke`; removed the MolmoSpaces cleanup/prepared-cleanup
+  and USD-reference harness shortcuts.
+- Added/updated unit and contract tests for MolmoSpaces MuJoCo-only metadata,
+  B1 Isaac lowering, console route absence, public MolmoSpaces Isaac rejection,
+  private backend override rejection, and harness recipe cleanup.
+
+Evidence so far:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/launch/test_environment_setup_catalog.py \
+  tests/unit/operator_console/test_routes.py \
+  tests/unit/operator_console/test_operator_console.py \
+  tests/unit/operator_console/test_launcher.py \
+  tests/contract/dev_tools/test_backend_catalog_just_recipes.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/dev_tools/test_isaac_runtime_preflight_just_recipe.py
+```
+
+Passed on 2026-06-15.
+
+Final evidence:
+
+```bash
+ruff check \
+  roboclaws/launch/backends.py \
+  roboclaws/launch/worlds.py \
+  roboclaws/operator_console/routes.py \
+  tests/unit/launch \
+  tests/unit/operator_console \
+  tests/contract/dev_tools
+```
+
+Passed on 2026-06-15.
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/launch \
+  tests/unit/operator_console \
+  tests/contract/dev_tools/test_backend_catalog_just_recipes.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/dev_tools/test_isaac_runtime_preflight_just_recipe.py
+```
+
+Passed on 2026-06-15.
+
+```bash
+ROBOCLAWS_JUST_TRACE=1 just run::surface \
+  surface=household-world world=b1-map12 backend=isaaclab \
+  agent_engine=codex-cli prompt='inspect the digital twin' \
+  evidence_lane=world-oracle-labels
+```
+
+Passed as a trace gate on 2026-06-15: public B1 launch resolves to
+`world=b1-map12`, `backend=isaaclab`, B1 map/scene defaults, and the private
+`backend=isaaclab_subprocess` implementation.
+
+```bash
+ROBOCLAWS_JUST_TRACE=1 just run::surface \
+  surface=household-world world=molmospaces/val_0 backend=isaaclab \
+  agent_engine=codex-cli preset=map-build evidence_lane=world-oracle-labels
+```
+
+Rejected on 2026-06-15 with `backend 'isaaclab' cannot run world
+'molmospaces/val_0'; expected mujoco`.
+
+```bash
+ROBOCLAWS_JUST_TRACE=1 just agent::run \
+  household-world.cleanup direct world-oracle-labels \
+  backend=isaaclab_subprocess
+```
+
+Rejected on 2026-06-15 with `backend=isaaclab_subprocess is scoped to
+world=b1-map12`.
+
+```bash
+rg -n "molmospaces/.+::isaaclab|backend=isaaclab|isaaclab_subprocess|Genesis|genesis" \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md \
+  docs/human docs/plans just roboclaws/launch roboclaws/operator_console \
+  tests/unit/launch tests/unit/operator_console tests/contract/dev_tools
+```
+
+Passed on 2026-06-15 by inspection. Remaining hits are B1/generic Isaac support,
+explicit MolmoSpaces rejection guards/tests, this completed gate, or historical
+Genesis / MolmoSpaces-Isaac docs labeled retired, superseded, implemented, or
+evidence-only.
+
+```bash
+just run::surface \
+  surface=household-world \
+  world=molmospaces/val_0 \
+  backend=mujoco \
+  preset=map-build \
+  agent_engine=direct-runner \
+  evidence_lane=world-oracle-labels \
+  seed=7 \
+  scenario_setup=baseline \
+  output_dir=/tmp/roboclaws-molmospaces-mujoco-check
+```
+
+Passed on 2026-06-15. Report:
+`/tmp/roboclaws-molmospaces-mujoco-check/0615_2131/seed-7/report.html`.
+
+Skipped local-live/manual gate: `just harness::b1-map12-navigation-smoke ...`.
+No real B1 Isaac GPU/runtime health is claimed by this deterministic refactor
+slice.

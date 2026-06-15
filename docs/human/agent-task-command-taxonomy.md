@@ -24,11 +24,13 @@ Current household presets:
 
 No-preset household runs are open-ended prompt-driven tasks.
 
-Current household backends:
+Current household backend ids are world-scoped, not a cross product:
 
-- `mujoco`
-- `isaaclab`
-- `agibot-gdk`
+- `mujoco` for MolmoSpaces household scenes
+- `isaaclab` for `world=b1-map12`
+- `agibot-gdk` for `world=agibot-g2/map-12`
+
+MolmoSpaces + Isaac is retired from active command support.
 
 Current agent engines:
 

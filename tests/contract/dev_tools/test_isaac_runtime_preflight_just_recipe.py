@@ -44,19 +44,25 @@ def test_agent_harness_allows_isaac_runtime_preflight_target() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")
 
-    assert "molmo-isaac-runtime-preflight" in agent_text
-    assert re.search(r"^molmo-isaac-runtime-preflight \*overrides:", harness_text, re.MULTILINE)
+    assert "isaac-runtime-preflight" in agent_text
+    assert re.search(r"^isaac-runtime-preflight \*overrides:", harness_text, re.MULTILINE)
     assert "check_isaac_lab_runtime.py" in harness_text
-    assert "accept_nvidia_eula=true" in harness_text
+    recipe_match = re.search(
+        r"^isaac-runtime-preflight \*overrides:\n(?P<body>.*?)(?=^# Strict local Isaac Lab runtime smoke\.)",
+        harness_text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert recipe_match is not None
+    assert 'accept_nvidia_eula="true"' in recipe_match.group("body")
 
     route = trace_agent_harness(
-        "molmo-isaac-runtime-preflight",
+        "isaac-runtime-preflight",
         "output_dir=/tmp/roboclaws-isaac-preflight",
         "strict=true",
     )
     assert route == [
         "just",
-        "harness::molmo-isaac-runtime-preflight",
+        "harness::isaac-runtime-preflight",
         "output_dir=/tmp/roboclaws-isaac-preflight",
         "strict=true",
     ]
@@ -66,8 +72,8 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")
 
-    assert "molmo-isaac-runtime-smoke" in agent_text
-    assert re.search(r"^molmo-isaac-runtime-smoke \*overrides:", harness_text, re.MULTILINE)
+    assert "isaac-runtime-smoke" in agent_text
+    assert re.search(r"^isaac-runtime-smoke \*overrides:", harness_text, re.MULTILINE)
     assert "isaac_lab_backend_worker.py" in harness_text
     assert "check_isaac_lab_runtime_smoke_result.py" in harness_text
     assert "scene_usd_path" in harness_text
@@ -92,7 +98,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text
 
     route = trace_agent_harness(
-        "molmo-isaac-runtime-smoke",
+        "isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
         "generated_scene_kind=isaac_official_blocks",
@@ -102,7 +108,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     )
     assert route == [
         "just",
-        "harness::molmo-isaac-runtime-smoke",
+        "harness::isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
         "generated_scene_kind=isaac_official_blocks",
@@ -112,115 +118,31 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     ]
 
 
-def test_agent_harness_allows_isaac_usd_reference_target() -> None:
+def test_agent_harness_removes_molmospaces_isaac_usd_reference_target() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")
 
-    assert "molmo-isaac-usd-references" in agent_text
-    assert re.search(r"^molmo-isaac-usd-references \*overrides:", harness_text, re.MULTILINE)
-    assert "install_molmospaces_usd_references.py" in harness_text
-    assert "state_path" in harness_text
-    assert "--state-path" in harness_text
-    assert "--use-r2" in harness_text
-
-    route = trace_agent_harness(
-        "molmo-isaac-usd-references",
-        "state_path=/tmp/state.json",
-        "dry_run=true",
-    )
-    assert route == [
-        "just",
-        "harness::molmo-isaac-usd-references",
-        "state_path=/tmp/state.json",
-        "dry_run=true",
-    ]
+    assert "molmo-isaac-usd-references" not in agent_text
+    assert "isaac-usd-references" not in agent_text
+    assert "install_molmospaces_usd_references.py" not in harness_text
+    assert not re.search(r"^molmo-isaac-usd-references \*overrides:", harness_text, re.MULTILINE)
+    assert not re.search(r"^isaac-usd-references \*overrides:", harness_text, re.MULTILINE)
 
 
-def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
+def test_agent_harness_removes_molmospaces_isaac_cleanup_targets() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")
 
-    assert "molmo-isaac-cleanup-smoke" in agent_text
-    assert re.search(r"^molmo-isaac-cleanup-smoke \*overrides:", harness_text, re.MULTILINE)
-    assert "roboclaws.household.realworld_cleanup" in harness_text
-    assert "check_molmo_realworld_cleanup_result.py" in harness_text
-    assert "--backend isaaclab_subprocess" in harness_text
-    assert "--require-isaac-real-runtime" in harness_text
-    assert "--require-isaac-scene-loaded" in harness_text
-    assert "--require-isaac-local-scene-usd" in harness_text
-    assert "--require-isaac-selected-usd-bindings" in harness_text
-    assert "--require-isaac-robot-view-provenance" in harness_text
-    assert "require_robot_head_camera_fpv" in harness_text
-    assert "--require-robot-head-camera-fpv" in harness_text
-    assert 'map_bundle="scene-index"' in harness_text
-    assert "--require-isaac-scene-index-map-context" in harness_text
-    assert "--require-isaac-segmentation-evidence" in harness_text
-    assert "--isaac-enable-segmentation" in harness_text
-    assert "segmentation_data_types" in harness_text
-    assert "--isaac-segmentation-data-type" in harness_text
-    assert "segmentation_semantic_filter" in harness_text
-    assert "--isaac-segmentation-semantic-filter" in harness_text
-    assert "--require-isaac-snapshot-provenance" in harness_text
-    assert 'accept_nvidia_eula="true"' in harness_text
-    assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text
-
-    route = trace_agent_harness(
-        "molmo-isaac-cleanup-smoke",
-        "output_dir=/tmp/roboclaws-isaac-cleanup",
-        "runtime_python=/tmp/isaac-python",
-        "scene_usd_path=/tmp/molmospaces-scene.usd",
-        "segmentation_semantic_filter=usd_prim_path",
-        "accept_nvidia_eula=false",
-    )
-    assert route == [
-        "just",
-        "harness::molmo-isaac-cleanup-smoke",
-        "output_dir=/tmp/roboclaws-isaac-cleanup",
-        "runtime_python=/tmp/isaac-python",
-        "scene_usd_path=/tmp/molmospaces-scene.usd",
-        "segmentation_semantic_filter=usd_prim_path",
-        "accept_nvidia_eula=false",
-    ]
-
-
-def test_agent_harness_allows_isaac_prepared_cleanup_smoke_target() -> None:
-    agent_text = AGENT_JUST.read_text(encoding="utf-8")
-    harness_text = HARNESS_JUST.read_text(encoding="utf-8")
-
-    assert "molmo-isaac-prepared-cleanup-smoke" in agent_text
-    assert re.search(
+    assert "molmo-isaac-cleanup-smoke" not in agent_text
+    assert "molmo-isaac-prepared-cleanup-smoke" not in agent_text
+    assert not re.search(r"^molmo-isaac-cleanup-smoke \*overrides:", harness_text, re.MULTILINE)
+    assert not re.search(
         r"^molmo-isaac-prepared-cleanup-smoke \*overrides:",
         harness_text,
         re.MULTILINE,
     )
-    assert "prepare_molmospaces_flattened_semantic_usd.py" in harness_text
-    assert "scene_semantic.usda" in harness_text
-    assert "summary.json" in harness_text
-    assert 'require_prepare_ready="true"' in harness_text
-    assert 'require_segmentation_evidence="true"' in harness_text
-    assert 'segmentation_data_types="semantic_segmentation"' in harness_text
-    assert 'segmentation_semantic_filter="usd_prim_path"' in harness_text
-    assert "require_robot_head_camera_fpv=true" in harness_text
-    assert 'map_bundle="scene-index"' in harness_text
-    assert "just harness::molmo-isaac-cleanup-smoke" in harness_text
-
-    route = trace_agent_harness(
-        "molmo-isaac-prepared-cleanup-smoke",
-        "scene_usd_path=/tmp/raw-molmospaces-scene.usd",
-        "output_dir=/tmp/roboclaws-isaac-prepared-cleanup",
-        "runtime_python=/tmp/isaac-python",
-        "stamp=val2",
-        "accept_nvidia_eula=false",
-    )
-    assert route == [
-        "just",
-        "harness::molmo-isaac-prepared-cleanup-smoke",
-        "scene_usd_path=/tmp/raw-molmospaces-scene.usd",
-        "output_dir=/tmp/roboclaws-isaac-prepared-cleanup",
-        "runtime_python=/tmp/isaac-python",
-        "stamp=val2",
-        "accept_nvidia_eula=false",
-    ]
+    assert "prepare_molmospaces_flattened_semantic_usd.py" not in harness_text
+    assert "just harness::molmo-isaac-cleanup-smoke" not in harness_text
 
 
 def test_agent_harness_allows_b1_map12_navigation_smoke_target() -> None:

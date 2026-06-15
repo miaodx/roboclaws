@@ -6,6 +6,12 @@
 and ADR-0142. This file is historical MolmoSpaces Isaac evidence, not a current
 execution contract.
 
+**Supersession note, 2026-06-15:** active `molmo-isaac-*` harness recipes and
+MolmoSpaces `backend=isaaclab_subprocess` shortcuts have been removed. Keep
+using B1 / Map 12 `backend=isaaclab` and generic `isaac-runtime-*` probes for
+current Isaac work. Commands below are historical evidence unless they use the
+current generic recipe names explicitly.
+
 **Historical implementation evidence:** CI-safe fake backend scaffold plus local runtime preflight,
 local GPU real-mode Phase A smoke proof, Phase B static robot-view evidence
 path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
@@ -921,6 +927,7 @@ Do not add a new public task name. Add a backend selector to the existing
 household cleanup run shape, for local-dev only at first:
 
 ```bash
+# Historical command shape removed by ADR-0142:
 just task::run household-cleanup direct world-labels \
   backend=isaaclab_subprocess \
   seed=7 \
@@ -930,6 +937,7 @@ just task::run household-cleanup direct world-labels \
 Renderer comparison can use an explicit maintainer or harness command instead:
 
 ```bash
+# Historical command shape removed by ADR-0142:
 just agent::harness molmo-isaac-renderer-comparison \
   scene=procthor-val-0 \
   resolution=1280x720
@@ -946,6 +954,7 @@ The preferred cleanup command now prepares the flattened semantic USD, checks
 segmentation evidence and head-camera FPV robot-view provenance:
 
 ```bash
+# Historical command shape removed by ADR-0142:
 just agent::harness molmo-isaac-prepared-cleanup-smoke \
   scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda \
   scene_index=1
@@ -1063,7 +1072,7 @@ For lower-level diagnosis, the two steps remain available separately:
   --output-usd-path output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
   --summary-output output/isaaclab/flattened-semantic-usd/val_1/summary.json
 
-just agent::harness molmo-isaac-runtime-smoke \
+just agent::harness isaac-runtime-smoke \
   scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
   require_local_scene_usd=true \
   enable_segmentation=true \
@@ -1071,6 +1080,7 @@ just agent::harness molmo-isaac-runtime-smoke \
   segmentation_data_types=semantic_segmentation \
   segmentation_semantic_filter=usd_prim_path
 
+# Historical command shape removed by ADR-0142:
 just agent::harness molmo-isaac-cleanup-smoke \
   scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
   require_local_scene_usd=true \

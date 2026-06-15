@@ -43,11 +43,6 @@ MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS = (
     "molmospaces/val_0",
     "molmospaces/val_9",
 )
-MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS = (
-    "molmospaces/val_0",
-    "molmospaces/val_2",
-    "molmospaces/val_9",
-)
 
 
 @dataclass(frozen=True)
@@ -491,97 +486,12 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 default_overrides=("seed=7",),
             )
         )
-        if world_id in MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS:
-            rows.extend(
-                _lane_selections(
-                    world_id,
-                    "isaaclab",
-                    "cleanup",
-                    "codex-cli",
-                    "codex-env",
-                    evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-                    gates=common_gates,
-                    default_overrides=("seed=7", "relocation_count=1"),
-                    supports_operator_steer=True,
-                )
-            )
-            rows.extend(
-                _lane_selections(
-                    world_id,
-                    "isaaclab",
-                    "cleanup",
-                    "claude-code",
-                    "mimo-anthropic",
-                    evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-                    gates=common_gates,
-                    default_overrides=("seed=7", "relocation_count=1"),
-                    supports_operator_steer=True,
-                )
-            )
-        rows.extend(
-            _lane_selections(
-                world_id,
-                "isaaclab",
-                "map-build",
-                "codex-cli",
-                "codex-env",
-                evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-                gates=common_gates,
-                default_overrides=("seed=7",),
-            )
-        )
     return tuple(rows)
 
 
 def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
     return (
         *_disabled_molmospaces_cleanup_combinations(),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "isaaclab",
-            "cleanup",
-            "codex-cli",
-            "codex-env",
-            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
-            enabled=False,
-            unsupported_reason=(
-                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
-            ),
-            gates=_common_gates(),
-            default_overrides=("seed=7", "relocation_count=1"),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "isaaclab",
-            "cleanup",
-            "claude-code",
-            "mimo-anthropic",
-            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
-            enabled=False,
-            unsupported_reason=(
-                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
-            ),
-            gates=_common_gates(),
-            default_overrides=("seed=7", "relocation_count=1"),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "isaaclab",
-            "map-build",
-            "codex-cli",
-            "codex-env",
-            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
-            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            enabled=False,
-            unsupported_reason=(
-                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
-            ),
-            gates=_common_gates(),
-            default_overrides=("seed=7",),
-        ),
         *_lane_selections(
             "b1-map12",
             "isaaclab",
@@ -651,30 +561,6 @@ def _disabled_molmospaces_cleanup_combinations() -> tuple[ConsoleLaunchSelection
                         unsupported_reason=reason,
                         gates=_common_gates(),
                         default_overrides=("seed=7",),
-                        supports_operator_steer=True,
-                    )
-                )
-        if world_id not in MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS:
-            reason = (
-                "This scene has no generated cleanup targets under the current cleanup rules. "
-                "Use Map Build or choose a cleanup-ready scene."
-            )
-            for agent_engine_id, provider_profile in (
-                ("codex-cli", "codex-env"),
-                ("claude-code", "mimo-anthropic"),
-            ):
-                rows.extend(
-                    _lane_selections(
-                        world_id,
-                        "isaaclab",
-                        "cleanup",
-                        agent_engine_id,
-                        provider_profile,
-                        evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-                        enabled=False,
-                        unsupported_reason=reason,
-                        gates=_common_gates(),
-                        default_overrides=("seed=7", "relocation_count=1"),
                         supports_operator_steer=True,
                     )
                 )

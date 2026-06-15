@@ -49,9 +49,6 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-ISAAC_CLAUDE_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
-ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-ISAAC_CODEX_MAP_BUILD = "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
 MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
 MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
 MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
@@ -81,11 +78,8 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
     assert {route.id for route in supported} >= {
         MUJOCO_CODEX_CLEANUP,
         MUJOCO_CLAUDE_CLEANUP,
-        ISAAC_CODEX_CLEANUP,
-        ISAAC_CLAUDE_CLEANUP,
         AGIBOT_CODEX_MAP_BUILD,
         MUJOCO_CODEX_MAP_BUILD,
-        ISAAC_CODEX_MAP_BUILD,
         B1_CODEX_OPEN_TASK,
     }
     assert {route.agent_engine_id for route in supported} >= {"codex-cli", "claude-code"}
@@ -102,15 +96,15 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
 
 def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
     mujoco = get_selection(MUJOCO_CODEX_CLEANUP).to_payload()
-    isaac = get_selection(ISAAC_CODEX_CLEANUP).to_payload()
+    b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
     agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
 
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
     assert {"overview", "fpv", "map", "outputs"}.issubset(set(mujoco["view_modes"]))
 
-    assert isaac["field_groups"] == ["common", "isaac"]
-    assert "grounding" in isaac["view_modes"]
+    assert b1["field_groups"] == ["common", "isaac"]
+    assert "grounding" in b1["view_modes"]
 
     assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
     assert "grounding" in agibot["view_modes"]
@@ -173,7 +167,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
 def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blocking(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(ISAAC_CODEX_CLEANUP)
+    route = get_selection(B1_CODEX_OPEN_TASK)
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is True
     assert {gate["id"] for gate in readiness["gates"]} == {"provider_key", "mcp_port_free"}
@@ -382,9 +376,12 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     assert routes["molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"][
         "enabled"
     ]
-    assert not routes["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"][
-        "enabled"
-    ]
+    assert not routes["b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"]["enabled"]
+    assert not any(
+        "::isaaclab::" in route_id
+        for route_id in routes
+        if route_id.startswith("molmospaces/")
+    )
 
 
 def test_operator_console_messup_preview_endpoint_is_non_launching(tmp_path: Path) -> None:

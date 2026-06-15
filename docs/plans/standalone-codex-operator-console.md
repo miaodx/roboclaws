@@ -1,5 +1,13 @@
 # Standalone Codex Operator Console
 
+**Status note, 2026-06-15:** current console route policy is world-scoped.
+MolmoSpaces console routes use MuJoCo. Isaac Lab remains current for the
+B1 / Map 12 digital-twin route and generic Isaac runtime proof; old
+MolmoSpaces Isaac cleanup/map-build rows in this plan are historical target
+rows, not current route guidance. See
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142.
+
 ## Goal
 
 Build a standalone HTML operator console for Roboclaws live Codex robot runs.
@@ -8,9 +16,11 @@ prompts only where the route can carry them safely, show live robot state and
 agent decision evidence, provide operator controls, and hand off completed runs
 to the existing `report.html` artifacts.
 
-The target runtime is Codex controlling MolmoSpaces/MuJoCo, Isaac Lab, and
-Agibot G2 routes. Direct, OpenClaw, appliance, AI2-THOR game, and generic shell
-execution are out of scope for this console.
+The target runtime was originally Codex controlling MolmoSpaces/MuJoCo,
+MolmoSpaces Isaac, and Agibot G2 routes. Current console support keeps
+MolmoSpaces/MuJoCo, B1 / Map 12 Isaac, and Agibot G2 routes. Direct, OpenClaw,
+appliance, AI2-THOR game, and generic shell execution are out of scope for this
+console.
 
 ## Idea Shaping Mode
 
@@ -55,12 +65,12 @@ execution are out of scope for this console.
   not submit arbitrary shell commands.
 - Custom prompts are supported only on route metadata that can safely pass a
   prompt. Routes without prompt support must disable the prompt input.
-- Target routes for v1:
+- Historical target routes for v1 before ADR-0142:
   - `household-cleanup codex world-labels backend=molmospaces_subprocess`
-  - `household-cleanup codex world-labels backend=isaaclab_subprocess`
   - `semantic-map-build codex camera-labels backend=agibot_gdk`
   - `semantic-map-build codex world-labels backend=molmospaces_subprocess`
-  - `semantic-map-build codex world-labels backend=isaaclab_subprocess`
+- Current target route replacement for Isaac:
+  - `surface=household-world world=b1-map12 backend=isaaclab agent_engine=codex-cli prompt=...`
 - Unsupported desired routes should be visible as disabled cards with concrete
   blocker text. Example: `household-cleanup + agibot_gdk` is disabled because
   physical cleanup manipulation remains blocked.
@@ -72,11 +82,10 @@ execution are out of scope for this console.
   and provider status. It must not promise hidden/private model chain-of-thought.
 - Raw Codex logs are not shown by default. They may be available behind an
   expandable details view with secret redaction.
-- The first implementation slice must include route code/adapters for MuJoCo,
-  Isaac, and Agibot G2, because this machine has GPU support and the next
-  physical target after simulator proof is G2.
-- Proof order is MuJoCo first, Isaac next on the local GPU machine, then Agibot
-  G2.
+- The first implementation slice included route code/adapters for MuJoCo,
+  Isaac, and Agibot G2. Current support scopes Isaac to B1 / Map 12.
+- Proof order is MuJoCo first, B1 Isaac next on the local GPU machine, then
+  Agibot G2.
 - The console should add a normalized live operator state layer derived from
   existing artifacts instead of forcing every backend to rewrite its output
   format.
@@ -85,7 +94,7 @@ execution are out of scope for this console.
 - Agibot G2 Start is disabled until the console has the required context and
   operator gate evidence: `context_json`, localization gate, run enablement,
   and visible E-stop/manual stop readiness.
-- Isaac Start requires a preflight/runtime-smoke pass or a recent accepted
+- B1 Isaac Start requires a preflight/runtime-smoke pass or a recent accepted
   preflight artifact before enabling the Codex route.
 - Human Takeover Stop ends the run in v1. Continuing requires a new run after
   the operator resolves the condition.
@@ -100,9 +109,9 @@ execution are out of scope for this console.
 | 3 | Custom prompt support? | Public route contract | Metadata-gated by route. | Some routes can carry a `task`/kickoff prompt safely, others cannot. | All supported runners gain one normalized prompt argument. |
 | 4 | Pause semantics? | Safety and runtime control | Cooperative pause plus separate hard stop/E-stop. | A soft agent-loop pause is not equivalent to robot motion stop. | Backends expose one uniform tested pause/stop protocol. |
 | 5 | Thinking panel content? | Agent evidence boundary | Show public decision evidence and explicitly surfaced model reasoning; do not promise hidden chain-of-thought. | Keeps the UI reviewable without misrepresenting model internals. | Provider contracts expose a safe richer reasoning artifact. |
-| 6 | Target routes? | Scope boundary | Codex over MolmoSpaces/MuJoCo, Isaac, and Agibot G2 only. | These are the target runtimes; direct/OpenClaw are not product targets. | The operator workflow expands to non-Codex drivers. |
+| 6 | Target routes? | Scope boundary | Codex over MolmoSpaces/MuJoCo, B1 Isaac, and Agibot G2 only. | These are the target runtimes; direct/OpenClaw are not product targets. | The operator workflow expands to non-Codex drivers. |
 | 7 | Disabled unsupported routes? | UX and safety | Show disabled cards with blocker text. | Operators need to see why a desired route is unavailable. | The route matrix becomes too large and needs filtering. |
-| 8 | First proof scope? | Acceptance gate | Include MuJoCo, Isaac, and G2 route code in the first implementation, prove in order MuJoCo -> Isaac -> G2. | Local GPU is available and G2 follows simulator proof. | G2 hardware access is delayed or unavailable. |
+| 8 | First proof scope? | Acceptance gate | Include MuJoCo, B1 Isaac, and G2 route code in the first implementation, prove in order MuJoCo -> B1 Isaac -> G2. | Local GPU is available and G2 follows simulator proof. | G2 hardware access is delayed or unavailable. |
 | 9 | Resource locks? | Runtime safety | Lock per backend resource. | Live simulators, GPU Isaac, and real G2 cannot be treated as unlimited background jobs. | Multi-instance backends become supported and tested. |
 | 10 | Green run criteria? | Verification gate | Route-specific checker must pass. | A UI launch is not success without existing report/checker evidence. | Checkers are replaced by a stronger unified operator verifier. |
 
@@ -130,8 +139,8 @@ cooperative pause and stop, and links to the generated `report.html` after the
 route-specific checker passes.
 
 The smallest demo should still include visible but gated route cards and adapter
-code for Isaac and Agibot G2 so the console shape does not need to be redesigned
-after the MuJoCo proof.
+code for B1 Isaac and Agibot G2 so the console shape does not need to be
+redesigned after the MuJoCo proof.
 
 ## Fuller Demo
 
@@ -139,8 +148,7 @@ The console supports the full v1 route matrix:
 
 - MuJoCo cleanup through Codex.
 - MuJoCo semantic-map-build through Codex.
-- Isaac cleanup through Codex after local GPU preflight/runtime-smoke evidence.
-- Isaac semantic-map-build through Codex after local GPU preflight/runtime-smoke
+- B1 Isaac open-ended task through Codex after local GPU preflight/runtime-smoke
   evidence.
 - Agibot G2 semantic-map-build through Codex after context, localization, run
   enablement, and E-stop readiness gates.
@@ -205,16 +213,17 @@ minimal map evidence, waypoint honesty, real-robot alignment, no cleanup
 success gate, and report exists.
 
 ```bash
-just agent::harness molmo-isaac-runtime-preflight
-just agent::harness molmo-isaac-runtime-smoke
-just task::run household-cleanup codex world-labels \
-  backend=isaaclab_subprocess seed=7 generated_mess_count=1
+just agent::harness isaac-runtime-preflight
+just agent::harness isaac-runtime-smoke
+just run::surface surface=household-world world=b1-map12 backend=isaaclab \
+  agent_engine=codex-cli provider_profile=codex-env \
+  prompt="inspect the digital twin" evidence_lane=world-oracle-labels
 ```
 
-Expected checker shape: Isaac real runtime, scene loaded, selected USD
-bindings, robot-view provenance, and `isaac_semantic_pose` provenance. Use the
-stricter prepared-USD segmentation gates when the route requests segmentation
-evidence.
+Expected checker shape: B1 / Map 12 Isaac route starts only after local runtime
+proof, preserves the B1 map bundle and USD path defaults, and records
+robot-view provenance. Real Isaac runtime health still requires local GPU
+verification.
 
 ```bash
 just task::run semantic-map-build codex camera-labels \
@@ -305,7 +314,7 @@ the console exists.
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| GSD UI Phase | `$gsd-ui-phase` | UI design contract | 1 | CLEAR (artifact) | UI-SPEC passes the 6 checker dimensions: copywriting, visuals, color, typography, spacing, and registry safety. Follow-up implementation added public `semantic-map-build codex` Just routes for `molmospaces_subprocess` and `isaaclab_subprocess`; console Start should now gate on route metadata, locks, and preflights rather than an Agibot-only restriction. |
+| GSD UI Phase | `$gsd-ui-phase` | UI design contract | 1 | CLEAR (artifact) | UI-SPEC passes the 6 checker dimensions: copywriting, visuals, color, typography, spacing, and registry safety. Historical follow-up implementation added public `semantic-map-build codex` Just routes for MolmoSpaces and old Isaac subprocess targets; ADR-0142 now scopes Isaac console support to B1 / Map 12. Console Start should gate on route metadata, locks, and preflights rather than an Agibot-only restriction. |
 | DX Review | `$devex-review` | Operator/developer workflow | 1 | PARTIAL (artifact) | Live TTHW cannot be measured yet. Implementation must provide one local entrypoint, metadata-driven route addition, command preview, actionable disabled-state errors, redaction, lock visibility, and final report links. |
 | Design Review | `$design-review` | UI/UX gaps | 1 | PARTIAL (artifact) | Classified as app UI. The contract avoids landing-page/AI-SaaS patterns, keeps the robot view as the visual anchor, separates Pause/Stop/E-stop, and constrains type/color/spacing. Live screenshot review remains required after implementation. |
 | Eng Review | `/plan-eng-review` | Architecture & tests (required before ship) | 0 for this plan | REQUIRED LATER | Before implementation or ship, review route registry boundaries, launcher safety, locks, redaction, operator-state adapters, and CI-safe tests. |

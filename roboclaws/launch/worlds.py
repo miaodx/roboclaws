@@ -52,7 +52,7 @@ def _molmospaces_world_spec(row) -> WorldSpec:
         id=row.world_id,
         label=f"MolmoSpaces {row.scene_source} #{scene_index}",
         surface_id="household-world",
-        available_backends=("mujoco", "isaaclab"),
+        available_backends=("mujoco",),
         scene_source=row.scene_source,
         tags=tags,
         default_backend="mujoco",

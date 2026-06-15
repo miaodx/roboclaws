@@ -31,8 +31,6 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-ISAAC_CODEX_MAP_BUILD = "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
 MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
 MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
 MUJOCO_OPENAI_AGENTS_CLEANUP = (
@@ -56,24 +54,6 @@ def _free_port() -> str:
 
 
 def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> None:
-    isaac = route_readiness(
-        tmp_path,
-        get_selection(ISAAC_CODEX_CLEANUP),
-        overrides={"port": _free_port()},
-        env=CODEX_ENV,
-    )
-    assert isaac["can_start"] is True
-    assert {gate["id"] for gate in isaac["gates"]} == {"provider_key", "mcp_port_free"}
-
-    isaac_map = route_readiness(
-        tmp_path,
-        get_selection(ISAAC_CODEX_MAP_BUILD),
-        overrides={"port": _free_port()},
-        env=CODEX_ENV,
-    )
-    assert isaac_map["can_start"] is True
-    assert {gate["id"] for gate in isaac_map["gates"]} == {"provider_key", "mcp_port_free"}
-
     b1_map12 = route_readiness(
         tmp_path,
         get_selection(B1_CODEX_OPEN_TASK),

@@ -113,6 +113,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     task_intent="${task_intent#task-intent=}"
     task_intent="${task_intent#intent=}"
     task_intent="${task_intent:-${ROBOCLAWS_TASK_INTENT:-cleanup}}"
+    launch_world_id="${ROBOCLAWS_LAUNCH_WORLD_ID:-}"
     operator_messages_path="${operator_messages_path#operator_messages_path=}"
     operator_messages_path="${operator_messages_path#operator-messages-path=}"
     skill_name="${skill_name#skill_name=}"
@@ -353,6 +354,10 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         backend="$("$python_bin" -m roboclaws.launch.backends cleanup-implementation-backend "$backend_override")"
         ;;
     esac
+    if [[ "$backend" == "isaaclab_subprocess" && "$launch_world_id" != "b1-map12" ]]; then
+      echo "error: backend=isaaclab_subprocess is scoped to world=b1-map12; MolmoSpaces household routes use backend=molmospaces_subprocess" >&2
+      exit 1
+    fi
     if [[ "$profile" == "world-oracle-labels" && "$backend" == "isaaclab_subprocess" ]]; then
       isaac_min_semantic_accepted_count="$generated_mess_count"
       if [[ "$min_generated_mess_count_override" != "auto" && -n "$min_generated_mess_count_override" ]]; then

@@ -219,6 +219,7 @@ def _resolve_launch(
     )
     dispatch_overrides = (
         *_without_launch_only_overrides(plan_overrides),
+        *((f"world={world.id}",) if backend.implementation_backend == "isaaclab_subprocess" else ()),
         f"backend={backend.implementation_backend}",
         *dispatch_setup_overrides,
     )
