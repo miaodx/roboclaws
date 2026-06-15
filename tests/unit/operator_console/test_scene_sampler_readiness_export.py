@@ -27,6 +27,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "readiness_report",
         "selection_gaps",
         "source_availability",
+        "source_prep",
     }
     manifest = json.loads((tmp_path / "scene_sampler_manifest.json").read_text())
     projection = json.loads((tmp_path / "scene_sampler_eval_projection.json").read_text())
@@ -36,6 +37,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     )
     candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
     selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
+    source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
     generated_suite = json.loads(
         (tmp_path / "generated_eval/scene_sampler_stress.json").read_text()
     )
@@ -58,6 +60,25 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
     assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
     assert selection["sources"]["ithor"]["ui_needed_count"] == 3
+    assert source_prep["schema"] == "molmospaces_scene_sampler_source_prep_v1"
+    assert source_prep["probe_mode"] == "no_download_no_vlm"
+    assert source_prep["download_policy"] == "manual_operator_only"
+    assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
+        'get_scenes("ithor", "train")'
+    )
+    assert source_prep["sources"]["procthor-objaverse-val"][
+        "molmospaces_get_scenes_call"
+    ] == 'get_scenes("procthor-objaverse", "val")'
+    assert source_prep["sources"]["holodeck-objaverse-val"][
+        "molmospaces_get_scenes_call"
+    ] == 'get_scenes("holodeck-objaverse", "val")'
+    assert source_prep["sources"]["procthor-10k-val"][
+        "recommended_candidate_range"
+    ] == "0:19"
+    assert any(
+        command["name"] == "install_single_scene_example"
+        for command in source_prep["sources"]["ithor"]["operator_commands"]
+    )
     assert generated_suite == json.loads(
         (
             REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"

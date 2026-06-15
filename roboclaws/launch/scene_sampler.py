@@ -599,6 +599,85 @@ def selection_gap_report(
     }
 
 
+def source_prep_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return a no-download source-preparation plan for scanner admission work."""
+
+    availability = source_availability_report(candidate_indices=candidate_indices)
+    selection = selection_gap_report(candidate_indices=candidate_indices)
+    max_candidate_index = max(candidate_indices) if candidate_indices else -1
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_availability = availability["sources"][source]
+        source_selection = selection["sources"][source]
+        dataset_name, split = _molmospaces_get_scenes_args(source)
+        missing_resources = _missing_source_resources(
+            source=source,
+            source_availability=source_availability,
+        )
+        recommended_end = max_candidate_index
+        next_eval_count = len(source_selection.get("next_eval_scan_world_ids") or [])
+        eval_needed = int(source_selection.get("eval_needed_count") or 0)
+        if next_eval_count < eval_needed:
+            recommended_end = max(recommended_end, 19)
+        sources[source] = {
+            "scene_source": source,
+            "scene_family": _family_split(source)[0],
+            "scene_split": _family_split(source)[1],
+            "prep_status": _source_prep_status(
+                source_availability=source_availability,
+                source_selection=source_selection,
+                missing_resources=missing_resources,
+            ),
+            "download_policy": "manual_operator_only",
+            "molmospaces_scene_source": source,
+            "molmospaces_dataset_name": dataset_name,
+            "molmospaces_split": split,
+            "molmospaces_get_scenes_call": f'get_scenes("{dataset_name}", "{split}")',
+            "scene_asset_id": source,
+            "source_dir": source_availability.get("source_dir", ""),
+            "source_dir_available": bool(source_availability.get("source_dir_available")),
+            "candidate_indices": list(candidate_indices),
+            "missing_resource_count": len(missing_resources),
+            "missing_resources": missing_resources,
+            "next_scan_world_ids": [
+                item.get("world_id")
+                for item in source_selection.get("next_scan_candidates") or []
+            ],
+            "recommended_candidate_range": f"0:{recommended_end}"
+            if recommended_end >= 0
+            else "",
+            "operator_commands": _source_prep_operator_commands(
+                source=source,
+                dataset_name=dataset_name,
+                split=split,
+                recommended_end=recommended_end,
+            ),
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_source_prep_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_vlm",
+        "download_policy": "manual_operator_only",
+        "candidate_indices": list(candidate_indices),
+        "summary": {
+            "source_count": len(SUPPORTED_SCENE_SOURCES),
+            "sources_requiring_operator_prep_count": sum(
+                1
+                for source in sources.values()
+                if str(source.get("prep_status", "")).startswith("blocked_")
+            ),
+            "missing_resource_count": sum(
+                int(source.get("missing_resource_count") or 0)
+                for source in sources.values()
+            ),
+        },
+        "sources": sources,
+    }
+
+
 def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
     """Load the prepared room-category label manifest used for admission."""
 
@@ -904,6 +983,115 @@ def _source_availability_blocked_reason(
             f"{missing_files}; run source preparation before sampler admission."
         )
     return ""
+
+
+def _molmospaces_get_scenes_args(scene_source: str) -> tuple[str, str]:
+    if scene_source == "ithor":
+        return "ithor", "train"
+    family, split = _family_split(scene_source)
+    if split == "not_applicable":
+        split = "train"
+    return family, split
+
+
+def _missing_source_resources(
+    *,
+    source: str,
+    source_availability: dict[str, Any],
+) -> list[dict[str, Any]]:
+    resources: list[dict[str, Any]] = []
+    source_dir = str(source_availability.get("source_dir") or "")
+    if not source_availability.get("source_dir_available"):
+        resources.append(
+            {
+                "resource_type": "scene_source_dir",
+                "scene_source": source,
+                "path": source_dir,
+                "reason": "source_dir_missing",
+            }
+        )
+    for item in source_availability.get("candidate_files") or []:
+        if not isinstance(item, dict) or item.get("exists"):
+            continue
+        resources.append(
+            {
+                "resource_type": "scene_xml",
+                "scene_source": source,
+                "scene_index": item.get("scene_index"),
+                "path": item.get("path", ""),
+                "reason": "candidate_xml_missing",
+            }
+        )
+    return resources
+
+
+def _source_prep_status(
+    *,
+    source_availability: dict[str, Any],
+    source_selection: dict[str, Any],
+    missing_resources: list[dict[str, Any]],
+) -> str:
+    if source_availability.get("module_available") is False:
+        return "blocked_molmospaces_module"
+    if not source_availability.get("scene_root_available"):
+        return "blocked_scene_root"
+    if missing_resources:
+        return "blocked_missing_resources"
+    if source_selection.get("status") != "complete":
+        return "ready_for_scanner"
+    return "complete"
+
+
+def _source_prep_operator_commands(
+    *,
+    source: str,
+    dataset_name: str,
+    split: str,
+    recommended_end: int,
+) -> list[dict[str, str]]:
+    return [
+        {
+            "name": "inspect_scene_index_map",
+            "description": (
+                "List the MolmoSpaces scene map for this source without forcing downloads."
+            ),
+            "command": (
+                ".venv/bin/python - <<'PY'\n"
+                "from molmo_spaces.molmo_spaces_constants import get_scenes\n"
+                f'mapping = get_scenes("{dataset_name}", "{split}")\n'
+                f'print(mapping["{split}"])\n'
+                "PY"
+            ),
+        },
+        {
+            "name": "install_single_scene_example",
+            "description": (
+                "Operator-run example for installing one scene and its object/grasp assets."
+            ),
+            "command": (
+                ".venv/bin/python - <<'PY'\n"
+                "from molmo_spaces.molmo_spaces_constants import get_scenes\n"
+                "from molmo_spaces.utils.lazy_loading_utils import "
+                "install_scene_with_objects_and_grasps_from_path\n"
+                f'mapping = get_scenes("{dataset_name}", "{split}")["{split}"]\n'
+                "scene_index, scene_path = next(\n"
+                "    (index, path) for index, path in sorted(mapping.items()) if path\n"
+                ")\n"
+                "install_scene_with_objects_and_grasps_from_path(scene_path)\n"
+                "PY"
+            ),
+        },
+        {
+            "name": "rerun_readiness_after_prep",
+            "description": "Refresh scanner prep artifacts after manual asset preparation.",
+            "command": (
+                ".venv/bin/python scripts/operator_console/"
+                "export_scene_sampler_readiness.py "
+                f"--candidate-range 0:{recommended_end} "
+                f"--require-selection-capacity-source {source}"
+            ),
+        },
+    ]
 
 
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:

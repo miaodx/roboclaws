@@ -27,6 +27,7 @@ from roboclaws.launch.scene_sampler import (
     sampler_rows,
     selection_gap_report,
     source_availability_report,
+    source_prep_report,
     ui_molmospaces_world_ids,
     validate_sampler_manifest,
 )
@@ -324,3 +325,41 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
         "molmospaces/ithor/2",
     ]
     assert ithor["next_eval_scan_world_ids"][:3] == ithor["next_ui_scan_world_ids"]
+
+
+def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
+    )
+
+    report = source_prep_report(candidate_indices=tuple(range(10)))
+
+    assert report["schema"] == "molmospaces_scene_sampler_source_prep_v1"
+    assert report["probe_mode"] == "no_download_no_vlm"
+    assert report["download_policy"] == "manual_operator_only"
+    assert report["summary"]["source_count"] == 4
+
+    procthor = report["sources"]["procthor-10k-val"]
+    assert procthor["prep_status"] == "blocked_molmospaces_module"
+    assert procthor["recommended_candidate_range"] == "0:19"
+    assert procthor["molmospaces_get_scenes_call"] == 'get_scenes("procthor-10k", "val")'
+    assert any(
+        item["resource_type"] == "scene_xml" and item["scene_index"] == 6
+        for item in procthor["missing_resources"]
+    )
+
+    ithor = report["sources"]["ithor"]
+    assert ithor["molmospaces_get_scenes_call"] == 'get_scenes("ithor", "train")'
+    assert ithor["next_scan_world_ids"][:3] == [
+        "molmospaces/ithor/0",
+        "molmospaces/ithor/1",
+        "molmospaces/ithor/2",
+    ]
+    assert any(
+        command["name"] == "rerun_readiness_after_prep"
+        for command in ithor["operator_commands"]
+    )

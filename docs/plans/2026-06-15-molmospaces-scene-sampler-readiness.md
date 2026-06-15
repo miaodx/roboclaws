@@ -98,6 +98,13 @@ First slice implemented on 2026-06-15.
   admitted eval row. These generated payloads match the committed fixtures
   today and give future scanner admission a deterministic way to materialize
   new eval rows.
+- Readiness export now writes `scene_sampler_source_prep.json`, a no-download
+  source-preparation artifact. It records per-source MolmoSpaces
+  `get_scenes(...)` arguments, missing source/XML resources, next scanner world
+  ids, recommended candidate ranges, and operator-run preparation commands for
+  `procthor-10k-val`, `ithor`, `procthor-objaverse-val`, and
+  `holodeck-objaverse-val`. It is intentionally a manual prep plan, not an
+  implicit downloader.
 
 Verification run on 2026-06-15:
 
@@ -182,7 +189,8 @@ Next Flow implementation slices:
      to write validated sampler artifacts under
      `output/scene-sampler-readiness/`.
      The export now includes no-download source availability evidence,
-     candidate readiness packets, and selection-gap worklists. A later slice
+     candidate readiness packets, selection-gap worklists, and a
+     source-preparation artifact with manual operator commands. A later slice
      should replace or extend the static facts with real scanner candidate
      output for new source families after the MolmoSpaces runtime and scene
      assets are visible.
