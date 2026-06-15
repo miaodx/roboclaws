@@ -5168,3 +5168,19 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this OpenClaw
   chat-tail patch so the unrelated staged `eval-harness` rename was not blessed
   into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by moving
+  `scripts/operator_console/render_scene_previews.py::_render_semantic_map_preview(...)`
+  into `scripts/operator_console/semantic_map_preview.py` with focused room,
+  waypoint, receptacle, object, trajectory, and legend drawing helpers. The
+  operator-console preview image size, scene alignment, semantic-map preview
+  purpose, and metadata behavior remain unchanged. A direct smoke test now
+  covers that the semantic-map preview renders a non-blank image. Evidence:
+  `ruff check scripts/operator_console/render_scene_previews.py scripts/operator_console/semantic_map_preview.py tests/unit/operator_console/test_render_scene_previews.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/operator_console/render_scene_previews.py scripts/operator_console/semantic_map_preview.py tests/unit/operator_console/test_render_scene_previews.py`
+  passed; `ruff format scripts/operator_console/render_scene_previews.py scripts/operator_console/semantic_map_preview.py tests/unit/operator_console/test_render_scene_previews.py`
+  left all three files unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_render_scene_previews.py`
+  passed with 5 tests. The quality baseline was refreshed from 38 to 37 Ruff
+  complexity violations and from 58 to 57 oversized modules. The ratchet
+  write/ok proof used a temporary clean worktree containing only this preview
+  rendering patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.

@@ -153,11 +153,6 @@
         "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py"
       },
       {
-        "lines": 825,
-        "max_module_lines": 800,
-        "path": "scripts/operator_console/render_scene_previews.py"
-      },
-      {
         "lines": 1809,
         "max_module_lines": 800,
         "path": "scripts/visual_grounding/adapters.py"
@@ -392,16 +387,6 @@
         "row": 2033,
         "symbol": "_install_grasp_collision_diagnostics",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/operator_console/render_scene_previews.py|C901|_render_semantic_map_preview",
-        "limit": 10,
-        "message": "`_render_semantic_map_preview` is too complex (13 > 10)",
-        "path": "scripts/operator_console/render_scene_previews.py",
-        "row": 491,
-        "symbol": "_render_semantic_map_preview",
-        "value": 13
       },
       {
         "code": "C901",

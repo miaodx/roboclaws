@@ -9,6 +9,7 @@ from scripts.operator_console.render_scene_previews import (
     PREVIEW_METADATA_SCHEMA,
     _first_public_waypoint,
     _preview_metadata,
+    _render_semantic_map_preview,
     _scene_alignment,
     _scene_center_and_span,
     _topdown_camera_request,
@@ -168,3 +169,30 @@ def test_scene_alignment_expands_bounds_to_preview_aspect() -> None:
     )
     assert alignment["topdown_azimuth_deg"] == pytest.approx(90.0)
     assert alignment["span_x_m"] / alignment["span_y_m"] == pytest.approx(900 / 560)
+
+
+def test_semantic_map_preview_draws_scene_layers() -> None:
+    state = {
+        "room_outlines": [{"room_id": "room_1", "center": [1.0, 1.0], "half_extents": [1.0, 1.0]}],
+        "receptacles": {"sink_01": {"position": [0.2, 0.4]}},
+        "objects": {
+            "mug_01": {"position": [1.4, 1.2]},
+            "plate_01": {"position": [1.7, 0.8]},
+        },
+        "selected_object_ids": ["mug_01"],
+        "robot_trajectory": [{"x": 0.1, "y": 0.1, "theta": 0.0}, {"x": 1.5, "y": 1.5}],
+    }
+    alignment = _scene_alignment(state, width=240, height=160)
+
+    image = _render_semantic_map_preview(
+        state,
+        metric_map={"inspection_waypoints": [{"waypoint_id": "w1", "x": 0.5, "y": 0.5}]},
+        alignment=alignment,
+        world_label="molmospaces/val_0",
+        width=240,
+        height=160,
+    )
+
+    assert image.size == (240, 160)
+    assert image.getbbox() is not None
+    assert len(set(image.getdata())) > 1
