@@ -115,6 +115,11 @@ First slice implemented on 2026-06-15.
   admitted, rejected, and blocked candidate rows with required gates, missing
   gates, and next actions before any real preview rendering or map-build run is
   allowed.
+- MolmoSpaces subprocess backend init now resolves scene XML paths from
+  MolmoSpaces `get_scenes(...)` refs before loading MuJoCo or installing scene
+  assets. This removes the legacy runtime assumption that every source uses
+  `get_scenes_root() / scene_source / val_<index>.xml`, so future scanner runs
+  can target source-specific paths such as `ithor/FloorPlan1_physics.xml`.
 
 Verification run on 2026-06-15:
 
@@ -129,6 +134,8 @@ just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
 ruff check roboclaws/launch/scene_sampler.py roboclaws/operator_console/messup.py scripts/operator_console/render_scene_previews.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_messup.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-readiness-availability --require-ui-supported-source procthor-10k-val
+./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py -q
+ruff check scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py
 ```
 
 Known partial scope:
@@ -185,6 +192,10 @@ sources represented by normalized blocked eval rows.
 Next Flow implementation slices:
 
 1. **Scanner And Candidate Preparation**
+   - Backend scene resolution is now source-aware in
+     `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`; scanner work can
+     call product/map-build routes with non-`procthor-10k-val` source ids
+     without the worker silently falling back to `val_<index>.xml` paths.
    - Turn the current static preview/readiness facts into a repeatable scanner
      or preparation command that can inspect candidate indices per
      `scene_source`.
