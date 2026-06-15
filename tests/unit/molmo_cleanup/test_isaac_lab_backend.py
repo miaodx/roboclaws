@@ -341,6 +341,85 @@ def test_isaac_lab_backend_can_request_robot_view_settle_frames(
     assert captured["args"][-2:] == ("--render-settle-frames", "16")
 
 
+def test_isaac_lab_backend_can_navigate_to_waypoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        include_robot=True,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True, "robot_pose": {"x": -2.0, "y": 0.0, "yaw_deg": 0.0}}
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+
+    result = backend.navigate_to_waypoint(
+        waypoint={
+            "waypoint_id": "generated_exploration_002",
+            "room_id": "meeting_room_b",
+            "frame_id": "map",
+            "x": -2.0,
+            "y": 0.0,
+            "yaw": 0.0,
+        }
+    )
+
+    assert result["ok"] is True
+    assert captured["command"] == "navigate_to_waypoint"
+    assert captured["args"][0] == "--waypoint-json"
+    payload = json.loads(str(captured["args"][1]))
+    assert payload["waypoint_id"] == "generated_exploration_002"
+    assert payload["x"] == pytest.approx(-2.0)
+
+
+def test_isaac_fake_worker_waypoint_navigation_updates_robot_view_pose(
+    tmp_path: Path,
+) -> None:
+    backend = IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        include_robot=True,
+        generated_mess_count=1,
+    )
+
+    waypoint = {
+        "waypoint_id": "generated_exploration_003",
+        "room_id": "meeting_room_c",
+        "frame_id": "map",
+        "x": -3.0,
+        "y": 7.0,
+        "yaw": 1.57079632679,
+    }
+    nav = backend.navigate_to_waypoint(waypoint=waypoint)
+    views = backend.write_robot_views_with_resolution(
+        tmp_path / "robot_views_after_waypoint",
+        label="0002_waypoint",
+        width=64,
+        height=48,
+    )
+
+    assert nav["ok"] is True
+    assert nav["state_mutation"] == "isaac_waypoint_pose"
+    assert nav["backend_pose_mutation_available"] is True
+    assert nav["robot_pose"]["waypoint_id"] == "generated_exploration_003"
+    assert nav["robot_pose"]["pose_source"] == "public_waypoint_map_frame"
+    assert nav["robot_pose"]["x"] == pytest.approx(-3.0)
+    assert nav["robot_pose"]["y"] == pytest.approx(7.0)
+    assert nav["robot_pose"]["yaw_deg"] == pytest.approx(90.0)
+    assert views["robot_pose"]["waypoint_id"] == "generated_exploration_003"
+    assert views["robot_pose"]["pose_source"] != "hash_fallback_pose_near_receptacle"
+    assert backend.semantic_pose_state["robot_pose"]["waypoint_id"] == ("generated_exploration_003")
+    assert backend.semantic_pose_state["transform_events"][-1]["tool"] == ("navigate_to_waypoint")
+
+
 def test_isaac_lab_backend_can_request_robot_view_aa_probe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -789,11 +868,95 @@ def test_isaac_robot_view_color_profile_merges_comparison_override() -> None:
     )
 
     assert profile["profile_id"] == "display_srgb_soft_highlight_v1"
-    assert profile["backend_luminance_gain"]["isaaclab_subprocess"] == pytest.approx(
-        0.7161647108631373
+    assert profile["backend_luminance_gain"]["isaaclab_subprocess"] == pytest.approx(1.0)
+    assert profile["backend_luminance_gain"]["isaaclab-prepared-usd"] == pytest.approx(1.0)
+    assert profile["backend_luminance_gain_source"] == (
+        "robot_view_display_default_no_scene_probe_delta"
     )
     assert profile["backend_rgb_gain"]["isaaclab_subprocess"] == pytest.approx([0.9, 0.8, 0.7])
     assert profile["backend_rgb_gain_source"] == "unit-comparison-profile"
+
+
+def test_isaac_worker_waypoint_navigation_prefers_b1_pose(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    state = {
+        "schema": "isaac_lab_backend_state_v1",
+        "backend": ISAACLAB_SUBPROCESS_BACKEND,
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "runtime": {"runtime_mode": "fake"},
+        "scenario": {"objects": [], "receptacles": []},
+        "locations": {},
+        "held_object_id": None,
+        "current_receptacle_id": "floor_01",
+        "open_receptacle_ids": [],
+        "containment": {},
+        "object_pose_overrides": {},
+        "tool_event_counts": {},
+        "object_index": {},
+        "receptacle_index": {},
+        "semantic_pose_state": {
+            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+            "robot_pose": {
+                "frame": "world",
+                "x": 1.36,
+                "y": 1.82,
+                "z": 0.0,
+                "yaw_deg": 23.0,
+                "pose_source": "hash_fallback_pose_near_receptacle",
+            },
+            "object_poses": {},
+            "articulations": {},
+            "transform_events": [],
+        },
+    }
+    isaac_lab_backend_worker.write_state(state_path, state)
+
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "navigate_to_waypoint",
+            "--waypoint-json",
+            json.dumps(
+                {
+                    "waypoint_id": "b1_overlay_anchor_001",
+                    "room_id": "meeting_room_b",
+                    "frame_id": "map",
+                    "x": -2.0,
+                    "y": 0.0,
+                    "yaw": 0.0,
+                    "b1_pose": {
+                        "frame": "b1_rebuilt_scene_usd_world_candidate",
+                        "x": -42.5,
+                        "y": 13.25,
+                        "z": 0.0,
+                        "yaw_deg": 90.0,
+                        "pose_source": "robot_map_12_navigation_memory_overlay",
+                    },
+                },
+                sort_keys=True,
+            ),
+        ]
+    )
+
+    result = isaac_lab_backend_worker.navigate_to_waypoint(
+        args,
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+    updated = isaac_lab_backend_worker.read_state(state_path)
+
+    assert result["ok"] is True
+    assert result["state_mutation"] == "isaac_waypoint_pose"
+    assert result["robot_pose"]["frame"] == "b1_rebuilt_scene_usd_world_candidate"
+    assert result["robot_pose"]["x"] == pytest.approx(-42.5)
+    assert result["robot_pose"]["y"] == pytest.approx(13.25)
+    assert result["robot_pose"]["yaw_deg"] == pytest.approx(90.0)
+    assert result["robot_pose"]["waypoint_pose_key"] == "b1_pose"
+    assert updated["semantic_pose_state"]["robot_pose"] == result["robot_pose"]
+    assert updated["semantic_pose_state"]["transform_events"][-1]["waypoint_id"] == (
+        "b1_overlay_anchor_001"
+    )
+    assert updated["semantic_pose_state"]["rendered_to_usd"] is False
 
 
 def test_isaac_write_camera_views_returns_color_contract(

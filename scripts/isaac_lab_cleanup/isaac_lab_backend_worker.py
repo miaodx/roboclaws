@@ -2751,7 +2751,12 @@ def _scale_stage_light_intensities(
 
 
 def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:
-    profile = robot_view_display_color_profile()
+    profile = _json_roundtrip(robot_view_display_color_profile())
+    luminance_gain = _dict(profile.get("backend_luminance_gain"))
+    luminance_gain["isaaclab_subprocess"] = 1.0
+    luminance_gain["isaaclab-prepared-usd"] = 1.0
+    profile["backend_luminance_gain"] = luminance_gain
+    profile["backend_luminance_gain_source"] = "robot_view_display_default_no_scene_probe_delta"
     if isinstance(override, dict) and override:
         profile.update(override)
     return profile
@@ -4583,6 +4588,69 @@ def _record_semantic_pose_event(
     return event
 
 
+def _record_waypoint_pose_event(
+    state: dict[str, Any],
+    *,
+    waypoint: dict[str, Any],
+    robot_pose: dict[str, Any],
+    previous_waypoint_id: str = "",
+    previous_room_id: str = "",
+) -> dict[str, Any]:
+    semantic_pose_state = _dict(state.get("semantic_pose_state"))
+    events = [
+        dict(item)
+        for item in semantic_pose_state.get("transform_events", [])
+        if isinstance(item, dict)
+    ]
+    waypoint_id = str(waypoint.get("waypoint_id") or "")
+    room_id = str(waypoint.get("room_id") or "")
+    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
+    event = {
+        "schema": ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+        "sequence": len(events) + 1,
+        "tool": "navigate_to_waypoint",
+        "state_mutation": "isaac_waypoint_pose",
+        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "rendered_to_usd": False,
+        "planner_backed": False,
+        "physical_robot": False,
+        "waypoint_id": waypoint_id,
+        "room_id": room_id,
+        "fixture_ids": fixture_ids,
+        "previous_waypoint_id": previous_waypoint_id,
+        "previous_room_id": previous_room_id,
+        "robot_pose": dict(robot_pose),
+    }
+    events.append(event)
+    semantic_pose_state.update(
+        {
+            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+            "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+            "rendered_to_usd": False,
+            "planner_backed": False,
+            "physical_robot": False,
+            "semantic_pose_only": True,
+            "robot_pose": dict(robot_pose),
+            "held_object_id": state.get("held_object_id"),
+            "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
+            "object_poses": _semantic_object_poses_from_state(state),
+            "articulations": _semantic_articulations_from_state(state),
+            "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
+            "transform_events": events,
+            "evidence_note": (
+                "Semantic cleanup primitives update backend JSON pose/articulation state "
+                "against public USD prim handles. Waypoint navigation updates the robot "
+                "pose used by Isaac robot-view rendering, but it is not planner-backed "
+                "navigation proof."
+            ),
+        }
+    )
+    state["semantic_pose_state"] = semantic_pose_state
+    return event
+
+
 def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
     targets = [_dict(item) for item in _dict(state.get("private_manifest")).get("targets", [])]
     if not targets:
@@ -5679,6 +5747,47 @@ def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> d
     )
 
 
+def navigate_to_waypoint(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    _count(state, "navigate_to_waypoint")
+    waypoint = _dict(args.waypoint_json)
+    robot_pose = _robot_pose_for_waypoint(waypoint)
+    if not _has_xy(robot_pose):
+        return _error(
+            "navigate_to_waypoint",
+            "waypoint_pose_missing",
+            waypoint_id=str(waypoint.get("waypoint_id") or ""),
+        )
+    previous_waypoint_id = str(state.get("current_waypoint_id") or "")
+    previous_room_id = str(state.get("current_room_id") or "")
+    waypoint_id = str(waypoint.get("waypoint_id") or "")
+    room_id = str(waypoint.get("room_id") or "")
+    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
+    state["current_waypoint_id"] = waypoint_id
+    state["current_room_id"] = room_id
+    if fixture_ids:
+        state["current_receptacle_id"] = fixture_ids[0]
+    event = _record_waypoint_pose_event(
+        state,
+        waypoint=waypoint,
+        robot_pose=robot_pose,
+        previous_waypoint_id=previous_waypoint_id,
+        previous_room_id=previous_room_id,
+    )
+    write_state_from_state_arg(state)
+    return _ok(
+        "navigate_to_waypoint",
+        waypoint_id=waypoint_id,
+        room_id=room_id,
+        fixture_ids=fixture_ids,
+        previous_waypoint_id=previous_waypoint_id,
+        previous_room_id=previous_room_id,
+        robot_pose=robot_pose,
+        state_mutation="isaac_waypoint_pose",
+        semantic_pose_event=event,
+        backend_pose_mutation_available=True,
+    )
+
+
 def pick(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
     _count(state, "pick")
     object_id = args.object_id
@@ -6106,6 +6215,7 @@ _STATE_COMMANDS: dict[str, _IsaacWorkerCommand] = {
     "camera_views": write_camera_views,
     "observe": observe,
     "navigate_to_object": navigate_to_object,
+    "navigate_to_waypoint": navigate_to_waypoint,
     "navigate_to_receptacle": navigate_to_receptacle,
     "pick": pick,
     "open_receptacle": open_receptacle,
@@ -6269,6 +6379,66 @@ def _robot_pose_for_receptacle(
     )
     pose["support_pose_source"] = str(support.get("source") or "")
     return pose
+
+
+def _robot_pose_for_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
+    for key in ("b1_pose", "robot_pose"):
+        pose = _dict(waypoint.get(key))
+        if _has_xy(pose):
+            result = _normalized_waypoint_robot_pose(
+                pose,
+                waypoint=waypoint,
+                pose_source=str(pose.get("pose_source") or key),
+            )
+            result["waypoint_pose_key"] = key
+            return result
+    if not _has_xy(waypoint):
+        return {}
+    return _normalized_waypoint_robot_pose(
+        waypoint,
+        waypoint=waypoint,
+        pose_source=str(waypoint.get("pose_source") or "public_waypoint_map_frame"),
+    )
+
+
+def _normalized_waypoint_robot_pose(
+    pose: dict[str, Any],
+    *,
+    waypoint: dict[str, Any],
+    pose_source: str,
+) -> dict[str, Any]:
+    x = _optional_float(pose.get("x"))
+    y = _optional_float(pose.get("y"))
+    if x is None or y is None:
+        return {}
+    yaw = _optional_float(pose.get("yaw"))
+    yaw_deg = _optional_float(pose.get("yaw_deg"))
+    if yaw_deg is None and yaw is not None:
+        yaw_deg = math.degrees(yaw)
+    result: dict[str, Any] = {
+        "frame": str(
+            pose.get("frame") or pose.get("frame_id") or waypoint.get("frame_id") or "map"
+        ),
+        "x": round(float(x), 6),
+        "y": round(float(y), 6),
+        "z": round(float(_optional_float(pose.get("z")) or 0.0), 6),
+        "pose_source": pose_source,
+        "waypoint_id": str(waypoint.get("waypoint_id") or ""),
+        "room_id": str(waypoint.get("room_id") or ""),
+    }
+    if yaw_deg is not None:
+        result["yaw_deg"] = round(float(yaw_deg), 6)
+    if yaw is not None:
+        result["theta"] = round(float(yaw), 6)
+    target = _vec3(pose.get("target_position"))
+    if target is not None:
+        result["target_position"] = _round_vec3(target)
+    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
+    if fixture_ids:
+        result["fixture_ids"] = fixture_ids
+    if pose.get("support_pose_source") is not None:
+        result["support_pose_source"] = str(pose.get("support_pose_source"))
+    return result
 
 
 def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
@@ -7443,6 +7613,10 @@ def _norm(value: Any) -> str:
 
 def _dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _json_roundtrip(value: Any) -> Any:
+    return json.loads(json.dumps(value))
 
 
 def _vec3(value: Any) -> list[float] | None:
