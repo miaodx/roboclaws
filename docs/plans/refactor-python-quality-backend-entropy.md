@@ -4873,3 +4873,21 @@ Stop this refactor loop when:
   passed after a deliberate baseline refresh. The quality baseline was lowered
   from 57 to 56 Ruff complexity violations, with oversized modules unchanged at
   59. This slice reduced `roboclaws/agents/live_runtime.py` by 2 net lines.
+- 2026-06-15: Continued the backend/live-runner consistency residual by moving
+  live-run backend resource leasing into
+  `roboclaws/agents/drivers/household_live.py::acquire_household_live_run_lease(...)`.
+  Codex, Claude Code, and OpenAI Agents SDK cleanup runners now share the same
+  MolmoSpaces visual-backend-slot acquisition/status payload behavior and the
+  same non-Molmo file-lock payload path, while preserving engine-specific
+  runner execution, provider timing, server startup, and checker behavior.
+  Evidence:
+  `ruff check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py`
+  passed; `ruff format --check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_molmo_codex_live_is_detached_and_probeable tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_runners_open_ended_checker_drops_full_cleanup_gates tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_claude_print_command_uses_verbose_for_stream_json tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 6 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. Ruff complexity violations stayed
+  at 56 and oversized modules dropped from 59 to 58 because
+  `scripts/molmo_cleanup/run_live_claude_cleanup.py` fell below the 800-line
+  threshold. The touched live-runner scripts dropped by 186 net lines; after
+  the shared helper and focused tests, the slice is still a net line reduction.

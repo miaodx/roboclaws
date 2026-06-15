@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
 import json
 import os
 import shutil
@@ -19,6 +18,8 @@ from pathlib import Path
 from typing import BinaryIO
 
 from roboclaws.agents.drivers.household_live import (
+    HouseholdLiveRunLease,
+    acquire_household_live_run_lease,
     add_household_cleanup_live_runner_args,
     household_cleanup_server_argv,
 )
@@ -32,12 +33,6 @@ from roboclaws.agents.provider_timing_proxy import (
     stop_provider_timing_proxy,
 )
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
-from roboclaws.household.visual_backend_slots import (
-    MOLMOSPACES_SUBPROCESS_BACKEND,
-    VisualBackendSlotError,
-    VisualBackendSlotLease,
-    acquire_visual_backend_slot,
-)
 from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
     household_intent_id_for_checker,
@@ -89,8 +84,7 @@ class LiveClaudeCleanupRunner:
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.provider_timing_proxy: ProviderTimingProxyHandle | None = None
-        self.lock_file = None
-        self.visual_slot: VisualBackendSlotLease | None = None
+        self.run_lease = HouseholdLiveRunLease()
         self.live_timing: dict[str, object] = {
             "schema": "molmo_live_timing_v1",
             "runtime": "claude-code",
@@ -142,66 +136,19 @@ class LiveClaudeCleanupRunner:
         return 0
 
     def _acquire_lock(self) -> None:
-        if self.args.backend == MOLMOSPACES_SUBPROCESS_BACKEND:
-            try:
-                self.visual_slot = acquire_visual_backend_slot(
-                    repo_root=self.args.repo_root,
-                    run_id=_run_id_from_run_dir(self.run_dir),
-                    pid=os.getpid(),
-                    backend=self.args.backend,
-                    port=self.args.port,
-                    output_dir=self.run_dir,
-                    status_path=self.status_path,
-                    owner="claude-live",
-                )
-            except VisualBackendSlotError as exc:
-                detail = (
-                    f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
-                )
-                raise RuntimeError(
-                    "no MolmoSpaces visual backend slot is available"
-                    f" under {self.args.repo_root / 'output/molmo/visual-backend-slots'}{detail}"
-                ) from exc
-            return
-
-        self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_file = self.args.lock_path.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            lock_file.seek(0)
-            active = lock_file.read().strip()
-            lock_file.close()
-            detail = f": {active}" if active else ""
-            raise RuntimeError(
-                f"another live Molmo cleanup run holds {self.args.lock_path}{detail}"
-            ) from exc
-        lock_file.seek(0)
-        lock_file.truncate()
-        lock_file.write(
-            json.dumps(
-                {
-                    "pid": os.getpid(),
-                    "run_dir": str(self.run_dir),
-                    "status_path": str(self.status_path),
-                    "started_at_epoch": self.started_at_epoch,
-                },
-                sort_keys=True,
-            )
-            + "\n"
+        self.run_lease = acquire_household_live_run_lease(
+            backend=self.args.backend,
+            repo_root=self.args.repo_root,
+            run_dir=self.run_dir,
+            status_path=self.status_path,
+            lock_path=self.args.lock_path,
+            port=self.args.port,
+            owner="claude-live",
+            started_at_epoch=self.started_at_epoch,
         )
-        lock_file.flush()
-        self.lock_file = lock_file
 
     def _release_visual_slot(self) -> None:
-        if self.visual_slot is None:
-            return
-        try:
-            self.visual_slot.release()
-        except VisualBackendSlotError as exc:
-            print(f"warning: could not release visual backend slot: {exc}", file=sys.stderr)
-        finally:
-            self.visual_slot = None
+        self.run_lease.release_visual_slot()
 
     def _start_server(self) -> None:
         print("==> Claude Code Molmo cleanup runner")
@@ -553,8 +500,7 @@ class LiveClaudeCleanupRunner:
             payload["resume_available"] = resume_available
         if detail:
             payload["detail"] = detail
-        if self.visual_slot is not None:
-            payload["visual_backend_slot"] = self.visual_slot.to_payload()
+        payload.update(self.run_lease.status_fields())
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -819,14 +765,6 @@ def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
             continue
         filtered.append(arg)
     return filtered
-
-
-def _run_id_from_run_dir(run_dir: Path) -> str:
-    name = run_dir.name
-    parent = run_dir.parent.name
-    if parent:
-        return f"{parent}/{name}"
-    return name
 
 
 def _model_from_claude_args(args: list[str]) -> str:
