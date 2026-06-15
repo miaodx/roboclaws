@@ -4891,3 +4891,18 @@ Stop this refactor loop when:
   `scripts/molmo_cleanup/run_live_claude_cleanup.py` fell below the 800-line
   threshold. The touched live-runner scripts dropped by 186 net lines; after
   the shared helper and focused tests, the slice is still a net line reduction.
+- 2026-06-15: Continued under `$intuitive-flow` by moving the open-ended
+  live-runner checker-gate filter into
+  `roboclaws/agents/drivers/household_live.py::without_full_cleanup_checker_gates(...)`.
+  Codex, Claude Code, and OpenAI Agents SDK cleanup runners now share the same
+  policy for dropping full-cleanup-only checker gates on no-preset open-ended
+  tasks; unused adjacent local checker helper definitions were removed from the
+  runner scripts. Evidence:
+  `ruff check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py`
+  passed; `ruff format --check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_runners_open_ended_checker_drops_full_cleanup_gates tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_claude_camera_raw_checker_requires_all_generated_mess_actions tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 6 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed with Ruff complexity unchanged at 56 and oversized modules unchanged
+  at 58. This slice reduced the touched live-runner/helper/test files by 36 net
+  lines without changing public live-runner CLI or checker output behavior.

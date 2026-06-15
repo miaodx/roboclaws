@@ -23,6 +23,7 @@ from roboclaws.agents.drivers.household_live import (
     acquire_household_live_run_lease,
     add_household_cleanup_live_runner_args,
     household_cleanup_server_argv,
+    without_full_cleanup_checker_gates,
 )
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
 from roboclaws.agents.provider_timing_proxy import (
@@ -420,7 +421,7 @@ class LiveCodexCleanupRunner:
         open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
-            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
+            checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
             task_name=task_name,
             task_intent=task_intent,
@@ -1080,40 +1081,6 @@ def _shell_quote(value: str) -> str:
     if all(char in safe for char in value):
         return value
     return "'" + value.replace("'", "'\"'\"'") + "'"
-
-
-def _append_missing_checker_flag(args: list[str], flag: str) -> None:
-    if flag not in args:
-        args.append(flag)
-
-
-def _append_missing_checker_value(args: list[str], flag: str, value: str) -> None:
-    if flag not in args:
-        args.extend([flag, value])
-
-
-def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
-    filtered: list[str] = []
-    skip_value = False
-    for arg in args:
-        if skip_value:
-            skip_value = False
-            continue
-        if arg in {
-            "--min-semantic-accepted-count",
-            "--min-model-declared-observations",
-            "--min-model-declared-actions",
-            "--min-sweep-coverage",
-        }:
-            skip_value = True
-            continue
-        if arg in {
-            "--require-clean-agent-run",
-            "--require-model-declared-observations",
-        }:
-            continue
-        filtered.append(arg)
-    return filtered
 
 
 if __name__ == "__main__":
