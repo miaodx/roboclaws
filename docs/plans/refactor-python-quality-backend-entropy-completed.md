@@ -256,6 +256,14 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac metadata/index
   tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac USD support-pose and support-surface selection/scoring
+  moved from the backend worker into `isaac_support_surface_geometry.py`, with
+  worker wrappers preserving monkeypatchable `_usd_world_bounds` and
+  `_iter_usd_prim_range` tests. Metric: `isaac_lab_backend_worker.py` 7178 ->
+  7020 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Isaac support-pose/support-surface tests, ruff, format check,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
