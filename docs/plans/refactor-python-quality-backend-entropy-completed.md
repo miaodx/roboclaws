@@ -294,6 +294,13 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Isaac camera
   geometry/robot-pose tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac stage bounds and capture-lighting diagnostics moved from
+  the backend worker into `isaac_stage_lighting.py`, keeping lazy PXR imports
+  and worker-private wrappers for scene-camera capture hooks and light-path
+  tests. Metric: `isaac_lab_backend_worker.py` 6155 -> 5976 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Isaac stage-light/scene-camera tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
