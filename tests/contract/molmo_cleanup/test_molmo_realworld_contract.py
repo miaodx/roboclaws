@@ -310,9 +310,38 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
 
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
+    waypoint, waypoint_nav, detection = _first_detected_metric_map_waypoint(
+        contract,
+        metric_map,
+    )
+    fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    assert fixture is not None
+    blocked_nav = contract.navigate_to_object(detection["object_id"])
+    object_nav, receptacle_nav = _confirm_pick_and_navigate_to_fixture(
+        contract,
+        detection,
+        fixture,
+    )
+    agent_view = contract.agent_view_payload()
+    live_metric_map = contract.metric_map()
+
+    _assert_nav2_shaped_metric_map(metric_map, fixture_hints, waypoint)
+    _assert_nav2_navigation_provenance(
+        waypoint_nav,
+        blocked_nav,
+        object_nav,
+        receptacle_nav,
+    )
+    _assert_nav2_agent_runtime_map(agent_view, live_metric_map)
+    _assert_no_forbidden_keys(agent_view)
+
+
+def _first_detected_metric_map_waypoint(
+    contract: RealWorldCleanupContract,
+    metric_map: dict,
+) -> tuple[dict, dict, dict]:
     waypoint = {}
     waypoint_nav = {}
-    observation = {}
     detection = None
     for candidate in metric_map["inspection_waypoints"]:
         waypoint = candidate
@@ -323,9 +352,14 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
             detection = detections[0]
             break
     assert detection is not None
-    fixture = infer_target_fixture_for_detection(detection, fixture_hints)
-    assert fixture is not None
-    blocked_nav = contract.navigate_to_object(detection["object_id"])
+    return waypoint, waypoint_nav, detection
+
+
+def _confirm_pick_and_navigate_to_fixture(
+    contract: RealWorldCleanupContract,
+    detection: dict,
+    fixture: dict,
+) -> tuple[dict, dict]:
     contract.adjust_camera(yaw_delta_deg=15)
     confirmed_observation = contract.observe()
     confirmed = next(
@@ -336,9 +370,14 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     object_nav = contract.navigate_to_object(confirmed["object_id"])
     assert contract.pick(confirmed["object_id"])["ok"] is True
     receptacle_nav = contract.navigate_to_receptacle(str(fixture["fixture_id"]))
-    agent_view = contract.agent_view_payload()
-    live_metric_map = contract.metric_map()
+    return object_nav, receptacle_nav
 
+
+def _assert_nav2_shaped_metric_map(
+    metric_map: dict,
+    fixture_hints: dict,
+    waypoint: dict,
+) -> None:
     assert metric_map["schema"] == REAL_ROBOT_MAP_BUNDLE_SCHEMA
     assert metric_map["frame_id"] == "map"
     assert metric_map["origin"] == {"x": 0.0, "y": 0.0, "yaw": 0.0}
@@ -354,6 +393,14 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert fixture_hints["contains_runtime_observations"] is False
     assert fixture_hints["rooms"] == []
     assert "observations" not in fixture_hints
+
+
+def _assert_nav2_navigation_provenance(
+    waypoint_nav: dict,
+    blocked_nav: dict,
+    object_nav: dict,
+    receptacle_nav: dict,
+) -> None:
     assert waypoint_nav["navigation_backend"] == "sim_costmap_planner"
     assert waypoint_nav["route_validation"]["ok"] is True
     assert waypoint_nav["pose_source"] == "inspection_waypoint"
@@ -364,6 +411,9 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert object_nav["requires_reobserve"] is False
     assert receptacle_nav["navigation_backend"] == "api_semantic"
     assert receptacle_nav["pose_source"] == "fixture_semantic_map"
+
+
+def _assert_nav2_agent_runtime_map(agent_view: dict, live_metric_map: dict) -> None:
     assert agent_view["policy_view"]["chase_camera_policy_input"] is False
     assert "runtime_metric_map" in agent_view["policy_view"]["allowed_inputs"]
     assert agent_view["runtime_metric_map"]["schema"] == RUNTIME_METRIC_MAP_SCHEMA
@@ -374,7 +424,6 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert agent_view["runtime_metric_map"]["observed_objects"][0]["state"] == "held"
     assert agent_view["cleanup_worklist"]["schema"] == CLEANUP_WORKLIST_SCHEMA
     assert agent_view["cleanup_worklist"]["objects"][0]["state"] == "held"
-    _assert_no_forbidden_keys(agent_view)
 
 
 def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_bundle() -> None:

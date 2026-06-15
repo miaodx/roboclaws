@@ -173,6 +173,12 @@ logs before choosing the next slice.
   helpers. Metric: 15 -> 14 complexity rows; oversized modules unchanged at
   62. Proof: focused realworld-contract test, ruff, format check, and ratchet.
 
+- 2026-06-16: Nav2-shaped public map/provenance contract test split detection
+  lookup, confirmation/pick/navigation flow, map-shape assertions, navigation
+  provenance assertions, and runtime-map assertions into focused helpers.
+  Metric: 14 -> 13 complexity rows; oversized modules unchanged at 62. Proof:
+  focused realworld-contract test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
