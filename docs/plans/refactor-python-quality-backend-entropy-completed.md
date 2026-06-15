@@ -537,6 +537,15 @@ logs before choosing the next slice.
   Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
   focused Isaac backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Isaac RBY1M robot stage reference, head-camera robot pose
+  application, static head-pitch transform, USD camera diagnostics, eye-target
+  camera diagnostics, and head-camera lens application moved from the backend
+  worker into `isaac_robot_camera_stage.py`, with worker-private wrappers
+  preserving current capture hooks and direct tests. Metric:
+  `isaac_lab_backend_worker.py` 3608 -> 3404 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
