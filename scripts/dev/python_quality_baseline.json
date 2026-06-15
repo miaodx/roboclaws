@@ -379,26 +379,6 @@
         "value": 13
       },
       {
-        "code": "C901",
-        "key": "roboclaws/household/isaac_lab_backend.py|C901|IsaacLabSubprocessBackend.__init__",
-        "limit": 10,
-        "message": "`__init__` is too complex (14 > 10)",
-        "path": "roboclaws/household/isaac_lab_backend.py",
-        "row": 44,
-        "symbol": "IsaacLabSubprocessBackend.__init__",
-        "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/isaac_lab_backend.py|PLR0912|IsaacLabSubprocessBackend.__init__",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/household/isaac_lab_backend.py",
-        "row": 44,
-        "symbol": "IsaacLabSubprocessBackend.__init__",
-        "value": 13
-      },
-      {
         "code": "PLR0915",
         "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
         "limit": 50,

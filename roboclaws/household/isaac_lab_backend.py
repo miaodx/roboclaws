@@ -30,6 +30,7 @@ ISAAC_WORKER_SCRIPT = (
     / "isaac_lab_cleanup"
     / "isaac_lab_backend_worker.py"
 )
+_ISAACLAB_TRUE_ENV_VALUES = {"1", "true", "TRUE", "yes", "YES"}
 
 
 class IsaacLabSubprocessBackend:
@@ -84,47 +85,21 @@ class IsaacLabSubprocessBackend:
             "--runtime-mode",
             self.runtime_mode,
         ]
-        for object_id in generated_mess_object_ids:
-            init_args.extend(["--generated-mess-object-id", str(object_id)])
-        if generated_mess_manifest_path is not None:
-            init_args.extend(["--generated-mess-manifest-path", str(generated_mess_manifest_path)])
-        if include_robot:
-            init_args.extend(["--include-robot", "--robot-name", robot_name])
-        if map_bundle_dir is not None:
-            init_args.extend(["--map-bundle-dir", str(map_bundle_dir)])
-        if scene_usd_path is not None:
-            init_args.extend(["--scene-usd-path", str(scene_usd_path)])
-        if enable_segmentation is None:
-            enable_segmentation = os.environ.get("ROBOCLAWS_ISAACLAB_ENABLE_SEGMENTATION") in {
-                "1",
-                "true",
-                "TRUE",
-                "yes",
-                "YES",
-            }
-        if segmentation_data_types is None:
-            env_data_types = os.environ.get("ROBOCLAWS_ISAACLAB_SEGMENTATION_DATA_TYPES", "")
-            segmentation_data_types = tuple(
-                item.strip() for item in env_data_types.split(",") if item.strip()
-            )
-        if segmentation_semantic_filter is None:
-            env_semantic_filter = os.environ.get(
-                "ROBOCLAWS_ISAACLAB_SEGMENTATION_SEMANTIC_FILTER",
-                "",
-            )
-            segmentation_semantic_filter = tuple(
-                item.strip() for item in env_semantic_filter.split(",") if item.strip()
-            )
-        if segmentation_data_types:
-            enable_segmentation = True
-        if segmentation_semantic_filter:
-            enable_segmentation = True
-        if enable_segmentation:
-            init_args.append("--enable-segmentation")
-            for data_type in segmentation_data_types or ():
-                init_args.extend(["--segmentation-data-type", data_type])
-            for instance_name in segmentation_semantic_filter or ():
-                init_args.extend(["--segmentation-semantic-filter", instance_name])
+        _extend_isaac_init_args(
+            init_args,
+            generated_mess_object_ids=generated_mess_object_ids,
+            generated_mess_manifest_path=generated_mess_manifest_path,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            map_bundle_dir=map_bundle_dir,
+            scene_usd_path=scene_usd_path,
+        )
+        _extend_segmentation_args(
+            init_args,
+            enable_segmentation=enable_segmentation,
+            segmentation_data_types=segmentation_data_types,
+            segmentation_semantic_filter=segmentation_semantic_filter,
+        )
         result = self._run_worker("init", *init_args)
         self.backend = ISAACLAB_SUBPROCESS_BACKEND
         self.scenario = _scenario_from_worker_payload(
@@ -420,6 +395,61 @@ class IsaacLabSubprocessBackend:
             env=_isaac_worker_env(self.runtime_mode),
             timeout_s=_isaac_worker_timeout_s(command),
         )
+
+
+def _extend_isaac_init_args(
+    args: list[str],
+    *,
+    generated_mess_object_ids: tuple[str, ...],
+    generated_mess_manifest_path: Path | None,
+    include_robot: bool,
+    robot_name: str,
+    map_bundle_dir: Path | None,
+    scene_usd_path: Path | None,
+) -> None:
+    for object_id in generated_mess_object_ids:
+        args.extend(["--generated-mess-object-id", str(object_id)])
+    if generated_mess_manifest_path is not None:
+        args.extend(["--generated-mess-manifest-path", str(generated_mess_manifest_path)])
+    if include_robot:
+        args.extend(["--include-robot", "--robot-name", robot_name])
+    if map_bundle_dir is not None:
+        args.extend(["--map-bundle-dir", str(map_bundle_dir)])
+    if scene_usd_path is not None:
+        args.extend(["--scene-usd-path", str(scene_usd_path)])
+
+
+def _extend_segmentation_args(
+    args: list[str],
+    *,
+    enable_segmentation: bool | None,
+    segmentation_data_types: tuple[str, ...] | None,
+    segmentation_semantic_filter: tuple[str, ...] | None,
+) -> None:
+    data_types = segmentation_data_types or _csv_env_tuple(
+        "ROBOCLAWS_ISAACLAB_SEGMENTATION_DATA_TYPES"
+    )
+    semantic_filter = segmentation_semantic_filter or _csv_env_tuple(
+        "ROBOCLAWS_ISAACLAB_SEGMENTATION_SEMANTIC_FILTER"
+    )
+    enabled = enable_segmentation
+    if enabled is None:
+        enabled = (
+            os.environ.get("ROBOCLAWS_ISAACLAB_ENABLE_SEGMENTATION") in _ISAACLAB_TRUE_ENV_VALUES
+        )
+    if data_types or semantic_filter:
+        enabled = True
+    if not enabled:
+        return
+    args.append("--enable-segmentation")
+    for data_type in data_types:
+        args.extend(["--segmentation-data-type", data_type])
+    for instance_name in semantic_filter:
+        args.extend(["--segmentation-semantic-filter", instance_name])
+
+
+def _csv_env_tuple(name: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in os.environ.get(name, "").split(",") if item.strip())
 
 
 def _isaac_worker_env(runtime_mode: str) -> dict[str, str]:

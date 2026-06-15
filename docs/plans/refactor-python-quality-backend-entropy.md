@@ -4747,3 +4747,18 @@ Stop this refactor loop when:
   59. A broader `ruff check --select C901,PLR0912,PLR0915` over the launch
   tests still reports the existing `surface_args_from_legacy_task_args` helper
   complexity unrelated to this slice.
+- 2026-06-15: Continued the backend-adapter consistency residual by splitting
+  Isaac Lab subprocess backend constructor setup details in
+  `roboclaws/household/isaac_lab_backend.py`. Generated-mess, robot, map-bundle,
+  scene-USD, and segmentation worker argument assembly now live in focused
+  helpers while the public backend wrapper, worker command shape, fake protocol
+  behavior, and result payload fields remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/isaac_lab_backend.py`
+  passed; `ruff check roboclaws/household/isaac_lab_backend.py` passed;
+  `ruff format --check roboclaws/household/isaac_lab_backend.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_backend_reports_missing_runtime tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_backend_can_request_segmentation tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_backend_can_request_segmentation_semantic_filter`
+  passed with 4 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 66 to 64 Ruff complexity violations, with oversized modules unchanged at
+  59. This slice validated the fake worker/mock-covered adapter contract only;
+  it does not claim a real Isaac Lab runtime proof.
