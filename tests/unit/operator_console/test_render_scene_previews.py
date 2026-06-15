@@ -14,6 +14,9 @@ from scripts.operator_console.render_scene_previews import (
     _scene_center_and_span,
     _topdown_camera_request,
 )
+from scripts.operator_console.semantic_map_preview import (
+    semantic_map_preview_projection_summary,
+)
 
 
 def test_topdown_preview_request_uses_scene_camera_not_semantic_map() -> None:
@@ -114,6 +117,12 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
         },
         topdown_path=topdown_path,
         scene_alignment=scene_alignment,
+        semantic_projection={
+            "schema": "operator_console_semantic_map_projection_v1",
+            "waypoint_count": 2,
+            "rendered_waypoint_count": 2,
+            "room_remapped_waypoint_count": 1,
+        },
     )
 
     assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
@@ -134,6 +143,7 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
     )
     assert metadata["views"]["map"]["view"] == "semantic_map_aligned_preview"
     assert metadata["views"]["map"]["scene_alignment"] == scene_alignment
+    assert metadata["views"]["map"]["semantic_projection"]["room_remapped_waypoint_count"] == 1
     assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
     assert metadata["views"]["topdown"]["camera_pose"]["azimuth"] == pytest.approx(90.0)
     assert metadata["views"]["topdown"]["scene_alignment"] == scene_alignment
@@ -196,3 +206,65 @@ def test_semantic_map_preview_draws_scene_layers() -> None:
     assert image.size == (240, 160)
     assert image.getbbox() is not None
     assert len(set(image.getdata())) > 1
+
+
+def test_semantic_map_preview_draws_legend_even_without_scene_layers() -> None:
+    image = _render_semantic_map_preview(
+        {},
+        metric_map={},
+        alignment=_scene_alignment({}, width=320, height=220),
+        world_label="molmospaces/val_0",
+        width=320,
+        height=220,
+    )
+
+    colors = set(image.getdata())
+    assert (99, 102, 241) in colors  # public waypoint
+    assert (86, 103, 140) in colors  # receptacle / surface
+    assert (245, 158, 11) in colors  # movable object
+    assert (239, 68, 68) in colors  # selected movable object
+    assert (37, 99, 235) in colors  # robot path
+
+
+def test_semantic_map_preview_remaps_abstract_waypoints_to_scene_room_bounds() -> None:
+    state = {
+        "room_outlines": [
+            {
+                "room_id": "room_10",
+                "label": "Room 10",
+                "center": [10.0, 10.0],
+                "half_extents": [2.0, 4.0],
+            }
+        ],
+    }
+    metric_map = {
+        "rooms": [
+            {
+                "room_id": "room_10",
+                "polygon": [
+                    {"x": 0.0, "y": 0.0},
+                    {"x": 2.0, "y": 0.0},
+                    {"x": 2.0, "y": 2.0},
+                    {"x": 0.0, "y": 2.0},
+                ],
+            }
+        ],
+        "inspection_waypoints": [
+            {"waypoint_id": "generated_exploration_001", "room_id": "room_10", "x": 1.0, "y": 0.3}
+        ],
+    }
+    alignment = _scene_alignment(state, width=240, height=160)
+
+    summary = semantic_map_preview_projection_summary(
+        state,
+        metric_map=metric_map,
+        alignment=alignment,
+    )
+
+    assert summary["waypoint_count"] == 1
+    assert summary["rendered_waypoint_count"] == 1
+    assert summary["room_remapped_waypoint_count"] == 1
+    assert summary["raw_scene_waypoint_count"] == 0
+    assert summary["skipped_waypoint_count"] == 0
+    assert summary["projected_waypoint_bounds"]["min_x"] == pytest.approx(10.0)
+    assert summary["projected_waypoint_bounds"]["max_y"] == pytest.approx(7.2)
