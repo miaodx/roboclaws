@@ -5050,3 +5050,17 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this test
   split patch so the unrelated staged `eval-harness` rename was not blessed
   into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/reports/live_performance.py::_estimate_model_work_s(...)` into
+  unavailable-estimate packet, calibration source/limitations, coefficient
+  value/missing-field, image-estimation, and final-estimate helpers. The report
+  performance packet shape and normalized model-work estimate behavior remain
+  unchanged. Evidence: `ruff check roboclaws/reports/live_performance.py tests/unit/reports/test_live_performance.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/reports/live_performance.py tests/unit/reports/test_live_performance.py`
+  passed; `ruff format roboclaws/reports/live_performance.py` left the file
+  unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/reports/test_live_performance.py`
+  passed with 16 tests. The quality baseline was refreshed from 48 to 47 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this report
+  helper split so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.

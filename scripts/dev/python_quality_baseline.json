@@ -83,7 +83,7 @@
         "path": "roboclaws/operator_console/state.py"
       },
       {
-        "lines": 1530,
+        "lines": 1592,
         "max_module_lines": 800,
         "path": "roboclaws/reports/live_performance.py"
       },
@@ -372,16 +372,6 @@
         "row": 5547,
         "symbol": "_inspection_waypoints_from_bundle_projection",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/reports/live_performance.py|C901|_estimate_model_work_s",
-        "limit": 10,
-        "message": "`_estimate_model_work_s` is too complex (12 > 10)",
-        "path": "roboclaws/reports/live_performance.py",
-        "row": 571,
-        "symbol": "_estimate_model_work_s",
-        "value": 12
       },
       {
         "code": "PLR0915",
