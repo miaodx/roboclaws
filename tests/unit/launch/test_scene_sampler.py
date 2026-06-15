@@ -339,6 +339,20 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     report = candidate_readiness_report(candidate_indices=(0, 1, 2))
 
     assert report["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
+    assert report["summary"] == {
+        "source_count": 4,
+        "candidate_count": 12,
+        "ready_candidate_count": 2,
+        "blocked_candidate_count": 9,
+        "rejected_candidate_count": 1,
+        "ui_ready_count": 2,
+        "ui_needed_count": 10,
+        "eval_ready_count": 2,
+        "eval_needed_count": 38,
+        "ui_supported_source_count": 0,
+        "eval_complete_source_count": 0,
+        "blocked_source_count": 3,
+    }
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["ui_ready_count"] == 2
     assert procthor["eval_ready_count"] == 2

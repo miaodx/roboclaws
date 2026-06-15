@@ -189,6 +189,10 @@ First slice implemented on 2026-06-15.
   This gate fails until a source has at least one scanner candidate marked
   `ready_for_product_smoke`, so source-prep work can prove when preview plus
   map-build product-smoke execution is actually allowed.
+- Candidate-readiness artifacts now include a top-level summary for total
+  candidates, ready/blocked/rejected counts, UI/eval ready counts, and
+  remaining UI/eval target counts. This gives future scanner and eval-refresh
+  flows the same source-level signal without parsing every candidate packet.
 
 Verification run on 2026-06-15:
 
@@ -237,6 +241,8 @@ ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sample
 ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
 ruff check scripts/operator_console/export_scene_sampler_readiness.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-scanner-ready-gate --candidate-range 0:19 --require-scanner-ready-source ithor --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
+ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 ```
 
 Current limits feeding the next Flow:

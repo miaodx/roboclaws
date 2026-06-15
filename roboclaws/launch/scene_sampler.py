@@ -650,6 +650,7 @@ def candidate_readiness_report(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
         "candidate_indices": list(candidate_indices),
+        "summary": _candidate_readiness_summary(sources),
         "sources": sources,
     }
 
@@ -2002,6 +2003,55 @@ def _selection_candidate_summary(candidate: dict[str, Any]) -> dict[str, Any]:
         "blocked_reason": candidate["blocked_reason"],
         "source_availability_status": candidate.get("source_availability_status", ""),
         "candidate_file": candidate.get("candidate_file", {}),
+    }
+
+
+def _candidate_readiness_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "source_count": len(sources),
+        "candidate_count": sum(
+            int(source.get("candidate_count") or 0) for source in sources.values()
+        ),
+        "ready_candidate_count": sum(
+            int(source.get("ready_candidate_count") or 0) for source in sources.values()
+        ),
+        "blocked_candidate_count": sum(
+            int(source.get("blocked_candidate_count") or 0) for source in sources.values()
+        ),
+        "rejected_candidate_count": sum(
+            int(source.get("rejected_candidate_count") or 0) for source in sources.values()
+        ),
+        "ui_ready_count": sum(
+            int(source.get("ui_ready_count") or 0) for source in sources.values()
+        ),
+        "ui_needed_count": sum(
+            max(
+                0,
+                UI_TARGET_PER_SCENE_SOURCE - int(source.get("ui_ready_count") or 0),
+            )
+            for source in sources.values()
+        ),
+        "eval_ready_count": sum(
+            int(source.get("eval_ready_count") or 0) for source in sources.values()
+        ),
+        "eval_needed_count": sum(
+            max(
+                0,
+                EVAL_TARGET_PER_SCENE_SOURCE - int(source.get("eval_ready_count") or 0),
+            )
+            for source in sources.values()
+        ),
+        "ui_supported_source_count": sum(
+            1 for source in sources.values() if source.get("ui_status") == "ready"
+        ),
+        "eval_complete_source_count": sum(
+            1 for source in sources.values() if source.get("eval_status") == "complete"
+        ),
+        "blocked_source_count": sum(
+            1
+            for source in sources.values()
+            if int(source.get("blocked_candidate_count") or 0) > 0
+        ),
     }
 
 

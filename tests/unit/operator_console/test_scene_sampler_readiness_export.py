@@ -69,6 +69,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "environment_blocked",
     }
     assert candidates["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
+    assert candidates["summary"]["source_count"] == 4
+    assert "eval_needed_count" in candidates["summary"]
     assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["ithor"]["blocked_candidate_count"] == 10
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
