@@ -4,6 +4,7 @@ import copy
 import html
 import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -927,6 +928,13 @@ def _empty_cleanup_actions_result() -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True)
+class _CleanupActionSelection:
+    selected_targets: list[dict[str, Any]]
+    observations: list[dict[str, Any]]
+    navigation_attempts: list[dict[str, Any]]
+
+
 def _run_cleanup_action_rehearsal(
     *,
     contract: RealWorldCleanupContract,
@@ -943,103 +951,24 @@ def _run_cleanup_action_rehearsal(
     record_robot_views: bool,
     cleanup_object_count: int,
 ) -> dict[str, Any]:
-    selected_targets: list[dict[str, Any]] = []
-    seen_handles: set[str] = set()
-    observations: list[dict[str, Any]] = []
-    navigation_attempts: list[dict[str, Any]] = []
-
-    for waypoint in metric_map.get("inspection_waypoints") or []:
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        if not waypoint_id:
-            continue
-        nav_response = contract.navigate_to_waypoint(waypoint_id)
-        nav = _simulated_navigation(
-            nav_response,
-            metric_map=metric_map,
-            waypoint_id=waypoint_id,
-            runtime=runtime,
-        )
-        navigation_attempts.append(nav)
-        _record(trace_events, started_at, "navigate_to_waypoint", {"waypoint_id": waypoint_id}, nav)
-        policy_events.append(_policy_event(len(policy_events), nav, "cleanup_sweep_nav"))
-        if record_robot_views and nav.get("ok"):
-            robot_view_index_ref[0] = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index_ref[0],
-                action=f"navigate_to_waypoint {waypoint_id}",
-                label_suffix=f"cleanup_waypoint_{waypoint_id}",
-            )
-
-        observation_image = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=contract.scenario,
-            output_path=run_dir / "runtime" / f"policy_observation_{waypoint_id}.png",
-            title=f"Simulated policy observation at {waypoint_id}",
-        )
-        obs = _simulated_observation(
-            contract.observe(),
-            observation_image=observation_image,
-            run_dir=run_dir,
-            runtime=runtime,
-            metric_map=metric_map,
-            waypoint_id=waypoint_id,
-        )
-        observations.append(obs)
-        _record(trace_events, started_at, "observe", {"waypoint_id": waypoint_id}, obs)
-        policy_events.append(_policy_event(len(policy_events), obs, "cleanup_sweep_observe"))
-        if record_robot_views and obs.get("ok"):
-            robot_view_index_ref[0] = _record_tool_robot_view(
-                contract=contract,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                index=robot_view_index_ref[0],
-                tool="observe",
-                request={"waypoint_id": waypoint_id},
-                response=obs,
-            )
-
-        for detection in obs.get("visible_object_detections") or []:
-            handle = str(detection.get("object_id") or "")
-            if not handle or handle in seen_handles:
-                continue
-            target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
-            if target_fixture is None:
-                continue
-            target_fixture_id = str(target_fixture.get("fixture_id") or "")
-            source_fixture_id = str(
-                (detection.get("support_estimate") or {}).get("fixture_id") or ""
-            )
-            if not target_fixture_id or target_fixture_id == source_fixture_id:
-                continue
-            selected_targets.append(
-                {
-                    "object_id": handle,
-                    "internal_object_id": str(contract._internal_object_id(handle) or ""),
-                    "category": str(detection.get("category") or ""),
-                    "source_receptacle_id": source_fixture_id,
-                    "target_receptacle_id": target_fixture_id,
-                    "target_receptacle": target_fixture,
-                    "recommended_tool": str(detection.get("recommended_tool") or "auto"),
-                    "source_observation_id": str(obs.get("observation_id") or ""),
-                    "waypoint_id": waypoint_id,
-                }
-            )
-            seen_handles.add(handle)
-            if len(selected_targets) >= cleanup_object_count:
-                break
-        if len(selected_targets) >= cleanup_object_count:
-            break
+    selection = _select_cleanup_action_targets(
+        contract=contract,
+        base_contract=base_contract,
+        metric_map=metric_map,
+        fixture_hints=fixture_hints,
+        trace_events=trace_events,
+        policy_events=policy_events,
+        started_at=started_at,
+        runtime=runtime,
+        run_dir=run_dir,
+        robot_view_steps=robot_view_steps,
+        robot_view_index_ref=robot_view_index_ref,
+        record_robot_views=record_robot_views,
+        cleanup_object_count=cleanup_object_count,
+    )
 
     loop_result = run_semantic_cleanup_loop(
-        targets=selected_targets,
+        targets=selection.selected_targets,
         contract=contract,
         call_tool=lambda tool, request, fn: _call_cleanup_action_tool(
             trace_events=trace_events,
@@ -1071,11 +1000,226 @@ def _run_cleanup_action_rehearsal(
     )
     return _cleanup_actions_payload(
         loop_result=loop_result,
+        selected_targets=selection.selected_targets,
+        observations=selection.observations,
+        navigation_attempts=selection.navigation_attempts,
+        robot_view_index=robot_view_index_ref[0],
+    )
+
+
+def _select_cleanup_action_targets(
+    *,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    started_at: float,
+    runtime: str,
+    run_dir: Path,
+    robot_view_steps: list[dict[str, Any]],
+    robot_view_index_ref: list[int],
+    record_robot_views: bool,
+    cleanup_object_count: int,
+) -> _CleanupActionSelection:
+    selected_targets: list[dict[str, Any]] = []
+    seen_handles: set[str] = set()
+    observations: list[dict[str, Any]] = []
+    navigation_attempts: list[dict[str, Any]] = []
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if not waypoint_id:
+            continue
+        nav = _record_cleanup_sweep_navigation(
+            contract=contract,
+            base_contract=base_contract,
+            metric_map=metric_map,
+            trace_events=trace_events,
+            policy_events=policy_events,
+            started_at=started_at,
+            runtime=runtime,
+            run_dir=run_dir,
+            robot_view_steps=robot_view_steps,
+            robot_view_index_ref=robot_view_index_ref,
+            record_robot_views=record_robot_views,
+            waypoint_id=waypoint_id,
+        )
+        navigation_attempts.append(nav)
+        obs = _record_cleanup_sweep_observation(
+            contract=contract,
+            base_contract=base_contract,
+            metric_map=metric_map,
+            trace_events=trace_events,
+            policy_events=policy_events,
+            started_at=started_at,
+            runtime=runtime,
+            run_dir=run_dir,
+            robot_view_steps=robot_view_steps,
+            robot_view_index_ref=robot_view_index_ref,
+            record_robot_views=record_robot_views,
+            waypoint_id=waypoint_id,
+        )
+        observations.append(obs)
+        _append_cleanup_action_targets(
+            contract=contract,
+            fixture_hints=fixture_hints,
+            selected_targets=selected_targets,
+            seen_handles=seen_handles,
+            observation=obs,
+            waypoint_id=waypoint_id,
+            cleanup_object_count=cleanup_object_count,
+        )
+        if len(selected_targets) >= cleanup_object_count:
+            break
+    return _CleanupActionSelection(
         selected_targets=selected_targets,
         observations=observations,
         navigation_attempts=navigation_attempts,
-        robot_view_index=robot_view_index_ref[0],
     )
+
+
+def _record_cleanup_sweep_navigation(
+    *,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    metric_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    started_at: float,
+    runtime: str,
+    run_dir: Path,
+    robot_view_steps: list[dict[str, Any]],
+    robot_view_index_ref: list[int],
+    record_robot_views: bool,
+    waypoint_id: str,
+) -> dict[str, Any]:
+    nav = _simulated_navigation(
+        contract.navigate_to_waypoint(waypoint_id),
+        metric_map=metric_map,
+        waypoint_id=waypoint_id,
+        runtime=runtime,
+    )
+    _record(trace_events, started_at, "navigate_to_waypoint", {"waypoint_id": waypoint_id}, nav)
+    policy_events.append(_policy_event(len(policy_events), nav, "cleanup_sweep_nav"))
+    if record_robot_views and nav.get("ok"):
+        robot_view_index_ref[0] = _record_robot_view(
+            robot_view_steps=robot_view_steps,
+            trace_events=trace_events,
+            started_at=started_at,
+            backend=base_contract.backend,
+            run_dir=run_dir,
+            index=robot_view_index_ref[0],
+            action=f"navigate_to_waypoint {waypoint_id}",
+            label_suffix=f"cleanup_waypoint_{waypoint_id}",
+        )
+    return nav
+
+
+def _record_cleanup_sweep_observation(
+    *,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    metric_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    started_at: float,
+    runtime: str,
+    run_dir: Path,
+    robot_view_steps: list[dict[str, Any]],
+    robot_view_index_ref: list[int],
+    record_robot_views: bool,
+    waypoint_id: str,
+) -> dict[str, Any]:
+    observation_image = _write_snapshot(
+        runtime=runtime,
+        contract=base_contract,
+        scenario=contract.scenario,
+        output_path=run_dir / "runtime" / f"policy_observation_{waypoint_id}.png",
+        title=f"Simulated policy observation at {waypoint_id}",
+    )
+    obs = _simulated_observation(
+        contract.observe(),
+        observation_image=observation_image,
+        run_dir=run_dir,
+        runtime=runtime,
+        metric_map=metric_map,
+        waypoint_id=waypoint_id,
+    )
+    _record(trace_events, started_at, "observe", {"waypoint_id": waypoint_id}, obs)
+    policy_events.append(_policy_event(len(policy_events), obs, "cleanup_sweep_observe"))
+    if record_robot_views and obs.get("ok"):
+        robot_view_index_ref[0] = _record_tool_robot_view(
+            contract=contract,
+            backend=base_contract.backend,
+            run_dir=run_dir,
+            robot_view_steps=robot_view_steps,
+            trace_events=trace_events,
+            started_at=started_at,
+            index=robot_view_index_ref[0],
+            tool="observe",
+            request={"waypoint_id": waypoint_id},
+            response=obs,
+        )
+    return obs
+
+
+def _append_cleanup_action_targets(
+    *,
+    contract: RealWorldCleanupContract,
+    fixture_hints: dict[str, Any],
+    selected_targets: list[dict[str, Any]],
+    seen_handles: set[str],
+    observation: dict[str, Any],
+    waypoint_id: str,
+    cleanup_object_count: int,
+) -> None:
+    for detection in observation.get("visible_object_detections") or []:
+        handle = str(detection.get("object_id") or "")
+        if not handle or handle in seen_handles:
+            continue
+        target = _cleanup_action_target(
+            contract=contract,
+            fixture_hints=fixture_hints,
+            detection=detection,
+            observation=observation,
+            waypoint_id=waypoint_id,
+        )
+        if target is None:
+            continue
+        selected_targets.append(target)
+        seen_handles.add(handle)
+        if len(selected_targets) >= cleanup_object_count:
+            return
+
+
+def _cleanup_action_target(
+    *,
+    contract: RealWorldCleanupContract,
+    fixture_hints: dict[str, Any],
+    detection: dict[str, Any],
+    observation: dict[str, Any],
+    waypoint_id: str,
+) -> dict[str, Any] | None:
+    handle = str(detection.get("object_id") or "")
+    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    if target_fixture is None:
+        return None
+    target_fixture_id = str(target_fixture.get("fixture_id") or "")
+    source_fixture_id = str((detection.get("support_estimate") or {}).get("fixture_id") or "")
+    if not target_fixture_id or target_fixture_id == source_fixture_id:
+        return None
+    return {
+        "object_id": handle,
+        "internal_object_id": str(contract._internal_object_id(handle) or ""),
+        "category": str(detection.get("category") or ""),
+        "source_receptacle_id": source_fixture_id,
+        "target_receptacle_id": target_fixture_id,
+        "target_receptacle": target_fixture,
+        "recommended_tool": str(detection.get("recommended_tool") or "auto"),
+        "source_observation_id": str(observation.get("observation_id") or ""),
+        "waypoint_id": waypoint_id,
+    }
 
 
 def _call_cleanup_action_tool(

@@ -5242,3 +5242,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this exact
   cleanup task config patch so the unrelated staged `eval-harness` rename was
   not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/agibot_contract_rehearsal.py::_run_cleanup_action_rehearsal(...)`
+  into cleanup-action target selection, sweep navigation, sweep observation,
+  and target-payload helpers. The simulated Agibot cleanup-action rehearsal
+  keeps the same waypoint sweep, policy observation snapshots, trace events,
+  policy events, robot-view capture hooks, selected target fields, semantic
+  cleanup loop call, and public/private simulated evidence boundary. Evidence:
+  `ruff check roboclaws/household/agibot_contract_rehearsal.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/agibot_contract_rehearsal.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps`
+  passed with 1 test. The quality baseline was refreshed from 33 to 32 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this Agibot
+  cleanup-action rehearsal patch so the unrelated staged `eval-harness` rename
+  was not blessed into the baseline.

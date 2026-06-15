@@ -8,7 +8,7 @@
         "path": "roboclaws/agents/drivers/openai_agents_live.py"
       },
       {
-        "lines": 1996,
+        "lines": 2140,
         "max_module_lines": 800,
         "path": "roboclaws/household/agibot_contract_rehearsal.py"
       },
@@ -298,16 +298,6 @@
       "PLR0915"
     ],
     "violations": [
-      {
-        "code": "C901",
-        "key": "roboclaws/household/agibot_contract_rehearsal.py|C901|_run_cleanup_action_rehearsal",
-        "limit": 10,
-        "message": "`_run_cleanup_action_rehearsal` is too complex (11 > 10)",
-        "path": "roboclaws/household/agibot_contract_rehearsal.py",
-        "row": 930,
-        "symbol": "_run_cleanup_action_rehearsal",
-        "value": 11
-      },
       {
         "code": "PLR0915",
         "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
