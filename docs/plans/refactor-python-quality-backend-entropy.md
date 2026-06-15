@@ -5332,3 +5332,17 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this
   coding-agent Docker toolchain test patch so the unrelated staged
   `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_writes_public_private_artifacts(...)`
+  into cleanup-result contract, public/private artifact, and report/trace
+  assertion helpers. The deterministic cleanup status, public/private
+  separation, semantic substep phase checks, planner proof request artifacts,
+  Nav2 map bundle snapshot checks, advisory evaluation checks, report text,
+  and trace event assertions remain unchanged. Evidence:
+  `ruff check tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_writes_public_private_artifacts`
+  passed with 1 test. The quality baseline was refreshed from 27 to 26 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this public/
+  private artifact contract test patch so the unrelated staged `eval-harness`
+  rename was not blessed into the baseline.

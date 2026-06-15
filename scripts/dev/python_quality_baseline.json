@@ -414,19 +414,9 @@
         "limit": 50,
         "message": "Too many statements (84 > 50)",
         "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
-        "row": 420,
+        "row": 438,
         "symbol": "test_realworld_cleanup_demo_can_run_isaaclab_fake_backend",
         "value": 84
-      },
-      {
-        "code": "PLR0915",
-        "key": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py|PLR0915|test_realworld_cleanup_demo_writes_public_private_artifacts",
-        "limit": 50,
-        "message": "Too many statements (56 > 50)",
-        "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
-        "row": 100,
-        "symbol": "test_realworld_cleanup_demo_writes_public_private_artifacts",
-        "value": 56
       },
       {
         "code": "PLR0915",

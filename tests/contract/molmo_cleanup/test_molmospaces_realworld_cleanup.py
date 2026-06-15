@@ -111,6 +111,15 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
     report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
 
+    _assert_cleanup_result_contract(result, run_result)
+    _assert_cleanup_public_private_artifacts(tmp_path)
+    _assert_cleanup_report_and_trace(report_text, trace_lines)
+
+
+def _assert_cleanup_result_contract(
+    result: dict[str, object],
+    run_result: dict[str, object],
+) -> None:
     assert result["cleanup_status"] == "success"
     assert result["contract"] == REALWORLD_CONTRACT
     assert result["adr_0003_satisfied"] is True
@@ -144,11 +153,11 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     )
     assert run_result["artifacts"]["nav2_map_yaml"].endswith("map_bundle/map.yaml")
     assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
-    assert "Planner Proof Requests" in report_text
-    assert "Nav2 Map Bundle" in report_text
-    assert "map_bundle/map.yaml" in report_text
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
+
+
+def _assert_cleanup_public_private_artifacts(tmp_path: Path) -> None:
     assert (tmp_path / "agent_view.json").is_file()
     assert (tmp_path / "private_evaluation.json").is_file()
     assert (tmp_path / "advisory_evaluation.json").is_file()
@@ -162,6 +171,15 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert (tmp_path / "before.png").is_file()
     assert (tmp_path / "after.png").is_file()
     assert (tmp_path / "report.html").is_file()
+
+
+def _assert_cleanup_report_and_trace(
+    report_text: str,
+    trace_lines: list[str],
+) -> None:
+    assert "Planner Proof Requests" in report_text
+    assert "Nav2 Map Bundle" in report_text
+    assert "map_bundle/map.yaml" in report_text
     assert any('"tool": "metric_map"' in line for line in trace_lines)
     assert any('"tool": "observe"' in line for line in trace_lines)
     assert not any('"tool": "scene_objects"' in line for line in trace_lines)
