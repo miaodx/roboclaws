@@ -2008,6 +2008,32 @@ def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Pa
         RUN_CAMERA_COMPARISON_PATH,
         "run_robot_camera_apple2apple_comparison_object_parity_audit",
     )
+    fixtures = _object_parity_audit_fixtures(tmp_path)
+    audit = run_camera._object_parity_audit(
+        mujoco_state=fixtures["mujoco_state"],
+        isaac_state=fixtures["isaac_state"],
+        mujoco_contract=run_camera._mujoco_render_contract_from_xml(str(fixtures["mujoco_xml"])),
+        isaac_contract=run_camera._isaac_render_contract_from_usda(str(fixtures["isaac_usd"])),
+        scene_binding_diagnostics={},
+        locations=fixtures["locations"],
+        output_dir=tmp_path,
+    )
+
+    _assert_object_parity_audit(audit)
+    diagnostics = run_camera._object_render_parity_diagnostics(
+        object_audit=audit,
+        render_domain_checks={
+            "status": "render_domain_delta_confirmed",
+            "check_status_counts": {"light_shadow_contract_delta": 1},
+            "recommended_next_action": "Inspect renderer response.",
+        },
+        residual_triage={"status": "render_domain_geometry_or_texture_residual"},
+    )
+    _assert_object_render_parity_diagnostics(diagnostics)
+    _assert_object_render_parity_report(run_camera, diagnostics, audit)
+
+
+def _object_parity_audit_fixtures(tmp_path: Path) -> dict[str, object]:
     mujoco_xml = tmp_path / "scene.xml"
     mujoco_xml.write_text(
         """<mujoco>
@@ -2178,26 +2204,25 @@ def Xform "World"
         image_path = tmp_path / image_relpath
         image_path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (12, 8), color).save(image_path)
-    locations = [
-        {
-            "status": "success",
-            "target": {"kind": "object", "target_id": "box_1"},
-            "views": {
-                "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
-                "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
-            },
-        }
-    ]
-    audit = run_camera._object_parity_audit(
-        mujoco_state=mujoco_state,
-        isaac_state=isaac_state,
-        mujoco_contract=run_camera._mujoco_render_contract_from_xml(str(mujoco_xml)),
-        isaac_contract=run_camera._isaac_render_contract_from_usda(str(isaac_usd)),
-        scene_binding_diagnostics={},
-        locations=locations,
-        output_dir=tmp_path,
-    )
+    return {
+        "mujoco_xml": mujoco_xml,
+        "isaac_usd": isaac_usd,
+        "mujoco_state": mujoco_state,
+        "isaac_state": isaac_state,
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "object", "target_id": "box_1"},
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+            }
+        ],
+    }
 
+
+def _assert_object_parity_audit(audit: dict[str, object]) -> None:
     assert audit["schema"] == "robot_camera_object_parity_audit_v1"
     assert audit["status"] == "object_parity_gaps_detected"
     assert audit["object_count"] == 2
@@ -2226,16 +2251,8 @@ def Xform "World"
         "visual_state_delta": 1
     }
 
-    diagnostics = run_camera._object_render_parity_diagnostics(
-        object_audit=audit,
-        render_domain_checks={
-            "status": "render_domain_delta_confirmed",
-            "check_status_counts": {"light_shadow_contract_delta": 1},
-            "recommended_next_action": "Inspect renderer response.",
-        },
-        residual_triage={"status": "render_domain_geometry_or_texture_residual"},
-    )
 
+def _assert_object_render_parity_diagnostics(diagnostics: dict[str, object]) -> None:
     assert diagnostics["schema"] == "robot_camera_object_render_parity_diagnostics_v1"
     assert diagnostics["status"] == "object_gate_failures_detected"
     object_gate = diagnostics["object_gate"]
@@ -2253,6 +2270,12 @@ def Xform "World"
     assert blocking_statuses["bowl_1"] == "category_delta"
     assert diagnostics["render_gate"]["status"] == "blocked_by_object_gate"
 
+
+def _assert_object_render_parity_report(
+    run_camera: object,
+    diagnostics: dict[str, object],
+    audit: dict[str, object],
+) -> None:
     report_html = run_camera._render_report(
         {
             "purpose": "unit test",

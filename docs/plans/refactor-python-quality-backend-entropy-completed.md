@@ -185,6 +185,12 @@ logs before choosing the next slice.
   complexity rows; oversized modules unchanged at 62. Proof: focused report
   test, ruff, format check, and ratchet.
 
+- 2026-06-16: Robot-camera object parity audit test split fixture files/state,
+  audit assertions, render-parity diagnostics assertions, and report assertions
+  into focused helpers. Metric: 12 -> 11 complexity rows; oversized modules
+  unchanged at 62. Proof: focused apple-to-apple test, ruff, format check, and
+  ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
