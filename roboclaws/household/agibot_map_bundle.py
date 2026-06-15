@@ -24,6 +24,13 @@ from roboclaws.maps.bundle import (
     parse_map_yaml,
     validate_nav2_map_bundle,
 )
+from roboclaws.maps.spatial_contract import (
+    ALIGNMENT_STATUS_NATIVE,
+    GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+    POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_room,
+    source_frame_spatial_contract,
+)
 
 AGIBOT_MAP_BUNDLE_PROVENANCE = "agibot_gdk_map_artifact"
 AGIBOT_ROBOT_MAP_9_ENVIRONMENT_ID = "agibot-robot-map-9"
@@ -102,17 +109,23 @@ def _semantics_from_context(
     environment_id = str(context.get("environment_id") or DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK)
     map_id = f"{environment_id}_semantic_map"
     map_source = source_json.get("source_agibot_map") or context.get("map_source") or {}
+    frame_id = str(context.get("frame_id") or "map")
     return {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": environment_id,
         "map_id": map_id,
         "map_version": str(context.get("map_version") or DEFAULT_AGIBOT_MAP_VERSION_FALLBACK),
         "frame_ids": {
-            "map": str(context.get("frame_id") or "map"),
+            "map": frame_id,
             "base": "base_link",
             "camera": "head_camera_rgb_optical_frame",
         },
-        "rooms": [_room_payload(room) for room in _list(context.get("rooms"))],
+        "spatial_contract": source_frame_spatial_contract(
+            frame_id=frame_id,
+            alignment_status=ALIGNMENT_STATUS_NATIVE,
+        ),
+        "display_frame": None,
+        "rooms": [_room_payload(room, frame_id=frame_id) for room in _list(context.get("rooms"))],
         "fixtures": [_fixture_payload(fixture) for fixture in _list(context.get("fixtures"))],
         "inspection_waypoints": [
             _waypoint_payload(waypoint) for waypoint in _list(context.get("inspection_waypoints"))
@@ -132,13 +145,19 @@ def _semantics_from_context(
     }
 
 
-def _room_payload(room: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "room_id": str(room["room_id"]),
-        "room_label": str(room.get("room_label") or room["room_id"]),
-        "fixture_count": int(room.get("fixture_count") or 0),
-        "polygon": _list(room.get("polygon")),
-    }
+def _room_payload(room: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
+    return normalize_spatial_room(
+        {
+            "room_id": str(room["room_id"]),
+            "room_label": str(room.get("room_label") or room["room_id"]),
+            "fixture_count": int(room.get("fixture_count") or 0),
+            "polygon": _list(room.get("polygon")),
+        },
+        frame_id=frame_id,
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+        alignment_status=ALIGNMENT_STATUS_NATIVE,
+    )
 
 
 def _fixture_payload(fixture: dict[str, Any]) -> dict[str, Any]:

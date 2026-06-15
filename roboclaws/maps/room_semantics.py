@@ -9,8 +9,17 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.maps.bundle import validate_nav2_map_bundle
+from roboclaws.maps.spatial_contract import (
+    ALIGNMENT_STATUS_CANDIDATE,
+    ALIGNMENT_STATUS_NATIVE,
+    GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+    POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_rooms,
+    source_frame_spatial_contract,
+)
 
 ROOM_SEMANTIC_OVERLAY_SCHEMA = "scene_room_semantic_overlay_v1"
+SCENE_MAP_CORRESPONDENCE_SCHEMA = "scene_map_correspondence_v1"
 
 _PARTITION_RE = re.compile(r'over\s+"([^"]+)"')
 _INSTANCE_SUFFIX_RE = re.compile(r"(?:_\d+)+$")
@@ -56,6 +65,7 @@ def build_scene_room_semantic_overlay(
     partitions = _scene_partitions(scene_root)
     object_index = _object_index(scene_root)
     override_rooms = _override_rooms(overrides)
+    correspondence = _scene_map_correspondence(overrides)
     rooms: list[dict[str, Any]] = []
     for partition_id in partitions:
         objects = object_index.get(partition_id, Counter())
@@ -64,12 +74,17 @@ def build_scene_room_semantic_overlay(
         rooms.append(room)
 
     navigation_rooms = _navigation_rooms(source_bundle_dir)
-    if navigation_rooms:
-        rooms = _attach_navigation_areas(rooms, navigation_rooms)
+    rooms = _attach_scene_map_correspondence(
+        rooms,
+        navigation_rooms,
+        correspondence=correspondence,
+    )
     overlay = {
         "schema": ROOM_SEMANTIC_OVERLAY_SCHEMA,
         "scene_root": str(scene_root),
         "source_bundle_dir": str(source_bundle_dir or ""),
+        "scene_map_correspondence_schema": SCENE_MAP_CORRESPONDENCE_SCHEMA,
+        "scene_map_correspondence_v1": correspondence,
         "producer": {
             "type": "scene_engine_asset_room_semantic_overlay",
             "method": "partition_and_object_name_heuristics",
@@ -113,7 +128,15 @@ def apply_room_semantic_overlay_to_bundle(
     shutil.copytree(source_bundle_dir, output_bundle_dir)
     semantics_path = output_bundle_dir / "semantics.json"
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
-    rooms = _rooms_for_semantics(overlay, fallback_rooms=semantics.get("rooms") or [])
+    frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
+    fallback_rooms = normalize_spatial_rooms(
+        semantics.get("rooms") or [],
+        frame_id=frame_id,
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+        alignment_status=ALIGNMENT_STATUS_NATIVE,
+    )
+    rooms = _rooms_for_semantics(overlay, fallback_rooms=fallback_rooms, frame_id=frame_id)
     room_by_navigation_area = {
         str(room.get("navigation_area_id") or ""): str(room.get("room_id") or "")
         for room in rooms
@@ -124,6 +147,11 @@ def apply_room_semantic_overlay_to_bundle(
         room_by_navigation_area=room_by_navigation_area,
     )
     semantics["rooms"] = rooms
+    semantics["spatial_contract"] = source_frame_spatial_contract(
+        frame_id=frame_id,
+        alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+    )
+    semantics["display_frame"] = None
     semantics["room_category_hints"] = _room_category_hints(rooms)
     semantics["inspection_waypoints"] = waypoints
     semantics["driveable_ways"] = _driveable_ways(rooms, semantics.get("driveable_ways") or [])
@@ -135,6 +163,7 @@ def apply_room_semantic_overlay_to_bundle(
         "room_semantic_overlay_schema": overlay.get("schema"),
         "room_semantic_overlay_source": overlay.get("scene_root", ""),
         "room_semantic_overlay_producer": (overlay.get("producer") or {}).get("type", ""),
+        "scene_map_correspondence_schema": overlay.get("scene_map_correspondence_schema", ""),
         "contains_runtime_observations": False,
         "contains_private_scoring_truth": False,
     }
@@ -239,6 +268,16 @@ def _room_from_partition(
     for key in ("polygon", "map_center", "navigation_area_id"):
         if key in override:
             room[key] = copy.deepcopy(override[key])
+    for key in (
+        "polygon_role",
+        "geometry_source",
+        "alignment_status",
+        "source_map_frame_id",
+        "polygon_usage",
+        "scene_map_correspondence",
+    ):
+        if key in override:
+            room[key] = copy.deepcopy(override[key])
     return room
 
 
@@ -318,20 +357,92 @@ def _navigation_rooms(source_bundle_dir: str | Path | None) -> list[dict[str, An
     return [dict(item) for item in semantics.get("rooms") or [] if isinstance(item, dict)]
 
 
-def _attach_navigation_areas(
+def _scene_map_correspondence(overrides: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not overrides:
+        return []
+    raw = overrides.get(SCENE_MAP_CORRESPONDENCE_SCHEMA)
+    if raw is None:
+        raw = overrides.get("scene_map_correspondence")
+    if not isinstance(raw, list):
+        return []
+    output: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        asset_partition_id = str(item.get("asset_partition_id") or "")
+        navigation_area_id = str(item.get("navigation_area_id") or "")
+        if not asset_partition_id or not navigation_area_id:
+            continue
+        output.append(
+            {
+                "asset_partition_id": asset_partition_id,
+                "navigation_area_id": navigation_area_id,
+                "alignment_status": str(item.get("alignment_status") or ALIGNMENT_STATUS_CANDIDATE),
+                "transform_source": str(item.get("transform_source") or "operator_review"),
+                "evidence_artifacts": list(item.get("evidence_artifacts") or []),
+                **(
+                    {"geometry_source": str(item["geometry_source"])}
+                    if "geometry_source" in item
+                    else {}
+                ),
+                **(
+                    {"map_polygon": copy.deepcopy(item["map_polygon"])}
+                    if "map_polygon" in item
+                    else {}
+                ),
+            }
+        )
+    return output
+
+
+def _attach_scene_map_correspondence(
     rooms: list[dict[str, Any]],
     navigation_rooms: list[dict[str, Any]],
+    *,
+    correspondence: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    if not navigation_rooms:
+    if not correspondence:
         return rooms
+    navigation_by_id = {str(room.get("room_id") or ""): room for room in navigation_rooms}
+    correspondence_by_partition = {
+        str(item.get("asset_partition_id") or ""): item for item in correspondence
+    }
     output = []
-    for index, room in enumerate(rooms):
+    for room in rooms:
         item = dict(room)
-        nav_room = navigation_rooms[min(index, len(navigation_rooms) - 1)]
-        item.setdefault("navigation_area_id", nav_room.get("room_id", ""))
-        item.setdefault("polygon", copy.deepcopy(nav_room.get("polygon") or []))
+        match = correspondence_by_partition.get(str(item.get("asset_partition_id") or ""))
+        if not match:
+            output.append(item)
+            continue
+        navigation_area_id = str(match.get("navigation_area_id") or "")
+        nav_room = navigation_by_id.get(navigation_area_id, {})
+        item["navigation_area_id"] = navigation_area_id
+        polygon = match.get("map_polygon")
+        if polygon is None:
+            polygon = nav_room.get("polygon") or []
+        item["polygon"] = copy.deepcopy(polygon)
         if "map_center" not in item:
             item["map_center"] = _polygon_center(item.get("polygon") or [])
+        item["polygon_role"] = POLYGON_ROLE_NAVIGATION_AREA
+        item["geometry_source"] = str(
+            match.get("geometry_source") or GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE
+        )
+        item["alignment_status"] = str(match.get("alignment_status") or ALIGNMENT_STATUS_CANDIDATE)
+        item["source_map_frame_id"] = str(nav_room.get("source_map_frame_id") or "map")
+        item["polygon_usage"] = {
+            "navigation": True,
+            "semantic_labeling": item["alignment_status"],
+            "review": True,
+        }
+        item["scene_map_correspondence"] = {
+            "schema": SCENE_MAP_CORRESPONDENCE_SCHEMA,
+            "asset_partition_id": str(match.get("asset_partition_id") or ""),
+            "navigation_area_id": navigation_area_id,
+            "alignment_status": item["alignment_status"],
+            "transform_source": str(match.get("transform_source") or ""),
+            "evidence_artifacts": list(match.get("evidence_artifacts") or []),
+            "map_polygon_provided": "map_polygon" in match,
+        }
         output.append(item)
     return output
 
@@ -340,24 +451,67 @@ def _rooms_for_semantics(
     overlay: dict[str, Any],
     *,
     fallback_rooms: list[dict[str, Any]],
+    frame_id: str,
 ) -> list[dict[str, Any]]:
     overlay_rooms = [item for item in overlay.get("rooms") or [] if isinstance(item, dict)]
     fallback_by_id = {str(room.get("room_id") or ""): room for room in fallback_rooms}
-    fallback_by_nav = {str(room.get("navigation_area_id") or ""): room for room in overlay_rooms}
+    correspondence_by_partition = {
+        str(item.get("asset_partition_id") or ""): item
+        for item in overlay.get("scene_map_correspondence_v1") or []
+        if isinstance(item, dict)
+    }
+    overlay_navigation_ids = {
+        str(room.get("navigation_area_id") or "")
+        for room in overlay_rooms
+        if str(room.get("navigation_area_id") or "")
+    }
     rooms = []
     for item in overlay_rooms:
         room = dict(item)
         fallback = fallback_by_id.get(str(room.get("navigation_area_id") or ""))
         if fallback:
             room.setdefault("polygon", copy.deepcopy(fallback.get("polygon") or []))
+            room.setdefault("geometry_source", fallback.get("geometry_source"))
+            room.setdefault("source_map_frame_id", fallback.get("source_map_frame_id"))
         if "map_center" not in room:
             room["map_center"] = _polygon_center(room.get("polygon") or [])
+        if not room.get("polygon") and not str(room.get("navigation_area_id") or ""):
+            continue
+        if room.get("polygon"):
+            room = normalize_spatial_rooms(
+                [room],
+                frame_id=frame_id,
+                polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+                geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+                alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+                semantic_label_status=str(
+                    room.get("alignment_status") or ALIGNMENT_STATUS_CANDIDATE
+                ),
+            )[0]
+        match = correspondence_by_partition.get(str(room.get("asset_partition_id") or ""))
+        if match:
+            room.setdefault(
+                "scene_map_correspondence",
+                {
+                    "schema": SCENE_MAP_CORRESPONDENCE_SCHEMA,
+                    "asset_partition_id": str(match.get("asset_partition_id") or ""),
+                    "navigation_area_id": str(match.get("navigation_area_id") or ""),
+                    "alignment_status": str(
+                        match.get("alignment_status")
+                        or room.get("alignment_status")
+                        or ALIGNMENT_STATUS_CANDIDATE
+                    ),
+                    "transform_source": str(match.get("transform_source") or ""),
+                    "evidence_artifacts": list(match.get("evidence_artifacts") or []),
+                    "map_polygon_provided": "map_polygon" in match,
+                },
+            )
         rooms.append(room)
     for fallback in fallback_rooms:
         room_id = str(fallback.get("room_id") or "")
         if (
             room_id
-            and room_id not in fallback_by_nav
+            and room_id not in overlay_navigation_ids
             and not any(str(room.get("room_id") or "") == room_id for room in rooms)
         ):
             rooms.append(dict(fallback))

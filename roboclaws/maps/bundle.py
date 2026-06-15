@@ -17,9 +17,19 @@ from roboclaws.maps.bundle_validation import (
     validate_nav2_map_bundle_payload,
 )
 from roboclaws.maps.rasterize import (
+    OccupancyGrid,
     fixtures_from_hints,
+    load_pgm,
     occupancy_grid_from_metric_map,
+    world_to_grid,
     write_pgm,
+)
+from roboclaws.maps.spatial_contract import (
+    ALIGNMENT_STATUS_NATIVE,
+    GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+    POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_rooms,
+    source_frame_spatial_contract,
 )
 
 NAV2_MAP_BUNDLE_SCHEMA = "nav2_map_bundle_v1"
@@ -212,7 +222,7 @@ def write_nav2_map_bundle(
     )
     robot_profile_path.write_text(_simple_yaml(DEFAULT_ROBOT_PROFILE), encoding="utf-8")
     costmap_params_path.write_text(_costmap_yaml(metric_map), encoding="utf-8")
-    _write_preview(preview_path, metric_map, fixture_hints)
+    write_source_frame_bundle_preview(bundle_dir, output_path=preview_path)
 
     artifact_paths = {
         "map_yaml": map_yaml_path,
@@ -508,17 +518,29 @@ def _semantics_payload(metric_map: dict[str, Any], fixture_hints: dict[str, Any]
     metadata = (
         metric_map.get("map_bundle") if isinstance(metric_map.get("map_bundle"), dict) else {}
     )
+    frame_id = str(metric_map.get("frame_id") or "map")
     return {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": metadata.get("environment_id") or metric_map.get("map_id"),
         "frame_ids": {
-            "map": str(metric_map.get("frame_id") or "map"),
+            "map": frame_id,
             "base": DEFAULT_ROBOT_PROFILE["base_frame_id"],
             "camera": DEFAULT_ROBOT_PROFILE["camera"]["frame_id"],
         },
+        "spatial_contract": source_frame_spatial_contract(
+            frame_id=frame_id,
+            alignment_status=ALIGNMENT_STATUS_NATIVE,
+        ),
+        "display_frame": None,
         "map_id": metric_map.get("map_id"),
         "map_version": metric_map.get("map_version"),
-        "rooms": metric_map.get("rooms") or [],
+        "rooms": normalize_spatial_rooms(
+            metric_map.get("rooms") or [],
+            frame_id=frame_id,
+            polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+            geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+            alignment_status=ALIGNMENT_STATUS_NATIVE,
+        ),
         "fixtures": fixtures_from_hints(fixture_hints),
         "inspection_waypoints": metric_map.get("inspection_waypoints") or [],
         "driveable_ways": metric_map.get("driveable_ways") or [],
@@ -530,11 +552,92 @@ def _semantics_payload(metric_map: dict[str, Any], fixture_hints: dict[str, Any]
     }
 
 
+def write_source_frame_bundle_preview(bundle_dir: Path, *, output_path: Path | None = None) -> Path:
+    """Render preview.png from the bundle's source occupancy image and map-frame semantics."""
+
+    bundle_dir = Path(bundle_dir)
+    output_path = output_path or bundle_dir / "preview.png"
+    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    map_yaml = parse_map_yaml((bundle_dir / "map.yaml").read_text(encoding="utf-8"))
+    resolution = float(map_yaml.get("resolution") or 0.05)
+    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
+    origin = (origin + [0.0, 0.0, 0.0])[:3]
+    grid = load_pgm(
+        bundle_dir / str(map_yaml.get("image") or "map.pgm"),
+        resolution_m=resolution,
+        origin_x=float(origin[0]),
+        origin_y=float(origin[1]),
+    )
+    image = _source_grid_preview_image(grid)
+    draw = ImageDraw.Draw(image, "RGBA")
+
+    def project(x: float, y: float) -> tuple[int, int]:
+        return world_to_grid(x, y, grid)
+
+    draw.rectangle((10, 10, 430, 46), fill=(255, 255, 255, 225), outline=(213, 220, 230, 230))
+    draw.text((18, 17), "Source map frame; display_frame absent", fill=(30, 41, 59, 255))
+
+    for room in semantics.get("rooms") or []:
+        points = [
+            project(float(point.get("x", 0.0)), float(point.get("y", 0.0)))
+            for point in room.get("polygon") or []
+            if isinstance(point, dict)
+        ]
+        if len(points) < 3:
+            continue
+        draw.polygon(points, fill=(72, 121, 210, 44), outline=(31, 79, 168, 210))
+        cx = sum(point[0] for point in points) / len(points)
+        cy = sum(point[1] for point in points) / len(points)
+        label = str(room.get("room_label") or room.get("room_id") or "")
+        draw.text((cx - 28, cy - 7), label[:18], fill=(15, 39, 82, 255))
+
+    for fixture in semantics.get("fixtures") or []:
+        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+        x, y = project(float(pose.get("x", 0.0)), float(pose.get("y", 0.0)))
+        draw.rectangle((x - 7, y - 5, x + 7, y + 5), fill=(130, 82, 32, 230))
+
+    for waypoint in semantics.get("inspection_waypoints") or []:
+        x, y = project(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0)))
+        draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=(34, 158, 91, 245))
+        draw.text((x + 7, y - 6), str(waypoint.get("waypoint_id") or ""), fill=(12, 74, 38, 255))
+
+    max_width = 1200
+    if image.width > max_width:
+        ratio = max_width / image.width
+        image = image.resize((max_width, max(1, int(image.height * ratio))))
+    image = _pad_preview_canvas(image)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path, format="PNG")
+    return output_path
+
+
+def _source_grid_preview_image(grid: OccupancyGrid) -> Image.Image:
+    pixels = bytes(
+        255 if value >= 250 else 25 if value <= 5 else 205 for row in grid.rows for value in row
+    )
+    return Image.frombytes("L", (grid.width, grid.height), pixels).convert("RGB")
+
+
+def _pad_preview_canvas(image: Image.Image) -> Image.Image:
+    margin_x = 10
+    margin_top = 10
+    margin_bottom = 28
+    min_height = 240
+    output = Image.new(
+        "RGB",
+        (image.width + margin_x * 2, max(min_height, image.height + margin_top + margin_bottom)),
+        (205, 205, 205),
+    )
+    output.paste(image, (margin_x, margin_top))
+    return output
+
+
 def _write_preview(path: Path, metric_map: dict[str, Any], fixture_hints: dict[str, Any]) -> None:
     image = Image.new("RGB", (900, 560), (247, 249, 252))
     draw = ImageDraw.Draw(image)
     draw.rectangle((18, 18, 882, 542), outline=(175, 184, 196), width=2)
     draw.text((34, 32), "Nav2 static map bundle preview", fill=(28, 35, 48))
+    draw.text((34, 52), "Raw/source-map aligned; display_frame absent", fill=(86, 95, 112))
     bounds = _coordinate_bounds(metric_map, fixture_hints)
     for room in metric_map.get("rooms") or []:
         polygon = room.get("polygon") or []

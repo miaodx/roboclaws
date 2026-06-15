@@ -161,6 +161,7 @@
         "Meeting room A",
         "meeting_room"
       ],
+      "alignment_status": "candidate",
       "asset_partition_id": "meeting_room_a",
       "category": "meeting_room",
       "classification_status": "map_prior",
@@ -184,6 +185,7 @@
         "partition_name": "meeting_room_a",
         "weak_evidence": true
       },
+      "geometry_source": "operator_authored_navigation_zone",
       "map_center": {
         "x": -7.1,
         "y": 2.65
@@ -207,11 +209,18 @@
           "y": 4.8
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "candidate"
+      },
       "render_review_recommended": false,
       "review_status": "accepted",
       "room_id": "meeting_room_a",
       "room_label": "Meeting room A",
-      "semantic_source": "operator_authored_room_overlay"
+      "semantic_source": "operator_authored_room_overlay",
+      "source_map_frame_id": "map"
     },
     {
       "aliases": [
@@ -220,6 +229,7 @@
         "Open kitchen",
         "kitchen"
       ],
+      "alignment_status": "candidate",
       "asset_partition_id": "meeting_room_b",
       "category": "kitchen",
       "classification_status": "map_prior",
@@ -241,6 +251,7 @@
         "partition_name": "meeting_room_b",
         "weak_evidence": true
       },
+      "geometry_source": "operator_authored_navigation_zone",
       "map_center": {
         "x": -1.1,
         "y": 2.4
@@ -264,11 +275,18 @@
           "y": 5.8
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "candidate"
+      },
       "render_review_recommended": false,
       "review_status": "accepted",
       "room_id": "meeting_room_b",
       "room_label": "Open kitchen",
-      "semantic_source": "operator_authored_room_overlay"
+      "semantic_source": "operator_authored_room_overlay",
+      "source_map_frame_id": "map"
     },
     {
       "aliases": [
@@ -277,6 +295,7 @@
         "Meeting room B",
         "meeting_room"
       ],
+      "alignment_status": "candidate",
       "asset_partition_id": "meeting_room_c",
       "category": "meeting_room",
       "classification_status": "map_prior",
@@ -297,6 +316,7 @@
         "partition_name": "meeting_room_c",
         "weak_evidence": true
       },
+      "geometry_source": "operator_authored_navigation_zone",
       "map_center": {
         "x": -2.0,
         "y": 5.4
@@ -320,11 +340,18 @@
           "y": 7.8
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "candidate"
+      },
       "render_review_recommended": false,
       "review_status": "accepted",
       "room_id": "meeting_room_c",
       "room_label": "Meeting room B",
-      "semantic_source": "operator_authored_room_overlay"
+      "semantic_source": "operator_authored_room_overlay",
+      "source_map_frame_id": "map"
     },
     {
       "aliases": [
@@ -333,6 +360,7 @@
         "Main hall / living area",
         "living_room"
       ],
+      "alignment_status": "candidate",
       "asset_partition_id": "reception_area_a",
       "category": "living_room",
       "classification_status": "map_prior",
@@ -371,6 +399,7 @@
         "partition_name": "reception_area_a",
         "weak_evidence": false
       },
+      "geometry_source": "operator_authored_navigation_zone",
       "map_center": {
         "x": 0.7,
         "y": -3.8
@@ -394,11 +423,18 @@
           "y": -2.8
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "candidate"
+      },
       "render_review_recommended": false,
       "review_status": "accepted",
       "room_id": "reception_area_a",
       "room_label": "Main hall / living area",
-      "semantic_source": "operator_authored_room_overlay"
+      "semantic_source": "operator_authored_room_overlay",
+      "source_map_frame_id": "map"
     },
     {
       "aliases": [
@@ -407,6 +443,7 @@
         "Corridor",
         "corridor"
       ],
+      "alignment_status": "candidate",
       "asset_partition_id": "short_corridor_a",
       "category": "corridor",
       "classification_status": "map_prior",
@@ -424,6 +461,7 @@
         "partition_name": "short_corridor_a",
         "weak_evidence": true
       },
+      "geometry_source": "operator_authored_navigation_zone",
       "map_center": {
         "x": 0.7,
         "y": -3.8
@@ -447,11 +485,18 @@
           "y": -2.8
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "candidate"
+      },
       "render_review_recommended": true,
       "review_status": "render_review_recommended",
       "room_id": "short_corridor_a",
       "room_label": "Corridor",
-      "semantic_source": "scene_engine_asset_name_heuristic"
+      "semantic_source": "scene_engine_asset_name_heuristic",
+      "source_map_frame_id": "map"
     },
     {
       "aliases": [
@@ -460,6 +505,7 @@
         "Storage room",
         "storage_room"
       ],
+      "alignment_status": "candidate",
       "asset_partition_id": "storage_room_a",
       "category": "storage_room",
       "classification_status": "map_prior",
@@ -479,6 +525,7 @@
         "partition_name": "storage_room_a",
         "weak_evidence": false
       },
+      "geometry_source": "operator_authored_navigation_zone",
       "map_center": {
         "x": 0.7,
         "y": -3.8
@@ -502,11 +549,72 @@
           "y": -2.8
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "candidate"
+      },
       "render_review_recommended": false,
       "review_status": "accepted",
       "room_id": "storage_room_a",
       "room_label": "Storage room",
-      "semantic_source": "scene_engine_asset_name_heuristic"
+      "semantic_source": "scene_engine_asset_name_heuristic",
+      "source_map_frame_id": "map"
+    }
+  ],
+  "scene_map_correspondence_schema": "scene_map_correspondence_v1",
+  "scene_map_correspondence_v1": [
+    {
+      "alignment_status": "candidate",
+      "asset_partition_id": "meeting_room_a",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+      ],
+      "navigation_area_id": "west_corridor",
+      "transform_source": "operator_review"
+    },
+    {
+      "alignment_status": "candidate",
+      "asset_partition_id": "meeting_room_b",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0003_observe.fpv.png"
+      ],
+      "navigation_area_id": "central_floor",
+      "transform_source": "operator_review"
+    },
+    {
+      "alignment_status": "candidate",
+      "asset_partition_id": "meeting_room_c",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+      ],
+      "navigation_area_id": "north_fixture_area",
+      "transform_source": "operator_review"
+    },
+    {
+      "alignment_status": "candidate",
+      "asset_partition_id": "reception_area_a",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0001_observe.fpv.png",
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0004_observe.fpv.png"
+      ],
+      "navigation_area_id": "south_fixture_area",
+      "transform_source": "operator_review"
+    },
+    {
+      "alignment_status": "candidate",
+      "asset_partition_id": "short_corridor_a",
+      "evidence_artifacts": [],
+      "navigation_area_id": "south_fixture_area",
+      "transform_source": "operator_review"
+    },
+    {
+      "alignment_status": "candidate",
+      "asset_partition_id": "storage_room_a",
+      "evidence_artifacts": [],
+      "navigation_area_id": "south_fixture_area",
+      "transform_source": "operator_review"
     }
   ],
   "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated",

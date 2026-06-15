@@ -1,5 +1,58 @@
 {
   "schema": "scene_room_semantic_overlay_overrides_v1",
+  "scene_map_correspondence_v1": [
+    {
+      "asset_partition_id": "meeting_room_a",
+      "navigation_area_id": "west_corridor",
+      "alignment_status": "candidate",
+      "transform_source": "operator_review",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "meeting_room_b",
+      "navigation_area_id": "central_floor",
+      "alignment_status": "candidate",
+      "transform_source": "operator_review",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0003_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "meeting_room_c",
+      "navigation_area_id": "north_fixture_area",
+      "alignment_status": "candidate",
+      "transform_source": "operator_review",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "reception_area_a",
+      "navigation_area_id": "south_fixture_area",
+      "alignment_status": "candidate",
+      "transform_source": "operator_review",
+      "evidence_artifacts": [
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0001_observe.fpv.png",
+        "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0004_observe.fpv.png"
+      ]
+    },
+    {
+      "asset_partition_id": "short_corridor_a",
+      "navigation_area_id": "south_fixture_area",
+      "alignment_status": "candidate",
+      "transform_source": "operator_review",
+      "evidence_artifacts": []
+    },
+    {
+      "asset_partition_id": "storage_room_a",
+      "navigation_area_id": "south_fixture_area",
+      "alignment_status": "candidate",
+      "transform_source": "operator_review",
+      "evidence_artifacts": []
+    }
+  ],
   "rooms": [
     {
       "asset_partition_id": "meeting_room_a",
