@@ -39,6 +39,8 @@ from roboclaws.operator_console.routes import (
 )
 from roboclaws.operator_console.runtime_inventory import (
     requested_mcp_endpoint,
+    runtime_blockers_from_inventory,
+    runtime_blockers_payload,
     runtime_inventory_payload,
 )
 from roboclaws.operator_console.state import derive_operator_state, redacted_artifact_text
@@ -332,7 +334,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 )
                 for selection in list_console_combinations(include_disabled=False)
             },
-            "runtime": inventory,
+            "runtime": runtime_blockers_from_inventory(inventory),
         }
 
     def _serve_runtime_tasks(self, query_string: str) -> None:
@@ -343,7 +345,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 ports.append(int(value))
             except ValueError:
                 continue
-        self._json(runtime_inventory_payload(self.repo_root, ports=ports))
+        self._json(runtime_blockers_payload(self.repo_root, ports=ports))
 
     def _serve_route_readiness(self, query_string: str) -> None:
         try:

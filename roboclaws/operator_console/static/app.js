@@ -104,9 +104,6 @@ const els = {
   imageDialogPath: document.getElementById("image-dialog-path"),
   imageDialogImg: document.getElementById("image-dialog-img"),
   refreshTasksButton: document.getElementById("refresh-tasks-button"),
-  taskStatusFilter: document.getElementById("task-status-filter"),
-  taskOwnerFilter: document.getElementById("task-owner-filter"),
-  taskSearchInput: document.getElementById("task-search-input"),
   backgroundTaskSummary: document.getElementById("background-task-summary"),
   backgroundTaskList: document.getElementById("background-task-list"),
 };
@@ -208,10 +205,6 @@ function bindEvents() {
   els.messupButton.addEventListener("click", previewMessup);
   els.latestResultButton.addEventListener("click", attachLatestResult);
   els.refreshTasksButton.addEventListener("click", refreshRuntimeTasks);
-  [els.taskStatusFilter, els.taskOwnerFilter, els.taskSearchInput].forEach((input) => {
-    input.addEventListener("input", renderBackgroundTasks);
-    input.addEventListener("change", renderBackgroundTasks);
-  });
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
     confirmAction({
@@ -1788,15 +1781,14 @@ function renderArtifacts(items) {
 }
 
 function renderBackgroundTasks() {
-  const tasks = ((state.runtime && state.runtime.tasks) || []).filter(taskMatchesFilters);
-  renderTaskOwnerFilter();
+  const tasks = (state.runtime && state.runtime.tasks) || [];
   const summary = (state.runtime && state.runtime.summary) || {};
   els.backgroundTaskSummary.textContent =
-    `${summary.active || 0} active / ${summary.total || 0} total repo-relevant task` +
-    `${summary.total === 1 ? "" : "s"}.`;
+    `${summary.active || 0} blocking resource${summary.active === 1 ? "" : "s"} affecting ` +
+    `console/UI E2E startup.`;
   els.backgroundTaskList.innerHTML = "";
   if (!tasks.length) {
-    els.backgroundTaskList.textContent = "No matching background tasks.";
+    els.backgroundTaskList.textContent = "No blocking background resources detected.";
     return;
   }
   for (const task of tasks) {
@@ -1817,37 +1809,6 @@ function renderBackgroundTasks() {
     bindTaskActions(row, task);
     els.backgroundTaskList.appendChild(row);
   }
-}
-
-function renderTaskOwnerFilter() {
-  const previous = els.taskOwnerFilter.value;
-  const owners = [
-    ...new Set(((state.runtime && state.runtime.tasks) || []).map((task) => task.owner).filter(Boolean)),
-  ].sort();
-  els.taskOwnerFilter.innerHTML = '<option value="">All</option>';
-  for (const owner of owners) {
-    const option = document.createElement("option");
-    option.value = owner;
-    option.textContent = owner;
-    option.selected = owner === previous;
-    els.taskOwnerFilter.appendChild(option);
-  }
-}
-
-function taskMatchesFilters(task) {
-  const status = els.taskStatusFilter.value;
-  const owner = els.taskOwnerFilter.value;
-  const query = (els.taskSearchInput.value || "").trim().toLowerCase();
-  if (status && task.status !== status) {
-    return false;
-  }
-  if (owner && task.owner !== owner) {
-    return false;
-  }
-  if (!query) {
-    return true;
-  }
-  return JSON.stringify(task).toLowerCase().includes(query);
 }
 
 function taskResourcesHtml(resources) {

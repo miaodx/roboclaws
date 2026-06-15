@@ -58,9 +58,7 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'id="tasks-panel"',
     "Background Tasks",
     'id="background-task-list"',
-    'id="task-status-filter"',
-    'id="task-owner-filter"',
-    'id="task-search-input"',
+    "No blocking background resources loaded.",
 )
 
 ROUTE_FIELD_HTML_FORBIDDEN = (
@@ -74,6 +72,9 @@ ROUTE_FIELD_HTML_FORBIDDEN = (
     'id="operator-message-input"',
     'id="operator-message-button"',
     "Continue",
+    'id="task-status-filter"',
+    'id="task-owner-filter"',
+    'id="task-search-input"',
 )
 
 ROUTE_FIELD_APP_REQUIRED = (
@@ -137,6 +138,7 @@ ROUTE_FIELD_APP_REQUIRED = (
     "payload.runtime",
     "/api/runtime/tasks",
     "renderBackgroundTasks",
+    "No blocking background resources detected.",
     "background_blockers",
     "TASK RUNNING",
     "data-open-background-tasks",

@@ -729,7 +729,7 @@ pre,
 
 .tasks-panel {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
   padding: 16px;
@@ -748,16 +748,6 @@ pre,
 
 .tasks-header h2 {
   margin: 0;
-}
-
-.task-filters {
-  display: grid;
-  grid-template-columns: minmax(120px, 160px) minmax(140px, 180px) minmax(180px, 1fr);
-  gap: 12px;
-}
-
-.task-filters label {
-  margin-bottom: 0;
 }
 
 .task-table {

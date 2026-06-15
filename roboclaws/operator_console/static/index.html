@@ -229,31 +229,7 @@
               <h2>Background Tasks</h2>
               <button id="refresh-tasks-button" class="secondary" type="button">Refresh</button>
             </div>
-            <div class="task-filters">
-              <label>
-                Status
-                <select id="task-status-filter">
-                  <option value="">All</option>
-                  <option value="running">Running</option>
-                  <option value="launched">Launched</option>
-                  <option value="blocked">Blocked</option>
-                  <option value="terminal">Terminal</option>
-                  <option value="stale">Stale</option>
-                  <option value="unknown">Unknown</option>
-                </select>
-              </label>
-              <label>
-                Owner
-                <select id="task-owner-filter">
-                  <option value="">All</option>
-                </select>
-              </label>
-              <label>
-                Search
-                <input id="task-search-input" type="search" placeholder="route, run, resource" />
-              </label>
-            </div>
-            <div id="background-task-summary" class="field-help">No background task inventory loaded.</div>
+            <div id="background-task-summary" class="field-help">No blocking background resources loaded.</div>
             <div id="background-task-list" class="task-table"></div>
           </article>
         </section>
