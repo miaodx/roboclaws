@@ -348,6 +348,14 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac action,
   waypoint, and semantic-pose recapture tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac semantic placement resolution, direct-support candidate
+  selection, footprint/clearance math, and placement diagnostics moved from
+  the backend worker into `isaac_placement_resolution.py`, with worker-private
+  wrappers preserving existing tests and monkeypatch hooks. Metric:
+  `isaac_lab_backend_worker.py` 5355 -> 5097 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
+  ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
