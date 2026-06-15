@@ -37,6 +37,7 @@ from scripts.isaac_lab_cleanup import (
     isaac_placement_resolution,
     isaac_robot_camera_stage,
     isaac_robot_pose_focus,
+    isaac_runtime_capture,
     isaac_scenario_builders,
     isaac_scenario_state,
     isaac_scene_camera_geometry,
@@ -152,6 +153,7 @@ from scripts.isaac_lab_cleanup.isaac_robot_view_artifacts import (
     robot_view_provenance,
     semantic_pose_robot_view_provenance,
 )
+from scripts.isaac_lab_cleanup.isaac_runtime_capture import IsaacRuntimeCaptureHooks
 from scripts.isaac_lab_cleanup.isaac_runtime_diagnostics import (
     module_version,
 )
@@ -500,103 +502,18 @@ def real_runtime_smoke(
     args: argparse.Namespace,
     scenario: CleanupScenario,
 ) -> dict[str, Any]:
-    """Launch Isaac Lab and capture the minimal renderer/USD proof for Phase A.
-
-    This function intentionally stays behind the worker subprocess. Normal
-    Roboclaws imports must not import Isaac packages or start Omniverse.
-    """
-
-    _require_isaac_import()
-    args.run_dir.mkdir(parents=True, exist_ok=True)
-    smoke_image = args.run_dir / "isaac_runtime_smoke.png"
-    robot_view_paths = _runtime_smoke_robot_view_paths(args.run_dir, smoke_image=smoke_image)
-    if args.scene_usd_path is not None:
-        scene_usd = args.scene_usd_path
-        if not scene_usd.is_file():
-            raise RuntimeError(f"local Isaac scene USD is missing: {scene_usd}")
-        loaded_asset_kind = "local_scene_usd"
-    else:
-        scene_usd = args.run_dir / _generated_scene_filename(args.generated_scene_kind)
-        loaded_asset_kind = "generated_runtime_smoke_usd"
-    robot_import = _rby1m_robot_import_plan(args.robot_name) if args.include_robot else {}
-
-    simulation_app = None
-    render_steps = 0
-    scene_index_diagnostics: dict[str, Any] | None = None
-    stage_prim_count = 0
-    from isaaclab.app import AppLauncher
-
-    launcher_args = _isaac_app_launcher_args(AppLauncher)
-    app_launcher = AppLauncher(launcher_args)
-    simulation_app = app_launcher.app
-    global _DEFERRED_SIMULATION_APP
-    _DEFERRED_SIMULATION_APP = simulation_app
-
-    # Isaac Sim requires that Omniverse/pxr modules are not imported before
-    # SimulationApp starts. Generate and inspect USD only after AppLauncher
-    # owns the Kit bootstrap.
-    if args.scene_usd_path is None:
-        _write_generated_runtime_smoke_usd(
-            scene_usd,
-            scenario,
-            scene_kind=args.generated_scene_kind,
-        )
-    scene_index_diagnostics = _inspect_usd_scene_index(scene_usd)
-    stage_prim_count = int(scene_index_diagnostics["stage_prim_count"])
-
-    capture = _capture_isaac_lab_camera_views(
-        scene_usd=scene_usd,
-        view_paths=robot_view_paths,
-        width=DEFAULT_WIDTH,
-        height=DEFAULT_HEIGHT,
-        simulation_app=simulation_app,
-        robot_import=robot_import,
-        include_segmentation=args.enable_segmentation,
-        segmentation_data_types=tuple(args.segmentation_data_type or ISAAC_SEGMENTATION_DATA_TYPES),
-        semantic_filter=tuple(args.segmentation_semantic_filter or ("class",)),
-        scene_index_diagnostics=scene_index_diagnostics,
+    return isaac_runtime_capture.real_runtime_smoke(
+        args,
+        scenario,
+        hooks=_isaac_runtime_capture_hooks(),
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        segmentation_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
+        real_smoke_renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
+        real_robot_view_capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
     )
-    render_steps = int(capture["render_steps"])
-    robot_view_images = dict(capture["robot_view_images"])
-    segmentation = _dict(capture.get("segmentation"))
-
-    if not smoke_image.is_file():
-        raise RuntimeError(f"Isaac Lab camera capture did not write {smoke_image}")
-    if scene_index_diagnostics is None:
-        raise RuntimeError("Isaac Lab runtime smoke did not inspect the USD scene index.")
-    missing_views = sorted(
-        key for key in ROBOT_VIEW_KEYS if not Path(str(robot_view_images.get(key, ""))).is_file()
-    )
-    if missing_views:
-        raise RuntimeError(f"Isaac Lab robot view capture missed views: {', '.join(missing_views)}")
-    return {
-        "image_path": str(smoke_image),
-        "scene_usd": str(scene_usd),
-        "loaded_asset_kind": loaded_asset_kind,
-        "generated_scene_kind": args.generated_scene_kind if args.scene_usd_path is None else "",
-        "requested_scene_source": args.scene_source,
-        "requested_scene_index": args.scene_index,
-        "requested_molmospaces_scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
-        "isaac_lab_version": _module_version("isaaclab"),
-        "isaac_sim_version": _module_version("isaacsim"),
-        "renderer_mode": REAL_SMOKE_RENDERER_MODE,
-        "capture_method": REAL_SMOKE_CAPTURE_METHOD,
-        "robot_view_capture_method": REAL_ROBOT_VIEW_CAPTURE_METHOD,
-        "robot_view_images": robot_view_images,
-        "robot_import": robot_import,
-        "robot_view_uses_mounted_head_camera": bool(
-            capture.get("robot_view_uses_mounted_head_camera")
-        ),
-        "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
-        "scene_bounds": capture.get("scene_bounds"),
-        "stage_prim_count": stage_prim_count,
-        "render_steps": render_steps,
-        "scene_index_diagnostics": scene_index_diagnostics,
-        "object_index": scene_index_diagnostics["object_index"],
-        "receptacle_index": scene_index_diagnostics["receptacle_index"],
-        "segmentation": segmentation,
-        "native_render_diagnostics": _dict(capture.get("native_render_diagnostics")),
-    }
 
 
 def capture_semantic_pose_robot_views(
@@ -615,22 +532,15 @@ def capture_semantic_pose_robot_views(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    _require_isaac_import()
-    from isaaclab.app import AppLauncher
-
-    launcher_args = _isaac_app_launcher_args(AppLauncher)
-    app_launcher = AppLauncher(launcher_args)
-    simulation_app = app_launcher.app
-    global _DEFERRED_SIMULATION_APP
-    _DEFERRED_SIMULATION_APP = simulation_app
-    capture = _capture_isaac_lab_camera_views(
+    return isaac_runtime_capture.capture_semantic_pose_robot_views(
+        state=state,
         scene_usd=scene_usd,
         view_paths=view_paths,
         width=width,
         height=height,
-        simulation_app=simulation_app,
-        robot_import=_dict(state.get("robot_import")),
-        semantic_pose_state=_dict(state.get("semantic_pose_state")),
+        hooks=_isaac_runtime_capture_hooks(),
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
         color_profile_override=color_profile_override,
         render_settle_frames=render_settle_frames,
         isaac_aa_op=isaac_aa_op,
@@ -638,8 +548,28 @@ def capture_semantic_pose_robot_views(
         isaac_exposure_bias=isaac_exposure_bias,
         isaac_colorcorr_gain=isaac_colorcorr_gain,
     )
-    capture["simulation_app_reuse_token"] = simulation_app
-    return capture
+
+
+def _isaac_runtime_capture_hooks() -> IsaacRuntimeCaptureHooks:
+    return IsaacRuntimeCaptureHooks(
+        capture_isaac_lab_camera_views=_capture_isaac_lab_camera_views,
+        dict_value=_dict,
+        generated_scene_filename=_generated_scene_filename,
+        inspect_usd_scene_index=_inspect_usd_scene_index,
+        isaac_app_launcher_args=_isaac_app_launcher_args,
+        module_version=_module_version,
+        rby1m_robot_import_plan=_rby1m_robot_import_plan,
+        require_isaac_import=_require_isaac_import,
+        runtime_smoke_robot_view_paths=_runtime_smoke_robot_view_paths,
+        scene_usd_path=_scene_usd_path,
+        set_deferred_simulation_app=_set_deferred_simulation_app,
+        write_generated_runtime_smoke_usd=_write_generated_runtime_smoke_usd,
+    )
+
+
+def _set_deferred_simulation_app(simulation_app: Any) -> None:
+    global _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = simulation_app
 
 
 def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
