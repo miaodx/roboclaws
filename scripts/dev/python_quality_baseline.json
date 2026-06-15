@@ -339,16 +339,6 @@
         "value": 12
       },
       {
-        "code": "C901",
-        "key": "roboclaws/household/grasp_cache_generation.py|C901|run_grasp_cache_generation",
-        "limit": 10,
-        "message": "`run_grasp_cache_generation` is too complex (11 > 10)",
-        "path": "roboclaws/household/grasp_cache_generation.py",
-        "row": 26,
-        "symbol": "run_grasp_cache_generation",
-        "value": 11
-      },
-      {
         "code": "PLR0915",
         "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
         "limit": 50,
