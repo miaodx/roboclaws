@@ -314,16 +314,6 @@
         "value": 11
       },
       {
-        "code": "C901",
-        "key": "roboclaws/household/cleanup_routine.py|C901|run_cleanup_routine",
-        "limit": 10,
-        "message": "`run_cleanup_routine` is too complex (12 > 10)",
-        "path": "roboclaws/household/cleanup_routine.py",
-        "row": 35,
-        "symbol": "run_cleanup_routine",
-        "value": 12
-      },
-      {
         "code": "PLR0915",
         "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
         "limit": 50,

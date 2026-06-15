@@ -5138,3 +5138,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this material
   response probe patch so the unrelated staged `eval-harness` rename was not
   blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting the
+  `roboclaws.household.cleanup_routine.run_cleanup_routine(...)` required
+  transport phase loop into `_run_required_transport_phases(...)` and
+  `_required_transport_phase_specs(...)`. The public cleanup routine schema,
+  MCP tool order, request payloads, recovery retry path, and failure response
+  shape remain unchanged. Evidence:
+  `ruff check roboclaws/household/cleanup_routine.py tests/contract/skills/test_molmo_realworld_cleanup_skill.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/cleanup_routine.py tests/contract/skills/test_molmo_realworld_cleanup_skill.py`
+  passed; `ruff format roboclaws/household/cleanup_routine.py` left the file
+  unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/skills/test_molmo_realworld_cleanup_skill.py`
+  passed with 4 tests. The quality baseline was refreshed from 41 to 40 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this cleanup
+  routine patch so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.

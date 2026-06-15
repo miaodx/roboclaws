@@ -30,6 +30,7 @@ PUBLIC_ATOMIC_TOOLS = (
 
 ToolCall = Callable[[str, dict[str, Any], Callable[[], dict[str, Any]]], dict[str, Any]]
 ToolViewRecorder = Callable[[str, dict[str, Any], dict[str, Any]], None]
+RunPhase = Callable[[str, dict[str, Any], Callable[[], dict[str, Any]]], dict[str, Any]]
 
 
 def run_cleanup_routine(
@@ -98,49 +99,21 @@ def run_cleanup_routine(
         steps.append(step)
         return step
 
-    for phase, request, fn in (
-        (
-            NAVIGATE_TO_OBJECT_PHASE,
-            _navigate_object_request(
-                object_id=object_id,
-                source_receptacle_id=source_receptacle_id,
-            ),
-            lambda: contract.navigate_to_object(object_id),
-        ),
-        (PICK_PHASE, {"object_id": object_id}, lambda: contract.pick(object_id)),
-        (
-            NAVIGATE_TO_RECEPTACLE_PHASE,
-            _navigate_receptacle_request(
-                fixture_id=fixture_id,
-                object_id=object_id,
-                include_object_id=include_object_id_in_receptacle_request,
-            ),
-            lambda: contract.navigate_to_receptacle(fixture_id),
-        ),
-    ):
-        response = run_phase(phase, request, fn)
-        if not response.get("ok"):
-            recovered = _recover_once(
-                contract=contract,
-                call_tool=call_tool,
-                record_tool_view=record_tool_view,
-                failed_phase=phase,
-                failed_request=request,
-                failed_fn=fn,
-                failed_response=response,
-                object_id=object_id,
-                fixture_id=fixture_id,
-                steps=steps,
-                target_request_key=target_request_key,
-            )
-            if recovered is None or not recovered.get("ok"):
-                return _failure_response(
-                    object_id=object_id,
-                    fixture_id=fixture_id,
-                    selected_tool=selected_tool,
-                    steps=steps,
-                    response=recovered or response,
-                )
+    failure = _run_required_transport_phases(
+        contract=contract,
+        call_tool=call_tool,
+        record_tool_view=record_tool_view,
+        run_phase=run_phase,
+        object_id=object_id,
+        fixture_id=fixture_id,
+        selected_tool=selected_tool,
+        source_receptacle_id=source_receptacle_id,
+        include_object_id_in_receptacle_request=include_object_id_in_receptacle_request,
+        steps=steps,
+        target_request_key=target_request_key,
+    )
+    if failure is not None:
+        return failure
 
     requires_open = fixture_requires_open(
         fixture_id,
@@ -222,6 +195,84 @@ def run_cleanup_routine(
         fixture_id=fixture_id,
         selected_tool=selected_tool,
         steps=steps,
+    )
+
+
+def _run_required_transport_phases(
+    *,
+    contract: Any,
+    call_tool: ToolCall | None,
+    record_tool_view: ToolViewRecorder | None,
+    run_phase: RunPhase,
+    object_id: str,
+    fixture_id: str,
+    selected_tool: str,
+    source_receptacle_id: str,
+    include_object_id_in_receptacle_request: bool,
+    steps: list[dict[str, Any]],
+    target_request_key: str,
+) -> dict[str, Any] | None:
+    for phase, request, fn in _required_transport_phase_specs(
+        contract=contract,
+        object_id=object_id,
+        fixture_id=fixture_id,
+        source_receptacle_id=source_receptacle_id,
+        include_object_id_in_receptacle_request=include_object_id_in_receptacle_request,
+    ):
+        response = run_phase(phase, request, fn)
+        if response.get("ok"):
+            continue
+        recovered = _recover_once(
+            contract=contract,
+            call_tool=call_tool,
+            record_tool_view=record_tool_view,
+            failed_phase=phase,
+            failed_request=request,
+            failed_fn=fn,
+            failed_response=response,
+            object_id=object_id,
+            fixture_id=fixture_id,
+            steps=steps,
+            target_request_key=target_request_key,
+        )
+        if recovered is None or not recovered.get("ok"):
+            return _failure_response(
+                object_id=object_id,
+                fixture_id=fixture_id,
+                selected_tool=selected_tool,
+                steps=steps,
+                response=recovered or response,
+            )
+    return None
+
+
+def _required_transport_phase_specs(
+    *,
+    contract: Any,
+    object_id: str,
+    fixture_id: str,
+    source_receptacle_id: str,
+    include_object_id_in_receptacle_request: bool,
+) -> tuple[tuple[str, dict[str, Any], Callable[[], dict[str, Any]]], ...]:
+    return (
+        (
+            NAVIGATE_TO_OBJECT_PHASE,
+            _navigate_object_request(
+                object_id=object_id,
+                source_receptacle_id=source_receptacle_id,
+            ),
+            lambda: contract.navigate_to_object(object_id),
+        ),
+        (PICK_PHASE, {"object_id": object_id}, lambda: contract.pick(object_id)),
+        (
+            NAVIGATE_TO_RECEPTACLE_PHASE,
+            _navigate_receptacle_request(
+                fixture_id=fixture_id,
+                object_id=object_id,
+                include_object_id=include_object_id_in_receptacle_request,
+            ),
+            lambda: contract.navigate_to_receptacle(fixture_id),
+        ),
     )
 
 
