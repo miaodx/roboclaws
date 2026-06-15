@@ -118,12 +118,12 @@
         "path": "scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py"
       },
       {
-        "lines": 1120,
+        "lines": 1087,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_live_codex_cleanup.py"
       },
       {
-        "lines": 3057,
+        "lines": 2714,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
       },
@@ -198,7 +198,7 @@
         "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py"
       },
       {
-        "lines": 3113,
+        "lines": 3112,
         "max_module_lines": 800,
         "path": "tests/contract/dev_tools/test_task_agent_just_recipes.py"
       },
@@ -742,16 +742,6 @@
         "row": 1837,
         "symbol": "test_openai_agents_cleanup_runner_invokes_sdk_then_checker",
         "value": 57
-      },
-      {
-        "code": "PLR0915",
-        "key": "tests/unit/agents/test_live_runtime.py|PLR0915|test_openai_agents_perf_profiles_resolve_known_defaults",
-        "limit": 50,
-        "message": "Too many statements (80 > 50)",
-        "path": "tests/unit/agents/test_live_runtime.py",
-        "row": 3466,
-        "symbol": "test_openai_agents_perf_profiles_resolve_known_defaults",
-        "value": 80
       },
       {
         "code": "PLR0915",

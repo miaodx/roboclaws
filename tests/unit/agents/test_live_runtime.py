@@ -3463,34 +3463,73 @@ def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     assert timing["openai_agents"]["phase"] == "agent-turn-complete"
 
 
-def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None:
-    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
-    base_args = Namespace(
+def _openai_agents_perf_profile_base_args(**overrides) -> Namespace:
+    values = dict.fromkeys(
+        """
+        max_turns incomplete_turn_continuation_attempts context_soft_limit_tokens
+        context_hard_limit_tokens max_observe_per_waypoint raw_fpv_candidate_budget
+        done_retry_budget model_input_compaction model_input_compaction_min_chars model_racing
+        model_racing_arm_count raw_fpv_repeated_failure_limit raw_fpv_image_memory
+        raw_fpv_image_memory_retain camera_grounded_history_compaction
+        camera_grounded_history_retain camera_grounded_composite_tools
+        model_service_retry_attempts model_service_retry_sleep_s
+        """.split(),
+        None,
+    )
+    values.update(
         provider_profile="codex-env",
         model="gpt-5.5",
         agent_sdk_perf_profile="",
         prompt_mode="",
         continuation_mode="",
-        max_turns=None,
-        incomplete_turn_continuation_attempts=None,
         cache_tools_list=True,
         mcp_client_session_timeout_s=30.0,
-        context_soft_limit_tokens=None,
-        context_hard_limit_tokens=None,
-        max_observe_per_waypoint=None,
-        raw_fpv_candidate_budget=None,
-        done_retry_budget=None,
-        model_input_compaction=None,
-        model_input_compaction_min_chars=None,
-        camera_grounded_history_compaction=None,
-        camera_grounded_history_retain=None,
-        camera_grounded_composite_tools=None,
         robot_view_capture_policy="",
-        model_service_retry_attempts=None,
-        model_service_retry_sleep_s=None,
     )
+    values.update(overrides)
+    return Namespace(**values)
 
-    baseline = _resolve_agent_sdk_perf_profile(base_args)
+
+def _expected_model_racing_observability(**overrides) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema": "agent_sdk_model_racing_observability_v1",
+        "enabled": False,
+        "mode": "per_arm_observability_v1",
+        "candidate_ids": ["D"],
+        "arm_count": 1,
+        "racing_multiplier": 1.0,
+        "winner_selection": "single_arm_no_racing",
+        "loser_cancellation": "not_applicable_until_racing_enabled",
+        "unknown_loser_billing": False,
+        "hook": "OpenAI Agents SDK model request boundary",
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
+            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
+        ),
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _expected_raw_fpv_image_memory_policy(retained_full_frame_limit: int) -> dict[str, object]:
+    return {
+        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+        "enabled": True,
+        "mode": "retain_latest_full_frame",
+        "retained_full_frame_limit": retained_full_frame_limit,
+        "candidate_ids": ["AA"],
+        "private_artifact_policy": (
+            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
+            "remain complete"
+        ),
+    }
+
+
+def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    baseline = _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args())
+
     assert baseline["profile_id"] == "baseline"
     assert baseline["source"] == "default"
     assert baseline["provider_profile"] == "codex-env"
@@ -3513,23 +3552,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
             "full report robot-view capture; default public route behavior unchanged"
         ),
     }
-    assert baseline["model_racing_observability"] == {
-        "schema": "agent_sdk_model_racing_observability_v1",
-        "enabled": False,
-        "mode": "per_arm_observability_v1",
-        "candidate_ids": ["D"],
-        "arm_count": 1,
-        "racing_multiplier": 1.0,
-        "winner_selection": "single_arm_no_racing",
-        "loser_cancellation": "not_applicable_until_racing_enabled",
-        "unknown_loser_billing": False,
-        "hook": "OpenAI Agents SDK model request boundary",
-        "private_artifact_policy": (
-            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
-            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
-            "credentials, and private truth are not persisted"
-        ),
-    }
+    assert baseline["model_racing_observability"] == _expected_model_racing_observability()
     assert baseline["sdk_model_settings"] == {
         "tool_choice": "auto",
         "parallel_tool_calls": False,
@@ -3541,40 +3564,19 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
         "workflow_name": "roboclaws-openai-agents-live",
     }
 
-    gpt_args = Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "gpt_compact_v1"})
-    gpt = _resolve_agent_sdk_perf_profile(gpt_args)
+
+def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    gpt = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="gpt_compact_v1")
+    )
+
     assert gpt["source"] == "cli"
     assert gpt["prompt_mode"] == "compact"
     assert gpt["continuation_mode"] == "state_summary_only"
     assert gpt["max_turns"] == 128
     assert gpt["max_continuations"] == 1
     assert gpt["context_soft_limit_tokens"] == 96_000
-
-    racing_args = Namespace(
-        **{
-            **vars(base_args),
-            "model_racing": True,
-            "model_racing_arm_count": None,
-        }
-    )
-    racing = _resolve_agent_sdk_perf_profile(racing_args)
-    assert racing["model_racing_observability"] == {
-        "schema": "agent_sdk_model_racing_observability_v1",
-        "enabled": True,
-        "mode": "get_response_racing_v1",
-        "candidate_ids": ["D", "C"],
-        "arm_count": 2,
-        "racing_multiplier": 2.0,
-        "winner_selection": "first_successful_sdk_response",
-        "loser_cancellation": "cancel_pending_losers",
-        "unknown_loser_billing": True,
-        "hook": "OpenAI Agents SDK model request boundary",
-        "private_artifact_policy": (
-            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
-            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
-            "credentials, and private truth are not persisted"
-        ),
-    }
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
@@ -3594,15 +3596,31 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["camera_grounded_composite_tools"]["candidate_ids"] == ["O"]
     assert gpt["camera_grounded_composite_tools"]["enabled"] is False
 
-    mimo_args = Namespace(
-        **{
-            **vars(base_args),
-            "provider_profile": "mify",
-            "model": "xiaomi/mimo-v2.5",
-            "agent_sdk_perf_profile": "mimo_compact_v1",
-        }
+    racing = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(model_racing=True, model_racing_arm_count=None)
     )
-    mimo = _resolve_agent_sdk_perf_profile(mimo_args)
+    assert racing["model_racing_observability"] == _expected_model_racing_observability(
+        enabled=True,
+        mode="get_response_racing_v1",
+        candidate_ids=["D", "C"],
+        arm_count=2,
+        racing_multiplier=2.0,
+        winner_selection="first_successful_sdk_response",
+        loser_cancellation="cancel_pending_losers",
+        unknown_loser_billing=True,
+    )
+
+
+def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    mimo = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(
+            provider_profile="mify",
+            model="xiaomi/mimo-v2.5",
+            agent_sdk_perf_profile="mimo_compact_v1",
+        )
+    )
+
     assert mimo["provider_profile"] == "mify"
     assert mimo["wire_api"] == "responses"
     assert mimo["model_family"] == "mimo"
@@ -3610,14 +3628,9 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert mimo["context_soft_limit_tokens"] == 64_000
     assert mimo["context_hard_limit_tokens"] == 96_000
 
-    chat_args = Namespace(
-        **{
-            **vars(base_args),
-            "provider_profile": "mimo-chat",
-            "model": "mimo-v2.5",
-        }
+    chat = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(provider_profile="mimo-chat", model="mimo-v2.5")
     )
-    chat = _resolve_agent_sdk_perf_profile(chat_args)
     assert chat["provider_profile"] == "mimo-openai-chat"
     assert chat["wire_api"] == "chat-completions"
     assert chat["model_family"] == "mimo"
@@ -3627,49 +3640,46 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
         "include_usage": True,
     }
 
+
+def test_openai_agents_perf_profile_resolves_raw_fpv_budget_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     raw = _resolve_agent_sdk_perf_profile(
-        Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "raw_fpv_budgeted_v1"})
+        _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="raw_fpv_budgeted_v1")
     )
+
     assert raw["prompt_mode"] == "raw_fpv_compact"
     assert raw["max_turns"] == 40
     assert raw["max_continuations"] == 1
     assert raw["raw_fpv_candidate_budget"] == 24
     assert raw["raw_fpv_repeated_failure_limit"] == 3
     assert raw["model_input_compaction"]["enabled"] is True
-    assert raw["model_input_compaction"]["raw_fpv_image_memory"] == {
-        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
-        "enabled": True,
-        "mode": "retain_latest_full_frame",
-        "retained_full_frame_limit": 1,
-        "candidate_ids": ["AA"],
-        "private_artifact_policy": (
-            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
-            "remain complete"
-        ),
-    }
+    assert raw["model_input_compaction"]["raw_fpv_image_memory"] == (
+        _expected_raw_fpv_image_memory_policy(1)
+    )
     assert raw["done_retry_budget"] == 1
 
+
+def test_openai_agents_perf_profile_resolves_custom_overrides(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     custom = _resolve_agent_sdk_perf_profile(
-        Namespace(
-            **{
-                **vars(base_args),
-                "agent_sdk_perf_profile": "custom",
-                "prompt_mode": "compact",
-                "continuation_mode": "state_summary_only",
-                "max_turns": 9,
-                "incomplete_turn_continuation_attempts": 3,
-                "context_soft_limit_tokens": 12,
-                "context_hard_limit_tokens": 34,
-                "max_observe_per_waypoint": 2,
-                "raw_fpv_candidate_budget": 3,
-                "raw_fpv_repeated_failure_limit": 2,
-                "raw_fpv_image_memory": True,
-                "raw_fpv_image_memory_retain": 2,
-                "robot_view_capture_policy": "action_timeline",
-                "done_retry_budget": 4,
-            }
+        _openai_agents_perf_profile_base_args(
+            agent_sdk_perf_profile="custom",
+            prompt_mode="compact",
+            continuation_mode="state_summary_only",
+            max_turns=9,
+            incomplete_turn_continuation_attempts=3,
+            context_soft_limit_tokens=12,
+            context_hard_limit_tokens=34,
+            max_observe_per_waypoint=2,
+            raw_fpv_candidate_budget=3,
+            raw_fpv_repeated_failure_limit=2,
+            raw_fpv_image_memory=True,
+            raw_fpv_image_memory_retain=2,
+            robot_view_capture_policy="action_timeline",
+            done_retry_budget=4,
         )
     )
+
     assert custom["profile_id"] == "custom"
     assert custom["prompt_mode"] == "compact"
     assert custom["max_turns"] == 9
@@ -3688,58 +3698,48 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert custom["robot_view_capture_policy"]["policy"] == "action_timeline"
     assert custom["robot_view_capture_policy"]["candidate_ids"] == ["F"]
 
+
+def test_openai_agents_perf_profile_resolves_custom_compaction(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     compaction = _resolve_agent_sdk_perf_profile(
-        Namespace(
-            **{
-                **vars(base_args),
-                "agent_sdk_perf_profile": "custom",
-                "model_input_compaction": True,
-                "model_input_compaction_min_chars": 80,
-                "raw_fpv_image_memory": True,
-                "raw_fpv_image_memory_retain": 2,
-                "camera_grounded_history_compaction": True,
-                "camera_grounded_history_retain": 3,
-                "camera_grounded_composite_tools": True,
-            }
+        _openai_agents_perf_profile_base_args(
+            agent_sdk_perf_profile="custom",
+            model_input_compaction=True,
+            model_input_compaction_min_chars=80,
+            raw_fpv_image_memory=True,
+            raw_fpv_image_memory_retain=2,
+            camera_grounded_history_compaction=True,
+            camera_grounded_history_retain=3,
+            camera_grounded_composite_tools=True,
         )
     )
-    assert compaction["model_input_compaction"] == {
-        "schema": "agent_sdk_model_input_compaction_v1",
+
+    model_input = compaction["model_input_compaction"]
+    assert model_input["schema"] == "agent_sdk_model_input_compaction_v1"
+    assert model_input["enabled"] is True
+    assert model_input["mode"] == (
+        "public_tool_result_summary_v1+repeated_metric_map_delta_v1+raw_fpv_image_memory_v1+"
+        "camera_grounded_history_v1"
+    )
+    assert model_input["min_chars"] == 80
+    assert model_input["candidate_ids"] == ["I", "N", "AA", "AC"]
+    assert model_input["hook"] == "RunConfig.call_model_input_filter"
+    assert model_input["repeated_metric_map_delta"] is True
+    assert model_input["raw_fpv_image_memory"] == _expected_raw_fpv_image_memory_policy(2)
+    assert model_input["camera_grounded_history"] == {
+        "schema": "agent_sdk_camera_grounded_history_policy_v1",
         "enabled": True,
-        "mode": (
-            "public_tool_result_summary_v1+repeated_metric_map_delta_v1+raw_fpv_image_memory_v1+"
-            "camera_grounded_history_v1"
-        ),
-        "min_chars": 80,
-        "candidate_ids": ["I", "N", "AA", "AC"],
-        "hook": "RunConfig.call_model_input_filter",
-        "repeated_metric_map_delta": True,
-        "raw_fpv_image_memory": {
-            "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
-            "enabled": True,
-            "mode": "retain_latest_full_frame",
-            "retained_full_frame_limit": 2,
-            "candidate_ids": ["AA"],
-            "private_artifact_policy": (
-                "model-facing raw-FPV image memory only; MCP traces, reports, and image "
-                "artifacts remain complete"
-            ),
-        },
-        "camera_grounded_history": {
-            "schema": "agent_sdk_camera_grounded_history_policy_v1",
-            "enabled": True,
-            "mode": "retain_latest_actionable_outputs",
-            "retained_recent_outputs": 3,
-            "candidate_ids": ["AC"],
-            "private_artifact_policy": (
-                "model-facing camera-grounded history compaction only; MCP traces, reports, "
-                "and run artifacts remain complete"
-            ),
-        },
+        "mode": "retain_latest_actionable_outputs",
+        "retained_recent_outputs": 3,
+        "candidate_ids": ["AC"],
         "private_artifact_policy": (
-            "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+            "model-facing camera-grounded history compaction only; MCP traces, reports, "
+            "and run artifacts remain complete"
         ),
     }
+    assert model_input["private_artifact_policy"] == (
+        "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+    )
     assert compaction["camera_grounded_composite_tools"] == {
         "schema": "agent_sdk_camera_grounded_composite_tools_v1",
         "enabled": True,

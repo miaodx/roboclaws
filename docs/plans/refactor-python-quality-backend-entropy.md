@@ -4939,3 +4939,22 @@ Stop this refactor loop when:
   dropping `run_live_openai_agents_cleanup.py` from 2944 to 2714 lines and
   keeping `openai_agents_metrics.py` below the 800-line ratchet threshold at
   793 lines.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/unit/agents/test_live_runtime.py::test_openai_agents_perf_profiles_resolve_known_defaults`
+  into focused OpenAI Agents perf-profile tests with shared base-args and
+  expected-payload helpers. The baseline, compact/racing, MiMo/chat, raw-FPV
+  budgeted, custom override, and custom compaction assertions remain covered.
+  Evidence:
+  `ruff check tests/unit/agents/test_live_runtime.py` passed;
+  `ruff format --check tests/unit/agents/test_live_runtime.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 tests/unit/agents/test_live_runtime.py`
+  now reports only the existing unrelated
+  `test_openai_agents_cleanup_runner_invokes_sdk_then_checker` PLR0915; the
+  perf-profile PLR0915 is removed. The 6 split perf-profile tests passed with
+  `./scripts/dev/run_pytest_standalone.sh -q ...`. The quality baseline was
+  refreshed from 56 to 55 Ruff complexity violations with oversized modules
+  unchanged at 58 and `test_live_runtime.py` held at 4570 lines. Because the
+  main worktree currently has unrelated staged `eval-harness` renames, the
+  ratchet write/ok proof was run in a temporary clean worktree containing only
+  this test split patch; the refreshed baseline intentionally keeps the old
+  `skills/agent-validation-matrix/...` path until that rename slice lands.
