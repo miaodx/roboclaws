@@ -214,6 +214,11 @@ logs before choosing the next slice.
   helpers. Metric: 7 -> 6 complexity rows; oversized modules unchanged at 62.
   Proof: focused Isaac backend test, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac scene-camera color-profile test moved fake sim, sim-utils,
+  camera config, tensor, camera type, torch shim, and camera request setup into
+  focused helpers. Metric: 6 -> 5 complexity rows; oversized modules unchanged
+  at 62. Proof: focused Isaac backend test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

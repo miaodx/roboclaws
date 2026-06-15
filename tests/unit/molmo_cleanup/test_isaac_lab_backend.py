@@ -798,55 +798,54 @@ def test_isaac_rby1m_chase_camera_matches_mujoco_follower_pitch() -> None:
     assert math.degrees(math.atan2(vertical_drop, horizontal_distance)) == pytest.approx(45.0)
 
 
-def test_isaac_scene_camera_capture_applies_color_profile(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import numpy as np
+class _FakeSceneCameraSim:
+    device = "cpu"
 
-    class _FakeSim:
-        device = "cpu"
+    def __init__(self) -> None:
+        self.steps = 0
 
-        def __init__(self) -> None:
-            self.steps = 0
+    def reset(self) -> None:
+        self.steps = 0
 
-        def reset(self) -> None:
-            self.steps = 0
+    def step(self) -> None:
+        self.steps += 1
 
-        def step(self) -> None:
-            self.steps += 1
+    def get_physics_dt(self) -> float:
+        return 1 / 60
 
-        def get_physics_dt(self) -> float:
-            return 1 / 60
 
-    class _FakeSimUtils:
-        @staticmethod
-        def create_prim(*_args: object, **_kwargs: object) -> None:
-            return None
+class _FakeSceneCameraSimUtils:
+    @staticmethod
+    def create_prim(*_args: object, **_kwargs: object) -> None:
+        return None
 
-        class PinholeCameraCfg:
-            def __init__(self, **kwargs: object) -> None:
-                self.kwargs = kwargs
-
-    class _FakeCameraCfg:
+    class PinholeCameraCfg:
         def __init__(self, **kwargs: object) -> None:
             self.kwargs = kwargs
 
-    class _FakeTensor:
-        def __init__(self, array: np.ndarray) -> None:
-            self._array = array
 
-        def detach(self) -> "_FakeTensor":
-            return self
+class _FakeSceneCameraCfg:
+    def __init__(self, **kwargs: object) -> None:
+        self.kwargs = kwargs
 
-        def cpu(self) -> "_FakeTensor":
-            return self
 
-        def numpy(self) -> np.ndarray:
-            return self._array
+class _FakeSceneCameraTensor:
+    def __init__(self, array: object) -> None:
+        self._array = array
 
+    def detach(self) -> "_FakeSceneCameraTensor":
+        return self
+
+    def cpu(self) -> "_FakeSceneCameraTensor":
+        return self
+
+    def numpy(self) -> object:
+        return self._array
+
+
+def _fake_scene_camera_type(np: object) -> type:
     class _FakeCamera:
-        def __init__(self, cfg: _FakeCameraCfg) -> None:
+        def __init__(self, cfg: _FakeSceneCameraCfg) -> None:
             self.cfg = cfg
             self.data = SimpleNamespace(output={})
 
@@ -857,14 +856,37 @@ def test_isaac_scene_camera_capture_applies_color_profile(
             del dt
             frame = np.full((1, 4, 6, 3), 250, dtype=np.uint8)
             frame[:, 0, 0, :] = 230
-            self.data.output["rgb"] = _FakeTensor(frame)
+            self.data.output["rgb"] = _FakeSceneCameraTensor(frame)
 
-    class _FakeTorch:
-        float32 = "float32"
+    return _FakeCamera
 
-        @staticmethod
-        def tensor(value: object, **_kwargs: object) -> object:
-            return value
+
+class _FakeSceneCameraTorch:
+    float32 = "float32"
+
+    @staticmethod
+    def tensor(value: object, **_kwargs: object) -> object:
+        return value
+
+
+def _unit_scene_camera_request() -> dict[str, object]:
+    return {
+        "camera_model": "canonical_eye_target_camera_v1",
+        "views": [
+            {
+                "view_id": "fpv",
+                "eye": [0.0, 0.0, 1.0],
+                "target": [1.0, 0.0, 1.0],
+            }
+        ],
+    }
+
+
+def test_isaac_scene_camera_capture_applies_color_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
 
     monkeypatch.setattr(
         isaac_lab_backend_worker,
@@ -873,25 +895,16 @@ def test_isaac_scene_camera_capture_applies_color_profile(
     )
 
     result = isaac_lab_backend_worker._capture_scene_camera_request_with_existing_sim(
-        camera_request={
-            "camera_model": "canonical_eye_target_camera_v1",
-            "views": [
-                {
-                    "view_id": "fpv",
-                    "eye": [0.0, 0.0, 1.0],
-                    "target": [1.0, 0.0, 1.0],
-                }
-            ],
-        },
+        camera_request=_unit_scene_camera_request(),
         output_dir=tmp_path,
         width=6,
         height=4,
-        sim=_FakeSim(),
-        sim_utils=_FakeSimUtils,
+        sim=_FakeSceneCameraSim(),
+        sim_utils=_FakeSceneCameraSimUtils,
         stage_utils=SimpleNamespace(),
-        camera_type=_FakeCamera,
-        camera_cfg_type=_FakeCameraCfg,
-        torch=_FakeTorch,
+        camera_type=_fake_scene_camera_type(np),
+        camera_cfg_type=_FakeSceneCameraCfg,
+        torch=_FakeSceneCameraTorch,
         np=np,
         scene_bounds={},
     )
