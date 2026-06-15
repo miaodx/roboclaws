@@ -1,7 +1,12 @@
 <!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260527-231144.md -->
 # Isaac Lab MolmoSpaces Backend Support
 
-**Status:** CI-safe fake backend scaffold plus local runtime preflight,
+**Status:** Superseded by
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142. This file is historical MolmoSpaces Isaac evidence, not a current
+execution contract.
+
+**Historical implementation evidence:** CI-safe fake backend scaffold plus local runtime preflight,
 local GPU real-mode Phase A smoke proof, Phase B static robot-view evidence
 path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
 gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
@@ -25,8 +30,9 @@ explicitly `isaac_semantic_pose`, not planner-backed.
 **Last updated:** 2026-05-29
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
-**Workflow:** Pre-GSD plan reviewed through `intuitive-flow` autoplan intake;
-use this file as the canonical implementation source and closeout ledger.
+**Historical workflow:** Pre-GSD plan reviewed through `intuitive-flow`
+autoplan intake. Do not use this file as a current implementation source; use
+the superseding digital-twin Isaac / MolmoSpaces mainline separation plan.
 
 ## Problem
 

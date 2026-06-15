@@ -1,8 +1,9 @@
 ---
-status: ACTIVE_SUBPHASE
+status: SUPERSEDED
 plan_scope: mujoco-isaac-render-difference-probe-directions
 created: 2026-06-04
 last_updated: 2026-06-04
+superseded_by: 2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md
 accepted_severities:
   - P1
   - P2
@@ -12,7 +13,10 @@ accepted_severities:
 
 ## Status
 
-ACTIVE_SUBPHASE
+Superseded by
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142. This file is historical MolmoSpaces Isaac renderer evidence, not
+a current execution contract.
 
 This is a focused direction file for the visible MuJoCo/Isaac render differences
 after FPV camera parity improved. The 2026-06-04 bounded worker sub-phase makes

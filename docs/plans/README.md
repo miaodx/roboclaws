@@ -101,10 +101,11 @@ aid, not a source of truth for current priority.
 
 ### Rendering, Cameras, And Visual Grounding
 
-- [Isaac Lab MolmoSpaces Backend Support](isaac-lab-molmospaces-backend-support.md)
-- [MuJoCo Isaac Object And Render Parity Audit](mujoco-isaac-object-render-parity-audit.md)
-- [MuJoCo Isaac Render Difference Probe Directions](mujoco-isaac-render-difference-probe-directions.md)
-- [MuJoCo Isaac Visual Parity Convergence](mujoco-isaac-visual-parity-convergence.md)
+- [Digital-Twin Isaac / MolmoSpaces Mainline Separation](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+- [Isaac Lab MolmoSpaces Backend Support](isaac-lab-molmospaces-backend-support.md) (superseded / historical)
+- [MuJoCo Isaac Object And Render Parity Audit](mujoco-isaac-object-render-parity-audit.md) (superseded / historical)
+- [MuJoCo Isaac Render Difference Probe Directions](mujoco-isaac-render-difference-probe-directions.md) (superseded / historical)
+- [MuJoCo Isaac Visual Parity Convergence](mujoco-isaac-visual-parity-convergence.md) (superseded / historical)
 - [Runtime Render State Parity](refactor-runtime-render-state-parity.md)
 - [Scene Camera Material Vs Light Diagnostic](scene-camera-material-vs-light-diagnostic.md)
 - [Genesis Scene-Camera Backend Lane](genesis-scene-camera-backend-lane.md)

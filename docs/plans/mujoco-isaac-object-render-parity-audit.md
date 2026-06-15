@@ -1,13 +1,16 @@
 # MuJoCo Isaac Object And Render Parity Audit
 
-**Status:** Planned
+**Status:** Superseded by
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142. This file is historical MolmoSpaces Isaac renderer evidence, not
+a current execution contract.
 **Created:** 2026-06-03
 **Last updated:** 2026-06-03
 **Source:** MuJoCo/Isaac visual parity discussion after FPV head-camera
 alignment, chase-camera repair, combined material/light default path, and box
 visual-state freeze.
-**Workflow:** Pre-GSD plan. Use this file as the next execution source before
-creating any `.planning/` phase.
+**Historical workflow:** Pre-GSD plan superseded before current execution.
+Do not use this file as the next execution source.
 
 ## Intuitive-Flow Autoplan Reconciliation
 
@@ -167,7 +170,8 @@ Output:
 
 - `docs/status/active/mujoco-isaac-camera-visual-parity.md` remains the long
   evidence ledger.
-- This plan remains the execution source for new work.
+- This plan was the execution source for the historical audit work before it
+  was superseded by the digital-twin Isaac / MolmoSpaces mainline separation.
 
 Acceptance:
 
