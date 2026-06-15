@@ -470,16 +470,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/launch/catalog.py|C901|_overrides_with_surface_context",
-        "limit": 10,
-        "message": "`_overrides_with_surface_context` is too complex (11 > 10)",
-        "path": "roboclaws/launch/catalog.py",
-        "row": 547,
-        "symbol": "_overrides_with_surface_context",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/maps/bundle.py|C901|_normalize_room_only_fixture_poses",
         "limit": 10,
         "message": "`_normalize_room_only_fixture_poses` is too complex (11 > 10)",

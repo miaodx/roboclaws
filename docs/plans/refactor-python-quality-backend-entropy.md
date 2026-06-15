@@ -4731,3 +4731,19 @@ Stop this refactor loop when:
   59. A broader `ruff check --select C901,PLR0912,PLR0915` over the two
   contract test files still reports existing oversized test bodies unrelated to
   this slice.
+- 2026-06-15: Continued the launch/backend context residual by splitting
+  `roboclaws/launch/catalog.py::_overrides_with_surface_context(...)` into
+  table-driven launch-only stripping and missing-context merge helpers. The
+  public `run::surface` grammar, normalized surface/world/backend/agent-engine
+  overrides, provider-profile export path, dispatch backend lowering, and
+  scenario setup behavior remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/launch/catalog.py`
+  passed; `ruff check roboclaws/launch/catalog.py` passed;
+  `ruff format --check roboclaws/launch/catalog.py tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_backend_catalog_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_backend_catalog_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed with 156 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 67 to 66 Ruff complexity violations, with oversized modules unchanged at
+  59. A broader `ruff check --select C901,PLR0912,PLR0915` over the launch
+  tests still reports the existing `surface_args_from_legacy_task_args` helper
+  complexity unrelated to this slice.
