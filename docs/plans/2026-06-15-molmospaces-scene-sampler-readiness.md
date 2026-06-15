@@ -199,6 +199,11 @@ First slice implemented on 2026-06-15.
   manual source preparation for `procthor-10k-val`, `ithor`,
   `procthor-objaverse-val`, and `holodeck-objaverse-val` directly consumable by
   the next scanner flow.
+- The readiness exporter now returns a top-level summary index in its stdout
+  packet. It includes the UI/eval projections plus source availability,
+  candidate readiness, selection-gap, source-prep, scanner-admission, and
+  scanner-execution summaries, so a next Flow or CI gate can read one packet
+  before opening detailed artifact files.
 
 Verification run on 2026-06-15:
 
@@ -252,6 +257,9 @@ ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sample
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
 ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-source-prep-worklist --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
+ruff check scripts/operator_console/export_scene_sampler_readiness.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-export-summary --candidate-range 0:19 --no-generated-eval
 ```
 
 Current limits feeding the next Flow:

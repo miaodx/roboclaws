@@ -17,6 +17,10 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
 
     assert result["status"] == "success"
     assert result["threshold_failures"] == []
+    assert result["summary"]["readiness"]["source_count"] == 4
+    assert result["summary"]["candidate_readiness"]["source_count"] == 4
+    assert result["summary"]["selection_gaps"]["source_count"] == 4
+    assert result["summary"]["source_prep"]["source_count"] == 4
     artifacts = result["artifacts"]
     assert set(artifacts) == {
         "candidate_readiness",
@@ -315,6 +319,7 @@ def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     assert code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
+    assert payload["summary"]["eval_projection"]["ready_sample_count"] == 5
     assert payload["threshold_failures"][0]["ready_count"] == 5
 
 

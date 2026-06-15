@@ -172,17 +172,39 @@ def export_readiness_artifacts(
     """Write deterministic sampler artifacts for review and later scanner slices."""
 
     validate_sampler_manifest()
+    manifest = sampler_manifest()
+    projection = eval_projection_metadata()
     readiness = readiness_report()
     selection = selection_gap_report(candidate_indices=candidate_indices)
+    availability = (
+        source_availability_report(candidate_indices=candidate_indices)
+        if write_source_availability
+        else None
+    )
+    candidates = (
+        candidate_readiness_report(candidate_indices=candidate_indices)
+        if write_candidate_readiness
+        else None
+    )
+    source_prep = (
+        source_prep_report(candidate_indices=candidate_indices)
+        if write_source_prep
+        else None
+    )
+    scanner_admission = (
+        scanner_admission_report(candidate_indices=candidate_indices)
+        if write_scanner_admission
+        else None
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     artifacts: dict[str, str] = {}
     if write_manifest:
         manifest_path = output_dir / "scene_sampler_manifest.json"
-        _write_json(manifest_path, sampler_manifest())
+        _write_json(manifest_path, manifest)
         artifacts["manifest"] = str(manifest_path)
     if write_eval_projection:
         projection_path = output_dir / "scene_sampler_eval_projection.json"
-        _write_json(projection_path, eval_projection_metadata())
+        _write_json(projection_path, projection)
         artifacts["eval_projection"] = str(projection_path)
     if write_readiness_report:
         readiness_path = output_dir / "scene_sampler_readiness_report.json"
@@ -190,17 +212,11 @@ def export_readiness_artifacts(
         artifacts["readiness_report"] = str(readiness_path)
     if write_source_availability:
         availability_path = output_dir / "scene_sampler_source_availability.json"
-        _write_json(
-            availability_path,
-            source_availability_report(candidate_indices=candidate_indices),
-        )
+        _write_json(availability_path, availability or {})
         artifacts["source_availability"] = str(availability_path)
     if write_candidate_readiness:
         candidate_path = output_dir / "scene_sampler_candidate_readiness.json"
-        _write_json(
-            candidate_path,
-            candidate_readiness_report(candidate_indices=candidate_indices),
-        )
+        _write_json(candidate_path, candidates or {})
         artifacts["candidate_readiness"] = str(candidate_path)
     if write_selection_gaps:
         selection_path = output_dir / "scene_sampler_selection_gaps.json"
@@ -208,17 +224,11 @@ def export_readiness_artifacts(
         artifacts["selection_gaps"] = str(selection_path)
     if write_source_prep:
         source_prep_path = output_dir / "scene_sampler_source_prep.json"
-        _write_json(
-            source_prep_path,
-            source_prep_report(candidate_indices=candidate_indices),
-        )
+        _write_json(source_prep_path, source_prep or {})
         artifacts["source_prep"] = str(source_prep_path)
     if write_scanner_admission:
         scanner_admission_path = output_dir / "scene_sampler_scanner_admission.json"
-        _write_json(
-            scanner_admission_path,
-            scanner_admission_report(candidate_indices=candidate_indices),
-        )
+        _write_json(scanner_admission_path, scanner_admission or {})
         artifacts["scanner_admission"] = str(scanner_admission_path)
     scanner_execution: dict[str, Any] | None = None
     if write_scanner_execution_plan or required_scanner_ready_sources:
@@ -257,12 +267,52 @@ def export_readiness_artifacts(
         "output_dir": str(output_dir),
         "candidate_indices": list(candidate_indices),
         "artifacts": artifacts,
+        "summary": _export_summary(
+            manifest=manifest,
+            projection=projection,
+            readiness=readiness,
+            selection=selection,
+            availability=availability,
+            candidates=candidates,
+            source_prep=source_prep,
+            scanner_admission=scanner_admission,
+            scanner_execution=scanner_execution,
+        ),
         "threshold_failures": failures,
     }
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _export_summary(
+    *,
+    manifest: dict[str, Any],
+    projection: dict[str, Any],
+    readiness: dict[str, Any],
+    selection: dict[str, Any],
+    availability: dict[str, Any] | None,
+    candidates: dict[str, Any] | None,
+    source_prep: dict[str, Any] | None,
+    scanner_admission: dict[str, Any] | None,
+    scanner_execution: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "supported_scene_sources": manifest.get("supported_scene_sources", []),
+        "ui_world_ids": (manifest.get("projections") or {}).get("ui_world_ids", []),
+        "eval_sample_ids": (manifest.get("projections") or {}).get(
+            "eval_sample_ids", []
+        ),
+        "eval_projection": projection.get("summary", {}),
+        "readiness": readiness.get("summary", {}),
+        "source_availability": (availability or {}).get("summary", {}),
+        "candidate_readiness": (candidates or {}).get("summary", {}),
+        "selection_gaps": (selection or {}).get("summary", {}),
+        "source_prep": (source_prep or {}).get("summary", {}),
+        "scanner_admission": (scanner_admission or {}).get("summary", {}),
+        "scanner_execution": (scanner_execution or {}).get("summary", {}),
+    }
 
 
 def _candidate_indices(
