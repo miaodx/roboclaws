@@ -475,16 +475,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py|C901|main",
-        "limit": 10,
-        "message": "`main` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py",
-        "row": 79,
-        "symbol": "main",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_configure_exact_cleanup_task",
         "limit": 10,
         "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",

@@ -4973,3 +4973,18 @@ Stop this refactor loop when:
   dropped from 4570 to 4566 lines. As with the prior test split, the ratchet
   write/ok proof used a temporary clean worktree containing only this patch so
   the unrelated staged `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py::main(...)` into
+  selected-entry, preflight-status, failed-preflight-status, and entry-loop
+  helpers. The CLI flags, dry-run behavior, preflight order, manifest writing,
+  continue-on-error behavior, live command shape, and published status payloads
+  remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py`
+  passed; `ruff format --check scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py::test_dry_run_matrix_writes_status_and_manifest tests/unit/molmo_cleanup/test_ci_live_reports.py::test_dry_run_camera_raw_entry_uses_entry_profile tests/unit/molmo_cleanup/test_ci_live_reports.py::test_dry_run_camera_raw_generated_mess_count_override tests/unit/molmo_cleanup/test_ci_live_reports.py::test_ci_live_matrix_preserves_provider_timing_proxy_escape_hatch tests/unit/molmo_cleanup/test_ci_live_reports.py::test_failed_live_entry_publishes_partial_seed_diagnostics`
+  passed with 5 tests. The quality baseline was refreshed from 54 to 53 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof again used a temporary clean worktree containing only this
+  patch so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.
