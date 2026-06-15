@@ -112,6 +112,13 @@ logs before choosing the next slice.
   but remains a P1 hard-ceiling candidate. Proof: focused scene-sampler/eval
   tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Scene-sampler readiness-export artifact assertions moved behind
+  focused local helpers, removing that operator-console test from the ratchet
+  complexity list. Current ratchet still shows 25 complexity rows and 62
+  oversized modules, led next by `export_scene_sampler_readiness.py`,
+  `scene_sampler.py`, and one launch test. Proof: focused scene-sampler/eval
+  tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

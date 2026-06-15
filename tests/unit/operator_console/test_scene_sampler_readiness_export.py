@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -34,6 +35,7 @@ def isolate_scanner_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
 def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     result = export_readiness_artifacts(output_dir=tmp_path)
+    payloads = _read_export_payloads(tmp_path)
 
     assert result["status"] == "success"
     assert result["threshold_failures"] == []
@@ -56,21 +58,50 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "source_availability",
         "source_prep",
     }
-    manifest = json.loads((tmp_path / "scene_sampler_manifest.json").read_text())
-    projection = json.loads((tmp_path / "scene_sampler_eval_projection.json").read_text())
-    readiness = json.loads((tmp_path / "scene_sampler_readiness_report.json").read_text())
-    availability = json.loads((tmp_path / "scene_sampler_source_availability.json").read_text())
-    candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
-    selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
-    source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
-    scanner_admission = json.loads((tmp_path / "scene_sampler_scanner_admission.json").read_text())
-    scanner_execution = json.loads(
-        (tmp_path / "scene_sampler_scanner_execution_plan.json").read_text()
+    _assert_projection_readiness_and_candidates(payloads)
+    _assert_selection_and_source_prep(payloads)
+    _assert_scanner_artifacts(payloads)
+    _assert_next_flow(payloads, result=result, output_dir=tmp_path)
+    _assert_generated_eval(
+        payloads,
+        output_dir=tmp_path,
+        sample_count=len(artifacts["generated_eval_samples"]),
     )
-    next_flow = json.loads((tmp_path / "scene_sampler_next_flow_worklist.json").read_text())
-    generated_suite = json.loads(
-        (tmp_path / "generated_eval/scene_sampler_stress.json").read_text()
-    )
+
+
+def _read_export_payloads(output_dir: Path) -> dict[str, Any]:
+    return {
+        "manifest": json.loads((output_dir / "scene_sampler_manifest.json").read_text()),
+        "projection": json.loads((output_dir / "scene_sampler_eval_projection.json").read_text()),
+        "readiness": json.loads((output_dir / "scene_sampler_readiness_report.json").read_text()),
+        "availability": json.loads(
+            (output_dir / "scene_sampler_source_availability.json").read_text()
+        ),
+        "candidates": json.loads(
+            (output_dir / "scene_sampler_candidate_readiness.json").read_text()
+        ),
+        "selection": json.loads((output_dir / "scene_sampler_selection_gaps.json").read_text()),
+        "source_prep": json.loads((output_dir / "scene_sampler_source_prep.json").read_text()),
+        "scanner_admission": json.loads(
+            (output_dir / "scene_sampler_scanner_admission.json").read_text()
+        ),
+        "scanner_execution": json.loads(
+            (output_dir / "scene_sampler_scanner_execution_plan.json").read_text()
+        ),
+        "next_flow": json.loads((output_dir / "scene_sampler_next_flow_worklist.json").read_text()),
+        "generated_suite": json.loads(
+            (output_dir / "generated_eval/scene_sampler_stress.json").read_text()
+        ),
+    }
+
+
+def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> None:
+    manifest = payloads["manifest"]
+    projection = payloads["projection"]
+    readiness = payloads["readiness"]
+    availability = payloads["availability"]
+    candidates = payloads["candidates"]
+
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
@@ -100,6 +131,12 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert candidates["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert candidates["sources"]["ithor"]["eval_ready_count"] == 0
+
+
+def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
+    selection = payloads["selection"]
+    source_prep = payloads["source_prep"]
+
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
     assert selection["summary"]["source_count"] == 4
     assert "worklist" in selection["summary"]
@@ -107,11 +144,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert selection["sources"]["procthor-10k-val"]["selection_capacity_status"] == "complete"
     assert selection["sources"]["procthor-10k-val"]["next_action"] == "none"
     assert selection["sources"]["ithor"]["ui_needed_count"] == 3
-    assert selection["sources"]["ithor"]["next_action"] in {
-        "expand_candidate_range",
-        "run_source_prep_before_scanner",
-        "run_scanner_admission",
-    }
+    assert selection["sources"]["ithor"]["next_action"] == "expand_candidate_range"
     assert source_prep["schema"] == "molmospaces_scene_sampler_source_prep_v1"
     assert source_prep["probe_mode"] == "no_download_no_vlm"
     assert source_prep["download_policy"] == "manual_operator_only"
@@ -148,6 +181,12 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         command["name"] == "install_single_scene_example"
         for command in source_prep["sources"]["ithor"]["operator_commands"]
     )
+
+
+def _assert_scanner_artifacts(payloads: dict[str, Any]) -> None:
+    scanner_admission = payloads["scanner_admission"]
+    scanner_execution = payloads["scanner_execution"]
+
     assert scanner_admission["schema"] == "molmospaces_scene_sampler_scanner_admission_v1"
     assert scanner_admission["probe_mode"] == "no_download_no_backend_no_vlm"
     assert scanner_admission["summary"]["source_count"] == 4
@@ -158,6 +197,17 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert scanner_execution["probe_mode"] == "no_download_no_backend_no_vlm"
     assert scanner_execution["summary"]["source_count"] == 4
     assert "ready_for_product_smoke_count" in scanner_execution["summary"]
+
+
+def _assert_next_flow(
+    payloads: dict[str, Any],
+    *,
+    result: dict[str, Any],
+    output_dir: Path,
+) -> None:
+    next_flow = payloads["next_flow"]
+    scanner_execution = payloads["scanner_execution"]
+
     assert next_flow["schema"] == "molmospaces_scene_sampler_next_flow_worklist_v1"
     assert next_flow["probe_mode"] == "no_download_no_backend_no_vlm"
     assert next_flow["download_policy"] == "manual_operator_only"
@@ -172,9 +222,9 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "holodeck-objaverse-val",
     }
     assert result["summary"]["next_flow_worklist"]["source_count"] == 4
-    assert next_flow["artifact_paths"]["readiness_output_dir"] == str(tmp_path)
+    assert next_flow["artifact_paths"]["readiness_output_dir"] == str(output_dir)
     assert next_flow["artifact_paths"]["source_prep"] == str(
-        tmp_path / "scene_sampler_source_prep.json"
+        output_dir / "scene_sampler_source_prep.json"
     )
     assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "ready"
     assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 10
@@ -186,13 +236,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert next_flow["sources"]["procthor-objaverse-val"]["next_action"] == "none"
     assert next_flow["sources"]["ithor"]["ui_needed_count"] == 3
     assert next_flow["sources"]["ithor"]["eval_needed_count"] == 10
-    assert next_flow["sources"]["ithor"]["next_action"] in {
-        "install_repo_dev_runtime",
-        "run_manual_source_prep",
-        "run_scanner_plan_for_ready_candidates",
-        "expand_candidate_range",
-    }
-    assert next_flow["sources"]["ithor"]["recommended_candidate_range"] in {"0:9", "0:19"}
+    assert next_flow["sources"]["ithor"]["next_action"] == "expand_candidate_range"
+    assert next_flow["sources"]["ithor"]["recommended_candidate_range"] == "0:19"
     assert "source_asset_available" in next_flow["sources"]["ithor"]["missing_gate_counts"]
     ithor_commands = next_flow["sources"]["ithor"]["recommended_commands"]
     assert "source_prep_dry_run" in [command["name"] for command in ithor_commands]
@@ -218,15 +263,25 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
             in ithor_scanner["preview_command"]
         )
         assert "world=molmospaces/ithor/" in ithor_scanner["map_build_product_smoke_command"]
+
+
+def _assert_generated_eval(
+    payloads: dict[str, Any],
+    *,
+    output_dir: Path,
+    sample_count: int,
+) -> None:
+    generated_suite = payloads["generated_suite"]
+
     assert generated_suite == json.loads(
         (REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json").read_text(
             encoding="utf-8"
         )
     )
-    assert len(artifacts["generated_eval_samples"]) == 20
+    assert sample_count == 20
     generated_sample = json.loads(
         (
-            tmp_path / "generated_eval/samples/scene_sampler/procthor-10k-val_0_map_build.json"
+            output_dir / "generated_eval/samples/scene_sampler/procthor-10k-val_0_map_build.json"
         ).read_text(encoding="utf-8")
     )
     committed_sample = json.loads(
