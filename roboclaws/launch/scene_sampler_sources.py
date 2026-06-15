@@ -173,7 +173,19 @@ SCANNER_READY_METADATA: dict[str, dict[int, dict[str, Any]]] = {
     },
 }
 
+_ITHOR_REJECTED_METADATA: dict[int, dict[str, Any]] = {
+    index: {
+        "room_count": 1,
+        "waypoint_count": 2,
+        "quality_score": 1.0,
+        "coverage_score": 0.1,
+        "blocked_reason": "fewer_than_three_public_navigation_areas",
+    }
+    for index in range(1, 13)
+}
+
 SCANNER_REJECTED_METADATA: dict[str, dict[int, dict[str, Any]]] = {
+    "ithor": _ITHOR_REJECTED_METADATA,
     "procthor-objaverse-val": {
         2: {
             "room_count": 1,
@@ -215,7 +227,11 @@ SCANNER_REJECTED_METADATA: dict[str, dict[int, dict[str, Any]]] = {
 
 
 def admitted_sources(*, supported_sources: tuple[str, ...]) -> tuple[str, ...]:
-    admitted = set(SOURCE_UI_SELECTED_INDICES) | set(SOURCE_EVAL_READY_INDICES)
+    admitted = (
+        set(SOURCE_UI_SELECTED_INDICES)
+        | set(SOURCE_EVAL_READY_INDICES)
+        | set(SCANNER_REJECTED_METADATA)
+    )
     return tuple(source for source in supported_sources if source in admitted)
 
 
@@ -261,13 +277,13 @@ def legacy_world_id(*, source: str, scene_index: int) -> str:
 
 
 def category_provenance(source: str) -> str:
-    if source == "procthor-objaverse-val":
+    if source in {"ithor", "procthor-objaverse-val"}:
         return "source_metadata"
     return "prepared_visual_label_manifest"
 
 
 def category_manifest(source: str, *, default_manifest: str) -> str:
-    if source == "procthor-objaverse-val":
+    if source in {"ithor", "procthor-objaverse-val"}:
         return ""
     return default_manifest
 

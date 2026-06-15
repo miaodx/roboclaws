@@ -445,12 +445,13 @@ def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
     assert sampler_projection["summary"]["ready_sample_count"] == 20
     assert sampler_projection["summary"]["remaining_sample_count"] == 20
     assert sampler_projection["summary"]["partial_source_count"] == 0
-    assert sampler_projection["summary"]["blocked_source_count"] == 2
+    assert sampler_projection["summary"]["blocked_source_count"] == 1
+    assert sampler_projection["summary"]["rejected_source_count"] == 1
     assert sampler_projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
     assert sampler_projection["scene_sources"]["procthor-10k-val"]["needed_count"] == 0
     assert sampler_projection["scene_sources"]["procthor-objaverse-val"]["ready_count"] == 10
     assert sampler_projection["scene_sources"]["procthor-objaverse-val"]["needed_count"] == 0
-    assert sampler_projection["scene_sources"]["ithor"]["support_status"] == "blocked"
+    assert sampler_projection["scene_sources"]["ithor"]["support_status"] == "rejected"
     result = payload["results"][0]
     assert result["grader_outputs"]["sampler_admission"]["status"] == "passed"
     assert result["grader_outputs"]["sampler_admission"]["scene_source"] == "procthor-10k-val"

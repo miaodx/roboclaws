@@ -10,6 +10,7 @@ from typing import Any
 _SOURCE_PREP_ACTIONS = {
     "complete": "none",
     "ready_for_scanner": "run_scanner_admission",
+    "rejected_exhausted": "do_not_scan_without_new_human_curation",
     "blocked_molmospaces_module": "install_repo_dev_runtime",
     "blocked_scene_root": "configure_or_install_molmospaces_scene_root",
     "blocked_missing_resources": "run_manual_source_prep",
@@ -304,6 +305,8 @@ def next_flow_status(
     if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
         return "scanner_ready"
     prep_status = str(prep_source.get("prep_status") or "")
+    if prep_status == "rejected_exhausted":
+        return "rejected_exhausted"
     if prep_status.startswith("blocked_"):
         return prep_status
     return "needs_scanner_or_selection"
@@ -541,6 +544,9 @@ def next_flow_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "configure_or_install_molmospaces_scene_root",
                 "install_repo_dev_runtime",
             }
+        ),
+        "rejected_exhausted_source_count": sum(
+            1 for source in sources.values() if source.get("flow_status") == "rejected_exhausted"
         ),
         "next_actions": _next_flow_action_counts(actionable_sources),
         "worklist": [_next_flow_worklist_item(source) for source in actionable_sources],

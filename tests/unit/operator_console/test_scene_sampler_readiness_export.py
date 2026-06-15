@@ -75,14 +75,14 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "complete"
-    assert projection["scene_sources"]["ithor"]["support_status"] == "blocked"
+    assert projection["scene_sources"]["ithor"]["support_status"] == "rejected"
     assert projection["summary"]["ready_sample_count"] == 20
     assert projection["summary"]["remaining_sample_count"] == 20
     assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert readiness["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
     assert readiness["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert readiness["sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
-        "environment_blocked"
+        "map_actionability_failure"
     )
     assert availability["schema"] == "molmospaces_scene_source_availability_report_v1"
     assert availability["probe_mode"] == "no_download_no_vlm"
@@ -335,8 +335,8 @@ def test_scene_sampler_readiness_export_fails_when_scanner_source_has_no_ready_c
             "threshold": "scanner_ready",
             "reason": "no_ready_product_smoke_candidates",
             "ready_for_product_smoke_count": 0,
-            "candidate_count": 10,
-            "blocked_count": 10,
+            "candidate_count": 8,
+            "blocked_count": 8,
             "prep_status": "blocked_molmospaces_module",
         }
     ]
@@ -391,4 +391,4 @@ def test_scene_sampler_readiness_export_cli_accepts_scanner_ready_threshold(
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
     assert payload["threshold_failures"][0]["threshold"] == "scanner_ready"
-    assert payload["threshold_failures"][0]["blocked_count"] == 10
+    assert payload["threshold_failures"][0]["blocked_count"] == 8

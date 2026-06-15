@@ -314,6 +314,7 @@ def eval_projection_metadata() -> dict[str, Any]:
         support_status = _eval_projection_support_status(
             ready_count=ready_count,
             blocked_count=blocked_count,
+            rejected_count=rejected_count,
             target_count=EVAL_TARGET_PER_SCENE_SOURCE,
         )
         total_ready_count += ready_count
@@ -331,7 +332,9 @@ def eval_projection_metadata() -> dict[str, Any]:
             "blocked_or_rejected_row_count": blocked_or_rejected_row_count,
             "support_status": support_status,
             "status": (
-                "complete" if ready_count == EVAL_TARGET_PER_SCENE_SOURCE else "partial_or_blocked"
+                "complete"
+                if ready_count == EVAL_TARGET_PER_SCENE_SOURCE
+                else ("rejected" if support_status == "rejected" else "partial_or_blocked")
             ),
             "sample_ids": [eval_sample_id(row) for row in ready],
             "blocked_rows": [row.to_dict() for row in blocked_or_rejected],
@@ -347,6 +350,9 @@ def eval_projection_metadata() -> dict[str, Any]:
             "ready_sample_count": total_ready_count,
             "partial_source_count": sum(
                 1 for payload in by_source.values() if payload["support_status"] == "partial"
+            ),
+            "rejected_source_count": sum(
+                1 for payload in by_source.values() if payload["support_status"] == "rejected"
             ),
             "blocked_source_count": sum(
                 1 for payload in by_source.values() if payload["support_status"] == "blocked"
@@ -727,6 +733,11 @@ def selection_gap_report(
                 and (item.get("candidate_file") or {}).get("status") != "missing_from_index_map"
             )
         ]
+        rejected_candidate_indices = [
+            item["scene_index"]
+            for item in source_candidates
+            if item["readiness_status"] == READINESS_REJECTED
+        ]
         ui_scan_candidates = scanner_candidates[:ui_needed]
         eval_scan_candidates = scanner_candidates[:eval_needed]
         source_availability_status = (source_payload.get("source_availability") or {}).get("status")
@@ -735,6 +746,7 @@ def selection_gap_report(
             ui_available=len(ui_scan_candidates),
             eval_needed=eval_needed,
             eval_available=len(eval_scan_candidates),
+            rejected_count=len(rejected_candidate_indices),
         )
         sources[source] = {
             "scene_source": source,
@@ -759,11 +771,7 @@ def selection_gap_report(
                 _selection_candidate_summary(item)
                 for item in _unique_candidates([*ui_scan_candidates, *eval_scan_candidates])
             ],
-            "rejected_candidate_indices": [
-                item["scene_index"]
-                for item in source_candidates
-                if item["readiness_status"] == READINESS_REJECTED
-            ],
+            "rejected_candidate_indices": rejected_candidate_indices,
         }
     return {
         "schema": "molmospaces_scene_sampler_selection_gaps_v1",
@@ -795,9 +803,12 @@ def source_prep_report(
             if isinstance(item, dict)
         ]
         source_complete = source_selection.get("status") == "complete"
+        source_rejected_exhausted = (
+            source_selection.get("selection_capacity_status") == "rejected_exhausted"
+        )
         missing_resources = (
             []
-            if source_complete
+            if source_complete or source_rejected_exhausted
             else _missing_source_resources(
                 source=source,
                 source_availability=source_availability,
@@ -810,7 +821,9 @@ def source_prep_report(
         if next_eval_count < eval_needed:
             recommended_end = max(recommended_end, 19)
         next_scan_candidates = (
-            [] if source_complete else source_selection.get("next_scan_candidates") or []
+            []
+            if source_complete or source_rejected_exhausted
+            else source_selection.get("next_scan_candidates") or []
         )
         sources[source] = {
             "scene_source": source,
@@ -1233,6 +1246,7 @@ def _eval_projection_support_status(
     *,
     ready_count: int,
     blocked_count: int,
+    rejected_count: int,
     target_count: int,
 ) -> str:
     if ready_count == target_count:
@@ -1241,6 +1255,8 @@ def _eval_projection_support_status(
         return "partial"
     if blocked_count > 0:
         return "blocked"
+    if rejected_count > 0:
+        return "rejected"
     return "not_started"
 
 
@@ -1676,6 +1692,8 @@ def _source_prep_status(
 ) -> str:
     if source_selection.get("status") == "complete":
         return "complete"
+    if source_selection.get("selection_capacity_status") == "rejected_exhausted":
+        return "rejected_exhausted"
     if source_availability.get("module_available") is False:
         return "blocked_molmospaces_module"
     if not source_availability.get("scene_root_available"):
@@ -1734,6 +1752,8 @@ def _source_prep_worklist(sources: dict[str, dict[str, Any]]) -> list[dict[str, 
 def _source_prep_next_action(prep_status: str) -> str:
     if prep_status == "complete":
         return "none"
+    if prep_status == "rejected_exhausted":
+        return "do_not_scan_without_new_human_curation"
     if prep_status == "ready_for_scanner":
         return "run_scanner_admission"
     if prep_status == "blocked_molmospaces_module":
@@ -2203,9 +2223,12 @@ def _selection_capacity_status(
     ui_available: int,
     eval_needed: int,
     eval_available: int,
+    rejected_count: int = 0,
 ) -> str:
     if ui_needed == 0 and eval_needed == 0:
         return "complete"
+    if rejected_count and ui_available == 0 and eval_available == 0:
+        return "rejected_exhausted"
     if ui_available < ui_needed or eval_available < eval_needed:
         return "candidate_range_insufficient"
     return "candidate_range_sufficient"
@@ -2218,6 +2241,8 @@ def _selection_next_action(
 ) -> str:
     if capacity_status == "complete":
         return "none"
+    if capacity_status == "rejected_exhausted":
+        return "do_not_scan_without_new_human_curation"
     if capacity_status == "candidate_range_insufficient":
         return "expand_candidate_range"
     if source_availability_status != "available":

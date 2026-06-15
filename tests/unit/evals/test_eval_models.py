@@ -313,7 +313,8 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     projection = scene_suite.metadata["sampler_projection"]
     assert projection["summary"]["ready_sample_count"] == 20
     assert projection["summary"]["partial_source_count"] == 0
-    assert projection["summary"]["blocked_source_count"] == 2
+    assert projection["summary"]["blocked_source_count"] == 1
+    assert projection["summary"]["rejected_source_count"] == 1
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["target_count"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "complete"
@@ -323,9 +324,9 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     assert projection["scene_sources"]["procthor-objaverse-val"]["support_status"] == "complete"
     assert projection["scene_sources"]["procthor-objaverse-val"]["partial_gap_count"] == 0
     assert projection["scene_sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
-        "environment_blocked"
+        "map_actionability_failure"
     )
-    assert projection["scene_sources"]["ithor"]["support_status"] == "blocked"
+    assert projection["scene_sources"]["ithor"]["support_status"] == "rejected"
 
 
 def _minimal_suite_payload(sample_id: str) -> dict:
