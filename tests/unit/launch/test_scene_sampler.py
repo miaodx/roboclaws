@@ -20,6 +20,7 @@ from roboclaws.launch.scene_sampler import (
     readiness_report,
     sampler_manifest,
     sampler_rows,
+    selection_gap_report,
     source_availability_report,
     ui_molmospaces_world_ids,
     validate_sampler_manifest,
@@ -252,3 +253,38 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     assert ithor["blocked_candidate_count"] == 3
     assert ithor["candidates"][0]["world_id"] == "molmospaces/ithor/0"
     assert ithor["candidates"][0]["failure_class"] == "environment_blocked"
+
+
+def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
+    monkeypatch,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces"),
+    )
+
+    report = selection_gap_report(candidate_indices=tuple(range(10)))
+
+    assert report["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
+    procthor = report["sources"]["procthor-10k-val"]
+    assert procthor["ui_needed_count"] == 0
+    assert procthor["eval_needed_count"] == 5
+    assert procthor["next_ui_scan_world_ids"] == []
+    assert procthor["next_eval_scan_world_ids"] == [
+        "molmospaces/procthor-10k-val/6",
+        "molmospaces/procthor-10k-val/8",
+    ]
+    assert procthor["rejected_candidate_indices"] == [1, 4, 7]
+
+    ithor = report["sources"]["ithor"]
+    assert ithor["ui_needed_count"] == 3
+    assert ithor["eval_needed_count"] == 10
+    assert ithor["next_ui_scan_world_ids"] == [
+        "molmospaces/ithor/0",
+        "molmospaces/ithor/1",
+        "molmospaces/ithor/2",
+    ]
+    assert ithor["next_eval_scan_world_ids"][:3] == ithor["next_ui_scan_world_ids"]

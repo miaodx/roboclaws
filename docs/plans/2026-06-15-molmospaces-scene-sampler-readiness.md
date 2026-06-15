@@ -78,6 +78,10 @@ First slice implemented on 2026-06-15.
   It carries existing ready/rejected `procthor-10k-val` rows and blocked
   source-aware candidate packets such as `molmospaces/ithor/0` for sources that
   still need real scene preparation.
+- Readiness export also includes `scene_sampler_selection_gaps.json`, a
+  deterministic scanner worklist projection that records how many UI/eval
+  samples each source still needs and which source-aware world ids should be
+  scanned next.
 
 Verification run on 2026-06-15:
 
@@ -151,10 +155,11 @@ Next Flow implementation slices:
   - Current scaffold: run
      `python scripts/operator_console/export_scene_sampler_readiness.py` to
      write validated sampler artifacts under `output/scene-sampler-readiness/`.
-     The export now includes no-download source availability evidence and
-     candidate readiness packets. A later slice should replace or extend the
-     static facts with real scanner candidate output for new source families
-     after the MolmoSpaces runtime and scene assets are visible.
+     The export now includes no-download source availability evidence,
+     candidate readiness packets, and selection-gap worklists. A later slice
+     should replace or extend the static facts with real scanner candidate
+     output for new source families after the MolmoSpaces runtime and scene
+     assets are visible.
    - Strict threshold mode is available for gates. For example,
      `--require-ui-supported-source procthor-10k-val` should pass today, while
      `--require-eval-complete-source procthor-10k-val` should fail until the

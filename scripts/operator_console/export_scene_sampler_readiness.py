@@ -19,6 +19,7 @@ from roboclaws.launch.scene_sampler import (  # noqa: E402
     eval_projection_metadata,
     readiness_report,
     sampler_manifest,
+    selection_gap_report,
     source_availability_report,
     validate_sampler_manifest,
 )
@@ -35,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         write_readiness_report=not args.no_readiness_report,
         write_source_availability=not args.no_source_availability,
         write_candidate_readiness=not args.no_candidate_readiness,
+        write_selection_gaps=not args.no_selection_gaps,
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
     )
@@ -56,6 +58,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-readiness-report", action="store_true")
     parser.add_argument("--no-source-availability", action="store_true")
     parser.add_argument("--no-candidate-readiness", action="store_true")
+    parser.add_argument("--no-selection-gaps", action="store_true")
     parser.add_argument(
         "--require-ui-supported-source",
         action="append",
@@ -89,6 +92,7 @@ def export_readiness_artifacts(
     write_readiness_report: bool = True,
     write_source_availability: bool = True,
     write_candidate_readiness: bool = True,
+    write_selection_gaps: bool = True,
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
 ) -> dict[str, Any]:
@@ -118,6 +122,10 @@ def export_readiness_artifacts(
         candidate_path = output_dir / "scene_sampler_candidate_readiness.json"
         _write_json(candidate_path, candidate_readiness_report())
         artifacts["candidate_readiness"] = str(candidate_path)
+    if write_selection_gaps:
+        selection_path = output_dir / "scene_sampler_selection_gaps.json"
+        _write_json(selection_path, selection_gap_report())
+        artifacts["selection_gaps"] = str(selection_path)
     failures = _threshold_failures(
         readiness,
         required_ui_supported_sources=required_ui_supported_sources,

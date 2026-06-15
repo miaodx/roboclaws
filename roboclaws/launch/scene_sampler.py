@@ -445,6 +445,61 @@ def candidate_readiness_report(
     }
 
 
+def selection_gap_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return deterministic scanner worklist gaps toward UI/eval source targets."""
+
+    candidates = candidate_readiness_report(candidate_indices=candidate_indices)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_payload = candidates["sources"][source]
+        source_candidates = source_payload["candidates"]
+        ui_ready_count = int(source_payload["ui_ready_count"])
+        eval_ready_count = int(source_payload["eval_ready_count"])
+        ui_needed = max(0, UI_TARGET_PER_SCENE_SOURCE - ui_ready_count)
+        eval_needed = max(0, EVAL_TARGET_PER_SCENE_SOURCE - eval_ready_count)
+        scanner_candidates = [
+            item
+            for item in source_candidates
+            if item["readiness_status"] == READINESS_BLOCKED and not item["eval_ready"]
+        ]
+        ui_scan_candidates = scanner_candidates[:ui_needed]
+        eval_scan_candidates = scanner_candidates[:eval_needed]
+        sources[source] = {
+            "scene_source": source,
+            "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
+            "ui_ready_count": ui_ready_count,
+            "ui_needed_count": ui_needed,
+            "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
+            "eval_ready_count": eval_ready_count,
+            "eval_needed_count": eval_needed,
+            "status": "complete" if ui_needed == 0 and eval_needed == 0 else "incomplete",
+            "source_availability_status": (
+                source_payload.get("source_availability") or {}
+            ).get("status"),
+            "next_ui_scan_world_ids": [item["world_id"] for item in ui_scan_candidates],
+            "next_eval_scan_world_ids": [item["world_id"] for item in eval_scan_candidates],
+            "next_scan_candidates": [
+                _selection_candidate_summary(item)
+                for item in _unique_candidates([*ui_scan_candidates, *eval_scan_candidates])
+            ],
+            "rejected_candidate_indices": [
+                item["scene_index"]
+                for item in source_candidates
+                if item["readiness_status"] == READINESS_REJECTED
+            ],
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_selection_gaps_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_vlm",
+        "candidate_indices": list(candidate_indices),
+        "sources": sources,
+    }
+
+
 def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
     """Load the prepared room-category label manifest used for admission."""
 
@@ -810,6 +865,31 @@ def _blocked_candidate_packet(
         "source_availability_status": source_availability.get("status"),
         "candidate_file": candidate_file,
     }
+
+
+def _selection_candidate_summary(candidate: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_source": candidate["scene_source"],
+        "scene_index": candidate["scene_index"],
+        "world_id": candidate["world_id"],
+        "readiness_status": candidate["readiness_status"],
+        "failure_class": candidate["failure_class"],
+        "blocked_reason": candidate["blocked_reason"],
+        "source_availability_status": candidate.get("source_availability_status", ""),
+        "candidate_file": candidate.get("candidate_file", {}),
+    }
+
+
+def _unique_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, int]] = set()
+    unique: list[dict[str, Any]] = []
+    for candidate in candidates:
+        key = (str(candidate["scene_source"]), int(candidate["scene_index"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(candidate)
+    return unique
 
 
 def _parse_scene_index(raw_value: str, *, world_id: str) -> int:

@@ -16,6 +16,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "manifest",
         "eval_projection",
         "readiness_report",
+        "selection_gaps",
         "source_availability",
     }
     manifest = json.loads((tmp_path / "scene_sampler_manifest.json").read_text())
@@ -25,6 +26,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         (tmp_path / "scene_sampler_source_availability.json").read_text()
     )
     candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
+    selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
@@ -41,6 +43,9 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert candidates["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["ithor"]["blocked_candidate_count"] == 10
+    assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
+    assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
+    assert selection["sources"]["ithor"]["ui_needed_count"] == 3
 
 
 def test_scene_sampler_readiness_export_can_require_ui_supported_source(tmp_path) -> None:
