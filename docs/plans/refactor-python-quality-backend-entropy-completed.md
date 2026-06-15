@@ -191,6 +191,12 @@ logs before choosing the next slice.
   unchanged at 62. Proof: focused apple-to-apple test, ruff, format check, and
   ratchet.
 
+- 2026-06-16: Robot-camera render-contract diagnostics test split light/shadow
+  fixtures, scene-binding diagnostics, summary checks, material response checks,
+  preview-surface checks, and tone/location assertions into focused helpers.
+  Metric: 11 -> 10 complexity rows; oversized modules unchanged at 62. Proof:
+  focused apple-to-apple test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

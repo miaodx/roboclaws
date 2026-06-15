@@ -756,6 +756,36 @@ def test_robot_camera_render_contract_diagnostics_reports_light_shadow_delta(
         RUN_CAMERA_COMPARISON_PATH,
         "run_robot_camera_apple2apple_comparison_render_contract",
     )
+    fixtures = _render_contract_light_shadow_fixtures(tmp_path)
+    manifest = _render_contract_light_shadow_manifest()
+    mujoco_state = {"scene_xml": str(fixtures["mujoco_xml"]), "robot_xml": "robot.xml"}
+    isaac_state = {
+        "scene_usd": str(fixtures["isaac_usd"]),
+        "scene_binding_diagnostics": _render_contract_scene_binding_diagnostics(),
+    }
+
+    run_camera._attach_state_artifact_summaries(
+        manifest,
+        output_dir=tmp_path,
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+    )
+    (tmp_path / "mujoco_state.json").write_text(json.dumps(mujoco_state), encoding="utf-8")
+    (tmp_path / "isaac_state.json").write_text(json.dumps(isaac_state), encoding="utf-8")
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+
+    summary = manifest["summary"]["render_contract_diagnostics"]
+    checks = manifest["summary"]["render_domain_checks"]
+    location = manifest["locations"][0]["render_contract_diagnostics"]
+    check_by_id = {item["check_id"]: item for item in checks["checks"]}
+    _assert_render_contract_summary(summary, checks, check_by_id)
+    _assert_texture_material_response_check(check_by_id)
+    _assert_preview_surface_material_check(check_by_id)
+    _assert_tone_color_and_location_check(check_by_id, location)
+
+
+def _render_contract_light_shadow_fixtures(tmp_path: Path) -> dict[str, Path]:
     mujoco_xml = tmp_path / "scene.xml"
     mujoco_xml.write_text(
         """<mujoco>
@@ -824,7 +854,11 @@ def Xform "World"
 """,
         encoding="utf-8",
     )
-    manifest = {
+    return {"mujoco_xml": mujoco_xml, "isaac_usd": isaac_usd}
+
+
+def _render_contract_light_shadow_manifest() -> dict[str, object]:
+    return {
         "locations": [
             {
                 "status": "success",
@@ -846,42 +880,29 @@ def Xform "World"
         ],
         "summary": {},
     }
-    mujoco_state = {"scene_xml": str(mujoco_xml), "robot_xml": "robot.xml"}
-    isaac_state = {
-        "scene_usd": str(isaac_usd),
-        "scene_binding_diagnostics": {
-            "schema": "binding_v1",
-            "status": "selected_bound",
-            "receptacle_bindings": {
-                "bed_1": {
-                    "status": "bound",
-                    "public_id": "bed_1",
-                    "kind": "receptacle",
-                    "usd_prim_path": "/World/bed_1",
-                    "geometry_status": "renderable",
-                }
-            },
+
+
+def _render_contract_scene_binding_diagnostics() -> dict[str, object]:
+    return {
+        "schema": "binding_v1",
+        "status": "selected_bound",
+        "receptacle_bindings": {
+            "bed_1": {
+                "status": "bound",
+                "public_id": "bed_1",
+                "kind": "receptacle",
+                "usd_prim_path": "/World/bed_1",
+                "geometry_status": "renderable",
+            }
         },
     }
 
-    run_camera._attach_state_artifact_summaries(
-        manifest,
-        output_dir=tmp_path,
-        mujoco_state=mujoco_state,
-        isaac_state=isaac_state,
-    )
-    (tmp_path / "mujoco_state.json").write_text(
-        __import__("json").dumps(mujoco_state), encoding="utf-8"
-    )
-    (tmp_path / "isaac_state.json").write_text(
-        __import__("json").dumps(isaac_state), encoding="utf-8"
-    )
 
-    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
-
-    summary = manifest["summary"]["render_contract_diagnostics"]
-    checks = manifest["summary"]["render_domain_checks"]
-    location = manifest["locations"][0]["render_contract_diagnostics"]
+def _assert_render_contract_summary(
+    summary: dict[str, object],
+    checks: dict[str, object],
+    check_by_id: dict[str, dict[str, object]],
+) -> None:
     assert summary["status"] == "lighting_shadow_contract_delta"
     assert summary["mujoco_light_count"] == 1
     assert summary["isaac_light_count"] == 2
@@ -889,9 +910,11 @@ def Xform "World"
     assert summary["target_contract_delta_counts"] == {"material_texture_names_match": 1}
     assert checks["schema"] == "robot_camera_render_domain_checks_v1"
     assert checks["status"] == "render_domain_delta_confirmed"
-    check_by_id = {item["check_id"]: item for item in checks["checks"]}
     assert check_by_id["light_shadow_contract"]["status"] == "light_shadow_contract_delta"
     assert check_by_id["light_shadow_contract"]["probe_history"]["status"] == "not_attached"
+
+
+def _assert_texture_material_response_check(check_by_id: dict[str, dict[str, object]]) -> None:
     assert check_by_id["texture_colorspace_material_response"]["status"] == (
         "texture_basenames_match_paths_or_colorspace_unverified"
     )
@@ -909,6 +932,9 @@ def Xform "World"
     assert high_residual_target["mujoco_texture_basenames"] == ["bed.png"]
     assert high_residual_target["isaac_texture_basenames"] == ["bed.png"]
     assert high_residual_target["fpv_isaac_mean_luminance"] == 126.0
+
+
+def _assert_preview_surface_material_check(check_by_id: dict[str, dict[str, object]]) -> None:
     assert check_by_id["usd_preview_surface_material_model"]["status"] == (
         "usd_preview_surface_vs_mujoco_material_model_delta"
     )
@@ -929,6 +955,12 @@ def Xform "World"
     assert preview_target["isaac_texture_scales"] == [[0.9, 0.8, 0.7, 1.0]]
     assert preview_target["isaac_texture_fallbacks"] == [[0.9, 0.8, 0.7, 1.0]]
     assert preview_target["isaac_texture_wrap_modes"] == ["repeat/repeat"]
+
+
+def _assert_tone_color_and_location_check(
+    check_by_id: dict[str, dict[str, object]],
+    location: dict[str, object],
+) -> None:
     assert check_by_id["tone_color_response"]["status"] == "tone_color_delta_rgb_oracle"
     assert check_by_id["tone_color_response"]["fpv_mean_abs_rgb_avg"] == 48.0
     assert check_by_id["tone_color_response"]["check_id"] == "tone_color_response"
