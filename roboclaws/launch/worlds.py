@@ -105,7 +105,7 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         default_overrides=(
             "map_bundle=b1-map12-room-semantics",
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "2rd_floor_seperated/storey_1/scene_gs.usda",
+            "2rd_floor_seperated/storey_1/configuration/scene_base.usd",
             "robot_views=on",
         ),
         preview_assets=(("map", "/asset-previews/maps/b1-map12-room-semantics/preview.png"),),

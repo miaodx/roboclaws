@@ -3526,6 +3526,12 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             _write_nonblank_image(path)
         return {
             "robot_view_images": {key: str(path) for key, path in view_paths.items()},
+            "scene_bounds": {
+                "min": [-2.0, -3.0, 0.0],
+                "max": [4.0, 5.0, 2.5],
+                "size": [6.0, 8.0, 2.5],
+                "center": [1.0, 1.0, 1.25],
+            },
             "render_steps": 9,
             "render_settle_frames": render_settle_frames,
             "robot_view_uses_mounted_head_camera": False,
@@ -3679,10 +3685,17 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     assert state["robot_view_provenance"]["head_camera_equivalent"] is True
     assert state["semantic_pose_view_capture"]["render_steps"] == 9
     assert state["semantic_pose_view_capture"]["render_settle_frames"] == 16
+    assert state["scene_bounds"]["center"] == [1.0, 1.0, 1.25]
+    assert state["semantic_pose_view_capture"]["scene_bounds"]["size"] == [6.0, 8.0, 2.5]
     assert state["semantic_pose_view_capture"]["canonical_camera_control"] is False
     assert state["semantic_pose_view_capture"]["head_camera_equivalent"] is True
     assert "canonical_robot_view_camera_control_capture" not in state
     assert state["semantic_pose_state"]["semantic_pose_view_capture"]["render_steps"] == 9
+    assert state["semantic_pose_state"]["semantic_pose_view_capture"]["scene_bounds"]["center"] == [
+        1.0,
+        1.0,
+        1.25,
+    ]
     assert state["semantic_pose_state"]["semantic_pose_view_capture"]["render_settle_frames"] == 16
     robot_view_gap = next(
         item for item in state["mapping_gaps"] if item["area"] == "robot_view_variants"

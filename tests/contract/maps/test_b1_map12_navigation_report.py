@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PIL import Image
-
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     READINESS_SCHEMA,
     SEMANTIC_SOURCE,
@@ -13,6 +11,7 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
 )
 from scripts.isaac_lab_cleanup.render_b1_map12_navigation_report import main as render_main
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import (
+    _write_reviewable_image,
     navigation_payload,
     static_readiness_payload,
 )
@@ -28,10 +27,11 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
         view_dir.mkdir()
         for view_name in ("chase", "map", "verify"):
             path = view_dir / f"{waypoint['waypoint_id']}.{view_name}.png"
-            Image.new("RGB", (12, 8), color=(20 * index, 30, 40)).save(path)
+            _write_reviewable_image(path, offset=20 * index)
             views[view_name] = str(path)
     navigation["b1_scene_usd"] = (
-        "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
+        "data/robot-data-lab/scene-engine/data/"
+        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
     )
     navigation["validation"] = {"status": "passed", "errors": []}
     readiness = readiness_artifact_with_navigation(

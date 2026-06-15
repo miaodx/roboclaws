@@ -471,7 +471,10 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     assert "scenario_setup=baseline" in argv
     assert "map_bundle=b1-map12-room-semantics" in argv
     assert "robot_views=on" in argv
-    assert any(item.startswith("isaac_scene_usd_path=data/robot-data-lab/") for item in argv)
+    assert (
+        "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
+        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+    ) in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
 
 
