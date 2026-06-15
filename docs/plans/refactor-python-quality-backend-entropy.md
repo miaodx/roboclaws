@@ -4859,3 +4859,17 @@ Stop this refactor loop when:
   passed with 57 Ruff complexity violations and 59 oversized modules unchanged.
   This slice reduced live-runner code by 11 net lines while improving backend
   argument contract consistency.
+- 2026-06-15: Continued the live-runtime status residual by making
+  `roboclaws/agents/live_runtime.py::LiveAgentResult.to_live_status_payload(...)`
+  table-driven for optional status fields. Timestamp, exit-status, retryable,
+  and resume-available fields continue to preserve falsey values through
+  `is not None`, while optional reason/detail/session fields keep the existing
+  truthy-only emission behavior. Evidence:
+  `ruff check roboclaws/agents/live_runtime.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/live_runtime.py`
+  passed; `ruff format --check roboclaws/agents/live_runtime.py tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_live_agent_result_from_failure_matches_live_status_fields tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 2 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 57 to 56 Ruff complexity violations, with oversized modules unchanged at
+  59. This slice reduced `roboclaws/agents/live_runtime.py` by 2 net lines.
