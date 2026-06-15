@@ -169,6 +169,146 @@
         {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-10k-val-15-map.png"},
         {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-10k-val-15-fpv.png"}
       ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 0,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-0-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-0-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 1,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-1-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-1-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 4,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-4-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-4-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 5,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-5-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-5-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 7,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-7-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-7-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 10,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-10-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-10-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 11,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-11-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-11-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 12,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-12-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-12-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 13,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-13-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-13-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-objaverse-val",
+      "scene_index": 14,
+      "room_id": "room_0",
+      "room_label": "Room 0",
+      "category": "unlabeled",
+      "category_provenance": "source_metadata",
+      "confidence": 0.0,
+      "uncertainty_notes": "Scanner-admitted source-metadata candidate; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-14-map.png"},
+        {"view": "fpv", "path": "output/scene-sampler-scanner/previews/molmospaces-procthor-objaverse-val-14-fpv.png"}
+      ]
     }
   ]
 }

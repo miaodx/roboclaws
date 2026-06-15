@@ -50,6 +50,9 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
         "molmospaces/val_0",
         "molmospaces/val_2",
         "molmospaces/val_9",
+        "molmospaces/procthor-objaverse-val/0",
+        "molmospaces/procthor-objaverse-val/1",
+        "molmospaces/procthor-objaverse-val/4",
     )
     assert MOLMOSPACES_CONSOLE_WORLD_IDS == ui_molmospaces_world_ids()
     assert MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS == legacy_molmospaces_world_ids()
@@ -66,8 +69,36 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
 
     ui_rows = [row for row in sampler_rows() if row.ui_ready]
     eval_rows = eval_sampler_rows()
-    assert [row.scene_index for row in ui_rows] == [0, 2, 9]
-    assert [row.scene_index for row in eval_rows] == [0, 2, 3, 5, 9, 10, 11, 12, 13, 15]
+    assert [(row.scene_source, row.scene_index) for row in ui_rows] == [
+        ("procthor-10k-val", 0),
+        ("procthor-10k-val", 2),
+        ("procthor-10k-val", 9),
+        ("procthor-objaverse-val", 0),
+        ("procthor-objaverse-val", 1),
+        ("procthor-objaverse-val", 4),
+    ]
+    assert [(row.scene_source, row.scene_index) for row in eval_rows] == [
+        ("procthor-10k-val", 0),
+        ("procthor-10k-val", 2),
+        ("procthor-10k-val", 3),
+        ("procthor-10k-val", 5),
+        ("procthor-10k-val", 9),
+        ("procthor-10k-val", 10),
+        ("procthor-10k-val", 11),
+        ("procthor-10k-val", 12),
+        ("procthor-10k-val", 13),
+        ("procthor-10k-val", 15),
+        ("procthor-objaverse-val", 0),
+        ("procthor-objaverse-val", 1),
+        ("procthor-objaverse-val", 4),
+        ("procthor-objaverse-val", 5),
+        ("procthor-objaverse-val", 7),
+        ("procthor-objaverse-val", 10),
+        ("procthor-objaverse-val", 11),
+        ("procthor-objaverse-val", 12),
+        ("procthor-objaverse-val", 13),
+        ("procthor-objaverse-val", 14),
+    ]
     assert all(UI_LANE in row.lanes for row in ui_rows)
     assert all(EVAL_STRESS_LANE in row.lanes for row in eval_rows)
 
@@ -150,14 +181,14 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
     assert projection["summary"] == {
         "source_count": 4,
         "target_sample_count": 40,
-        "ready_sample_count": 10,
+        "ready_sample_count": 20,
         "partial_source_count": 0,
-        "blocked_source_count": 3,
-        "complete_source_count": 1,
-        "blocked_row_count": 3,
-        "rejected_row_count": 3,
-        "blocked_or_rejected_row_count": 6,
-        "remaining_sample_count": 30,
+        "blocked_source_count": 2,
+        "complete_source_count": 2,
+        "blocked_row_count": 2,
+        "rejected_row_count": 8,
+        "blocked_or_rejected_row_count": 10,
+        "remaining_sample_count": 20,
     }
 
     procthor = projection["scene_sources"]["procthor-10k-val"]
@@ -170,7 +201,9 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
     assert procthor["blocked_or_rejected_row_count"] == 3
     assert procthor["support_status"] == "complete"
     assert procthor["status"] == "complete"
-    assert procthor["sample_ids"] == [eval_sample_id(row) for row in eval_sampler_rows()]
+    assert procthor["sample_ids"] == [
+        eval_sample_id(row) for row in eval_sampler_rows() if row.scene_source == "procthor-10k-val"
+    ]
     blocked_indices = {
         row["scene_index"]
         for row in procthor["blocked_rows"]
@@ -182,7 +215,28 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
         for row in procthor["blocked_rows"]
     )
 
-    for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
+    objaverse = projection["scene_sources"]["procthor-objaverse-val"]
+    assert objaverse["target_count"] == 10
+    assert objaverse["ready_count"] == 10
+    assert objaverse["partial_gap_count"] == 0
+    assert objaverse["needed_count"] == 0
+    assert objaverse["blocked_count"] == 0
+    assert objaverse["rejected_count"] == 5
+    assert objaverse["blocked_or_rejected_row_count"] == 5
+    assert objaverse["support_status"] == "complete"
+    assert objaverse["status"] == "complete"
+    assert objaverse["sample_ids"] == [
+        eval_sample_id(row)
+        for row in eval_sampler_rows()
+        if row.scene_source == "procthor-objaverse-val"
+    ]
+    assert {
+        row["scene_index"]
+        for row in objaverse["blocked_rows"]
+        if row["readiness_status"] == READINESS_REJECTED
+    } == {2, 3, 6, 8, 9}
+
+    for source in ("ithor", "holodeck-objaverse-val"):
         source_projection = projection["scene_sources"][source]
         assert source_projection["ready_count"] == 0
         assert source_projection["partial_gap_count"] == 10
@@ -270,15 +324,22 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
 
     assert report["schema"] == "molmospaces_scene_sampler_readiness_report_v1"
     assert report["summary"]["source_count"] == 4
-    assert report["summary"]["ui_supported_source_count"] == 1
-    assert report["summary"]["eval_complete_source_count"] == 1
+    assert report["summary"]["ui_supported_source_count"] == 2
+    assert report["summary"]["eval_complete_source_count"] == 2
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["ui_status"] == "ready"
     assert procthor["ui_ready_count"] == 3
     assert procthor["eval_status"] == "complete"
     assert procthor["eval_ready_count"] == 10
 
-    for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
+    objaverse = report["sources"]["procthor-objaverse-val"]
+    assert objaverse["ui_status"] == "ready"
+    assert objaverse["ui_ready_count"] == 3
+    assert objaverse["eval_status"] == "complete"
+    assert objaverse["eval_ready_count"] == 10
+    assert {row["scene_index"] for row in objaverse["blocked_rows"]} == {2, 3, 6, 8, 9}
+
+    for source in ("ithor", "holodeck-objaverse-val"):
         source_report = report["sources"][source]
         assert source_report["ui_status"] == "not_visible"
         assert source_report["ui_ready_count"] == 0
@@ -341,17 +402,17 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     assert report["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert report["summary"] == {
         "source_count": 4,
-        "candidate_count": 22,
-        "ready_candidate_count": 10,
-        "blocked_candidate_count": 9,
-        "rejected_candidate_count": 3,
-        "ui_ready_count": 3,
-        "ui_needed_count": 9,
-        "eval_ready_count": 10,
-        "eval_needed_count": 30,
-        "ui_supported_source_count": 1,
-        "eval_complete_source_count": 1,
-        "blocked_source_count": 3,
+        "candidate_count": 34,
+        "ready_candidate_count": 20,
+        "blocked_candidate_count": 6,
+        "rejected_candidate_count": 8,
+        "ui_ready_count": 6,
+        "ui_needed_count": 6,
+        "eval_ready_count": 20,
+        "eval_needed_count": 20,
+        "ui_supported_source_count": 2,
+        "eval_complete_source_count": 2,
+        "blocked_source_count": 2,
     }
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["ui_ready_count"] == 3
@@ -363,8 +424,21 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     assert val_1["readiness_status"] == READINESS_REJECTED
     assert val_1["blocked_reason"] == "fewer_than_three_public_navigation_areas"
 
+    objaverse = report["sources"]["procthor-objaverse-val"]
+    assert objaverse["ui_ready_count"] == 3
+    assert objaverse["eval_ready_count"] == 10
+    assert objaverse["candidate_count"] == 15
+    assert objaverse["ready_candidate_count"] == 10
+    assert objaverse["rejected_candidate_count"] == 5
+    assert {
+        item["scene_index"]
+        for item in objaverse["candidates"]
+        if item["readiness_status"] == READINESS_REJECTED
+    } == {2, 3, 6, 8, 9}
+
     ithor = report["sources"]["ithor"]
     assert ithor["blocked_candidate_count"] == 3
+    assert ithor["rejected_candidate_count"] == 0
     assert ithor["candidates"][0]["world_id"] == "molmospaces/ithor/0"
     assert ithor["candidates"][0]["failure_class"] == "environment_blocked"
 
@@ -383,13 +457,13 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     report = selection_gap_report(candidate_indices=tuple(range(10)))
 
     assert report["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
-    assert report["summary"]["ui_needed_count"] == 9
-    assert report["summary"]["eval_needed_count"] == 30
-    assert report["summary"]["candidate_range_sufficient_source_count"] == 3
+    assert report["summary"]["ui_needed_count"] == 6
+    assert report["summary"]["eval_needed_count"] == 20
+    assert report["summary"]["candidate_range_sufficient_source_count"] == 2
     assert report["summary"]["candidate_range_insufficient_source_count"] == 0
-    assert report["summary"]["source_prep_required_count"] == 3
+    assert report["summary"]["source_prep_required_count"] == 2
     assert report["summary"]["next_actions"] == {
-        "run_source_prep_before_scanner": 3,
+        "run_source_prep_before_scanner": 2,
     }
     assert report["summary"]["worklist"][0] == {
         "scene_source": "ithor",
@@ -422,6 +496,15 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     assert procthor["next_eval_scan_world_ids"] == []
     assert procthor["rejected_candidate_indices"] == [1, 4, 7]
 
+    objaverse = report["sources"]["procthor-objaverse-val"]
+    assert objaverse["ui_needed_count"] == 0
+    assert objaverse["eval_needed_count"] == 0
+    assert objaverse["selection_capacity_status"] == "complete"
+    assert objaverse["next_action"] == "none"
+    assert objaverse["next_ui_scan_world_ids"] == []
+    assert objaverse["next_eval_scan_world_ids"] == []
+    assert objaverse["rejected_candidate_indices"] == [2, 3, 6, 8, 9]
+
     ithor = report["sources"]["ithor"]
     assert ithor["ui_needed_count"] == 3
     assert ithor["eval_needed_count"] == 10
@@ -449,14 +532,15 @@ def test_scene_sampler_selection_gap_report_records_expanded_range_capacity(
     report = selection_gap_report(candidate_indices=tuple(range(20)))
 
     assert report["summary"]["candidate_range_insufficient_source_count"] == 0
-    assert report["summary"]["candidate_range_sufficient_source_count"] == 3
-    assert report["summary"]["source_prep_required_count"] == 3
-    assert report["summary"]["next_actions"] == {"run_source_prep_before_scanner": 3}
+    assert report["summary"]["candidate_range_sufficient_source_count"] == 2
+    assert report["summary"]["source_prep_required_count"] == 2
+    assert report["summary"]["next_actions"] == {"run_source_prep_before_scanner": 2}
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["selection_capacity_status"] == "complete"
     assert procthor["next_action"] == "none"
     assert procthor["eval_scan_candidate_count"] == 0
     assert procthor["next_eval_scan_world_ids"] == []
+    assert report["sources"]["procthor-objaverse-val"]["selection_capacity_status"] == "complete"
 
 
 def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -> None:
@@ -475,16 +559,16 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert report["download_policy"] == "manual_operator_only"
     assert report["summary"]["source_count"] == 4
     assert report["summary"]["missing_resource_summary"]["by_resource_type"] == {
-        "scene_source_dir": 3,
-        "scene_xml": 30,
+        "scene_source_dir": 2,
+        "scene_xml": 20,
     }
     assert report["summary"]["missing_resource_summary"]["by_reason"] == {
-        "candidate_xml_missing": 30,
-        "source_dir_missing": 3,
+        "candidate_xml_missing": 20,
+        "source_dir_missing": 2,
     }
     assert report["summary"]["prep_status_counts"] == {
-        "blocked_molmospaces_module": 3,
-        "complete": 1,
+        "blocked_molmospaces_module": 2,
+        "complete": 2,
     }
     assert report["summary"]["worklist"][0]["scene_source"] == "ithor"
     assert report["summary"]["worklist"][0]["next_action"] == "install_repo_dev_runtime"
@@ -499,6 +583,14 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert procthor["candidate_scene_refs"] == []
     assert procthor["missing_resources"] == []
     assert procthor["missing_resource_summary"]["by_resource_type"] == {}
+
+    objaverse = report["sources"]["procthor-objaverse-val"]
+    assert objaverse["prep_status"] == "complete"
+    assert objaverse["recommended_candidate_range"] == "0:9"
+    assert objaverse["molmospaces_get_scenes_call"] == (
+        'get_scenes("procthor-objaverse", "val")'
+    )
+    assert objaverse["missing_resources"] == []
 
     ithor = report["sources"]["ithor"]
     assert ithor["molmospaces_get_scenes_call"] == 'get_scenes("ithor", "train")'
@@ -548,11 +640,11 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
 
     assert report["schema"] == "molmospaces_scene_sampler_scanner_admission_v1"
     assert report["probe_mode"] == "no_download_no_backend_no_vlm"
-    assert report["summary"]["admitted_count"] == 10
-    assert report["summary"]["blocked_count"] == 32
-    assert report["summary"]["rejected_count"] == 3
-    assert report["summary"]["missing_gate_counts"]["source_asset_available"] == 32
-    assert report["summary"]["missing_gate_counts"]["preview_metadata"] == 32
+    assert report["summary"]["admitted_count"] == 20
+    assert report["summary"]["blocked_count"] == 22
+    assert report["summary"]["rejected_count"] == 8
+    assert report["summary"]["missing_gate_counts"]["source_asset_available"] == 22
+    assert report["summary"]["missing_gate_counts"]["preview_metadata"] == 22
     procthor = report["sources"]["procthor-10k-val"]
     val_0 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 0)
     assert val_0["admission_status"] == "admitted"
@@ -560,9 +652,19 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
     val_1 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 1)
     assert val_1["admission_status"] == "rejected"
     assert val_1["failure_class"] == "map_actionability_failure"
-    val_6 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 6)
-    assert val_6["admission_status"] == "blocked"
-    assert val_6["required_gates"] == [
+
+    objaverse = report["sources"]["procthor-objaverse-val"]
+    objaverse_0 = next(item for item in objaverse["admission_rows"] if item["scene_index"] == 0)
+    assert objaverse_0["admission_status"] == "admitted"
+    assert objaverse_0["category_provenance"] == "source_metadata"
+    objaverse_2 = next(item for item in objaverse["admission_rows"] if item["scene_index"] == 2)
+    assert objaverse_2["admission_status"] == "rejected"
+    assert objaverse_2["failure_class"] == "map_actionability_failure"
+
+    holodeck = report["sources"]["holodeck-objaverse-val"]
+    holodeck_0 = next(item for item in holodeck["admission_rows"] if item["scene_index"] == 0)
+    assert holodeck_0["admission_status"] == "blocked"
+    assert holodeck_0["required_gates"] == [
         "source_asset_available",
         "preview_metadata",
         "public_room_count",
@@ -570,9 +672,9 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
         "trusted_category_provenance",
         "map_build_artifacts",
     ]
-    assert "source_asset_available" in val_6["missing_gates"]
-    assert "preview_metadata" in val_6["missing_gates"]
-    assert val_6["next_action"] == "run_manual_source_prep_before_scanner"
+    assert "source_asset_available" in holodeck_0["missing_gates"]
+    assert "preview_metadata" in holodeck_0["missing_gates"]
+    assert holodeck_0["next_action"] == "run_manual_source_prep_before_scanner"
 
     ithor = report["sources"]["ithor"]
     assert ithor["needed_ui_count"] == 3
@@ -674,10 +776,11 @@ def test_scene_sampler_scanner_execution_plan_records_commands(monkeypatch) -> N
 
     assert plan["schema"] == "molmospaces_scene_sampler_scanner_execution_plan_v1"
     assert plan["download_policy"] == "manual_operator_only"
-    assert plan["summary"]["candidate_count"] == 30
+    assert plan["summary"]["candidate_count"] == 20
     assert plan["summary"]["ready_for_product_smoke_count"] == 0
-    assert plan["summary"]["blocked_count"] == 30
-    assert plan["summary"]["blocked_source_count"] == 3
+    assert plan["summary"]["blocked_count"] == 20
+    assert plan["summary"]["blocked_source_count"] == 2
+    candidate = ithor["candidates"][0]
     assert candidate["world_id"] == "molmospaces/ithor/0"
     assert candidate["scanner_status"] == "blocked_missing_resources"
     assert candidate["scene_family"] == "ithor"

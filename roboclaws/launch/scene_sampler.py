@@ -36,6 +36,20 @@ from roboclaws.launch.scene_sampler_scanner import (
     scanner_required_gates,
     world_id_slug,
 )
+from roboclaws.launch.scene_sampler_sources import (
+    CURRENT_ALIAS_INDICES,
+    SCANNER_READY_METADATA,
+    admitted_sources,
+    category_manifest,
+    category_provenance,
+    known_indices_for_source,
+    legacy_world_id,
+    sampler_world_id,
+    scanner_metadata,
+    source_eval_indices,
+    source_ui_indices,
+    uses_legacy_preview_assets,
+)
 
 SAMPLER_MANIFEST_SCHEMA = "molmospaces_scene_sampler_manifest_v1"
 SAMPLER_LABEL_MANIFEST_SCHEMA = "molmospaces_scene_room_labels_v1"
@@ -58,62 +72,8 @@ SUPPORTED_SCENE_SOURCES: tuple[str, ...] = (
     "holodeck-objaverse-val",
 )
 
-_CURRENT_ALIAS_INDICES: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 7, 9)
-_UI_SELECTED_INDICES: tuple[int, ...] = (0, 2, 9)
-_EVAL_READY_INDICES: tuple[int, ...] = (0, 2, 3, 5, 9, 10, 11, 12, 13, 15)
-_SCANNER_EVAL_READY_METADATA: dict[int, dict[str, Any]] = {
-    10: {
-        "room_count": 4,
-        "waypoint_count": 8,
-        "quality_score": 1.0,
-        "coverage_score": 0.4,
-        "product_smoke_run_dir": (
-            "output/scene-sampler-scanner/product-smoke/"
-            "molmospaces-procthor-10k-val-10/0615_2303/seed-7"
-        ),
-    },
-    11: {
-        "room_count": 4,
-        "waypoint_count": 8,
-        "quality_score": 1.0,
-        "coverage_score": 0.4,
-        "product_smoke_run_dir": (
-            "output/scene-sampler-scanner/product-smoke/"
-            "molmospaces-procthor-10k-val-11/0615_2303/seed-7"
-        ),
-    },
-    12: {
-        "room_count": 10,
-        "waypoint_count": 20,
-        "quality_score": 1.0,
-        "coverage_score": 1.0,
-        "product_smoke_run_dir": (
-            "output/scene-sampler-scanner/product-smoke/"
-            "molmospaces-procthor-10k-val-12/0615_2304/seed-7"
-        ),
-    },
-    13: {
-        "room_count": 4,
-        "waypoint_count": 8,
-        "quality_score": 1.0,
-        "coverage_score": 0.4,
-        "product_smoke_run_dir": (
-            "output/scene-sampler-scanner/product-smoke/"
-            "molmospaces-procthor-10k-val-13/0615_2306/seed-7"
-        ),
-    },
-    15: {
-        "room_count": 10,
-        "waypoint_count": 20,
-        "quality_score": 1.0,
-        "coverage_score": 1.0,
-        "product_smoke_run_dir": (
-            "output/scene-sampler-scanner/product-smoke/"
-            "molmospaces-procthor-10k-val-15/0615_2308/seed-7"
-        ),
-    },
-}
 _PREVIEW_ROOT = Path(__file__).resolve().parents[1] / "operator_console" / "static" / "previews"
+_CANONICAL_SCANNER_PREVIEW_ROOT = Path("output") / "scene-sampler-scanner" / "previews"
 _SCANNER_OUTPUT_ROOT = Path("output") / "scene-sampler-scanner"
 _SCANNER_PREVIEW_ROOT = _SCANNER_OUTPUT_ROOT / "previews"
 _SCANNER_PRODUCT_SMOKE_ROOT = _SCANNER_OUTPUT_ROOT / "product-smoke"
@@ -179,7 +139,7 @@ class SceneSamplerRow:
             f"scene_source={self.scene_source}",
             f"scene_index={self.scene_index}",
         )
-        if self.scene_index != 0:
+        if self.scene_source != "procthor-10k-val" or self.scene_index != 0:
             overrides = (*overrides, "map_bundle=none")
         return overrides
 
@@ -236,9 +196,18 @@ def sampler_manifest() -> dict[str, Any]:
 def sampler_rows() -> tuple[SceneSamplerRow, ...]:
     """Return all known source rows, including blocked source-family packets."""
 
-    known_indices = sorted({*_CURRENT_ALIAS_INDICES, *_EVAL_READY_INDICES})
-    rows = [_ready_row(index) for index in known_indices]
-    rows.extend(_blocked_source_row(scene_source) for scene_source in SUPPORTED_SCENE_SOURCES[1:])
+    rows: list[SceneSamplerRow] = []
+    sources = admitted_sources(supported_sources=SUPPORTED_SCENE_SOURCES)
+    for source in sources:
+        rows.extend(
+            _ready_row(source=source, scene_index=index)
+            for index in known_indices_for_source(source)
+        )
+    rows.extend(
+        _blocked_source_row(scene_source)
+        for scene_source in SUPPORTED_SCENE_SOURCES
+        if scene_source not in sources
+    )
     return tuple(rows)
 
 
@@ -263,7 +232,7 @@ def sampler_blocked_rows() -> tuple[SceneSamplerRow, ...]:
 def legacy_molmospaces_world_ids() -> tuple[str, ...]:
     """Return all current source-opaque aliases kept launchable for migration."""
 
-    return tuple(f"molmospaces/val_{index}" for index in _CURRENT_ALIAS_INDICES)
+    return tuple(f"molmospaces/val_{index}" for index in CURRENT_ALIAS_INDICES)
 
 
 def parse_molmospaces_world_id(world_id: str) -> MolmoSpacesSceneRef:
@@ -1163,19 +1132,19 @@ def validate_sampler_manifest(manifest: dict[str, Any] | None = None) -> None:
         _validate_source_lane_counts(source=source, source_rows=source_rows)
 
 
-def _ready_row(scene_index: int) -> SceneSamplerRow:
-    scanner_metadata = _SCANNER_EVAL_READY_METADATA.get(scene_index)
-    preview = _ready_row_preview_metadata(scene_index)
+def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
+    metadata = scanner_metadata(source=source, scene_index=scene_index)
+    preview = _ready_row_preview_metadata(source=source, scene_index=scene_index)
     room_ids = _room_ids(preview)
-    room_count = int((scanner_metadata or {}).get("room_count") or len(room_ids))
-    waypoint_count = int((scanner_metadata or {}).get("waypoint_count") or _waypoint_count(preview))
+    room_count = int((metadata or {}).get("room_count") or len(room_ids))
+    waypoint_count = int((metadata or {}).get("waypoint_count") or _waypoint_count(preview))
     view_statuses = _view_statuses(preview)
     all_views_reviewable = all(
         view_statuses.get(view) == "reviewable" for view in _required_views()
     )
-    ui_ready = scene_index in _UI_SELECTED_INDICES
-    eval_ready = scene_index in _EVAL_READY_INDICES
-    rejected_reason = ""
+    ui_ready = scene_index in source_ui_indices(source)
+    eval_ready = scene_index in source_eval_indices(source)
+    rejected_reason = str((metadata or {}).get("blocked_reason") or "")
     if room_count < 3:
         rejected_reason = "fewer_than_three_public_navigation_areas"
     elif not all_views_reviewable:
@@ -1194,43 +1163,32 @@ def _ready_row(scene_index: int) -> SceneSamplerRow:
         else rejected_reason or "alias_preserved_not_selected"
     )
     return SceneSamplerRow(
-        scene_family="procthor-10k",
-        scene_split="val",
-        scene_source="procthor-10k-val",
+        scene_family=_family_split(source)[0],
+        scene_split=_family_split(source)[1],
+        scene_source=source,
         scene_index=scene_index,
         backend=PRIMARY_MOLMOSPACES_BACKEND,
         readiness_status=status,
         lanes=tuple(lanes),
-        world_id=_procthor_world_id(scene_index),
-        legacy_world_id=_procthor_legacy_world_id(scene_index),
+        world_id=sampler_world_id(source=source, scene_index=scene_index),
+        legacy_world_id=legacy_world_id(source=source, scene_index=scene_index),
         room_count=room_count,
         waypoint_count=waypoint_count,
-        category_provenance="prepared_visual_label_manifest",
-        category_manifest=str(_LABEL_MANIFEST_PATH.relative_to(_repo_root())),
-        preview_assets=_ready_row_preview_assets(scene_index),
+        category_provenance=category_provenance(source),
+        category_manifest=category_manifest(
+            source,
+            default_manifest=str(_LABEL_MANIFEST_PATH.relative_to(_repo_root())),
+        ),
+        preview_assets=_ready_row_preview_assets(source=source, scene_index=scene_index),
         selected_reason=selected_reason,
         blocked_reason=rejected_reason,
         failure_class="map_actionability_failure" if rejected_reason else "",
-        quality_score=float(
-            (scanner_metadata or {}).get("quality_score") or _quality_score(preview)
-        ),
+        quality_score=float((metadata or {}).get("quality_score") or _quality_score(preview)),
         coverage_score=float(
-            (scanner_metadata or {}).get("coverage_score")
+            (metadata or {}).get("coverage_score")
             or _coverage_score(room_count=room_count, waypoint_count=waypoint_count)
         ),
     )
-
-
-def _procthor_world_id(scene_index: int) -> str:
-    if scene_index in _CURRENT_ALIAS_INDICES:
-        return f"molmospaces/val_{scene_index}"
-    return f"molmospaces/procthor-10k-val/{scene_index}"
-
-
-def _procthor_legacy_world_id(scene_index: int) -> str:
-    if scene_index in _CURRENT_ALIAS_INDICES:
-        return f"molmospaces/val_{scene_index}"
-    return ""
 
 
 def _eval_sample_launch_overrides(row: SceneSamplerRow) -> dict[str, Any]:
@@ -1299,15 +1257,15 @@ def _preview_metadata(scene_index: int) -> dict[str, Any]:
     return payload
 
 
-def _ready_row_preview_metadata(scene_index: int) -> dict[str, Any]:
-    if scene_index in _SCANNER_EVAL_READY_METADATA:
-        preview = _scanner_preview_metadata("procthor-10k-val", scene_index)
-        return preview or _static_scanner_preview_metadata(scene_index)
+def _ready_row_preview_metadata(*, source: str, scene_index: int) -> dict[str, Any]:
+    if source != "procthor-10k-val" or scene_index in SCANNER_READY_METADATA.get(source, {}):
+        preview = _scanner_preview_metadata(source, scene_index)
+        return preview or _static_scanner_preview_metadata(source=source, scene_index=scene_index)
     return _preview_metadata(scene_index)
 
 
-def _static_scanner_preview_metadata(scene_index: int) -> dict[str, Any]:
-    metadata = _SCANNER_EVAL_READY_METADATA[scene_index]
+def _static_scanner_preview_metadata(*, source: str, scene_index: int) -> dict[str, Any]:
+    metadata = scanner_metadata(source=source, scene_index=scene_index)
     room_count = int(metadata["room_count"])
     waypoint_count = int(metadata["waypoint_count"])
     room_ids = [f"room_{index}" for index in range(room_count)]
@@ -1323,7 +1281,7 @@ def _static_scanner_preview_metadata(scene_index: int) -> dict[str, Any]:
         "projected_waypoints": projected_waypoints,
     }
     return {
-        "scene_source": "procthor-10k-val",
+        "scene_source": source,
         "scene_index": scene_index,
         "backend": PRIMARY_MOLMOSPACES_BACKEND,
         "views": views,
@@ -1385,12 +1343,13 @@ def _preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
     )
 
 
-def _ready_row_preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
-    if scene_index not in _SCANNER_EVAL_READY_METADATA:
+def _ready_row_preview_assets(*, source: str, scene_index: int) -> tuple[tuple[str, str], ...]:
+    if uses_legacy_preview_assets(source=source, scene_index=scene_index):
         return _preview_assets(scene_index)
-    slug = _world_id_slug(f"molmospaces/procthor-10k-val/{scene_index}")
+    slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
     return tuple(
-        (view, str(_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png")) for view in _required_views()
+        (view, str(_CANONICAL_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png"))
+        for view in _required_views()
     )
 
 
@@ -2079,8 +2038,10 @@ def _scanner_preview_assets(source: str, scene_index: int) -> list[dict[str, str
 
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
     preview_statuses: dict[str, str] = {}
-    if row.scene_source == "procthor-10k-val" and row.scene_index is not None:
-        preview_statuses = _view_statuses(_ready_row_preview_metadata(row.scene_index))
+    if row.scene_index is not None:
+        preview_statuses = _view_statuses(
+            _ready_row_preview_metadata(source=row.scene_source, scene_index=row.scene_index)
+        )
     return {
         "scene_family": row.scene_family,
         "scene_split": row.scene_split,

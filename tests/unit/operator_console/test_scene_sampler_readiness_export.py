@@ -76,9 +76,11 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "complete"
     assert projection["scene_sources"]["ithor"]["support_status"] == "blocked"
-    assert projection["summary"]["ready_sample_count"] == 10
-    assert projection["summary"]["remaining_sample_count"] == 30
+    assert projection["summary"]["ready_sample_count"] == 20
+    assert projection["summary"]["remaining_sample_count"] == 20
     assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
+    assert readiness["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
+    assert readiness["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert readiness["sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
         "environment_blocked"
     )
@@ -95,6 +97,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert "eval_needed_count" in candidates["summary"]
     assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["procthor-10k-val"]["eval_ready_count"] == 10
+    assert candidates["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
+    assert candidates["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert candidates["sources"]["ithor"]["eval_ready_count"] == 0
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
     assert selection["summary"]["source_count"] == 4
@@ -158,8 +162,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert next_flow["probe_mode"] == "no_download_no_backend_no_vlm"
     assert next_flow["download_policy"] == "manual_operator_only"
     assert next_flow["summary"]["source_count"] == 4
-    assert next_flow["summary"]["ui_needed_count"] == 9
-    assert next_flow["summary"]["eval_needed_count"] == 30
+    assert next_flow["summary"]["ui_needed_count"] == 6
+    assert next_flow["summary"]["eval_needed_count"] == 20
     assert "worklist" in next_flow["summary"]
     assert next_flow["worklist"] == next_flow["summary"]["worklist"]
     assert next_flow["worklist"][0]["scene_source"] in {
@@ -176,6 +180,10 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 10
     assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 0
     assert next_flow["sources"]["procthor-10k-val"]["next_action"] == "none"
+    assert next_flow["sources"]["procthor-objaverse-val"]["ui_status"] == "ready"
+    assert next_flow["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
+    assert next_flow["sources"]["procthor-objaverse-val"]["eval_needed_count"] == 0
+    assert next_flow["sources"]["procthor-objaverse-val"]["next_action"] == "none"
     assert next_flow["sources"]["ithor"]["ui_needed_count"] == 3
     assert next_flow["sources"]["ithor"]["eval_needed_count"] == 10
     assert next_flow["sources"]["ithor"]["next_action"] in {
@@ -214,7 +222,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
             encoding="utf-8"
         )
     )
-    assert len(artifacts["generated_eval_samples"]) == 10
+    assert len(artifacts["generated_eval_samples"]) == 20
     generated_sample = json.loads(
         (
             tmp_path / "generated_eval/samples/scene_sampler/procthor-10k-val_0_map_build.json"
@@ -359,7 +367,7 @@ def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     assert code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
-    assert payload["summary"]["eval_projection"]["ready_sample_count"] == 10
+    assert payload["summary"]["eval_projection"]["ready_sample_count"] == 20
     assert payload["threshold_failures"][0]["ready_count"] == 0
 
 
