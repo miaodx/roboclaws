@@ -1406,6 +1406,9 @@ def _preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
 def _ready_row_preview_assets(*, source: str, scene_index: int) -> tuple[tuple[str, str], ...]:
     if uses_legacy_preview_assets(source=source, scene_index=scene_index):
         return _preview_assets(scene_index)
+    if scene_index in source_ui_indices(source):
+        slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
+        return tuple((view, f"/previews/{slug}-{view}.png") for view in _required_views())
     slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
     return tuple(
         (view, str(_CANONICAL_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png"))

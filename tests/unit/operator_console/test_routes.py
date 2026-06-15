@@ -347,9 +347,7 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
         in disabled["molmospaces/val_2::mujoco::cleanup::codex-cli::world-oracle-labels"]
     )
     assert not any(
-        "::isaaclab::" in route_id
-        for route_id in all_ids
-        if route_id.startswith("molmospaces/")
+        "::isaaclab::" in route_id for route_id in all_ids if route_id.startswith("molmospaces/")
     )
     assert "molmospaces/val_2::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
     assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
