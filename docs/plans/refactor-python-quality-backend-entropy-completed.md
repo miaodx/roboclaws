@@ -309,6 +309,13 @@ logs before choosing the next slice.
   at 62. Proof: focused Isaac robot-import/robot-view tests, ruff, format
   check, and ratchet.
 
+- 2026-06-16: Isaac scene-load and mapping-gap diagnostics moved from the
+  backend worker into `isaac_mapping_diagnostics.py`, with worker wrappers
+  injecting existing robot-view image checks and preserving `_scene_usd_path`.
+  Metric: `isaac_lab_backend_worker.py` 5903 -> 5715 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Isaac fake
+  and real mapping-gap tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
