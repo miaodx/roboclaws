@@ -40,6 +40,7 @@ from scripts.isaac_lab_cleanup import (
     isaac_scenario_state,
     isaac_scene_camera_geometry,
     isaac_scene_index_geometry,
+    isaac_semantic_pose_projection,
     isaac_semantic_pose_stage,
     isaac_worker_commands,
     isaac_worker_outputs,
@@ -278,6 +279,9 @@ from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
 )
 from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
     semantic_label_target_prims as _semantic_label_target_prims,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_projection import (
+    IsaacSemanticPoseProjectionHooks,
 )
 from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
     SemanticPoseRobotViewHooks,
@@ -1667,6 +1671,16 @@ def _record_waypoint_pose_event(
     )
 
 
+def _isaac_semantic_pose_projection_hooks() -> IsaacSemanticPoseProjectionHooks:
+    return IsaacSemanticPoseProjectionHooks(
+        dict_value=_dict,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        round_vec3=_round_vec3,
+        semantic_pose_target_position=_semantic_pose_target_position,
+        vec3=_vec3,
+    )
+
+
 def _isaac_scenario_state_hooks() -> IsaacScenarioStateHooks:
     return IsaacScenarioStateHooks(
         dict_value=_dict,
@@ -2096,53 +2110,12 @@ def _isaac_placement_diagnostic(
 
 
 def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    poses: dict[str, dict[str, Any]] = {}
-    locations = state.get("locations") or {}
-    containment = state.get("containment") or {}
-    current_receptacle_id = str(state.get("current_receptacle_id") or "")
-    for item in _dict(state.get("scenario")).get("objects", []):
-        if not isinstance(item, dict):
-            continue
-        object_id = str(item.get("object_id") or "")
-        if not object_id:
-            continue
-        location_id = str(locations.get(object_id) or item.get("location_id") or "")
-        support_receptacle_id = (
-            current_receptacle_id if location_id == HELD_LOCATION_ID else location_id
-        )
-        relation = _dict(containment.get(object_id)).get("location_relation") or "on"
-        pose_override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
-        position = _semantic_object_position_from_state(
-            state,
-            object_id=object_id,
-            location_id=location_id,
-            original_location_id=str(item.get("location_id") or ""),
-            support_receptacle_id=support_receptacle_id,
-        )
-        position_source = _semantic_object_position_source(
-            position,
-            location_id=location_id,
-            original_location_id=str(item.get("location_id") or ""),
-            pose_override=pose_override,
-        )
-        poses[object_id] = {
-            "object_id": object_id,
-            "usd_prim_path": _object_usd_prim_path(state, object_id),
-            "location_id": location_id,
-            "support_receptacle_id": support_receptacle_id,
-            "support_usd_prim_path": _receptacle_usd_prim_path(state, support_receptacle_id),
-            "attached_to_robot": location_id == HELD_LOCATION_ID,
-            "location_relation": relation,
-            "position": position,
-            "position_source": position_source,
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "rendered_to_usd": False,
-        }
-        if pose_override:
-            poses[object_id]["placement_support_status"] = pose_override.get("support_status")
-            poses[object_id]["placement_contact_proof"] = pose_override.get("contact_proof")
-            poses[object_id]["placement_resolution_source"] = pose_override.get("resolution_source")
-    return poses
+    return isaac_semantic_pose_projection.semantic_object_poses_from_state(
+        state,
+        hooks=_isaac_semantic_pose_projection_hooks(),
+        held_location_id=HELD_LOCATION_ID,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+    )
 
 
 def _semantic_object_position_from_state(
@@ -2153,31 +2126,15 @@ def _semantic_object_position_from_state(
     original_location_id: str,
     support_receptacle_id: str,
 ) -> list[float] | None:
-    if location_id != HELD_LOCATION_ID:
-        pose_override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
-        override_position = _vec3(pose_override.get("position"))
-        if override_position is not None:
-            return _round_vec3(override_position)
-    if location_id == original_location_id:
-        bounds_position = _object_usd_world_bounds_center(state, object_id)
-        if bounds_position is not None:
-            return bounds_position
-    if location_id == HELD_LOCATION_ID:
-        robot_pose = _robot_pose_for_receptacle(
-            state,
-            str(state.get("current_receptacle_id") or support_receptacle_id),
-        )
-        held_target = _vec3(robot_pose.get("target_position"))
-        if held_target is not None:
-            return _round_vec3(held_target)
-    target = _semantic_pose_target_position(
-        support_id=support_receptacle_id,
-        receptacle_index=_dict(state.get("receptacle_index")),
-        fallback_pose={},
+    return isaac_semantic_pose_projection.semantic_object_position_from_state(
+        state,
+        object_id=object_id,
+        location_id=location_id,
+        original_location_id=original_location_id,
+        support_receptacle_id=support_receptacle_id,
+        hooks=_isaac_semantic_pose_projection_hooks(),
+        held_location_id=HELD_LOCATION_ID,
     )
-    if target is not None:
-        return _round_vec3(list(target))
-    return _object_usd_world_bounds_center(state, object_id)
 
 
 def _semantic_object_position_source(
@@ -2187,69 +2144,49 @@ def _semantic_object_position_source(
     original_location_id: str,
     pose_override: dict[str, Any] | None = None,
 ) -> str:
-    if position is None:
-        return ""
-    if _vec3(_dict(pose_override).get("position")) is not None and location_id != HELD_LOCATION_ID:
-        return str(_dict(pose_override).get("position_source") or ISAAC_PLACEMENT_RESOLVER_SOURCE)
-    if location_id == HELD_LOCATION_ID:
-        return "isaac_robot_target_position"
-    if location_id == original_location_id:
-        return "usd_world_bounds_center"
-    return "isaac_support_pose_semantic_location"
+    return isaac_semantic_pose_projection.semantic_object_position_source(
+        position,
+        location_id=location_id,
+        original_location_id=original_location_id,
+        pose_override=pose_override,
+        hooks=_isaac_semantic_pose_projection_hooks(),
+        held_location_id=HELD_LOCATION_ID,
+    )
 
 
 def _object_usd_world_bounds_center(
     state: dict[str, Any],
     object_id: str,
 ) -> list[float] | None:
-    binding = _binding_for_handle(
-        state.get("scene_binding_diagnostics"),
+    return isaac_semantic_pose_projection.object_usd_world_bounds_center(
+        state,
         object_id,
-        ("selected_object_bindings", "object_bindings"),
+        hooks=_isaac_semantic_pose_projection_hooks(),
     )
-    for handle in (binding.get("usd_handle"), object_id):
-        entry = _dict(_dict(state.get("object_index")).get(str(handle)))
-        center = _vec3(_dict(entry.get("usd_world_bounds")).get("center"))
-        if center is not None:
-            return _round_vec3(center)
-    return None
 
 
 def _semantic_articulations_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    open_ids = set(state.get("open_receptacle_ids") or [])
-    articulations: dict[str, dict[str, Any]] = {}
-    for item in _dict(state.get("scenario")).get("receptacles", []):
-        if not isinstance(item, dict):
-            continue
-        receptacle_id = str(item.get("receptacle_id") or "")
-        if not receptacle_id:
-            continue
-        opened = receptacle_id in open_ids
-        articulations[receptacle_id] = {
-            "receptacle_id": receptacle_id,
-            "usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
-            "open": opened,
-            "joint_state": "open" if opened else "closed",
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "rendered_to_usd": False,
-        }
-    return articulations
+    return isaac_semantic_pose_projection.semantic_articulations_from_state(
+        state,
+        hooks=_isaac_semantic_pose_projection_hooks(),
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+    )
 
 
 def _object_usd_prim_path(state: dict[str, Any], object_id: str) -> str:
-    return _binding_usd_prim_path(
-        state.get("scene_binding_diagnostics"),
+    return isaac_semantic_pose_projection.object_usd_prim_path(
+        state,
         object_id,
-        ("selected_object_bindings", "object_bindings"),
-    ) or _index_usd_prim_path(state.get("object_index"), object_id)
+        hooks=_isaac_semantic_pose_projection_hooks(),
+    )
 
 
 def _receptacle_usd_prim_path(state: dict[str, Any], receptacle_id: str) -> str:
-    return _binding_usd_prim_path(
-        state.get("scene_binding_diagnostics"),
+    return isaac_semantic_pose_projection.receptacle_usd_prim_path(
+        state,
         receptacle_id,
-        ("selected_target_receptacle_bindings", "receptacle_bindings"),
-    ) or _index_usd_prim_path(state.get("receptacle_index"), receptacle_id)
+        hooks=_isaac_semantic_pose_projection_hooks(),
+    )
 
 
 def _binding_usd_prim_path(
@@ -2257,21 +2194,20 @@ def _binding_usd_prim_path(
     public_id: str,
     binding_keys: tuple[str, ...],
 ) -> str:
-    if not public_id:
-        return ""
-    diagnostics = _dict(scene_binding_diagnostics)
-    for key in binding_keys:
-        binding = _dict(_dict(diagnostics.get(key)).get(public_id))
-        if binding.get("status") == "bound" and binding.get("usd_prim_path"):
-            return str(binding["usd_prim_path"])
-    return ""
+    return isaac_semantic_pose_projection.binding_usd_prim_path(
+        scene_binding_diagnostics,
+        public_id,
+        binding_keys,
+        hooks=_isaac_semantic_pose_projection_hooks(),
+    )
 
 
 def _index_usd_prim_path(index: Any, handle: str) -> str:
-    if not handle:
-        return ""
-    entry = _dict(_dict(index).get(handle))
-    return str(entry.get("usd_prim_path") or "")
+    return isaac_semantic_pose_projection.index_usd_prim_path(
+        index,
+        handle,
+        hooks=_isaac_semantic_pose_projection_hooks(),
+    )
 
 
 def _isaac_worker_command_hooks() -> IsaacWorkerCommandHooks:

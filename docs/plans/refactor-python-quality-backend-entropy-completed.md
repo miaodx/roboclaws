@@ -577,6 +577,14 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Isaac semantic-pose object projection, articulation projection,
+  USD prim-path resolution, and object world-bounds center lookup moved into
+  `isaac_semantic_pose_projection.py`, with worker-private wrappers preserving
+  direct test names and semantic-pose hook surfaces. Metric:
+  `isaac_lab_backend_worker.py` 2945 -> 2881 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
