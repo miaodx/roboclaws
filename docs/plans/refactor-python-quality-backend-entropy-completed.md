@@ -231,6 +231,11 @@ logs before choosing the next slice.
   complexity rows; oversized modules unchanged at 62. Proof: realworld cleanup
   checker contract file, ruff, format check, and ratchet.
 
+- 2026-06-16: Operator-console scene-preview map transform split semantic-map
+  point collection, padded bounds, and plot geometry helpers. Metric: 1 -> 0
+  Ruff complexity rows; oversized modules unchanged at 62. Proof:
+  operator-console render-preview tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
