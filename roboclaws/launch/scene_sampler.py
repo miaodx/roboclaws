@@ -763,6 +763,57 @@ def source_prep_report(
     }
 
 
+def scanner_execution_plan(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return a no-download executable plan for the next scanner/product-smoke step."""
+
+    source_prep = source_prep_report(candidate_indices=candidate_indices)
+    scanner_admission = scanner_admission_report(candidate_indices=candidate_indices)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        prep_source = source_prep["sources"][source]
+        admission_by_world_id = {
+            row.get("world_id"): row
+            for row in scanner_admission["sources"][source].get("admission_rows") or []
+            if isinstance(row, dict)
+        }
+        candidates = []
+        for install_candidate in prep_source.get("install_candidates") or []:
+            if not isinstance(install_candidate, dict):
+                continue
+            world_id = str(install_candidate.get("world_id") or "")
+            admission = admission_by_world_id.get(world_id) or {}
+            candidates.append(
+                _scanner_execution_candidate(
+                    install_candidate=install_candidate,
+                    admission=admission,
+                )
+            )
+        sources[source] = {
+            "scene_source": source,
+            "prep_status": prep_source.get("prep_status", ""),
+            "download_policy": "manual_operator_only",
+            "candidate_count": len(candidates),
+            "ready_for_product_smoke_count": sum(
+                1 for item in candidates if item["scanner_status"] == "ready_for_product_smoke"
+            ),
+            "blocked_count": sum(
+                1 for item in candidates if item["scanner_status"].startswith("blocked_")
+            ),
+            "candidates": candidates,
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_scanner_execution_plan_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_backend_no_vlm",
+        "download_policy": "manual_operator_only",
+        "candidate_indices": list(candidate_indices),
+        "sources": sources,
+    }
+
+
 def scanner_admission_report(
     *,
     candidate_indices: tuple[int, ...] = tuple(range(10)),
@@ -1558,6 +1609,72 @@ def _scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str])
     if "map_build_artifacts" in missing_gates:
         return "run_map_build_product_smoke_before_eval_admission"
     return "run_scanner_admission_checks"
+
+
+def _scanner_execution_candidate(
+    *,
+    install_candidate: dict[str, Any],
+    admission: dict[str, Any],
+) -> dict[str, Any]:
+    world_id = str(install_candidate.get("world_id") or "")
+    scene_source = str(install_candidate.get("scene_source") or "")
+    scene_index = install_candidate.get("scene_index")
+    missing_paths = [
+        str(path) for path in install_candidate.get("missing_paths") or [] if path
+    ]
+    candidate_file_exists = not missing_paths and bool(install_candidate.get("primary_path"))
+    missing_gates = [
+        str(gate) for gate in admission.get("missing_gates") or [] if gate
+    ]
+    scanner_status = (
+        "ready_for_product_smoke"
+        if candidate_file_exists and "source_asset_available" not in missing_gates
+        else "blocked_missing_resources"
+    )
+    if admission.get("next_action") == "choose_valid_source_specific_candidate_index":
+        scanner_status = "blocked_invalid_candidate_index"
+    return {
+        "scene_source": scene_source,
+        "scene_index": scene_index,
+        "world_id": world_id,
+        "scanner_status": scanner_status,
+        "admission_status": admission.get("admission_status", ""),
+        "missing_gates": missing_gates,
+        "missing_paths": missing_paths,
+        "primary_path": install_candidate.get("primary_path", ""),
+        "path_status": install_candidate.get("path_status", ""),
+        "install_command": install_candidate.get("install_command", ""),
+        "preview_command": _preview_scanner_command(world_id),
+        "map_build_product_smoke_command": _map_build_product_smoke_command(world_id),
+        "next_action": (
+            "run_preview_then_map_build_product_smoke"
+            if scanner_status == "ready_for_product_smoke"
+            else admission.get("next_action", "run_manual_source_prep_before_scanner")
+        ),
+    }
+
+
+def _preview_scanner_command(world_id: str) -> str:
+    return (
+        ".venv/bin/python scripts/operator_console/render_scene_previews.py "
+        f"--world {world_id} "
+        "--output-dir output/scene-sampler-scanner/previews "
+        "--work-dir output/scene-sampler-scanner/work"
+    )
+
+
+def _map_build_product_smoke_command(world_id: str) -> str:
+    return (
+        "just run::surface surface=household-world "
+        f"world={world_id} "
+        "backend=mujoco preset=map-build agent_engine=direct-runner "
+        "evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline "
+        f"output_dir=output/scene-sampler-scanner/product-smoke/{_world_id_slug(world_id)}"
+    )
+
+
+def _world_id_slug(world_id: str) -> str:
+    return "".join(ch if ch.isalnum() else "-" for ch in world_id).strip("-")
 
 
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:

@@ -26,6 +26,7 @@ from roboclaws.launch.scene_sampler import (
     sampler_manifest,
     sampler_rows,
     scanner_admission_report,
+    scanner_execution_plan,
     selection_gap_report,
     source_availability_report,
     source_prep_report,
@@ -437,3 +438,27 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
     assert ithor["needed_eval_count"] == 10
     assert ithor["admission_rows"][0]["world_id"] == "molmospaces/ithor/0"
     assert ithor["admission_rows"][0]["admission_status"] == "blocked"
+
+
+def test_scene_sampler_scanner_execution_plan_records_commands(monkeypatch) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
+    )
+
+    plan = scanner_execution_plan(candidate_indices=tuple(range(11)))
+    ithor = plan["sources"]["ithor"]
+    candidate = ithor["candidates"][0]
+
+    assert plan["schema"] == "molmospaces_scene_sampler_scanner_execution_plan_v1"
+    assert plan["download_policy"] == "manual_operator_only"
+    assert candidate["world_id"] == "molmospaces/ithor/0"
+    assert candidate["scanner_status"] == "blocked_missing_resources"
+    assert candidate["install_command"].startswith(".venv/bin/python - <<'PY'")
+    assert "render_scene_previews.py --world molmospaces/ithor/0" in candidate[
+        "preview_command"
+    ]
+    assert "world=molmospaces/ithor/0" in candidate["map_build_product_smoke_command"]

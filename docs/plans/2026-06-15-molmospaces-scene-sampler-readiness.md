@@ -128,6 +128,12 @@ First slice implemented on 2026-06-15.
   world specs with explicit `scene_source`, `scene_index`, and `map_bundle=none`
   overrides. These candidates are launchable for scanner/product smoke work but
   remain absent from the default operator-console scene rail until admitted.
+- Readiness export now writes
+  `scene_sampler_scanner_execution_plan.json`, a no-download/no-backend/no-VLM
+  command plan for each next scanner candidate. It records per-candidate
+  install commands, preview render commands, map-build product-smoke commands,
+  missing paths, missing gates, and whether the candidate is currently
+  `ready_for_product_smoke` or still `blocked_missing_resources`.
 
 Verification run on 2026-06-15:
 
@@ -148,6 +154,9 @@ ruff check scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/unit/mol
 ruff check roboclaws/operator_console/messup.py tests/unit/operator_console/test_messup.py
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/launch/test_environment_setup_catalog.py -q
 ruff check roboclaws/launch/worlds.py roboclaws/launch/catalog.py tests/unit/launch/test_scene_sampler.py
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --candidate-range 0:10 --no-generated-eval
 ```
 
 Known partial scope:
@@ -212,6 +221,10 @@ Next Flow implementation slices:
      ids such as `molmospaces/ithor/1`, so the scanner can product-smoke
      candidate ids emitted by the readiness artifacts before those ids are
      exposed in the operator console.
+   - `scene_sampler_scanner_execution_plan.json` now turns those scanner
+     candidates into explicit install, preview-render, and map-build product
+     smoke commands while preserving current blocked status when local scene
+     XML/resources are missing.
    - Turn the current static preview/readiness facts into a repeatable scanner
      or preparation command that can inspect candidate indices per
      `scene_source`.

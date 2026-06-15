@@ -26,6 +26,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "eval_projection",
         "readiness_report",
         "scanner_admission",
+        "scanner_execution_plan",
         "selection_gaps",
         "source_availability",
         "source_prep",
@@ -41,6 +42,9 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
     scanner_admission = json.loads(
         (tmp_path / "scene_sampler_scanner_admission.json").read_text()
+    )
+    scanner_execution = json.loads(
+        (tmp_path / "scene_sampler_scanner_execution_plan.json").read_text()
     )
     generated_suite = json.loads(
         (tmp_path / "generated_eval/scene_sampler_stress.json").read_text()
@@ -95,6 +99,20 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "admitted_count"
     ] == 5
     assert scanner_admission["sources"]["ithor"]["needed_ui_count"] == 3
+    assert scanner_execution["schema"] == (
+        "molmospaces_scene_sampler_scanner_execution_plan_v1"
+    )
+    assert scanner_execution["probe_mode"] == "no_download_no_backend_no_vlm"
+    ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
+    assert ithor_scanner["world_id"] == "molmospaces/ithor/1"
+    assert ithor_scanner["scanner_status"] in {
+        "blocked_missing_resources",
+        "ready_for_product_smoke",
+    }
+    assert "render_scene_previews.py --world molmospaces/ithor/1" in ithor_scanner[
+        "preview_command"
+    ]
+    assert "world=molmospaces/ithor/1" in ithor_scanner["map_build_product_smoke_command"]
     assert generated_suite == json.loads(
         (
             REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"
