@@ -553,6 +553,14 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Isaac backend
   tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Isaac backend `init_state` runtime/scenario bootstrap, initial
+  state payload assembly, placeholder smoke artifact write, and init response
+  assembly moved into `isaac_worker_state.py`, with the worker preserving the
+  public `init_state(args)` entry point and monkeypatchable helper hooks.
+  Metric: `isaac_lab_backend_worker.py` 3315 -> 3184 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Isaac backend
+  tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

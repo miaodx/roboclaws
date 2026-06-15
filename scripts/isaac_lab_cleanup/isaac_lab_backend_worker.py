@@ -26,7 +26,6 @@ from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-    ISAACLAB_SUBPROCESS_BACKEND,
 )
 from roboclaws.household.types import (
     CleanupObject,
@@ -46,6 +45,7 @@ from scripts.isaac_lab_cleanup import (
     isaac_worker_commands,
     isaac_worker_outputs,
     isaac_worker_protocol,
+    isaac_worker_state,
 )
 from scripts.isaac_lab_cleanup.isaac_camera_capture import (
     IsaacCameraCaptureHooks,
@@ -329,6 +329,7 @@ from scripts.isaac_lab_cleanup.isaac_worker_commands import (
 from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
     IsaacWorkerOutputHooks,
 )
+from scripts.isaac_lab_cleanup.isaac_worker_state import IsaacInitHooks
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
@@ -443,177 +444,45 @@ def _close_deferred_simulation_app() -> None:
 
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
-    args.scene_index = _effective_scene_index(args)
-    generated_mess_manifest = _load_generated_mess_manifest(args.generated_mess_manifest_path)
-    scenario = _scenario_for_init(args, generated_mess_manifest=generated_mess_manifest)
-    scenario_source = _scenario_source(args)
-    real_smoke = None
-    if args.runtime_mode == "real":
-        try:
-            real_smoke = real_runtime_smoke(args, scenario)
-        except Exception as exc:
-            raise RuntimeError(
-                "Real Isaac runtime smoke failed before backend init could prove "
-                "renderer/USD evidence. Run `just agent::harness "
-                "molmo-isaac-runtime-preflight` first and keep CI-only protocol "
-                "tests on ROBOCLAWS_ISAACLAB_RUNTIME_MODE=fake."
-            ) from exc
-    runtime = runtime_diagnostics(args.runtime_mode, real_smoke=real_smoke)
-    scene_load = scene_load_diagnostics(
-        args.runtime_mode,
-        args.scene_source,
-        args.scene_index,
-        real_smoke=real_smoke,
+    return isaac_worker_state.init_state(
+        args,
+        hooks=_isaac_init_hooks(),
+        state_schema=STATE_SCHEMA,
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
     )
-    scene_usd = str(scene_load["scene_usd"])
-    object_index = _object_index(scenario)
-    receptacle_index = _receptacle_index(scenario)
-    scene_index_diagnostics: dict[str, Any] = {
-        "status": "placeholder_mapping",
-        "source": "scenario_fixture",
-        "object_candidate_count": len(object_index),
-        "receptacle_candidate_count": len(receptacle_index),
-        "blockers": ["Object and receptacle USD prim paths are deterministic placeholders."],
-    }
-    if real_smoke is not None:
-        scene_index_diagnostics = _dict(real_smoke.get("scene_index_diagnostics"))
-        object_index = _index_or_default(real_smoke.get("object_index"), object_index)
-        receptacle_index = _index_or_default(real_smoke.get("receptacle_index"), receptacle_index)
-    room_outlines = _room_outlines_from_scene_index_diagnostics(scene_index_diagnostics)
-    if not room_outlines:
-        room_outlines = _fallback_room_outlines_from_indices(
-            scenario=scenario,
-            object_index=object_index,
-            receptacle_index=receptacle_index,
-        )
-        scene_index_diagnostics["room_outline_count"] = len(room_outlines)
-        scene_index_diagnostics["room_outlines"] = room_outlines
-    scene_binding_diagnostics = _scene_binding_diagnostics(
-        runtime_mode=args.runtime_mode,
-        scenario=scenario,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        real_smoke=real_smoke,
+
+
+def _isaac_init_hooks() -> IsaacInitHooks:
+    return IsaacInitHooks(
+        dict_value=_dict,
+        effective_scene_index=_effective_scene_index,
+        fallback_room_outlines_from_indices=_fallback_room_outlines_from_indices,
+        first_target_object_location=_first_target_object_location,
+        index_or_default=_index_or_default,
+        initial_receptacle_id=_initial_receptacle_id,
+        initial_semantic_pose_state_from_state=_initial_semantic_pose_state_from_state,
+        load_generated_mess_manifest=_load_generated_mess_manifest,
+        mapping_gap_diagnostics=mapping_gap_diagnostics,
+        object_index=_object_index,
+        rby1m_robot_import_plan=_rby1m_robot_import_plan,
+        real_runtime_smoke=real_runtime_smoke,
+        real_smoke_robot_view_images=_real_smoke_robot_view_images,
+        receptacle_index=_receptacle_index,
+        robot_payload=_robot_payload,
+        robot_view_provenance=_robot_view_provenance,
+        room_outlines_from_scene_index_diagnostics=(_room_outlines_from_scene_index_diagnostics),
+        runtime_diagnostics=runtime_diagnostics,
+        scenario_for_init=_scenario_for_init,
+        scenario_source=_scenario_source,
+        scene_binding_diagnostics=_scene_binding_diagnostics,
+        scene_load_diagnostics=scene_load_diagnostics,
+        scene_specific_scenario_if_needed=_scene_specific_scenario_if_needed,
+        seed_generated_mess_placements=_seed_generated_mess_placements,
+        segmentation_diagnostics=segmentation_diagnostics,
+        write_placeholder_image=_write_placeholder_image,
+        write_state=write_state,
     )
-    scene_specific_scenario = _scene_specific_scenario_if_needed(
-        args=args,
-        generated_mess_manifest=generated_mess_manifest,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        real_smoke=real_smoke,
-    )
-    if scene_specific_scenario is not None:
-        scenario = scene_specific_scenario
-        scenario_source = "isaac_scene_index"
-        scene_binding_diagnostics = _scene_binding_diagnostics(
-            runtime_mode=args.runtime_mode,
-            scenario=scenario,
-            object_index=object_index,
-            receptacle_index=receptacle_index,
-            real_smoke=real_smoke,
-        )
-    segmentation = segmentation_diagnostics(
-        runtime_mode=args.runtime_mode,
-        real_smoke=real_smoke,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-    )
-    mapping_gaps = mapping_gap_diagnostics(
-        runtime_mode=args.runtime_mode,
-        map_bundle_dir=args.map_bundle_dir,
-        real_smoke=real_smoke,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-        segmentation=segmentation,
-    )
-    runtime["scenario_source"] = scenario_source
-    initial_receptacle_id = _initial_receptacle_id(scenario)
-    before_path = args.run_dir / "isaac_runtime_smoke.png"
-    if real_smoke is not None:
-        before_path = Path(str(real_smoke["image_path"]))
-        if not before_path.is_file():
-            raise RuntimeError(f"real Isaac smoke image is missing: {before_path}")
-    state = {
-        "schema": STATE_SCHEMA,
-        "backend": ISAACLAB_SUBPROCESS_BACKEND,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "runtime": runtime,
-        "scene_load": scene_load,
-        "scene_source": args.scene_source,
-        "scene_index": args.scene_index,
-        "scene_usd": scene_usd,
-        "scenario_source": scenario_source,
-        "real_runtime_smoke": real_smoke,
-        "requested_generated_mess_count": args.generated_mess_count,
-        "scenario": scenario.public_payload(),
-        "private_manifest": scenario.private_manifest.to_private_dict(),
-        "generated_mess_manifest": generated_mess_manifest,
-        "locations": scenario.object_locations(),
-        "held_object_id": None,
-        "current_receptacle_id": initial_receptacle_id,
-        "open_receptacle_ids": [],
-        "containment": {},
-        "object_pose_overrides": {},
-        "mess_placement_diagnostics": [],
-        "tool_event_counts": {},
-        "placement_diagnostics": [],
-        "mapping_gaps": mapping_gaps,
-        "object_index": object_index,
-        "receptacle_index": receptacle_index,
-        "room_outlines": room_outlines,
-        "scene_index_diagnostics": scene_index_diagnostics,
-        "scene_binding_diagnostics": scene_binding_diagnostics,
-        "robot_view_images": _real_smoke_robot_view_images(real_smoke),
-        "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
-        "native_render_diagnostics": _dict(
-            _dict(runtime.get("rendering")).get("native_render_diagnostics")
-        ),
-        "segmentation": segmentation,
-        "robot": _robot_payload(args.robot_name) if args.include_robot else None,
-        "robot_import": _rby1m_robot_import_plan(args.robot_name) if args.include_robot else None,
-    }
-    _seed_generated_mess_placements(state)
-    state["current_receptacle_id"] = _first_target_object_location(state) or initial_receptacle_id
-    state["semantic_pose_state"] = _initial_semantic_pose_state_from_state(state)
-    args.run_dir.mkdir(parents=True, exist_ok=True)
-    write_state(args.state_path, state)
-    if real_smoke is None:
-        _write_placeholder_image(
-            before_path,
-            title="Isaac Lab runtime smoke",
-            subtitle=runtime["renderer_mode"],
-            state=state,
-            width=DEFAULT_WIDTH,
-            height=DEFAULT_HEIGHT,
-        )
-    return {
-        "ok": True,
-        "tool": "init",
-        "backend": ISAACLAB_SUBPROCESS_BACKEND,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "scenario": state["scenario"],
-        "private_manifest": state["private_manifest"],
-        "generated_mess_manifest": state.get("generated_mess_manifest") or None,
-        "runtime": runtime,
-        "scene_usd": state["scene_usd"],
-        "scene_load": scene_load,
-        "scene_index": args.scene_index,
-        "scenario_source": scenario_source,
-        "scene_index_diagnostics": scene_index_diagnostics,
-        "scene_binding_diagnostics": scene_binding_diagnostics,
-        "object_index": state["object_index"],
-        "receptacle_index": state["receptacle_index"],
-        "mapping_gaps": mapping_gaps,
-        "segmentation": state["segmentation"],
-        "native_render_diagnostics": state["native_render_diagnostics"],
-        "requested_generated_mess_count": args.generated_mess_count,
-        "generated_mess_count": len(state["private_manifest"]["targets"]),
-        "robot": state["robot"],
-        "robot_import": state["robot_import"],
-        "artifacts": {
-            "runtime_smoke_image": str(before_path),
-            "robot_view_images": state["robot_view_images"],
-        },
-    }
 
 
 def _require_isaac_import() -> None:
