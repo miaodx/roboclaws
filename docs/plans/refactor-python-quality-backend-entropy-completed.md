@@ -585,6 +585,15 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Isaac backend worker context helpers moved into
+  `isaac_worker_context.py`, remaining wrapper-only helper imports were
+  collapsed to module namespaces and dynamic hook adapters, and
+  worker-private aliases were preserved for direct tests and monkeypatch
+  surfaces. Metric: `isaac_lab_backend_worker.py` 2881 -> 1990 lines,
+  clearing the 2000-line hard ceiling; Ruff complexity stayed at 0 and
+  oversized modules stayed at 62. Proof: focused Isaac backend tests, ruff,
+  format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

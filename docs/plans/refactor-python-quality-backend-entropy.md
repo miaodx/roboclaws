@@ -25,6 +25,9 @@ ratchet slices:
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
+- Backend workers are no longer hard-ceiling blockers:
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
+  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
@@ -132,11 +135,9 @@ shape. Owner: `intuitive-refactor`.
 
 ### C: Backend Worker Hard-Ceiling Split
 
-Severity: P1. `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` and
-`scripts/molmo_cleanup/molmospaces_subprocess_worker.py` remain far above the
-2000-line ceiling. Split command families, runtime metadata, render/camera
-helpers, and state writeback without importing Isaac into normal Roboclaws
-processes. Owner: `intuitive-refactor`.
+Status: cleared on 2026-06-16; see the completed ledger. Keep reopened only
+for fresh backend-worker hard-ceiling regressions or wrapper/import drift that
+pushes either worker back above 2000 lines.
 
 ### D: Visual Comparison Pipeline Split
 

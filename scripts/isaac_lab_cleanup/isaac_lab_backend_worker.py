@@ -31,374 +31,188 @@ from roboclaws.household.types import (
     CleanupScenario,
 )
 from scripts.isaac_lab_cleanup import (
+    isaac_camera_capture,
+    isaac_camera_geometry,
+    isaac_capture_quality,
     isaac_mapping_diagnostics,
     isaac_placement_resolution,
+    isaac_render_diagnostics,
     isaac_robot_camera_stage,
+    isaac_robot_import,
     isaac_robot_pose_focus,
+    isaac_robot_view_artifacts,
     isaac_runtime_capture,
+    isaac_runtime_diagnostics,
+    isaac_runtime_smoke_usd,
     isaac_scenario_builders,
     isaac_scenario_state,
+    isaac_scene_bindings,
+    isaac_scene_camera_capture,
     isaac_scene_camera_geometry,
     isaac_scene_index_geometry,
+    isaac_scene_index_metadata,
+    isaac_segmentation_diagnostics,
+    isaac_semantic_labels,
     isaac_semantic_pose_projection,
+    isaac_semantic_pose_robot_view,
     isaac_semantic_pose_stage,
+    isaac_semantic_pose_state,
+    isaac_stage_lighting,
+    isaac_support_surface_geometry,
+    isaac_usd_xform,
+    isaac_worker_cli,
     isaac_worker_commands,
+    isaac_worker_context,
     isaac_worker_outputs,
     isaac_worker_protocol,
     isaac_worker_state,
 )
-from scripts.isaac_lab_cleanup.isaac_camera_capture import (
-    IsaacCameraCaptureHooks,
-    IsaacCameraCaptureRequest,
-    capture_isaac_lab_camera_views,
-)
-from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
-    ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-    RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
-    RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
-    horizontal_aperture_from_lens,
-    isaac_camera_view_poses,
-    matrix4d_rowmajor,
-    normalize_quat,
-    optional_float,
-    quat_from_axis_angle,
-    quat_multiply,
-    robot_pose_yaw_deg,
-    robot_relative_chase_eye_target,
-    rotate_point_y_about_pivot,
-    static_head_camera_pose_for_pitch,
-    tensor_first_vec3,
-    usd_attr_float,
-    usd_camera_fov_metadata,
-    usd_vec,
-)
-from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
-    RBY1M_CHASE_CAMERA_OFFSET_M as _RBY1M_CHASE_CAMERA_OFFSET_M,
-)
-from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
-    RBY1M_CHASE_CAMERA_TARGET_OFFSET_M as _RBY1M_CHASE_CAMERA_TARGET_OFFSET_M,
-)
-from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
-    RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ as _RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ,
-)
-from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
-    robot_view_color_profile as isaac_robot_view_color_profile,
-)
-from scripts.isaac_lab_cleanup.isaac_capture_quality import (
-    apply_isaac_capture_quality_overrides,
-)
-from scripts.isaac_lab_cleanup.isaac_capture_quality import (
-    restore_isaac_capture_quality_overrides as _restore_isaac_capture_quality_overrides,
-)
-from scripts.isaac_lab_cleanup.isaac_mapping_diagnostics import (
-    mapping_gap_diagnostics as _mapping_gap_diagnostics,
-)
-from scripts.isaac_lab_cleanup.isaac_mapping_diagnostics import (
-    scene_load_diagnostics as _scene_load_diagnostics,
-)
-from scripts.isaac_lab_cleanup.isaac_placement_resolution import (
-    ISAAC_PLACEMENT_RESOLVER_SOURCE as _ISAAC_PLACEMENT_RESOLVER_SOURCE,
-)
-from scripts.isaac_lab_cleanup.isaac_placement_resolution import (
-    PLACEMENT_DIAGNOSTIC_SCHEMA as _PLACEMENT_DIAGNOSTIC_SCHEMA,
-)
-from scripts.isaac_lab_cleanup.isaac_placement_resolution import (
-    IsaacPlacementHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_render_diagnostics import (
-    ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
-    ISAAC_NATIVE_RENDER_SETTING_PATHS,
-    camera_render_product_paths,
-    capture_quality_settings,
-    capture_quality_settings_unavailable,
-    isaac_setting_value,
-    native_render_diagnostics,
-    native_render_diagnostics_unavailable,
-    native_setting_candidate_count,
-    render_product_paths_from_value,
-)
-from scripts.isaac_lab_cleanup.isaac_render_diagnostics import (
-    ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA as _ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA,
-)
-from scripts.isaac_lab_cleanup.isaac_robot_camera_stage import (
-    IsaacRobotCameraStageHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_robot_import import (
-    ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA as _ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
-)
-from scripts.isaac_lab_cleanup.isaac_robot_import import (
-    ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH,
-    ISAAC_RBY1M_ROBOT_USD_PATH,
-    find_rby1m_isaac_urdf,
-    load_json_if_file,
-    rby1m_robot_import_plan,
-    repo_path,
-    robot_payload,
-)
-from scripts.isaac_lab_cleanup.isaac_robot_pose_focus import (
-    IsaacRobotPoseHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_robot_view_artifacts import (
-    copy_nonblank_rgb_image,
-    copy_real_robot_view_images,
-    copy_real_snapshot_image,
-    has_required_robot_view_images,
-    pil_image_has_variance,
-    real_rendering_proven,
-    real_robot_view_images,
-    real_smoke_robot_view_images,
-    real_snapshot_source_image,
-    robot_view_command_provenance,
-    robot_view_provenance,
-    semantic_pose_robot_view_provenance,
-)
-from scripts.isaac_lab_cleanup.isaac_runtime_capture import IsaacRuntimeCaptureHooks
-from scripts.isaac_lab_cleanup.isaac_runtime_diagnostics import (
-    module_version,
-)
-from scripts.isaac_lab_cleanup.isaac_runtime_diagnostics import (
-    rendering_diagnostics as _runtime_rendering_diagnostics,
-)
-from scripts.isaac_lab_cleanup.isaac_runtime_diagnostics import (
-    runtime_diagnostics as _runtime_diagnostics,
-)
-from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
-    GENERATED_SCENE_KINDS,
-)
-from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
-    generated_scene_filename as _generated_scene_filename,
-)
-from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
-    write_generated_runtime_smoke_usd as _write_generated_runtime_smoke_usd,
-)
-from scripts.isaac_lab_cleanup.isaac_scenario_builders import (
-    CANONICAL_CLEANUP_CATEGORY_ALIASES,
-    SCENE_CLEANUP_TARGET_ALIASES,
-    SCENE_STRICT_CLEANUP_TARGET_ALIASES,
-    canonical_cleanup_category,
-    cleanup_receptacle_from_fixture,
-    cleanup_receptacle_from_scene_index,
-    cleanup_receptacle_index_for_mess_generation,
-    effective_scene_index,
-    first_fixture_matching,
-    first_receptacle_matching_aliases,
-    initial_receptacle_id,
-    limit_scenario_to_generated_mess_count,
-    load_generated_mess_manifest,
-    map_aligned_target_specs,
-    scenario_for_init,
-    scenario_from_generated_mess_manifest_or_limit,
-    scenario_from_map_bundle,
-    scenario_from_scene_index,
-    scenario_without_private_targets,
-    scene_cleanup_object_category,
-    scene_entry_tokens,
-    scene_index_from_usd_path,
-    scene_object_category,
-    scene_object_name,
-    scene_source_receptacle_id,
-    scene_specific_scenario_if_needed,
-    scene_target_receptacle_id,
-)
-from scripts.isaac_lab_cleanup.isaac_scenario_state import IsaacScenarioStateHooks
-from scripts.isaac_lab_cleanup.isaac_scene_bindings import (
-    SCENE_BINDING_SCHEMA as _SCENE_BINDING_SCHEMA,
-)
-from scripts.isaac_lab_cleanup.isaac_scene_bindings import (
-    bind_public_scene_item,
-    scene_binding_diagnostics,
-    scene_index_match,
-)
-from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
-    IsaacSceneCameraCaptureHooks,
-    IsaacSceneCameraCaptureRequest,
-    capture_isaac_lab_scene_camera_views,
-    capture_scene_camera_request_with_existing_sim,
-)
-from scripts.isaac_lab_cleanup.isaac_scene_camera_geometry import (
-    apply_scene_transform_to_point,
-    backend_transform_for_lane,
-    bounds_from_usd_prim_path,
-    camera_vec3,
-    eye_from_lookat_spec,
-    image_has_variance,
-    isaac_scene_camera_view_spec,
-    lane_camera_orbit,
-    load_camera_view_specs,
-)
-from scripts.isaac_lab_cleanup.isaac_scene_index_geometry import (
-    IsaacUsdSceneIndexHooks,
-    authored_reference_asset_paths,
-    fallback_room_outlines_from_indices,
-    is_local_reference_asset_path,
-    local_reference_asset_missing,
-    room_outlines_from_scene_index_diagnostics,
-    round_vec3,
-    usd_list_op_items,
-)
-from scripts.isaac_lab_cleanup.isaac_scene_index_metadata import (
-    MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS,
-    category_from_usd_name,
-    contains_child_segment,
-    is_molmospaces_object_metadata,
-    is_molmospaces_receptacle_metadata,
-    is_object_prim_path,
-    is_receptacle_prim_path,
-    load_molmospaces_scene_metadata,
-    merge_molmospaces_metadata_index,
-    metadata_room_id,
-    molmospaces_metadata_prim_path,
-    molmospaces_prim_path_rank,
-    usd_handle_from_prim,
-    usd_index_entry,
-    usd_metadata_index_entry,
-    usd_safe_name,
-)
-from scripts.isaac_lab_cleanup.isaac_segmentation_diagnostics import (
-    ISAAC_SEGMENTATION_DATA_TYPES as _ISAAC_SEGMENTATION_DATA_TYPES,
-)
-from scripts.isaac_lab_cleanup.isaac_segmentation_diagnostics import (
-    MAX_SEGMENTATION_CANDIDATES as _MAX_SEGMENTATION_CANDIDATES,
-)
-from scripts.isaac_lab_cleanup.isaac_segmentation_diagnostics import (
-    SEGMENTATION_SCHEMA as _SEGMENTATION_SCHEMA,
-)
-from scripts.isaac_lab_cleanup.isaac_segmentation_diagnostics import (
-    camera_segmentation_capture_diagnostics,
-    camera_segmentation_not_requested_diagnostics,
-    camera_segmentation_view_diagnostics,
-)
-from scripts.isaac_lab_cleanup.isaac_segmentation_diagnostics import (
-    segmentation_diagnostics as _segmentation_diagnostics,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
-    apply_scene_index_semantic_labels,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
-    semantic_label_application_not_requested as _semantic_label_application_not_requested,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
-    semantic_label_target_prims as _semantic_label_target_prims,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_pose_projection import (
-    IsaacSemanticPoseProjectionHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
-    SemanticPoseRobotViewHooks,
-    SemanticPoseRobotViewRequest,
-    real_semantic_pose_robot_view_images,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_pose_stage import (
-    IsaacSemanticPoseStageHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_pose_state import (
-    initial_semantic_pose_state,
-    record_semantic_pose_event,
-    record_waypoint_pose_event,
-    semantic_pose_state_from_backend_state,
-)
-from scripts.isaac_lab_cleanup.isaac_stage_lighting import (
-    current_stage_bounds,
-    ensure_capture_lighting,
-    isaac_distant_light_rotation_from_direction,
-    normalized_vec3,
-    prim_type_is_light,
-    scale_stage_light_intensities,
-    stage_light_paths,
-)
-from scripts.isaac_lab_cleanup.isaac_support_surface_geometry import (
-    ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE as _ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
-)
-from scripts.isaac_lab_cleanup.isaac_support_surface_geometry import (
-    ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE as _ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
-)
-from scripts.isaac_lab_cleanup.isaac_support_surface_geometry import (
-    ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE as _ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
-)
-from scripts.isaac_lab_cleanup.isaac_support_surface_geometry import (
-    is_usd_renderable_support_candidate,
-    support_pose_from_support_surface,
-    support_pose_from_usd_bounds,
-    support_surface_from_usd_bounds,
-    usd_support_surface_score,
-    usd_support_surface_union_entry,
-)
-from scripts.isaac_lab_cleanup.isaac_usd_xform import (
-    set_usd_xform_translate as _set_usd_xform_translate,
-)
-from scripts.isaac_lab_cleanup.isaac_worker_cli import build_arg_parser
-from scripts.isaac_lab_cleanup.isaac_worker_commands import (
-    IsaacWorkerCommandHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
-    IsaacWorkerOutputHooks,
-)
-from scripts.isaac_lab_cleanup.isaac_worker_state import IsaacInitHooks
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
-SCENE_BINDING_SCHEMA = _SCENE_BINDING_SCHEMA
-_bind_public_scene_item = bind_public_scene_item
-_scene_binding_diagnostics = scene_binding_diagnostics
-_scene_index_match = scene_index_match
-_authored_reference_asset_paths = authored_reference_asset_paths
-_category_from_usd_name = category_from_usd_name
-_contains_child_segment = contains_child_segment
-_fallback_room_outlines_from_indices = fallback_room_outlines_from_indices
-_is_local_reference_asset_path = is_local_reference_asset_path
-_is_molmospaces_object_metadata = is_molmospaces_object_metadata
-_is_molmospaces_receptacle_metadata = is_molmospaces_receptacle_metadata
-_is_object_prim_path = is_object_prim_path
-_is_receptacle_prim_path = is_receptacle_prim_path
-_local_reference_asset_missing = local_reference_asset_missing
-_load_molmospaces_scene_metadata = load_molmospaces_scene_metadata
-_merge_molmospaces_metadata_index = merge_molmospaces_metadata_index
-_metadata_room_id = metadata_room_id
-_molmospaces_metadata_prim_path = molmospaces_metadata_prim_path
-_molmospaces_prim_path_rank = molmospaces_prim_path_rank
-_room_outlines_from_scene_index_diagnostics = room_outlines_from_scene_index_diagnostics
-_round_vec3 = round_vec3
-_usd_list_op_items = usd_list_op_items
-_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = (
-    MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS
+SCENE_BINDING_SCHEMA = isaac_scene_bindings.SCENE_BINDING_SCHEMA
+_bind_public_scene_item = isaac_scene_bindings.bind_public_scene_item
+_scene_binding_diagnostics = isaac_scene_bindings.scene_binding_diagnostics
+_scene_index_match = isaac_scene_bindings.scene_index_match
+_authored_reference_asset_paths = isaac_scene_index_geometry.authored_reference_asset_paths
+_fallback_room_outlines_from_indices = (
+    isaac_scene_index_geometry.fallback_room_outlines_from_indices
 )
-_usd_handle_from_prim = usd_handle_from_prim
-_usd_index_entry = usd_index_entry
-_usd_metadata_index_entry = usd_metadata_index_entry
-_usd_safe_name = usd_safe_name
-_is_usd_renderable_support_candidate = is_usd_renderable_support_candidate
-_support_pose_from_support_surface = support_pose_from_support_surface
-_support_pose_from_usd_bounds = support_pose_from_usd_bounds
-_support_surface_from_usd_bounds = support_surface_from_usd_bounds
-_usd_support_surface_score = usd_support_surface_score
-_usd_support_surface_union = usd_support_surface_union_entry
-SEGMENTATION_SCHEMA = _SEGMENTATION_SCHEMA
-ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = _ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA
-ISAAC_SEGMENTATION_DATA_TYPES = _ISAAC_SEGMENTATION_DATA_TYPES
-MAX_SEGMENTATION_CANDIDATES = _MAX_SEGMENTATION_CANDIDATES
-RBY1M_CHASE_CAMERA_OFFSET_M = _RBY1M_CHASE_CAMERA_OFFSET_M
-RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = _RBY1M_CHASE_CAMERA_TARGET_OFFSET_M
-RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = _RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ
+_is_local_reference_asset_path = isaac_scene_index_geometry.is_local_reference_asset_path
+_local_reference_asset_missing = isaac_scene_index_geometry.local_reference_asset_missing
+_room_outlines_from_scene_index_diagnostics = (
+    isaac_scene_index_geometry.room_outlines_from_scene_index_diagnostics
+)
+_round_vec3 = isaac_scene_index_geometry.round_vec3
+_usd_list_op_items = isaac_scene_index_geometry.usd_list_op_items
+_category_from_usd_name = isaac_scene_index_metadata.category_from_usd_name
+_contains_child_segment = isaac_scene_index_metadata.contains_child_segment
+_is_molmospaces_object_metadata = isaac_scene_index_metadata.is_molmospaces_object_metadata
+_is_molmospaces_receptacle_metadata = isaac_scene_index_metadata.is_molmospaces_receptacle_metadata
+_is_object_prim_path = isaac_scene_index_metadata.is_object_prim_path
+_is_receptacle_prim_path = isaac_scene_index_metadata.is_receptacle_prim_path
+_load_molmospaces_scene_metadata = isaac_scene_index_metadata.load_molmospaces_scene_metadata
+_merge_molmospaces_metadata_index = isaac_scene_index_metadata.merge_molmospaces_metadata_index
+_metadata_room_id = isaac_scene_index_metadata.metadata_room_id
+_molmospaces_metadata_prim_path = isaac_scene_index_metadata.molmospaces_metadata_prim_path
+_molmospaces_prim_path_rank = isaac_scene_index_metadata.molmospaces_prim_path_rank
+_usd_handle_from_prim = isaac_scene_index_metadata.usd_handle_from_prim
+_usd_index_entry = isaac_scene_index_metadata.usd_index_entry
+_usd_metadata_index_entry = isaac_scene_index_metadata.usd_metadata_index_entry
+_usd_safe_name = isaac_scene_index_metadata.usd_safe_name
+_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = (
+    isaac_scene_index_metadata.MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS
+)
+_is_usd_renderable_support_candidate = (
+    isaac_support_surface_geometry.is_usd_renderable_support_candidate
+)
+_support_pose_from_support_surface = (
+    isaac_support_surface_geometry.support_pose_from_support_surface
+)
+_support_pose_from_usd_bounds = isaac_support_surface_geometry.support_pose_from_usd_bounds
+_support_surface_from_usd_bounds = isaac_support_surface_geometry.support_surface_from_usd_bounds
+_usd_support_surface_score = isaac_support_surface_geometry.usd_support_surface_score
+_usd_support_surface_union = isaac_support_surface_geometry.usd_support_surface_union_entry
+SEGMENTATION_SCHEMA = isaac_segmentation_diagnostics.SEGMENTATION_SCHEMA
+ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = (
+    isaac_render_diagnostics.ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA
+)
+ISAAC_SEGMENTATION_DATA_TYPES = isaac_segmentation_diagnostics.ISAAC_SEGMENTATION_DATA_TYPES
+MAX_SEGMENTATION_CANDIDATES = isaac_segmentation_diagnostics.MAX_SEGMENTATION_CANDIDATES
+RBY1M_CHASE_CAMERA_OFFSET_M = isaac_camera_geometry.RBY1M_CHASE_CAMERA_OFFSET_M
+RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = isaac_camera_geometry.RBY1M_CHASE_CAMERA_TARGET_OFFSET_M
+RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = isaac_camera_geometry.RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ
+RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = isaac_camera_geometry.RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG
+RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = isaac_camera_geometry.RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_ROBOT_VIEW_RERENDER_METHOD = "isaac_lab_camera_rgb_semantic_pose_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
-PLACEMENT_DIAGNOSTIC_SCHEMA = _PLACEMENT_DIAGNOSTIC_SCHEMA
-ISAAC_PLACEMENT_RESOLVER_SOURCE = _ISAAC_PLACEMENT_RESOLVER_SOURCE
-ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = _ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE
-ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = _ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE
-ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = _ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE
-ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = _ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA
+PLACEMENT_DIAGNOSTIC_SCHEMA = isaac_placement_resolution.PLACEMENT_DIAGNOSTIC_SCHEMA
+ISAAC_PLACEMENT_RESOLVER_SOURCE = isaac_placement_resolution.ISAAC_PLACEMENT_RESOLVER_SOURCE
+ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = (
+    isaac_support_surface_geometry.ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE
+)
+ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = (
+    isaac_support_surface_geometry.ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE
+)
+ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = (
+    isaac_support_surface_geometry.ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE
+)
+ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = isaac_robot_import.ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA
 _DEFERRED_SIMULATION_APP: Any | None = None
+_current_stage_bounds = isaac_stage_lighting.current_stage_bounds
+_ensure_capture_lighting = isaac_stage_lighting.ensure_capture_lighting
+_normalized_vec3 = isaac_stage_lighting.normalized_vec3
+_isaac_distant_light_rotation_from_direction = (
+    isaac_stage_lighting.isaac_distant_light_rotation_from_direction
+)
+_scale_stage_light_intensities = isaac_stage_lighting.scale_stage_light_intensities
+_stage_light_paths = isaac_stage_lighting.stage_light_paths
+_prim_type_is_light = isaac_stage_lighting.prim_type_is_light
+_robot_view_color_profile = isaac_camera_geometry.robot_view_color_profile
+_isaac_camera_view_poses = isaac_camera_geometry.isaac_camera_view_poses
+_robot_relative_chase_eye_target = isaac_camera_geometry.robot_relative_chase_eye_target
+_static_head_camera_pose_for_pitch = isaac_camera_geometry.static_head_camera_pose_for_pitch
+_rotate_point_y_about_pivot = isaac_camera_geometry.rotate_point_y_about_pivot
+_quat_from_axis_angle = isaac_camera_geometry.quat_from_axis_angle
+_quat_multiply = isaac_camera_geometry.quat_multiply
+_normalize_quat = isaac_camera_geometry.normalize_quat
+_usd_camera_fov_metadata = isaac_camera_geometry.usd_camera_fov_metadata
+_matrix4d_rowmajor = isaac_camera_geometry.matrix4d_rowmajor
+_usd_attr_float = isaac_camera_geometry.usd_attr_float
+_usd_vec = isaac_camera_geometry.usd_vec
+_tensor_first_vec3 = isaac_camera_geometry.tensor_first_vec3
+_robot_pose_yaw_deg = isaac_camera_geometry.robot_pose_yaw_deg
+_optional_float = isaac_camera_geometry.optional_float
+_load_camera_view_specs = isaac_scene_camera_geometry.load_camera_view_specs
+_lane_camera_orbit = isaac_scene_camera_geometry.lane_camera_orbit
+_backend_transform_for_lane = isaac_scene_camera_geometry.backend_transform_for_lane
+_apply_scene_transform_to_point = isaac_scene_camera_geometry.apply_scene_transform_to_point
+_camera_vec3 = isaac_scene_camera_geometry.camera_vec3
+_image_has_variance = isaac_scene_camera_geometry.image_has_variance
+_module_version = isaac_runtime_diagnostics.module_version
+_generated_scene_filename = isaac_runtime_smoke_usd.generated_scene_filename
+_isaac_native_render_diagnostics_unavailable = (
+    isaac_render_diagnostics.native_render_diagnostics_unavailable
+)
+_native_setting_candidate_count = isaac_render_diagnostics.native_setting_candidate_count
+_capture_quality_settings_unavailable = (
+    isaac_render_diagnostics.capture_quality_settings_unavailable
+)
+_capture_quality_settings = isaac_render_diagnostics.capture_quality_settings
+_isaac_setting_value = isaac_render_diagnostics.isaac_setting_value
+_camera_render_product_paths = isaac_render_diagnostics.camera_render_product_paths
+_render_product_paths_from_value = isaac_render_diagnostics.render_product_paths_from_value
+_restore_isaac_capture_quality_overrides = (
+    isaac_capture_quality.restore_isaac_capture_quality_overrides
+)
+_semantic_label_application_not_requested = (
+    isaac_semantic_labels.semantic_label_application_not_requested
+)
+_semantic_label_target_prims = isaac_semantic_labels.semantic_label_target_prims
+_set_usd_xform_translate = isaac_usd_xform.set_usd_xform_translate
+_norm = isaac_worker_context.norm
+_dict = isaac_worker_context.dict_value
+_vec3 = isaac_worker_context.vec3
+_has_xy = isaac_worker_context.has_xy
+_index_or_default = isaac_worker_context.index_or_default
+_objects_by_id = isaac_worker_context.objects_by_id
+_receptacles_by_id = isaac_worker_context.receptacles_by_id
+_object_index = isaac_worker_context.object_index
+_receptacle_index = isaac_worker_context.receptacle_index
+_pose_near = isaac_worker_context.pose_near
+ISAAC_RBY1M_ROBOT_USD_PATH = isaac_robot_import.ISAAC_RBY1M_ROBOT_USD_PATH
+ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = isaac_robot_import.ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    return build_arg_parser(
+    return isaac_worker_cli.build_arg_parser(
         default_width=DEFAULT_WIDTH,
         default_height=DEFAULT_HEIGHT,
-        generated_scene_kinds=GENERATED_SCENE_KINDS,
+        generated_scene_kinds=isaac_runtime_smoke_usd.GENERATED_SCENE_KINDS,
         segmentation_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
     ).parse_args(argv)
 
@@ -457,8 +271,8 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
-def _isaac_init_hooks() -> IsaacInitHooks:
-    return IsaacInitHooks(
+def _isaac_init_hooks() -> isaac_worker_state.IsaacInitHooks:
+    return isaac_worker_state.IsaacInitHooks(
         dict_value=_dict,
         effective_scene_index=_effective_scene_index,
         fallback_room_outlines_from_indices=_fallback_room_outlines_from_indices,
@@ -552,11 +366,11 @@ def capture_semantic_pose_robot_views(
     )
 
 
-def _isaac_runtime_capture_hooks() -> IsaacRuntimeCaptureHooks:
-    return IsaacRuntimeCaptureHooks(
+def _isaac_runtime_capture_hooks() -> isaac_runtime_capture.IsaacRuntimeCaptureHooks:
+    return isaac_runtime_capture.IsaacRuntimeCaptureHooks(
         capture_isaac_lab_camera_views=_capture_isaac_lab_camera_views,
         dict_value=_dict,
-        generated_scene_filename=_generated_scene_filename,
+        generated_scene_filename=isaac_runtime_smoke_usd.generated_scene_filename,
         inspect_usd_scene_index=_inspect_usd_scene_index,
         isaac_app_launcher_args=_isaac_app_launcher_args,
         module_version=_module_version,
@@ -565,7 +379,7 @@ def _isaac_runtime_capture_hooks() -> IsaacRuntimeCaptureHooks:
         runtime_smoke_robot_view_paths=_runtime_smoke_robot_view_paths,
         scene_usd_path=_scene_usd_path,
         set_deferred_simulation_app=_set_deferred_simulation_app,
-        write_generated_runtime_smoke_usd=_write_generated_runtime_smoke_usd,
+        write_generated_runtime_smoke_usd=isaac_runtime_smoke_usd.write_generated_runtime_smoke_usd,
     )
 
 
@@ -598,8 +412,8 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
     )
 
 
-def _isaac_usd_scene_index_hooks() -> IsaacUsdSceneIndexHooks:
-    return IsaacUsdSceneIndexHooks(
+def _isaac_usd_scene_index_hooks() -> isaac_scene_index_geometry.IsaacUsdSceneIndexHooks:
+    return isaac_scene_index_geometry.IsaacUsdSceneIndexHooks(
         annotate_usd_index_geometry=_annotate_usd_index_geometry,
         authored_reference_asset_paths=_authored_reference_asset_paths,
         dict_value=_dict,
@@ -691,18 +505,6 @@ def _iter_usd_prim_range(prim: Any) -> Any:
     return isaac_scene_index_geometry.iter_usd_prim_range(prim)
 
 
-def _dedupe(values: Any) -> list[str]:
-    seen = set()
-    result = []
-    for value in values:
-        item = str(value or "")
-        if not item or item in seen:
-            continue
-        seen.add(item)
-        result.append(item)
-    return result
-
-
 def _runtime_smoke_robot_view_paths(
     run_dir: Path,
     *,
@@ -736,8 +538,8 @@ def _capture_isaac_lab_camera_views(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    return capture_isaac_lab_camera_views(
-        request=IsaacCameraCaptureRequest(
+    return isaac_camera_capture.capture_isaac_lab_camera_views(
+        request=isaac_camera_capture.IsaacCameraCaptureRequest(
             scene_usd=scene_usd,
             view_paths=view_paths,
             width=width,
@@ -756,14 +558,14 @@ def _capture_isaac_lab_camera_views(
             isaac_exposure_bias=isaac_exposure_bias,
             isaac_colorcorr_gain=isaac_colorcorr_gain,
             robot_view_keys=ROBOT_VIEW_KEYS,
-            head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-            head_camera_vertical_fov_deg=RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
-            head_camera_focal_length_mm=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+            head_camera_prim=isaac_camera_geometry.ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            head_camera_vertical_fov_deg=(isaac_camera_geometry.RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG),
+            head_camera_focal_length_mm=isaac_camera_geometry.RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
             renderer_mode=REAL_SMOKE_RENDERER_MODE,
             capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
             default_lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
         ),
-        hooks=IsaacCameraCaptureHooks(
+        hooks=isaac_camera_capture.IsaacCameraCaptureHooks(
             wait_for_stage_load=_wait_for_stage_load,
             load_current_stage_payloads=_load_current_stage_payloads,
             apply_semantic_pose_state_to_stage=_apply_semantic_pose_state_to_stage,
@@ -812,7 +614,7 @@ def _capture_scene_camera_request_with_existing_sim(
     np: Any,
     scene_bounds: dict[str, Any],
 ) -> dict[str, Any]:
-    return capture_scene_camera_request_with_existing_sim(
+    return isaac_scene_camera_capture.capture_scene_camera_request_with_existing_sim(
         camera_request=camera_request,
         output_dir=output_dir,
         width=width,
@@ -874,8 +676,8 @@ def _capture_isaac_lab_scene_camera_views(
     simulation_app: Any,
     semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return capture_isaac_lab_scene_camera_views(
-        request=IsaacSceneCameraCaptureRequest(
+    return isaac_scene_camera_capture.capture_isaac_lab_scene_camera_views(
+        request=isaac_scene_camera_capture.IsaacSceneCameraCaptureRequest(
             scene_usd=scene_usd,
             camera_request=camera_request,
             output_dir=output_dir,
@@ -885,7 +687,7 @@ def _capture_isaac_lab_scene_camera_views(
             semantic_pose_state=_dict(semantic_pose_state),
             renderer_mode=REAL_SMOKE_RENDERER_MODE,
         ),
-        hooks=IsaacSceneCameraCaptureHooks(
+        hooks=isaac_scene_camera_capture.IsaacSceneCameraCaptureHooks(
             normalize_camera_control_request=normalize_camera_control_request,
             wait_for_stage_load=_wait_for_stage_load,
             load_current_stage_payloads=_load_current_stage_payloads,
@@ -910,7 +712,7 @@ def _apply_semantic_pose_state_to_stage(
     return isaac_semantic_pose_stage.apply_semantic_pose_state_to_stage(
         stage_utils=stage_utils,
         semantic_pose_state=semantic_pose_state,
-        hooks=IsaacSemanticPoseStageHooks(
+        hooks=isaac_semantic_pose_stage.IsaacSemanticPoseStageHooks(
             dict_value=_dict,
             set_usd_xform_translate=_set_usd_xform_translate,
             semantic_pose_target_position=_semantic_pose_target_position,
@@ -967,7 +769,7 @@ def _apply_scene_index_semantic_labels(
     sim_utils: Any,
     scene_index_diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    return apply_scene_index_semantic_labels(
+    return isaac_semantic_labels.apply_scene_index_semantic_labels(
         stage_utils=stage_utils,
         sim_utils=sim_utils,
         scene_index_diagnostics=scene_index_diagnostics,
@@ -982,7 +784,7 @@ def _camera_segmentation_view_diagnostics(
     view_name: str,
     np: Any,
 ) -> dict[str, Any]:
-    return camera_segmentation_view_diagnostics(
+    return isaac_segmentation_diagnostics.camera_segmentation_view_diagnostics(
         camera,
         data_types=data_types,
         view_name=view_name,
@@ -998,7 +800,7 @@ def _camera_segmentation_capture_diagnostics(
     semantic_label_application: dict[str, Any] | None = None,
     semantic_filter: str | list[str] | None = None,
 ) -> dict[str, Any]:
-    return camera_segmentation_capture_diagnostics(
+    return isaac_segmentation_diagnostics.camera_segmentation_capture_diagnostics(
         views,
         requested_data_types=requested_data_types,
         semantic_label_application=semantic_label_application,
@@ -1008,71 +810,9 @@ def _camera_segmentation_capture_diagnostics(
 
 
 def _camera_segmentation_not_requested_diagnostics() -> dict[str, Any]:
-    return camera_segmentation_not_requested_diagnostics(
+    return isaac_segmentation_diagnostics.camera_segmentation_not_requested_diagnostics(
         requested_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
     )
-
-
-def _current_stage_bounds(stage_utils: Any) -> dict[str, list[float]] | None:
-    return current_stage_bounds(stage_utils)
-
-
-def _ensure_capture_lighting(
-    stage_utils: Any, profile: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    return ensure_capture_lighting(stage_utils, profile)
-
-
-def _normalized_vec3(value: Any) -> list[float] | None:
-    return normalized_vec3(value)
-
-
-def _isaac_distant_light_rotation_from_direction(direction: list[float]) -> list[float]:
-    return isaac_distant_light_rotation_from_direction(direction)
-
-
-def _scale_stage_light_intensities(
-    stage: Any,
-    light_paths: list[str],
-    *,
-    scale: float,
-) -> list[dict[str, Any]]:
-    return scale_stage_light_intensities(stage, light_paths, scale=scale)
-
-
-def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:
-    return isaac_robot_view_color_profile(override)
-
-
-def _stage_light_paths(
-    stage: Any, *, exclude_prefix: str = "", light_api: Any | None = None
-) -> list[str]:
-    return stage_light_paths(stage, exclude_prefix=exclude_prefix, light_api=light_api)
-
-
-def _prim_type_is_light(prim: Any) -> bool:
-    return prim_type_is_light(prim)
-
-
-def _isaac_camera_view_poses(
-    *,
-    torch: Any,
-    device: Any,
-    scene_bounds: dict[str, list[float]] | None = None,
-    semantic_pose_state: dict[str, Any] | None = None,
-) -> dict[str, tuple[Any, Any]]:
-    return isaac_camera_view_poses(
-        torch=torch,
-        device=device,
-        scene_bounds=scene_bounds,
-        semantic_pose_state=semantic_pose_state,
-    )
-
-
-def _robot_relative_chase_eye_target(
-    pose: dict[str, Any],
-) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
-    return robot_relative_chase_eye_target(pose)
 
 
 def _ensure_rby1m_robot_on_stage(
@@ -1086,8 +826,8 @@ def _ensure_rby1m_robot_on_stage(
     )
 
 
-def _isaac_robot_camera_stage_hooks() -> IsaacRobotCameraStageHooks:
-    return IsaacRobotCameraStageHooks(
+def _isaac_robot_camera_stage_hooks() -> isaac_robot_camera_stage.IsaacRobotCameraStageHooks:
+    return isaac_robot_camera_stage.IsaacRobotCameraStageHooks(
         dict_value=_dict,
         has_xy=_has_xy,
         horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
@@ -1126,41 +866,6 @@ def _apply_static_head_camera_pitch(
         head_pitch=head_pitch,
         hooks=_isaac_robot_camera_stage_hooks(),
     )
-
-
-def _static_head_camera_pose_for_pitch(
-    head_pitch: float,
-) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
-    return static_head_camera_pose_for_pitch(head_pitch)
-
-
-def _rotate_point_y_about_pivot(
-    point: tuple[float, float, float],
-    *,
-    pivot: tuple[float, float, float],
-    angle_rad: float,
-) -> tuple[float, float, float]:
-    return rotate_point_y_about_pivot(point, pivot=pivot, angle_rad=angle_rad)
-
-
-def _quat_from_axis_angle(
-    axis: tuple[float, float, float],
-    angle_rad: float,
-) -> tuple[float, float, float, float]:
-    return quat_from_axis_angle(axis, angle_rad)
-
-
-def _quat_multiply(
-    left: tuple[float, float, float, float],
-    right: tuple[float, float, float, float],
-) -> tuple[float, float, float, float]:
-    return quat_multiply(left, right)
-
-
-def _normalize_quat(
-    quat: tuple[float, float, float, float],
-) -> tuple[float, float, float, float]:
-    return normalize_quat(quat)
 
 
 def _static_head_pitch_note(head_pitch_application: dict[str, Any]) -> str:
@@ -1223,45 +928,6 @@ def _configure_rby1m_head_camera_lens(
     )
 
 
-def _usd_camera_fov_metadata(
-    *,
-    focal_length: float | None,
-    horizontal_aperture: float | None,
-    width: int,
-    height: int,
-) -> dict[str, float]:
-    return usd_camera_fov_metadata(
-        focal_length=focal_length,
-        horizontal_aperture=horizontal_aperture,
-        width=width,
-        height=height,
-    )
-
-
-def _matrix4d_rowmajor(matrix: Any) -> list[float]:
-    return matrix4d_rowmajor(matrix)
-
-
-def _usd_attr_float(attr: Any) -> float | None:
-    return usd_attr_float(attr)
-
-
-def _usd_vec(attr: Any) -> list[float] | None:
-    return usd_vec(attr)
-
-
-def _tensor_first_vec3(value: Any) -> list[float]:
-    return tensor_first_vec3(value)
-
-
-def _robot_pose_yaw_deg(pose: dict[str, Any]) -> float | None:
-    return robot_pose_yaw_deg(pose)
-
-
-def _optional_float(value: Any) -> float | None:
-    return optional_float(value)
-
-
 def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
     is_loading = getattr(stage_utils, "is_stage_loading", None)
     if not callable(is_loading):
@@ -1293,10 +959,6 @@ def _rgb_tensor_to_uint8(value: Any, *, np: Any) -> Any:
     return np.clip(array, 0, 255).astype("uint8")
 
 
-def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
-    return load_camera_view_specs(path)
-
-
 def _load_camera_request_from_args(
     *,
     view_specs_path: Path | None,
@@ -1318,23 +980,11 @@ def _isaac_scene_camera_view_spec(
     index: int,
     stage_utils: Any | None = None,
 ) -> dict[str, Any]:
-    return isaac_scene_camera_view_spec(
+    return isaac_scene_camera_geometry.isaac_scene_camera_view_spec(
         raw_spec,
         index=index,
         stage_utils=stage_utils,
     )
-
-
-def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
-    return lane_camera_orbit(raw_spec, lane_id)
-
-
-def _backend_transform_for_lane(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
-    return backend_transform_for_lane(raw_spec, lane_id)
-
-
-def _apply_scene_transform_to_point(point: list[float], transform: dict[str, Any]) -> list[float]:
-    return apply_scene_transform_to_point(point, transform)
 
 
 def _horizontal_aperture_from_lens(
@@ -1344,7 +994,7 @@ def _horizontal_aperture_from_lens(
     height: int,
     focal_length: float,
 ) -> float:
-    return horizontal_aperture_from_lens(
+    return isaac_camera_geometry.horizontal_aperture_from_lens(
         lens,
         width=width,
         height=height,
@@ -1358,7 +1008,7 @@ def _bounds_from_usd_prim_path(
     usd_prim_path: str,
     min_target_z: float,
 ) -> dict[str, Any] | None:
-    return bounds_from_usd_prim_path(
+    return isaac_scene_camera_geometry.bounds_from_usd_prim_path(
         stage_utils=stage_utils,
         usd_prim_path=usd_prim_path,
         min_target_z=min_target_z,
@@ -1372,7 +1022,7 @@ def _eye_from_lookat_spec(
     azimuth: float,
     elevation: float,
 ) -> list[float]:
-    return eye_from_lookat_spec(
+    return isaac_scene_camera_geometry.eye_from_lookat_spec(
         target=target,
         distance=distance,
         azimuth=azimuth,
@@ -1380,24 +1030,12 @@ def _eye_from_lookat_spec(
     )
 
 
-def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
-    return camera_vec3(value, default=default)
-
-
-def _image_has_variance(array: Any, *, np: Any) -> bool:
-    return image_has_variance(array, np=np)
-
-
-def _module_version(module_name: str) -> str | None:
-    return module_version(module_name)
-
-
 def runtime_diagnostics(
     runtime_mode: str,
     *,
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return _runtime_diagnostics(
+    return isaac_runtime_diagnostics.runtime_diagnostics(
         runtime_mode,
         real_smoke=real_smoke,
         default_width=DEFAULT_WIDTH,
@@ -1413,50 +1051,11 @@ def rendering_diagnostics(
     *,
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return _runtime_rendering_diagnostics(
+    return isaac_runtime_diagnostics.rendering_diagnostics(
         runtime_mode,
         real_smoke=real_smoke,
         real_smoke_renderer_mode=REAL_SMOKE_RENDERER_MODE,
         real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
-    )
-
-
-def _isaac_native_render_diagnostics_unavailable(
-    *,
-    runtime_mode: str,
-    reason: str,
-) -> dict[str, Any]:
-    return native_render_diagnostics_unavailable(
-        runtime_mode=runtime_mode,
-        reason=reason,
-    )
-
-
-def _native_setting_candidate_count() -> int:
-    return native_setting_candidate_count()
-
-
-def _capture_quality_settings_unavailable(
-    *,
-    render_settle_frames: int,
-    reason: str,
-) -> dict[str, Any]:
-    return capture_quality_settings_unavailable(
-        render_settle_frames=render_settle_frames,
-        reason=reason,
-    )
-
-
-def _capture_quality_settings(
-    *,
-    render_settle_frames: int,
-    settings: Any | None,
-    settings_mutation: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    return capture_quality_settings(
-        render_settle_frames=render_settle_frames,
-        settings=settings,
-        settings_mutation=settings_mutation,
     )
 
 
@@ -1471,7 +1070,7 @@ def _isaac_native_render_diagnostics(
     isaac_lab_isp_active: bool = False,
     capture_quality_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return native_render_diagnostics(
+    return isaac_render_diagnostics.native_render_diagnostics(
         renderer_mode=renderer_mode,
         capture_method=capture_method,
         view_kind=view_kind,
@@ -1492,10 +1091,10 @@ def _apply_isaac_capture_quality_overrides(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    return apply_isaac_capture_quality_overrides(
+    return isaac_capture_quality.apply_isaac_capture_quality_overrides(
         settings=settings,
-        setting_paths=ISAAC_NATIVE_RENDER_SETTING_PATHS,
-        capture_quality_fields=ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
+        setting_paths=isaac_render_diagnostics.ISAAC_NATIVE_RENDER_SETTING_PATHS,
+        capture_quality_fields=isaac_render_diagnostics.ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
         isaac_aa_op=isaac_aa_op,
         isaac_tonemap_op=isaac_tonemap_op,
         isaac_exposure_bias=isaac_exposure_bias,
@@ -1512,18 +1111,6 @@ def _isaac_settings_interface() -> Any | None:
         return None
 
 
-def _isaac_setting_value(settings: Any | None, candidate_paths: tuple[str, ...]) -> dict[str, Any]:
-    return isaac_setting_value(settings, candidate_paths)
-
-
-def _camera_render_product_paths(camera: Any) -> list[str]:
-    return camera_render_product_paths(camera)
-
-
-def _render_product_paths_from_value(value: Any) -> list[str]:
-    return render_product_paths_from_value(value)
-
-
 def scene_load_diagnostics(
     runtime_mode: str,
     scene_source: str,
@@ -1531,7 +1118,7 @@ def scene_load_diagnostics(
     *,
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return _scene_load_diagnostics(
+    return isaac_mapping_diagnostics.scene_load_diagnostics(
         runtime_mode,
         scene_source,
         scene_index,
@@ -1545,7 +1132,7 @@ def segmentation_diagnostics(
     real_smoke: dict[str, Any] | None = None,
     scene_binding_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return _segmentation_diagnostics(
+    return isaac_segmentation_diagnostics.segmentation_diagnostics(
         runtime_mode,
         real_smoke=real_smoke,
         scene_binding_diagnostics=scene_binding_diagnostics,
@@ -1562,7 +1149,7 @@ def mapping_gap_diagnostics(
     scene_binding_diagnostics: dict[str, Any] | None = None,
     segmentation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    return _mapping_gap_diagnostics(
+    return isaac_mapping_diagnostics.mapping_gap_diagnostics(
         runtime_mode=runtime_mode,
         map_bundle_dir=map_bundle_dir,
         real_smoke=real_smoke,
@@ -1583,7 +1170,7 @@ def _initial_semantic_pose_state(
     scene_binding_diagnostics: dict[str, Any] | None,
     initial_receptacle_id: str,
 ) -> dict[str, Any]:
-    return initial_semantic_pose_state(
+    return isaac_semantic_pose_state.initial_semantic_pose_state(
         scenario=scenario,
         object_index=object_index,
         receptacle_index=receptacle_index,
@@ -1602,7 +1189,7 @@ def _semantic_pose_state_from_backend_state(
     *,
     transform_events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    return semantic_pose_state_from_backend_state(
+    return isaac_semantic_pose_state.semantic_pose_state_from_backend_state(
         state,
         transform_events=transform_events,
         state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
@@ -1626,7 +1213,7 @@ def _record_semantic_pose_event(
     relation: str = "",
     **extra: Any,
 ) -> dict[str, Any]:
-    return record_semantic_pose_event(
+    return isaac_semantic_pose_state.record_semantic_pose_event(
         state,
         tool=tool,
         state_mutation=state_mutation,
@@ -1656,7 +1243,7 @@ def _record_waypoint_pose_event(
     previous_waypoint_id: str = "",
     previous_room_id: str = "",
 ) -> dict[str, Any]:
-    return record_waypoint_pose_event(
+    return isaac_semantic_pose_state.record_waypoint_pose_event(
         state,
         waypoint=waypoint,
         robot_pose=robot_pose,
@@ -1671,8 +1258,10 @@ def _record_waypoint_pose_event(
     )
 
 
-def _isaac_semantic_pose_projection_hooks() -> IsaacSemanticPoseProjectionHooks:
-    return IsaacSemanticPoseProjectionHooks(
+def _isaac_semantic_pose_projection_hooks() -> (
+    isaac_semantic_pose_projection.IsaacSemanticPoseProjectionHooks
+):
+    return isaac_semantic_pose_projection.IsaacSemanticPoseProjectionHooks(
         dict_value=_dict,
         robot_pose_for_receptacle=_robot_pose_for_receptacle,
         round_vec3=_round_vec3,
@@ -1681,8 +1270,8 @@ def _isaac_semantic_pose_projection_hooks() -> IsaacSemanticPoseProjectionHooks:
     )
 
 
-def _isaac_scenario_state_hooks() -> IsaacScenarioStateHooks:
-    return IsaacScenarioStateHooks(
+def _isaac_scenario_state_hooks() -> isaac_scenario_state.IsaacScenarioStateHooks:
+    return isaac_scenario_state.IsaacScenarioStateHooks(
         dict_value=_dict,
         isaac_placement_diagnostic=_isaac_placement_diagnostic,
         receptacle_prefers_inside=_receptacle_prefers_inside,
@@ -1694,108 +1283,45 @@ def _isaac_scenario_state_hooks() -> IsaacScenarioStateHooks:
     )
 
 
-def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
-    return isaac_scenario_state.seed_generated_mess_placements(
-        state,
-        hooks=_isaac_scenario_state_hooks(),
-    )
+def _with_isaac_scenario_state_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_scenario_state_hooks())
+
+    return call
 
 
-def _manifest_target_by_object_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return isaac_scenario_state.manifest_target_by_object_id(
-        state,
-        hooks=_isaac_scenario_state_hooks(),
-    )
-
-
-def _target_start_receptacle(
-    state: dict[str, Any],
-    wrong_pool: list[dict[str, Any]],
-    index: int,
-    target_ids: set[str],
-    manifest_target: dict[str, Any] | None,
-) -> dict[str, Any]:
-    return isaac_scenario_state.target_start_receptacle(
-        state,
-        wrong_pool,
-        index,
-        target_ids,
-        manifest_target,
-        hooks=_isaac_scenario_state_hooks(),
-    )
-
-
-def _target_relation(
-    receptacle: dict[str, Any],
-    manifest_target: dict[str, Any] | None,
-) -> str:
-    return isaac_scenario_state.target_relation(
-        receptacle,
-        manifest_target,
-        hooks=_isaac_scenario_state_hooks(),
-    )
+_seed_generated_mess_placements = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.seed_generated_mess_placements
+)
+_manifest_target_by_object_id = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.manifest_target_by_object_id
+)
+_target_start_receptacle = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.target_start_receptacle
+)
+_target_relation = _with_isaac_scenario_state_hooks(isaac_scenario_state.target_relation)
 
 
 def _target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
     return isaac_scenario_state.target_placement_index(index, manifest_target)
 
 
-def _mess_wrong_receptacle_pool(
-    state: dict[str, Any],
-    target_receptacle_ids: set[str],
-) -> list[dict[str, Any]]:
-    return isaac_scenario_state.mess_wrong_receptacle_pool(
-        state,
-        target_receptacle_ids,
-        hooks=_isaac_scenario_state_hooks(),
-    )
+_mess_wrong_receptacle_pool = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.mess_wrong_receptacle_pool
+)
+_apply_object_location = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.apply_object_location
+)
+_set_public_scenario_object_location = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.set_public_scenario_object_location
+)
+_first_target_object_location = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.first_target_object_location
+)
 
 
-def _apply_object_location(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    relation: str,
-    placement_index: int,
-    source: str,
-) -> dict[str, Any]:
-    return isaac_scenario_state.apply_object_location(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        placement_index=placement_index,
-        source=source,
-        hooks=_isaac_scenario_state_hooks(),
-    )
-
-
-def _set_public_scenario_object_location(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    relation: str,
-) -> None:
-    return isaac_scenario_state.set_public_scenario_object_location(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        hooks=_isaac_scenario_state_hooks(),
-    )
-
-
-def _first_target_object_location(state: dict[str, Any]) -> str:
-    return isaac_scenario_state.first_target_object_location(
-        state,
-        hooks=_isaac_scenario_state_hooks(),
-    )
-
-
-def _isaac_placement_hooks() -> IsaacPlacementHooks:
-    return IsaacPlacementHooks(
+def _isaac_placement_hooks() -> isaac_placement_resolution.IsaacPlacementHooks:
+    return isaac_placement_resolution.IsaacPlacementHooks(
         aabb_xy_overlaps=_aabb_xy_overlaps,
         binding_for_handle=_binding_for_handle,
         candidate_has_direct_support=_candidate_has_direct_support,
@@ -1834,185 +1360,56 @@ def _isaac_placement_hooks() -> IsaacPlacementHooks:
     )
 
 
-def _resolve_isaac_placement(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    index: int,
-    relation: str,
-    source: str,
-) -> dict[str, Any]:
-    return isaac_placement_resolution.resolve_isaac_placement(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        index=index,
-        relation=relation,
-        source=source,
-        hooks=_isaac_placement_hooks(),
-    )
+def _with_isaac_placement_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_placement_hooks())
+
+    return call
 
 
-def _isaac_state_objects_for_clearance(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return isaac_placement_resolution.isaac_state_objects_for_clearance(
-        state, hooks=_isaac_placement_hooks()
-    )
-
-
-def _isaac_direct_support_placement(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    index: int,
-) -> dict[str, Any] | None:
-    return isaac_placement_resolution.isaac_direct_support_placement(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        index=index,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_receptacle_support_surface(
-    state: dict[str, Any],
-    receptacle_id: str,
-) -> dict[str, Any] | None:
-    return isaac_placement_resolution.isaac_receptacle_support_surface(
-        state,
-        receptacle_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_receptacle_support_surfaces(
-    state: dict[str, Any],
-    receptacle_id: str,
-) -> list[dict[str, Any]]:
-    return isaac_placement_resolution.isaac_receptacle_support_surfaces(
-        state,
-        receptacle_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _normalize_support_surface(surface: Any) -> dict[str, Any] | None:
-    return isaac_placement_resolution.normalize_support_surface(surface)
-
-
-def _surface_candidate_positions(
-    surface: dict[str, Any],
-    *,
-    footprint: tuple[float, float],
-    bottom_offset: float,
-    clearance: float,
-    index: int,
-) -> list[list[float]]:
-    return isaac_placement_resolution.surface_candidate_positions(
-        surface,
-        footprint=footprint,
-        bottom_offset=bottom_offset,
-        clearance=clearance,
-        index=index,
-    )
-
-
-def _candidate_has_direct_support(
-    position: list[float],
-    surface: dict[str, Any],
-    footprint: tuple[float, float],
-) -> bool:
-    return isaac_placement_resolution.candidate_has_direct_support(position, surface, footprint)
-
-
-def _isaac_candidate_is_clear_of_dynamic_objects(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    position: list[float],
-    footprint: tuple[float, float],
-    bottom_offset: float,
-) -> bool:
-    return isaac_placement_resolution.isaac_candidate_is_clear_of_dynamic_objects(
-        state,
-        object_id=object_id,
-        position=position,
-        footprint=footprint,
-        bottom_offset=bottom_offset,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _aabb_xy_overlaps(
-    first: tuple[float, float, float, float],
-    second: dict[str, float],
-    *,
-    margin: float,
-) -> bool:
-    return isaac_placement_resolution.aabb_xy_overlaps(first, second, margin=margin)
-
-
-def _isaac_object_current_aabb(state: dict[str, Any], object_id: str) -> dict[str, float] | None:
-    return isaac_placement_resolution.isaac_object_current_aabb(
-        state,
-        object_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _elevated_position_over_surface(
-    surface: dict[str, Any],
-    *,
-    bottom_offset: float,
-) -> list[float]:
-    return isaac_placement_resolution.elevated_position_over_surface(
-        surface, bottom_offset=bottom_offset
-    )
-
-
-def _isaac_fallback_placement_position(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    index: int,
-    relation: str,
-) -> list[float]:
-    return isaac_placement_resolution.isaac_fallback_placement_position(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        index=index,
-        relation=relation,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_object_footprint_half_extents(
-    state: dict[str, Any],
-    object_id: str,
-) -> tuple[float, float]:
-    return isaac_placement_resolution.isaac_object_footprint_half_extents(
-        state,
-        object_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_object_bottom_offset(state: dict[str, Any], object_id: str) -> float:
-    return isaac_placement_resolution.isaac_object_bottom_offset(
-        state,
-        object_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_object_height(state: dict[str, Any], object_id: str) -> float:
-    return isaac_placement_resolution.isaac_object_height(
-        state, object_id, hooks=_isaac_placement_hooks()
-    )
+_resolve_isaac_placement = _with_isaac_placement_hooks(
+    isaac_placement_resolution.resolve_isaac_placement
+)
+_isaac_state_objects_for_clearance = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_state_objects_for_clearance
+)
+_isaac_direct_support_placement = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_direct_support_placement
+)
+_isaac_receptacle_support_surface = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_receptacle_support_surface
+)
+_isaac_receptacle_support_surfaces = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_receptacle_support_surfaces
+)
+_normalize_support_surface = isaac_placement_resolution.normalize_support_surface
+_surface_candidate_positions = isaac_placement_resolution.surface_candidate_positions
+_candidate_has_direct_support = isaac_placement_resolution.candidate_has_direct_support
+_isaac_candidate_is_clear_of_dynamic_objects = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_candidate_is_clear_of_dynamic_objects
+)
+_aabb_xy_overlaps = isaac_placement_resolution.aabb_xy_overlaps
+_isaac_object_current_aabb = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_current_aabb
+)
+_elevated_position_over_surface = isaac_placement_resolution.elevated_position_over_surface
+_isaac_fallback_placement_position = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_fallback_placement_position
+)
+_isaac_object_footprint_half_extents = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_footprint_half_extents
+)
+_isaac_object_bottom_offset = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_bottom_offset
+)
+_isaac_object_height = _with_isaac_placement_hooks(isaac_placement_resolution.isaac_object_height)
+_isaac_object_world_bounds = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_world_bounds
+)
+_isaac_receptacle_world_bounds = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_receptacle_world_bounds
+)
+_isaac_index_entry = _with_isaac_placement_hooks(isaac_placement_resolution.isaac_index_entry)
 
 
 def _isaac_object_surface_lift(category: Any) -> float:
@@ -2028,38 +1425,6 @@ def _isaac_direct_support_clearance(
         receptacle,
         norm=_norm,
         receptacle_text=_receptacle_text,
-    )
-
-
-def _isaac_object_world_bounds(state: dict[str, Any], object_id: str) -> dict[str, Any]:
-    return isaac_placement_resolution.isaac_object_world_bounds(
-        state,
-        object_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_receptacle_world_bounds(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    return isaac_placement_resolution.isaac_receptacle_world_bounds(
-        state,
-        receptacle_id,
-        hooks=_isaac_placement_hooks(),
-    )
-
-
-def _isaac_index_entry(
-    state: dict[str, Any],
-    public_id: str,
-    *,
-    index_name: str,
-    binding_groups: tuple[str, ...],
-) -> dict[str, Any]:
-    return isaac_placement_resolution.isaac_index_entry(
-        state,
-        public_id,
-        index_name=index_name,
-        binding_groups=binding_groups,
-        hooks=_isaac_placement_hooks(),
     )
 
 
@@ -2109,109 +1474,57 @@ def _isaac_placement_diagnostic(
     )
 
 
-def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return isaac_semantic_pose_projection.semantic_object_poses_from_state(
-        state,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-        held_location_id=HELD_LOCATION_ID,
-        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-    )
+def _with_semantic_pose_projection_hooks(
+    func: Callable[..., Any],
+    **injected: Any,
+) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(
+            *args,
+            **kwargs,
+            hooks=_isaac_semantic_pose_projection_hooks(),
+            **injected,
+        )
+
+    return call
 
 
-def _semantic_object_position_from_state(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    location_id: str,
-    original_location_id: str,
-    support_receptacle_id: str,
-) -> list[float] | None:
-    return isaac_semantic_pose_projection.semantic_object_position_from_state(
-        state,
-        object_id=object_id,
-        location_id=location_id,
-        original_location_id=original_location_id,
-        support_receptacle_id=support_receptacle_id,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-        held_location_id=HELD_LOCATION_ID,
-    )
+_semantic_object_poses_from_state = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_object_poses_from_state,
+    held_location_id=HELD_LOCATION_ID,
+    state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+)
+_semantic_object_position_from_state = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_object_position_from_state,
+    held_location_id=HELD_LOCATION_ID,
+)
+_semantic_object_position_source = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_object_position_source,
+    held_location_id=HELD_LOCATION_ID,
+)
+_object_usd_world_bounds_center = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.object_usd_world_bounds_center
+)
+_semantic_articulations_from_state = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_articulations_from_state,
+    state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+)
+_object_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.object_usd_prim_path
+)
+_receptacle_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.receptacle_usd_prim_path
+)
+_binding_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.binding_usd_prim_path
+)
+_index_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.index_usd_prim_path
+)
 
 
-def _semantic_object_position_source(
-    position: list[float] | None,
-    *,
-    location_id: str,
-    original_location_id: str,
-    pose_override: dict[str, Any] | None = None,
-) -> str:
-    return isaac_semantic_pose_projection.semantic_object_position_source(
-        position,
-        location_id=location_id,
-        original_location_id=original_location_id,
-        pose_override=pose_override,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-        held_location_id=HELD_LOCATION_ID,
-    )
-
-
-def _object_usd_world_bounds_center(
-    state: dict[str, Any],
-    object_id: str,
-) -> list[float] | None:
-    return isaac_semantic_pose_projection.object_usd_world_bounds_center(
-        state,
-        object_id,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-    )
-
-
-def _semantic_articulations_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return isaac_semantic_pose_projection.semantic_articulations_from_state(
-        state,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-    )
-
-
-def _object_usd_prim_path(state: dict[str, Any], object_id: str) -> str:
-    return isaac_semantic_pose_projection.object_usd_prim_path(
-        state,
-        object_id,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-    )
-
-
-def _receptacle_usd_prim_path(state: dict[str, Any], receptacle_id: str) -> str:
-    return isaac_semantic_pose_projection.receptacle_usd_prim_path(
-        state,
-        receptacle_id,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-    )
-
-
-def _binding_usd_prim_path(
-    scene_binding_diagnostics: Any,
-    public_id: str,
-    binding_keys: tuple[str, ...],
-) -> str:
-    return isaac_semantic_pose_projection.binding_usd_prim_path(
-        scene_binding_diagnostics,
-        public_id,
-        binding_keys,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-    )
-
-
-def _index_usd_prim_path(index: Any, handle: str) -> str:
-    return isaac_semantic_pose_projection.index_usd_prim_path(
-        index,
-        handle,
-        hooks=_isaac_semantic_pose_projection_hooks(),
-    )
-
-
-def _isaac_worker_command_hooks() -> IsaacWorkerCommandHooks:
-    return IsaacWorkerCommandHooks(
+def _isaac_worker_command_hooks() -> isaac_worker_commands.IsaacWorkerCommandHooks:
+    return isaac_worker_commands.IsaacWorkerCommandHooks(
         apply_object_location=_apply_object_location,
         count=_count,
         dict_value=_dict,
@@ -2231,38 +1544,23 @@ def _isaac_worker_command_hooks() -> IsaacWorkerCommandHooks:
     )
 
 
-def observe(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.observe(args, state, hooks=_isaac_worker_command_hooks())
+def _with_isaac_worker_command_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_worker_command_hooks())
+
+    return call
 
 
-def navigate_to_object(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.navigate_to_object(
-        args, state, hooks=_isaac_worker_command_hooks()
-    )
-
-
-def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.navigate_to_receptacle(
-        args, state, hooks=_isaac_worker_command_hooks()
-    )
-
-
-def navigate_to_waypoint(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.navigate_to_waypoint(
-        args, state, hooks=_isaac_worker_command_hooks()
-    )
-
-
-def pick(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.pick(args, state, hooks=_isaac_worker_command_hooks())
-
-
-def open_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.open_receptacle(args, state, hooks=_isaac_worker_command_hooks())
-
-
-def close_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.close_receptacle(args, state, hooks=_isaac_worker_command_hooks())
+observe = _with_isaac_worker_command_hooks(isaac_worker_commands.observe)
+navigate_to_object = _with_isaac_worker_command_hooks(isaac_worker_commands.navigate_to_object)
+navigate_to_receptacle = _with_isaac_worker_command_hooks(
+    isaac_worker_commands.navigate_to_receptacle
+)
+navigate_to_waypoint = _with_isaac_worker_command_hooks(isaac_worker_commands.navigate_to_waypoint)
+pick = _with_isaac_worker_command_hooks(isaac_worker_commands.pick)
+open_receptacle = _with_isaac_worker_command_hooks(isaac_worker_commands.open_receptacle)
+close_receptacle = _with_isaac_worker_command_hooks(isaac_worker_commands.close_receptacle)
+done = _with_isaac_worker_command_hooks(isaac_worker_commands.done)
 
 
 def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> dict[str, Any]:
@@ -2271,12 +1569,8 @@ def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> 
     )
 
 
-def done(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_commands.done(args, state, hooks=_isaac_worker_command_hooks())
-
-
-def _isaac_worker_output_hooks() -> IsaacWorkerOutputHooks:
-    return IsaacWorkerOutputHooks(
+def _isaac_worker_output_hooks() -> isaac_worker_outputs.IsaacWorkerOutputHooks:
+    return isaac_worker_outputs.IsaacWorkerOutputHooks(
         camera_capture_provenance=_camera_capture_provenance,
         camera_capture_variant=_camera_capture_variant,
         capture_scene_camera_views=capture_scene_camera_views,
@@ -2305,22 +1599,19 @@ def _isaac_worker_output_hooks() -> IsaacWorkerOutputHooks:
     )
 
 
-def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_outputs.write_snapshot(args, state, hooks=_isaac_worker_output_hooks())
+def _with_isaac_worker_output_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_worker_output_hooks())
+
+    return call
 
 
-def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_outputs.write_robot_views(args, state, hooks=_isaac_worker_output_hooks())
-
-
-def _robot_view_rendered_robot_pose(state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_outputs.robot_view_rendered_robot_pose(
-        state, hooks=_isaac_worker_output_hooks()
-    )
-
-
-def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_outputs.write_camera_views(args, state, hooks=_isaac_worker_output_hooks())
+write_snapshot = _with_isaac_worker_output_hooks(isaac_worker_outputs.write_snapshot)
+write_robot_views = _with_isaac_worker_output_hooks(isaac_worker_outputs.write_robot_views)
+_robot_view_rendered_robot_pose = _with_isaac_worker_output_hooks(
+    isaac_worker_outputs.robot_view_rendered_robot_pose
+)
+write_camera_views = _with_isaac_worker_output_hooks(isaac_worker_outputs.write_camera_views)
 
 
 def _locations_command(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
@@ -2359,8 +1650,8 @@ def _robot_view_camera_control_contract(
     )
 
 
-def _isaac_robot_pose_hooks() -> IsaacRobotPoseHooks:
-    return IsaacRobotPoseHooks(
+def _isaac_robot_pose_hooks() -> isaac_robot_pose_focus.IsaacRobotPoseHooks:
+    return isaac_robot_pose_focus.IsaacRobotPoseHooks(
         binding_for_handle=_binding_for_handle,
         dict_value=_dict,
         has_xy=_has_xy,
@@ -2376,57 +1667,30 @@ def _isaac_robot_pose_hooks() -> IsaacRobotPoseHooks:
     )
 
 
-def _target_room_id_from_pose_inputs(
-    state: dict[str, Any],
-    receptacle_id: str,
-    support: dict[str, Any],
-) -> str | None:
-    return isaac_robot_pose_focus.target_room_id_from_pose_inputs(
-        state,
-        receptacle_id,
-        support,
-        hooks=_isaac_robot_pose_hooks(),
-    )
+def _with_isaac_robot_pose_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_robot_pose_hooks())
+
+    return call
 
 
-def _robot_pose_for_receptacle(
-    state: dict[str, Any],
-    receptacle_id: str,
-) -> dict[str, Any]:
-    return isaac_robot_pose_focus.robot_pose_for_receptacle(
-        state,
-        receptacle_id,
-        hooks=_isaac_robot_pose_hooks(),
-    )
-
-
-def _robot_pose_for_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
-    return isaac_robot_pose_focus.robot_pose_for_waypoint(
-        waypoint,
-        hooks=_isaac_robot_pose_hooks(),
-    )
-
-
-def _normalized_waypoint_robot_pose(
-    pose: dict[str, Any],
-    *,
-    waypoint: dict[str, Any],
-    pose_source: str,
-) -> dict[str, Any]:
-    return isaac_robot_pose_focus.normalized_waypoint_robot_pose(
-        pose,
-        waypoint=waypoint,
-        pose_source=pose_source,
-        hooks=_isaac_robot_pose_hooks(),
-    )
-
-
-def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    return isaac_robot_pose_focus.receptacle_support_pose(
-        state,
-        receptacle_id,
-        hooks=_isaac_robot_pose_hooks(),
-    )
+_target_room_id_from_pose_inputs = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.target_room_id_from_pose_inputs
+)
+_robot_pose_for_receptacle = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.robot_pose_for_receptacle
+)
+_robot_pose_for_waypoint = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.robot_pose_for_waypoint
+)
+_normalized_waypoint_robot_pose = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.normalized_waypoint_robot_pose
+)
+_receptacle_support_pose = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.receptacle_support_pose
+)
+_robot_view_focus = _with_isaac_robot_pose_hooks(isaac_robot_pose_focus.robot_view_focus)
+_focus_payload = _with_isaac_robot_pose_hooks(isaac_robot_pose_focus.focus_payload)
 
 
 def _binding_for_handle(
@@ -2450,83 +1714,6 @@ def _scene_index_center_xy(state: dict[str, Any]) -> tuple[float, float]:
     )
 
 
-def _camera_capture_variant(capture: dict[str, Any]) -> str:
-    return isaac_worker_outputs.camera_capture_variant(capture)
-
-
-def _camera_capture_provenance(capture: dict[str, Any]) -> str:
-    return isaac_worker_outputs.camera_capture_provenance(capture)
-
-
-def _real_semantic_pose_robot_view_images(
-    state: dict[str, Any],
-    target_images: dict[str, Path],
-    *,
-    width: int,
-    height: int,
-    render_settle_frames: int = 0,
-    isaac_aa_op: int | None = None,
-    isaac_tonemap_op: int | None = None,
-    isaac_exposure_bias: float | None = None,
-    isaac_colorcorr_gain: tuple[float, float, float] | None = None,
-    focus_object_id: str | None = None,
-    focus_receptacle_id: str | None = None,
-) -> dict[str, str]:
-    return real_semantic_pose_robot_view_images(
-        SemanticPoseRobotViewRequest(
-            state=state,
-            target_images=target_images,
-            width=width,
-            height=height,
-            render_settle_frames=render_settle_frames,
-            isaac_aa_op=isaac_aa_op,
-            isaac_tonemap_op=isaac_tonemap_op,
-            isaac_exposure_bias=isaac_exposure_bias,
-            isaac_colorcorr_gain=isaac_colorcorr_gain,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-        ),
-        hooks=SemanticPoseRobotViewHooks(
-            capture_semantic_pose_robot_views=capture_semantic_pose_robot_views,
-            has_required_robot_view_images=_has_required_robot_view_images,
-            semantic_pose_robot_view_provenance=_semantic_pose_robot_view_provenance,
-            write_state_from_state_arg=write_state_from_state_arg,
-        ),
-        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
-        isaac_rby1m_head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-    )
-
-
-def _robot_view_focus(
-    state: dict[str, Any],
-    robot_pose: dict[str, Any],
-    *,
-    focus_object_id: str | None,
-    focus_receptacle_id: str | None,
-) -> dict[str, Any]:
-    return isaac_robot_pose_focus.robot_view_focus(
-        state,
-        robot_pose,
-        focus_object_id=focus_object_id,
-        focus_receptacle_id=focus_receptacle_id,
-        hooks=_isaac_robot_pose_hooks(),
-    )
-
-
-def _focus_payload(
-    *,
-    state: dict[str, Any] | None = None,
-    focus_object_id: str | None,
-    focus_receptacle_id: str | None,
-) -> dict[str, Any]:
-    return isaac_robot_pose_focus.focus_payload(
-        state=state,
-        focus_object_id=focus_object_id,
-        focus_receptacle_id=focus_receptacle_id,
-        hooks=_isaac_robot_pose_hooks(),
-    )
-
-
 def _semantic_object_pose_entry(
     state: dict[str, Any],
     object_id: str | None,
@@ -2545,8 +1732,51 @@ def _support_pose_position(pose: dict[str, Any]) -> list[float] | None:
     )
 
 
+_camera_capture_variant = isaac_worker_outputs.camera_capture_variant
+_camera_capture_provenance = isaac_worker_outputs.camera_capture_provenance
+
+
+def _real_semantic_pose_robot_view_images(
+    state: dict[str, Any],
+    target_images: dict[str, Path],
+    *,
+    width: int,
+    height: int,
+    render_settle_frames: int = 0,
+    isaac_aa_op: int | None = None,
+    isaac_tonemap_op: int | None = None,
+    isaac_exposure_bias: float | None = None,
+    isaac_colorcorr_gain: tuple[float, float, float] | None = None,
+    focus_object_id: str | None = None,
+    focus_receptacle_id: str | None = None,
+) -> dict[str, str]:
+    return isaac_semantic_pose_robot_view.real_semantic_pose_robot_view_images(
+        isaac_semantic_pose_robot_view.SemanticPoseRobotViewRequest(
+            state=state,
+            target_images=target_images,
+            width=width,
+            height=height,
+            render_settle_frames=render_settle_frames,
+            isaac_aa_op=isaac_aa_op,
+            isaac_tonemap_op=isaac_tonemap_op,
+            isaac_exposure_bias=isaac_exposure_bias,
+            isaac_colorcorr_gain=isaac_colorcorr_gain,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
+        ),
+        hooks=isaac_semantic_pose_robot_view.SemanticPoseRobotViewHooks(
+            capture_semantic_pose_robot_views=capture_semantic_pose_robot_views,
+            has_required_robot_view_images=_has_required_robot_view_images,
+            semantic_pose_robot_view_provenance=_semantic_pose_robot_view_provenance,
+            write_state_from_state_arg=write_state_from_state_arg,
+        ),
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
+        isaac_rby1m_head_camera_prim=isaac_camera_geometry.ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+    )
+
+
 def _real_robot_view_images(state: dict[str, Any]) -> dict[str, str]:
-    return real_robot_view_images(state, robot_view_keys=ROBOT_VIEW_KEYS)
+    return isaac_robot_view_artifacts.real_robot_view_images(state, robot_view_keys=ROBOT_VIEW_KEYS)
 
 
 def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -2570,11 +1800,15 @@ def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, An
 
 
 def _real_smoke_robot_view_images(real_smoke: dict[str, Any] | None) -> dict[str, str]:
-    return real_smoke_robot_view_images(real_smoke, robot_view_keys=ROBOT_VIEW_KEYS)
+    return isaac_robot_view_artifacts.real_smoke_robot_view_images(
+        real_smoke, robot_view_keys=ROBOT_VIEW_KEYS
+    )
 
 
 def _has_required_robot_view_images(images: dict[str, str]) -> bool:
-    return has_required_robot_view_images(images, robot_view_keys=ROBOT_VIEW_KEYS)
+    return isaac_robot_view_artifacts.has_required_robot_view_images(
+        images, robot_view_keys=ROBOT_VIEW_KEYS
+    )
 
 
 def _copy_real_robot_view_images(
@@ -2584,7 +1818,7 @@ def _copy_real_robot_view_images(
     width: int,
     height: int,
 ) -> dict[str, list[int]]:
-    return copy_real_robot_view_images(
+    return isaac_robot_view_artifacts.copy_real_robot_view_images(
         source_images,
         target_images,
         width=width,
@@ -2594,7 +1828,9 @@ def _copy_real_robot_view_images(
 
 
 def _real_snapshot_source_image(state: dict[str, Any]) -> Path:
-    return real_snapshot_source_image(state, robot_view_keys=ROBOT_VIEW_KEYS)
+    return isaac_robot_view_artifacts.real_snapshot_source_image(
+        state, robot_view_keys=ROBOT_VIEW_KEYS
+    )
 
 
 def _copy_real_snapshot_image(
@@ -2604,7 +1840,9 @@ def _copy_real_snapshot_image(
     width: int,
     height: int,
 ) -> list[int]:
-    return copy_real_snapshot_image(source, target, width=width, height=height)
+    return isaac_robot_view_artifacts.copy_real_snapshot_image(
+        source, target, width=width, height=height
+    )
 
 
 def _copy_nonblank_rgb_image(
@@ -2615,7 +1853,7 @@ def _copy_nonblank_rgb_image(
     height: int,
     description: str,
 ) -> list[int]:
-    return copy_nonblank_rgb_image(
+    return isaac_robot_view_artifacts.copy_nonblank_rgb_image(
         source,
         target,
         width=width,
@@ -2625,18 +1863,18 @@ def _copy_nonblank_rgb_image(
 
 
 def _pil_image_has_variance(image: Image.Image) -> bool:
-    return pil_image_has_variance(image)
+    return isaac_robot_view_artifacts.pil_image_has_variance(image)
 
 
 def _real_rendering_proven(state: dict[str, Any]) -> bool:
-    return real_rendering_proven(state)
+    return isaac_robot_view_artifacts.real_rendering_proven(state)
 
 
 def _robot_view_provenance(
     runtime_mode: str,
     real_smoke: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    return robot_view_provenance(
+    return isaac_robot_view_artifacts.robot_view_provenance(
         runtime_mode,
         real_smoke,
         robot_view_keys=ROBOT_VIEW_KEYS,
@@ -2649,7 +1887,7 @@ def _robot_view_command_provenance(
     *,
     semantic_pose_state_refreshed: bool,
 ) -> dict[str, Any]:
-    return robot_view_command_provenance(
+    return isaac_robot_view_artifacts.robot_view_command_provenance(
         state,
         semantic_pose_state_refreshed=semantic_pose_state_refreshed,
         robot_view_keys=ROBOT_VIEW_KEYS,
@@ -2662,7 +1900,7 @@ def _semantic_pose_robot_view_provenance(
     mounted_head_camera: bool = False,
     head_camera_equivalent: bool = False,
 ) -> dict[str, Any]:
-    return semantic_pose_robot_view_provenance(
+    return isaac_robot_view_artifacts.semantic_pose_robot_view_provenance(
         mounted_head_camera=mounted_head_camera,
         head_camera_equivalent=head_camera_equivalent,
         robot_view_keys=ROBOT_VIEW_KEYS,
@@ -2670,207 +1908,78 @@ def _semantic_pose_robot_view_provenance(
     )
 
 
-def _safe_file_stem(value: str) -> str:
-    return isaac_worker_protocol.safe_file_stem(value)
-
-
-def _write_placeholder_image(
-    path: Path,
-    *,
-    title: str,
-    subtitle: str,
-    state: dict[str, Any],
-    width: int,
-    height: int,
-    focus_object_id: str | None = None,
-    focus_receptacle_id: str | None = None,
-) -> None:
-    isaac_worker_protocol.write_placeholder_image(
-        path,
-        title=title,
-        subtitle=subtitle,
-        state=state,
-        width=width,
-        height=height,
-        focus_object_id=focus_object_id,
-        focus_receptacle_id=focus_receptacle_id,
-    )
-
-
-def _ok(tool: str, **payload: Any) -> dict[str, Any]:
-    return isaac_worker_protocol.ok_response(tool, **payload)
-
-
-def _error(tool: str, error: str, **payload: Any) -> dict[str, Any]:
-    return isaac_worker_protocol.error_response(tool, error, **payload)
-
-
-def read_state(path: Path) -> dict[str, Any]:
-    return isaac_worker_protocol.read_state(path)
-
-
-def write_state(path: Path, state: dict[str, Any]) -> None:
-    isaac_worker_protocol.write_state(path, state)
-
-
-def write_state_from_state_arg(state: dict[str, Any]) -> None:
-    isaac_worker_protocol.write_state_from_state_arg(state)
-
-
-def _count(state: dict[str, Any], tool: str) -> None:
-    isaac_worker_protocol.count_tool_request(state, tool)
-
-
-def _public_state(state: dict[str, Any]) -> dict[str, Any]:
-    return isaac_worker_protocol.public_state(state)
-
-
-def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
-    return isaac_scenario_builders.scenario_from_state(state)
-
-
-_load_generated_mess_manifest = load_generated_mess_manifest
-_scenario_for_init = scenario_for_init
+_safe_file_stem = isaac_worker_protocol.safe_file_stem
+_write_placeholder_image = isaac_worker_protocol.write_placeholder_image
+_ok = isaac_worker_protocol.ok_response
+_error = isaac_worker_protocol.error_response
+read_state = isaac_worker_protocol.read_state
+write_state = isaac_worker_protocol.write_state
+write_state_from_state_arg = isaac_worker_protocol.write_state_from_state_arg
+_count = isaac_worker_protocol.count_tool_request
+_public_state = isaac_worker_protocol.public_state
+scenario_from_state = isaac_scenario_builders.scenario_from_state
+_load_generated_mess_manifest = isaac_scenario_builders.load_generated_mess_manifest
+_scenario_for_init = isaac_scenario_builders.scenario_for_init
 _scenario_source = isaac_scenario_builders.scenario_source
-_effective_scene_index = effective_scene_index
-_scene_index_from_usd_path = scene_index_from_usd_path
-_scene_specific_scenario_if_needed = scene_specific_scenario_if_needed
-_scenario_from_scene_index = scenario_from_scene_index
-_cleanup_receptacle_index_for_mess_generation = cleanup_receptacle_index_for_mess_generation
-_cleanup_receptacle_from_scene_index = cleanup_receptacle_from_scene_index
-_scene_object_name = scene_object_name
-_scene_object_category = scene_object_category
-_scene_cleanup_object_category = scene_cleanup_object_category
-_canonical_cleanup_category = canonical_cleanup_category
-_scene_target_receptacle_id = scene_target_receptacle_id
-_first_receptacle_matching_aliases = first_receptacle_matching_aliases
-_scene_source_receptacle_id = scene_source_receptacle_id
-_scene_entry_tokens = scene_entry_tokens
-_SCENE_CLEANUP_TARGET_ALIASES = SCENE_CLEANUP_TARGET_ALIASES
-_SCENE_STRICT_CLEANUP_TARGET_ALIASES = SCENE_STRICT_CLEANUP_TARGET_ALIASES
-_CANONICAL_CLEANUP_CATEGORY_ALIASES = CANONICAL_CLEANUP_CATEGORY_ALIASES
-
-_scenario_from_generated_mess_manifest_or_limit = scenario_from_generated_mess_manifest_or_limit
-_limit_scenario_to_generated_mess_count = limit_scenario_to_generated_mess_count
-_scenario_without_private_targets = scenario_without_private_targets
-_scenario_from_map_bundle = scenario_from_map_bundle
-_initial_receptacle_id = initial_receptacle_id
-_cleanup_receptacle_from_fixture = cleanup_receptacle_from_fixture
-_map_aligned_target_specs = map_aligned_target_specs
-_first_fixture_matching = first_fixture_matching
-
-
-def _norm(value: Any) -> str:
-    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
-
-
-def _dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _json_roundtrip(value: Any) -> Any:
-    return json.loads(json.dumps(value))
-
-
-def _vec3(value: Any) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return None
-    try:
-        return [float(value[0]), float(value[1]), float(value[2])]
-    except (TypeError, ValueError):
-        return None
-
-
-def _has_xy(value: dict[str, Any]) -> bool:
-    if "x" not in value or "y" not in value:
-        return False
-    try:
-        float(value["x"])
-        float(value["y"])
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def _index_or_default(
-    value: Any,
-    default: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    if not isinstance(value, dict) or not value:
-        return default
-    return {
-        str(key): dict(item) for key, item in value.items() if isinstance(item, dict)
-    } or default
-
-
-def _objects_by_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {str(item["object_id"]): item for item in state["scenario"]["objects"]}
-
-
-def _receptacles_by_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {str(item["receptacle_id"]): item for item in state["scenario"]["receptacles"]}
-
-
-def _object_index(scenario: CleanupScenario) -> dict[str, dict[str, Any]]:
-    return {
-        item.object_id: {
-            "usd_prim_path": f"/World/Scene/Objects/{item.object_id}",
-            "category": item.category,
-            "public_label": item.name,
-        }
-        for item in scenario.objects
-    }
-
-
-def _receptacle_index(scenario: CleanupScenario) -> dict[str, dict[str, Any]]:
-    return {
-        item.receptacle_id: {
-            "usd_prim_path": f"/World/Scene/Receptacles/{item.receptacle_id}",
-            "category": item.category or item.kind,
-            "public_label": item.name,
-            "support_pose": _pose_near(item.receptacle_id),
-        }
-        for item in scenario.receptacles
-    }
-
-
-def _pose_near(anchor_id: str) -> dict[str, float | str]:
-    value = sum(ord(char) for char in anchor_id)
-    return {
-        "frame": "world",
-        "x": round((value % 17) * 0.17, 3),
-        "y": round(((value // 17) % 17) * 0.13, 3),
-        "z": 0.0,
-        "yaw_deg": float((value * 13) % 360),
-    }
+_effective_scene_index = isaac_scenario_builders.effective_scene_index
+_scene_index_from_usd_path = isaac_scenario_builders.scene_index_from_usd_path
+_scene_specific_scenario_if_needed = isaac_scenario_builders.scene_specific_scenario_if_needed
+_scenario_from_scene_index = isaac_scenario_builders.scenario_from_scene_index
+_cleanup_receptacle_index_for_mess_generation = (
+    isaac_scenario_builders.cleanup_receptacle_index_for_mess_generation
+)
+_cleanup_receptacle_from_scene_index = isaac_scenario_builders.cleanup_receptacle_from_scene_index
+_scene_object_name = isaac_scenario_builders.scene_object_name
+_scene_object_category = isaac_scenario_builders.scene_object_category
+_scene_cleanup_object_category = isaac_scenario_builders.scene_cleanup_object_category
+_canonical_cleanup_category = isaac_scenario_builders.canonical_cleanup_category
+_scene_target_receptacle_id = isaac_scenario_builders.scene_target_receptacle_id
+_first_receptacle_matching_aliases = isaac_scenario_builders.first_receptacle_matching_aliases
+_scene_source_receptacle_id = isaac_scenario_builders.scene_source_receptacle_id
+_scene_entry_tokens = isaac_scenario_builders.scene_entry_tokens
+_SCENE_CLEANUP_TARGET_ALIASES = isaac_scenario_builders.SCENE_CLEANUP_TARGET_ALIASES
+_SCENE_STRICT_CLEANUP_TARGET_ALIASES = isaac_scenario_builders.SCENE_STRICT_CLEANUP_TARGET_ALIASES
+_CANONICAL_CLEANUP_CATEGORY_ALIASES = isaac_scenario_builders.CANONICAL_CLEANUP_CATEGORY_ALIASES
+_scenario_from_generated_mess_manifest_or_limit = (
+    isaac_scenario_builders.scenario_from_generated_mess_manifest_or_limit
+)
+_limit_scenario_to_generated_mess_count = (
+    isaac_scenario_builders.limit_scenario_to_generated_mess_count
+)
+_scenario_without_private_targets = isaac_scenario_builders.scenario_without_private_targets
+_scenario_from_map_bundle = isaac_scenario_builders.scenario_from_map_bundle
+_initial_receptacle_id = isaac_scenario_builders.initial_receptacle_id
+_cleanup_receptacle_from_fixture = isaac_scenario_builders.cleanup_receptacle_from_fixture
+_map_aligned_target_specs = isaac_scenario_builders.map_aligned_target_specs
+_first_fixture_matching = isaac_scenario_builders.first_fixture_matching
 
 
 def _robot_payload(robot_name: str) -> dict[str, Any]:
-    return robot_payload(robot_name, _rby1m_robot_import_plan(robot_name))
+    return isaac_robot_import.robot_payload(robot_name, _rby1m_robot_import_plan(robot_name))
 
 
 def _rby1m_robot_import_plan(robot_name: str) -> dict[str, Any]:
-    return rby1m_robot_import_plan(
+    return isaac_robot_import.rby1m_robot_import_plan(
         robot_name,
         robot_usd_path=ISAAC_RBY1M_ROBOT_USD_PATH,
         import_summary_path=ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH,
         find_urdf=_find_rby1m_isaac_urdf,
         repo_path=_repo_path,
         load_json_if_file=_load_json_if_file,
-        head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+        head_camera_prim=isaac_camera_geometry.ISAAC_RBY1M_HEAD_CAMERA_PRIM,
     )
 
 
 def _repo_path(path: Path) -> Path:
-    return repo_path(path, anchor_file=__file__)
+    return isaac_robot_import.repo_path(path, anchor_file=__file__)
 
 
 def _load_json_if_file(path: Path) -> dict[str, Any]:
-    return load_json_if_file(path)
+    return isaac_robot_import.load_json_if_file(path)
 
 
 def _find_rby1m_isaac_urdf() -> Path | None:
-    return find_rby1m_isaac_urdf()
+    return isaac_robot_import.find_rby1m_isaac_urdf()
 
 
 def _scene_usd_path(scene_source: str, scene_index: int) -> str:
