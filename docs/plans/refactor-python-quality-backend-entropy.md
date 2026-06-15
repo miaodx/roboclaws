@@ -5317,3 +5317,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this physical
   Nav2 pilot patch so the unrelated staged `eval-harness` rename was not
   blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/contract/dev_tools/test_code_just_recipes.py::test_pinned_coding_agent_docker_toolchain_is_the_ci_source(...)`
+  into focused assertions for `code.just` wrapper routing, Dockerfile/toolchain
+  pin consistency, Docker isolation guarantees, and CI wiring. The pinned
+  Codex/Claude package versions, Node image digest, wrapper install route,
+  isolated workspace/Codex-home checks, provider env checks, and CI no-NPM
+  assertions remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 tests/contract/dev_tools/test_code_just_recipes.py`
+  passed; `ruff check tests/contract/dev_tools/test_code_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_code_just_recipes.py::test_pinned_coding_agent_docker_toolchain_is_the_ci_source`
+  passed with 1 test. The quality baseline was refreshed from 28 to 27 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  coding-agent Docker toolchain test patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.

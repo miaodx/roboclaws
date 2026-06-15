@@ -359,16 +359,6 @@
         "value": 16
       },
       {
-        "code": "PLR0915",
-        "key": "tests/contract/dev_tools/test_code_just_recipes.py|PLR0915|test_pinned_coding_agent_docker_toolchain_is_the_ci_source",
-        "limit": 50,
-        "message": "Too many statements (59 > 50)",
-        "path": "tests/contract/dev_tools/test_code_just_recipes.py",
-        "row": 82,
-        "symbol": "test_pinned_coding_agent_docker_toolchain_is_the_ci_source",
-        "value": 59
-      },
-      {
         "code": "C901",
         "key": "tests/contract/dev_tools/test_task_agent_just_recipes.py|C901|surface_args_from_legacy_task_args",
         "limit": 10,
