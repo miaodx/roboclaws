@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-14
+last_verified: 2026-06-15
 ---
 
 # Refactor Scope: Python Quality And Backend Entropy
@@ -208,6 +208,12 @@ Rejected alternatives:
     material checker split.
   - Preserve current `just verify` / `just harness` behavior and checker
     contract tests.
+
+- [x] **C1.2: Split live checker CLI argument registration.**
+  - Target `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`.
+  - Extract CLI argument registration into core, evidence, planner, Isaac, and
+    robot-camera helper groups.
+  - Preserve current flag names, defaults, help text, and checker behavior.
 
 - [x] **C1.5: Split direct cleanup orchestration from artifact/result assembly.**
   - Target `roboclaws/household/realworld_cleanup.py`.
@@ -5015,3 +5021,17 @@ Stop this refactor loop when:
   complexity violations with oversized modules unchanged at 58. This is a
   static/unit-covered replay-labeler cleanup; it does not claim a real
   MolmoSpaces full-trace relabeling run.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py::parse_args()`
+  into core, evidence, planner, Isaac, and robot-camera argument registration
+  helpers. All CLI flag names, defaults, help text, and checker behavior remain
+  unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  passed; `ruff format scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
+  passed with 112 tests. The quality baseline was refreshed from 50 to 49 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this checker
+  patch so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.

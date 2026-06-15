@@ -98,7 +98,7 @@
         "path": "scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py"
       },
       {
-        "lines": 1914,
+        "lines": 1934,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
       },
@@ -442,16 +442,6 @@
         "row": 86,
         "symbol": "make_material_response_probe_usd",
         "value": 12
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|parse_args",
-        "limit": 50,
-        "message": "Too many statements (57 > 50)",
-        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
-        "row": 130,
-        "symbol": "parse_args",
-        "value": 57
       },
       {
         "code": "C901",
