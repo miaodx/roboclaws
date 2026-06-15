@@ -233,7 +233,7 @@
         "path": "tests/contract/visual_grounding/test_visual_grounding_benchmark.py"
       },
       {
-        "lines": 4570,
+        "lines": 4566,
         "max_module_lines": 800,
         "path": "tests/unit/agents/test_live_runtime.py"
       },
@@ -732,16 +732,6 @@
         "row": 1832,
         "symbol": "test_planner_proof_bundle_runner_report_renders_commands",
         "value": 117
-      },
-      {
-        "code": "PLR0915",
-        "key": "tests/unit/agents/test_live_runtime.py|PLR0915|test_openai_agents_cleanup_runner_invokes_sdk_then_checker",
-        "limit": 50,
-        "message": "Too many statements (57 > 50)",
-        "path": "tests/unit/agents/test_live_runtime.py",
-        "row": 1837,
-        "symbol": "test_openai_agents_cleanup_runner_invokes_sdk_then_checker",
-        "value": 57
       },
       {
         "code": "PLR0915",

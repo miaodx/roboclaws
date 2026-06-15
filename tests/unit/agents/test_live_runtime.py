@@ -1954,6 +1954,11 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert status_payload["phase"] == "finished"
     assert status_payload["exit_status"] == 0
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    _assert_baseline_openai_agents_timing(timing)
+    _assert_openai_agents_timeline_and_checker(timing, checker_commands)
+
+
+def _assert_baseline_openai_agents_timing(timing: dict[str, object]) -> None:
     assert timing["runtime"] == "openai-agents-live"
     assert timing["surface"] == "household-world"
     assert timing["intent"] == "cleanup"
@@ -1968,23 +1973,9 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert timing["agent_sdk_perf_profile"]["max_turns"] == 128
     assert timing["agent_sdk_perf_profile"]["model_service_retry_attempts"] == 1
     assert timing["agent_sdk_perf_profile"]["model_service_retry_sleep_s"] == 1.0
-    assert timing["agent_sdk_perf_profile"]["model_racing_observability"] == {
-        "schema": "agent_sdk_model_racing_observability_v1",
-        "enabled": False,
-        "mode": "per_arm_observability_v1",
-        "candidate_ids": ["D"],
-        "arm_count": 1,
-        "racing_multiplier": 1.0,
-        "winner_selection": "single_arm_no_racing",
-        "loser_cancellation": "not_applicable_until_racing_enabled",
-        "unknown_loser_billing": False,
-        "hook": "OpenAI Agents SDK model request boundary",
-        "private_artifact_policy": (
-            "records model-call arm lifecycle, winner/cancel fields, timing, "
-            "provider/model ids, and usage availability only; raw prompts, model text, "
-            "tool payload bodies, credentials, and private truth are not persisted"
-        ),
-    }
+    assert timing["agent_sdk_perf_profile"]["model_racing_observability"] == (
+        _expected_model_racing_observability()
+    )
     assert timing["agent_sdk_perf_profile"]["sdk_model_settings"] == {
         "parallel_tool_calls": False,
         "store": False,
@@ -2005,6 +1996,11 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert timing["mcp_control_plane_metrics"]["available"] is False
     assert timing["openai_agents_event_metrics"]["available"] is True
     assert timing["openai_agents_span_metrics"]["available"] is False
+
+
+def _assert_openai_agents_timeline_and_checker(
+    timing: dict[str, object], checker_commands: list[list[str]]
+) -> None:
     assert timing["timeline"]["schema"] == "live_agent_timeline_v1"
     assert timing["timeline"]["surface"] == "household-world"
     assert timing["timeline"]["intent"] == "cleanup"

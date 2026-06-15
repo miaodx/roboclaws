@@ -4958,3 +4958,18 @@ Stop this refactor loop when:
   ratchet write/ok proof was run in a temporary clean worktree containing only
   this test split patch; the refreshed baseline intentionally keeps the old
   `skills/agent-validation-matrix/...` path until that rename slice lands.
+- 2026-06-15: Continued under `$intuitive-flow` by extracting
+  `tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  timing/profile and timeline/checker assertions into focused helpers while
+  reusing the shared OpenAI Agents model-racing expected payload. The runner
+  behavior, fake SDK result, live timing keys, checker command assertions, and
+  status payload expectations remain unchanged. Evidence:
+  `ruff check tests/unit/agents/test_live_runtime.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 tests/unit/agents/test_live_runtime.py`
+  passed with no violations; `ruff format --check tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed. The quality baseline was refreshed from 55 to 54 Ruff complexity
+  violations with oversized modules unchanged at 58, and `test_live_runtime.py`
+  dropped from 4570 to 4566 lines. As with the prior test split, the ratchet
+  write/ok proof used a temporary clean worktree containing only this patch so
+  the unrelated staged `eval-harness` rename was not blessed into the baseline.
