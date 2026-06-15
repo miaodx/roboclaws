@@ -1,6 +1,6 @@
 ---
 refactor_scope: python-quality-backend-entropy
-status: CONTINUE
+status: PAUSED
 accepted_severities:
   - P0
   - P1
@@ -12,7 +12,7 @@ last_verified: 2026-06-15
 
 ## Status
 
-CONTINUE
+PAUSED
 
 ## Target
 
@@ -5364,3 +5364,37 @@ Stop this refactor loop when:
   The quality baseline was refreshed from 26 to 25 Ruff complexity violations
   with oversized modules unchanged at 57, using a temporary clean worktree so
   unrelated staged `eval-harness` and provider changes were not blessed.
+- 2026-06-15: Continued the dirty-worktree reduce-entropy loop after the
+  previous stop condition proved too narrow: clean-HEAD ratchet success did not
+  mean current eval-harness/evidence-lane/operator-console work had no new
+  quality debt. This pass removed the current ratchet blockers without
+  refreshing the baseline. The model-matrix benchmark was split into catalog
+  and wire-format helper modules; operator-console checker/wrapper-launch and
+  Agibot context-readiness tests were moved behind smaller helpers/files; the
+  Agibot GDK backend/evidence identity moved to `roboclaws.household.profiles`;
+  the report evidence-lane note/badges moved to `report_sections_agent.py`; and
+  MCP smoke artifact assertions moved out of the already oversized MCP server
+  test. Evidence: `ruff check` passed for the touched benchmark, operator
+  console, Agibot, report, dev-tool, MCP, regression, and model-matrix test
+  surfaces; focused pytest passed for model-matrix, migration guard, dev-tool
+  just recipes, operator-console state/launcher/static/readiness/wrapper tests,
+  MCP server and MCP smoke artifacts, report rendering, and Agibot identity
+  nodes. `python scripts/dev/check_python_quality_ratchet.py` now passes in the
+  dirty worktree with 20 Ruff complexity violations and 56 oversized modules,
+  down from the dirty-loop high of 26 complexity / 57 oversized and below the
+  prior clean-HEAD summary of 25 / 57.
+- 2026-06-15: Paused the reduce-entropy loop because the worktree has many
+  other parallel staged and unstaged changes. The only new implementation slice
+  in this checkpoint is the operator-console static asset test cleanup:
+  `tests/unit/operator_console/test_static_assets.py::test_static_app_has_route_specific_field_groups`
+  now uses named required/forbidden snippet groups plus shared assertion
+  helpers instead of one long assertion block. Evidence: `ruff check
+  tests/unit/operator_console/test_static_assets.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q
+  tests/unit/operator_console/test_static_assets.py` passed with 13 tests;
+  `python scripts/dev/check_python_quality_ratchet.py` passes at 19 Ruff
+  complexity violations and 56 oversized modules. A tentative report-test
+  extraction probe was reverted before commit. Remaining current candidates are
+  parked for the next loop, led by report-rendering test complexity, Isaac fake
+  backend test complexity, scene-camera comparison, and the broader backend
+  metadata/evidence normalization direction.

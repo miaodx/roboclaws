@@ -7,6 +7,136 @@ from pathlib import Path
 STATIC_ROOT = Path(__file__).resolve().parents[3] / "roboclaws" / "operator_console" / "static"
 
 
+def _assert_contains_all(body: str, snippets: tuple[str, ...]) -> None:
+    missing = [snippet for snippet in snippets if snippet not in body]
+    assert missing == []
+
+
+def _assert_contains_none(body: str, snippets: tuple[str, ...]) -> None:
+    present = [snippet for snippet in snippets if snippet in body]
+    assert present == []
+
+
+ROUTE_FIELD_HTML_REQUIRED = (
+    'id="isaac-fields"',
+    'id="codex-fields"',
+    'id="codex-provider-input"',
+    'value="minimax"',
+    'value="mimo-openai-chat"',
+    'value="kimi-openai-chat"',
+    'id="claude-fields"',
+    'id="claude-provider-input"',
+    'value="kimi-anthropic"',
+    'value="mimo-anthropic"',
+    'value="mify-anthropic"',
+    'id="agibot-fields"',
+    'id="agibot-gate-fields"',
+    'id="real-movement-gate"',
+    "Latest Result",
+    'id="camera-angle-value"',
+    'class="setup-panel"',
+    'class="state-rail"',
+    'id="prompt-label"',
+    "Scenario seed for reproducible runs",
+    "Baseline does not relocate objects",
+    'id="scenario-setup-input"',
+    'name="scenario_setup"',
+    "Relocate loose objects",
+    "Relocate cleanup-related objects",
+    'id="relocation-count-field"',
+    'id="relocation-count-input"',
+    'name="relocation_count"',
+    'id="messup-button"',
+    'id="messup-status"',
+    "Try Mess-up",
+    'data-operator-mode="ask_why"',
+    'data-operator-mode="steer"',
+    'data-operator-mode="goal"',
+)
+
+ROUTE_FIELD_HTML_FORBIDDEN = (
+    'id="codex-model-input"',
+    'id="isaac-preflight-gate"',
+    "Isaac preflight accepted",
+    "Isaac runtime preflight and smoke markers",
+    "Generated mess count",
+    'id="mess-count-input"',
+    'data-operator-mode="continue"',
+    'id="operator-message-input"',
+    'id="operator-message-button"',
+    "Continue",
+)
+
+ROUTE_FIELD_APP_REQUIRED = (
+    "renderRouteFields",
+    "field_groups",
+    "real_movement_enabled",
+    "Movement",
+    "Provider",
+    "env_overrides",
+    "ROBOCLAWS_CODEX_PROVIDER",
+    "ROBOCLAWS_CLAUDE_PROVIDER",
+    "selectedCodexProvider",
+    "selectedClaudeProvider",
+    "Capability Gate",
+    "NEEDS SAFETY GATES",
+    "NEEDS CONTEXT",
+    "PORT IN USE",
+    "ATTACH",
+    "Attach Existing Run",
+    "latest-result-button",
+    "cameraStateLabel",
+    "renderToolPanel",
+    "renderScenarioSetup",
+    "defaultScenarioSetup",
+    "selectedScenarioSetup",
+    "previewMessup",
+    "/api/messup-preview",
+    "Baseline remains available",
+    "Baseline means no pre-run relocation",
+    "markCurrentSetupSelection",
+    "resetMessupStatusForManualSetup",
+    "/next-goal",
+    "Start Next Goal",
+    "Confirm Next Goal",
+    "/ask-why",
+    "check_operator_messages",
+    "attachLatestResult",
+    "/api/runs/latest",
+    "attachExistingRun",
+    "attachable_run",
+    "?selection_id=",
+    "renderStartAction",
+    "compactRunId",
+    "compactDisplayRunId",
+    "compactRunPart",
+    "Run Attached",
+    "Use Steer or Ask Why",
+    "/api/readiness",
+    "refreshSelectedRouteReadiness",
+    "checkerStatus.message",
+    "state.evidenceLanes",
+    "payload.evidence_lanes",
+    "evidenceLaneOptions",
+    "intentOptionsForCurrentAxes",
+    "node.disabled = Boolean(option.disabled)",
+    "node.title = option.title",
+    "orderedVisibleWorlds(payload.worlds || [])",
+    "enabledLaunchCount > 0",
+    "isMolmospacesWorld",
+    "return leftMolmo ? 1 : -1",
+)
+
+ROUTE_FIELD_APP_FORBIDDEN = (
+    "Diagnostic",
+    "NEEDS PREFLIGHT",
+    "NEEDS OPERATOR GATES",
+    "generated_mess_count",
+    "/continue",
+    "?route=",
+)
+
+
 def test_static_app_references_existing_dom_ids() -> None:
     html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
@@ -21,118 +151,21 @@ def test_static_app_has_route_specific_field_groups() -> None:
     html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
-    assert 'id="isaac-fields"' in html
-    assert 'id="codex-fields"' in html
-    assert 'id="codex-provider-input"' in html
-    assert 'value="minimax"' in html
-    assert 'value="mimo-openai-chat"' in html
-    assert 'value="kimi-openai-chat"' in html
-    assert 'id="codex-model-input"' not in html
-    assert 'id="claude-fields"' in html
-    assert 'id="claude-provider-input"' in html
-    assert 'value="kimi-anthropic"' in html
-    assert 'value="mimo-anthropic"' in html
-    assert 'value="mify-anthropic"' in html
-    assert 'id="agibot-fields"' in html
-    assert 'id="agibot-gate-fields"' in html
-    assert 'id="real-movement-gate"' in html
-    assert 'id="isaac-preflight-gate"' not in html
-    assert "Isaac preflight accepted" not in html
-    assert "Isaac runtime preflight and smoke markers" not in html
-    assert "renderRouteFields" in app
-    assert "field_groups" in app
-    assert "real_movement_enabled" in app
-    assert "Movement" in app
-    assert "Provider" in app
-    assert "env_overrides" in app
-    assert "ROBOCLAWS_CODEX_PROVIDER" in app
-    assert "ROBOCLAWS_CLAUDE_PROVIDER" in app
-    assert "selectedCodexProvider" in app
-    assert "selectedClaudeProvider" in app
-    assert "Diagnostic" not in app
-    assert "Capability Gate" in app
-    assert "NEEDS SAFETY GATES" in app
-    assert "NEEDS CONTEXT" in app
-    assert "NEEDS PREFLIGHT" not in app
-    assert "NEEDS OPERATOR GATES" not in app
-    assert "PORT IN USE" in app
-    assert "ATTACH" in app
-    assert "Attach Existing Run" in app
-    assert "Latest Result" in html
-    assert "latest-result-button" in app
-    assert 'id="camera-angle-value"' in html
-    assert "cameraStateLabel" in app
-    assert "renderToolPanel" in app
-    assert 'class="setup-panel"' in html
-    assert 'class="state-rail"' in html
+    _assert_contains_all(html, ROUTE_FIELD_HTML_REQUIRED)
+    _assert_contains_none(html, ROUTE_FIELD_HTML_FORBIDDEN)
+    _assert_contains_all(app, ROUTE_FIELD_APP_REQUIRED)
+    _assert_contains_none(app, ROUTE_FIELD_APP_FORBIDDEN)
+
     setup_html = html.split('<aside class="setup-panel">', 1)[1].split("</aside>", 1)[0]
     state_rail_html = html.split('<aside class="state-rail">', 1)[1].split("</aside>", 1)[0]
     assert "Operator Input" in setup_html
     assert "Operator Input" not in state_rail_html
-    assert 'id="prompt-label"' in html
-    assert "Scenario seed for reproducible runs" in html
-    assert "Baseline does not relocate objects" in html
-    assert "Generated mess count" not in html
-    assert 'id="mess-count-input"' not in html
-    assert 'id="scenario-setup-input"' in html
-    assert 'name="scenario_setup"' in html
-    assert "Relocate loose objects" in html
-    assert "Relocate cleanup-related objects" in html
-    assert 'id="relocation-count-field"' in html
-    assert 'id="relocation-count-input"' in html
-    assert 'name="relocation_count"' in html
-    assert 'id="messup-button"' in html
-    assert 'id="messup-status"' in html
-    assert "Try Mess-up" in html
-    assert "renderScenarioSetup" in app
-    assert "defaultScenarioSetup" in app
-    assert "selectedScenarioSetup" in app
-    assert "previewMessup" in app
-    assert "/api/messup-preview" in app
-    assert "Baseline remains available" in app
-    assert "Baseline means no pre-run relocation" in app
-    assert "markCurrentSetupSelection" in app
-    assert "resetMessupStatusForManualSetup" in app
-    assert "generated_mess_count" not in app
-    assert 'data-operator-mode="ask_why"' in html
-    assert 'data-operator-mode="steer"' in html
-    assert 'data-operator-mode="goal"' in html
-    assert 'data-operator-mode="continue"' not in html
-    assert 'id="operator-message-input"' not in html
-    assert 'id="operator-message-button"' not in html
-    assert "Continue" not in html
-    assert "/continue" not in app
-    assert "/next-goal" in app
-    assert "Start Next Goal" in app
-    assert "Confirm Next Goal" in app
-    assert "/ask-why" in app
-    assert "check_operator_messages" in app
-    assert "attachLatestResult" in app
-    assert "/api/runs/latest" in app
-    assert "attachExistingRun" in app
-    assert "attachable_run" in app
-    assert "?selection_id=" in app
-    assert "?route=" not in app
-    assert "renderStartAction" in app
-    assert "compactRunId" in app
-    assert "compactDisplayRunId" in app
-    assert "compactRunPart" in app
-    assert "Run Attached" in app
-    assert "Use Steer or Ask Why" in app
-    assert "/api/readiness" in app
-    assert "refreshSelectedRouteReadiness" in app
+
+
+def test_static_app_does_not_short_circuit_context_json_readiness() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
     assert 'gate.id === "context_json" && Boolean(els.contextInput.value.trim())' not in app
-    assert "checkerStatus.message" in app
-    assert "state.evidenceLanes" in app
-    assert "payload.evidence_lanes" in app
-    assert "evidenceLaneOptions" in app
-    assert "intentOptionsForCurrentAxes" in app
-    assert "node.disabled = Boolean(option.disabled)" in app
-    assert "node.title = option.title" in app
-    assert "orderedVisibleWorlds(payload.worlds || [])" in app
-    assert "enabledLaunchCount > 0" in app
-    assert "isMolmospacesWorld" in app
-    assert "return leftMolmo ? 1 : -1" in app
 
 
 def test_static_app_renders_scene_preview_assets() -> None:
@@ -329,10 +362,14 @@ def test_static_app_keeps_long_run_header_within_fixed_top_bar() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
     css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
     desktop_controls = css.split(".global-controls {", 1)[1].split("\n}", 1)[0]
-    responsive_controls = css.split("@media (max-width: 1360px)", 1)[1].split(
-        ".global-controls {",
-        1,
-    )[1].split("\n  }", 1)[0]
+    responsive_controls = (
+        css.split("@media (max-width: 1360px)", 1)[1]
+        .split(
+            ".global-controls {",
+            1,
+        )[1]
+        .split("\n  }", 1)[0]
+    )
 
     assert 'href="/styles.css?v=header-layout-20260615"' in html
     assert 'src="/app.js?v=header-layout-20260615"' in html
@@ -353,12 +390,10 @@ def test_static_app_keeps_long_run_header_within_fixed_top_bar() -> None:
     assert "#run-title {\n    flex-basis: 100%;" in css
     assert "function compactRunPart(part)" in app
     assert (
-        "return `${fullTimestamp[2]}${fullTimestamp[3]}-"
-        "${fullTimestamp[4]}${fullTimestamp[5]}`"
+        "return `${fullTimestamp[2]}${fullTimestamp[3]}-${fullTimestamp[4]}${fullTimestamp[5]}`"
     ) in app
     assert (
-        "return `${shortTimestamp[1]}${shortTimestamp[2]}_"
-        "${shortTimestamp[3]}${shortTimestamp[4]}`"
+        "return `${shortTimestamp[1]}${shortTimestamp[2]}_${shortTimestamp[3]}${shortTimestamp[4]}`"
     ) in app
     assert '"$2$3-$4$5$7"' not in app
 
