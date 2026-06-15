@@ -38,7 +38,7 @@
         "path": "roboclaws/household/realworld_cleanup.py"
       },
       {
-        "lines": 6424,
+        "lines": 6460,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_contract.py"
       },
@@ -327,16 +327,6 @@
         "row": 895,
         "symbol": "RealWorldCleanupContract.declare_visual_candidates",
         "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/realworld_contract.py|C901|_inspection_waypoints_from_bundle_projection",
-        "limit": 10,
-        "message": "`_inspection_waypoints_from_bundle_projection` is too complex (11 > 10)",
-        "path": "roboclaws/household/realworld_contract.py",
-        "row": 5547,
-        "symbol": "_inspection_waypoints_from_bundle_projection",
-        "value": 11
       },
       {
         "code": "C901",

@@ -5257,3 +5257,16 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this Agibot
   cleanup-action rehearsal patch so the unrelated staged `eval-harness` rename
   was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_contract.py::_inspection_waypoints_from_bundle_projection(...)`
+  into fixture-projection index and waypoint hydration helpers. The selected
+  Nav2/map-bundle public inspection waypoint projection keeps the same
+  preferred waypoint ids, room fixture fallback, sorted fixture ids, frame-id
+  defaulting, and unvisited marker behavior. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals`
+  passed with 1 test. The quality baseline was refreshed from 32 to 31 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  realworld-contract waypoint projection patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
