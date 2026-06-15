@@ -786,12 +786,14 @@ def source_prep_report(
                 recommended_end=recommended_end,
             ),
         }
+    worklist = _source_prep_worklist(sources)
     return {
         "schema": "molmospaces_scene_sampler_source_prep_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
         "download_policy": "manual_operator_only",
         "candidate_indices": list(candidate_indices),
+        "worklist": worklist,
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
             "sources_requiring_operator_prep_count": sum(
@@ -811,7 +813,7 @@ def source_prep_report(
                 ]
             ),
             "prep_status_counts": _source_prep_status_counts(sources),
-            "worklist": _source_prep_worklist(sources),
+            "worklist": worklist,
         },
         "sources": sources,
     }
@@ -961,6 +963,7 @@ def next_flow_worklist_report(
                 artifact_paths=artifact_paths,
             ),
         }
+    summary = _next_flow_summary(sources)
     return {
         "schema": "molmospaces_scene_sampler_next_flow_worklist_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
@@ -968,7 +971,8 @@ def next_flow_worklist_report(
         "download_policy": "manual_operator_only",
         "candidate_indices": list(candidate_indices),
         "artifact_paths": artifact_paths,
-        "summary": _next_flow_summary(sources),
+        "worklist": summary["worklist"],
+        "summary": summary,
         "sources": sources,
     }
 

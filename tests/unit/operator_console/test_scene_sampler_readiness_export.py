@@ -95,6 +95,13 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert "missing_resource_summary" in source_prep["summary"]
     assert "prep_status_counts" in source_prep["summary"]
     assert "worklist" in source_prep["summary"]
+    assert source_prep["worklist"] == source_prep["summary"]["worklist"]
+    assert source_prep["worklist"][0]["next_action"] in {
+        "run_manual_source_prep",
+        "run_scanner_admission",
+        "expand_candidate_range",
+        "inspect_source_prep",
+    }
     assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
         'get_scenes("ithor", "train")'
     )
@@ -134,6 +141,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert next_flow["summary"]["ui_needed_count"] == 9
     assert next_flow["summary"]["eval_needed_count"] == 35
     assert "worklist" in next_flow["summary"]
+    assert next_flow["worklist"] == next_flow["summary"]["worklist"]
+    assert next_flow["worklist"][0]["scene_source"] == "procthor-10k-val"
     assert result["summary"]["next_flow_worklist"]["source_count"] == 4
     assert next_flow["artifact_paths"]["readiness_output_dir"] == str(tmp_path)
     assert next_flow["artifact_paths"]["source_prep"] == str(
