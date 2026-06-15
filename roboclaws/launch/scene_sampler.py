@@ -426,32 +426,82 @@ def source_availability_report(
     )
     sources: dict[str, dict[str, Any]] = {}
     for source in SUPPORTED_SCENE_SOURCES:
+        dataset_name, split = _molmospaces_get_scenes_args(source)
+        scene_index_map = _molmospaces_scene_index_map(
+            source=source,
+            dataset_name=dataset_name,
+            split=split,
+            candidate_indices=candidate_indices,
+            module_available=module_available,
+        )
+        scene_refs_by_index = {
+            item["scene_index"]: item for item in scene_index_map["candidate_scene_refs"]
+        }
         source_dir = root / source if root is not None else None
         source_exists = bool(source_dir and source_dir.is_dir())
         candidate_files = []
         missing_files = []
+        invalid_candidate_indices = []
         for index in candidate_indices:
+            scene_ref = scene_refs_by_index.get(index)
+            if scene_ref is not None:
+                row = {
+                    "scene_source": source,
+                    "scene_index": index,
+                    "path": scene_ref.get("primary_path", ""),
+                    "exists": bool(scene_ref.get("all_paths_exist")),
+                    "status": scene_ref.get("status", ""),
+                    "source": "molmospaces_get_scenes",
+                    "raw_ref_type": scene_ref.get("raw_ref_type", ""),
+                    "paths": scene_ref.get("paths", []),
+                    "missing_paths": scene_ref.get("missing_paths", []),
+                }
+                candidate_files.append(row)
+                if scene_ref.get("status") == "missing_from_index_map":
+                    invalid_candidate_indices.append(index)
+                elif not row["exists"]:
+                    missing_files.append(index)
+                continue
             candidate_path = source_dir / f"val_{index}.xml" if source_dir else None
             row = {
+                "scene_source": source,
                 "scene_index": index,
                 "path": str(candidate_path) if candidate_path else "",
                 "exists": bool(candidate_path and candidate_path.is_file()),
+                "status": "fallback_path_checked",
+                "source": "legacy_val_xml_path",
             }
             candidate_files.append(row)
             if not row["exists"]:
                 missing_files.append(index)
-        status = "available" if source_exists and not missing_files else "blocked"
+        status = (
+            "available"
+            if (
+                source_exists
+                and scene_index_map["status"] == "available"
+                and not missing_files
+                and not invalid_candidate_indices
+            )
+            else "blocked"
+        )
         sources[source] = {
             "scene_source": source,
             "status": status,
             "module_available": module_available,
             "scene_root": str(root) if root is not None else "",
             "scene_root_available": bool(root and root.is_dir()),
+            "molmospaces_dataset_name": dataset_name,
+            "molmospaces_split": split,
+            "molmospaces_scene_version": scene_index_map["version"],
+            "scene_index_map_status": scene_index_map["status"],
+            "scene_index_map_reason": scene_index_map["reason"],
+            "scene_index_map_stdout": scene_index_map["stdout"],
             "source_dir": str(source_dir) if source_dir is not None else "",
             "source_dir_available": source_exists,
             "candidate_indices": list(candidate_indices),
             "candidate_files": candidate_files,
             "missing_candidate_indices": missing_files,
+            "invalid_candidate_indices": invalid_candidate_indices,
             "blocked_reason": _source_availability_blocked_reason(
                 module_available=module_available,
                 module_reason=module_reason,
@@ -460,6 +510,8 @@ def source_availability_report(
                 source=source,
                 source_exists=source_exists,
                 missing_files=missing_files,
+                invalid_candidate_indices=invalid_candidate_indices,
+                scene_index_map=scene_index_map,
             ),
             "failure_class": "" if status == "available" else "environment_blocked",
         }
@@ -562,7 +614,12 @@ def selection_gap_report(
         scanner_candidates = [
             item
             for item in source_candidates
-            if item["readiness_status"] == READINESS_BLOCKED and not item["eval_ready"]
+            if (
+                item["readiness_status"] == READINESS_BLOCKED
+                and not item["eval_ready"]
+                and (item.get("candidate_file") or {}).get("status")
+                != "missing_from_index_map"
+            )
         ]
         ui_scan_candidates = scanner_candidates[:ui_needed]
         eval_scan_candidates = scanner_candidates[:eval_needed]
@@ -613,9 +670,15 @@ def source_prep_report(
         source_availability = availability["sources"][source]
         source_selection = selection["sources"][source]
         dataset_name, split = _molmospaces_get_scenes_args(source)
+        candidate_scene_refs = [
+            _candidate_scene_ref_from_availability(item)
+            for item in source_availability.get("candidate_files") or []
+            if isinstance(item, dict)
+        ]
         missing_resources = _missing_source_resources(
             source=source,
             source_availability=source_availability,
+            candidate_scene_refs=candidate_scene_refs,
         )
         recommended_end = max_candidate_index
         next_eval_count = len(source_selection.get("next_eval_scan_world_ids") or [])
@@ -636,10 +699,27 @@ def source_prep_report(
             "molmospaces_dataset_name": dataset_name,
             "molmospaces_split": split,
             "molmospaces_get_scenes_call": f'get_scenes("{dataset_name}", "{split}")',
+            "molmospaces_scene_version": source_availability.get(
+                "molmospaces_scene_version", ""
+            ),
+            "scene_index_map_status": source_availability.get(
+                "scene_index_map_status", ""
+            ),
+            "scene_index_map_reason": source_availability.get(
+                "scene_index_map_reason", ""
+            ),
+            "scene_index_map_stdout": source_availability.get(
+                "scene_index_map_stdout", ""
+            ),
             "scene_asset_id": source,
             "source_dir": source_availability.get("source_dir", ""),
             "source_dir_available": bool(source_availability.get("source_dir_available")),
             "candidate_indices": list(candidate_indices),
+            "candidate_scene_refs": [
+                item
+                for item in candidate_scene_refs
+                if item.get("source") == "molmospaces_get_scenes"
+            ],
             "missing_resource_count": len(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [
@@ -959,6 +1039,8 @@ def _source_availability_blocked_reason(
     source: str,
     source_exists: bool,
     missing_files: list[int],
+    invalid_candidate_indices: list[int],
+    scene_index_map: dict[str, Any],
 ) -> str:
     if not module_available:
         return (
@@ -977,9 +1059,21 @@ def _source_availability_blocked_reason(
             f"MolmoSpaces scene source directory is missing for {source}: {root / source}; "
             "install that source before scanner admission."
         )
+    if scene_index_map.get("status") != "available":
+        return (
+            f"MolmoSpaces get_scenes index map is unavailable for {source} "
+            f"({scene_index_map.get('reason')}); source preparation must resolve the index "
+            "map before sampler admission."
+        )
+    if invalid_candidate_indices:
+        return (
+            f"MolmoSpaces scene source {source} has no get_scenes entries for candidate "
+            f"indices {invalid_candidate_indices}; choose valid source-specific indices before "
+            "scanner admission."
+        )
     if missing_files:
         return (
-            f"MolmoSpaces scene source {source} is missing candidate XML files for indices "
+            f"MolmoSpaces scene source {source} has missing get_scenes file paths for indices "
             f"{missing_files}; run source preparation before sampler admission."
         )
     return ""
@@ -994,10 +1088,142 @@ def _molmospaces_get_scenes_args(scene_source: str) -> tuple[str, str]:
     return family, split
 
 
+def _molmospaces_scene_index_map(
+    *,
+    source: str,
+    dataset_name: str,
+    split: str,
+    candidate_indices: tuple[int, ...],
+    module_available: bool,
+) -> dict[str, Any]:
+    if not module_available:
+        return {
+            "source": source,
+            "dataset_name": dataset_name,
+            "split": split,
+            "status": "blocked",
+            "reason": "molmo_spaces_module_unavailable",
+            "version": "",
+            "stdout": "",
+            "candidate_scene_refs": [],
+        }
+    stdout = io.StringIO()
+    try:
+        with redirect_stdout(stdout):
+            constants = importlib.import_module("molmo_spaces.molmo_spaces_constants")
+            mapping, version = constants.get_scenes(
+                dataset_name, split, return_version=True
+            )
+    except Exception as exc:  # pragma: no cover - dependency failures vary by host.
+        return {
+            "source": source,
+            "dataset_name": dataset_name,
+            "split": split,
+            "status": "blocked",
+            "reason": f"get_scenes_failed:{type(exc).__name__}:{exc}",
+            "version": "",
+            "stdout": stdout.getvalue(),
+            "candidate_scene_refs": [],
+        }
+    split_mapping = mapping.get(split) if isinstance(mapping, dict) else None
+    if not isinstance(split_mapping, dict):
+        return {
+            "source": source,
+            "dataset_name": dataset_name,
+            "split": split,
+            "status": "blocked",
+            "reason": "split_map_missing",
+            "version": str(version or ""),
+            "stdout": stdout.getvalue(),
+            "candidate_scene_refs": [],
+        }
+    candidate_scene_refs = [
+        _candidate_scene_ref(
+            source=source,
+            scene_index=index,
+            raw_ref=split_mapping.get(index),
+        )
+        for index in candidate_indices
+    ]
+    return {
+        "source": source,
+        "dataset_name": dataset_name,
+        "split": split,
+        "status": "available",
+        "reason": "",
+        "version": str(version or ""),
+        "stdout": stdout.getvalue(),
+        "candidate_scene_refs": candidate_scene_refs,
+    }
+
+
+def _candidate_scene_ref(
+    *,
+    source: str,
+    scene_index: int,
+    raw_ref: Any,
+) -> dict[str, Any]:
+    paths = _scene_ref_paths(raw_ref)
+    return {
+        "scene_source": source,
+        "scene_index": scene_index,
+        "status": "available" if paths else "missing_from_index_map",
+        "raw_ref_type": type(raw_ref).__name__,
+        "paths": paths,
+        "primary_path": _primary_scene_ref_path(paths),
+        "all_paths_exist": bool(paths) and all(path["exists"] for path in paths),
+        "missing_paths": [
+            path["path"] for path in paths if path.get("path") and not path["exists"]
+        ],
+    }
+
+
+def _candidate_scene_ref_from_availability(candidate_file: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_source": candidate_file.get("scene_source", ""),
+        "scene_index": candidate_file.get("scene_index"),
+        "status": candidate_file.get("status", ""),
+        "source": candidate_file.get("source", ""),
+        "raw_ref_type": candidate_file.get("raw_ref_type", ""),
+        "paths": candidate_file.get("paths", []),
+        "primary_path": candidate_file.get("path", ""),
+        "all_paths_exist": bool(candidate_file.get("exists")),
+        "missing_paths": candidate_file.get("missing_paths", []),
+    }
+
+
+def _scene_ref_paths(raw_ref: Any) -> list[dict[str, Any]]:
+    if raw_ref is None:
+        return []
+    if isinstance(raw_ref, str | Path):
+        path = Path(raw_ref)
+        return [{"role": "base", "path": str(raw_ref), "exists": path.is_file()}]
+    if isinstance(raw_ref, dict):
+        paths = []
+        for role, raw_path in sorted(raw_ref.items()):
+            if raw_path is None:
+                continue
+            path = Path(str(raw_path))
+            paths.append({"role": str(role), "path": str(raw_path), "exists": path.is_file()})
+        return paths
+    return []
+
+
+def _primary_scene_ref_path(paths: list[dict[str, Any]]) -> str:
+    for role in ("base", "physics", "ceiling"):
+        for path in paths:
+            if path.get("role") == role:
+                return str(path.get("path") or "")
+    if paths:
+        return str(paths[0].get("path") or "")
+    return ""
+
+
 def _missing_source_resources(
     *,
     source: str,
     source_availability: dict[str, Any],
+    candidate_scene_refs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     resources: list[dict[str, Any]] = []
     source_dir = str(source_availability.get("source_dir") or "")
@@ -1010,6 +1236,30 @@ def _missing_source_resources(
                 "reason": "source_dir_missing",
             }
         )
+    for scene_ref in candidate_scene_refs:
+        if not isinstance(scene_ref, dict):
+            continue
+        scene_index = scene_ref.get("scene_index")
+        if scene_ref.get("status") == "missing_from_index_map":
+            resources.append(
+                {
+                    "resource_type": "scene_index_map_entry",
+                    "scene_source": source,
+                    "scene_index": scene_index,
+                    "path": "",
+                    "reason": "scene_index_missing_from_get_scenes",
+                }
+            )
+        for missing_path in scene_ref.get("missing_paths") or []:
+            resources.append(
+                {
+                    "resource_type": "molmospaces_scene_path",
+                    "scene_source": source,
+                    "scene_index": scene_index,
+                    "path": missing_path,
+                    "reason": "get_scenes_path_missing",
+                }
+            )
     for item in source_availability.get("candidate_files") or []:
         if not isinstance(item, dict) or item.get("exists"):
             continue

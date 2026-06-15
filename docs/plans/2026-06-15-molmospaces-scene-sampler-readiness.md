@@ -100,11 +100,16 @@ First slice implemented on 2026-06-15.
   new eval rows.
 - Readiness export now writes `scene_sampler_source_prep.json`, a no-download
   source-preparation artifact. It records per-source MolmoSpaces
-  `get_scenes(...)` arguments, missing source/XML resources, next scanner world
-  ids, recommended candidate ranges, and operator-run preparation commands for
-  `procthor-10k-val`, `ithor`, `procthor-objaverse-val`, and
+  `get_scenes(...)` arguments, scene asset versions, candidate index-map paths,
+  missing source/XML resources, next scanner world ids, recommended candidate
+  ranges, and operator-run preparation commands for `procthor-10k-val`, `ithor`,
+  `procthor-objaverse-val`, and
   `holodeck-objaverse-val`. It is intentionally a manual prep plan, not an
   implicit downloader.
+- Source availability and selection-gap artifacts now use MolmoSpaces
+  `get_scenes(...)` refs for candidate paths and validity, so source-specific
+  numbering such as `ithor`'s `FloorPlan*_physics.xml` entries is not mistaken
+  for `val_<index>.xml` availability.
 
 Verification run on 2026-06-15:
 

@@ -347,6 +347,9 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert procthor["prep_status"] == "blocked_molmospaces_module"
     assert procthor["recommended_candidate_range"] == "0:19"
     assert procthor["molmospaces_get_scenes_call"] == 'get_scenes("procthor-10k", "val")'
+    assert procthor["scene_index_map_status"] == "blocked"
+    assert procthor["scene_index_map_reason"] == "molmo_spaces_module_unavailable"
+    assert procthor["candidate_scene_refs"] == []
     assert any(
         item["resource_type"] == "scene_xml" and item["scene_index"] == 6
         for item in procthor["missing_resources"]

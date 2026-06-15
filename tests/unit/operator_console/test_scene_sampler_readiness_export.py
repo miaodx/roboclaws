@@ -75,6 +75,12 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert source_prep["sources"]["procthor-10k-val"][
         "recommended_candidate_range"
     ] == "0:19"
+    assert "molmospaces_scene_version" in source_prep["sources"]["procthor-10k-val"]
+    assert source_prep["sources"]["procthor-10k-val"]["scene_index_map_status"] in {
+        "available",
+        "blocked",
+    }
+    assert "candidate_scene_refs" in source_prep["sources"]["procthor-10k-val"]
     assert any(
         command["name"] == "install_single_scene_example"
         for command in source_prep["sources"]["ithor"]["operator_commands"]
@@ -177,11 +183,25 @@ def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidate
 ) -> None:
     result = export_readiness_artifacts(
         output_dir=tmp_path,
+        candidate_indices=tuple(range(11)),
         required_selection_capacity_sources=("ithor",),
     )
 
+    selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
+
     assert result["status"] == "success"
     assert result["threshold_failures"] == []
+    assert selection["sources"]["ithor"]["next_ui_scan_world_ids"] == [
+        "molmospaces/ithor/1",
+        "molmospaces/ithor/2",
+        "molmospaces/ithor/3",
+    ]
+    assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][0] == (
+        "molmospaces/ithor/1"
+    )
+    assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][-1] == (
+        "molmospaces/ithor/10"
+    )
 
 
 def test_scene_sampler_readiness_export_candidate_index_options_are_sorted_unique() -> None:
