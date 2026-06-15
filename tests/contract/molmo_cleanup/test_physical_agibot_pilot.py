@@ -87,6 +87,65 @@ def _assert_camera_grounding_failure_evidence(run_result: dict) -> None:
     assert run_result["agent_view"]["camera_model_policy_evidence"] == camera_policy
 
 
+def _assert_agibot_map_build_tool_responses(
+    metric_map: dict,
+    nav: dict,
+    observe: dict,
+    blocked: dict,
+    done: dict,
+) -> None:
+    assert metric_map["tool"] == "metric_map"
+    assert nav["tool"] == "navigate_to_waypoint"
+    assert nav["waypoint_id"] == "wp_sofa_front"
+    assert observe["tool"] == "observe"
+    assert blocked["status"] == "blocked_capability"
+    assert done["agent_driven"] is True
+
+
+def _assert_agibot_map_build_run_identity(run_result: dict) -> None:
+    assert run_result["agent_driven"] is True
+    assert run_result["mcp_server"] == MCP_SERVER_NAME
+    assert run_result["backend_variant"] == "agibot_gdk"
+    assert run_result["evidence_lane"] == "camera-grounded-labels"
+    assert run_result["backend_evidence"]["evidence_lane"] == "physical-robot-evidence"
+    assert run_result["perception_mode"] == "camera_model_policy"
+    assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
+    assert run_result["raw_fpv_observations"][0]["camera"] == "head_color"
+
+
+def _assert_agibot_map_build_policy_trace(run_result: dict) -> None:
+    assert run_result["cleanup_policy_trace"]["agent_reasoning_visible"] is True
+    assert run_result["cleanup_policy_trace"]["agent_review_kind"] == (
+        "agibot_codex_semantic_map_build_review"
+    )
+    assert run_result["cleanup_policy_trace"]["events"][0]["decision"] == (
+        "inspect_public_metric_map"
+    )
+    assert run_result["cleanup_policy_trace"]["events"][-1]["decision"] == "block_manipulation"
+
+
+def _assert_agibot_map_build_runtime_map(run_result: dict, runtime_map: dict) -> None:
+    assert run_result["real_robot_readiness"]["semantic_map_build"] is True
+    assert run_result["real_robot_readiness"]["visited_waypoint_ids"] == ["wp_sofa_front"]
+    assert run_result["runtime_metric_map"]["visited_waypoint_ids"] == ["wp_sofa_front"]
+    assert runtime_map["source"] == "agibot_semantic_map_build_mcp"
+    assert runtime_map["visited_waypoint_ids"] == ["wp_sofa_front"]
+
+
+def _assert_agibot_map_build_artifacts(
+    run_result: dict,
+    trace_events: list[dict],
+    report_text: str,
+) -> None:
+    assert run_result["manipulation_evidence"]["status"] == "blocked_capability"
+    assert "runtime_metric_map.json" in run_result["artifacts"].values()
+    assert any(event.get("tool") == "observe" for event in trace_events)
+    assert "AgiBot Backend Evidence" in report_text
+    assert "Camera Labeler Evidence" in report_text
+    assert "grounding-dino" in report_text
+    assert "Agibot intent=map-build" in report_text
+
+
 def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     tmp_path: Path,
 ) -> None:
@@ -379,42 +438,13 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     ]
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
 
-    assert metric_map["tool"] == "metric_map"
+    _assert_agibot_map_build_tool_responses(metric_map, nav, observe, blocked, done)
     _assert_fixture_hints_artifact_only(run_result, runtime_map, trace_events)
-    assert nav["tool"] == "navigate_to_waypoint"
-    assert nav["waypoint_id"] == "wp_sofa_front"
-    assert observe["tool"] == "observe"
-    assert blocked["status"] == "blocked_capability"
-    assert done["agent_driven"] is True
-    assert run_result["agent_driven"] is True
-    assert run_result["mcp_server"] == MCP_SERVER_NAME
-    assert run_result["backend_variant"] == "agibot_gdk"
-    assert run_result["evidence_lane"] == "camera-grounded-labels"
-    assert run_result["backend_evidence"]["evidence_lane"] == "physical-robot-evidence"
-    assert run_result["perception_mode"] == "camera_model_policy"
-    assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
-    assert run_result["raw_fpv_observations"][0]["camera"] == "head_color"
+    _assert_agibot_map_build_run_identity(run_result)
     _assert_camera_grounding_failure_evidence(run_result)
-    assert run_result["cleanup_policy_trace"]["agent_reasoning_visible"] is True
-    assert run_result["cleanup_policy_trace"]["agent_review_kind"] == (
-        "agibot_codex_semantic_map_build_review"
-    )
-    assert run_result["cleanup_policy_trace"]["events"][0]["decision"] == (
-        "inspect_public_metric_map"
-    )
-    assert run_result["cleanup_policy_trace"]["events"][-1]["decision"] == "block_manipulation"
-    assert run_result["real_robot_readiness"]["semantic_map_build"] is True
-    assert run_result["real_robot_readiness"]["visited_waypoint_ids"] == ["wp_sofa_front"]
-    assert run_result["runtime_metric_map"]["visited_waypoint_ids"] == ["wp_sofa_front"]
-    assert runtime_map["source"] == "agibot_semantic_map_build_mcp"
-    assert runtime_map["visited_waypoint_ids"] == ["wp_sofa_front"]
-    assert run_result["manipulation_evidence"]["status"] == "blocked_capability"
-    assert "runtime_metric_map.json" in run_result["artifacts"].values()
-    assert any(event.get("tool") == "observe" for event in trace_events)
-    assert "AgiBot Backend Evidence" in report_text
-    assert "Camera Labeler Evidence" in report_text
-    assert "grounding-dino" in report_text
-    assert "Agibot intent=map-build" in report_text
+    _assert_agibot_map_build_policy_trace(run_result)
+    _assert_agibot_map_build_runtime_map(run_result, runtime_map)
+    _assert_agibot_map_build_artifacts(run_result, trace_events, report_text)
 
 
 def test_agibot_semantic_map_build_camera_labels_call_external_grounding(

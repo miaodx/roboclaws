@@ -197,6 +197,12 @@ logs before choosing the next slice.
   Metric: 11 -> 10 complexity rows; oversized modules unchanged at 62. Proof:
   focused apple-to-apple test, ruff, format check, and ratchet.
 
+- 2026-06-16: Agibot semantic map-build MCP contract test split tool-response,
+  run-identity, policy-trace, runtime-map, and artifact/report assertions into
+  focused helpers. Metric: 10 -> 9 complexity rows; oversized modules unchanged
+  at 62. Proof: focused physical Agibot pilot test, ruff, format check, and
+  ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
