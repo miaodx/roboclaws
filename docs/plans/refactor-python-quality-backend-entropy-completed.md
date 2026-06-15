@@ -432,6 +432,14 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
   Molmo subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces generated-mess manifest loading, scene XML
+  resolution, scene-ref path normalization, install-prep, and scenario-id
+  helpers moved from the subprocess worker into `molmospaces_worker_init.py`,
+  with worker-private wrappers preserving current scene-resolution tests.
+  Metric: `molmospaces_subprocess_worker.py` 3397 -> 3345 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Molmo subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

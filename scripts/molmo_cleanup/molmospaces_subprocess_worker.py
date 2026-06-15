@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -24,12 +23,10 @@ from roboclaws.household.camera_control import (
     normalize_camera_control_request,
 )
 from roboclaws.household.generated_mess import (
-    GENERATED_MESS_MANIFEST_SCHEMA,
     generated_mess_success_threshold,
     select_generated_mess_targets,
     targets_from_generated_mess_manifest,
 )
-from roboclaws.launch.scene_sampler import _molmospaces_get_scenes_args
 from scripts.molmo_cleanup.molmospaces_placement import (
     MolmoPlacementHooks,
 )
@@ -184,6 +181,27 @@ from scripts.molmo_cleanup.molmospaces_room_map import (
     render_robot_map as _render_robot_map_impl,
 )
 from scripts.molmo_cleanup.molmospaces_worker_cli import build_arg_parser
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    load_generated_mess_manifest as _load_generated_mess_manifest_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    normalize_molmospaces_scene_ref_path as _normalize_molmospaces_scene_ref_path_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    prepare_molmospaces_scene as _prepare_molmospaces_scene_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    resolve_molmospaces_scene_xml as _resolve_molmospaces_scene_xml_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    scenario_id as _scenario_id_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    scene_ref_candidate_xml_path as _scene_ref_candidate_xml_path_impl,
+)
+from scripts.molmo_cleanup.molmospaces_worker_init import (
+    scene_xml_path_from_ref as _scene_xml_path_from_ref_impl,
+)
 from scripts.molmo_cleanup.molmospaces_worker_outputs import (
     MolmoWorkerOutputHooks,
 )
@@ -488,17 +506,7 @@ _WORKER_COMMAND_HANDLERS: dict[str, _WorkerCommandHandler] = {
 
 
 def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
-    if path is None:
-        return {}
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict):
-        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
-    if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
-        raise ValueError(
-            "generated mess manifest schema mismatch: "
-            f"{manifest.get('schema')} != {GENERATED_MESS_MANIFEST_SCHEMA}"
-        )
-    return manifest
+    return _load_generated_mess_manifest_impl(path)
 
 
 def init_state(
@@ -681,15 +689,15 @@ def _prepare_molmospaces_scene(
     get_scenes_root: Callable[[], Any],
     install_scene_with_objects_and_grasps_from_path: Callable[[Path], Any],
 ) -> tuple[Path, dict[str, Any]]:
-    scene_xml, resolution = _resolve_molmospaces_scene_xml(
+    return _prepare_molmospaces_scene_impl(
         scene_source=scene_source,
         scene_index=scene_index,
         get_scenes=get_scenes,
-        scenes_root=Path(get_scenes_root()),
+        get_scenes_root=get_scenes_root,
+        install_scene_with_objects_and_grasps_from_path=(
+            install_scene_with_objects_and_grasps_from_path
+        ),
     )
-    install_scene_with_objects_and_grasps_from_path(scene_xml)
-    resolution["install_method"] = "install_scene_with_objects_and_grasps_from_path"
-    return scene_xml, resolution
 
 
 def _resolve_molmospaces_scene_xml(
@@ -699,42 +707,12 @@ def _resolve_molmospaces_scene_xml(
     get_scenes: Callable[..., Any],
     scenes_root: Path,
 ) -> tuple[Path, dict[str, Any]]:
-    dataset_name, split = _molmospaces_get_scenes_args(scene_source)
-    mapping = get_scenes(dataset_name, split)
-    if isinstance(mapping, tuple):
-        mapping = mapping[0]
-    split_mapping = mapping.get(split) if isinstance(mapping, dict) else None
-    if not isinstance(split_mapping, dict):
-        raise FileNotFoundError(
-            f"MolmoSpaces get_scenes({dataset_name!r}, {split!r}) has no {split!r} map"
-        )
-    if scene_index not in split_mapping:
-        raise FileNotFoundError(
-            "MolmoSpaces scene index missing from get_scenes map: "
-            f"scene_source={scene_source!r} scene_index={scene_index}"
-        )
-    raw_ref = split_mapping[scene_index]
-    scene_xml, ref_role, path_was_relative = _scene_xml_path_from_ref(
-        raw_ref,
+    return _resolve_molmospaces_scene_xml_impl(
+        scene_source=scene_source,
+        scene_index=scene_index,
+        get_scenes=get_scenes,
         scenes_root=scenes_root,
     )
-    if scene_xml is None:
-        raise FileNotFoundError(
-            "MolmoSpaces get_scenes ref does not contain a scene XML path: "
-            f"scene_source={scene_source!r} scene_index={scene_index} "
-            f"raw_ref_type={type(raw_ref).__name__}"
-        )
-    return scene_xml, {
-        "schema": "molmospaces_scene_resolution_v1",
-        "scene_source": scene_source,
-        "scene_index": scene_index,
-        "dataset_name": dataset_name,
-        "split": split,
-        "raw_ref_type": type(raw_ref).__name__,
-        "selected_ref_role": ref_role,
-        "path_was_relative": path_was_relative,
-        "scene_xml": str(scene_xml),
-    }
 
 
 def _scene_xml_path_from_ref(
@@ -742,25 +720,7 @@ def _scene_xml_path_from_ref(
     *,
     scenes_root: Path,
 ) -> tuple[Path | None, str, bool]:
-    if isinstance(raw_ref, str | Path):
-        path, path_was_relative = _normalize_molmospaces_scene_ref_path(
-            raw_ref,
-            scenes_root=scenes_root,
-        )
-        if path.suffix == ".xml":
-            return path, "path", path_was_relative
-        return None, "path", path_was_relative
-    if isinstance(raw_ref, dict):
-        for role in ("base", "physics", "ceiling"):
-            raw_path = raw_ref.get(role)
-            path = _scene_ref_candidate_xml_path(raw_path, scenes_root=scenes_root)
-            if path is not None:
-                return path[0], role, path[1]
-        for role, raw_path in sorted(raw_ref.items()):
-            path = _scene_ref_candidate_xml_path(raw_path, scenes_root=scenes_root)
-            if path is not None:
-                return path[0], str(role), path[1]
-    return None, "", False
+    return _scene_xml_path_from_ref_impl(raw_ref, scenes_root=scenes_root)
 
 
 def _scene_ref_candidate_xml_path(
@@ -768,15 +728,7 @@ def _scene_ref_candidate_xml_path(
     *,
     scenes_root: Path,
 ) -> tuple[Path, bool] | None:
-    if raw_path is None:
-        return None
-    path, path_was_relative = _normalize_molmospaces_scene_ref_path(
-        raw_path,
-        scenes_root=scenes_root,
-    )
-    if path.suffix != ".xml":
-        return None
-    return path, path_was_relative
+    return _scene_ref_candidate_xml_path_impl(raw_path, scenes_root=scenes_root)
 
 
 def _normalize_molmospaces_scene_ref_path(
@@ -784,15 +736,11 @@ def _normalize_molmospaces_scene_ref_path(
     *,
     scenes_root: Path,
 ) -> tuple[Path, bool]:
-    path = Path(str(raw_path))
-    if path.is_absolute():
-        return path, False
-    return scenes_root / path, True
+    return _normalize_molmospaces_scene_ref_path_impl(raw_path, scenes_root=scenes_root)
 
 
 def _scenario_id(*, scene_source: str, scene_index: int, seed: int) -> str:
-    source_token = re.sub(r"[^A-Za-z0-9_.-]+", "-", scene_source).strip("-")
-    return f"molmospaces-{source_token}-{scene_index}-{seed}"
+    return _scenario_id_impl(scene_source=scene_source, scene_index=scene_index, seed=seed)
 
 
 def _molmo_worker_output_hooks() -> MolmoWorkerOutputHooks:
