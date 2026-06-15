@@ -12,9 +12,6 @@ from PIL import Image, ImageDraw
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.cleanup_primitive_evidence import (
-    cleanup_primitive_evidence_from_substeps,
-)
 from roboclaws.household.manipulation_provenance import api_semantic_manipulation_evidence
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.profiles import MOLMOSPACES_SIM_BACKEND
@@ -31,11 +28,8 @@ from roboclaws.household.realworld_contract import (
     RealWorldCleanupContract,
 )
 from roboclaws.household.report import (
-    render_cleanup_report,
     write_state_snapshot,
-    write_trace_jsonl,
 )
-from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_cleanup_loop import (
     SemanticCleanupLoopResult,
     run_semantic_cleanup_loop,
@@ -44,7 +38,6 @@ from roboclaws.household.semantic_timeline import (
     ROBOT_VIEW_VARIANT,
     record_robot_view_step,
     robot_view_capture_for_tool,
-    semantic_substeps,
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 from roboclaws.household.types import CleanupScenario
@@ -85,382 +78,28 @@ def run_molmospaces_agibot_contract_rehearsal(
 ) -> dict[str, Any]:
     """Run the Agibot-shaped cleanup contract against simulated MolmoSpaces semantics."""
 
-    if runtime not in {RUNTIME_FIXTURE, RUNTIME_MOLMOSPACES_SUBPROCESS}:
-        expected = f"{RUNTIME_FIXTURE}|{RUNTIME_MOLMOSPACES_SUBPROCESS}"
-        raise ValueError(f"unsupported rehearsal runtime {runtime!r} (expected {expected})")
-    if rehearsal_mode not in {REHEARSAL_MODE_CONTRACT, REHEARSAL_MODE_CLEANUP_ACTIONS}:
-        expected = f"{REHEARSAL_MODE_CONTRACT}|{REHEARSAL_MODE_CLEANUP_ACTIONS}"
-        raise ValueError(f"unsupported rehearsal mode {rehearsal_mode!r} (expected {expected})")
-    if cleanup_object_count < 1:
-        raise ValueError("cleanup_object_count must be >= 1")
-    if record_robot_views and (runtime != RUNTIME_MOLMOSPACES_SUBPROCESS or not include_robot):
-        raise ValueError(
-            "record_robot_views requires runtime=molmospaces-subprocess and include_robot=true"
-        )
+    from roboclaws.household.agibot_contract_rehearsal_stages import (
+        _ContractRehearsalOptions,
+        run_contract_rehearsal,
+    )
 
-    run_dir = Path(run_dir).resolve()
-    run_dir.mkdir(parents=True, exist_ok=True)
-    started_at = time.time()
-    trace_events: list[dict[str, Any]] = []
-    policy_events: list[dict[str, Any]] = []
-    robot_view_steps: list[dict[str, Any]] = []
-    robot_view_index = 0
-    backend_instance: MolmoSpacesSubprocessBackend | None = None
-
-    try:
-        if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS:
-            backend_instance = MolmoSpacesSubprocessBackend(
-                run_dir=run_dir,
-                seed=seed,
-                python_executable=molmospaces_python,
-                include_robot=include_robot,
-                robot_name=robot_name,
-                generated_mess_count=generated_mess_count,
-            )
-            scenario = backend_instance.scenario
-            base_contract = CleanupBackendSession(scenario, backend=backend_instance)
-        else:
-            scenario = build_cleanup_scenario(seed=seed)
-            base_contract = CleanupBackendSession(scenario)
-
-        contract = RealWorldCleanupContract(
-            base_contract,
-            task_prompt=scenario.task,
-            fixture_hint_mode="exact_fixtures",
-            perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
-        )
-
-        before_snapshot = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=scenario,
-            output_path=run_dir / "before.png",
-            title="Before MolmoSpaces Agibot contract rehearsal",
-        )
-        if record_robot_views:
-            robot_view_index = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index,
-                action="before",
-                label_suffix="before",
-            )
-
-        metric_map = _agibot_shaped_metric_map(contract.metric_map(), seed=seed)
-        fixture_hints = _agibot_shaped_fixture_hints(contract.fixture_hints())
-        preflight = _write_preflight_artifacts(
-            run_dir=run_dir,
-            scenario=scenario,
-            metric_map=metric_map,
-            fixture_hints=fixture_hints,
-            runtime=runtime,
+    return run_contract_rehearsal(
+        run_dir=run_dir,
+        options=_ContractRehearsalOptions(
             seed=seed,
             generated_mess_count=generated_mess_count,
-            backend_instance=backend_instance,
+            runtime=runtime,
+            waypoint_id=waypoint_id,
+            molmospaces_python=molmospaces_python,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            rehearsal_mode=rehearsal_mode,
+            cleanup_object_count=cleanup_object_count,
+            record_robot_views=record_robot_views,
             context_json=context_json,
             agibot_map_artifact_dir=agibot_map_artifact_dir,
-        )
-        preflight_agent_view = _load_json(preflight["agent_view"])
-        waypoint_sequence = _load_json(preflight["waypoint_sequence"])
-        metric_map = dict(preflight_agent_view["metric_map"])
-        fixture_hints = dict(preflight_agent_view["fixture_hints"])
-        subphase_reports = [
-            _write_stage_artifact(
-                run_dir=run_dir,
-                stage_dir=run_dir / "subphases" / "01-agent-view",
-                stage="agent_view_export",
-                status="ok",
-                ok=True,
-                tool_response=metric_map,
-                artifacts={
-                    "metric_map": _relpath(preflight["metric_map"], run_dir),
-                    "fixture_hints": _relpath(preflight["fixture_hints"], run_dir),
-                    "agent_view": _relpath(preflight["agent_view"], run_dir),
-                    "scene_identity": _relpath(preflight["scene_identity"], run_dir),
-                    "map_preview": _relpath(preflight["map_preview"], run_dir),
-                    "waypoint_sequence": _relpath(preflight["waypoint_sequence"], run_dir),
-                    "runner_task_input": _relpath(preflight["runner_task_input"], run_dir),
-                },
-                note=(
-                    "Generated Agibot-shaped preflight artifacts from the simulated "
-                    "MolmoSpaces cleanup scene. No real Agibot map or GDK artifact "
-                    "was consumed."
-                ),
-            )
-        ]
-        _record(trace_events, started_at, "metric_map", {}, metric_map)
-
-        runtime_dir = run_dir / "runtime"
-        runtime_dir.mkdir(parents=True, exist_ok=True)
-        selected_waypoint_id = waypoint_id or _first_waypoint_id_from_sequence(waypoint_sequence)
-
-        observation_image = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=scenario,
-            output_path=runtime_dir / "policy_observation.png",
-            title="Simulated policy observation",
-        )
-        observation = _simulated_observation(
-            contract.observe(),
-            observation_image=observation_image,
-            run_dir=run_dir,
-            runtime=runtime,
-            metric_map=metric_map,
-            waypoint_id=selected_waypoint_id,
-        )
-        (runtime_dir / "observation.json").write_text(
-            json.dumps(observation, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        subphase_reports.append(
-            _write_stage_artifact(
-                run_dir=run_dir,
-                stage_dir=run_dir / "subphases" / "02-observe",
-                stage="observe",
-                status="ok",
-                ok=True,
-                tool_response=observation,
-                artifacts={"observation": "runtime/observation.json"},
-                note=(
-                    "Simulated policy-camera observe evidence. This validates the "
-                    "public observe result shape, not a head_color GDK camera capture."
-                ),
-            )
-        )
-        policy_events.append(_policy_event(len(policy_events), observation, "observe"))
-        _record(trace_events, started_at, "observe", {"label": "pre_navigation"}, observation)
-
-        navigation = _simulated_navigation(
-            contract.navigate_to_waypoint(selected_waypoint_id),
-            metric_map=metric_map,
-            waypoint_id=selected_waypoint_id,
-            runtime=runtime,
-        )
-        (runtime_dir / "navigation.json").write_text(
-            json.dumps(navigation, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        subphase_reports.append(
-            _write_stage_artifact(
-                run_dir=run_dir,
-                stage_dir=run_dir / "subphases" / "03-navigate-waypoint",
-                stage="navigate_waypoint",
-                status="ok",
-                ok=True,
-                tool_response=navigation,
-                artifacts={"navigation": "runtime/navigation.json"},
-                note=(
-                    "Simulated waypoint navigation evidence with Agibot-shaped "
-                    "runner fields and MolmoSpaces simulation provenance."
-                ),
-            )
-        )
-        policy_events.append(_policy_event(len(policy_events), navigation, "navigate_waypoint"))
-        _record(
-            trace_events,
-            started_at,
-            "navigate_to_waypoint",
-            {"waypoint_id": selected_waypoint_id},
-            navigation,
-        )
-        if record_robot_views and navigation.get("ok"):
-            robot_view_index = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index,
-                action=f"navigate_to_waypoint {selected_waypoint_id}",
-                label_suffix=f"navigate_waypoint_{selected_waypoint_id}",
-            )
-
-        manipulation_results = []
-        cleanup_actions = _empty_cleanup_actions_result()
-        final_locations = base_contract.backend.object_locations()
-        done_response: dict[str, Any] | None = None
-        if rehearsal_mode == REHEARSAL_MODE_CONTRACT:
-            for tool in BLOCKED_MANIPULATION_TOOLS:
-                result = _blocked_manipulation(tool)
-                manipulation_results.append(result)
-                policy_events.append(
-                    _policy_event(len(policy_events), result, "blocked_manipulation")
-                )
-                _record(trace_events, started_at, tool, {}, result)
-            subphase_reports.append(
-                _write_stage_artifact(
-                    run_dir=run_dir,
-                    stage_dir=run_dir / "subphases" / "04-blocked-manipulation",
-                    stage="blocked_manipulation",
-                    status="blocked_capability",
-                    ok=False,
-                    tool_response={"blocked_tools": manipulation_results},
-                    artifacts={"blocked_manipulation": "runtime/blocked_manipulation.json"},
-                    note=(
-                        "Manipulation tools are intentionally visible but blocked in this "
-                        "contract rehearsal."
-                    ),
-                )
-            )
-            (runtime_dir / "blocked_manipulation.json").write_text(
-                json.dumps(manipulation_results, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-        else:
-            cleanup_actions = _run_cleanup_action_rehearsal(
-                contract=contract,
-                base_contract=base_contract,
-                metric_map=metric_map,
-                fixture_hints=fixture_hints,
-                trace_events=trace_events,
-                policy_events=policy_events,
-                started_at=started_at,
-                runtime=runtime,
-                run_dir=run_dir,
-                robot_view_steps=robot_view_steps,
-                robot_view_index_ref=[robot_view_index],
-                record_robot_views=record_robot_views,
-                cleanup_object_count=cleanup_object_count,
-            )
-            robot_view_index = int(cleanup_actions.get("robot_view_index", robot_view_index))
-            done_response = _record_action_done(
-                contract=base_contract,
-                trace_events=trace_events,
-                started_at=started_at,
-                runtime=runtime,
-            )
-            final_locations = dict(done_response.get("final_locations") or final_locations)
-            cleanup_actions["final_object_locations"] = final_locations
-            (runtime_dir / "cleanup_actions.json").write_text(
-                json.dumps(cleanup_actions, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-            subphase_reports.append(
-                _write_stage_artifact(
-                    run_dir=run_dir,
-                    stage_dir=run_dir / "subphases" / "04-cleanup-actions",
-                    stage="cleanup_actions",
-                    status="ok" if cleanup_actions["completed_object_count"] else "partial",
-                    ok=bool(cleanup_actions["completed_object_count"]),
-                    tool_response=cleanup_actions,
-                    artifacts={"cleanup_actions": "runtime/cleanup_actions.json"},
-                    note=(
-                        "Opt-in simulated cleanup-action rehearsal. Pick/place effects "
-                        "are api_semantic MolmoSpaces state updates, not Agibot GDK "
-                        "manipulation or planner-backed proof."
-                    ),
-                )
-            )
-
-        after_snapshot = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=scenario,
-            output_path=run_dir / "after.png",
-            title="After MolmoSpaces Agibot contract rehearsal",
-        )
-        if record_robot_views:
-            robot_view_index = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index,
-                action="after",
-                label_suffix="after",
-            )
-
-        top_level_agent_view = _agent_view_with_runtime_observation(
-            metric_map=metric_map,
-            fixture_hints=fixture_hints,
-            observation=observation,
-        )
-        if rehearsal_mode == REHEARSAL_MODE_CLEANUP_ACTIONS:
-            top_level_agent_view = _agent_view_with_cleanup_actions(
-                contract.agent_view_payload(),
-                metric_map=metric_map,
-                fixture_hints=fixture_hints,
-                fallback_observation=observation,
-            )
-        substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
-        cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
-        runtime_export = _runtime_export(
-            observation=observation,
-            navigation=navigation,
-            manipulation_results=manipulation_results,
-            subphase_reports=subphase_reports,
-            runtime=runtime,
-            rehearsal_mode=rehearsal_mode,
-            cleanup_actions=cleanup_actions,
-            semantic_substeps=substeps,
-            final_locations=final_locations,
-            robot_view_steps=robot_view_steps,
-        )
-        (runtime_dir / "runtime_export.json").write_text(
-            json.dumps(runtime_export, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        (run_dir / "agent_view.json").write_text(
-            json.dumps(top_level_agent_view, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        trace_path = run_dir / "trace.jsonl"
-        write_trace_jsonl(trace_path, trace_events)
-
-        run_result = _run_result(
-            run_dir=run_dir,
-            scenario=scenario,
-            runtime=runtime,
-            seed=seed,
-            generated_mess_count=generated_mess_count,
-            started_at=started_at,
-            metric_map=metric_map,
-            fixture_hints=fixture_hints,
-            observation=observation,
-            navigation=navigation,
-            manipulation_results=manipulation_results,
-            cleanup_actions=cleanup_actions,
-            agent_view=top_level_agent_view,
-            runtime_export=runtime_export,
-            subphase_reports=subphase_reports,
-            trace_path=trace_path,
-            before_snapshot=before_snapshot,
-            after_snapshot=after_snapshot,
-            policy_events=policy_events,
-            semantic_substeps=substeps,
-            cleanup_primitive_evidence=cleanup_primitive_evidence,
-            final_locations=final_locations,
-            done_response=done_response,
-            robot_view_steps=robot_view_steps,
-            backend_instance=backend_instance,
-            scene_identity_path=preflight["scene_identity"],
-            map_preview_path=preflight["map_preview"],
-            agibot_map_reference_path=preflight["agibot_map_reference"],
-            rehearsal_mode=rehearsal_mode,
-            record_robot_views=record_robot_views,
-        )
-        (run_dir / "run_result.json").write_text(
-            json.dumps(run_result, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        render_cleanup_report(
-            run_dir=run_dir,
-            scenario=scenario,
-            run_result=run_result,
-            trace_events=trace_events,
-            before_snapshot=before_snapshot,
-            after_snapshot=after_snapshot,
-            robot_view_steps=robot_view_steps,
-        )
-        return run_result
-    finally:
-        if backend_instance is not None:
-            backend_instance.close()
+        ),
+    )
 
 
 def run_molmospaces_agibot_prehardware_rehearsal(

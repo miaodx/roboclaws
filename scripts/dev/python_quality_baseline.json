@@ -8,7 +8,7 @@
         "path": "roboclaws/agents/drivers/openai_agents_live.py"
       },
       {
-        "lines": 2357,
+        "lines": 1996,
         "max_module_lines": 800,
         "path": "roboclaws/household/agibot_contract_rehearsal.py"
       },
@@ -33,7 +33,7 @@
         "path": "roboclaws/household/planner_task_feasibility.py"
       },
       {
-        "lines": 1067,
+        "lines": 1065,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_cleanup.py"
       },
@@ -43,7 +43,7 @@
         "path": "roboclaws/household/realworld_contract.py"
       },
       {
-        "lines": 1180,
+        "lines": 1164,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
@@ -198,7 +198,7 @@
         "path": "tests/contract/checkers/test_check_molmo_planner_proof_bundle_runner_result.py"
       },
       {
-        "lines": 4671,
+        "lines": 4669,
         "max_module_lines": 800,
         "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py"
       },
@@ -324,39 +324,9 @@
         "limit": 10,
         "message": "`_run_cleanup_action_rehearsal` is too complex (11 > 10)",
         "path": "roboclaws/household/agibot_contract_rehearsal.py",
-        "row": 1293,
+        "row": 930,
         "symbol": "_run_cleanup_action_rehearsal",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/agibot_contract_rehearsal.py|C901|run_molmospaces_agibot_contract_rehearsal",
-        "limit": 10,
-        "message": "`run_molmospaces_agibot_contract_rehearsal` is too complex (13 > 10)",
-        "path": "roboclaws/household/agibot_contract_rehearsal.py",
-        "row": 70,
-        "symbol": "run_molmospaces_agibot_contract_rehearsal",
-        "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/agibot_contract_rehearsal.py|PLR0912|run_molmospaces_agibot_contract_rehearsal",
-        "limit": 12,
-        "message": "Too many branches (15 > 12)",
-        "path": "roboclaws/household/agibot_contract_rehearsal.py",
-        "row": 70,
-        "symbol": "run_molmospaces_agibot_contract_rehearsal",
-        "value": 15
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/agibot_contract_rehearsal.py|PLR0915|run_molmospaces_agibot_contract_rehearsal",
-        "limit": 50,
-        "message": "Too many statements (95 > 50)",
-        "path": "roboclaws/household/agibot_contract_rehearsal.py",
-        "row": 70,
-        "symbol": "run_molmospaces_agibot_contract_rehearsal",
-        "value": 95
       },
       {
         "code": "C901",
@@ -504,7 +474,7 @@
         "limit": 10,
         "message": "`_maybe_clean_visible_object` is too complex (12 > 10)",
         "path": "roboclaws/household/realworld_cleanup.py",
-        "row": 715,
+        "row": 713,
         "symbol": "_maybe_clean_visible_object",
         "value": 12
       },
@@ -864,7 +834,7 @@
         "limit": 10,
         "message": "`_add_isaac_robot_view_step` is too complex (13 > 10)",
         "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py",
-        "row": 4042,
+        "row": 4040,
         "symbol": "_add_isaac_robot_view_step",
         "value": 13
       },
@@ -874,7 +844,7 @@
         "limit": 12,
         "message": "Too many branches (16 > 12)",
         "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py",
-        "row": 4042,
+        "row": 4040,
         "symbol": "_add_isaac_robot_view_step",
         "value": 16
       },
@@ -944,7 +914,7 @@
         "limit": 50,
         "message": "Too many statements (84 > 50)",
         "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
-        "row": 388,
+        "row": 420,
         "symbol": "test_realworld_cleanup_demo_can_run_isaaclab_fake_backend",
         "value": 84
       },
@@ -954,7 +924,7 @@
         "limit": 50,
         "message": "Too many statements (56 > 50)",
         "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
-        "row": 97,
+        "row": 100,
         "symbol": "test_realworld_cleanup_demo_writes_public_private_artifacts",
         "value": 56
       },

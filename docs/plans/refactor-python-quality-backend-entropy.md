@@ -4577,3 +4577,19 @@ Stop this refactor loop when:
   and the module dropped from 2359 to 2357 lines. Remaining Candidate C work is
   limited to broader Agibot contract rehearsal complexity and planner-proof
   fallback rows.
+- 2026-06-15: Continued Candidate C by splitting MolmoSpaces Agibot contract
+  rehearsal orchestration into `roboclaws/household/agibot_contract_rehearsal_stages.py`.
+  `run_molmospaces_agibot_contract_rehearsal(...)` is now a thin public wrapper;
+  validation, backend/session construction, preflight export, observe/navigation,
+  blocked-manipulation versus cleanup-action execution, runtime export, and
+  report/run-result finalization are named stage helpers. Evidence:
+  `ruff check roboclaws/household/agibot_contract_rehearsal.py roboclaws/household/agibot_contract_rehearsal_stages.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py -q`
+  passed with 4 tests and 2 skips; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 83 to 80 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/agibot_contract_rehearsal.py` dropped from 2357 to
+  1996 lines and no longer appears in the complexity-by-file summary; the new
+  stage helper module is 785 lines, below the oversized-module threshold.
+  Remaining Candidate C work is limited to planner-proof fallback rows.
