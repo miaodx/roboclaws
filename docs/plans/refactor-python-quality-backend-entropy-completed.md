@@ -476,6 +476,16 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
   subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces MuJoCo model loading/cache, robot result metadata,
+  robot base/head qpos helpers, held-object robot-relative sync, runtime render
+  state articulation evidence, and openable-receptacle joint discovery moved
+  from the subprocess worker into `molmospaces_runtime_state.py`, with
+  worker-private wrappers preserving cache, robot-view, held-object, and
+  runtime-state test hooks. Metric: `molmospaces_subprocess_worker.py` 2809 ->
+  2627 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Molmo subprocess backend tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
