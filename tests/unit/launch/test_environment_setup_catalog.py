@@ -169,6 +169,36 @@ def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
     assert "provider_profile=mimo-openai-chat" in plan.overrides
 
 
+@pytest.mark.parametrize(
+    ("agent_engine", "provider_profile", "env_key"),
+    (
+        ("codex-cli", "mify", "ROBOCLAWS_CODEX_PROVIDER"),
+        ("claude-code", "kimi-anthropic", "ROBOCLAWS_CLAUDE_PROVIDER"),
+        ("openai-agents-sdk", "mimo-openai-chat", "ROBOCLAWS_CODEX_PROVIDER"),
+    ),
+)
+def test_provider_profile_env_export_uses_agent_engine_catalog(
+    agent_engine: str,
+    provider_profile: str,
+    env_key: str,
+) -> None:
+    plan = resolve_surface_launch(
+        [
+            "surface=household-world",
+            "world=molmospaces/val_0",
+            "backend=mujoco",
+            "intent=cleanup",
+            f"agent_engine={agent_engine}",
+            f"provider_profile={provider_profile}",
+            "evidence_lane=world-oracle-labels",
+        ]
+    )
+
+    exported = export_env_from_overrides(plan.overrides)
+
+    assert exported[env_key] == provider_profile
+
+
 @pytest.mark.parametrize("agent_engine", ["codex-cli", "openai-agents-sdk"])
 def test_responses_agent_engines_accept_minimax_provider_profile(agent_engine: str) -> None:
     plan = resolve_surface_launch(

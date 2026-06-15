@@ -4684,3 +4684,17 @@ Stop this refactor loop when:
   from 72 to 71 Ruff complexity violations, with oversized modules unchanged at
   59. `roboclaws/household/visual_grounding.py` no longer appears in the
   complexity-by-file summary.
+- 2026-06-15: Continued the backend/engine consistency residual by making
+  `roboclaws/launch/runners.py::export_env_from_overrides(...)` use the
+  launch agent-engine catalog for provider-profile environment export.
+  Provider env keys now come from `AgentEngineSpec.provider_env_key` instead of
+  being repeated as local `codex-cli` / `claude-code` / `openai-agents-sdk`
+  branches, while task metadata, goal contract, and scenario setup exports keep
+  the same external shape. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/launch/runners.py tests/unit/launch/test_environment_setup_catalog.py`
+  passed; `ruff format --check roboclaws/launch/runners.py tests/unit/launch/test_environment_setup_catalog.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed with 154 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 71 to 70 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/launch/runners.py` no longer appears in the complexity summary.

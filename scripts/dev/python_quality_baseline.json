@@ -510,16 +510,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/launch/runners.py|C901|export_env_from_overrides",
-        "limit": 10,
-        "message": "`export_env_from_overrides` is too complex (12 > 10)",
-        "path": "roboclaws/launch/runners.py",
-        "row": 23,
-        "symbol": "export_env_from_overrides",
-        "value": 12
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/maps/bundle.py|C901|_normalize_room_only_fixture_poses",
         "limit": 10,
         "message": "`_normalize_room_only_fixture_poses` is too complex (11 > 10)",
