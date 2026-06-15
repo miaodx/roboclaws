@@ -364,6 +364,13 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
   ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac robot-pose and focus payload helpers moved from the
+  backend worker into `isaac_robot_pose_focus.py`, with worker-private wrappers
+  preserving current pose/focus tests and placement/semantic-pose hook call
+  shapes. Metric: `isaac_lab_backend_worker.py` 4678 -> 4578 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Isaac backend tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
