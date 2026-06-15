@@ -122,6 +122,18 @@ from scripts.isaac_lab_cleanup.isaac_render_diagnostics import (
 from scripts.isaac_lab_cleanup.isaac_render_diagnostics import (
     ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA as _ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA,
 )
+from scripts.isaac_lab_cleanup.isaac_robot_import import (
+    ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA as _ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
+)
+from scripts.isaac_lab_cleanup.isaac_robot_import import (
+    ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH,
+    ISAAC_RBY1M_ROBOT_USD_PATH,
+    find_rby1m_isaac_urdf,
+    load_json_if_file,
+    rby1m_robot_import_plan,
+    repo_path,
+    robot_payload,
+)
 from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
     GENERATED_SCENE_KINDS,
 )
@@ -302,11 +314,7 @@ ISAAC_PLACEMENT_RESOLVER_SOURCE = "isaac_support_placement_resolver"
 ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = _ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE
 ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = _ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE
 ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = _ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE
-ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = "isaac_rby1m_robot_import_plan_v1"
-ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
-ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
-    "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
-)
+ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = _ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA
 _DEFERRED_SIMULATION_APP: Any | None = None
 
 
@@ -5860,112 +5868,31 @@ def _pose_near(anchor_id: str) -> dict[str, float | str]:
 
 
 def _robot_payload(robot_name: str) -> dict[str, Any]:
-    robot_import = _rby1m_robot_import_plan(robot_name)
-    imported = robot_import.get("status") == "imported"
-    return {
-        "robot_name": robot_name,
-        "embodiment": "rby1m" if imported else "rby1m_head_camera_equivalent",
-        "physical_robot": False,
-        "planner_backed": False,
-        "robot_import_status": robot_import.get("status") if robot_import else "not_requested",
-        "robot_usd_path": robot_import.get("usd_path") if robot_import else "",
-        "head_camera_prim_path": robot_import.get("head_camera_prim_path") if robot_import else "",
-        "robot_mounted_head_camera": imported,
-    }
+    return robot_payload(robot_name, _rby1m_robot_import_plan(robot_name))
 
 
 def _rby1m_robot_import_plan(robot_name: str) -> dict[str, Any]:
-    if robot_name not in {"rby1m", "rby1"}:
-        return {
-            "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
-            "robot_name": robot_name,
-            "status": "unsupported_robot",
-            "head_camera_prim_path": "",
-            "blockers": [f"unsupported Isaac robot import target: {robot_name}"],
-        }
-    urdf = _find_rby1m_isaac_urdf()
-    usd_path = _repo_path(ISAAC_RBY1M_ROBOT_USD_PATH)
-    summary_path = _repo_path(ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH)
-    summary = _load_json_if_file(summary_path)
-    summary_ready = summary.get("schema") == "isaac_rby1m_robot_usd_import_v1" and (
-        summary.get("status") == "ready"
+    return rby1m_robot_import_plan(
+        robot_name,
+        robot_usd_path=ISAAC_RBY1M_ROBOT_USD_PATH,
+        import_summary_path=ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH,
+        find_urdf=_find_rby1m_isaac_urdf,
+        repo_path=_repo_path,
+        load_json_if_file=_load_json_if_file,
+        head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
     )
-    imported = usd_path.is_file() and summary_ready
-    blockers: list[str] = []
-    if not urdf:
-        blockers.append("RBY1M Isaac URDF not found in MolmoSpaces asset cache.")
-    if not imported:
-        if not usd_path.is_file():
-            blockers.append(f"RBY1M Isaac robot USD import artifact is missing: {usd_path}")
-        if not summary_ready:
-            blockers.append(f"RBY1M Isaac robot import summary is not ready: {summary_path}")
-    return {
-        "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
-        "robot_name": robot_name,
-        "status": "imported"
-        if imported
-        else ("pending_usd_conversion" if urdf else "missing_urdf"),
-        "physical_robot": False,
-        "importer": "isaacsim.asset.importer.urdf",
-        "source_urdf": str(urdf) if urdf else "",
-        "expected_usd_path": str(usd_path),
-        "usd_path": str(usd_path) if imported else "",
-        "import_summary_path": str(summary_path),
-        "stage_prim_path": "/World/robot_0",
-        "head_link_name": "link_head_2",
-        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-        "head_camera_source": "rby1m_mujoco_robot_0/head_camera_extrinsics_and_fov",
-        "head_camera_mounted": imported,
-        "head_camera_equivalent": not imported,
-        "required_joints": ["base_x", "base_y", "base_theta", "head_0", "head_1"],
-        "blockers": blockers,
-        "import_summary": summary if summary_ready else {},
-        "evidence_note": (
-            "Isaac imports the RBY1M holobase URDF to USD, references it at "
-            "/World/robot_0, and uses a head_camera prim authored from the MuJoCo "
-            "robot_0/head_camera extrinsics/FOV. If the import artifact is absent, "
-            "Isaac FPV is reported as a head-camera-equivalent view instead of a "
-            "robot-mounted camera."
-        ),
-    }
 
 
 def _repo_path(path: Path) -> Path:
-    return Path(__file__).resolve().parents[2] / path
+    return repo_path(path, anchor_file=__file__)
 
 
 def _load_json_if_file(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return load_json_if_file(path)
 
 
 def _find_rby1m_isaac_urdf() -> Path | None:
-    candidates: list[Path] = []
-    env_root = os.environ.get("MLSPACES_ASSETS_DIR")
-    if env_root:
-        candidates.append(
-            Path(env_root).expanduser()
-            / "robots"
-            / "rby1m"
-            / "curobo_config"
-            / "urdf"
-            / "model_holobase_isaac"
-            / "model_holobase_isaac.urdf"
-        )
-    candidates.extend(
-        Path("/home/mi/.cache/molmospaces/assets").glob(
-            "*/robots/rby1m/curobo_config/urdf/model_holobase_isaac/model_holobase_isaac.urdf"
-        )
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    return None
+    return find_rby1m_isaac_urdf()
 
 
 def _scene_usd_path(scene_source: str, scene_index: int) -> str:

@@ -301,6 +301,14 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
   Isaac stage-light/scene-camera tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac RBY1M robot-import planning, import-summary loading, URDF
+  discovery, and robot payload construction moved from the backend worker into
+  `isaac_robot_import.py`, keeping worker-private wrappers and constants for
+  current tests and monkeypatch hooks. Metric: `isaac_lab_backend_worker.py`
+  5976 -> 5903 lines; Ruff complexity stayed at 0 and oversized modules stayed
+  at 62. Proof: focused Isaac robot-import/robot-view tests, ruff, format
+  check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
