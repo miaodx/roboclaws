@@ -135,34 +135,48 @@ def _fmt_content(content: Any) -> list[str]:
         return [repr(content)]
     lines: list[str] = []
     for part in content:
-        if not isinstance(part, dict):
-            lines.append(repr(part))
-            continue
-        ptype = part.get("type", "?")
-        if ptype == "text":
-            text = (part.get("text") or "").strip()
-            if text:
-                lines.append(text)
-        elif ptype == "toolCall":
-            name = part.get("name", "?")
-            args = part.get("arguments") or part.get("args") or {}
-            args_s = json.dumps(args, separators=(",", ":"))
-            if len(args_s) > 120:
-                args_s = args_s[:117] + "..."
-            lines.append(f"→ toolCall {name} {args_s}")
-        elif ptype == "toolResult":
-            name = part.get("toolName") or part.get("name") or "?"
-            inner = part.get("content") or []
-            inner_kinds = [c.get("type", "?") for c in inner if isinstance(c, dict)]
-            lines.append(f"← toolResult {name} parts={inner_kinds}")
-        elif ptype in ("image", "image_url"):
-            src = part.get("source") or part.get("image_url") or "?"
-            if isinstance(src, dict):
-                src = src.get("type", "?")
-            lines.append(f"[image: {src}]")
-        else:
-            lines.append(f"[{ptype}]")
+        rendered = _fmt_part(part)
+        if rendered:
+            lines.append(rendered)
     return lines
+
+
+def _fmt_part(part: Any) -> str:
+    if not isinstance(part, dict):
+        return repr(part)
+    ptype = part.get("type", "?")
+    if ptype == "text":
+        return str(part.get("text") or "").strip()
+    if ptype == "toolCall":
+        return _fmt_tool_call(part)
+    if ptype == "toolResult":
+        return _fmt_tool_result(part)
+    if ptype in ("image", "image_url"):
+        return _fmt_image_part(part)
+    return f"[{ptype}]"
+
+
+def _fmt_tool_call(part: dict[str, Any]) -> str:
+    name = part.get("name", "?")
+    args = part.get("arguments") or part.get("args") or {}
+    args_s = json.dumps(args, separators=(",", ":"))
+    if len(args_s) > 120:
+        args_s = args_s[:117] + "..."
+    return f"→ toolCall {name} {args_s}"
+
+
+def _fmt_tool_result(part: dict[str, Any]) -> str:
+    name = part.get("toolName") or part.get("name") or "?"
+    inner = part.get("content") or []
+    inner_kinds = [item.get("type", "?") for item in inner if isinstance(item, dict)]
+    return f"← toolResult {name} parts={inner_kinds}"
+
+
+def _fmt_image_part(part: dict[str, Any]) -> str:
+    src = part.get("source") or part.get("image_url") or "?"
+    if isinstance(src, dict):
+        src = src.get("type", "?")
+    return f"[image: {src}]"
 
 
 def _render_line(raw: str) -> list[str]:
@@ -197,42 +211,57 @@ def _emit(lines: list[str], sinks: list[IO[str]]) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
-        if args.session:
-            session_path = f"/home/node/.openclaw/agents/{args.agent}/sessions/{args.session}.jsonl"
-        else:
-            session_path = _latest_session(args.container, args.agent)
+        session_path = _session_path(args)
     except (subprocess.CalledProcessError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    # Default: write under the newest run dir so each interactive session
-    # keeps its own chat transcript next to trace.jsonl + snapshots/ for
-    # later review. Also maintain `latest-chat.log` as a symlink at the
-    # parent so the operator has one stable filename across runs.
-    log_file: Path | None = args.log_file
-    if log_file is None:
-        latest_run = _latest_run_dir()
-        if latest_run is not None:
-            log_file = latest_run / "chat.log"
-
-    log_fp: IO[str] | None = None
-    if log_file is not None:
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-        log_fp = log_file.open("a", encoding="utf-8", buffering=1)
-        _refresh_latest_symlink(log_file)
+    log_file = _defaulted_log_file(args.log_file)
+    log_fp = _open_log_sink(log_file)
     sinks: list[IO[str]] = [sys.stdout] + ([log_fp] if log_fp else [])
 
     banner = f"# tail {args.container}:{session_path}" + (
         f" → {log_file}  (symlink: {_LATEST_SYMLINK})" if log_file else ""
     )
     _emit([banner, "-" * len(banner)], sinks)
+    return _tail_session(args.container, session_path, sinks=sinks, log_fp=log_fp)
 
+
+def _session_path(args: argparse.Namespace) -> str:
+    if args.session:
+        return f"/home/node/.openclaw/agents/{args.agent}/sessions/{args.session}.jsonl"
+    return _latest_session(args.container, args.agent)
+
+
+def _defaulted_log_file(log_file: Path | None) -> Path | None:
+    if log_file is not None:
+        return log_file
+    latest_run = _latest_run_dir()
+    return latest_run / "chat.log" if latest_run is not None else None
+
+
+def _open_log_sink(log_file: Path | None) -> IO[str] | None:
+    if log_file is None:
+        return None
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_fp = log_file.open("a", encoding="utf-8", buffering=1)
+    _refresh_latest_symlink(log_file)
+    return log_fp
+
+
+def _tail_session(
+    container: str,
+    session_path: str,
+    *,
+    sinks: list[IO[str]],
+    log_fp: IO[str] | None,
+) -> int:
     # `tail -n +1 -F` prints the whole file then follows new lines.
     proc = subprocess.Popen(
         [
             "docker",
             "exec",
-            args.container,
+            container,
             "sh",
             "-lc",
             f"tail -n +1 -F {session_path}",

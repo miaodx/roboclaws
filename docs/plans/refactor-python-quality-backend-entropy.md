@@ -5153,3 +5153,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this cleanup
   routine patch so the unrelated staged `eval-harness` rename was not blessed
   into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/openclaw/tail-openclaw-chat.py` content-part rendering and tail
+  setup into focused helpers. The pretty transcript output, tool-call/tool-result
+  summaries, image summaries, default latest-run chat log, relative
+  `latest-chat.log` symlink behavior, and Docker tail command remain unchanged.
+  Evidence:
+  `ruff check scripts/openclaw/tail-openclaw-chat.py tests/contract/openclaw/test_tail_openclaw_chat.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/openclaw/tail-openclaw-chat.py tests/contract/openclaw/test_tail_openclaw_chat.py`
+  passed; `ruff format scripts/openclaw/tail-openclaw-chat.py` left the file
+  unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/openclaw/test_tail_openclaw_chat.py`
+  passed with 12 tests. The quality baseline was refreshed from 40 to 38 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this OpenClaw
+  chat-tail patch so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.

@@ -395,26 +395,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/openclaw/tail-openclaw-chat.py|C901|_fmt_content",
-        "limit": 10,
-        "message": "`_fmt_content` is too complex (12 > 10)",
-        "path": "scripts/openclaw/tail-openclaw-chat.py",
-        "row": 130,
-        "symbol": "_fmt_content",
-        "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "scripts/openclaw/tail-openclaw-chat.py|C901|main",
-        "limit": 10,
-        "message": "`main` is too complex (11 > 10)",
-        "path": "scripts/openclaw/tail-openclaw-chat.py",
-        "row": 197,
-        "symbol": "main",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "scripts/operator_console/render_scene_previews.py|C901|_render_semantic_map_preview",
         "limit": 10,
         "message": "`_render_semantic_map_preview` is too complex (13 > 10)",
