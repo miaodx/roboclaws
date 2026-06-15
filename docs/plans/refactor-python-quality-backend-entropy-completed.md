@@ -408,6 +408,14 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
   subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces placement resolution, support-surface geometry,
+  placement diagnostics, receptacle relation policy, and object footprint/AABB
+  helpers moved from the subprocess worker into `molmospaces_placement.py`,
+  with worker-private wrappers preserving current placement tests and call
+  shapes. Metric: `molmospaces_subprocess_worker.py` 3956 -> 3685 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Molmo subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
