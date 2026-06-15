@@ -424,6 +424,14 @@ logs before choosing the next slice.
   at 0 and oversized modules stayed at 62. Proof: focused Molmo subprocess
   backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces robot-map rendering, map bounds/points, room-outline
+  collection, room mesh XY bounds, fallback room outlines, and map item labels
+  moved from the subprocess worker into `molmospaces_room_map.py`, with
+  worker-private wrappers preserving current map and room-outline tests.
+  Metric: `molmospaces_subprocess_worker.py` 3577 -> 3397 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Molmo subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

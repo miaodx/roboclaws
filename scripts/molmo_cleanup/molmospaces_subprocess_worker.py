@@ -162,6 +162,27 @@ from scripts.molmo_cleanup.molmospaces_robot_pose import (
 from scripts.molmo_cleanup.molmospaces_robot_pose import (
     waypoint_target_position as _waypoint_target_position_impl,
 )
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    collect_room_outlines as _collect_room_outlines_impl,
+)
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    fallback_room_outlines as _fallback_room_outlines_impl,
+)
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    geom_xy_bounds as _geom_xy_bounds_impl,
+)
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    item_label as _item_label_impl,
+)
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    map_bounds as _map_bounds_impl,
+)
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    map_points as _map_points_impl,
+)
+from scripts.molmo_cleanup.molmospaces_room_map import (
+    render_robot_map as _render_robot_map_impl,
+)
 from scripts.molmo_cleanup.molmospaces_worker_cli import build_arg_parser
 from scripts.molmo_cleanup.molmospaces_worker_outputs import (
     MolmoWorkerOutputHooks,
@@ -2882,12 +2903,7 @@ def _scene_focus_position(state: dict[str, Any]) -> list[float]:
 
 
 def _item_label(item: dict[str, Any] | None, id_key: str) -> str:
-    if item is None:
-        return ""
-    category = str(item.get("category") or item.get("kind") or "item")
-    identifier = str(item.get(id_key, ""))
-    short_id = identifier.split("_", 1)[0]
-    return f"{category} {short_id}"
+    return _item_label_impl(item, id_key)
 
 
 def _focus_visibility(
@@ -3217,107 +3233,11 @@ def _inflate_bbox(
 
 
 def _render_robot_map(state: dict[str, Any], *, focus: dict[str, Any] | None = None) -> Image.Image:
-    width, height = 620, 420
-    margin = 34
-    image = Image.new("RGB", (width, height), (247, 248, 250))
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((12, 12, width - 12, height - 12), outline=(187, 193, 204), width=2)
-
-    focus = focus or {}
-    points = _map_points(state, focus)
-    min_x, max_x, min_y, max_y = _map_bounds(points)
-
-    def project(x: float, y: float) -> tuple[int, int]:
-        px = margin + (x - min_x) / max(max_x - min_x, 0.001) * (width - 2 * margin)
-        py = height - margin - (y - min_y) / max(max_y - min_y, 0.001) * (height - 2 * margin)
-        return (int(round(px)), int(round(py)))
-
-    for outline in state.get("room_outlines", []):
-        center = outline["center"]
-        half_x, half_y = outline["half_extents"]
-        x1, y1 = project(float(center[0]) - float(half_x), float(center[1]) - float(half_y))
-        x2, y2 = project(float(center[0]) + float(half_x), float(center[1]) + float(half_y))
-        left, right = sorted((x1, x2))
-        top, bottom = sorted((y1, y2))
-        draw.rectangle((left, top, right, bottom), outline=(148, 163, 184), width=2)
-        draw.text((left + 5, top + 5), str(outline.get("label", "room")), fill=(71, 85, 105))
-
-    focus_receptacle_id = focus.get("receptacle_id")
-    focus_object_id = focus.get("object_id")
-    if focus_receptacle_id in state["receptacles"]:
-        receptacle = state["receptacles"][focus_receptacle_id]
-        x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
-        draw.rounded_rectangle(
-            (x - 13, y - 13, x + 13, y + 13),
-            radius=5,
-            outline=(8, 145, 178),
-            width=4,
-        )
-        draw.text(
-            (x + 10, y - 20),
-            _item_label(receptacle, "receptacle_id"),
-            fill=(8, 92, 116),
-        )
-
-    for receptacle in state["receptacles"].values():
-        x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
-        draw.rounded_rectangle((x - 5, y - 5, x + 5, y + 5), radius=2, fill=(99, 116, 139))
-
-    for object_id in state["selected_object_ids"]:
-        obj = state["objects"][object_id]
-        x, y = project(float(obj["position"][0]), float(obj["position"][1]))
-        draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(192, 88, 68))
-        if object_id == focus_object_id:
-            draw.ellipse((x - 11, y - 11, x + 11, y + 11), outline=(220, 38, 38), width=4)
-            draw.text((x + 10, y + 4), _item_label(obj, "object_id"), fill=(153, 27, 27))
-
-    trajectory = state.get("robot_trajectory", [])
-    projected_path = [project(float(pose["x"]), float(pose["y"])) for pose in trajectory]
-    if len(projected_path) >= 2:
-        draw.line(projected_path, fill=(37, 99, 235), width=3)
-    for index, (x, y) in enumerate(projected_path):
-        radius = 5 if index == len(projected_path) - 1 else 3
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(37, 99, 235))
-    if trajectory:
-        pose = trajectory[-1]
-        x, y = projected_path[-1]
-        heading = float(pose["theta"])
-        tip = (int(round(x + math.cos(heading) * 18)), int(round(y - math.sin(heading) * 18)))
-        left = (
-            int(round(x + math.cos(heading + 2.45) * 10)),
-            int(round(y - math.sin(heading + 2.45) * 10)),
-        )
-        right = (
-            int(round(x + math.cos(heading - 2.45) * 10)),
-            int(round(y - math.sin(heading - 2.45) * 10)),
-        )
-        draw.polygon([tip, left, right], fill=(15, 23, 42))
-
-    draw.text((24, 22), "RBY1M map", fill=(31, 41, 55))
-    draw.text(
-        (24, height - 30),
-        "blue: robot path  gray: receptacles  red: objects  cyan/red rings: focus",
-        fill=(75, 85, 99),
-    )
-    return image
+    return _render_robot_map_impl(state, focus=focus)
 
 
 def _map_points(state: dict[str, Any], focus: dict[str, Any]) -> list[list[float]]:
-    points = [item["position"] for item in state["receptacles"].values()]
-    points += [state["objects"][oid]["position"] for oid in state["selected_object_ids"]]
-    points += [[pose["x"], pose["y"], 0.0] for pose in state.get("robot_trajectory", [])]
-    if focus.get("focus_position"):
-        points.append(focus["focus_position"])
-    for outline in state.get("room_outlines", []):
-        center = outline["center"]
-        half_x, half_y = outline["half_extents"]
-        points.extend(
-            [
-                [float(center[0]) - float(half_x), float(center[1]) - float(half_y), 0.0],
-                [float(center[0]) + float(half_x), float(center[1]) + float(half_y), 0.0],
-            ]
-        )
-    return points
+    return _map_points_impl(state, focus)
 
 
 def _room_relation_payload(
@@ -3365,45 +3285,7 @@ def _collect_room_outlines(
     data: mujoco.MjData,
     state: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    outlines: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for geom_id in range(model.ngeom):
-        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
-        if name is None:
-            continue
-        match = re.match(r"^(room_\d+)_visual", name)
-        if match is None:
-            continue
-        room_id = match.group(1)
-        if room_id in seen:
-            continue
-        bounds = _geom_xy_bounds(model, data, geom_id)
-        if bounds is None:
-            continue
-        min_xy, max_xy = bounds
-        half_extents = [
-            (float(max_xy[0]) - float(min_xy[0])) / 2.0,
-            (float(max_xy[1]) - float(min_xy[1])) / 2.0,
-        ]
-        if min(half_extents) < 0.25:
-            continue
-        center = [
-            (float(min_xy[0]) + float(max_xy[0])) / 2.0,
-            (float(min_xy[1]) + float(max_xy[1])) / 2.0,
-        ]
-        outlines.append(
-            {
-                "room_id": room_id,
-                "label": room_id.replace("_", " ").title(),
-                "center": [round(center[0], 6), round(center[1], 6)],
-                "half_extents": [round(half_extents[0], 6), round(half_extents[1], 6)],
-                "provenance": "mujoco_room_mesh_world_bounds",
-            }
-        )
-        seen.add(room_id)
-    if outlines:
-        return sorted(outlines, key=lambda item: item["room_id"])
-    return _fallback_room_outlines(state)
+    return _collect_room_outlines_impl(model, data, state, xyz=_xyz)
 
 
 def _geom_xy_bounds(
@@ -3411,77 +3293,15 @@ def _geom_xy_bounds(
     data: mujoco.MjData,
     geom_id: int,
 ) -> tuple[list[float], list[float]] | None:
-    geom_type = int(model.geom_type[geom_id])
-    if geom_type == int(mujoco.mjtGeom.mjGEOM_MESH):
-        mesh_id = int(model.geom_dataid[geom_id])
-        if mesh_id < 0:
-            return None
-        vertex_start = int(model.mesh_vertadr[mesh_id])
-        vertex_count = int(model.mesh_vertnum[mesh_id])
-        if vertex_count <= 0:
-            return None
-        vertices = model.mesh_vert[vertex_start : vertex_start + vertex_count]
-        matrix = data.geom_xmat[geom_id].reshape(3, 3)
-        position = data.geom_xpos[geom_id]
-        world_vertices = vertices @ matrix.T + position
-        min_xy = [float(world_vertices[:, 0].min()), float(world_vertices[:, 1].min())]
-        max_xy = [float(world_vertices[:, 0].max()), float(world_vertices[:, 1].max())]
-        return min_xy, max_xy
-
-    center = _xyz(data.geom_xpos[geom_id])
-    size = [float(value) for value in model.geom_size[geom_id]]
-    radius_x = abs(size[0]) if size else 0.0
-    radius_y = abs(size[1]) if len(size) > 1 else radius_x
-    return [center[0] - radius_x, center[1] - radius_y], [
-        center[0] + radius_x,
-        center[1] + radius_y,
-    ]
+    return _geom_xy_bounds_impl(model, data, geom_id, xyz=_xyz)
 
 
 def _fallback_room_outlines(state: dict[str, Any]) -> list[dict[str, Any]]:
-    grouped: dict[str, list[list[float]]] = {}
-    for receptacle in state["receptacles"].values():
-        grouped.setdefault(str(receptacle.get("room_area", "room_unknown")), []).append(
-            receptacle["position"]
-        )
-    for obj in state["objects"].values():
-        location_id = obj.get("seeded_start_receptacle_id") or obj.get("target_receptacle_id")
-        receptacle = state["receptacles"].get(location_id)
-        if receptacle is None:
-            continue
-        grouped.setdefault(str(receptacle.get("room_area", "room_unknown")), []).append(
-            obj["position"]
-        )
-    outlines = []
-    for room_id, points in grouped.items():
-        if not points:
-            continue
-        xs = [float(point[0]) for point in points]
-        ys = [float(point[1]) for point in points]
-        center = [round((min(xs) + max(xs)) / 2.0, 6), round((min(ys) + max(ys)) / 2.0, 6)]
-        half_extents = [
-            round(max((max(xs) - min(xs)) / 2.0, 0.8), 6),
-            round(max((max(ys) - min(ys)) / 2.0, 0.8), 6),
-        ]
-        outlines.append(
-            {
-                "room_id": room_id,
-                "label": room_id.replace("_", " ").title(),
-                "center": center,
-                "half_extents": half_extents,
-                "provenance": "public_object_room_area_bounds",
-            }
-        )
-    return sorted(outlines, key=lambda item: item["room_id"])
+    return _fallback_room_outlines_impl(state)
 
 
 def _map_bounds(points: list[list[float]]) -> tuple[float, float, float, float]:
-    if not points:
-        return (0.0, 1.0, 0.0, 1.0)
-    xs = [float(point[0]) for point in points]
-    ys = [float(point[1]) for point in points]
-    pad = 0.8
-    return (min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad)
+    return _map_bounds_impl(points)
 
 
 def _apply_qpos(data: mujoco.MjData, qpos: list[float]) -> None:
