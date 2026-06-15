@@ -495,16 +495,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/molmo_cleanup/summarize_live_run.py|C901|_print_timing",
-        "limit": 10,
-        "message": "`_print_timing` is too complex (13 > 10)",
-        "path": "scripts/molmo_cleanup/summarize_live_run.py",
-        "row": 488,
-        "symbol": "_print_timing",
-        "value": 13
-      },
-      {
-        "code": "C901",
         "key": "scripts/openclaw/tail-openclaw-chat.py|C901|_fmt_content",
         "limit": 10,
         "message": "`_fmt_content` is too complex (12 > 10)",

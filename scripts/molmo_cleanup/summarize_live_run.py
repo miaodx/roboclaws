@@ -488,17 +488,20 @@ def _token_delta(candidate: Any, baseline: Any) -> str:
 def _print_timing(timing: dict[str, Any]) -> None:
     runner = timing.get("runner") or {}
     mcp = timing.get("mcp") or {}
-    profile = timing.get("profile") or {}
-    codex_events = timing.get("codex_events") or {}
-    performance = timing.get("performance") or {}
-    perf_model_work = performance.get("model_work") if isinstance(performance, dict) else {}
-    perf_timing = performance.get("timing") if isinstance(performance, dict) else {}
-
     if not runner and not mcp:
         print("timing: pending")
         return
 
     print("timing:")
+    _print_runner_timing(runner)
+    _print_mcp_timing(mcp)
+    _print_model_api_timing(timing.get("codex_events") or {})
+    _print_profile_timing(timing.get("profile") or {})
+    _print_report_performance_timing(timing.get("performance") or {})
+    _print_skipped_work(timing.get("skipped_work") or [])
+
+
+def _print_runner_timing(runner: dict[str, Any]) -> None:
     if runner:
         print(
             "  runner wall: "
@@ -511,6 +514,9 @@ def _print_timing(timing: dict[str, Any]) -> None:
         )
         if runner.get("server_startup_s") is not None:
             print(f"  server startup: {_format_duration(runner.get('server_startup_s'))}")
+
+
+def _print_mcp_timing(mcp: dict[str, Any]) -> None:
     if mcp:
         print(
             "  MCP trace: "
@@ -534,6 +540,9 @@ def _print_timing(timing: dict[str, Any]) -> None:
                 f"{item.get('after_tool')} -> {item.get('before_tool')} "
                 f"{_format_duration(item.get('gap_s'))}"
             )
+
+
+def _print_model_api_timing(codex_events: dict[str, Any]) -> None:
     usage = codex_events.get("usage") or {}
     model_api_time = codex_events.get("model_api_time_s")
     print(f"  model API time: {_format_duration(model_api_time)}")
@@ -548,12 +557,20 @@ def _print_timing(timing: dict[str, Any]) -> None:
             f"output={usage.get('output_tokens', 'n/a')} "
             f"reasoning={usage.get('reasoning_output_tokens', 'n/a')}"
         )
+
+
+def _print_profile_timing(profile: dict[str, Any]) -> None:
     if profile:
         print(
             "  profile: "
             f"{profile.get('profile', 'unknown')} "
             f"record_robot_views={profile.get('record_robot_views', 'unknown')}"
         )
+
+
+def _print_report_performance_timing(performance: dict[str, Any]) -> None:
+    perf_model_work = performance.get("model_work") if isinstance(performance, dict) else {}
+    perf_timing = performance.get("timing") if isinstance(performance, dict) else {}
     if perf_model_work:
         print(
             "  report performance: "
@@ -571,7 +588,9 @@ def _print_timing(timing: dict[str, Any]) -> None:
             f"residual={_format_duration(perf_timing.get('model_latency_residual_s'))} "
             f"model_or_sdk_residual={_format_duration(perf_timing.get('model_or_sdk_residual_s'))}"
         )
-    skipped = timing.get("skipped_work") or []
+
+
+def _print_skipped_work(skipped: list[Any]) -> None:
     if skipped:
         print(f"  skipped/sampled: {', '.join(str(item) for item in skipped)}")
 

@@ -4988,3 +4988,16 @@ Stop this refactor loop when:
   write/ok proof again used a temporary clean worktree containing only this
   patch so the unrelated staged `eval-harness` rename was not blessed into the
   baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/summarize_live_run.py::_print_timing(...)` into
+  runner, MCP, model API, profile, report-performance, and skipped-work
+  printing helpers. The single-run summary text, comparison-manifest behavior,
+  timing labels, and report-performance fields remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/summarize_live_run.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/summarize_live_run.py`
+  passed; `ruff format --check scripts/molmo_cleanup/summarize_live_run.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_summarize_live_run.py`
+  passed with 6 tests. The quality baseline was refreshed from 53 to 52 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this patch so
+  the unrelated staged `eval-harness` rename was not blessed into the baseline.
