@@ -470,16 +470,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/household/target_query.py|C901|_required_next_tool",
-        "limit": 10,
-        "message": "`_required_next_tool` is too complex (11 > 10)",
-        "path": "roboclaws/household/target_query.py",
-        "row": 206,
-        "symbol": "_required_next_tool",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/launch/catalog.py|C901|_overrides_with_surface_context",
         "limit": 10,
         "message": "`_overrides_with_surface_context` is too complex (11 > 10)",

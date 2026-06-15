@@ -4715,3 +4715,19 @@ Stop this refactor loop when:
   from 70 to 68 Ruff complexity violations, with oversized modules unchanged at
   59. `roboclaws/household/generated_mess.py` no longer appears in the
   complexity-by-file summary.
+- 2026-06-15: Continued the target-query recovery residual by splitting
+  `roboclaws/household/target_query.py::_required_next_tool(...)` into named
+  next-tool policy helpers for actionable, destination-navigation, general
+  actionable, and non-actionable candidates. The target-query resolution schema,
+  required-next-tool strings, actionability priorities, and MCP recovery
+  guidance remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/target_query.py`
+  passed; `ruff check roboclaws/household/target_query.py` passed;
+  `ruff format --check roboclaws/household/target_query.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_target_query_recovery_resolves_stale_fixture_id_through_public_anchor tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_target_query_recovery_not_found_includes_public_search_budget tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_resolves_stale_target_query_to_public_anchor tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance`
+  passed with 4 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 68 to 67 Ruff complexity violations, with oversized modules unchanged at
+  59. A broader `ruff check --select C901,PLR0912,PLR0915` over the two
+  contract test files still reports existing oversized test bodies unrelated to
+  this slice.
