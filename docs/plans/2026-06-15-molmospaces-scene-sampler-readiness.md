@@ -236,6 +236,13 @@ First slice implemented on 2026-06-15.
   source targets as `blocked_missing_resources` with `next_action:
   run_manual_source_prep`, `procthor-10k-val` still needing five eval samples,
   and the three other source targets each needing three UI and ten eval samples.
+- Source-prep and scanner runners now accept the unified
+  `scene_sampler_next_flow_worklist.json` through `--worklist` and include
+  `worklist_alignment` in their run JSON. The alignment packet records whether
+  the runner processed the world ids currently expected by the next-Flow
+  worklist. On this host, `ithor` source-prep dry-run aligns with the worklist,
+  while the scanner run records `ran_before_worklist_action` because the
+  current worklist still requires manual source prep before scanner execution.
 
 Verification run on 2026-06-15:
 
@@ -305,6 +312,12 @@ just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/robocla
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-next-flow-worklist-artifact --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_source_prep_runner.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/launch/test_scene_sampler.py -q
+ruff check scripts/operator_console/scene_sampler_worklist_alignment.py scripts/operator_console/run_scene_sampler_source_prep.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
+ruff format --check scripts/operator_console/scene_sampler_worklist_alignment.py scripts/operator_console/run_scene_sampler_source_prep.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-worklist-alignment --candidate-range 0:19 --no-generated-eval
+.venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py --prep /tmp/roboclaws-scene-sampler-worklist-alignment/scene_sampler_source_prep.json --worklist /tmp/roboclaws-scene-sampler-worklist-alignment/scene_sampler_next_flow_worklist.json --output /tmp/roboclaws-scene-sampler-worklist-alignment/source_prep_run.json --source ithor
+.venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py --plan /tmp/roboclaws-scene-sampler-worklist-alignment/scene_sampler_scanner_execution_plan.json --worklist /tmp/roboclaws-scene-sampler-worklist-alignment/scene_sampler_next_flow_worklist.json --output /tmp/roboclaws-scene-sampler-worklist-alignment/scanner_run.json --source ithor
 ```
 
 Current limits feeding the next Flow:

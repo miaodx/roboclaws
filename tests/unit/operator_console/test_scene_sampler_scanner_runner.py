@@ -45,6 +45,34 @@ def _write_plan(path: Path, candidates: list[dict[str, object]]) -> None:
     )
 
 
+def _write_worklist(
+    path: Path,
+    *,
+    next_action: str = "run_scanner_plan_for_ready_candidates",
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "molmospaces_scene_sampler_next_flow_worklist_v1",
+                "sources": {
+                    "ithor": {
+                        "scene_source": "ithor",
+                        "next_action": next_action,
+                        "next_scan_world_ids": ["molmospaces/ithor/1"],
+                        "scanner_ready_world_ids": ["molmospaces/ithor/1"]
+                        if next_action == "run_scanner_plan_for_ready_candidates"
+                        else [],
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def _candidate(*, scanner_status: str = "blocked_missing_resources") -> dict[str, object]:
     return {
         "scene_family": "ithor",
@@ -78,9 +106,7 @@ def _candidate(*, scanner_status: str = "blocked_missing_resources") -> dict[str
             "map_build_artifacts",
         ],
         "missing_gates": (
-            ["source_asset_available"]
-            if scanner_status != "ready_for_product_smoke"
-            else []
+            ["source_asset_available"] if scanner_status != "ready_for_product_smoke" else []
         ),
         "missing_paths": ["/tmp/FloorPlan1_physics.xml"]
         if scanner_status != "ready_for_product_smoke"
@@ -166,6 +192,50 @@ def test_scanner_runner_dry_run_records_ready_commands_without_execution(tmp_pat
     ]
     assert {item["status"] for item in result["rows"][0]["commands"]} == {"dry_run"}
     assert calls == []
+
+
+def test_scanner_runner_records_worklist_alignment(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    output_path = tmp_path / "scanner_run.json"
+    _write_plan(plan_path, [_candidate(scanner_status="ready_for_product_smoke")])
+    _write_worklist(worklist_path)
+
+    result = runner.run_scanner_plan(
+        plan_path=plan_path,
+        worklist_path=worklist_path,
+        output_path=output_path,
+        dry_run=True,
+    )
+
+    alignment = result["worklist_alignment"]
+    assert alignment["schema"] == "molmospaces_scene_sampler_runner_worklist_alignment_v1"
+    assert alignment["runner"] == "scanner"
+    assert alignment["status"] == "aligned"
+    assert alignment["sources"]["ithor"]["status"] == "aligned"
+    assert alignment["sources"]["ithor"]["expected_world_ids"] == ["molmospaces/ithor/1"]
+    assert alignment["sources"]["ithor"]["run_world_ids"] == ["molmospaces/ithor/1"]
+
+
+def test_scanner_runner_marks_run_before_worklist_action(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    output_path = tmp_path / "scanner_run.json"
+    _write_plan(plan_path, [_candidate(scanner_status="blocked_missing_resources")])
+    _write_worklist(worklist_path, next_action="run_manual_source_prep")
+
+    result = runner.run_scanner_plan(
+        plan_path=plan_path,
+        worklist_path=worklist_path,
+        output_path=output_path,
+    )
+
+    alignment = result["worklist_alignment"]
+    assert alignment["status"] == "ran_before_worklist_action"
+    assert alignment["sources"]["ithor"]["status"] == "ran_before_worklist_action"
+    assert alignment["sources"]["ithor"]["worklist_next_action"] == "run_manual_source_prep"
 
 
 def test_scanner_runner_executes_ready_preview_then_map_build(tmp_path: Path) -> None:

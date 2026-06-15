@@ -16,7 +16,13 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from scripts.operator_console.scene_sampler_worklist_alignment import (  # noqa: E402
+    align_rows_to_worklist,
+    load_next_flow_worklist,
+)
+
 DEFAULT_PREP_PATH = Path("output/scene-sampler-readiness/scene_sampler_source_prep.json")
+DEFAULT_WORKLIST_PATH = Path("output/scene-sampler-readiness/scene_sampler_next_flow_worklist.json")
 DEFAULT_OUTPUT_PATH = Path("output/scene-sampler-scanner/source_prep_run.json")
 SOURCE_PREP_RUN_SCHEMA = "molmospaces_scene_sampler_source_prep_run_v1"
 RunCommand = Callable[..., Any]
@@ -26,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     result = run_source_prep(
         prep_path=args.prep,
+        worklist_path=args.worklist,
         output_path=args.output,
         sources=tuple(args.sources),
         worlds=tuple(args.worlds),
@@ -46,6 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--prep", type=Path, default=DEFAULT_PREP_PATH)
+    parser.add_argument("--worklist", type=Path, default=DEFAULT_WORKLIST_PATH)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
     parser.add_argument(
         "--source",
@@ -75,6 +83,7 @@ def run_source_prep(
     *,
     prep_path: Path,
     output_path: Path,
+    worklist_path: Path | None = None,
     sources: tuple[str, ...] = (),
     worlds: tuple[str, ...] = (),
     execute: bool = False,
@@ -95,6 +104,11 @@ def run_source_prep(
         status = "dry_run"
     else:
         status = "no_candidates"
+    worklist = (
+        load_next_flow_worklist(worklist_path) if worklist_path and worklist_path.exists() else None
+    )
+    if worklist is not None:
+        worklist["worklist_path"] = str(worklist_path)
     result = {
         "schema": SOURCE_PREP_RUN_SCHEMA,
         "status": status,
@@ -106,6 +120,13 @@ def run_source_prep(
         "executed_candidate_count": executed_count,
         "failed_candidate_count": failed_count,
         "sources": _source_prep_run_summaries(rows),
+        "worklist_alignment": align_rows_to_worklist(
+            worklist,
+            runner="source_prep",
+            rows=rows,
+            sources=sources,
+            worlds=worlds,
+        ),
         "rows": rows,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)

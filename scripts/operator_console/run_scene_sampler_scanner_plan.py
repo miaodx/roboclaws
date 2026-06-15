@@ -17,9 +17,13 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
-DEFAULT_PLAN_PATH = Path(
-    "output/scene-sampler-readiness/scene_sampler_scanner_execution_plan.json"
+from scripts.operator_console.scene_sampler_worklist_alignment import (  # noqa: E402
+    align_rows_to_worklist,
+    load_next_flow_worklist,
 )
+
+DEFAULT_PLAN_PATH = Path("output/scene-sampler-readiness/scene_sampler_scanner_execution_plan.json")
+DEFAULT_WORKLIST_PATH = Path("output/scene-sampler-readiness/scene_sampler_next_flow_worklist.json")
 DEFAULT_OUTPUT_PATH = Path("output/scene-sampler-scanner/scanner_run.json")
 SCANNER_RUN_SCHEMA = "molmospaces_scene_sampler_scanner_run_v1"
 RunCommand = Callable[..., Any]
@@ -29,6 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     result = run_scanner_plan(
         plan_path=args.plan,
+        worklist_path=args.worklist,
         output_path=args.output,
         sources=tuple(args.sources),
         worlds=tuple(args.worlds),
@@ -49,6 +54,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN_PATH)
+    parser.add_argument("--worklist", type=Path, default=DEFAULT_WORKLIST_PATH)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT_PATH)
     parser.add_argument(
         "--source",
@@ -78,6 +84,7 @@ def run_scanner_plan(
     *,
     plan_path: Path,
     output_path: Path,
+    worklist_path: Path | None = None,
     sources: tuple[str, ...] = (),
     worlds: tuple[str, ...] = (),
     dry_run: bool = False,
@@ -93,9 +100,7 @@ def run_scanner_plan(
         for candidate in _iter_candidates(plan, sources=sources, worlds=worlds)
     ]
     failed_count = sum(1 for row in rows if row["status"] == "failed")
-    ready_count = sum(
-        1 for row in rows if row["scanner_status"] == "ready_for_product_smoke"
-    )
+    ready_count = sum(1 for row in rows if row["scanner_status"] == "ready_for_product_smoke")
     executed_count = sum(1 for row in rows if row["status"] in {"passed", "failed"})
     if failed_count:
         status = "failed"
@@ -105,6 +110,11 @@ def run_scanner_plan(
         status = "no_ready_candidates"
     else:
         status = "success"
+    worklist = (
+        load_next_flow_worklist(worklist_path) if worklist_path and worklist_path.exists() else None
+    )
+    if worklist is not None:
+        worklist["worklist_path"] = str(worklist_path)
     result = {
         "schema": SCANNER_RUN_SCHEMA,
         "status": status,
@@ -115,11 +125,16 @@ def run_scanner_plan(
         "candidate_count": len(rows),
         "ready_candidate_count": ready_count,
         "executed_candidate_count": executed_count,
-        "skipped_candidate_count": sum(
-            1 for row in rows if row["status"].startswith("skipped_")
-        ),
+        "skipped_candidate_count": sum(1 for row in rows if row["status"].startswith("skipped_")),
         "failed_candidate_count": failed_count,
         "sources": _source_run_summaries(rows),
+        "worklist_alignment": align_rows_to_worklist(
+            worklist,
+            runner="scanner",
+            rows=rows,
+            sources=sources,
+            worlds=worlds,
+        ),
         "rows": rows,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)

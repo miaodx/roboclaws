@@ -45,6 +45,31 @@ def _write_prep(path: Path, candidates: list[dict[str, object]]) -> None:
     )
 
 
+def _write_worklist(path: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "molmospaces_scene_sampler_next_flow_worklist_v1",
+                "sources": {
+                    "ithor": {
+                        "scene_source": "ithor",
+                        "next_action": "run_manual_source_prep",
+                        "next_scan_world_ids": [
+                            "molmospaces/ithor/1",
+                            "molmospaces/ithor/2",
+                        ],
+                        "scanner_ready_world_ids": [],
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def _candidate(scene_index: int = 1) -> dict[str, object]:
     return {
         "scene_source": "ithor",
@@ -53,11 +78,7 @@ def _candidate(scene_index: int = 1) -> dict[str, object]:
         "primary_path": f"/tmp/FloorPlan{scene_index}_physics.xml",
         "path_status": "available",
         "missing_paths": [f"/tmp/FloorPlan{scene_index}_physics.xml"],
-        "install_command": (
-            ".venv/bin/python - <<'PY'\n"
-            "print('install scene')\n"
-            "PY"
-        ),
+        "install_command": (".venv/bin/python - <<'PY'\nprint('install scene')\nPY"),
     }
 
 
@@ -126,6 +147,36 @@ def test_source_prep_runner_filters_by_world(tmp_path: Path) -> None:
 
     assert result["candidate_count"] == 1
     assert result["rows"][0]["world_id"] == "molmospaces/ithor/2"
+
+
+def test_source_prep_runner_records_worklist_alignment(tmp_path: Path) -> None:
+    runner = _load_runner()
+    prep_path = tmp_path / "source_prep.json"
+    worklist_path = tmp_path / "next_flow_worklist.json"
+    output_path = tmp_path / "source_prep_run.json"
+    _write_prep(prep_path, [_candidate(1), _candidate(2)])
+    _write_worklist(worklist_path)
+
+    result = runner.run_source_prep(
+        prep_path=prep_path,
+        worklist_path=worklist_path,
+        output_path=output_path,
+        sources=("ithor",),
+    )
+
+    alignment = result["worklist_alignment"]
+    assert alignment["schema"] == "molmospaces_scene_sampler_runner_worklist_alignment_v1"
+    assert alignment["runner"] == "source_prep"
+    assert alignment["status"] == "aligned"
+    assert alignment["sources"]["ithor"]["status"] == "aligned"
+    assert alignment["sources"]["ithor"]["expected_world_ids"] == [
+        "molmospaces/ithor/1",
+        "molmospaces/ithor/2",
+    ]
+    assert alignment["sources"]["ithor"]["run_world_ids"] == [
+        "molmospaces/ithor/1",
+        "molmospaces/ithor/2",
+    ]
 
 
 def test_source_prep_runner_records_failures(tmp_path: Path) -> None:
