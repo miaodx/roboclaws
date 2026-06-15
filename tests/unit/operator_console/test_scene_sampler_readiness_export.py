@@ -202,6 +202,12 @@ def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidate
     assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][-1] == (
         "molmospaces/ithor/10"
     )
+    source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
+    install_candidates = source_prep["sources"]["ithor"]["install_candidates"]
+    assert install_candidates[0]["scene_index"] == 1
+    assert install_candidates[0]["world_id"] == "molmospaces/ithor/1"
+    assert install_candidates[0]["primary_path"].endswith("FloorPlan1_physics.xml")
+    assert "mapping[1]" in install_candidates[0]["install_command"]
 
 
 def test_scene_sampler_readiness_export_candidate_index_options_are_sorted_unique() -> None:

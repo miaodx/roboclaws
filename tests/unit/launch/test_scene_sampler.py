@@ -362,6 +362,9 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
         "molmospaces/ithor/1",
         "molmospaces/ithor/2",
     ]
+    assert ithor["install_candidates"][0]["world_id"] == "molmospaces/ithor/0"
+    assert ithor["install_candidates"][0]["primary_path"] == ""
+    assert "mapping[0]" in ithor["install_candidates"][0]["install_command"]
     assert any(
         command["name"] == "rerun_readiness_after_prep"
         for command in ithor["operator_commands"]

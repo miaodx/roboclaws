@@ -102,8 +102,8 @@ First slice implemented on 2026-06-15.
   source-preparation artifact. It records per-source MolmoSpaces
   `get_scenes(...)` arguments, scene asset versions, candidate index-map paths,
   missing source/XML resources, next scanner world ids, recommended candidate
-  ranges, and operator-run preparation commands for `procthor-10k-val`, `ithor`,
-  `procthor-objaverse-val`, and
+  ranges, per-candidate install snippets, and operator-run preparation commands
+  for `procthor-10k-val`, `ithor`, `procthor-objaverse-val`, and
   `holodeck-objaverse-val`. It is intentionally a manual prep plan, not an
   implicit downloader.
 - Source availability and selection-gap artifacts now use MolmoSpaces

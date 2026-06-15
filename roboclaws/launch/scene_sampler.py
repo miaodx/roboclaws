@@ -685,6 +685,7 @@ def source_prep_report(
         eval_needed = int(source_selection.get("eval_needed_count") or 0)
         if next_eval_count < eval_needed:
             recommended_end = max(recommended_end, 19)
+        next_scan_candidates = source_selection.get("next_scan_candidates") or []
         sources[source] = {
             "scene_source": source,
             "scene_family": _family_split(source)[0],
@@ -723,9 +724,13 @@ def source_prep_report(
             "missing_resource_count": len(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [
-                item.get("world_id")
-                for item in source_selection.get("next_scan_candidates") or []
+                item.get("world_id") for item in next_scan_candidates
             ],
+            "install_candidates": _source_prep_install_candidates(
+                dataset_name=dataset_name,
+                split=split,
+                candidates=next_scan_candidates,
+            ),
             "recommended_candidate_range": f"0:{recommended_end}"
             if recommended_end >= 0
             else "",
@@ -1342,6 +1347,62 @@ def _source_prep_operator_commands(
             ),
         },
     ]
+
+
+def _source_prep_install_candidates(
+    *,
+    dataset_name: str,
+    split: str,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    install_candidates: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        candidate_file = candidate.get("candidate_file")
+        if not isinstance(candidate_file, dict):
+            candidate_file = {}
+        scene_index = candidate.get("scene_index")
+        install_candidates.append(
+            {
+                "scene_source": candidate.get("scene_source", ""),
+                "scene_index": scene_index,
+                "world_id": candidate.get("world_id", ""),
+                "primary_path": candidate_file.get("path", ""),
+                "path_source": candidate_file.get("source", ""),
+                "path_status": candidate_file.get("status", ""),
+                "paths": candidate_file.get("paths", []),
+                "missing_paths": candidate_file.get("missing_paths", []),
+                "install_command": _install_candidate_command(
+                    dataset_name=dataset_name,
+                    split=split,
+                    scene_index=scene_index,
+                ),
+            }
+        )
+    return install_candidates
+
+
+def _install_candidate_command(
+    *,
+    dataset_name: str,
+    split: str,
+    scene_index: Any,
+) -> str:
+    try:
+        parsed_index = int(scene_index)
+    except (TypeError, ValueError):
+        return ""
+    return (
+        ".venv/bin/python - <<'PY'\n"
+        "from molmo_spaces.molmo_spaces_constants import get_scenes\n"
+        "from molmo_spaces.utils.lazy_loading_utils import "
+        "install_scene_with_objects_and_grasps_from_path\n"
+        f'mapping = get_scenes("{dataset_name}", "{split}")["{split}"]\n'
+        f"scene_path = mapping[{parsed_index}]\n"
+        "install_scene_with_objects_and_grasps_from_path(scene_path)\n"
+        "PY"
+    )
 
 
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
