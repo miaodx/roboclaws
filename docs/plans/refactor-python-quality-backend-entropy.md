@@ -4668,3 +4668,19 @@ Stop this refactor loop when:
   from 73 to 72 Ruff complexity violations, with oversized modules unchanged at
   59. `scripts/visual_grounding/adapters.py` no longer appears in the
   complexity-by-file summary.
+- 2026-06-15: Continued the detector-sidecar residual by splitting
+  `HttpVisualGroundingClient.request_candidates(...)` transport handling in
+  `roboclaws/household/visual_grounding.py`. Request URL/header construction,
+  retry handling, timeout/connection failure responses, HTTP error JSON parsing,
+  and response validation now live in focused helpers while the public client
+  API and visual-grounding response contract remain unchanged. A focused test
+  now covers HTTP non-2xx responses that still return a valid contract failure
+  packet. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/visual_grounding.py tests/unit/molmo_cleanup/test_visual_grounding.py`
+  passed; `ruff format --check roboclaws/household/visual_grounding.py tests/unit/molmo_cleanup/test_visual_grounding.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+  passed with 34 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 72 to 71 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/visual_grounding.py` no longer appears in the
+  complexity-by-file summary.

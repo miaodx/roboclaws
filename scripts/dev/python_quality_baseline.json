@@ -500,16 +500,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/household/visual_grounding.py|C901|HttpVisualGroundingClient.request_candidates",
-        "limit": 10,
-        "message": "`request_candidates` is too complex (11 > 10)",
-        "path": "roboclaws/household/visual_grounding.py",
-        "row": 68,
-        "symbol": "HttpVisualGroundingClient.request_candidates",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/launch/catalog.py|C901|_overrides_with_surface_context",
         "limit": 10,
         "message": "`_overrides_with_surface_context` is too complex (11 > 10)",

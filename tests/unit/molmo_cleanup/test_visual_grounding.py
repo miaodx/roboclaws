@@ -62,6 +62,26 @@ def test_http_visual_grounding_client_accepts_valid_failure_response() -> None:
     assert response["error"]["reason"] == "fake_failure"
 
 
+def test_http_visual_grounding_client_accepts_http_error_failure_response() -> None:
+    server = _start_server(_failure_handler(status_code=503))
+    try:
+        client = HttpVisualGroundingClient(
+            VisualGroundingClientConfig(
+                pipeline_id="fake-http",
+                base_url=f"http://127.0.0.1:{server.server_port}",
+                timeout_s=2,
+            )
+        )
+        response = client.request_candidates(_request())
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert response["status"] == "failed"
+    assert response["candidates"] == []
+    assert response["error"]["reason"] == "fake_failure"
+
+
 def test_http_visual_grounding_client_retries_connection_setup_errors() -> None:
     client = HttpVisualGroundingClient(
         VisualGroundingClientConfig(
@@ -197,7 +217,7 @@ def _success_handler(seen: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def _failure_handler() -> type[BaseHTTPRequestHandler]:
+def _failure_handler(*, status_code: int = 200) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:  # noqa: N802
             self._write_json(
@@ -226,7 +246,7 @@ def _failure_handler() -> type[BaseHTTPRequestHandler]:
 
         def _write_json(self, payload: dict[str, Any]) -> None:
             body = json.dumps(payload).encode("utf-8")
-            self.send_response(200)
+            self.send_response(status_code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
