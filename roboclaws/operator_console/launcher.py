@@ -38,6 +38,12 @@ from roboclaws.operator_console.routes import (
     ConsoleLaunchSelection,
     get_selection,
 )
+from roboclaws.operator_console.runtime_inventory import (
+    background_blocker_message,
+    blocking_tasks_for_route,
+    requested_mcp_endpoint,
+    runtime_inventory_payload,
+)
 from roboclaws.operator_console.state import resolve_display_run_dir
 
 RUN_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -309,6 +315,7 @@ def route_readiness(
     env_overrides: dict[str, str] | None = None,
     gates: dict[str, bool] | None = None,
     env: dict[str, str] | None = None,
+    runtime_tasks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return route gate state used by both API and UI."""
 
@@ -323,6 +330,9 @@ def route_readiness(
     env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
     gate_map = gates or {}
+    if runtime_tasks is None:
+        _, port = requested_mcp_endpoint(override_map)
+        runtime_tasks = runtime_inventory_payload(root, ports=[port])["tasks"]
     lock_state, attachable_run, blocker, blocker_kind = _route_lock_readiness(root, route)
     provider_status = _provider_status(route, env_map)
     gate_rows, gate_blocker, gate_blocker_kind = route_gate_rows(
@@ -331,16 +341,35 @@ def route_readiness(
         override_map,
         gate_map,
         provider_status,
+        runtime_tasks=runtime_tasks,
     )
-    if not blocker and gate_blocker:
+    host, port = requested_mcp_endpoint(override_map)
+    background_blockers = blocking_tasks_for_route(route, runtime_tasks, host=host, port=port)
+    self_blocker_ids = set()
+    if attachable_run:
+        self_blocker_ids.add(f"operator-run:{attachable_run['run_id']}")
+    launch_blockers = [
+        task for task in background_blockers if str(task.get("id") or "") not in self_blocker_ids
+    ]
+    named_launch_blockers = [
+        task for task in launch_blockers if str(task.get("owner") or "") != "port-owner"
+    ]
+    if gate_blocker and named_launch_blockers and gate_blocker_kind == "mcp_port_in_use":
+        blocker = background_blocker_message(named_launch_blockers)
+        blocker_kind = "background_task"
+    elif not blocker and gate_blocker:
         blocker = gate_blocker
         blocker_kind = gate_blocker_kind
+    if not blocker and named_launch_blockers:
+        blocker = background_blocker_message(named_launch_blockers)
+        blocker_kind = "background_task"
     return {
         "can_start": not blocker,
         "blocker": blocker,
         "blocker_kind": blocker_kind,
         "lock": lock_state.to_payload(),
         "attachable_run": attachable_run,
+        "background_blockers": background_blockers,
         "provider": provider_status,
         "gates": gate_rows,
     }

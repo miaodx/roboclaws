@@ -54,6 +54,13 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'data-operator-mode="ask_why"',
     'data-operator-mode="steer"',
     'data-operator-mode="goal"',
+    'data-view="tasks"',
+    'id="tasks-panel"',
+    "Background Tasks",
+    'id="background-task-list"',
+    'id="task-status-filter"',
+    'id="task-owner-filter"',
+    'id="task-search-input"',
 )
 
 ROUTE_FIELD_HTML_FORBIDDEN = (
@@ -127,6 +134,14 @@ ROUTE_FIELD_APP_REQUIRED = (
     "enabledLaunchCount > 0",
     "isMolmospacesWorld",
     "return leftMolmo ? 1 : -1",
+    "payload.runtime",
+    "/api/runtime/tasks",
+    "renderBackgroundTasks",
+    "background_blockers",
+    "TASK RUNNING",
+    "data-open-background-tasks",
+    "copy_command",
+    "api_post",
 )
 
 ROUTE_FIELD_APP_FORBIDDEN = (

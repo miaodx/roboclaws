@@ -10,6 +10,7 @@ import re
 import shutil
 import socket
 import subprocess
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR_PATH = SCRIPT_DIR / "select_eval_harness.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
+DETACHED_LIVE_PRODUCT_TIMEOUT_S = 3600.0
 
 spec = importlib.util.spec_from_file_location("eval_harness_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
@@ -161,6 +163,7 @@ def _run_row(row: dict[str, Any], manifest: dict[str, Any]) -> None:
         _display_path(stdout_path),
         _display_path(stderr_path),
     ]
+    _wait_for_detached_live_product_row(row)
     _attach_eval_outputs(row)
     _classify_eval_result_row(row)
     _classify_failed_row(row, stderr=result.stderr, stdout=result.stdout)
@@ -251,6 +254,98 @@ def _classify_failed_row(row: dict[str, Any], *, stderr: str, stdout: str) -> No
                 "detail": "provider, key, rate-limit, or model service failure",
             }
         ]
+
+
+def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
+    if not _is_detached_live_product_row(row):
+        return
+    run_root = _row_command_output_dir(row)
+    if run_root is None:
+        return
+    run_dir = _discover_live_product_run_dir(run_root)
+    if run_dir is None:
+        return
+    row["detached_live_run_dir"] = _display_path(run_dir)
+    deadline = time.monotonic() + DETACHED_LIVE_PRODUCT_TIMEOUT_S
+    while time.monotonic() <= deadline:
+        run_result = run_dir / "run_result.json"
+        if run_result.is_file():
+            row["status"] = "ran"
+            row["outcome"] = "passed"
+            _append_output_artifacts(
+                row,
+                run_result,
+                run_dir / "live_status.json",
+                run_dir / "report.html",
+            )
+            return
+        status = _load_json(run_dir / "live_status.json")
+        exit_status = status.get("exit_status")
+        phase = str(status.get("phase") or "").lower()
+        if exit_status not in {None, 0} or phase in {"failed", "stopped_by_operator"}:
+            row["status"] = "blocked"
+            row["outcome"] = "blocked"
+            row["blocker_category"] = "environment_blocked"
+            row["blockers"] = [
+                _environment_blocker(
+                    "detached live product row ended before run_result.json: "
+                    f"{phase or exit_status}"
+                )
+            ]
+            _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+            return
+        time.sleep(1.0)
+        run_dir = _discover_live_product_run_dir(run_root) or run_dir
+    row["status"] = "blocked"
+    row["outcome"] = "blocked"
+    row["blocker_category"] = "environment_blocked"
+    row["blockers"] = [
+        _environment_blocker(
+            f"detached live product row did not finish within {DETACHED_LIVE_PRODUCT_TIMEOUT_S:g}s"
+        )
+    ]
+    _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+
+
+def _is_detached_live_product_row(row: dict[str, Any]) -> bool:
+    axes = row.get("axes") if isinstance(row.get("axes"), dict) else {}
+    command = [str(item) for item in row.get("resolved_command") or row.get("command") or []]
+    return (
+        row.get("row_kind") == "live_agent_eval"
+        and axes.get("agent_engine") == "codex-cli"
+        and "run::surface" in command
+        and any(item.startswith("output_dir=") for item in command)
+    )
+
+
+def _row_command_output_dir(row: dict[str, Any]) -> Path | None:
+    for item in row.get("resolved_command") or row.get("command") or []:
+        text = str(item)
+        if text.startswith("output_dir="):
+            return Path(text.split("=", 1)[1])
+    return None
+
+
+def _discover_live_product_run_dir(run_root: Path) -> Path | None:
+    candidates = []
+    if run_root.is_dir():
+        candidates.extend(path.parent for path in run_root.glob("**/live_status.json"))
+        candidates.extend(path.parent for path in run_root.glob("**/run_result.json"))
+    candidates = [path for path in candidates if path.is_dir()]
+    if not candidates:
+        return run_root if run_root.is_dir() else None
+    candidates.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def _append_output_artifacts(row: dict[str, Any], *paths: Path) -> None:
+    artifacts = list(row.get("output_artifacts") or [])
+    for path in paths:
+        if path.is_file():
+            display = _display_path(path)
+            if display not in artifacts:
+                artifacts.append(display)
+    row["output_artifacts"] = artifacts
 
 
 def _attach_eval_outputs(row: dict[str, Any]) -> None:

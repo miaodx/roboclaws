@@ -37,6 +37,10 @@ from roboclaws.operator_console.routes import (
     list_evidence_lanes,
     list_worlds,
 )
+from roboclaws.operator_console.runtime_inventory import (
+    requested_mcp_endpoint,
+    runtime_inventory_payload,
+)
 from roboclaws.operator_console.state import derive_operator_state, redacted_artifact_text
 
 PAUSE_UNAVAILABLE_REASON = "Pause is unavailable for this route. Use Stop or Emergency Stop."
@@ -219,6 +223,9 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/routes":
             self._json(self._routes_payload())
             return True
+        if parsed.path == "/api/runtime/tasks":
+            self._serve_runtime_tasks(parsed.query)
+            return True
         if parsed.path == "/api/readiness":
             self._serve_route_readiness(parsed.query)
             return True
@@ -304,6 +311,8 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         self._file(path)
 
     def _routes_payload(self) -> dict[str, object]:
+        inventory = runtime_inventory_payload(self.repo_root)
+        runtime_tasks = inventory["tasks"]
         return {
             "worlds": list(list_worlds()),
             "evidence_lanes": list(list_evidence_lanes()),
@@ -316,36 +325,55 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 for selection in list_console_combinations(include_disabled=True)
             ],
             "readiness": {
-                selection.id: route_readiness(self.repo_root, selection)
+                selection.id: route_readiness(
+                    self.repo_root,
+                    selection,
+                    runtime_tasks=runtime_tasks,
+                )
                 for selection in list_console_combinations(include_disabled=False)
             },
+            "runtime": inventory,
         }
+
+    def _serve_runtime_tasks(self, query_string: str) -> None:
+        query = parse_qs(query_string)
+        ports: list[int] = []
+        for value in query.get("port", []):
+            try:
+                ports.append(int(value))
+            except ValueError:
+                continue
+        self._json(runtime_inventory_payload(self.repo_root, ports=ports))
 
     def _serve_route_readiness(self, query_string: str) -> None:
         try:
             query = parse_qs(query_string)
             selection_id = _readiness_selection_id(query)
             route = get_selection(selection_id)
+            override_map = _query_overrides(
+                query,
+                (
+                    "host",
+                    "port",
+                    "context_json",
+                    "real_movement_enabled",
+                    "scenario_setup",
+                    "provider_profile",
+                ),
+            )
+            _, port = requested_mcp_endpoint(override_map)
+            inventory = runtime_inventory_payload(self.repo_root, ports=[port])
             self._json(
                 route_readiness(
                     self.repo_root,
                     route,
-                    overrides=_query_overrides(
-                        query,
-                        (
-                            "host",
-                            "port",
-                            "context_json",
-                            "real_movement_enabled",
-                            "scenario_setup",
-                            "provider_profile",
-                        ),
-                    ),
+                    overrides=override_map,
                     env_overrides=_query_provider_env_overrides(query),
                     gates=_query_gates(
                         query,
                         ("localization_ready", "run_enabled", "estop_ready"),
                     ),
+                    runtime_tasks=inventory["tasks"],
                 )
             )
         except (ConsoleLaunchError, KeyError, ValueError) as exc:
