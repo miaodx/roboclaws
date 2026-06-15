@@ -38,7 +38,7 @@
         "path": "roboclaws/household/realworld_cleanup.py"
       },
       {
-        "lines": 6479,
+        "lines": 6592,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_contract.py"
       },
@@ -307,16 +307,6 @@
         "row": 86,
         "symbol": "run_physical_nav2_cleanup_pilot",
         "value": 64
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/realworld_contract.py|C901|RealWorldCleanupContract.declare_visual_candidates",
-        "limit": 10,
-        "message": "`declare_visual_candidates` is too complex (12 > 10)",
-        "path": "roboclaws/household/realworld_contract.py",
-        "row": 895,
-        "symbol": "RealWorldCleanupContract.declare_visual_candidates",
-        "value": 12
       },
       {
         "code": "C901",

@@ -5283,3 +5283,20 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this
   realworld-contract public semantic anchor patch so the unrelated staged
   `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_contract.py::declare_visual_candidates(...)`
+  into visual-candidate input resolution, camera-label producer provenance,
+  failed-grounding response, candidate registration, invalid-candidate response,
+  and final declaration payload helpers. The RAW-FPV empty-declare error,
+  manual declaration pipeline summary, simulated camera-model provenance,
+  external visual-grounding failure evidence, invalid candidate recovery
+  payload, policy event recording, and public/private guard remain unchanged.
+  Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/realworld_contract.py`
+  passed; `ruff check roboclaws/household/realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_raw_empty_declare_does_not_fall_back_to_sim_labels tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_model_policy_records_sim_pipeline_provenance tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_http_success_uses_destination_resolver tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_rejects_malformed_model_declared_candidate`
+  passed with 5 tests. The quality baseline was refreshed from 30 to 29 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  realworld-contract visual-candidate declaration patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
