@@ -1,8 +1,8 @@
 ---
 plan_scope: molmospaces-scene-sampler-readiness
-status: Implemented; source outcomes classified
+status: Implemented; source outcomes classified and verified
 created: 2026-06-15
-last_reviewed: 2026-06-15
+last_reviewed: 2026-06-16
 implementation_allowed: true
 source:
   - user request to expose a smaller UI sample set and a larger eval-harness stress set
@@ -367,6 +367,39 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_sce
 ruff format --check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/scene_sampler_worklist_alignment.py scripts/operator_console/run_scene_sampler_source_prep.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-command-worklist --candidate-range 0:19 --no-generated-eval
 ```
+
+Completion audit on 2026-06-16:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_cross_environment_semantic_map_parity.py tests/contract/maps/test_actionable_semantic_map_snapshot.py -q
+ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaws/evals/runner.py roboclaws/operator_console/routes.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_harness_selector.py skills/eval-harness/scripts/select_eval_harness.py skills/eval-harness/scripts/eval_harness_rows.py docs/human/molmospaces-settings.md docs/human/evaluation.md
+ruff format --check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaws/evals/runner.py roboclaws/operator_console/routes.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_harness_selector.py skills/eval-harness/scripts/select_eval_harness.py skills/eval-harness/scripts/eval_harness_rows.py
+just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/roboclaws-scene-sampler-final-scene-sampler-stress
+just agent::eval suite=map_build_consumer budget=focused output_dir=/tmp/roboclaws-scene-sampler-final-map-build-consumer
+just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused output_dir=/tmp/roboclaws-scene-sampler-final-harness
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-final-readiness-default
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-final-readiness-ui-procthor --require-ui-supported-source procthor-10k-val
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-final-readiness-ui-objaverse --require-ui-supported-source procthor-objaverse-val
+just run::surface surface=household-world world=molmospaces/procthor-objaverse-val/0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline output_dir=/tmp/roboclaws-scene-sampler-final-product-objaverse-0
+```
+
+Additional audit evidence:
+
+- Static sampler check reports UI rows `3+3` for `procthor-10k-val` and
+  `procthor-objaverse-val`, eval rows `10+10`, and rejected exhausted rows for
+  `ithor` and `holodeck-objaverse-val`.
+- Generated eval artifacts from
+  `/tmp/roboclaws-scene-sampler-final-readiness-default/generated_eval/`
+  semantically match the committed `scene_sampler_stress` suite plus all 20
+  committed sample JSON files.
+- `scene_sampler_stress` passed 20/20 direct-runner samples and reported two
+  complete sources plus two rejected sources.
+- `map_build_consumer` passed 3/3 focused samples.
+- New UI source product smoke for
+  `molmospaces/procthor-objaverse-val/0` produced
+  `/tmp/roboclaws-scene-sampler-final-product-objaverse-0/0616_0151/seed-7/report.html`
+  and `runtime_metric_map.json`.
 
 Current limits after this Flow:
 

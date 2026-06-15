@@ -444,6 +444,6 @@ def test_recommendation_writes_json_markdown_and_html(tmp_path: Path) -> None:
     assert manifest["schema"] == "roboclaws_eval_harness_manifest_v1"
     assert (tmp_path / "eval_harness.md").exists()
     assert (tmp_path / "eval_harness.html").exists()
-    assert "openai-agents-sdk-open-task-live-eval" in (
-        tmp_path / "eval_harness.md"
-    ).read_text(encoding="utf-8")
+    assert "openai-agents-sdk-open-task-live-eval" in (tmp_path / "eval_harness.md").read_text(
+        encoding="utf-8"
+    )
