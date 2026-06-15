@@ -33,6 +33,9 @@ next_flow_scope:
 First slice implemented on 2026-06-15.
 
 - Canonical sampler source: `roboclaws/launch/scene_sampler.py`.
+  The sampler now enforces both per-source caps: exactly three UI rows when a
+  source is visible, and no more than ten eval-stress rows per supported
+  `scene_source`.
 - Prepared selected-sample room label manifest:
   `data/molmospaces/scene_sampler_room_labels.json`.
 - Operator-console UI projection: `procthor-10k-val` samples `0`, `2`, and
@@ -323,7 +326,7 @@ Planning-loop scouts:
 
 | # | Question | Classification | Decision | Rationale | Revisit if |
 |---|----------|----------------|----------|-----------|------------|
-| 1 | Should UI and eval use the same sample count? | User-owned, answered | No. UI gets 3; eval gets 10. | The user wants the UI readable and the eval harness broader. | UI review shows humans need more visual choices, or eval runtime is too expensive. |
+| 1 | Should UI and eval use the same sample count? | User-owned, answered | No. UI gets 3 per supported source; eval gets up to 10 per supported source. | The user wants the UI readable and the eval harness broader. | UI review shows humans need more visual choices, or eval runtime is too expensive. |
 | 2 | Should sample indices be contiguous? | User-owned, answered | No. Non-contiguous indices are allowed. | Coverage and readiness matter more than consecutive ids. | A backend installer can only cache contiguous ranges efficiently. |
 | 3 | What counts as a backend here? | User-owned, answered | For MolmoSpaces sampling, default to MuJoCo. Isaac Lab is not required for these samples and is mainly a digital-twin path. | Earlier Isaac work proved it can work; this sampler should not be blocked by Isaac parity. | A future MolmoSpaces-on-Isaac product goal becomes active. |
 | 4 | Which scene sources enter the first slice? | User-owned, answered | Cover multiple samples from `procthor-10k-val`, `ithor`, `procthor-objaverse-val`, and `holodeck-objaverse-val` when locally available; otherwise emit blocked rows. | The goal is representative MolmoSpaces source diversity, not multi-backend parity for one scene. | Asset availability or loader support makes a source unavailable. |
@@ -637,8 +640,8 @@ Task source: plan path
 Canonical source: `docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md`
 Route: durable `$intuitive-flow`
 Goal: Implement source-aware MolmoSpaces scene sampling so UI gets three curated
-samples per supported `scene_source`, while eval gets ten stress samples or
-blocked/partial evidence.
+samples per supported `scene_source`, while each supported source gets up to ten
+eval stress samples or blocked/partial evidence.
 
 Scope:
 
@@ -650,8 +653,8 @@ Scope:
 - Add an explicit environment-preparation label manifest flow using
   `provider_profile=codex-env`, `model=gpt-5.5` by default.
 - Integrate a 3-sample UI projection with world/operator-console metadata.
-- Integrate a 10-sample eval projection through generated static eval
-  suite/sample JSON.
+- Integrate a per-supported-source 10-sample eval projection through generated
+  static eval suite/sample JSON.
 - Preserve current `molmospaces/val_N` aliases for the first
   `procthor-10k-val` slice.
 - Add tests preventing heuristic room-label or room-count category fallback
@@ -683,8 +686,9 @@ Context:
 Acceptance:
 
 - Success: source-aware sampler produces UI and eval projections; UI exposes
-  exactly three passing samples per supported source; eval has ten passing
-  samples per complete source or normalized blocked/partial rows.
+  exactly three passing samples per supported source; each complete supported
+  source has at most ten and exactly ten passing eval-stress samples, while
+  incomplete sources keep normalized blocked/partial rows.
 - `BLOCKED_NEEDS_DECISION`: none currently.
 - `BLOCKED_NEEDS_LOCAL_VALIDATION`: required if local assets/runtime cannot
   exercise selected non-`procthor-10k-val` sources; blocked packets are

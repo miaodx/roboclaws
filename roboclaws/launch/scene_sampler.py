@@ -12,6 +12,8 @@ SAMPLER_LABEL_MANIFEST_SCHEMA = "molmospaces_scene_room_labels_v1"
 SAMPLER_PROJECTION_SCHEMA = "molmospaces_scene_sampler_projection_v1"
 SAMPLER_GENERATOR_VERSION = "2026-06-15.preview-readiness-v1"
 PRIMARY_MOLMOSPACES_BACKEND = "mujoco"
+UI_TARGET_PER_SCENE_SOURCE = 3
+EVAL_TARGET_PER_SCENE_SOURCE = 10
 
 UI_LANE = "ui"
 EVAL_STRESS_LANE = "eval_stress"
@@ -120,8 +122,8 @@ def sampler_manifest() -> dict[str, Any]:
         "schema": SAMPLER_MANIFEST_SCHEMA,
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "primary_backend": PRIMARY_MOLMOSPACES_BACKEND,
-        "ui_target_per_scene_source": 3,
-        "eval_target_per_scene_source": 10,
+        "ui_target_per_scene_source": UI_TARGET_PER_SCENE_SOURCE,
+        "eval_target_per_scene_source": EVAL_TARGET_PER_SCENE_SOURCE,
         "supported_scene_sources": list(SUPPORTED_SCENE_SOURCES),
         "room_label_manifest": str(_LABEL_MANIFEST_PATH.relative_to(_repo_root())),
         "rows": rows,
@@ -203,9 +205,13 @@ def eval_projection_metadata() -> dict[str, Any]:
             if row.scene_source == source and row.blocked_reason
         ]
         by_source[source] = {
-            "target_count": 10,
+            "target_count": EVAL_TARGET_PER_SCENE_SOURCE,
             "ready_count": len(ready),
-            "status": "complete" if len(ready) >= 10 else "partial_or_blocked",
+            "status": (
+                "complete"
+                if len(ready) == EVAL_TARGET_PER_SCENE_SOURCE
+                else "partial_or_blocked"
+            ),
             "sample_ids": [eval_sample_id(row) for row in ready],
             "blocked_rows": [row.to_dict() for row in blocked],
         }
@@ -269,8 +275,22 @@ def validate_sampler_manifest(manifest: dict[str, Any] | None = None) -> None:
         ]
         if 0 < len(ui_ready) < 3:
             raise ValueError(f"scene_source {source} exposes fewer than three UI-ready samples")
-        if len(ui_ready) > 3:
-            raise ValueError(f"scene_source {source} exposes more than three UI samples")
+        if len(ui_ready) > UI_TARGET_PER_SCENE_SOURCE:
+            raise ValueError(
+                f"scene_source {source} exposes more than "
+                f"{UI_TARGET_PER_SCENE_SOURCE} UI samples"
+            )
+        eval_ready = [
+            row
+            for row in source_rows
+            if row.get("readiness_status") == READINESS_READY
+            and EVAL_STRESS_LANE in row.get("lanes", [])
+        ]
+        if len(eval_ready) > EVAL_TARGET_PER_SCENE_SOURCE:
+            raise ValueError(
+                f"scene_source {source} exposes more than "
+                f"{EVAL_TARGET_PER_SCENE_SOURCE} eval-stress samples"
+            )
 
 
 def _ready_row(scene_index: int) -> SceneSamplerRow:

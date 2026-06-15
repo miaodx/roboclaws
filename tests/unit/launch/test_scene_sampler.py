@@ -125,5 +125,26 @@ def test_scene_sampler_requires_exactly_three_ui_rows_per_visible_source() -> No
     row["readiness_status"] = "ready"
     row["lanes"] = [UI_LANE, EVAL_STRESS_LANE]
 
-    with pytest.raises(ValueError, match="more than three UI samples"):
+    with pytest.raises(ValueError, match="more than 3 UI samples"):
+        validate_sampler_manifest(manifest)
+
+
+def test_scene_sampler_limits_eval_stress_rows_per_source() -> None:
+    manifest = copy.deepcopy(sampler_manifest())
+    template = next(
+        row
+        for row in manifest["rows"]
+        if row["readiness_status"] == "ready" and row["scene_index"] == 0
+    )
+    manifest["rows"] = [
+        {
+            **template,
+            "world_id": f"molmospaces/val_0/eval-{index}",
+            "legacy_world_id": f"molmospaces/val_0/eval-{index}",
+            "lanes": [EVAL_STRESS_LANE],
+        }
+        for index in range(11)
+    ]
+
+    with pytest.raises(ValueError, match="more than 10 eval-stress samples"):
         validate_sampler_manifest(manifest)
