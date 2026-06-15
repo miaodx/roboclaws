@@ -135,12 +135,12 @@ class LiveCodexAgibotMapBuildRunner:
         )
         workspace = _agent_workspace_root(
             repo_root=self.args.repo_root,
-            task_name="household-world.map-build",
+            run_id="household-world.map-build",
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
-            task_name="household-world.map-build",
+            run_id="household-world.map-build",
             skill_name=AGIBOT_MAP_BUILD_SKILL,
             workspace=workspace,
         )
