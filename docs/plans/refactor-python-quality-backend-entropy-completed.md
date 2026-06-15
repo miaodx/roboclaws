@@ -448,6 +448,15 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
   subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces public scenario projection, private score/readback,
+  generated-mess placement target selection, and inventory collection helpers
+  moved from the subprocess worker into `molmospaces_scenario_state.py`, with
+  worker-private wrappers preserving operator-console preview imports and
+  current tests. Metric: `molmospaces_subprocess_worker.py` 3185 -> 2978
+  lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Molmo subprocess backend/operator-console tests, ruff, format
+  check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
