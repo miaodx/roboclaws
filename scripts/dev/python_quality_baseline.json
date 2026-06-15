@@ -163,7 +163,7 @@
         "path": "scripts/operator_console/render_scene_previews.py"
       },
       {
-        "lines": 1793,
+        "lines": 1809,
         "max_module_lines": 800,
         "path": "scripts/visual_grounding/adapters.py"
       },
@@ -707,16 +707,6 @@
         "row": 491,
         "symbol": "_render_semantic_map_preview",
         "value": 13
-      },
-      {
-        "code": "C901",
-        "key": "scripts/visual_grounding/adapters.py|C901|_yolo_candidates_from_model",
-        "limit": 10,
-        "message": "`_yolo_candidates_from_model` is too complex (11 > 10)",
-        "path": "scripts/visual_grounding/adapters.py",
-        "row": 1268,
-        "symbol": "_yolo_candidates_from_model",
-        "value": 11
       },
       {
         "code": "C901",

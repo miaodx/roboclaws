@@ -4653,3 +4653,18 @@ Stop this refactor loop when:
   passed after a deliberate baseline refresh. The quality baseline was lowered
   from 74 to 73 Ruff complexity violations, with oversized modules unchanged at
   59. `run_comparison(...)` no longer appears in the complexity summary.
+- 2026-06-15: Continued the detector-sidecar residual by splitting YOLO-family
+  adapter runtime parsing in `scripts/visual_grounding/adapters.py`.
+  `_yolo_candidates_from_model(...)` now delegates runtime-parameter to
+  `predict_kwargs` translation and temporary-image model invocation to focused
+  helpers, while candidate parsing and response schemas remain unchanged.
+  Evidence:
+  `ruff check scripts/visual_grounding/adapters.py roboclaws/household/visual_grounding.py scripts/visual_grounding/run_visual_grounding_benchmark.py tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py tests/contract/visual_grounding/test_visual_grounding_service.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check scripts/visual_grounding/adapters.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+  passed with 33 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 73 to 72 Ruff complexity violations, with oversized modules unchanged at
+  59. `scripts/visual_grounding/adapters.py` no longer appears in the
+  complexity-by-file summary.
