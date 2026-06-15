@@ -486,6 +486,15 @@ logs before choosing the next slice.
   Proof: focused Molmo subprocess backend tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces navigation, pick/place, open/close receptacle,
+  place-inside, frame-comparison, done, and state-mutation response helpers
+  moved from the subprocess worker into `molmospaces_actions.py`, with
+  worker-private wrappers preserving action command names and direct
+  `_place_object_at_receptacle` tests. Metric:
+  `molmospaces_subprocess_worker.py` 2627 -> 2377 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
+  subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

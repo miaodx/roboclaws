@@ -24,6 +24,54 @@ from roboclaws.household.generated_mess import (
     select_generated_mess_targets,
     targets_from_generated_mess_manifest,
 )
+from scripts.molmo_cleanup.molmospaces_actions import (
+    MolmoActionHooks,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    close_receptacle as _close_receptacle_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    close_receptacle_state_mutation as _close_receptacle_state_mutation_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    done_cleanup as _done_cleanup_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    frame_comparison_object as _frame_comparison_object_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    navigate_to_object as _navigate_to_object_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    navigate_to_receptacle as _navigate_to_receptacle_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    navigate_to_receptacle_core as _navigate_to_receptacle_core_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    navigate_to_waypoint as _navigate_to_waypoint_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    open_receptacle as _open_receptacle_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    open_receptacle_state_mutation as _open_receptacle_state_mutation_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    pick_object as _pick_object_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    place_inside_object as _place_inside_object_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    place_object as _place_object_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    place_object_at_receptacle as _place_object_at_receptacle_impl,
+)
+from scripts.molmo_cleanup.molmospaces_actions import (
+    robot_pose_state_mutation as _robot_pose_state_mutation_impl,
+)
 from scripts.molmo_cleanup.molmospaces_focus_camera import (
     annotate_focus_image as _annotate_focus_image_impl,
 )
@@ -965,6 +1013,40 @@ def _molmo_worker_output_hooks() -> MolmoWorkerOutputHooks:
     )
 
 
+def _molmo_action_hooks() -> MolmoActionHooks:
+    return MolmoActionHooks(
+        api_semantic_provenance=API_SEMANTIC_PROVENANCE,
+        backend=BACKEND,
+        held_location_id=HELD_LOCATION_ID,
+        apply_qpos=_apply_qpos,
+        close_receptacle_state_mutation=_close_receptacle_state_mutation,
+        count=_count,
+        error=_error,
+        held_object_position=_held_object_position,
+        load_model_data_for_state=_load_model_data_for_state,
+        ok=_ok,
+        open_receptacle_state_mutation=_open_receptacle_state_mutation,
+        openable_receptacle_joints=_openable_receptacle_joints,
+        placement_diagnostic=_placement_diagnostic,
+        read_containment=_read_containment,
+        read_locations=_read_locations,
+        receptacle_requires_open=_receptacle_requires_open,
+        refresh_object_positions=_refresh_object_positions,
+        resolve_placement=_resolve_placement,
+        robot_pose_for_open_receptacle=_robot_pose_for_open_receptacle,
+        robot_pose_for_waypoint=_robot_pose_for_waypoint,
+        robot_pose_near_object=_robot_pose_near_object,
+        robot_pose_near_receptacle=_robot_pose_near_receptacle,
+        robot_pose_state_mutation=_robot_pose_state_mutation,
+        score=_score,
+        set_free_body_position=_set_free_body_position,
+        set_joint_qpos=_set_joint_qpos,
+        set_robot_pose=_set_robot_pose,
+        sync_held_object_to_robot_pose=_sync_held_object_to_robot_pose,
+        waypoint_target_position=_waypoint_target_position,
+    )
+
+
 def write_snapshot(
     state: dict[str, Any],
     output_path: Path,
@@ -1065,8 +1147,7 @@ def _render_camera_views_with_model_data(
 
 
 def navigate_to_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    _count(state, "navigate_to_receptacle")
-    return _navigate_to_receptacle(state, receptacle_id, tool="navigate_to_receptacle")
+    return _navigate_to_receptacle_impl(state, receptacle_id, hooks=_molmo_action_hooks())
 
 
 def _navigate_to_receptacle(
@@ -1075,214 +1156,36 @@ def _navigate_to_receptacle(
     *,
     tool: str,
 ) -> dict[str, Any]:
-    if receptacle_id not in state["receptacles"]:
-        return _error(tool, "stale_reference", receptacle_id=receptacle_id)
-    previous = state.get("current_receptacle_id")
-    state["current_receptacle_id"] = receptacle_id
-    robot_pose = None
-    held_object_pose = None
-    qpos_changed = False
-    state_mutation = "agent_pose_semantic"
-    if state.get("robot_included"):
-        model, data = _load_model_data_for_state(state)
-        _apply_qpos(data, state["qpos"])
-        robot_pose = _robot_pose_near_receptacle(state, state["receptacles"][receptacle_id])
-        _set_robot_pose(model, data, robot_pose)
-        state["robot_pose"] = robot_pose
-        state.setdefault("robot_trajectory", []).append(robot_pose)
-        held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
-        mujoco.mj_forward(model, data)
-        _refresh_object_positions(model, data, state)
-        state["qpos"] = [float(value) for value in data.qpos]
-        qpos_changed = True
-        state_mutation = _robot_pose_state_mutation(held_object_pose is not None)
-    return _ok(
-        tool,
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        receptacle_id=receptacle_id,
-        previous_receptacle_id=previous,
-        state_mutation=state_mutation,
-        held_object_pose=held_object_pose,
-        robot_name=state.get("robot_name"),
-        robot_pose=robot_pose,
-        robot_control_provenance=state.get("robot_control_provenance"),
-        qpos_changed=qpos_changed,
-        backend=BACKEND,
+    return _navigate_to_receptacle_core_impl(
+        state,
+        receptacle_id,
+        tool=tool,
+        hooks=_molmo_action_hooks(),
     )
 
 
 def navigate_to_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
-    _count(state, "navigate_to_object")
-    if object_id not in state["objects"]:
-        return _error("navigate_to_object", "stale_reference", object_id=object_id)
-    if state.get("held_object_id") == object_id:
-        return _error("navigate_to_object", "object_already_held", object_id=object_id)
-    locations = _read_locations(state)
-    source_receptacle_id = locations.get(object_id)
-    if not source_receptacle_id or source_receptacle_id == HELD_LOCATION_ID:
-        return _error("navigate_to_object", "object_not_at_public_location", object_id=object_id)
-    previous = state.get("current_receptacle_id")
-    state["current_receptacle_id"] = source_receptacle_id
-    robot_pose = None
-    qpos_changed = False
-    state_mutation = "agent_pose_semantic"
-    if state.get("robot_included"):
-        model, data = _load_model_data_for_state(state)
-        _apply_qpos(data, state["qpos"])
-        mujoco.mj_forward(model, data)
-        _refresh_object_positions(model, data, state)
-        robot_pose = _robot_pose_near_object(
-            state,
-            state["objects"][object_id],
-            source_receptacle_id=source_receptacle_id,
-        )
-        _set_robot_pose(model, data, robot_pose)
-        mujoco.mj_forward(model, data)
-        state["qpos"] = [float(value) for value in data.qpos]
-        state["robot_pose"] = robot_pose
-        state.setdefault("robot_trajectory", []).append(robot_pose)
-        qpos_changed = True
-        state_mutation = "robot_base_qpos"
-    return _ok(
-        "navigate_to_object",
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        object_id=object_id,
-        source_receptacle_id=source_receptacle_id,
-        previous_receptacle_id=previous,
-        location_id=source_receptacle_id,
-        state_mutation=state_mutation,
-        robot_name=state.get("robot_name"),
-        robot_pose=robot_pose,
-        robot_control_provenance=state.get("robot_control_provenance"),
-        qpos_changed=qpos_changed,
-        backend=BACKEND,
-    )
+    return _navigate_to_object_impl(state, object_id, hooks=_molmo_action_hooks())
 
 
 def navigate_to_waypoint(state: dict[str, Any], waypoint: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_waypoint")
-    waypoint_id = str(waypoint.get("waypoint_id") or "")
-    room_id = str(waypoint.get("room_id") or "")
-    previous = state.get("current_waypoint_id")
-    state["current_waypoint_id"] = waypoint_id
-    robot_pose = None
-    held_object_pose = None
-    qpos_changed = False
-    state_mutation = "agent_pose_semantic"
-    if state.get("robot_included"):
-        model, data = _load_model_data_for_state(state)
-        _apply_qpos(data, state["qpos"])
-        mujoco.mj_forward(model, data)
-        target = _waypoint_target_position(state, waypoint)
-        robot_pose = _robot_pose_for_waypoint(state, waypoint, target)
-        _set_robot_pose(model, data, robot_pose)
-        state["robot_pose"] = robot_pose
-        state.setdefault("robot_trajectory", []).append(robot_pose)
-        held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
-        mujoco.mj_forward(model, data)
-        _refresh_object_positions(model, data, state)
-        state["qpos"] = [float(value) for value in data.qpos]
-        qpos_changed = True
-        state_mutation = _robot_pose_state_mutation(held_object_pose is not None)
-    return _ok(
-        "navigate_to_waypoint",
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        waypoint_id=waypoint_id,
-        room_id=room_id,
-        previous_waypoint_id=previous,
-        state_mutation=state_mutation,
-        held_object_pose=held_object_pose,
-        robot_name=state.get("robot_name"),
-        robot_pose=robot_pose,
-        robot_control_provenance=state.get("robot_control_provenance"),
-        qpos_changed=qpos_changed,
-        backend=BACKEND,
-    )
+    return _navigate_to_waypoint_impl(state, waypoint, hooks=_molmo_action_hooks())
 
 
 def frame_comparison_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
-    _count(state, "frame_comparison_object")
-    if object_id not in state["objects"]:
-        return _error("frame_comparison_object", "stale_reference", object_id=object_id)
-    if not state.get("robot_included"):
-        return _error("frame_comparison_object", "robot_not_included")
-    model, data = _load_model_data_for_state(state)
-    _apply_qpos(data, state["qpos"])
-    mujoco.mj_forward(model, data)
-    _refresh_object_positions(model, data, state)
-    robot_pose = _robot_pose_near_object(
-        state,
-        state["objects"][object_id],
-        source_receptacle_id=None,
-    )
-    robot_pose["pose_source"] = "roboclaws_comparison_object_pose"
-    _set_robot_pose(model, data, robot_pose)
-    mujoco.mj_forward(model, data)
-    state["qpos"] = [float(value) for value in data.qpos]
-    state["robot_pose"] = robot_pose
-    state.setdefault("robot_trajectory", []).append(robot_pose)
-    return _ok(
-        "frame_comparison_object",
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        object_id=object_id,
-        state_mutation="robot_base_qpos",
-        robot_name=state.get("robot_name"),
-        robot_pose=robot_pose,
-        robot_control_provenance=state.get("robot_control_provenance"),
-        qpos_changed=True,
-        backend=BACKEND,
-    )
+    return _frame_comparison_object_impl(state, object_id, hooks=_molmo_action_hooks())
 
 
 def pick_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
-    _count(state, "pick")
-    if object_id not in state["objects"]:
-        return _error("pick", "stale_reference", object_id=object_id)
-    if state.get("held_object_id") is not None:
-        return _error("pick", "already_holding", held_object_id=state["held_object_id"])
-    locations = _read_locations(state)
-    qpos_changed = False
-    state_mutation = "held_state_only"
-    if state.get("robot_included"):
-        model, data = _load_model_data_for_state(state)
-        _apply_qpos(data, state["qpos"])
-        target_position = _held_object_position(state)
-        _set_free_body_position(
-            model, data, state["objects"][object_id]["body_name"], target_position
-        )
-        mujoco.mj_forward(model, data)
-        _refresh_object_positions(model, data, state)
-        state["qpos"] = [float(value) for value in data.qpos]
-        qpos_changed = True
-        state_mutation = "mujoco_freejoint_qpos_held_pose"
-    state["held_object_id"] = object_id
-    state["objects"][object_id]["contained_in"] = None
-    state["objects"][object_id]["location_relation"] = "held"
-    return _ok(
-        "pick",
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        object_id=object_id,
-        previous_location_id=locations.get(object_id),
-        location_id=HELD_LOCATION_ID,
-        state_mutation=state_mutation,
-        qpos_changed=qpos_changed,
-        backend=BACKEND,
-    )
+    return _pick_object_impl(state, object_id, hooks=_molmo_action_hooks())
 
 
 def place_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    _count(state, "place")
-    return _place_object_at_receptacle(state, receptacle_id, tool="place", relation="on")
+    return _place_object_impl(state, receptacle_id, hooks=_molmo_action_hooks())
 
 
 def place_inside_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    _count(state, "place_inside")
-    return _place_object_at_receptacle(
-        state,
-        receptacle_id,
-        tool="place_inside",
-        relation="inside",
-    )
+    return _place_inside_object_impl(state, receptacle_id, hooks=_molmo_action_hooks())
 
 
 def _place_object_at_receptacle(
@@ -1292,158 +1195,25 @@ def _place_object_at_receptacle(
     tool: str,
     relation: str,
 ) -> dict[str, Any]:
-    if receptacle_id not in state["receptacles"]:
-        return _error(tool, "stale_reference", receptacle_id=receptacle_id)
-    object_id = state.get("held_object_id")
-    if object_id is None:
-        return _error(tool, "not_holding")
-    receptacle = state["receptacles"][receptacle_id]
-    if (
-        relation == "inside"
-        and _receptacle_requires_open(receptacle)
-        and receptacle_id not in set(state.get("open_receptacle_ids", []))
-    ):
-        return _error(tool, "receptacle_closed", receptacle_id=receptacle_id)
-
-    model, data = _load_model_data_for_state(state)
-    _apply_qpos(data, state["qpos"])
-    obj = state["objects"][object_id]
-    placement_resolution = _resolve_placement(
-        model,
-        data,
-        state=state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        index=state["selected_object_ids"].index(object_id),
+    return _place_object_at_receptacle_impl(
+        state,
+        receptacle_id,
+        tool=tool,
         relation=relation,
-    )
-    target_position = placement_resolution["position"]
-    _set_free_body_position(model, data, obj["body_name"], target_position)
-    mujoco.mj_forward(model, data)
-    _refresh_object_positions(model, data, state)
-    diagnostic = _placement_diagnostic(
-        state=state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        requested_position=target_position,
-        source="cleanup_place",
-        placement_resolution=placement_resolution,
-    )
-    state.setdefault("placement_diagnostics", []).append(diagnostic)
-
-    state["qpos"] = [float(value) for value in data.qpos]
-    state["held_object_id"] = None
-    state["current_receptacle_id"] = receptacle_id
-    state["objects"][object_id]["contained_in"] = receptacle_id if relation == "inside" else None
-    state["objects"][object_id]["location_relation"] = relation
-    final_locations = _read_locations(state)
-    return _ok(
-        tool,
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        location_id=final_locations.get(object_id),
-        contained_in=receptacle_id if relation == "inside" else None,
-        location_relation=relation,
-        placement_diagnostic=diagnostic,
-        placement_support_status=diagnostic["support_status"],
-        mujoco_body_name=obj["body_name"],
-        qpos_changed=True,
-        state_mutation="mujoco_freejoint_qpos",
-        backend=BACKEND,
+        hooks=_molmo_action_hooks(),
     )
 
 
 def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    _count(state, "open_receptacle")
-    if receptacle_id not in state["receptacles"]:
-        return _error("open_receptacle", "stale_reference", receptacle_id=receptacle_id)
-
-    model, data = _load_model_data_for_state(state)
-    _apply_qpos(data, state["qpos"])
-    receptacle = state["receptacles"][receptacle_id]
-    joints = _openable_receptacle_joints(model, receptacle["body_name"])
-    for joint in joints:
-        _set_joint_qpos(model, data, joint["joint_name"], joint["open_value"])
-    robot_pose = None
-    robot_pose_changed = False
-    if state.get("robot_included") and joints:
-        robot_pose = _robot_pose_for_open_receptacle(state, receptacle)
-        _set_robot_pose(model, data, robot_pose)
-        state["robot_pose"] = robot_pose
-        state.setdefault("robot_trajectory", []).append(robot_pose)
-        held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
-        robot_pose_changed = True
-    else:
-        held_object_pose = None
-    mujoco.mj_forward(model, data)
-    _refresh_object_positions(model, data, state)
-    state["qpos"] = [float(value) for value in data.qpos]
-    open_ids = set(state.get("open_receptacle_ids", []))
-    if joints:
-        open_ids.add(receptacle_id)
-    state["open_receptacle_ids"] = sorted(open_ids)
-    return _ok(
-        "open_receptacle",
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        receptacle_id=receptacle_id,
-        opened=bool(joints),
-        open_joints=joints,
-        robot_pose=robot_pose,
-        held_object_pose=held_object_pose,
-        qpos_changed=bool(joints) or robot_pose_changed,
-        state_mutation=_open_receptacle_state_mutation(
-            bool(joints),
-            robot_pose_changed,
-            held_object_pose is not None,
-        ),
-        backend=BACKEND,
-    )
+    return _open_receptacle_impl(state, receptacle_id, hooks=_molmo_action_hooks())
 
 
 def close_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    _count(state, "close_receptacle")
-    if receptacle_id not in state["receptacles"]:
-        return _error("close_receptacle", "stale_reference", receptacle_id=receptacle_id)
-
-    model, data = _load_model_data_for_state(state)
-    _apply_qpos(data, state["qpos"])
-    receptacle = state["receptacles"][receptacle_id]
-    joints = _openable_receptacle_joints(model, receptacle["body_name"])
-    closed_joints = []
-    for joint in joints:
-        _set_joint_qpos(model, data, joint["joint_name"], joint["close_value"])
-        closed_joints.append(joint)
-    held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
-    mujoco.mj_forward(model, data)
-    _refresh_object_positions(model, data, state)
-    state["qpos"] = [float(value) for value in data.qpos]
-    open_ids = set(state.get("open_receptacle_ids", []))
-    was_open = receptacle_id in open_ids
-    open_ids.discard(receptacle_id)
-    state["open_receptacle_ids"] = sorted(open_ids)
-    return _ok(
-        "close_receptacle",
-        primitive_provenance=API_SEMANTIC_PROVENANCE,
-        receptacle_id=receptacle_id,
-        closed=was_open or bool(closed_joints),
-        closed_joints=closed_joints,
-        held_object_pose=held_object_pose,
-        qpos_changed=bool(closed_joints) or held_object_pose is not None,
-        state_mutation=_close_receptacle_state_mutation(
-            bool(closed_joints),
-            held_object_pose is not None,
-        ),
-        backend=BACKEND,
-    )
+    return _close_receptacle_impl(state, receptacle_id, hooks=_molmo_action_hooks())
 
 
 def _robot_pose_state_mutation(held_object_changed: bool) -> str:
-    parts = ["robot_base_qpos"]
-    if held_object_changed:
-        parts.append("held_object_freejoint_qpos")
-    return "+".join(parts)
+    return _robot_pose_state_mutation_impl(held_object_changed)
 
 
 def _open_receptacle_state_mutation(
@@ -1451,42 +1221,22 @@ def _open_receptacle_state_mutation(
     robot_pose_changed: bool,
     held_object_changed: bool,
 ) -> str:
-    parts = []
-    if joints_changed:
-        parts.append("mujoco_receptacle_joint_qpos")
-    if robot_pose_changed:
-        parts.append("robot_base_qpos")
-    if held_object_changed:
-        parts.append("held_object_freejoint_qpos")
-    return "+".join(parts) if parts else "no_openable_joint"
+    return _open_receptacle_state_mutation_impl(
+        joints_changed,
+        robot_pose_changed,
+        held_object_changed,
+    )
 
 
 def _close_receptacle_state_mutation(
     joints_changed: bool,
     held_object_changed: bool,
 ) -> str:
-    parts = []
-    if joints_changed:
-        parts.append("mujoco_receptacle_joint_qpos")
-    if held_object_changed:
-        parts.append("held_object_freejoint_qpos")
-    return "+".join(parts) if parts else "no_openable_joint"
+    return _close_receptacle_state_mutation_impl(joints_changed, held_object_changed)
 
 
 def done_cleanup(state: dict[str, Any], reason: str) -> dict[str, Any]:
-    _count(state, "done")
-    final_locations = _read_locations(state)
-    score = _score(final_locations, state["private_manifest"])
-    return _ok(
-        "done",
-        reason=reason,
-        cleanup_status=score["status"],
-        score=score,
-        final_locations=final_locations,
-        final_containment=_read_containment(state),
-        tool_event_counts=state["tool_event_counts"],
-        backend=BACKEND,
-    )
+    return _done_cleanup_impl(state, reason, hooks=_molmo_action_hooks())
 
 
 def _collect_dynamic_objects(
