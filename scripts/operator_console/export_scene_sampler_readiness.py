@@ -407,6 +407,7 @@ def _write_generated_eval_artifacts(output_dir: Path) -> dict[str, str | list[st
         "generated_eval_samples": sample_paths,
     }
 
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -415,9 +416,7 @@ def _export_summary(payloads: _ReadinessPayloads) -> dict[str, Any]:
     return {
         "supported_scene_sources": payloads.manifest.get("supported_scene_sources", []),
         "ui_world_ids": (payloads.manifest.get("projections") or {}).get("ui_world_ids", []),
-        "eval_sample_ids": (payloads.manifest.get("projections") or {}).get(
-            "eval_sample_ids", []
-        ),
+        "eval_sample_ids": (payloads.manifest.get("projections") or {}).get("eval_sample_ids", []),
         "eval_projection": payloads.projection.get("summary", {}),
         "readiness": payloads.readiness.get("summary", {}),
         "source_availability": (payloads.availability or {}).get("summary", {}),
@@ -616,7 +615,6 @@ def _scanner_ready_failures(
                 "prep_status": payload.get("prep_status", ""),
             }
         )
-    )
     return failures
 
 
