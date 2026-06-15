@@ -378,6 +378,13 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
   ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac worker protocol/state utilities moved from the backend
+  worker into `isaac_worker_protocol.py`, preserving worker-private wrappers
+  for state IO, command envelopes, counters, public-state projection, and
+  placeholder image generation. Metric: `isaac_lab_backend_worker.py` 4495 ->
+  4471 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Isaac backend tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
