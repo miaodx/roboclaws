@@ -19,6 +19,11 @@ related_context:
   - roboclaws/launch/worlds.py
   - roboclaws/operator_console/routes.py
   - vendors/molmospaces/docs/assets.md
+next_flow_scope:
+  - fill procthor-10k-val eval stress projection to ten admitted samples
+  - add ithor sampler readiness support
+  - add procthor-objaverse-val sampler readiness support
+  - add holodeck-objaverse-val sampler readiness support
 ---
 
 # MolmoSpaces Scene Sampler Readiness
@@ -68,6 +73,121 @@ Known partial scope:
 - The static smoke eval verifies runtime-map artifact readiness and sampler
   admission metadata; full scene-specific runtime output remains a product-run
   or later scanner proof.
+
+## Next Flow Development Plan
+
+The remaining sampler work is now explicit next-Flow development scope, not a
+loose parked-todo list. "Other sources" means these planned MolmoSpaces scene
+sources:
+
+- `ithor`
+- `procthor-objaverse-val`
+- `holodeck-objaverse-val`
+
+The next Flow should also finish the current source's stress target:
+
+- `procthor-10k-val`: raise eval-stress coverage from five admitted samples to
+  ten admitted samples while keeping the operator-console UI set at exactly
+  three default-visible samples.
+
+Recommended next Flow goal:
+
+```text
+Implement the remaining MolmoSpaces scene sampler plan: finish ten
+eval-stress samples for procthor-10k-val, add source-aware readiness support
+for ithor, procthor-objaverse-val, and holodeck-objaverse-val, expose exactly
+three UI-ready samples per supported source, and keep partial or unavailable
+sources represented by normalized blocked eval rows.
+```
+
+Next Flow implementation slices:
+
+1. **Scanner And Candidate Preparation**
+   - Turn the current static preview/readiness facts into a repeatable scanner
+     or preparation command that can inspect candidate indices per
+     `scene_source`.
+   - The scanner may use existing local assets and preview renderers, but must
+     not download large assets or call live VLMs implicitly.
+   - Output machine-readable readiness packets with preview status, public room
+     count, waypoint count, category provenance, selected reason, and canonical
+     `failure_class`.
+
+2. **`procthor-10k-val` Stress Fill**
+   - Scan additional non-contiguous `procthor-10k-val` candidates until ten
+     samples pass eval-stress admission.
+   - Keep `val_0`, `val_2`, and `val_9` as the visible UI set unless the scan
+     proves a materially better three-sample set and the plan is updated with
+     that reason.
+   - Generate or update eval sample JSON and projection metadata from the
+     scanner output.
+
+3. **Cross-Source Readiness**
+   - Add source-aware candidate rows for `ithor`,
+     `procthor-objaverse-val`, and `holodeck-objaverse-val`.
+   - For each source, admit three UI samples only after all UI readiness gates
+     pass.
+   - For each source, admit up to ten eval-stress samples only after eval gates
+     pass.
+   - If assets, loaders, room metadata, preview rendering, or map-build
+     artifacts are unavailable, keep normalized blocked rows with exact
+     asset/runtime reasons instead of silently omitting the source.
+
+4. **World Id And Console Projection**
+   - Preserve existing `molmospaces/val_N` aliases for
+     `procthor-10k-val`.
+   - Use explicit source-aware ids for newly visible non-`procthor-10k-val`
+     worlds, such as `molmospaces/ithor/<index>` or
+     `molmospaces/procthor-objaverse-val/<index>`.
+   - Ensure default operator-console worlds are only UI-admitted rows; hidden
+     aliases or blocked rows must not appear in the default scene rail.
+
+5. **Eval Projection And Harness**
+   - Extend `scene_sampler_stress` so aggregate metadata reports ready,
+     partial, and blocked counts per `scene_source`.
+   - Keep static suite/sample JSON unless dynamic `sample_manifest` support
+     becomes necessary during implementation.
+   - Keep `sampler_admission` deterministic and reject heuristic category
+     provenance such as `heuristic_room_label`, `heuristic_room_count`, and
+     `room_area_fallback`.
+
+6. **Docs And Status Alignment**
+   - Update `docs/human/molmospaces-settings.md` and
+     `docs/human/evaluation.md` after the next supported sample matrix changes.
+   - Update `STATUS.md` only if the repo-level current focus or blocker changes.
+
+Next Flow acceptance:
+
+- `procthor-10k-val` has ten eval-stress-admitted samples, or the scanner
+  records exact blocked reasons for the remaining candidates.
+- Each of `ithor`, `procthor-objaverse-val`, and
+  `holodeck-objaverse-val` has either three UI-ready samples and up to ten
+  eval-ready samples, or normalized blocked rows that name the missing asset,
+  loader, metadata, preview, waypoint, or map-build requirement.
+- No default UI row is exposed for a source with fewer than three UI-ready
+  samples.
+- No eval source is marked complete with fewer than ten eval-ready samples.
+- No sampler, eval, or CI path calls a live VLM implicitly.
+- No public sampler/world/eval metadata exposes private scorer truth, generated
+  mess sets, hidden target lists, or full simulator inventories.
+
+Next Flow verification:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_cross_environment_semantic_map_parity.py tests/contract/maps/test_actionable_semantic_map_snapshot.py -q
+ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaws/evals/runner.py roboclaws/operator_console/routes.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_harness_selector.py skills/eval-harness/scripts/select_eval_harness.py skills/eval-harness/scripts/eval_harness_rows.py
+just agent::eval suite=scene_sampler_stress budget=smoke
+just agent::eval suite=map_build_consumer budget=focused
+just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused
+```
+
+Run at least one product smoke for any newly UI-admitted source:
+
+```bash
+just run::surface surface=household-world world=<new-selected-ui-world> \
+  backend=mujoco preset=map-build agent_engine=direct-runner \
+  evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline
+```
 
 ## Goal
 
