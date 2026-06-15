@@ -400,6 +400,14 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces snapshot, robot-view, scene-camera, camera adjustment,
+  and output-provenance orchestration moved from the subprocess worker into
+  `molmospaces_worker_outputs.py`, with worker-private wrappers preserving
+  CLI/serve dispatch and monkeypatch render hooks. Metric:
+  `molmospaces_subprocess_worker.py` 4130 -> 3956 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
+  subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
