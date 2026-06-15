@@ -410,16 +410,6 @@
       },
       {
         "code": "PLR0915",
-        "key": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py|PLR0915|test_realworld_cleanup_demo_can_run_isaaclab_fake_backend",
-        "limit": 50,
-        "message": "Too many statements (84 > 50)",
-        "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
-        "row": 438,
-        "symbol": "test_realworld_cleanup_demo_can_run_isaaclab_fake_backend",
-        "value": 84
-      },
-      {
-        "code": "PLR0915",
         "key": "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py|PLR0915|test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace",
         "limit": 50,
         "message": "Too many statements (52 > 50)",

@@ -5346,3 +5346,21 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this public/
   private artifact contract test patch so the unrelated staged `eval-harness`
   rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(...)`
+  into focused fake-backend result, scene-index, semantic-pose/robot-view,
+  report, and checker-contract helpers. The fake IsaacLab runtime mode,
+  semantic pose provenance, scene-index privacy boundary, segmentation blocked
+  capability, robot-view metadata, report diagnostics, and checker positive/
+  negative proof requirements remain unchanged. Evidence in a temporary clean
+  worktree containing only this test patch: `ruff check
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend`
+  passed with 1 test. The same pytest command in the dirty main worktree is
+  currently blocked before this test's assertions by unrelated uncommitted API
+  drift (`RealWorldRunArtifactInputs.__init__()` rejects `cleanup_profile`).
+  The quality baseline was refreshed from 26 to 25 Ruff complexity violations
+  with oversized modules unchanged at 57, using a temporary clean worktree so
+  unrelated staged `eval-harness` and provider changes were not blessed.

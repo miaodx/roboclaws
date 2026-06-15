@@ -462,6 +462,17 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         (tmp_path / "isaac_scene_index.json").read_text(encoding="utf-8")
     )
 
+    _assert_isaac_fake_cleanup_result(result, run_result)
+    _assert_isaac_fake_scene_index(tmp_path, run_result, isaac_scene_index)
+    _assert_isaac_fake_semantic_pose_and_robot_views(run_result)
+    _assert_isaac_fake_report(report_text, run_result, isaac_scene_index)
+    _assert_isaac_fake_checker_contract(checker, run_result, tmp_path)
+
+
+def _assert_isaac_fake_cleanup_result(
+    result: dict[str, object],
+    run_result: dict[str, object],
+) -> None:
     assert result["backend"] == "isaaclab_subprocess"
     assert result["generated_mess_count"] == 1
     assert result["primitive_provenance"] == "isaac_semantic_pose"
@@ -478,6 +489,13 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["isaac_runtime"]["scene_binding_diagnostics"]["status"] == (
         "placeholder_mapping"
     )
+
+
+def _assert_isaac_fake_scene_index(
+    tmp_path: Path,
+    run_result: dict[str, object],
+    isaac_scene_index: dict[str, object],
+) -> None:
     assert run_result["isaac_runtime"]["scene_index_artifact"] == str(
         tmp_path / "isaac_scene_index.json"
     )
@@ -508,6 +526,9 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         item["placeholder_visuals"] is True
         for item in run_result["isaac_runtime"]["snapshot_artifacts"]
     )
+
+
+def _assert_isaac_fake_semantic_pose_and_robot_views(run_result: dict[str, object]) -> None:
     semantic_pose_state = run_result["isaac_runtime"]["semantic_pose_state"]
     assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
     assert semantic_pose_state["rendered_to_usd"] is False
@@ -515,7 +536,6 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert semantic_pose_state["physical_robot"] is False
     assert len(semantic_pose_state["transform_events"]) >= 4
     assert semantic_pose_state["object_poses"]
-    first_pose_object_id = next(iter(semantic_pose_state["object_poses"]))
     assert any(
         event["state_mutation"] == "isaac_prim_transform"
         for event in semantic_pose_state["transform_events"]
@@ -530,6 +550,13 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["robot_view_camera_control"]["step_count"] == len(
         run_result["robot_view_steps"]
     )
+
+
+def _assert_isaac_fake_report(
+    report_text: str,
+    run_result: dict[str, object],
+    isaac_scene_index: dict[str, object],
+) -> None:
     assert "Isaac Runtime Diagnostics" in report_text
     assert "Mapping gaps" in report_text
     assert "Selected USD bindings" in report_text
@@ -548,6 +575,8 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
             ].values()
         )
     )
+    semantic_pose_state = run_result["isaac_runtime"]["semantic_pose_state"]
+    first_pose_object_id = next(iter(semantic_pose_state["object_poses"]))
     assert selected_object_binding["usd_prim_path"] in report_text
     assert selected_receptacle_binding["usd_prim_path"] in report_text
     assert "placeholder_visuals" in report_text
@@ -564,6 +593,12 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         report_text,
     )
 
+
+def _assert_isaac_fake_checker_contract(
+    checker,
+    run_result: dict[str, object],
+    tmp_path: Path,
+) -> None:
     checker._assert_result(
         run_result,
         tmp_path,
