@@ -159,6 +159,17 @@ Severity: P2. `AGENTS.md` and `CLAUDE.md` still mention
 Fix only if startup rediscovery continues to cost time; keep it separate from
 code-size slices. Owner: `intuitive-init`.
 
+### G: Scene-Sampler Readiness Drift
+
+Severity: P1. Scene-sampler readiness work still leaves
+`roboclaws/launch/scene_sampler.py` over the hard 2000-line ceiling, and the
+readiness-export test remains the largest remaining test complexity row. The
+first scanner-evidence extraction removed current production complexity rows
+from `scene_sampler.py`, so the next useful work is another ownership split or
+focused readiness-export fixtures instead of accepting the oversized file as
+stable. Owner: `intuitive-refactor` / `intuitive-tests`. Proof: focused
+scene-sampler tests, ruff, and ratchet summary.
+
 ## Evidence Ladder
 
 - Static: `ruff check <touched files>`, `ruff format --check <touched files>`,

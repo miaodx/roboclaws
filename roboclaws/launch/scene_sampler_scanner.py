@@ -34,12 +34,9 @@ def scanner_preview_metadata(
     preview_root: Path,
     backend: str,
 ) -> dict[str, Any] | None:
-    """Load operator-run scanner preview metadata when it exists."""
-
     path = preview_root / f"{world_id_slug(f'molmospaces/{source}/{scene_index}')}-preview.json"
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
+    payload = _read_json_if_exists(path)
+    if not payload:
         return None
     if (
         payload.get("scene_source") != source
@@ -56,8 +53,6 @@ def scanner_product_smoke_artifacts(
     scene_index: int,
     product_smoke_root: Path,
 ) -> dict[str, Any]:
-    """Return the latest map-build smoke artifacts for a scanner candidate."""
-
     root = product_smoke_root / world_id_slug(f"molmospaces/{source}/{scene_index}")
     run_dirs = sorted(
         [path for path in root.glob("*/seed-*") if path.is_dir()],

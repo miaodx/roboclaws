@@ -100,6 +100,12 @@ logs before choosing the next slice.
   test cleanup. Ratchet passed at 19 Ruff complexity violations and 56
   oversized modules; remaining work returned to the active plan.
 
+- 2026-06-15: Scene-sampler scanner evidence/admission helpers moved into
+  `scene_sampler_scanner.py`, removing production complexity rows from
+  `scene_sampler.py`. Metric: dirty resumed checkpoint 28 -> 25 complexity
+  rows; oversized modules stayed at 60. Proof: focused scene-sampler tests,
+  ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
