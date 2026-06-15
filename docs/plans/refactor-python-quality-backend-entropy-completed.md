@@ -440,6 +440,14 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
   Molmo subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces focus-camera/view-spec math, focus payloads, focus
+  image annotation, and visual-grounding status helpers moved from the
+  subprocess worker into `molmospaces_focus_camera.py`, with worker-private
+  wrappers preserving direct tests and monkeypatch hooks. Metric:
+  `molmospaces_subprocess_worker.py` 3345 -> 3185 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
+  subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
