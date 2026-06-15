@@ -291,6 +291,17 @@ sole working route for the requested demo.
 
 - Keep commits scoped: `feat: add cleanup report gate`, `fix: handle provider timeout`
 - Commit messages: `type: description` format
+- Multiple agents may edit the same checkout at the same time. Before committing,
+  inspect `git status --short` and `git diff --cached`; stage only files or hunks
+  that belong to your current task.
+- Do not use broad staging or commit shortcuts such as `git add -A`, `git add .`,
+  or `git commit -a` in a shared checkout. Prefer explicit pathspecs,
+  `git add -p`, or a temporary `GIT_INDEX_FILE` index when the worktree already
+  contains unrelated changes.
+- Do not reset, restore, unstage, or commit another agent's work unless the human
+  explicitly asks for that. If a file contains mixed edits that cannot be safely
+  separated, leave it uncommitted and report the blocker instead of sweeping in
+  unrelated changes.
 - If a commit is created by Codex, include `Co-authored-by: Codex <codex@users.noreply.github.com>`
 - If a commit is created by another AI coding agent, include a corresponding co-author trailer.
 
