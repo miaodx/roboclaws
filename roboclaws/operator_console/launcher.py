@@ -32,6 +32,7 @@ from roboclaws.operator_console.launch_support import (
 )
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
+from roboclaws.operator_console.process_status import pid_is_active
 from roboclaws.operator_console.readiness import route_gate_rows
 from roboclaws.operator_console.routes import (
     ConsoleLaunchSelection,
@@ -871,13 +872,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _pid_exists(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+    return pid_is_active(pid)
 
 
 def _tmux_session_active(display_run_dir: Path) -> bool:

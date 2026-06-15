@@ -3060,13 +3060,17 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert "run_live_codex.sh" in molmo_text
     assert "scripts/molmo_cleanup/run_live_codex_cleanup.py" in molmo_text
     assert "another interactive Codex Molmo cleanup session appears to be active" in molmo_text
-    assert "another non-Molmo live cleanup run appears to be active" in molmo_text
+    assert (
+        'if [[ "$backend" == "molmospaces_subprocess" && "$interactive_visual_cap" == "1" ]]'
+        in molmo_text
+    )
+    assert "another non-Molmo live cleanup run appears to be active" not in molmo_text
+    assert "active MCP servers:" not in molmo_text
     assert "ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS" in molmo_text
     assert "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \\" in molmo_text
     assert "roboclaws.household.visual_backend_slots acquire" in molmo_text
     assert "visual_backend_slot.json" in molmo_text
     assert "refusing to choose another port" in molmo_text
-    assert "--lock-path output/molmo/.live-codex.lock" in molmo_text
     assert "tmux_session.txt" in molmo_text
     assert "live_status.json" in molmo_text
     assert all(item in runner_text for item in ("codex-events.jsonl", "codex-last-message.md"))
@@ -3076,6 +3080,9 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert "is already in use before server start" in runner_text
     assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
     assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text
+    assert 'live_lock_backend="${backend//[^A-Za-z0-9_.-]/-}"' in molmo_text
+    assert '--lock-path "$codex_lock_path"' in molmo_text
+    assert "output/molmo/.live-codex.lock" not in molmo_text
 
 
 def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker() -> None:

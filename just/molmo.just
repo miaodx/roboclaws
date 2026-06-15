@@ -556,31 +556,6 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
         elif [[ "$driver" == "openai-agents-live" ]]; then
           roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
         fi
-        if [[ "$backend" != "molmospaces_subprocess" ]]; then
-          active_runner=""
-          active_sessions=""
-          case "$driver" in
-            codex-live)
-              active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_codex_cleanup[.]py' || true)"
-              active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
-              ;;
-            claude-live)
-              active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_claude_cleanup[.]py' || true)"
-              ;;
-            openai-agents-live)
-              active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_openai_agents_cleanup[.]py' || true)"
-              ;;
-          esac
-          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-world[.]cleanup' || true)"
-          if [[ -n "$active_runner$active_server$active_sessions" ]]; then
-            echo "error: another non-Molmo live cleanup run appears to be active" >&2
-            [[ -n "$active_sessions" ]] && echo "active tmux sessions:" >&2 && echo "$active_sessions" >&2
-            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
-            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
-            echo "probe latest: just molmo::status" >&2
-            exit 1
-          fi
-        fi
         codex_model=""
         codex_profile_summary="system defaults"
         openai_agents_model=""
@@ -688,6 +663,10 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
         if [[ -n "$operator_messages_path" ]]; then
           server_args+=(--operator-messages-path "$operator_messages_path")
         fi
+        live_lock_backend="${backend//[^A-Za-z0-9_.-]/-}"
+        codex_lock_path="output/molmo/live-locks/${live_lock_backend}.codex.lock"
+        claude_lock_path="output/molmo/live-locks/${live_lock_backend}.claude.lock"
+        openai_agents_lock_path="output/molmo/live-locks/${live_lock_backend}.openai-agents.lock"
 
         if [[ "$driver" == "codex-live" ]]; then
           if ! command -v tmux >/dev/null 2>&1; then
@@ -695,7 +674,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             exit 1
           fi
 
-          if [[ "$interactive_visual_cap" == "1" ]]; then
+          if [[ "$backend" == "molmospaces_subprocess" && "$interactive_visual_cap" == "1" ]]; then
             active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
             if [[ -n "$active_sessions" ]]; then
               echo "error: another interactive Codex Molmo cleanup session appears to be active" >&2
@@ -738,7 +717,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --client-url "$client_url"
             --host "$host"
             --port "$port"
-            --lock-path output/molmo/.live-codex.lock
+            --lock-path "$codex_lock_path"
             --tmux-session "$session_name"
             --codex-bin "$codex_bin"
             --codex-model "$codex_model"
@@ -833,7 +812,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --client-url "$client_url"
             --host "$host"
             --port "$port"
-            --lock-path output/molmo/.live-claude.lock
+            --lock-path "$claude_lock_path"
             --claude-bin "$claude_bin"
             --claude-provider-summary "$claude_profile_summary"
             --server-startup-timeout-s "$server_startup_timeout_s"
@@ -884,7 +863,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --client-url "$client_url"
             --host "$host"
             --port "$port"
-            --lock-path output/molmo/.live-openai-agents.lock
+            --lock-path "$openai_agents_lock_path"
             --provider-profile "$openai_agents_profile"
             --model "$openai_agents_model"
             --mcp-client-session-timeout-s "${ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S:-30}"
