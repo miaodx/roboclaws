@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "justfile").is_file():
+            return parent
+    raise AssertionError("could not locate repo root")
+
+
+REPO_ROOT = _repo_root()
+RUNNER_PATH = REPO_ROOT / "scripts" / "operator_console" / "run_scene_sampler_scanner_plan.py"
+
+
+def _load_runner():
+    spec = importlib.util.spec_from_file_location("scene_sampler_scanner_runner", RUNNER_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_plan(path: Path, candidates: list[dict[str, object]]) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "molmospaces_scene_sampler_scanner_execution_plan_v1",
+                "sources": {
+                    "ithor": {
+                        "candidates": candidates,
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _candidate(*, scanner_status: str = "blocked_missing_resources") -> dict[str, object]:
+    return {
+        "scene_source": "ithor",
+        "scene_index": 1,
+        "world_id": "molmospaces/ithor/1",
+        "scanner_status": scanner_status,
+        "admission_status": "blocked",
+        "missing_gates": (
+            ["source_asset_available"]
+            if scanner_status != "ready_for_product_smoke"
+            else []
+        ),
+        "missing_paths": ["/tmp/FloorPlan1_physics.xml"]
+        if scanner_status != "ready_for_product_smoke"
+        else [],
+        "preview_command": (
+            ".venv/bin/python scripts/operator_console/render_scene_previews.py "
+            "--world molmospaces/ithor/1"
+        ),
+        "map_build_product_smoke_command": (
+            "just run::surface surface=household-world world=molmospaces/ithor/1 "
+            "backend=mujoco preset=map-build agent_engine=direct-runner "
+            "evidence_lane=world-oracle-labels"
+        ),
+    }
+
+
+def test_scanner_runner_skips_blocked_candidates_without_running_commands(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    output_path = tmp_path / "scanner_run.json"
+    _write_plan(plan_path, [_candidate()])
+    calls = []
+
+    result = runner.run_scanner_plan(
+        plan_path=plan_path,
+        output_path=output_path,
+        run_command=lambda *_args, **_kwargs: calls.append(_args),
+    )
+
+    assert result["schema"] == "molmospaces_scene_sampler_scanner_run_v1"
+    assert result["status"] == "no_ready_candidates"
+    assert result["skipped_candidate_count"] == 1
+    assert result["rows"][0]["status"] == "skipped_blocked_candidate"
+    assert calls == []
+    assert json.loads(output_path.read_text(encoding="utf-8")) == result
+
+
+def test_scanner_runner_dry_run_records_ready_commands_without_execution(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    output_path = tmp_path / "scanner_run.json"
+    _write_plan(plan_path, [_candidate(scanner_status="ready_for_product_smoke")])
+    calls = []
+
+    result = runner.run_scanner_plan(
+        plan_path=plan_path,
+        output_path=output_path,
+        dry_run=True,
+        run_command=lambda *_args, **_kwargs: calls.append(_args),
+    )
+
+    assert result["status"] == "dry_run"
+    assert result["ready_candidate_count"] == 1
+    assert [item["name"] for item in result["rows"][0]["commands"]] == [
+        "preview",
+        "map_build_product_smoke",
+    ]
+    assert {item["status"] for item in result["rows"][0]["commands"]} == {"dry_run"}
+    assert calls == []
+
+
+def test_scanner_runner_executes_ready_preview_then_map_build(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    output_path = tmp_path / "scanner_run.json"
+    _write_plan(plan_path, [_candidate(scanner_status="ready_for_product_smoke")])
+    calls = []
+
+    def fake_run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return SimpleNamespace(returncode=0, stdout="ok\n", stderr="")
+
+    result = runner.run_scanner_plan(
+        plan_path=plan_path,
+        output_path=output_path,
+        run_command=fake_run,
+    )
+
+    assert result["status"] == "success"
+    assert result["executed_candidate_count"] == 1
+    assert result["rows"][0]["status"] == "passed"
+    assert [item["name"] for item in result["rows"][0]["commands"]] == [
+        "preview",
+        "map_build_product_smoke",
+    ]
+    assert len(calls) == 2
+    assert calls[0][0][:2] == [
+        ".venv/bin/python",
+        "scripts/operator_console/render_scene_previews.py",
+    ]
+    assert calls[1][0][:2] == ["just", "run::surface"]

@@ -19,11 +19,16 @@ related_context:
   - roboclaws/launch/worlds.py
   - roboclaws/operator_console/routes.py
   - vendors/molmospaces/docs/assets.md
+other_source_targets:
+  - ithor
+  - procthor-objaverse-val
+  - holodeck-objaverse-val
 next_flow_scope:
   - fill procthor-10k-val eval stress projection to ten admitted samples
-  - add ithor sampler readiness support
-  - add procthor-objaverse-val sampler readiness support
-  - add holodeck-objaverse-val sampler readiness support
+  - add sampler readiness support for ithor
+  - add sampler readiness support for procthor-objaverse-val
+  - add sampler readiness support for holodeck-objaverse-val
+  - turn remaining plan slices into scanner, source-prep, UI, eval, and docs work
 ---
 
 # MolmoSpaces Scene Sampler Readiness
@@ -134,6 +139,15 @@ First slice implemented on 2026-06-15.
   install commands, preview render commands, map-build product-smoke commands,
   missing paths, missing gates, and whether the candidate is currently
   `ready_for_product_smoke` or still `blocked_missing_resources`.
+- Scanner execution runner:
+  `scripts/operator_console/run_scene_sampler_scanner_plan.py` consumes
+  `scene_sampler_scanner_execution_plan.json`, skips blocked candidates without
+  side effects, and runs preview plus map-build product-smoke commands only for
+  candidates marked `ready_for_product_smoke`. On this host, the current
+  artifact produces `output/scene-sampler-scanner/scanner_run.json` with
+  `status=no_ready_candidates`, `candidate_count=33`,
+  `ready_candidate_count=0`, `executed_candidate_count=0`, and
+  `skipped_candidate_count=33`.
 
 Verification run on 2026-06-15:
 
@@ -157,13 +171,23 @@ ruff check roboclaws/launch/worlds.py roboclaws/launch/catalog.py tests/unit/lau
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --candidate-range 0:10 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_scanner_runner.py -q
+ruff check scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
+.venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py
 ```
 
-Known partial scope:
+Current limits feeding the next Flow:
 
-- This first slice does not run a live provider or implicit VLM labeler.
-- Non-`procthor-10k-val` sources are blocked rows, not supported UI sources.
-- The eval-stress target of ten samples per source is not complete yet.
+- This first slice does not run a live provider or implicit VLM labeler. That
+  is intentional and remains a non-goal for sampler, eval, and CI paths.
+- Non-`procthor-10k-val` sources are represented by blocked rows today, not
+  supported UI sources. The next Flow should turn `ithor`,
+  `procthor-objaverse-val`, and `holodeck-objaverse-val` from blocked rows into
+  either supported source rows or explicit asset/runtime-blocked rows.
+- The eval-stress target of ten samples per supported source is not complete
+  yet. The next Flow should first fill `procthor-10k-val` from five to ten
+  admitted eval samples, then apply the same admission rules to the other
+  source targets.
 - The static smoke eval verifies runtime-map artifact readiness and sampler
   admission metadata; full scene-specific runtime output remains a product-run
   or later scanner proof.
@@ -187,8 +211,8 @@ Known partial scope:
 ## Next Flow Development Plan
 
 The remaining sampler work is now explicit next-Flow development scope, not a
-loose parked-todo list. "Other sources" means these planned MolmoSpaces scene
-sources:
+loose parked-todo list. In this plan, "other sources" means exactly these
+planned MolmoSpaces scene sources:
 
 - `ithor`
 - `procthor-objaverse-val`
@@ -227,7 +251,9 @@ Next Flow implementation slices:
      XML/resources are missing.
    - Turn the current static preview/readiness facts into a repeatable scanner
      or preparation command that can inspect candidate indices per
-     `scene_source`.
+     `scene_source`, skip blocked candidates without side effects, and run
+     preview plus map-build product-smoke commands only for candidates that are
+     explicitly `ready_for_product_smoke`.
    - The scanner may use existing local assets and preview renderers, but must
      not download large assets or call live VLMs implicitly.
    - Output machine-readable readiness packets with preview status, public room
@@ -319,6 +345,10 @@ Next Flow implementation slices:
    - Update `docs/human/molmospaces-settings.md` and
      `docs/human/evaluation.md` after the next supported sample matrix changes.
    - Update `STATUS.md` only if the repo-level current focus or blocker changes.
+
+Everything above is next-Flow implementation scope. Items can finish as either
+admitted samples or normalized blocked rows, but they should not be left as
+unclassified parked information after the next Flow runs.
 
 Next Flow acceptance:
 
