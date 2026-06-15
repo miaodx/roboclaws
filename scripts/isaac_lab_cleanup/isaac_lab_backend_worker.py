@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import sys
 import traceback
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -43,6 +42,7 @@ from scripts.isaac_lab_cleanup import (
     isaac_scenario_builders,
     isaac_scenario_state,
     isaac_scene_camera_geometry,
+    isaac_scene_index_geometry,
     isaac_semantic_pose_stage,
     isaac_worker_commands,
     isaac_worker_outputs,
@@ -225,11 +225,11 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_geometry import (
     load_camera_view_specs,
 )
 from scripts.isaac_lab_cleanup.isaac_scene_index_geometry import (
+    IsaacUsdSceneIndexHooks,
     authored_reference_asset_paths,
     fallback_room_outlines_from_indices,
     is_local_reference_asset_path,
     local_reference_asset_missing,
-    room_outline_from_usd_prim,
     room_outlines_from_scene_index_diagnostics,
     round_vec3,
     usd_list_op_items,
@@ -315,7 +315,6 @@ from scripts.isaac_lab_cleanup.isaac_support_surface_geometry import (
     support_pose_from_support_surface,
     support_pose_from_usd_bounds,
     support_surface_from_usd_bounds,
-    usd_receptacle_support_surfaces,
     usd_support_surface_score,
     usd_support_surface_union_entry,
 )
@@ -791,70 +790,33 @@ def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
 
 
 def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
-    from pxr import Usd, UsdGeom
-
-    stage = Usd.Stage.Open(str(usd_path))
-    if stage is None:
-        raise RuntimeError(f"Isaac USD stage could not be opened for indexing: {usd_path}")
-
-    object_index: dict[str, dict[str, Any]] = {}
-    receptacle_index: dict[str, dict[str, Any]] = {}
-    room_outlines: list[dict[str, Any]] = []
-    prim_paths_by_name: dict[str, list[str]] = {}
-    stage_prim_count = 0
-    for prim in stage.Traverse():
-        stage_prim_count += 1
-        prim_path = str(prim.GetPath())
-        prim_paths_by_name.setdefault(prim.GetName(), []).append(prim_path)
-        handle = _usd_handle_from_prim(prim_path, object_index, receptacle_index)
-        room_outline = _room_outline_from_usd_prim(
-            prim_path,
-            prim,
-            usd_geom=UsdGeom,
-        )
-        if room_outline is not None:
-            room_outlines.append(room_outline)
-        if _is_object_prim_path(prim_path):
-            object_index[handle] = _usd_index_entry(prim_path, prim.GetName(), "object")
-        elif _is_receptacle_prim_path(prim_path):
-            receptacle_index[handle] = {
-                **_usd_index_entry(prim_path, prim.GetName(), "receptacle"),
-                "support_pose": _pose_near(handle),
-            }
-    _merge_molmospaces_metadata_index(
-        usd_path=usd_path,
-        prim_paths_by_name=prim_paths_by_name,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-    )
-    _annotate_usd_index_geometry(
-        usd_path=usd_path,
-        stage=stage,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        usd_geom=UsdGeom,
+    return isaac_scene_index_geometry.inspect_usd_scene_index(
+        usd_path,
+        hooks=_isaac_usd_scene_index_hooks(),
     )
 
-    blockers = []
-    if not object_index:
-        blockers.append("No movable-object USD prim candidates matched current path heuristics.")
-    if not receptacle_index:
-        blockers.append(
-            "No receptacle/support USD prim candidates matched current path heuristics."
-        )
-    return {
-        "schema": "isaac_usd_scene_index_v1",
-        "status": "indexed" if not blockers else "partial",
-        "source": str(usd_path),
-        "stage_prim_count": stage_prim_count,
-        "object_candidate_count": len(object_index),
-        "receptacle_candidate_count": len(receptacle_index),
-        "room_outline_count": len(room_outlines),
-        "room_outlines": sorted(room_outlines, key=lambda item: str(item.get("room_id") or "")),
-        "object_index": object_index,
-        "receptacle_index": receptacle_index,
-        "blockers": blockers,
-    }
+
+def _isaac_usd_scene_index_hooks() -> IsaacUsdSceneIndexHooks:
+    return IsaacUsdSceneIndexHooks(
+        annotate_usd_index_geometry=_annotate_usd_index_geometry,
+        authored_reference_asset_paths=_authored_reference_asset_paths,
+        dict_value=_dict,
+        iter_usd_prim_range=_iter_usd_prim_range,
+        is_object_prim_path=_is_object_prim_path,
+        is_receptacle_prim_path=_is_receptacle_prim_path,
+        local_reference_asset_missing=_local_reference_asset_missing,
+        merge_molmospaces_metadata_index=_merge_molmospaces_metadata_index,
+        pose_near=_pose_near,
+        room_outline_from_usd_prim=_room_outline_from_usd_prim,
+        round_vec3=_round_vec3,
+        support_pose_from_support_surface=_support_pose_from_support_surface,
+        support_pose_from_usd_bounds=_support_pose_from_usd_bounds,
+        usd_handle_from_prim=_usd_handle_from_prim,
+        usd_index_entry=_usd_index_entry,
+        usd_receptacle_support_surfaces=_usd_receptacle_support_surfaces,
+        usd_world_bounds=_usd_world_bounds,
+        usd_world_root_position=_usd_world_root_position,
+    )
 
 
 def _annotate_usd_index_geometry(
@@ -865,137 +827,43 @@ def _annotate_usd_index_geometry(
     receptacle_index: dict[str, dict[str, Any]],
     usd_geom: Any,
 ) -> None:
-    for index in (object_index, receptacle_index):
-        for entry in index.values():
-            prim_path = str(entry.get("usd_prim_path") or "")
-            if not prim_path:
-                entry.update(
-                    {
-                        "prim_type": "",
-                        "valid_stage_prim": False,
-                        "has_renderable_geometry": False,
-                        "renderable_descendant_count": 0,
-                        "mesh_descendant_count": 0,
-                        "authored_reference_count": 0,
-                        "missing_referenced_asset_count": 0,
-                        "missing_referenced_assets": [],
-                        "geometry_status": "missing_prim_path",
-                    }
-                )
-                continue
-            prim = stage.GetPrimAtPath(prim_path)
-            diagnostics = _usd_prim_geometry_diagnostics(
-                usd_path=usd_path,
-                prim=prim,
-                usd_geom=usd_geom,
-            )
-            entry.update(diagnostics)
-            if str(entry.get("kind") or "") == "receptacle" or isinstance(
-                entry.get("support_pose"), dict
-            ):
-                support_surfaces = _usd_receptacle_support_surfaces(prim=prim, usd_geom=usd_geom)
-                if support_surfaces:
-                    entry["support_surfaces"] = support_surfaces
-                support_pose = _support_pose_from_usd_bounds(
-                    entry.get("usd_world_bounds"),
-                    fallback=_dict(entry.get("support_pose")),
-                )
-                if support_surfaces:
-                    support_pose = _support_pose_from_support_surface(
-                        support_surfaces[0],
-                        fallback=support_pose,
-                    )
-                if support_pose is not None:
-                    entry["support_pose"] = support_pose
+    return isaac_scene_index_geometry.annotate_usd_index_geometry(
+        usd_path=usd_path,
+        stage=stage,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        usd_geom=usd_geom,
+        hooks=_isaac_usd_scene_index_hooks(),
+    )
 
 
 def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) -> dict[str, Any]:
-    if not prim or not prim.IsValid():
-        return {
-            "prim_type": "",
-            "valid_stage_prim": False,
-            "has_renderable_geometry": False,
-            "renderable_descendant_count": 0,
-            "mesh_descendant_count": 0,
-            "authored_reference_count": 0,
-            "missing_referenced_asset_count": 0,
-            "missing_referenced_assets": [],
-            "geometry_status": "missing_stage_prim",
-        }
-    gprim_type = getattr(usd_geom, "Gprim", None)
-    renderable_descendant_count = 0
-    mesh_descendant_count = 0
-    for descendant in _iter_usd_prim_range(prim):
-        if gprim_type is not None and descendant.IsA(gprim_type):
-            renderable_descendant_count += 1
-        if str(descendant.GetTypeName() or "") == "Mesh":
-            mesh_descendant_count += 1
-    reference_assets = _authored_reference_asset_paths(usd_path=usd_path, prim=prim)
-    missing_assets = [asset for asset in reference_assets if _local_reference_asset_missing(asset)]
-    has_renderable_geometry = renderable_descendant_count > 0
-    if has_renderable_geometry:
-        geometry_status = "renderable"
-    elif missing_assets:
-        geometry_status = "missing_referenced_geometry"
-    else:
-        geometry_status = "no_renderable_descendants"
-    world_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
-    world_root_position = _usd_world_root_position(prim, usd_geom=usd_geom)
-    return {
-        "prim_type": str(prim.GetTypeName() or ""),
-        "valid_stage_prim": True,
-        "has_renderable_geometry": has_renderable_geometry,
-        "renderable_descendant_count": renderable_descendant_count,
-        "mesh_descendant_count": mesh_descendant_count,
-        "authored_reference_count": len(reference_assets),
-        "missing_referenced_asset_count": len(missing_assets),
-        "missing_referenced_assets": missing_assets[:5],
-        "geometry_status": geometry_status,
-        "is_instanceable": bool(prim.IsInstanceable()),
-        "is_instance": bool(prim.IsInstance()),
-        "usd_world_bounds": world_bounds,
-        "usd_world_root_position": world_root_position,
-    }
+    return isaac_scene_index_geometry.usd_prim_geometry_diagnostics(
+        usd_path=usd_path,
+        prim=prim,
+        usd_geom=usd_geom,
+        hooks=_isaac_usd_scene_index_hooks(),
+    )
 
 
 def _usd_world_bounds(prim: Any, *, usd_geom: Any) -> dict[str, Any] | None:
-    from pxr import Usd
-
-    bbox_cache = usd_geom.BBoxCache(
-        Usd.TimeCode.Default(),
-        [usd_geom.Tokens.default_, usd_geom.Tokens.render, usd_geom.Tokens.proxy],
+    return isaac_scene_index_geometry.usd_world_bounds(
+        prim,
+        usd_geom=usd_geom,
+        round_vec3=_round_vec3,
     )
-    bbox = bbox_cache.ComputeWorldBound(prim).ComputeAlignedBox()
-    min_point = [float(value) for value in bbox.GetMin()]
-    max_point = [float(value) for value in bbox.GetMax()]
-    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
-    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
-        return None
-    if max(size) <= 0:
-        return None
-    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
-    return {
-        "min": _round_vec3(min_point),
-        "max": _round_vec3(max_point),
-        "center": _round_vec3(center),
-        "size": _round_vec3(size),
-    }
 
 
 def _usd_world_root_position(prim: Any, *, usd_geom: Any) -> list[float] | None:
-    try:
-        transform = usd_geom.Xformable(prim).ComputeLocalToWorldTransform(0.0)
-        position = transform.Transform((0.0, 0.0, 0.0))
-    except Exception:
-        return None
-    values = [float(value) for value in position]
-    if any(not math.isfinite(value) for value in values):
-        return None
-    return _round_vec3(values)
+    return isaac_scene_index_geometry.usd_world_root_position(
+        prim,
+        usd_geom=usd_geom,
+        round_vec3=_round_vec3,
+    )
 
 
 def _usd_receptacle_support_surfaces(*, prim: Any, usd_geom: Any) -> list[dict[str, Any]]:
-    return usd_receptacle_support_surfaces(
+    return isaac_scene_index_geometry.receptacle_support_surfaces(
         prim=prim,
         usd_geom=usd_geom,
         world_bounds=_usd_world_bounds,
@@ -1009,7 +877,7 @@ def _room_outline_from_usd_prim(
     *,
     usd_geom: Any,
 ) -> dict[str, Any] | None:
-    return room_outline_from_usd_prim(
+    return isaac_scene_index_geometry.room_outline_from_usd_prim(
         prim_path,
         prim,
         usd_geom=usd_geom,
@@ -1017,10 +885,8 @@ def _room_outline_from_usd_prim(
     )
 
 
-def _iter_usd_prim_range(prim: Any) -> Iterable[Any]:
-    from pxr import Usd
-
-    return Usd.PrimRange(prim)
+def _iter_usd_prim_range(prim: Any) -> Any:
+    return isaac_scene_index_geometry.iter_usd_prim_range(prim)
 
 
 def _dedupe(values: Any) -> list[str]:

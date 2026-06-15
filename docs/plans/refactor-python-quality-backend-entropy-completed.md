@@ -529,6 +529,14 @@ logs before choosing the next slice.
   at 62. Proof: focused Isaac backend tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-16: Isaac USD scene-index inspection, geometry diagnostics, world
+  bounds/root-position extraction, room-outline lookup, and receptacle support
+  surface wiring moved from the backend worker into
+  `isaac_scene_index_geometry.py`, with worker-private wrappers and monkeypatch
+  hooks preserved. Metric: `isaac_lab_backend_worker.py` 3742 -> 3608 lines;
+  Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
+  focused Isaac backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
