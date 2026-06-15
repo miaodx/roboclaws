@@ -170,7 +170,7 @@ def preview_messup_from_inventory(
 
 
 def _load_molmospaces_inventory(world_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    from molmo_spaces.molmo_spaces_constants import get_scenes_root
+    from molmo_spaces.molmo_spaces_constants import get_scenes, get_scenes_root
     from molmo_spaces.utils.scene_metadata_utils import get_scene_metadata
 
     from scripts.molmo_cleanup.molmospaces_subprocess_worker import (
@@ -179,8 +179,11 @@ def _load_molmospaces_inventory(world_id: str) -> tuple[list[dict[str, Any]], li
         _load_model_data,
     )
 
-    scene_source, scene_index = _molmospaces_scene_ref(world_id)
-    scene_xml = get_scenes_root() / scene_source / f"val_{scene_index}.xml"
+    scene_xml = _resolve_molmospaces_inventory_scene_xml(
+        world_id,
+        get_scenes=get_scenes,
+        get_scenes_root=get_scenes_root,
+    )
     if not scene_xml.is_file():
         raise FileNotFoundError(scene_xml)
     model, data = _load_model_data(scene_xml)
@@ -192,6 +195,26 @@ def _load_molmospaces_inventory(world_id: str) -> tuple[list[dict[str, Any]], li
         data,
         metadata,
     )
+
+
+def _resolve_molmospaces_inventory_scene_xml(
+    world_id: str,
+    *,
+    get_scenes,
+    get_scenes_root,
+) -> Path:
+    from scripts.molmo_cleanup.molmospaces_subprocess_worker import (
+        _resolve_molmospaces_scene_xml,
+    )
+
+    scene_source, scene_index = _molmospaces_scene_ref(world_id)
+    scene_xml, _resolution = _resolve_molmospaces_scene_xml(
+        scene_source=scene_source,
+        scene_index=scene_index,
+        get_scenes=get_scenes,
+        scenes_root=Path(get_scenes_root()),
+    )
+    return scene_xml
 
 
 def _molmospaces_scene_ref(world_id: str) -> tuple[str, int]:

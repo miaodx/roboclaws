@@ -120,6 +120,9 @@ First slice implemented on 2026-06-15.
   assets. This removes the legacy runtime assumption that every source uses
   `get_scenes_root() / scene_source / val_<index>.xml`, so future scanner runs
   can target source-specific paths such as `ithor/FloorPlan1_physics.xml`.
+- Operator-console mess-up preview inventory loading now uses the same
+  source-aware scene resolution path, so future source-aware UI rows do not
+  silently probe a wrong legacy `val_<index>.xml` location before launch.
 
 Verification run on 2026-06-15:
 
@@ -136,6 +139,8 @@ ruff check roboclaws/launch/scene_sampler.py roboclaws/operator_console/messup.p
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-readiness-availability --require-ui-supported-source procthor-10k-val
 ./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py -q
 ruff check scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_messup.py -q
+ruff check roboclaws/operator_console/messup.py tests/unit/operator_console/test_messup.py
 ```
 
 Known partial scope:
