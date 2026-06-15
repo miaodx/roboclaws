@@ -213,9 +213,10 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         assert ithor_scanner["category_provenance"] == "unavailable"
         assert "source_asset_available" in ithor_scanner["required_gates"]
         assert "source_asset_available" in ithor_scanner["missing_gates"]
-        assert "render_scene_previews.py --world molmospaces/ithor/" in ithor_scanner[
-            "preview_command"
-        ]
+        assert (
+            "render_scene_previews.py --world molmospaces/ithor/"
+            in ithor_scanner["preview_command"]
+        )
         assert "world=molmospaces/ithor/" in ithor_scanner["map_build_product_smoke_command"]
     assert generated_suite == json.loads(
         (REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json").read_text(

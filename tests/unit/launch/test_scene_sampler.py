@@ -252,9 +252,9 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
 
 def test_scene_sampler_eval_suite_payload_matches_committed_fixture() -> None:
     fixture = json.loads(
-        (
-            REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"
-        ).read_text(encoding="utf-8")
+        (REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json").read_text(
+            encoding="utf-8"
+        )
     )
 
     assert eval_suite_payload() == fixture
@@ -587,9 +587,7 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     objaverse = report["sources"]["procthor-objaverse-val"]
     assert objaverse["prep_status"] == "complete"
     assert objaverse["recommended_candidate_range"] == "0:9"
-    assert objaverse["molmospaces_get_scenes_call"] == (
-        'get_scenes("procthor-objaverse", "val")'
-    )
+    assert objaverse["molmospaces_get_scenes_call"] == ('get_scenes("procthor-objaverse", "val")')
     assert objaverse["missing_resources"] == []
 
     ithor = report["sources"]["ithor"]
@@ -606,8 +604,7 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert "_scene_xml_path_from_ref(scene_ref, get_scenes_root())" in install_command
     assert "for role in ('base', 'physics', 'ceiling')" in install_command
     assert any(
-        command["name"] == "rerun_readiness_after_prep"
-        for command in ithor["operator_commands"]
+        command["name"] == "rerun_readiness_after_prep" for command in ithor["operator_commands"]
     )
 
 
@@ -801,7 +798,5 @@ def test_scene_sampler_scanner_execution_plan_records_commands(monkeypatch) -> N
     assert "source_asset_available" in candidate["missing_gates"]
     assert candidate["candidate_file"]["source"] == "legacy_val_xml_path"
     assert candidate["install_command"].startswith(".venv/bin/python - <<'PY'")
-    assert "render_scene_previews.py --world molmospaces/ithor/0" in candidate[
-        "preview_command"
-    ]
+    assert "render_scene_previews.py --world molmospaces/ithor/0" in candidate["preview_command"]
     assert "world=molmospaces/ithor/0" in candidate["map_build_product_smoke_command"]

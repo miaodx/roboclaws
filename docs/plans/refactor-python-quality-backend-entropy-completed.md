@@ -106,6 +106,12 @@ logs before choosing the next slice.
   rows; oversized modules stayed at 60. Proof: focused scene-sampler tests,
   ruff, format check, and ratchet.
 
+- 2026-06-16: Scene-sampler source-selection metadata moved into
+  `scene_sampler_sources.py` while admitting the `procthor-objaverse-val`
+  sampler rows and fixtures. Metric: `scene_sampler.py` is down to 2432 lines
+  but remains a P1 hard-ceiling candidate. Proof: focused scene-sampler/eval
+  tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
