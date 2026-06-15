@@ -466,6 +466,16 @@ logs before choosing the next slice.
   stayed at 62. Proof: focused Molmo subprocess backend tests, ruff, format
   check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces fixed/free camera rendering, camera diagnostics,
+  rendered-image loading, focus segmentation visibility, highlight-diff
+  fallback boxes, offscreen framebuffer growth, subtree geometry lookup,
+  bbox inflation, and render dimension helpers moved from the subprocess
+  worker into `molmospaces_rendering.py`, with worker-private wrappers
+  preserving current monkeypatch hooks and geometry helper call sites. Metric:
+  `molmospaces_subprocess_worker.py` 2942 -> 2809 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
+  subprocess backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

@@ -155,6 +155,60 @@ from scripts.molmo_cleanup.molmospaces_placement import (
 from scripts.molmo_cleanup.molmospaces_placement import (
     surface_candidate_positions as _surface_candidate_positions_impl,
 )
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    ensure_offscreen_framebuffer as _ensure_offscreen_framebuffer_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    fixed_camera_diagnostics as _fixed_camera_diagnostics_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    focus_visibility as _focus_visibility_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    free_camera_diagnostics as _free_camera_diagnostics_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    highlight_diff_box as _highlight_diff_box_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    image_to_array as _image_to_array_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    inflate_bbox as _inflate_bbox_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    load_rendered_robot_view_image as _load_rendered_robot_view_image_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    render_color_frame as _render_color_frame_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    render_dimensions as _render_dimensions_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    render_fixed_camera as _render_fixed_camera_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    render_free_camera as _render_free_camera_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    render_segmentation as _render_segmentation_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    segmentation_box as _segmentation_box_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    shape_height as _shape_height_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    shape_width as _shape_width_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    subtree_body_ids as _subtree_body_ids_impl,
+)
+from scripts.molmo_cleanup.molmospaces_rendering import (
+    subtree_geom_ids as _subtree_geom_ids_impl,
+)
 from scripts.molmo_cleanup.molmospaces_robot_pose import (
     angle_delta_value as _angle_delta_impl,
 )
@@ -2237,13 +2291,15 @@ def _render_fixed_camera(
     width: int = DEFAULT_RENDER_WIDTH,
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    width, height = _render_dimensions(width, height)
-    _ensure_offscreen_framebuffer(model, width=width, height=height)
-    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
-    renderer.update_scene(data, camera=camera_name)
-    frame = renderer.render()
-    renderer.close()
-    return frame
+    return _render_fixed_camera_impl(
+        model,
+        data,
+        camera_name,
+        width=width,
+        height=height,
+        render_dimensions=_render_dimensions,
+        ensure_offscreen_framebuffer=_ensure_offscreen_framebuffer,
+    )
 
 
 def _fixed_camera_diagnostics(
@@ -2251,75 +2307,11 @@ def _fixed_camera_diagnostics(
     data: mujoco.MjData,
     camera_name: str,
 ) -> dict[str, Any]:
-    try:
-        camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
-        if camera_id < 0:
-            return {
-                "schema": "mujoco_fixed_camera_diagnostics_v1",
-                "status": "missing_camera",
-                "camera_name": camera_name,
-            }
-        world_position = _array_row(getattr(data, "cam_xpos"), camera_id, 3)
-        world_xmat = _array_row(getattr(data, "cam_xmat"), camera_id, 9)
-        return {
-            "schema": "mujoco_fixed_camera_diagnostics_v1",
-            "status": "ready",
-            "camera_name": camera_name,
-            "camera_id": int(camera_id),
-            "camera_type": "fixed",
-            "world_position": world_position,
-            "world_xmat_rowmajor": world_xmat,
-            "fovy_deg": _array_scalar(getattr(model, "cam_fovy", None), camera_id),
-            "model_pos": _array_row(getattr(model, "cam_pos"), camera_id, 3),
-            "model_quat_wxyz": _array_row(getattr(model, "cam_quat"), camera_id, 4),
-            "znear": _optional_float(getattr(getattr(model, "vis", None), "map", None), "znear"),
-            "zfar": _optional_float(getattr(getattr(model, "vis", None), "map", None), "zfar"),
-        }
-    except Exception as exc:
-        return {
-            "schema": "mujoco_fixed_camera_diagnostics_v1",
-            "status": "unavailable",
-            "camera_name": camera_name,
-            "reason": f"{type(exc).__name__}: {exc}",
-        }
+    return _fixed_camera_diagnostics_impl(model, data, camera_name)
 
 
 def _free_camera_diagnostics(camera: mujoco.MjvCamera) -> dict[str, Any]:
-    try:
-        return {
-            "schema": "mujoco_free_camera_diagnostics_v1",
-            "status": "ready",
-            "camera_type": "free",
-            "lookat": [round(float(value), 6) for value in camera.lookat],
-            "distance": round(float(camera.distance), 6),
-            "azimuth": round(float(camera.azimuth), 6),
-            "elevation": round(float(camera.elevation), 6),
-        }
-    except Exception as exc:
-        return {
-            "schema": "mujoco_free_camera_diagnostics_v1",
-            "status": "unavailable",
-            "reason": f"{type(exc).__name__}: {exc}",
-        }
-
-
-def _array_row(array: Any, index: int, length: int) -> list[float]:
-    return [round(float(value), 6) for value in array[index][:length]]
-
-
-def _array_scalar(array: Any, index: int) -> float | None:
-    if array is None:
-        return None
-    return round(float(array[index]), 6)
-
-
-def _optional_float(parent: Any, attribute: str) -> float | None:
-    if parent is None or not hasattr(parent, attribute):
-        return None
-    try:
-        return round(float(getattr(parent, attribute)), 6)
-    except (TypeError, ValueError):
-        return None
+    return _free_camera_diagnostics_impl(camera)
 
 
 def _focus_camera(state: dict[str, Any], focus: dict[str, Any]) -> mujoco.MjvCamera:
@@ -2339,31 +2331,23 @@ def _render_free_camera(
     width: int = DEFAULT_RENDER_WIDTH,
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    width, height = _render_dimensions(width, height)
-    _ensure_offscreen_framebuffer(model, width=width, height=height)
-    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
-    renderer.update_scene(data, camera=camera)
-    frame = renderer.render()
-    renderer.close()
-    return frame
+    return _render_free_camera_impl(
+        model,
+        data,
+        camera,
+        width=width,
+        height=height,
+        render_dimensions=_render_dimensions,
+        ensure_offscreen_framebuffer=_ensure_offscreen_framebuffer,
+    )
 
 
 def _load_rendered_robot_view_image(camera_views: dict[str, Any], *, role: str) -> Any:
-    for item in camera_views.get("views") or []:
-        if not isinstance(item, dict) or item.get("robot_view_role") != role:
-            continue
-        image_path = Path(str(item.get("image_path") or ""))
-        if not image_path.is_file():
-            raise RuntimeError(f"missing rendered {role} camera-control image: {image_path}")
-        return _image_to_array(image_path)
-    raise RuntimeError(f"missing rendered {role} camera-control view")
+    return _load_rendered_robot_view_image_impl(camera_views, role=role)
 
 
 def _image_to_array(path: Path) -> Any:
-    import numpy as np
-
-    with Image.open(path) as image:
-        return np.asarray(image.convert("RGB")).copy()
+    return _image_to_array_impl(path)
 
 
 def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
@@ -2509,70 +2493,18 @@ def _focus_visibility(
     *,
     frame: Any | None = None,
 ) -> dict[str, Any]:
-    boxes = []
-    object_pixels = 0
-    receptacle_pixels = 0
-    try:
-        render_shape = frame.shape if frame is not None and hasattr(frame, "shape") else None
-        segmentation = _render_segmentation(
-            model,
-            data,
-            camera,
-            width=_shape_width(render_shape),
-            height=_shape_height(render_shape),
-        )
-    except Exception as exc:  # pragma: no cover - depends on MuJoCo renderer internals
-        return {
-            "status": "segmentation_unavailable",
-            "error": type(exc).__name__,
-            "object_pixels": 0,
-            "receptacle_pixels": 0,
-            "boxes": [],
-        }
-    if focus.get("object_body_name"):
-        box = _segmentation_box(
-            model,
-            segmentation,
-            focus["object_body_name"],
-            label=str(focus.get("object_label") or "object"),
-            color=[239, 68, 68],
-        )
-        if focus.get("object_category") == "RemoteControl" and (
-            box is None or int(box.get("pixels") or 0) < 20
-        ):
-            highlight_box = _highlight_diff_box(
-                model,
-                data,
-                camera,
-                focus["object_body_name"],
-                label=str(focus.get("object_label") or "object"),
-                color=[239, 68, 68],
-                frame=frame,
-            )
-            if highlight_box is not None and (
-                box is None or int(highlight_box.get("pixels") or 0) > int(box.get("pixels") or 0)
-            ):
-                box = highlight_box
-        if box is not None:
-            object_pixels = int(box["pixels"])
-            boxes.append(box)
-    if focus.get("receptacle_body_name"):
-        box = _segmentation_box(
-            model,
-            segmentation,
-            focus["receptacle_body_name"],
-            label=str(focus.get("receptacle_label") or "target"),
-            color=[8, 145, 178],
-        )
-        if box is not None:
-            receptacle_pixels = int(box["pixels"])
-            boxes.append(box)
-    return {
-        "status": "ok",
-        "object_pixels": object_pixels,
-        "receptacle_pixels": receptacle_pixels,
-        "boxes": boxes,
-    }
+    return _focus_visibility_impl(
+        model,
+        data,
+        camera,
+        focus,
+        frame=frame,
+        render_segmentation=_render_segmentation,
+        segmentation_box=_segmentation_box,
+        highlight_diff_box=_highlight_diff_box,
+        shape_width=_shape_width,
+        shape_height=_shape_height,
+    )
 
 
 def _annotate_focus_visual_grounding(focus: dict[str, Any]) -> dict[str, Any]:
@@ -2616,16 +2548,15 @@ def _render_segmentation(
     width: int = DEFAULT_RENDER_WIDTH,
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    width, height = _render_dimensions(width, height)
-    _ensure_offscreen_framebuffer(model, width=width, height=height)
-    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
-    renderer.update_scene(data, camera=camera)
-    renderer.render()
-    renderer.enable_segmentation_rendering()
-    renderer.update_scene(data, camera=camera)
-    segmentation = renderer.render()
-    renderer.close()
-    return segmentation
+    return _render_segmentation_impl(
+        model,
+        data,
+        camera,
+        width=width,
+        height=height,
+        render_dimensions=_render_dimensions,
+        ensure_offscreen_framebuffer=_ensure_offscreen_framebuffer,
+    )
 
 
 def _segmentation_box(
@@ -2636,28 +2567,15 @@ def _segmentation_box(
     label: str,
     color: list[int],
 ) -> dict[str, Any] | None:
-    geom_ids = _subtree_geom_ids(model, body_name)
-    if not geom_ids:
-        return None
-    import numpy as np
-
-    mask = np.isin(segmentation[:, :, 0], geom_ids) & (
-        segmentation[:, :, 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
+    return _segmentation_box_impl(
+        model,
+        segmentation,
+        body_name,
+        label=label,
+        color=color,
+        subtree_geom_ids=_subtree_geom_ids,
+        inflate_bbox=_inflate_bbox,
     )
-    pixels = int(mask.sum())
-    if pixels <= 0:
-        return None
-    ys, xs = np.where(mask)
-    left, right = int(xs.min()), int(xs.max())
-    top, bottom = int(ys.min()), int(ys.max())
-    left, top, right, bottom = _inflate_bbox(left, top, right, bottom, segmentation.shape)
-    return {
-        "label": label,
-        "bbox": [left, top, right, bottom],
-        "pixels": pixels,
-        "color": color,
-        "source": "segmentation",
-    }
 
 
 def _highlight_diff_box(
@@ -2670,46 +2588,20 @@ def _highlight_diff_box(
     color: list[int],
     frame: Any | None,
 ) -> dict[str, Any] | None:
-    geom_ids = _subtree_geom_ids(model, body_name)
-    if not geom_ids:
-        return None
-    import numpy as np
-
-    render_shape = frame.shape if frame is not None and hasattr(frame, "shape") else None
-    baseline = frame if frame is not None else _render_color_frame(model, data, camera)
-    baseline = np.asarray(baseline)
-    previous_rgba = model.geom_rgba[geom_ids].copy()
-    previous_matid = model.geom_matid[geom_ids].copy()
-    try:
-        for geom_id in geom_ids:
-            model.geom_rgba[geom_id] = np.array([1.0, 0.0, 1.0, 1.0])
-            model.geom_matid[geom_id] = -1
-        highlighted = _render_color_frame(
-            model,
-            data,
-            camera,
-            width=_shape_width(render_shape or baseline.shape),
-            height=_shape_height(render_shape or baseline.shape),
-        )
-    finally:
-        model.geom_rgba[geom_ids] = previous_rgba
-        model.geom_matid[geom_ids] = previous_matid
-    diff = np.abs(np.asarray(highlighted, dtype=np.int16) - baseline.astype(np.int16)).max(axis=2)
-    mask = diff > 35
-    pixels = int(mask.sum())
-    if pixels <= 0:
-        return None
-    ys, xs = np.where(mask)
-    left, right = int(xs.min()), int(xs.max())
-    top, bottom = int(ys.min()), int(ys.max())
-    left, top, right, bottom = _inflate_bbox(left, top, right, bottom, baseline.shape)
-    return {
-        "label": label,
-        "bbox": [left, top, right, bottom],
-        "pixels": pixels,
-        "color": color,
-        "source": "highlight_diff",
-    }
+    return _highlight_diff_box_impl(
+        model,
+        data,
+        camera,
+        body_name,
+        label=label,
+        color=color,
+        frame=frame,
+        subtree_geom_ids=_subtree_geom_ids,
+        render_color_frame=_render_color_frame,
+        shape_width=_shape_width,
+        shape_height=_shape_height,
+        inflate_bbox=_inflate_bbox,
+    )
 
 
 def _render_color_frame(
@@ -2720,13 +2612,15 @@ def _render_color_frame(
     width: int = DEFAULT_RENDER_WIDTH,
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    width, height = _render_dimensions(width, height)
-    _ensure_offscreen_framebuffer(model, width=width, height=height)
-    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
-    renderer.update_scene(data, camera=camera)
-    frame = renderer.render()
-    renderer.close()
-    return frame
+    return _render_color_frame_impl(
+        model,
+        data,
+        camera,
+        width=width,
+        height=height,
+        render_dimensions=_render_dimensions,
+        ensure_offscreen_framebuffer=_ensure_offscreen_framebuffer,
+    )
 
 
 def _ensure_offscreen_framebuffer(
@@ -2735,38 +2629,15 @@ def _ensure_offscreen_framebuffer(
     width: int,
     height: int,
 ) -> None:
-    """Grow MuJoCo's offscreen buffer so requested high-res renders are valid."""
-    global_settings = getattr(getattr(model, "vis", None), "global_", None)
-    if global_settings is None:
-        return
-    if int(getattr(global_settings, "offwidth", 0) or 0) < int(width):
-        global_settings.offwidth = int(width)
-    if int(getattr(global_settings, "offheight", 0) or 0) < int(height):
-        global_settings.offheight = int(height)
+    _ensure_offscreen_framebuffer_impl(model, width=width, height=height)
 
 
 def _subtree_geom_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
-    body_ids = _subtree_body_ids(model, body_name)
-    return [
-        geom_id
-        for geom_id in range(model.ngeom)
-        if int(model.geom_bodyid[geom_id]) in set(body_ids)
-    ]
+    return _subtree_geom_ids_impl(model, body_name, subtree_body_ids=_subtree_body_ids)
 
 
 def _subtree_body_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
-    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
-    if body_id < 0:
-        return []
-    body_ids = []
-    for candidate_id in range(model.nbody):
-        current_id = candidate_id
-        while current_id > 0:
-            if current_id == body_id:
-                body_ids.append(candidate_id)
-                break
-            current_id = int(model.body_parentid[current_id])
-    return body_ids
+    return _subtree_body_ids_impl(model, body_name)
 
 
 def _inflate_bbox(
@@ -2779,16 +2650,14 @@ def _inflate_bbox(
     min_size: int = 32,
     pad: int = 8,
 ) -> tuple[int, int, int, int]:
-    height, width = int(shape[0]), int(shape[1])
-    center_x = (left + right) // 2
-    center_y = (top + bottom) // 2
-    half_width = max((right - left) // 2 + pad, min_size // 2)
-    half_height = max((bottom - top) // 2 + pad, min_size // 2)
-    return (
-        max(0, center_x - half_width),
-        max(29, center_y - half_height),
-        min(width - 1, center_x + half_width),
-        min(height - 1, center_y + half_height),
+    return _inflate_bbox_impl(
+        left,
+        top,
+        right,
+        bottom,
+        shape,
+        min_size=min_size,
+        pad=pad,
     )
 
 
@@ -2885,22 +2754,20 @@ def _json_object_from_text(text: str) -> dict[str, Any]:
 
 
 def _render_dimensions(width: int, height: int) -> tuple[int, int]:
-    return (
-        _positive_int(width, DEFAULT_RENDER_WIDTH),
-        _positive_int(height, DEFAULT_RENDER_HEIGHT),
+    return _render_dimensions_impl(
+        width,
+        height,
+        default_width=DEFAULT_RENDER_WIDTH,
+        default_height=DEFAULT_RENDER_HEIGHT,
     )
 
 
 def _shape_width(shape: Any) -> int:
-    if isinstance(shape, (tuple, list)) and len(shape) >= 2:
-        return _positive_int(shape[1], DEFAULT_RENDER_WIDTH)
-    return DEFAULT_RENDER_WIDTH
+    return _shape_width_impl(shape, default_width=DEFAULT_RENDER_WIDTH)
 
 
 def _shape_height(shape: Any) -> int:
-    if isinstance(shape, (tuple, list)) and len(shape) >= 1:
-        return _positive_int(shape[0], DEFAULT_RENDER_HEIGHT)
-    return DEFAULT_RENDER_HEIGHT
+    return _shape_height_impl(shape, default_height=DEFAULT_RENDER_HEIGHT)
 
 
 def _primary_body_name(info: dict[str, Any], *, fallback: str) -> str:
