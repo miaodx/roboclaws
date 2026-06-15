@@ -102,6 +102,24 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureRequest,
     capture_isaac_lab_scene_camera_views,
 )
+from scripts.isaac_lab_cleanup.isaac_scene_index_metadata import (
+    MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS,
+    category_from_usd_name,
+    contains_child_segment,
+    is_molmospaces_object_metadata,
+    is_molmospaces_receptacle_metadata,
+    is_object_prim_path,
+    is_receptacle_prim_path,
+    load_molmospaces_scene_metadata,
+    merge_molmospaces_metadata_index,
+    metadata_room_id,
+    molmospaces_metadata_prim_path,
+    molmospaces_prim_path_rank,
+    usd_handle_from_prim,
+    usd_index_entry,
+    usd_metadata_index_entry,
+    usd_safe_name,
+)
 from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
     apply_scene_index_semantic_labels,
 )
@@ -130,6 +148,24 @@ SCENE_BINDING_SCHEMA = _SCENE_BINDING_SCHEMA
 _bind_public_scene_item = bind_public_scene_item
 _scene_binding_diagnostics = scene_binding_diagnostics
 _scene_index_match = scene_index_match
+_category_from_usd_name = category_from_usd_name
+_contains_child_segment = contains_child_segment
+_is_molmospaces_object_metadata = is_molmospaces_object_metadata
+_is_molmospaces_receptacle_metadata = is_molmospaces_receptacle_metadata
+_is_object_prim_path = is_object_prim_path
+_is_receptacle_prim_path = is_receptacle_prim_path
+_load_molmospaces_scene_metadata = load_molmospaces_scene_metadata
+_merge_molmospaces_metadata_index = merge_molmospaces_metadata_index
+_metadata_room_id = metadata_room_id
+_molmospaces_metadata_prim_path = molmospaces_metadata_prim_path
+_molmospaces_prim_path_rank = molmospaces_prim_path_rank
+_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = (
+    MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS
+)
+_usd_handle_from_prim = usd_handle_from_prim
+_usd_index_entry = usd_index_entry
+_usd_metadata_index_entry = usd_metadata_index_entry
+_usd_safe_name = usd_safe_name
 SEGMENTATION_SCHEMA = "isaac_segmentation_diagnostics_v1"
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 ISAAC_SEGMENTATION_DATA_TYPES = (
@@ -1209,194 +1245,6 @@ def _is_local_reference_asset_path(asset_path: str) -> bool:
 
 def _local_reference_asset_missing(asset_path: str) -> bool:
     return _is_local_reference_asset_path(asset_path) and not Path(asset_path).exists()
-
-
-def _merge_molmospaces_metadata_index(
-    *,
-    usd_path: Path,
-    prim_paths_by_name: dict[str, list[str]],
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> None:
-    metadata = _load_molmospaces_scene_metadata(usd_path)
-    if not metadata:
-        return
-
-    for handle, raw_info in metadata.items():
-        if not isinstance(raw_info, dict):
-            continue
-        prim_path = _molmospaces_metadata_prim_path(handle, prim_paths_by_name)
-        if prim_path is None:
-            continue
-        if _is_molmospaces_receptacle_metadata(raw_info):
-            receptacle_index.setdefault(
-                handle,
-                {
-                    **_usd_metadata_index_entry(prim_path, handle, raw_info, "receptacle"),
-                    "support_pose": _pose_near(handle),
-                },
-            )
-        elif _is_molmospaces_object_metadata(raw_info):
-            object_index.setdefault(
-                handle,
-                _usd_metadata_index_entry(prim_path, handle, raw_info, "object"),
-            )
-
-
-def _load_molmospaces_scene_metadata(usd_path: Path) -> dict[str, dict[str, Any]]:
-    metadata_path = usd_path.parent / "scene_metadata.json"
-    if not metadata_path.is_file():
-        return {}
-    try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    objects = payload.get("objects") if isinstance(payload, dict) else None
-    if not isinstance(objects, dict):
-        return {}
-    return {
-        str(handle): dict(info)
-        for handle, info in objects.items()
-        if isinstance(info, dict) and str(handle)
-    }
-
-
-def _molmospaces_metadata_prim_path(
-    handle: str,
-    prim_paths_by_name: dict[str, list[str]],
-) -> str | None:
-    candidates = list(prim_paths_by_name.get(handle) or [])
-    if not candidates:
-        return None
-    return sorted(candidates, key=_molmospaces_prim_path_rank)[0]
-
-
-def _molmospaces_prim_path_rank(prim_path: str) -> tuple[int, int, str]:
-    normalized = f"/{prim_path.strip('/')}/"
-    is_top_level_geometry = "/geometry/" in normalized.lower() and normalized.count("/") <= 4
-    return (0 if is_top_level_geometry else 1, normalized.count("/"), prim_path)
-
-
-def _usd_metadata_index_entry(
-    prim_path: str,
-    handle: str,
-    metadata: dict[str, Any],
-    kind: str,
-) -> dict[str, Any]:
-    category = str(metadata.get("category") or _category_from_usd_name(handle))
-    metadata_object_id = str(metadata.get("object_id") or "")
-    asset_id = str(metadata.get("asset_id") or "")
-    label_parts = [category, metadata_object_id, asset_id]
-    public_label = " ".join(part for part in label_parts if part)
-    return {
-        "usd_prim_path": prim_path,
-        "category": category,
-        "public_label": public_label or handle,
-        "index_source": "usd_stage_traversal",
-        "kind": kind,
-        "metadata_source": "molmospaces_scene_metadata",
-        "metadata_handle": handle,
-        "metadata_object_id": metadata_object_id,
-        "asset_id": asset_id,
-        "metadata_room_id": _metadata_room_id(metadata),
-        "parent": str(metadata.get("parent") or ""),
-        "is_static": bool(metadata.get("is_static")),
-    }
-
-
-def _metadata_room_id(metadata: dict[str, Any]) -> str:
-    raw_room_id = metadata.get("room_id")
-    if raw_room_id in {None, ""}:
-        return ""
-    room_id = str(raw_room_id)
-    return room_id if room_id.startswith("room_") else f"room_{room_id}"
-
-
-def _is_molmospaces_object_metadata(metadata: dict[str, Any]) -> bool:
-    return metadata.get("is_static") is False
-
-
-def _is_molmospaces_receptacle_metadata(metadata: dict[str, Any]) -> bool:
-    category = _norm(metadata.get("category"))
-    if not category:
-        return False
-    if category in _MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS:
-        return True
-    return bool(metadata.get("children")) and metadata.get("is_static") is True
-
-
-_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = {
-    "bed",
-    "bookshelf",
-    "chair",
-    "countertop",
-    "desk",
-    "diningtable",
-    "dresser",
-    "fridge",
-    "garbagecan",
-    "shelf",
-    "shelvingunit",
-    "sink",
-    "sofa",
-    "stand",
-    "toilet",
-    "tvstand",
-}
-
-
-def _usd_index_entry(prim_path: str, prim_name: str, kind: str) -> dict[str, Any]:
-    return {
-        "usd_prim_path": prim_path,
-        "category": _category_from_usd_name(prim_name),
-        "public_label": prim_name,
-        "index_source": "usd_stage_traversal",
-        "kind": kind,
-    }
-
-
-def _usd_handle_from_prim(
-    prim_path: str,
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> str:
-    base = _usd_safe_name(Path(prim_path).name)
-    if base in {"World", "Objects", "Receptacles", "Fixtures", "Scene"}:
-        base = _usd_safe_name(prim_path.strip("/").replace("/", "_"))
-    existing = set(object_index) | set(receptacle_index)
-    if base not in existing:
-        return base
-    suffix = 2
-    while f"{base}_{suffix}" in existing:
-        suffix += 1
-    return f"{base}_{suffix}"
-
-
-def _is_object_prim_path(prim_path: str) -> bool:
-    normalized = f"/{prim_path.strip('/').lower()}/"
-    return any(
-        _contains_child_segment(normalized, segment) for segment in ("objects", "movable", "props")
-    )
-
-
-def _is_receptacle_prim_path(prim_path: str) -> bool:
-    normalized = f"/{prim_path.strip('/').lower()}/"
-    return any(
-        _contains_child_segment(normalized, segment)
-        for segment in ("receptacles", "fixtures", "surfaces", "support_surfaces")
-    )
-
-
-def _contains_child_segment(normalized_path: str, segment: str) -> bool:
-    token = f"/{segment}/"
-    return token in normalized_path and not normalized_path.endswith(token)
-
-
-def _category_from_usd_name(value: str) -> str:
-    normalized = _norm(value)
-    if normalized:
-        return normalized
-    return "unknown"
 
 
 def _dedupe(values: Any) -> list[str]:
@@ -3151,15 +2999,6 @@ def _module_version(module_name: str) -> str | None:
     except Exception:
         return None
     return str(getattr(module, "__version__", "unknown"))
-
-
-def _usd_safe_name(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in value)
-    if not cleaned:
-        return "unnamed"
-    if cleaned[0].isdigit():
-        return f"_{cleaned}"
-    return cleaned
 
 
 def runtime_diagnostics(

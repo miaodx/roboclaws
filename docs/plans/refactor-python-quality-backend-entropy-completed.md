@@ -249,6 +249,13 @@ logs before choosing the next slice.
   at 62. Proof: focused Isaac scene-binding tests, ruff, format check, and
   ratchet.
 
+- 2026-06-16: Isaac USD scene metadata/path-index helpers moved from the
+  backend worker into `isaac_scene_index_metadata.py`, keeping worker-private
+  aliases for path heuristics and MolmoSpaces metadata tests. Metric:
+  `isaac_lab_backend_worker.py` 7339 -> 7178 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac metadata/index
+  tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
