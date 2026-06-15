@@ -4906,3 +4906,19 @@ Stop this refactor loop when:
   passed with Ruff complexity unchanged at 56 and oversized modules unchanged
   at 58. This slice reduced the touched live-runner/helper/test files by 36 net
   lines without changing public live-runner CLI or checker output behavior.
+- 2026-06-15: Continued under `$intuitive-flow` by moving OpenAI Agents event
+  and span artifact metrics readers from
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` into the existing
+  `scripts/molmo_cleanup/openai_agents_metrics.py` ownership module. The live
+  timing payload keys `openai_agents_event_metrics` and
+  `openai_agents_span_metrics` remain unchanged; runner tests keep importing
+  the same private aliases through the runner module. Evidence:
+  `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py tests/unit/agents/test_live_runtime.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py`
+  passed; `ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_openai_agents_event_metrics_parse_tool_errors tests/unit/agents/test_live_runtime.py::test_openai_agents_span_metrics_parse_span_artifacts tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 3 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed with Ruff complexity unchanged at 56 and oversized modules unchanged
+  at 58. `run_live_openai_agents_cleanup.py` dropped from 3024 to 2944 lines;
+  the helper module grew from 477 to 563 lines, so the total touched-line count
+  grew slightly while moving metrics ownership out of the live runner.
