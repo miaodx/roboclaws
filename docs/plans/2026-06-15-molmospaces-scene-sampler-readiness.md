@@ -155,6 +155,11 @@ First slice implemented on 2026-06-15.
   rejected-row counts. This lets the eval suite and exported readiness
   artifacts prove `procthor-10k-val` is partial and the three other source
   targets are blocked without inferring that state from raw `blocked_rows`.
+- Scanner admission gates now accept the current prepared room-label provenance
+  token (`prepared_visual_label_manifest`) and reviewable preview statuses.
+  That keeps future real scanner candidates from being incorrectly blocked on
+  `trusted_category_provenance` or `preview_metadata` after source assets and
+  preview packets are prepared.
 
 Verification run on 2026-06-15:
 
@@ -185,6 +190,9 @@ ruff check scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-projection-summary --no-source-availability --no-candidate-readiness --no-selection-gaps --no-source-prep --no-scanner-admission --no-scanner-execution-plan --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-admission-gate --no-generated-eval
 ```
 
 Current limits feeding the next Flow:

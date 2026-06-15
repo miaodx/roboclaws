@@ -1650,7 +1650,8 @@ def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
         missing.append("source_asset_available")
     preview_statuses = candidate.get("preview_statuses")
     if not isinstance(preview_statuses, dict) or not all(
-        preview_statuses.get(view) == "available" for view in _required_views()
+        _scanner_preview_status_passes(preview_statuses.get(view))
+        for view in _required_views()
     ):
         missing.append("preview_metadata")
     if int(candidate.get("room_count") or 0) < 3:
@@ -1659,6 +1660,7 @@ def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
         missing.append("public_waypoints")
     if candidate.get("category_provenance") not in {
         "source_metadata",
+        "prepared_visual_label_manifest",
         "prepared_visual_room_label_manifest",
     }:
         missing.append("trusted_category_provenance")
@@ -1681,6 +1683,10 @@ def _scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str])
     if "map_build_artifacts" in missing_gates:
         return "run_map_build_product_smoke_before_eval_admission"
     return "run_scanner_admission_checks"
+
+
+def _scanner_preview_status_passes(status: Any) -> bool:
+    return str(status or "") in {"available", "reviewable"}
 
 
 def _scanner_execution_candidate(

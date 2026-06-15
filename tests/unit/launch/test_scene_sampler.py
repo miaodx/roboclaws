@@ -465,6 +465,84 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
     assert ithor["admission_rows"][0]["admission_status"] == "blocked"
 
 
+def test_scene_sampler_scanner_admission_accepts_reviewable_prepared_label_packets(
+    monkeypatch,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "candidate_readiness_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "ui_ready_count": 0,
+                    "eval_ready_count": 0,
+                    "candidates": []
+                    if source != "ithor"
+                    else [
+                        {
+                            "scene_family": "ithor",
+                            "scene_split": "not_applicable",
+                            "scene_source": "ithor",
+                            "scene_index": 1,
+                            "world_id": "molmospaces/ithor/1",
+                            "readiness_status": READINESS_BLOCKED,
+                            "lanes": [],
+                            "eval_ready": False,
+                            "failure_class": "environment_blocked",
+                            "blocked_reason": "map build product smoke pending",
+                            "selected_reason": "scanner_candidate_ready_for_product_smoke",
+                            "room_count": 4,
+                            "waypoint_count": 4,
+                            "category_provenance": "prepared_visual_label_manifest",
+                            "preview_statuses": {
+                                "fpv": "reviewable",
+                                "map": "reviewable",
+                                "chase": "reviewable",
+                                "topdown": "reviewable",
+                            },
+                            "candidate_file": {
+                                "exists": True,
+                                "path": "/tmp/FloorPlan1_physics.xml",
+                            },
+                        }
+                    ],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "selection_gap_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "ui_needed_count": 3 if source == "ithor" else 0,
+                    "eval_needed_count": 10 if source == "ithor" else 0,
+                    "next_scan_candidates": [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    report = scanner_admission_report(candidate_indices=(1,))
+    row = report["sources"]["ithor"]["admission_rows"][0]
+
+    assert row["admission_status"] == "blocked"
+    assert row["passed_gates"] == [
+        "source_asset_available",
+        "preview_metadata",
+        "public_room_count",
+        "public_waypoints",
+        "trusted_category_provenance",
+    ]
+    assert row["missing_gates"] == ["map_build_artifacts"]
+    assert row["next_action"] == "run_map_build_product_smoke_before_eval_admission"
+
+
 def test_scene_sampler_scanner_execution_plan_records_commands(monkeypatch) -> None:
     import roboclaws.launch.scene_sampler as scene_sampler
 
