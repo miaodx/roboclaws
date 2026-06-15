@@ -316,6 +316,13 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Isaac fake
   and real mapping-gap tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac runtime/rendering diagnostics payload construction moved
+  from the backend worker into `isaac_runtime_diagnostics.py`, keeping lazy
+  module probes and worker wrappers for current runtime metadata tests. Metric:
+  `isaac_lab_backend_worker.py` 5715 -> 5634 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac runtime/render
+  metadata tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
