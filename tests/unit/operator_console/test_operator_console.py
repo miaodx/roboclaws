@@ -28,7 +28,12 @@ from roboclaws.operator_console.routes import (
     list_console_combinations,
     validate_supported_routes_against_catalog,
 )
-from roboclaws.operator_console.server import ConsoleRequestHandler
+from roboclaws.operator_console.server import (
+    ConsoleRequestHandler,
+)
+from roboclaws.operator_console.server import (
+    main as operator_console_main,
+)
 from roboclaws.operator_console.state import (
     derive_operator_state,
     redacted_artifact_text,
@@ -286,6 +291,21 @@ def test_just_console_run_recipe_is_public() -> None:
     )
     summary = set(result.stdout.split())
     assert "console::run" in summary
+
+
+def test_operator_console_cli_defaults_to_all_interfaces() -> None:
+    with patch("roboclaws.operator_console.server.run_server") as run_server:
+        assert operator_console_main([]) == 0
+
+    assert run_server.call_args.args[1] == "0.0.0.0"
+    assert run_server.call_args.args[2] == 8765
+
+
+def test_just_console_run_defaults_to_all_interfaces() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    recipe = (repo_root / "just" / "console.just").read_text(encoding="utf-8")
+
+    assert 'run host="0.0.0.0" port="8765":' in recipe
 
 
 def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:
