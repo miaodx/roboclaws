@@ -416,6 +416,14 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
   Molmo subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces robot-pose target projection, waypoint room
+  projection, room relation payloads, stand-off, head-pitch, and scene-center
+  helpers moved from the subprocess worker into `molmospaces_robot_pose.py`,
+  with worker-private wrappers preserving current pose command/tests. Metric:
+  `molmospaces_subprocess_worker.py` 3685 -> 3577 lines; Ruff complexity stayed
+  at 0 and oversized modules stayed at 62. Proof: focused Molmo subprocess
+  backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
