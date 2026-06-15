@@ -128,7 +128,7 @@
         "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
       },
       {
-        "lines": 2923,
+        "lines": 2948,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py"
       },
@@ -346,16 +346,6 @@
         "path": "roboclaws/household/realworld_contract.py",
         "row": 5547,
         "symbol": "_inspection_waypoints_from_bundle_projection",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_configure_exact_cleanup_task",
-        "limit": 10,
-        "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",
-        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
-        "row": 1567,
-        "symbol": "_configure_exact_cleanup_task",
         "value": 11
       },
       {

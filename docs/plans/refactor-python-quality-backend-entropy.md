@@ -5228,3 +5228,17 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this planner
   manipulation probe diagnostic patch so the unrelated staged `eval-harness`
   rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py::_configure_exact_cleanup_task(...)`
+  into exact scene override and planner alias override helpers. The exact
+  cleanup task config schema, missing-scene blocker, scene dataset/data split
+  override, sampler task limits, planner object alias, planner target alias,
+  and stale preset clearing remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py::test_runner_configures_exact_cleanup_task_scene_and_aliases`
+  passed with 1 test. The quality baseline was refreshed from 34 to 33 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this exact
+  cleanup task config patch so the unrelated staged `eval-harness` rename was
+  not blessed into the baseline.

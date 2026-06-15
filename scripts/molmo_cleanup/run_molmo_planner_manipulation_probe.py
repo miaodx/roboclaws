@@ -1569,44 +1569,19 @@ def _configure_exact_cleanup_task(config: Any, args: argparse.Namespace) -> dict
     scene_xml = str(getattr(args, "cleanup_scene_xml", "") or "")
     planner_object_id = str(requested.get("planner_object_id") or "")
     planner_target_id = str(requested.get("planner_target_receptacle_id") or "")
-    applied = False
     blockers = []
-    if scene_xml:
-        scene_path = Path(scene_xml)
-        if scene_path.is_file():
-            config.scene_dataset = str(scene_path)
-            config.data_split = "val"
-            config.task_sampler_config.house_inds = [0]
-            config.task_sampler_config.samples_per_house = 1
-            config.task_sampler_config.max_tasks = 1
-            applied = True
-        else:
-            blockers.append(
-                {
-                    "code": "cleanup_scene_xml_missing",
-                    "message": f"Requested cleanup scene XML does not exist: {scene_xml}",
-                }
-            )
-    task_config = getattr(config, "task_config", None)
-    if planner_object_id and task_config is not None:
-        task_config.pickup_obj_name = planner_object_id
-        if hasattr(config.task_sampler_config, "pickup_obj_name"):
-            config.task_sampler_config.pickup_obj_name = planner_object_id
-        applied = True
-    if planner_target_id and task_config is not None:
-        if hasattr(task_config, "place_receptacle_name"):
-            task_config.place_receptacle_name = planner_target_id
-        if hasattr(task_config, "place_target_name"):
-            task_config.place_target_name = planner_target_id
-        if hasattr(config.task_sampler_config, "place_target_name"):
-            config.task_sampler_config.place_target_name = planner_target_id
-        applied = True
+    scene_applied = _apply_exact_cleanup_scene_override(config, scene_xml, blockers)
+    alias_applied = _apply_exact_cleanup_alias_overrides(
+        config,
+        planner_object_id=planner_object_id,
+        planner_target_id=planner_target_id,
+    )
     for attr in ("task_config_preset_exp", "task_config_preset_scn"):
         if hasattr(config, attr):
             setattr(config, attr, None)
     return {
         "schema": "planner_probe_exact_cleanup_task_config_v1",
-        "applied": applied,
+        "applied": scene_applied or alias_applied,
         "scene_xml": scene_xml,
         "planner_object_id": planner_object_id,
         "planner_target_receptacle_id": planner_target_id,
@@ -1616,6 +1591,56 @@ def _configure_exact_cleanup_task(config: Any, args: argparse.Namespace) -> dict
             "artifact scene with requested cleanup object/target aliases."
         ),
     }
+
+
+def _apply_exact_cleanup_scene_override(
+    config: Any,
+    scene_xml: str,
+    blockers: list[dict[str, Any]],
+) -> bool:
+    if not scene_xml:
+        return False
+    scene_path = Path(scene_xml)
+    if not scene_path.is_file():
+        blockers.append(
+            {
+                "code": "cleanup_scene_xml_missing",
+                "message": f"Requested cleanup scene XML does not exist: {scene_xml}",
+            }
+        )
+        return False
+    config.scene_dataset = str(scene_path)
+    config.data_split = "val"
+    config.task_sampler_config.house_inds = [0]
+    config.task_sampler_config.samples_per_house = 1
+    config.task_sampler_config.max_tasks = 1
+    return True
+
+
+def _apply_exact_cleanup_alias_overrides(
+    config: Any,
+    *,
+    planner_object_id: str,
+    planner_target_id: str,
+) -> bool:
+    task_config = getattr(config, "task_config", None)
+    if task_config is None:
+        return False
+    applied = False
+    if planner_object_id:
+        task_config.pickup_obj_name = planner_object_id
+        if hasattr(config.task_sampler_config, "pickup_obj_name"):
+            config.task_sampler_config.pickup_obj_name = planner_object_id
+        applied = True
+    if planner_target_id:
+        if hasattr(task_config, "place_receptacle_name"):
+            task_config.place_receptacle_name = planner_target_id
+        if hasattr(task_config, "place_target_name"):
+            task_config.place_target_name = planner_target_id
+        if hasattr(config.task_sampler_config, "place_target_name"):
+            config.task_sampler_config.place_target_name = planner_target_id
+        applied = True
+    return applied
 
 
 def _cleanup_task_config_request_from_args(args: argparse.Namespace) -> dict[str, Any]:
