@@ -349,26 +349,6 @@
         "value": 11
       },
       {
-        "code": "C901",
-        "key": "roboclaws/household/grasp_pose_policy_cache.py|C901|run_grasp_pose_policy_cache_generation",
-        "limit": 10,
-        "message": "`run_grasp_pose_policy_cache_generation` is too complex (14 > 10)",
-        "path": "roboclaws/household/grasp_pose_policy_cache.py",
-        "row": 33,
-        "symbol": "run_grasp_pose_policy_cache_generation",
-        "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/grasp_pose_policy_cache.py|PLR0912|run_grasp_pose_policy_cache_generation",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/household/grasp_pose_policy_cache.py",
-        "row": 33,
-        "symbol": "run_grasp_pose_policy_cache_generation",
-        "value": 13
-      },
-      {
         "code": "PLR0915",
         "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
         "limit": 50,

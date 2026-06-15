@@ -4794,3 +4794,20 @@ Stop this refactor loop when:
   from 63 to 61 Ruff complexity violations, with oversized modules unchanged at
   59, and `roboclaws/household/semantic_timeline.py` dropped from 846 to 841
   lines.
+- 2026-06-15: Continued the MolmoSpaces grasp-cache residual by splitting
+  pose-policy cache blocker construction out of
+  `roboclaws/household/grasp_pose_policy_cache.py::run_grasp_pose_policy_cache_generation(...)`
+  and reusing compact blocker helpers across pose-policy resolution and
+  generation preflight failures. The pose-policy cache schema, command
+  arguments, dry-run behavior, install validation, availability-after-install
+  gate, and blocker codes/messages remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/grasp_pose_policy_cache.py`
+  passed; `ruff check roboclaws/household/grasp_pose_policy_cache.py` passed;
+  `ruff format --check roboclaws/household/grasp_pose_policy_cache.py tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
+  passed with 7 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 61 to 59 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/grasp_pose_policy_cache.py` no longer appears in the
+  complexity-by-file summary; the file grew from 411 to 420 lines, so the next
+  slices should favor net line reduction where materiality is otherwise equal.
