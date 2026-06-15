@@ -19,7 +19,6 @@ const state = {
   setupSelectionKey: "",
   messupStatusKey: "",
   syncAxesFromRoute: false,
-  latestOperatorResultText: "",
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -227,7 +226,7 @@ function bindEvents() {
   });
   document.querySelectorAll(".operator-mode").forEach((button) => {
     button.addEventListener("click", () => {
-      state.operatorMode = button.dataset.operatorMode || "ask_why";
+      state.operatorMode = button.dataset.operatorMode || "goal";
       renderSelection();
     });
   });
@@ -778,10 +777,8 @@ function renderOperatorInput(route) {
     els.promptHelp.textContent = "Steer writes an auditable active-run message for supported routes.";
     return;
   }
-  els.promptLabel.textContent = "Ask Why";
-  els.taskPrompt.disabled = false;
-  els.taskPrompt.placeholder = "Ask about public evidence, actions, or terminal status for the attached run.";
-  els.promptHelp.textContent = "Ask Why reads public run artifacts only and cannot change robot state.";
+  state.operatorMode = "goal";
+  renderOperatorInput(route);
 }
 
 function operatorGoalHelp(route) {
@@ -794,7 +791,7 @@ function operatorGoalHelp(route) {
   if (isRunTerminal()) {
     return "Starts a linked Next Goal run using public parent context.";
   }
-  return "Goal starts a run or terminal-parent Next Goal. Use Steer or Ask Why while this run is active.";
+  return "Goal starts a run or terminal-parent Next Goal. Use Steer while this run is active.";
 }
 
 function routeStatusDisplay(route, readiness) {
@@ -1180,18 +1177,6 @@ function isRealMovementGate(gate) {
 
 function renderStartAction(route, readiness) {
   const mode = state.operatorMode;
-  if (mode === "ask_why") {
-    els.startButton.textContent = "Ask Why";
-    els.startButton.disabled = !state.activeRunId;
-    if (state.latestOperatorResultText) {
-      els.startHelp.textContent = state.latestOperatorResultText;
-    } else {
-      els.startHelp.textContent = state.activeRunId
-        ? "Ask Why will read public artifacts for the attached run."
-        : "Attach a run before asking why.";
-    }
-    return;
-  }
   if (mode === "steer") {
     const controls = (state.activeState && state.activeState.controls) || {};
     const enabled = Boolean(state.activeRunId && controls.steer_available);
@@ -1206,7 +1191,7 @@ function renderStartAction(route, readiness) {
     els.startButton.disabled = !terminal || !route.supports_prompt;
     els.startHelp.textContent = terminal
       ? "Start a linked Next Goal from this terminal parent run."
-      : `Watching active run ${state.activeRunId}. Use Steer or Ask Why.`;
+      : `Watching active run ${state.activeRunId}. Use Steer.`;
     return;
   }
   const attachableRun = readiness.attachable_run || null;
@@ -1247,7 +1232,7 @@ function steerHelp(controls) {
 }
 
 function handleStartAction() {
-  if (state.operatorMode === "ask_why" || state.operatorMode === "steer") {
+  if (state.operatorMode === "steer") {
     sendOperatorMessage();
     return;
   }
@@ -1256,7 +1241,7 @@ function handleStartAction() {
     return;
   }
   if (state.activeRunId) {
-    els.startHelp.textContent = "Use Steer or Ask Why while this run is active.";
+    els.startHelp.textContent = "Use Steer while this run is active.";
     return;
   }
   const readiness = effectiveReadiness(state.selectedRoute);
@@ -1460,7 +1445,6 @@ async function sendNextGoal({ confirmed = false } = {}) {
     return;
   }
   els.startHelp.textContent = operatorMessageResultText(result);
-  state.latestOperatorResultText = els.startHelp.textContent;
   pollState();
 }
 
@@ -1722,16 +1706,10 @@ function renderOperatorMode(payload = state.activeState || {}) {
     button.classList.toggle("active", button.dataset.operatorMode === state.operatorMode);
   });
   const messages = payload.operator_messages || {};
-  const askWhyText = latestAskWhyText(messages);
-  if (askWhyText) {
-    state.latestOperatorResultText = askWhyText;
-  }
   if (messages.operator_message_pending) {
     els.startHelp.textContent = `${
       messages.pending_steer_count || 1
     } steer message(s) waiting for agent checkpoint.`;
-  } else if (state.operatorMode === "ask_why" && state.latestOperatorResultText) {
-    els.startHelp.textContent = state.latestOperatorResultText;
   }
 }
 
@@ -1745,14 +1723,11 @@ async function sendOperatorMessage() {
     return;
   }
   const encodedRun = encodeURIComponent(state.activeRunId);
-  const mode = state.operatorMode;
-  const endpoint =
-    mode === "ask_why" ? `/api/runs/${encodedRun}/ask-why` : `/api/runs/${encodedRun}/messages`;
-  const key = mode === "ask_why" ? "question" : "body";
+  const endpoint = `/api/runs/${encodedRun}/messages`;
   const result = await fetchJson(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ [key]: text }),
+    body: JSON.stringify({ body: text }),
   });
   if (result.error) {
     els.startHelp.textContent = result.error;
@@ -1761,15 +1736,10 @@ async function sendOperatorMessage() {
   els.taskPrompt.value = "";
   els.promptCount.textContent = "0 / 2000";
   els.startHelp.textContent = operatorMessageResultText(result);
-  state.latestOperatorResultText = els.startHelp.textContent;
   pollState();
 }
 
 function operatorMessageResultText(result) {
-  if (result.command_type === "ask_why") {
-    const summary = result.answer && result.answer.summary ? `: ${result.answer.summary}` : "";
-    return `Ask Why answered${summary}`;
-  }
   if (result.command_type === "next_goal") {
     return `Next Goal ${result.status || "queued"} (${result.queue_reason || "queued"}).`;
   }
@@ -1777,14 +1747,6 @@ function operatorMessageResultText(result) {
     return `Steer message ${result.status || "queued"}; waiting for check_operator_messages.`;
   }
   return "Operator message recorded.";
-}
-
-function latestAskWhyText(messages) {
-  const latest = messages.latest_message || {};
-  if (latest.command_type !== "ask_why") {
-    return "";
-  }
-  return operatorMessageResultText(latest);
 }
 
 function renderArtifacts(items) {

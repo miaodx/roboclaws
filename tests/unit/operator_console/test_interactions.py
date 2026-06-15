@@ -7,7 +7,6 @@ import pytest
 
 from roboclaws.operator_console.interactions import (
     InteractionError,
-    append_ask_why,
     append_next_goal_request,
     append_steer_message,
     attach_run_to_session,
@@ -65,103 +64,6 @@ def _write_run(
     return run_dir
 
 
-def test_ask_why_uses_public_artifacts_without_private_terms(tmp_path: Path) -> None:
-    _write_run(
-        tmp_path,
-        phase="finished",
-        run_result={
-            "cleanup_success": True,
-            "private_manifest": {"must_not": "leak"},
-            "generated_mess_set": ["cup"],
-        },
-    )
-
-    answer = append_ask_why(tmp_path, "run-a", "Why did it observe first?")
-
-    assert answer["command_type"] == "ask_why"
-    assert answer["status"] == "answered"
-    assert answer["answer"]["robot_mcp_tools_called"] is False
-    assert answer["answer"]["private_evaluation_used"] is False
-    assert "private_manifest" not in json.dumps(answer)
-    assert "generated_mess_set" not in json.dumps(answer)
-
-
-def test_ask_why_explains_missing_target_from_public_trace_and_runtime_map(
-    tmp_path: Path,
-) -> None:
-    run_dir = _write_run(tmp_path, phase="finished")
-    (run_dir / "trace.jsonl").write_text(
-        "\n".join(
-            [
-                json.dumps(
-                    {
-                        "event": "request",
-                        "tool": "resolve_target_query",
-                        "request": {
-                            "operation": "photograph",
-                            "query": "chair",
-                            "max_results": 10,
-                        },
-                    }
-                ),
-                json.dumps(
-                    {
-                        "event": "response",
-                        "tool": "resolve_target_query",
-                        "response": {
-                            "ok": True,
-                            "query": "chair",
-                            "status": "not_found",
-                            "missing_target_reason": "public_search_budget_exhausted",
-                            "match_count": 0,
-                            "candidate_count": 51,
-                            "public_search_budget": {
-                                "viewpoint_budget": {
-                                    "visited_waypoint_count": 14,
-                                    "total_public_waypoints": 14,
-                                    "unvisited_waypoint_count": 0,
-                                },
-                                "inspection_observation_count": 14,
-                            },
-                        },
-                    }
-                ),
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    (run_dir / "runtime_metric_map.json").write_text(
-        json.dumps(
-            {
-                "target_search_summary": {
-                    "candidate_count": 51,
-                    "viewpoint_budget": {
-                        "visited_waypoint_count": 14,
-                        "total_public_waypoints": 14,
-                        "unvisited_waypoint_count": 0,
-                    },
-                    "inspection_observations": [{}, {}],
-                },
-                "target_candidates": [
-                    {"category": "DiningTable", "label": "DiningTable"},
-                    {"category": "Sofa", "label": "Sofa"},
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    answer = append_ask_why(tmp_path, "run-a", "为什么没有看到椅子？")
-    summary = answer["answer"]["summary"]
-
-    assert "resolve_target_query(chair)" in summary
-    assert "public_search_budget_exhausted" in summary
-    assert "visited 14/14 public waypoint(s)" in summary
-    assert "runtime map has 51 target candidate(s)" in summary
-    assert "private" not in summary.lower()
-
-
 def test_steer_rejects_terminal_run_and_offers_next_goal(tmp_path: Path) -> None:
     _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
 
@@ -172,7 +74,7 @@ def test_steer_rejects_terminal_run_and_offers_next_goal(tmp_path: Path) -> None
 def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Path) -> None:
     run_dir = _write_run(tmp_path, phase="running-codex")
 
-    with pytest.raises(InteractionError, match="Use Steer or Ask Why"):
+    with pytest.raises(InteractionError, match="Use Steer"):
         append_next_goal_request(tmp_path, "run-a", "Now build the semantic map")
     messages = list_operator_messages(tmp_path, "run-a")
 

@@ -20,7 +20,6 @@ MESSAGE_SCHEMA = "operator_console_message_v1"
 MESSAGE_LOG = "operator_messages.jsonl"
 SESSION_LOG = "sessions.jsonl"
 SESSION_DIR = "sessions"
-ASK_WHY_DIR = "ask_why"
 NEXT_GOAL_QUEUE = "next_goal_queue.jsonl"
 
 TERMINAL_STATUSES = {
@@ -93,34 +92,6 @@ def attach_run_to_session(root: Path, run_id: str, session_id: str = "") -> dict
     return session
 
 
-def append_ask_why(root: Path, run_id: str, question: str) -> dict[str, Any]:
-    """Answer a read-only operator question from public run artifacts."""
-
-    question = _clean_text(question)
-    if not question:
-        raise InteractionError("Ask Why requires a question.")
-    run_dir, route = _run_context(root, run_id)
-    state = derive_operator_state(root, run_dir, route)
-    message = _base_message(
-        command_type="ask_why",
-        run_id=run_id,
-        body=question,
-        status="answered",
-    )
-    answer = _ask_why_answer(root, state, question)
-    message["answer"] = answer
-    message["artifact_scope"] = answer["artifact_scope"]
-    ask_dir = run_dir / ASK_WHY_DIR
-    ask_dir.mkdir(parents=True, exist_ok=True)
-    (ask_dir / f"{message['message_id']}.json").write_text(
-        json.dumps(message, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    _append_message(run_dir, message)
-    _record_session_message(root, run_dir, message)
-    return message
-
-
 def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     """Append an active-run steering message for routes that support the MCP inbox."""
 
@@ -162,7 +133,7 @@ def append_next_goal_request(
     if not terminal:
         raise InteractionError(
             "Next Goal is available after this Robot Run is terminal. "
-            "Use Steer or Ask Why while the run is active."
+            "Use Steer while this run is active."
         )
     requires_confirmation = _requires_next_goal_confirmation(route)
     result_available = _parent_result_available(run_dir, state)
@@ -319,224 +290,6 @@ def _base_message(
         "created_at_epoch": now,
         "created_at": _format_epoch(now),
     }
-
-
-def _ask_why_answer(root: Path, state: dict[str, Any], question: str) -> dict[str, Any]:
-    decision = state.get("latest_public_decision_evidence")
-    if not isinstance(decision, dict):
-        decision = {}
-    public_result = state.get("public_run_result")
-    if not isinstance(public_result, dict):
-        public_result = {}
-    artifacts = state.get("artifact_paths") if isinstance(state.get("artifact_paths"), list) else []
-    public_artifacts = _public_artifact_scope(artifacts)
-    public_evidence = _ask_why_public_evidence(public_artifacts, question)
-    evidence_bits = [
-        str(decision.get("observation_summary") or ""),
-        str(decision.get("decision") or decision.get("reasoning") or ""),
-        str(state.get("latest_action") or ""),
-        *public_evidence,
-        json.dumps(public_result, sort_keys=True),
-    ]
-    text = " ".join(item for item in evidence_bits if item).strip()
-    if not text:
-        text = "No public robot-tool evidence has been written for this run yet."
-    text = _strip_private_terms(text)
-    return {
-        "question": question,
-        "summary": text[:1200],
-        "basis": "public_operator_artifacts_only",
-        "robot_mcp_tools_called": False,
-        "private_evaluation_used": False,
-        "artifact_scope": public_artifacts,
-        "report_href": _first_artifact_href(artifacts, "Report"),
-        "run_dir": str(state.get("display_run_dir") or state.get("run_dir") or root),
-    }
-
-
-def _ask_why_public_evidence(
-    public_artifacts: list[dict[str, str]], question: str
-) -> list[str]:
-    """Extract question-relevant evidence from public run artifacts only."""
-
-    run_result = _artifact_json(public_artifacts, "Run Result")
-    runtime_map = _artifact_json(public_artifacts, "Runtime Map")
-    trace_rows = _artifact_jsonl(public_artifacts, "Trace")
-    query_terms = _question_terms(question)
-    output: list[str] = []
-
-    goal_contract = run_result.get("goal_contract")
-    if isinstance(goal_contract, dict):
-        normalized_goal = str(goal_contract.get("normalized_goal") or "").strip()
-        if normalized_goal:
-            output.append(f"Goal: {normalized_goal}.")
-
-    target_queries = _target_query_summaries(trace_rows, query_terms)
-    if target_queries:
-        output.extend(target_queries)
-
-    runtime_summary = _runtime_map_target_summary(runtime_map, query_terms)
-    if runtime_summary:
-        output.append(runtime_summary)
-
-    completion_claim = run_result.get("agent_completion_claim")
-    if isinstance(completion_claim, dict):
-        why_done = str(completion_claim.get("why_done") or "").strip()
-        if why_done:
-            output.append(f"Agent completion claim: {why_done}.")
-
-    return [_strip_private_terms(item) for item in output if item]
-
-
-def _target_query_summaries(rows: list[dict[str, Any]], query_terms: set[str]) -> list[str]:
-    summaries: list[str] = []
-    for row in rows:
-        if str(row.get("tool") or row.get("tool_name") or "") != "resolve_target_query":
-            continue
-        if str(row.get("event") or "") != "response":
-            continue
-        response = row.get("response") if isinstance(row.get("response"), dict) else {}
-        query = str(response.get("query") or response.get("normalized_query") or "").strip()
-        if query_terms and query and not _text_matches_terms(query, query_terms):
-            continue
-        status = str(response.get("status") or "").strip()
-        missing_reason = str(response.get("missing_target_reason") or "").strip()
-        match_count = _int_or_none(response.get("match_count"))
-        candidate_count = _int_or_none(response.get("candidate_count"))
-        budget = response.get("public_search_budget")
-        budget_text = _public_search_budget_text(budget if isinstance(budget, dict) else {})
-        parts = [f"resolve_target_query({query or 'target'})"]
-        if status:
-            parts.append(f"status={status}")
-        if missing_reason:
-            parts.append(f"reason={missing_reason}")
-        if match_count is not None:
-            parts.append(f"matches={match_count}")
-        if candidate_count is not None:
-            parts.append(f"candidates={candidate_count}")
-        if budget_text:
-            parts.append(budget_text)
-        summaries.append("; ".join(parts) + ".")
-    return summaries[-3:]
-
-
-def _runtime_map_target_summary(runtime_map: dict[str, Any], query_terms: set[str]) -> str:
-    if not runtime_map:
-        return ""
-    search_summary = runtime_map.get("target_search_summary")
-    if not isinstance(search_summary, dict):
-        search_summary = {}
-    candidate_count = _int_or_none(search_summary.get("candidate_count"))
-    budget_text = _public_search_budget_text(search_summary)
-    candidates = runtime_map.get("target_candidates")
-    candidate_labels: list[str] = []
-    if isinstance(candidates, list):
-        for candidate in candidates:
-            if not isinstance(candidate, dict):
-                continue
-            label = str(candidate.get("label") or candidate.get("category") or "").strip()
-            if not label:
-                continue
-            if query_terms and _text_matches_terms(label, query_terms):
-                candidate_labels.append(label)
-    parts: list[str] = []
-    if candidate_count is not None:
-        parts.append(f"runtime map has {candidate_count} target candidate(s)")
-    if budget_text:
-        parts.append(budget_text)
-    if query_terms:
-        parts.append(
-            f"question terms matched {len(candidate_labels)} runtime target candidate(s)"
-        )
-    return "; ".join(parts) + "." if parts else ""
-
-
-def _public_search_budget_text(payload: dict[str, Any]) -> str:
-    viewpoint = payload.get("viewpoint_budget")
-    if not isinstance(viewpoint, dict):
-        return ""
-    visited = _int_or_none(viewpoint.get("visited_waypoint_count"))
-    total = _int_or_none(viewpoint.get("total_public_waypoints"))
-    unvisited = _int_or_none(viewpoint.get("unvisited_waypoint_count"))
-    if visited is None and total is None and unvisited is None:
-        return ""
-    parts: list[str] = []
-    if visited is not None and total is not None:
-        parts.append(f"visited {visited}/{total} public waypoint(s)")
-    elif visited is not None:
-        parts.append(f"visited {visited} public waypoint(s)")
-    if unvisited is not None:
-        parts.append(f"unvisited={unvisited}")
-    return ", ".join(parts)
-
-
-def _artifact_json(public_artifacts: list[dict[str, str]], label: str) -> dict[str, Any]:
-    path = _artifact_path(public_artifacts, label)
-    if not path:
-        return {}
-    return _read_json(path)
-
-
-def _artifact_jsonl(public_artifacts: list[dict[str, str]], label: str) -> list[dict[str, Any]]:
-    path = _artifact_path(public_artifacts, label)
-    if not path or not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return []
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
-
-
-def _artifact_path(public_artifacts: list[dict[str, str]], label: str) -> Path | None:
-    for item in public_artifacts:
-        if item.get("label") != label:
-            continue
-        path = Path(str(item.get("path") or ""))
-        if path.exists() and path.is_file():
-            return path
-    return None
-
-
-def _question_terms(question: str) -> set[str]:
-    normalized = question.lower()
-    aliases = {
-        "chair": ("chair", "chairs", "seat", "stool", "椅", "椅子"),
-        "table": ("table", "desk", "桌", "桌子"),
-        "sofa": ("sofa", "couch", "沙发"),
-    }
-    terms: set[str] = set()
-    for canonical, values in aliases.items():
-        if any(value in normalized for value in values):
-            terms.add(canonical)
-            terms.update(values)
-    for raw in normalized.replace("?", " ").replace("？", " ").split():
-        token = raw.strip(".,:;!()[]{}\"'")
-        if len(token) >= 3:
-            terms.add(token)
-    return terms
-
-
-def _text_matches_terms(text: str, terms: set[str]) -> bool:
-    normalized = text.lower()
-    return any(term and term in normalized for term in terms)
-
-
-def _int_or_none(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _next_goal_packet(
