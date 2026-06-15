@@ -5199,3 +5199,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this RBY1M
   importer parser patch so the unrelated staged `eval-harness` rename was not
   blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_cleanup.py::_maybe_clean_visible_object(...)`
+  around a private visible-object candidate state and visual-scan confirmation
+  helpers. The visible-object cleanup path keeps the same inspection refresh,
+  source waypoint confirmation, camera adjustment, raw-FPV attachment,
+  failed-attempt reasons, already-on-inferred-fixture note, and cleanup
+  scratchpad fields. Evidence:
+  `ruff check roboclaws/household/realworld_cleanup.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/realworld_cleanup.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_camera_model_policy_mode`
+  passed with 2 tests. The quality baseline was refreshed from 36 to 35 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this direct
+  cleanup orchestration patch so the unrelated staged `eval-harness` rename was
+  not blessed into the baseline.

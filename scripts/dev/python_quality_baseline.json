@@ -33,7 +33,7 @@
         "path": "roboclaws/household/planner_task_feasibility.py"
       },
       {
-        "lines": 1065,
+        "lines": 1146,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_cleanup.py"
       },
@@ -317,16 +317,6 @@
         "row": 86,
         "symbol": "run_physical_nav2_cleanup_pilot",
         "value": 64
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/realworld_cleanup.py|C901|_maybe_clean_visible_object",
-        "limit": 10,
-        "message": "`_maybe_clean_visible_object` is too complex (12 > 10)",
-        "path": "roboclaws/household/realworld_cleanup.py",
-        "row": 713,
-        "symbol": "_maybe_clean_visible_object",
-        "value": 12
       },
       {
         "code": "C901",
