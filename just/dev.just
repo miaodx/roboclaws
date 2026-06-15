@@ -43,6 +43,21 @@ model-provider-health mode="all" *overrides:
     fi
     exec "$python_bin" scripts/dev/check_model_providers.py --mode "{{mode}}" "${override_args[@]}"
 
+model-matrix-benchmark *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x ".venv/bin/python" ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
+    fi
+    exec "$python_bin" scripts/dev/benchmark_model_matrix.py "$@"
+
 install-hooks:
     @git config core.hooksPath .githooks
     @echo "==> git hooks installed (core.hooksPath = .githooks)"

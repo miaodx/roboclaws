@@ -151,7 +151,7 @@ def build_direct_probes(
             wire_api=WIRE_CHAT_COMPLETIONS,
             model="kimi-k2.7-code",
             api_key_env="KIMI_API_KEY",
-            base_url="https://api.kimi.com/coding/v1",
+            base_url=os.environ.get("KIMI_OPENAI_BASE_URL", "https://api.kimi.com/coding/v1"),
             max_tokens=chat_max_tokens,
             provider_note=(
                 "Kimi coding requires a coding-agent User-Agent; this probe omits "
@@ -165,7 +165,7 @@ def build_direct_probes(
             model="nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
             api_key_env="NV_API_KEY",
             api_key_alt_env="NVIDIA_API_KEY",
-            base_url="https://integrate.api.nvidia.com/v1",
+            base_url=os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
             max_tokens=chat_max_tokens,
         ),
     ]
