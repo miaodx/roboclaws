@@ -18,10 +18,11 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 30` on 2026-06-15, before later parallel repo changes:
+--summary --top 40` on 2026-06-16, after the latest committed Candidate A
+test-helper slices:
 
-- 19 Ruff complexity violations.
-- 56 oversized modules.
+- 17 Ruff complexity violations.
+- 62 oversized modules.
 - Remaining complexity is test-heavy; remaining file-size debt is split between
   large production modules and large behavior tests.
 
@@ -158,17 +159,6 @@ Severity: P2. `AGENTS.md` and `CLAUDE.md` still mention
 `hybrid-phase-pipeline`, while this environment exposes `intuitive-flow`.
 Fix only if startup rediscovery continues to cost time; keep it separate from
 code-size slices. Owner: `intuitive-init`.
-
-### G: Scene-Sampler Readiness Drift
-
-Severity: P1. Scene-sampler readiness work still leaves
-`roboclaws/launch/scene_sampler.py` over the hard 2000-line ceiling, and the
-readiness-export test remains the largest remaining test complexity row. The
-first scanner-evidence extraction removed current production complexity rows
-from `scene_sampler.py`, so the next useful work is another ownership split or
-focused readiness-export fixtures instead of accepting the oversized file as
-stable. Owner: `intuitive-refactor` / `intuitive-tests`. Proof: focused
-scene-sampler tests, ruff, and ratchet summary.
 
 ## Evidence Ladder
 

@@ -148,6 +148,12 @@ logs before choosing the next slice.
   helpers. Metric: 19 -> 18 complexity rows; oversized modules unchanged at 62.
   Proof: focused Isaac backend test, ruff, format check, and ratchet.
 
+- 2026-06-16: Scene-camera comparison report contract test split fixture-image
+  setup, review UI, contract-section, lighting/render-domain, and lane-image
+  assertions into focused helpers. Metric: 18 -> 17 complexity rows; oversized
+  modules unchanged at 62. Proof: focused scene-camera report test, ruff,
+  format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
