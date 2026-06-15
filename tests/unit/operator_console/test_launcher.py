@@ -63,10 +63,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
         env=CODEX_ENV,
     )
     assert isaac["can_start"] is True
-    isaac_gate = next(gate for gate in isaac["gates"] if gate["id"] == "isaac_preflight")
-    assert isaac_gate["severity"] == "advisory"
-    assert isaac_gate["blocks_start"] is False
-    assert "Launch can start" in isaac_gate["message"]
+    assert {gate["id"] for gate in isaac["gates"]} == {"provider_key", "mcp_port_free"}
 
     isaac_map = route_readiness(
         tmp_path,
@@ -75,9 +72,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
         env=CODEX_ENV,
     )
     assert isaac_map["can_start"] is True
-    isaac_map_gate = next(gate for gate in isaac_map["gates"] if gate["id"] == "isaac_preflight")
-    assert isaac_map_gate["severity"] == "advisory"
-    assert isaac_map_gate["blocks_start"] is False
+    assert {gate["id"] for gate in isaac_map["gates"]} == {"provider_key", "mcp_port_free"}
 
     b1_map12 = route_readiness(
         tmp_path,
@@ -86,9 +81,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
         env=CODEX_ENV,
     )
     assert b1_map12["can_start"] is True
-    b1_gate = next(gate for gate in b1_map12["gates"] if gate["id"] == "isaac_preflight")
-    assert b1_gate["severity"] == "advisory"
-    assert b1_gate["blocks_start"] is False
+    assert {gate["id"] for gate in b1_map12["gates"]} == {"provider_key", "mcp_port_free"}
 
     agibot = route_readiness(
         tmp_path,

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from roboclaws.operator_console.routes import ConsoleLaunchSelection, accepted_isaac_preflight
+from roboclaws.operator_console.routes import ConsoleLaunchSelection
 
 DEFAULT_MCP_HOST = "127.0.0.1"
 DEFAULT_MCP_PORT = 18788
@@ -54,7 +54,6 @@ def _evaluate_route_gate(
 ) -> GateEvaluation:
     evaluators = {
         "provider_key": _provider_key_gate,
-        "isaac_preflight": _isaac_preflight_gate,
         "mcp_port_free": _mcp_port_gate,
         "request_field": _request_field_gate,
         "operator_gate": _operator_gate,
@@ -92,34 +91,6 @@ def _provider_key_gate(
             blocks_start=gate.required,
         )
     return GateEvaluation(severity=gate.severity, blocks_start=gate.required)
-
-
-def _isaac_preflight_gate(
-    root: Path,
-    route: ConsoleLaunchSelection,
-    gate: Any,
-    override_map: dict[str, str],
-    gate_map: dict[str, bool],
-    provider_status: dict[str, Any],
-) -> GateEvaluation:
-    del route, override_map, gate_map, provider_status
-    accepted = accepted_isaac_preflight(root)
-    if accepted is not None:
-        return GateEvaluation(
-            evidence=str(accepted),
-            severity=gate.severity,
-            blocks_start=gate.required,
-        )
-    return GateEvaluation(
-        ok=False,
-        message=(
-            "No accepted Isaac runtime preflight or smoke marker found. "
-            "Launch can start; backend diagnostics will report concrete runtime failures."
-        ),
-        kind="isaac_runtime_unverified",
-        severity=gate.severity,
-        blocks_start=gate.required,
-    )
 
 
 def _mcp_port_gate(

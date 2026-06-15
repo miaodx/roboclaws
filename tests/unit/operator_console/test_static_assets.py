@@ -38,7 +38,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert 'id="real-movement-gate"' in html
     assert 'id="isaac-preflight-gate"' not in html
     assert "Isaac preflight accepted" not in html
-    assert "Isaac runtime preflight and smoke markers" in html
+    assert "Isaac runtime preflight and smoke markers" not in html
     assert "renderRouteFields" in app
     assert "field_groups" in app
     assert "real_movement_enabled" in app
@@ -49,7 +49,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "ROBOCLAWS_CLAUDE_PROVIDER" in app
     assert "selectedCodexProvider" in app
     assert "selectedClaudeProvider" in app
-    assert "Diagnostic" in app
+    assert "Diagnostic" not in app
     assert "Capability Gate" in app
     assert "NEEDS SAFETY GATES" in app
     assert "NEEDS CONTEXT" in app

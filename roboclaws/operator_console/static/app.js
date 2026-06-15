@@ -818,9 +818,6 @@ function gateBadgeDisplay(gate) {
   if (gate.severity === "capability") {
     return { label: "Capability Gate", className: "warning" };
   }
-  if (gate.severity === "advisory") {
-    return { label: "Diagnostic", className: "warning" };
-  }
   return { label: "Needs Action", className: "needs_action" };
 }
 
