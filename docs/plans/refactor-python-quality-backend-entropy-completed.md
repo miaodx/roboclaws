@@ -143,6 +143,11 @@ logs before choosing the next slice.
   Metric: 20 -> 19 complexity rows; oversized modules unchanged at 62. Proof:
   focused report test, ruff, format check, and ratchet.
 
+- 2026-06-16: Fake Isaac backend protocol test split runtime, scene-binding,
+  visual-artifact, semantic-pose, and robot-import checks into focused local
+  helpers. Metric: 19 -> 18 complexity rows; oversized modules unchanged at 62.
+  Proof: focused Isaac backend test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

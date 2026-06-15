@@ -33,7 +33,22 @@ def test_isaac_lab_backend_reports_missing_runtime(tmp_path: Path) -> None:
 def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     tmp_path: Path,
 ) -> None:
-    backend = IsaacLabSubprocessBackend(
+    backend = _fake_isaac_backend(tmp_path)
+
+    _assert_fake_isaac_runtime_metadata(backend)
+    _assert_fake_isaac_scene_bindings(backend)
+    _assert_fake_isaac_scene_index_payload(backend)
+    _assert_fake_isaac_mess_diagnostics(backend)
+    _assert_fake_isaac_snapshot(backend, tmp_path)
+    _assert_fake_isaac_robot_views(backend, tmp_path)
+    object_id, receptacle_id, place, done = _exercise_fake_isaac_semantic_pose_actions(backend)
+    _assert_fake_isaac_action_results(place, done, object_id, receptacle_id)
+    _assert_fake_isaac_semantic_pose_state(backend, object_id, receptacle_id)
+    _assert_fake_isaac_robot_import(backend)
+
+
+def _fake_isaac_backend(tmp_path: Path) -> IsaacLabSubprocessBackend:
+    return IsaacLabSubprocessBackend(
         run_dir=tmp_path,
         python_executable=Path(sys.executable),
         runtime_mode="fake",
@@ -41,6 +56,8 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         generated_mess_count=1,
     )
 
+
+def _assert_fake_isaac_runtime_metadata(backend: IsaacLabSubprocessBackend) -> None:
     assert backend.backend == ISAACLAB_SUBPROCESS_BACKEND
     assert backend.runtime["runtime_mode"] == "fake"
     assert backend.runtime["renderer_mode"] == "fake_isaac_protocol"
@@ -62,6 +79,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.object_index
     assert backend.receptacle_index
     assert backend.scenario_source == "default_cleanup_scenario"
+
+
+def _assert_fake_isaac_scene_bindings(backend: IsaacLabSubprocessBackend) -> None:
     assert backend.scene_binding_diagnostics["schema"] == "isaac_public_scene_bindings_v1"
     assert backend.scene_binding_diagnostics["status"] == "placeholder_mapping"
     assert backend.scene_binding_diagnostics["source"] == "scenario_fixture"
@@ -78,6 +98,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert any(item["area"] == "camera_capture" for item in backend.mapping_gaps)
     assert any(item["status"] == "placeholder_visuals" for item in backend.mapping_gaps)
     assert any(item["area"] == "public_scene_bindings" for item in backend.mapping_gaps)
+
+
+def _assert_fake_isaac_scene_index_payload(backend: IsaacLabSubprocessBackend) -> None:
     scene_index_payload = backend.scene_index_artifact_payload()
     assert scene_index_payload["schema"] == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA
     assert scene_index_payload["backend"] == ISAACLAB_SUBPROCESS_BACKEND
@@ -91,6 +114,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert scene_index_payload["receptacle_index_count"] == len(
         scene_index_payload["receptacle_index"]
     )
+
+
+def _assert_fake_isaac_mess_diagnostics(backend: IsaacLabSubprocessBackend) -> None:
     assert len(backend.mess_placement_diagnostics) == 1
     mess_diagnostic = backend.mess_placement_diagnostics[0]
     assert mess_diagnostic["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
@@ -101,6 +127,8 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         "semantic_contained_in_receptacle",
     }
 
+
+def _assert_fake_isaac_snapshot(backend: IsaacLabSubprocessBackend, tmp_path: Path) -> None:
     snapshot_path = tmp_path / "snapshot.png"
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
     assert snapshot_path.is_file()
@@ -115,6 +143,11 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         == "placeholder_protocol_image"
     )
 
+
+def _assert_fake_isaac_robot_views(
+    backend: IsaacLabSubprocessBackend,
+    tmp_path: Path,
+) -> None:
     views = backend.write_robot_views(
         tmp_path / "robot_views",
         label="0001_pick",
@@ -129,6 +162,10 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     for path in views["views"].values():
         assert Path(path).is_file()
 
+
+def _exercise_fake_isaac_semantic_pose_actions(
+    backend: IsaacLabSubprocessBackend,
+) -> tuple[str, str, dict[str, object], dict[str, object]]:
     object_id = backend.scenario.objects[0].object_id
     receptacle_id = backend.scenario.private_manifest.targets[0].valid_receptacle_ids[0]
     nav = backend.navigate_to_object(object_id)
@@ -144,6 +181,15 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         assert response["physical_robot"] is False
         assert response["semantic_pose_event"]["rendered_to_usd"] is False
         assert response["semantic_pose_event"]["state_source"] == ISAAC_SEMANTIC_POSE_STATE_SOURCE
+    return object_id, receptacle_id, place, done
+
+
+def _assert_fake_isaac_action_results(
+    place: dict[str, object],
+    done: dict[str, object],
+    object_id: str,
+    receptacle_id: str,
+) -> None:
     assert done["final_locations"][object_id] == receptacle_id
     assert place["placement_diagnostic"]["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
     assert place["placement_diagnostic"]["diagnostic_source"] == "cleanup_place"
@@ -151,6 +197,13 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         place["placement_support_status"]
         == place["placement_diagnostic"]["placement_support_status"]
     )
+
+
+def _assert_fake_isaac_semantic_pose_state(
+    backend: IsaacLabSubprocessBackend,
+    object_id: str,
+    receptacle_id: str,
+) -> None:
     semantic_pose_state = backend.semantic_pose_state
     assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
     assert semantic_pose_state["primitive_provenance"] == ISAAC_SEMANTIC_POSE_PROVENANCE
@@ -168,6 +221,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         "navigate_to_receptacle",
         "place",
     ]
+
+
+def _assert_fake_isaac_robot_import(backend: IsaacLabSubprocessBackend) -> None:
     if backend.robot_import["status"] == "imported":
         assert backend.robot["embodiment"] == "rby1m"
         assert backend.robot["robot_mounted_head_camera"] is True
