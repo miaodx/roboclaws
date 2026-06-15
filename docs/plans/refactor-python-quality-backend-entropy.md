@@ -5093,3 +5093,17 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this test
   split so the unrelated staged `eval-harness` rename was not blessed into the
   baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py::validate(...)`
+  into runtime/scene, real-rendering, USD scene, artifact-evidence, and state
+  consistency helper checks. CLI flags, summary schema, and checker error
+  messages remain unchanged. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
+  passed; `ruff format scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
+  passed with 15 tests. The quality baseline was refreshed from 45 to 44 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this checker
+  split so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.

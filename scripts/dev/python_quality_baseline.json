@@ -375,16 +375,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py|C901|validate",
-        "limit": 10,
-        "message": "`validate` is too complex (11 > 10)",
-        "path": "scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py",
-        "row": 70,
-        "symbol": "validate",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py|C901|_decision",
         "limit": 10,
         "message": "`_decision` is too complex (12 > 10)",

@@ -98,69 +98,20 @@ def validate(
     segmentation = _dict(result.get("segmentation"))
     artifacts = _dict(result.get("artifacts"))
 
-    if require_real_rendering:
-        _require(
-            runtime.get("runtime_mode") == "real",
-            "runtime_mode is not real",
-            errors,
-        )
-        errors.extend(_real_runtime_diagnostic_errors(runtime))
-        _require(
-            rendering.get("real_rendering_proven") is True,
-            "real Isaac rendering is not proven",
-            errors,
-        )
-        _require(
-            rendering.get("placeholder_visuals") is not True,
-            "runtime smoke still reports placeholder visuals",
-            errors,
-        )
-    if require_usd_stage_loaded:
-        _require(
-            scene_load.get("usd_stage_loaded") is True,
-            "USD stage loading is not proven",
-            errors,
-        )
-        _require(
-            scene_load.get("status") == "loaded",
-            "scene_load status is not loaded",
-            errors,
-        )
-        errors.extend(_scene_load_errors(result, scene_load))
-    if require_local_scene_usd:
-        _require(
-            scene_load.get("usd_stage_loaded") is True,
-            "local scene USD loading is not proven",
-            errors,
-        )
-        _require(
-            scene_load.get("status") == "loaded",
-            "local scene_load status is not loaded",
-            errors,
-        )
-        errors.extend(_scene_load_errors(result, scene_load))
-        _require(
-            scene_load.get("loaded_asset_kind") == "local_scene_usd",
-            "loaded scene USD was not caller supplied local_scene_usd",
-            errors,
-        )
-    if require_usd_scene_index:
-        _require(bool(scene_index), "missing USD scene index diagnostics", errors)
-        _require(
-            int(scene_index.get("stage_prim_count") or 0) > 0,
-            "USD scene index has no stage prims",
-            errors,
-        )
-        _require(
-            int(scene_index.get("object_candidate_count") or 0) > 0 or bool(object_index),
-            "USD scene index has no object candidates",
-            errors,
-        )
-        _require(
-            int(scene_index.get("receptacle_candidate_count") or 0) > 0 or bool(receptacle_index),
-            "USD scene index has no receptacle candidates",
-            errors,
-        )
+    _append_runtime_and_scene_errors(
+        errors,
+        result=result,
+        runtime=runtime,
+        rendering=rendering,
+        scene_load=scene_load,
+        scene_index=scene_index,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        require_real_rendering=require_real_rendering,
+        require_usd_stage_loaded=require_usd_stage_loaded,
+        require_local_scene_usd=require_local_scene_usd,
+        require_usd_scene_index=require_usd_scene_index,
+    )
     if require_selected_usd_bindings:
         errors.extend(
             _selected_usd_binding_errors(
@@ -169,6 +120,145 @@ def validate(
                 receptacle_index=receptacle_index,
             )
         )
+    _append_artifact_evidence_errors(
+        errors,
+        artifacts=artifacts,
+        robot_views_result=robot_views_result,
+        segmentation=segmentation,
+        require_nonblank_image=require_nonblank_image,
+        require_robot_view_images=require_robot_view_images,
+        require_segmentation_evidence=require_segmentation_evidence,
+        require_real_rendering=require_real_rendering,
+    )
+    _append_state_consistency_errors(errors, result=result, state=state, runtime=runtime)
+    return errors
+
+
+def _append_runtime_and_scene_errors(
+    errors: list[str],
+    *,
+    result: dict[str, Any],
+    runtime: dict[str, Any],
+    rendering: dict[str, Any],
+    scene_load: dict[str, Any],
+    scene_index: dict[str, Any],
+    object_index: dict[str, Any],
+    receptacle_index: dict[str, Any],
+    require_real_rendering: bool,
+    require_usd_stage_loaded: bool,
+    require_local_scene_usd: bool,
+    require_usd_scene_index: bool,
+) -> None:
+    if require_real_rendering:
+        errors.extend(_real_rendering_errors(runtime, rendering))
+    if require_usd_stage_loaded:
+        errors.extend(_usd_stage_loaded_errors(result, scene_load))
+    if require_local_scene_usd:
+        errors.extend(_local_scene_usd_errors(result, scene_load))
+    if require_usd_scene_index:
+        errors.extend(_usd_scene_index_errors(scene_index, object_index, receptacle_index))
+
+
+def _real_rendering_errors(runtime: dict[str, Any], rendering: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _require(
+        runtime.get("runtime_mode") == "real",
+        "runtime_mode is not real",
+        errors,
+    )
+    errors.extend(_real_runtime_diagnostic_errors(runtime))
+    _require(
+        rendering.get("real_rendering_proven") is True,
+        "real Isaac rendering is not proven",
+        errors,
+    )
+    _require(
+        rendering.get("placeholder_visuals") is not True,
+        "runtime smoke still reports placeholder visuals",
+        errors,
+    )
+    return errors
+
+
+def _usd_stage_loaded_errors(
+    result: dict[str, Any],
+    scene_load: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    _require(
+        scene_load.get("usd_stage_loaded") is True,
+        "USD stage loading is not proven",
+        errors,
+    )
+    _require(
+        scene_load.get("status") == "loaded",
+        "scene_load status is not loaded",
+        errors,
+    )
+    errors.extend(_scene_load_errors(result, scene_load))
+    return errors
+
+
+def _local_scene_usd_errors(
+    result: dict[str, Any],
+    scene_load: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    _require(
+        scene_load.get("usd_stage_loaded") is True,
+        "local scene USD loading is not proven",
+        errors,
+    )
+    _require(
+        scene_load.get("status") == "loaded",
+        "local scene_load status is not loaded",
+        errors,
+    )
+    errors.extend(_scene_load_errors(result, scene_load))
+    _require(
+        scene_load.get("loaded_asset_kind") == "local_scene_usd",
+        "loaded scene USD was not caller supplied local_scene_usd",
+        errors,
+    )
+    return errors
+
+
+def _usd_scene_index_errors(
+    scene_index: dict[str, Any],
+    object_index: dict[str, Any],
+    receptacle_index: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    _require(bool(scene_index), "missing USD scene index diagnostics", errors)
+    _require(
+        int(scene_index.get("stage_prim_count") or 0) > 0,
+        "USD scene index has no stage prims",
+        errors,
+    )
+    _require(
+        int(scene_index.get("object_candidate_count") or 0) > 0 or bool(object_index),
+        "USD scene index has no object candidates",
+        errors,
+    )
+    _require(
+        int(scene_index.get("receptacle_candidate_count") or 0) > 0 or bool(receptacle_index),
+        "USD scene index has no receptacle candidates",
+        errors,
+    )
+    return errors
+
+
+def _append_artifact_evidence_errors(
+    errors: list[str],
+    *,
+    artifacts: dict[str, Any],
+    robot_views_result: dict[str, Any],
+    segmentation: dict[str, Any],
+    require_nonblank_image: bool,
+    require_robot_view_images: bool,
+    require_segmentation_evidence: bool,
+    require_real_rendering: bool,
+) -> None:
     if require_nonblank_image:
         image_path = artifacts.get("runtime_smoke_image")
         _require(
@@ -186,18 +276,26 @@ def validate(
     if require_segmentation_evidence:
         errors.extend(_segmentation_errors(segmentation))
 
-    if state:
-        _require(
-            state.get("backend") == result.get("backend"),
-            "state backend does not match init result",
-            errors,
-        )
-        _require(
-            _dict(state.get("runtime")).get("runtime_mode") == runtime.get("runtime_mode"),
-            "state runtime_mode does not match init result",
-            errors,
-        )
-    return errors
+
+def _append_state_consistency_errors(
+    errors: list[str],
+    *,
+    result: dict[str, Any],
+    state: dict[str, Any],
+    runtime: dict[str, Any],
+) -> None:
+    if not state:
+        return
+    _require(
+        state.get("backend") == result.get("backend"),
+        "state backend does not match init result",
+        errors,
+    )
+    _require(
+        _dict(state.get("runtime")).get("runtime_mode") == runtime.get("runtime_mode"),
+        "state runtime_mode does not match init result",
+        errors,
+    )
 
 
 def _scene_load_errors(result: dict[str, Any], scene_load: dict[str, Any]) -> list[str]:
