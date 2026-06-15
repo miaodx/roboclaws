@@ -22,6 +22,7 @@ from roboclaws.launch.scene_sampler import (  # noqa: E402
     eval_suite_payload,
     readiness_report,
     sampler_manifest,
+    scanner_admission_report,
     selection_gap_report,
     source_availability_report,
     source_prep_report,
@@ -47,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         write_candidate_readiness=not args.no_candidate_readiness,
         write_selection_gaps=not args.no_selection_gaps,
         write_source_prep=not args.no_source_prep,
+        write_scanner_admission=not args.no_scanner_admission,
         write_generated_eval=not args.no_generated_eval,
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
@@ -72,6 +74,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-candidate-readiness", action="store_true")
     parser.add_argument("--no-selection-gaps", action="store_true")
     parser.add_argument("--no-source-prep", action="store_true")
+    parser.add_argument("--no-scanner-admission", action="store_true")
     parser.add_argument("--no-generated-eval", action="store_true")
     parser.add_argument(
         "--candidate-index",
@@ -143,6 +146,7 @@ def export_readiness_artifacts(
     write_candidate_readiness: bool = True,
     write_selection_gaps: bool = True,
     write_source_prep: bool = True,
+    write_scanner_admission: bool = True,
     write_generated_eval: bool = True,
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
@@ -192,6 +196,13 @@ def export_readiness_artifacts(
             source_prep_report(candidate_indices=candidate_indices),
         )
         artifacts["source_prep"] = str(source_prep_path)
+    if write_scanner_admission:
+        scanner_admission_path = output_dir / "scene_sampler_scanner_admission.json"
+        _write_json(
+            scanner_admission_path,
+            scanner_admission_report(candidate_indices=candidate_indices),
+        )
+        artifacts["scanner_admission"] = str(scanner_admission_path)
     if write_generated_eval:
         generated_eval_dir = output_dir / "generated_eval"
         generated_samples_dir = generated_eval_dir / "samples" / "scene_sampler"

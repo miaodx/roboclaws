@@ -25,6 +25,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "manifest",
         "eval_projection",
         "readiness_report",
+        "scanner_admission",
         "selection_gaps",
         "source_availability",
         "source_prep",
@@ -38,6 +39,9 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
     selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
     source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
+    scanner_admission = json.loads(
+        (tmp_path / "scene_sampler_scanner_admission.json").read_text()
+    )
     generated_suite = json.loads(
         (tmp_path / "generated_eval/scene_sampler_stress.json").read_text()
     )
@@ -85,6 +89,12 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         command["name"] == "install_single_scene_example"
         for command in source_prep["sources"]["ithor"]["operator_commands"]
     )
+    assert scanner_admission["schema"] == "molmospaces_scene_sampler_scanner_admission_v1"
+    assert scanner_admission["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert scanner_admission["sources"]["procthor-10k-val"]["summary"][
+        "admitted_count"
+    ] == 5
+    assert scanner_admission["sources"]["ithor"]["needed_ui_count"] == 3
     assert generated_suite == json.loads(
         (
             REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"

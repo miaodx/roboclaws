@@ -25,6 +25,7 @@ from roboclaws.launch.scene_sampler import (
     readiness_report,
     sampler_manifest,
     sampler_rows,
+    scanner_admission_report,
     selection_gap_report,
     source_availability_report,
     source_prep_report,
@@ -369,3 +370,44 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
         command["name"] == "rerun_readiness_after_prep"
         for command in ithor["operator_commands"]
     )
+
+
+def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatch) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
+    )
+
+    report = scanner_admission_report(candidate_indices=tuple(range(10)))
+
+    assert report["schema"] == "molmospaces_scene_sampler_scanner_admission_v1"
+    assert report["probe_mode"] == "no_download_no_backend_no_vlm"
+    procthor = report["sources"]["procthor-10k-val"]
+    val_0 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 0)
+    assert val_0["admission_status"] == "admitted"
+    assert val_0["lanes"] == [UI_LANE, EVAL_STRESS_LANE]
+    val_1 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 1)
+    assert val_1["admission_status"] == "rejected"
+    assert val_1["failure_class"] == "map_actionability_failure"
+    val_6 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 6)
+    assert val_6["admission_status"] == "blocked"
+    assert val_6["required_gates"] == [
+        "source_asset_available",
+        "preview_metadata",
+        "public_room_count",
+        "public_waypoints",
+        "trusted_category_provenance",
+        "map_build_artifacts",
+    ]
+    assert "source_asset_available" in val_6["missing_gates"]
+    assert "preview_metadata" in val_6["missing_gates"]
+    assert val_6["next_action"] == "run_manual_source_prep_before_scanner"
+
+    ithor = report["sources"]["ithor"]
+    assert ithor["needed_ui_count"] == 3
+    assert ithor["needed_eval_count"] == 10
+    assert ithor["admission_rows"][0]["world_id"] == "molmospaces/ithor/0"
+    assert ithor["admission_rows"][0]["admission_status"] == "blocked"

@@ -110,6 +110,11 @@ First slice implemented on 2026-06-15.
   `get_scenes(...)` refs for candidate paths and validity, so source-specific
   numbering such as `ithor`'s `FloorPlan*_physics.xml` entries is not mistaken
   for `val_<index>.xml` availability.
+- Readiness export now writes `scene_sampler_scanner_admission.json`, a
+  no-download/no-backend/no-VLM dry-run of scanner admission gates. It records
+  admitted, rejected, and blocked candidate rows with required gates, missing
+  gates, and next actions before any real preview rendering or map-build run is
+  allowed.
 
 Verification run on 2026-06-15:
 
@@ -195,10 +200,11 @@ Next Flow implementation slices:
      `output/scene-sampler-readiness/`.
      The export now includes no-download source availability evidence,
      candidate readiness packets, selection-gap worklists, and a
-     source-preparation artifact with manual operator commands. A later slice
-     should replace or extend the static facts with real scanner candidate
-     output for new source families after the MolmoSpaces runtime and scene
-     assets are visible.
+     source-preparation artifact with manual operator commands. It also writes
+     a scanner-admission dry-run artifact that names missing gates before any
+     backend render or live labeler is allowed. A later slice should replace or
+     extend the static facts with real scanner candidate output for new source
+     families after the MolmoSpaces runtime and scene assets are visible.
    - Strict threshold mode is available for gates. For example,
      `--require-ui-supported-source procthor-10k-val` should pass today, while
      `--require-eval-complete-source procthor-10k-val` should fail until the

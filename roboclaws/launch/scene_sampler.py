@@ -763,6 +763,57 @@ def source_prep_report(
     }
 
 
+def scanner_admission_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return no-download scanner admission rows for candidate readiness work."""
+
+    candidates = candidate_readiness_report(candidate_indices=candidate_indices)
+    selection = selection_gap_report(candidate_indices=candidate_indices)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_candidates = candidates["sources"][source]
+        source_selection = selection["sources"][source]
+        admission_rows = [
+            _scanner_admission_row(candidate)
+            for candidate in source_candidates.get("candidates") or []
+        ]
+        sources[source] = {
+            "scene_source": source,
+            "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
+            "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
+            "ready_ui_count": int(source_candidates.get("ui_ready_count") or 0),
+            "ready_eval_count": int(source_candidates.get("eval_ready_count") or 0),
+            "needed_ui_count": int(source_selection.get("ui_needed_count") or 0),
+            "needed_eval_count": int(source_selection.get("eval_needed_count") or 0),
+            "next_scan_world_ids": [
+                item.get("world_id")
+                for item in source_selection.get("next_scan_candidates") or []
+            ],
+            "admission_rows": admission_rows,
+            "summary": {
+                "admitted_count": sum(
+                    1 for item in admission_rows if item["admission_status"] == "admitted"
+                ),
+                "rejected_count": sum(
+                    1 for item in admission_rows if item["admission_status"] == "rejected"
+                ),
+                "blocked_count": sum(
+                    1 for item in admission_rows if item["admission_status"] == "blocked"
+                ),
+            },
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_scanner_admission_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_backend_no_vlm",
+        "candidate_indices": list(candidate_indices),
+        "required_gates": list(_scanner_required_gates()),
+        "sources": sources,
+    }
+
+
 def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
     """Load the prepared room-category label manifest used for admission."""
 
@@ -1403,6 +1454,110 @@ def _install_candidate_command(
         "install_scene_with_objects_and_grasps_from_path(scene_path)\n"
         "PY"
     )
+
+
+def _scanner_required_gates() -> tuple[str, ...]:
+    return (
+        "source_asset_available",
+        "preview_metadata",
+        "public_room_count",
+        "public_waypoints",
+        "trusted_category_provenance",
+        "map_build_artifacts",
+    )
+
+
+def _scanner_admission_row(candidate: dict[str, Any]) -> dict[str, Any]:
+    status = str(candidate.get("readiness_status") or "")
+    if status == READINESS_READY:
+        return {
+            **_scanner_admission_row_base(candidate),
+            "admission_status": "admitted",
+            "lanes": candidate.get("lanes") or [],
+            "passed_gates": list(_scanner_required_gates()),
+            "missing_gates": [],
+            "next_action": "none",
+        }
+    if status == READINESS_REJECTED:
+        return {
+            **_scanner_admission_row_base(candidate),
+            "admission_status": "rejected",
+            "lanes": candidate.get("lanes") or [],
+            "passed_gates": [],
+            "missing_gates": [],
+            "next_action": "do_not_scan_without_new_human_curation",
+        }
+    missing_gates = _scanner_missing_gates(candidate)
+    return {
+        **_scanner_admission_row_base(candidate),
+        "admission_status": "blocked",
+        "lanes": [],
+        "passed_gates": [
+            gate for gate in _scanner_required_gates() if gate not in missing_gates
+        ],
+        "missing_gates": missing_gates,
+        "next_action": _scanner_next_action(candidate, missing_gates=missing_gates),
+    }
+
+
+def _scanner_admission_row_base(candidate: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_family": candidate.get("scene_family", ""),
+        "scene_split": candidate.get("scene_split", ""),
+        "scene_source": candidate.get("scene_source", ""),
+        "scene_index": candidate.get("scene_index"),
+        "world_id": candidate.get("world_id", ""),
+        "readiness_status": candidate.get("readiness_status", ""),
+        "failure_class": candidate.get("failure_class", ""),
+        "blocked_reason": candidate.get("blocked_reason", ""),
+        "selected_reason": candidate.get("selected_reason", ""),
+        "room_count": candidate.get("room_count", 0),
+        "waypoint_count": candidate.get("waypoint_count", 0),
+        "category_provenance": candidate.get("category_provenance", ""),
+        "preview_statuses": candidate.get("preview_statuses", {}),
+        "candidate_file": candidate.get("candidate_file", {}),
+        "required_gates": list(_scanner_required_gates()),
+    }
+
+
+def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
+    missing = []
+    candidate_file = candidate.get("candidate_file")
+    if not isinstance(candidate_file, dict) or not candidate_file.get("exists"):
+        missing.append("source_asset_available")
+    preview_statuses = candidate.get("preview_statuses")
+    if not isinstance(preview_statuses, dict) or not all(
+        preview_statuses.get(view) == "available" for view in _required_views()
+    ):
+        missing.append("preview_metadata")
+    if int(candidate.get("room_count") or 0) < 3:
+        missing.append("public_room_count")
+    if int(candidate.get("waypoint_count") or 0) < 3:
+        missing.append("public_waypoints")
+    if candidate.get("category_provenance") not in {
+        "source_metadata",
+        "prepared_visual_room_label_manifest",
+    }:
+        missing.append("trusted_category_provenance")
+    if not candidate.get("eval_ready"):
+        missing.append("map_build_artifacts")
+    return missing
+
+
+def _scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str]) -> str:
+    candidate_file = candidate.get("candidate_file")
+    if "source_asset_available" in missing_gates:
+        if (
+            isinstance(candidate_file, dict)
+            and candidate_file.get("status") == "missing_from_index_map"
+        ):
+            return "choose_valid_source_specific_candidate_index"
+        return "run_manual_source_prep_before_scanner"
+    if "preview_metadata" in missing_gates:
+        return "render_preview_metadata_with_explicit_operator_command"
+    if "map_build_artifacts" in missing_gates:
+        return "run_map_build_product_smoke_before_eval_admission"
+    return "run_scanner_admission_checks"
 
 
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
