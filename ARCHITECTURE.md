@@ -17,13 +17,14 @@ The current human-facing layers are:
 
 ```text
 Open-ended goal
-  -> Runnable Surface, World / Scene, and optional Preset
-  -> Backend Runtime
+  -> Runnable Surface, World / Scene, Intent, and optional Preset
   -> Agent Skill
   -> Agent Engine and Provider Profile
   -> Capability Profile requirements
-  -> MCP Capability Tools
-  -> Artifacts and reports
+  -> MCP Capability Contract and Tools
+  -> Thin Runtime / Server Adapter
+  -> Backend Runtime / Environment Primitive
+  -> Artifacts, reports, and eval suites
 ```
 
 Evaluation is a first-class maintainer layer beside product runs, not a
@@ -63,11 +64,26 @@ Harness recipes
   or `direct-runner`) from the model/key route (`provider_profile=codex-env`,
   `mify`, `mimo-anthropic`, and related profiles).
   `openclaw-gateway` is registered only as a validation-required maintainer
-  route until off-work-network Gateway proof is green.
+  route until off-work-network Gateway proof is green. The active stabilization
+  focus is coding-agent routes and the OpenAI Agents SDK route; OpenClaw,
+  Hermes-style, and similar high-level agent frameworks are later clients after
+  those lower routes are stable.
 - **Capability Profiles** define reusable capability environments. Skills
   require profiles; profiles should not be copied into task-specific supersets.
-- **MCP Tools** are the stable public robot interface: observe, navigate, map,
-  pick, place, done, and related bounded capabilities.
+- **MCP Capability Contract And Tools** are the stable public robot interface:
+  observe, navigate, map, pick, place, done, and related bounded capabilities.
+  MCP is where public capability contracts and tool-order validation responses
+  belong; task strategy should stay in skills unless behavior has met the MCP
+  promotion rule.
+- **Thin Runtime / Server Adapters** bind the MCP transport and lifecycle:
+  fixed server targets, host/port, readiness, pid/lock files, output dirs,
+  live-agent status, operator-console launch control, and eval live-run polling.
+  They are plumbing, not a behavior layer. They must not own cleanup/search/map
+  strategy, private scoring truth, benchmark-specific hints, or opaque
+  multi-tool task shortcuts.
+- **Backend Runtimes / Environment Primitives** execute environment-specific
+  actions behind the public MCP contract. Backend variants stay in metadata and
+  adapters, not in public task names.
 - **Eval Suites** are repo-owned benchmarks that run selected product surfaces
   through versioned samples, deterministic graders, optional advisory graders,
   aggregate metrics such as `pass@k` / `pass^k`, and failure replay. Their first
@@ -81,7 +97,8 @@ provenance, safety gates, operator map context, and blocked-capability status.
 
 Roboclaws currently centers on the household-world demo stack. Retired
 AI2-THOR, direct-VLM, and route-card demos may still appear in historical
-plans or archived reports, but they are not current public launch axes.
+plans or archived reports, but they are not current public launch axes and
+should not be revived without a new architecture decision.
 
 ### Household World And Cleanup
 
@@ -99,10 +116,11 @@ Key pieces:
 - `roboclaws/maps/` owns reusable navigation map artifacts, projections, and
   Actionable Semantic Map Snapshot conversion.
 - `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
-  surface for coding agents and OpenClaw-style clients.
+  capability surface for coding agents and future higher-level MCP clients.
 - `roboclaws/cli/household_agent_server.py` and
-  `roboclaws/cli/agibot_map_build_agent_server.py` assemble live household MCP
-  server processes behind `python -m roboclaws.cli.agent_server ...`.
+  `roboclaws/cli/agibot_map_build_agent_server.py` are thin server adapters
+  that assemble live household MCP server processes behind
+  `python -m roboclaws.cli.agent_server ...`.
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
   request schema used by MuJoCo and Isaac scene probes.
@@ -112,7 +130,8 @@ Key pieces:
 - `roboclaws/operator_console/` provides the standalone local agent operator
   console. It exposes explicit coding-agent route metadata, per-backend locks,
   route gates, normalized live operator state, redacted raw-log access, and
-  links to existing run artifacts.
+  links to existing run artifacts. It starts catalog-approved runs and surfaces
+  state; it does not own robot task strategy.
 
 The clean-slate direction is:
 
@@ -208,6 +227,11 @@ budget=smoke`. Do not add a third-party eval framework until deterministic
 household suites have proven the sample, artifact, grader, privacy, and result
 packet contracts that Roboclaws needs.
 
+Live eval execution is opt-in. Non-direct eval requests can record blocked
+identity/preflight packets without launching real providers; `live_execution=run`
+is the explicit switch that runs the selected product route. Provider/runtime
+failures are classified separately from agent behavior failures.
+
 ## Capability Profiles
 
 `roboclaws/mcp/profiles.py` defines current MCP capability metadata. The
@@ -230,6 +254,12 @@ Going forward:
   coding agents, shared launcher and status semantics should flow through
   `roboclaws/agents/live_runtime.py`, with task-specific kickoff text in
   `roboclaws/agents/prompts/`.
+- Add or revise thin server adapters only for transport and lifecycle concerns:
+  MCP server target routing, host/port, readiness, locks, run directories,
+  live status, operator-console run control, or eval live-run polling. If the
+  change needs task strategy or multi-step behavior, put it in a skill first or
+  promote it through the MCP capability contract only after the boundary is
+  stable.
 - Add or revise MCP tools in the domain-local MCP module when the capability
   surface is stable enough to reuse across skills.
 - Profiles describe reusable capability environments, not whole tasks.
