@@ -385,6 +385,13 @@ logs before choosing the next slice.
   4471 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
   Proof: focused Isaac backend tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac observe/navigation/manipulation/done command handlers
+  moved from the backend worker into `isaac_worker_commands.py`, with
+  worker-private wrappers preserving CLI dispatch, tests, semantic-pose event
+  hooks, and placement hooks. Metric: `isaac_lab_backend_worker.py` 4471 ->
+  4264 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Isaac backend tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

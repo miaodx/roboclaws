@@ -37,10 +37,6 @@ from roboclaws.household.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
     robot_mounted_head_camera_control_contract,
 )
-from roboclaws.household.scoring import score_cleanup
-from roboclaws.household.semantic_acceptability import (
-    annotate_score_with_semantic_acceptability,
-)
 from roboclaws.household.types import (
     CleanupObject,
     CleanupReceptacle,
@@ -440,6 +436,36 @@ from scripts.isaac_lab_cleanup.isaac_usd_xform import (
     set_usd_xform_translate as _set_usd_xform_translate,
 )
 from scripts.isaac_lab_cleanup.isaac_worker_cli import build_arg_parser
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    IsaacWorkerCommandHooks,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    close_receptacle as _close_receptacle_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    done as _done_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    navigate_to_object as _navigate_to_object_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    navigate_to_receptacle as _navigate_to_receptacle_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    navigate_to_waypoint as _navigate_to_waypoint_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    observe as _observe_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    open_receptacle as _open_receptacle_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    pick as _pick_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_commands import (
+    place as _place_impl,
+)
 from scripts.isaac_lab_cleanup.isaac_worker_protocol import (
     count_tool_request as _count_tool_request_impl,
 )
@@ -3124,294 +3150,61 @@ def _index_usd_prim_path(index: Any, handle: str) -> str:
     return str(entry.get("usd_prim_path") or "")
 
 
-def observe(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    del args
-    _count(state, "observe")
-    write_state_from_state_arg(state)
-    return _ok(
-        "observe",
-        scenario=_public_state(state),
-        current_receptacle_id=state["current_receptacle_id"],
-        held_object_id=state.get("held_object_id"),
-        isaac_runtime=state["runtime"],
+def _isaac_worker_command_hooks() -> IsaacWorkerCommandHooks:
+    return IsaacWorkerCommandHooks(
+        apply_object_location=_apply_object_location,
+        count=_count,
+        dict_value=_dict,
+        error=_error,
+        has_xy=_has_xy,
+        isaac_placement_diagnostic=_isaac_placement_diagnostic,
+        objects_by_id=_objects_by_id,
+        ok=_ok,
+        public_state=_public_state,
+        receptacles_by_id=_receptacles_by_id,
+        record_semantic_pose_event=_record_semantic_pose_event,
+        record_waypoint_pose_event=_record_waypoint_pose_event,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        robot_pose_for_waypoint=_robot_pose_for_waypoint,
+        scenario_from_state=scenario_from_state,
+        write_state_from_state_arg=write_state_from_state_arg,
     )
+
+
+def observe(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    return _observe_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def navigate_to_object(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_object")
-    object_id = args.object_id
-    if object_id not in _objects_by_id(state):
-        return _error("navigate_to_object", "stale_reference", object_id=object_id)
-    location_id = state["locations"].get(object_id)
-    if location_id in {None, HELD_LOCATION_ID}:
-        return _error("navigate_to_object", "object_not_at_public_location", object_id=object_id)
-    previous = state["current_receptacle_id"]
-    state["current_receptacle_id"] = str(location_id)
-    event = _record_semantic_pose_event(
-        state,
-        tool="navigate_to_object",
-        state_mutation="isaac_root_pose",
-        object_id=object_id,
-        receptacle_id=str(location_id),
-        previous_location_id=previous,
-        location_id=str(location_id),
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "navigate_to_object",
-        object_id=object_id,
-        source_receptacle_id=str(location_id),
-        previous_receptacle_id=previous,
-        location_id=str(location_id),
-        robot_pose=_robot_pose_for_receptacle(state, str(location_id)),
-        state_mutation="isaac_root_pose",
-        semantic_pose_event=event,
-    )
+    return _navigate_to_object_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_receptacle")
-    receptacle_id = args.receptacle_id
-    if receptacle_id not in _receptacles_by_id(state):
-        return _error("navigate_to_receptacle", "stale_reference", receptacle_id=receptacle_id)
-    previous = state["current_receptacle_id"]
-    state["current_receptacle_id"] = receptacle_id
-    held_object_id = state.get("held_object_id")
-    event = _record_semantic_pose_event(
-        state,
-        tool="navigate_to_receptacle",
-        state_mutation="isaac_root_pose",
-        object_id=str(held_object_id or ""),
-        receptacle_id=receptacle_id,
-        previous_location_id=previous,
-        location_id=receptacle_id,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "navigate_to_receptacle",
-        receptacle_id=receptacle_id,
-        object_id=held_object_id,
-        previous_receptacle_id=previous,
-        robot_pose=_robot_pose_for_receptacle(state, receptacle_id),
-        state_mutation="isaac_root_pose",
-        semantic_pose_event=event,
-    )
+    return _navigate_to_receptacle_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def navigate_to_waypoint(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_waypoint")
-    waypoint = _dict(args.waypoint_json)
-    robot_pose = _robot_pose_for_waypoint(waypoint)
-    if not _has_xy(robot_pose):
-        return _error(
-            "navigate_to_waypoint",
-            "waypoint_pose_missing",
-            waypoint_id=str(waypoint.get("waypoint_id") or ""),
-        )
-    previous_waypoint_id = str(state.get("current_waypoint_id") or "")
-    previous_room_id = str(state.get("current_room_id") or "")
-    waypoint_id = str(waypoint.get("waypoint_id") or "")
-    room_id = str(waypoint.get("room_id") or "")
-    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
-    state["current_waypoint_id"] = waypoint_id
-    state["current_room_id"] = room_id
-    if fixture_ids:
-        state["current_receptacle_id"] = fixture_ids[0]
-    event = _record_waypoint_pose_event(
-        state,
-        waypoint=waypoint,
-        robot_pose=robot_pose,
-        previous_waypoint_id=previous_waypoint_id,
-        previous_room_id=previous_room_id,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "navigate_to_waypoint",
-        waypoint_id=waypoint_id,
-        room_id=room_id,
-        fixture_ids=fixture_ids,
-        previous_waypoint_id=previous_waypoint_id,
-        previous_room_id=previous_room_id,
-        robot_pose=robot_pose,
-        state_mutation="isaac_waypoint_pose",
-        semantic_pose_event=event,
-        backend_pose_mutation_available=True,
-    )
+    return _navigate_to_waypoint_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def pick(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "pick")
-    object_id = args.object_id
-    objects = _objects_by_id(state)
-    obj = objects.get(object_id)
-    if obj is None:
-        return _error("pick", "stale_reference", object_id=object_id)
-    if not obj.get("pickupable", True):
-        return _error("pick", "not_pickupable", object_id=object_id)
-    if state.get("held_object_id") is not None:
-        return _error("pick", "already_holding", held_object_id=state["held_object_id"])
-    previous_location_id = state["locations"][object_id]
-    state["held_object_id"] = object_id
-    state["locations"][object_id] = HELD_LOCATION_ID
-    event = _record_semantic_pose_event(
-        state,
-        tool="pick",
-        state_mutation="isaac_prim_attach",
-        object_id=object_id,
-        receptacle_id=str(previous_location_id),
-        previous_location_id=previous_location_id,
-        location_id=HELD_LOCATION_ID,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "pick",
-        object_id=object_id,
-        previous_location_id=previous_location_id,
-        location_id=HELD_LOCATION_ID,
-        state_mutation="isaac_prim_attach",
-        semantic_pose_event=event,
-    )
+    return _pick_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def open_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "open_receptacle")
-    receptacle_id = args.receptacle_id
-    receptacle = _receptacles_by_id(state).get(receptacle_id)
-    if receptacle is None:
-        return _error("open_receptacle", "stale_reference", receptacle_id=receptacle_id)
-    opened = "fridge" in str(receptacle.get("name", "")).lower()
-    open_ids = set(state.get("open_receptacle_ids") or [])
-    if opened:
-        open_ids.add(receptacle_id)
-    state["open_receptacle_ids"] = sorted(open_ids)
-    event = _record_semantic_pose_event(
-        state,
-        tool="open_receptacle",
-        state_mutation="isaac_articulation_joint_pose",
-        object_id=str(state.get("held_object_id") or ""),
-        receptacle_id=receptacle_id,
-        location_id=receptacle_id,
-        articulation_open=opened,
-        requested_open=True,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "open_receptacle",
-        receptacle_id=receptacle_id,
-        object_id=state.get("held_object_id"),
-        opened=opened,
-        state_mutation="isaac_articulation_joint_pose",
-        semantic_pose_event=event,
-    )
+    return _open_receptacle_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def close_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "close_receptacle")
-    receptacle_id = args.receptacle_id
-    if receptacle_id not in _receptacles_by_id(state):
-        return _error("close_receptacle", "stale_reference", receptacle_id=receptacle_id)
-    open_ids = set(state.get("open_receptacle_ids") or [])
-    was_open = receptacle_id in open_ids
-    open_ids.discard(receptacle_id)
-    state["open_receptacle_ids"] = sorted(open_ids)
-    event = _record_semantic_pose_event(
-        state,
-        tool="close_receptacle",
-        state_mutation="isaac_articulation_joint_pose",
-        object_id=str(state.get("held_object_id") or ""),
-        receptacle_id=receptacle_id,
-        location_id=receptacle_id,
-        articulation_open=False,
-        was_open=was_open,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "close_receptacle",
-        receptacle_id=receptacle_id,
-        object_id=state.get("held_object_id"),
-        closed=was_open,
-        state_mutation="isaac_articulation_joint_pose",
-        semantic_pose_event=event,
-    )
+    return _close_receptacle_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> dict[str, Any]:
-    tool = "place_inside" if relation == "inside" else "place"
-    _count(state, tool)
-    receptacle_id = args.receptacle_id
-    if receptacle_id not in _receptacles_by_id(state):
-        return _error(tool, "stale_reference", receptacle_id=receptacle_id)
-    object_id = state.get("held_object_id")
-    if object_id is None:
-        return _error(tool, "not_holding")
-    object_id = str(object_id)
-    state["held_object_id"] = None
-    state["current_receptacle_id"] = receptacle_id
-    placement_resolution = _apply_object_location(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        placement_index=len(state.get("placement_diagnostics") or []),
-        source="cleanup_place",
-    )
-    diagnostic = _isaac_placement_diagnostic(
-        state=state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        source="cleanup_place",
-        placement_resolution=placement_resolution,
-    )
-    state.setdefault("placement_diagnostics", []).append(diagnostic)
-    event = _record_semantic_pose_event(
-        state,
-        tool=tool,
-        state_mutation="isaac_prim_transform",
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        previous_location_id=HELD_LOCATION_ID,
-        location_id=receptacle_id,
-        relation=relation,
-        placement_support_status=diagnostic.get("placement_support_status"),
-        direct_support_proven=diagnostic.get("direct_support_proven"),
-        placement_contact_proof=diagnostic.get("contact_proof"),
-        placement_resolution_source=diagnostic.get("resolution_source"),
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        tool,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        location_id=receptacle_id,
-        contained_in=receptacle_id if relation == "inside" else None,
-        location_relation=relation,
-        placement_diagnostic=diagnostic,
-        placement_support_status=diagnostic.get("placement_support_status"),
-        direct_support_proven=diagnostic.get("direct_support_proven"),
-        state_mutation="isaac_prim_transform",
-        semantic_pose_event=event,
-    )
+    return _place_impl(args, state, relation=relation, hooks=_isaac_worker_command_hooks())
 
 
 def done(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "done")
-    scenario = scenario_from_state(state)
-    score = score_cleanup(state["locations"], scenario.private_manifest)
-    annotated_score = annotate_score_with_semantic_acceptability(
-        score.to_dict(),
-        scenario,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "done",
-        reason=args.reason,
-        cleanup_status=score.status,
-        score=annotated_score,
-        final_locations=dict(state["locations"]),
-        final_containment=dict(state.get("containment") or {}),
-        tool_event_counts=dict(state.get("tool_event_counts") or {}),
-    )
+    return _done_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
 def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
