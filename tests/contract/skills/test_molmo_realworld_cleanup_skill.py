@@ -74,7 +74,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        cleanup_profile=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_LABELS_PROFILE,
         map_mode=MINIMAL_MAP_MODE,
     )
     try:

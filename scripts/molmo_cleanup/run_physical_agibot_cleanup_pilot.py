@@ -17,7 +17,7 @@ from roboclaws.household.agibot_sdk_runner import run_physical_agibot_cleanup_pi
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the AgiBot SDK-backed real_robot_cleanup_v1 navigation/perception "
+            "Run the AgiBot SDK-backed household navigation/perception "
             "pilot through the SDK CLI boundary."
         )
     )

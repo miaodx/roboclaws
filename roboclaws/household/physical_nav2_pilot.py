@@ -10,13 +10,16 @@ from roboclaws.household.nav2_adapter import (
     NAV2_ACTION_PROVENANCE,
     DirectNav2Adapter,
 )
+from roboclaws.household.profiles import (
+    PHYSICAL_ROBOT_EVIDENCE_LANE,
+    physical_robot_evidence_metadata,
+)
 from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.household.report import render_cleanup_report, write_state_snapshot
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
 from roboclaws.maps.bundle import copy_nav2_map_bundle_snapshot, validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
-from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, legacy_contract_profile_metadata
 
 PHYSICAL_NAV2_PILOT_SCHEMA = "physical_nav2_cleanup_pilot_v1"
 PHYSICAL_NAV2_PILOT_POLICY = "physical_nav2_navigation_perception_pilot"
@@ -194,8 +197,8 @@ def run_physical_nav2_cleanup_pilot(
     run_result = {
         "schema": PHYSICAL_NAV2_PILOT_SCHEMA,
         "contract": REALWORLD_CONTRACT,
-        "cleanup_profile": REAL_ROBOT_CLEANUP_PROFILE,
-        "cleanup_profile_metadata": legacy_contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE),
+        "evidence_lane": PHYSICAL_ROBOT_EVIDENCE_LANE,
+        "evidence_lane_metadata": physical_robot_evidence_metadata(backend=backend_name),
         "backend": backend_name,
         "policy": PHYSICAL_NAV2_PILOT_POLICY,
         "agent_driven": False,

@@ -78,8 +78,8 @@
   <rect x="46" y="422" width="1188" height="196" class="public-band"/>
   <text x="70" y="452" class="section">CAPABILITY PROFILE REQUIREMENTS: COMPOSE, DO NOT COPY</text>
   <rect x="82" y="488" width="238" height="86" class="focus-card"/>
-  <text x="106" y="516" class="focus-title">household_world_v1</text>
-  <text x="106" y="540" class="focus-text">metric map, fixture hints,</text>
+  <text x="106" y="516" class="focus-title">household_world</text>
+  <text x="106" y="540" class="focus-text">metric map, runtime evidence,</text>
   <text x="106" y="560" class="focus-text">observe, waypoint nav</text>
   <rect x="366" y="488" width="258" height="86" class="card"/>
   <text x="390" y="516" class="card-title">manipulation profile</text>

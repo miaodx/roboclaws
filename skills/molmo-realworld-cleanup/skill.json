@@ -6,7 +6,7 @@
   "role": "cleanup_task_behavior",
   "status": "active",
   "mcp": {
-    "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
+    "profiles": ["household_world", "household_manipulation", "household_episode"],
     "required_tools": [
       "metric_map",
       "navigate_to_waypoint",
@@ -31,9 +31,9 @@
     "boundary_notes": "Public/private-safe household surface. No scene_objects, target list, hidden destination table, source-map mutation, or private scoring truth."
   },
   "capability_requirements": {
-    "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
+    "profiles": ["household_world", "household_manipulation", "household_episode"],
     "backend_variants": ["api_semantic_synthetic", "molmospaces_subprocess", "nav2_ros2", "agibot_gdk"],
-    "notes": "intent=cleanup composes world evidence, manipulation, and task lifecycle; intent=map-build should require household_world_v1 without manipulation."
+    "notes": "intent=cleanup composes world evidence, manipulation, and task lifecycle; intent=map-build should require household_world without manipulation."
   },
   "scripts": [
     {

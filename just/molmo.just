@@ -38,10 +38,10 @@ claude_full_permission_args := "--dangerously-skip-permissions --permission-mode
 default:
     @just --list molmo
 
-# Private household-world cleanup implementation runner. Public callers should
+# Private household-world implementation runner. Public callers should
 # enter through `run::surface`; maintainers should enter through `agent::run`.
 [private]
-household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
+household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -68,9 +68,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     isaac_scene_usd_path="{{isaac_scene_usd_path}}"
     min_generated_mess_count_override="{{min_generated_mess_count_override}}"
     generated_mess_object_ids="{{generated_mess_object_ids}}"
-    task_name="{{task_name}}"
+    task_surface="{{task_surface}}"
+    task_intent="{{task_intent}}"
     operator_messages_path="{{operator_messages_path}}"
-    task_intent_mode="{{task_intent_mode}}"
     skill_name="{{skill_name}}"
     goal_contract_json="{{goal_contract_json}}"
     goal_contract_path="{{goal_contract_path}}"
@@ -106,13 +106,15 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     min_generated_mess_count_override="${min_generated_mess_count_override#min_generated_mess_count=}"
     min_generated_mess_count_override="${min_generated_mess_count_override#min_generated_mess_count_override=}"
     generated_mess_object_ids="${generated_mess_object_ids#generated_mess_object_ids=}"
-    task_name="${task_name#task_name=}"
-    task_name="${task_name#task-name=}"
+    task_surface="${task_surface#task_surface=}"
+    task_surface="${task_surface#task-surface=}"
+    task_surface="${task_surface:-household-world}"
+    task_intent="${task_intent#task_intent=}"
+    task_intent="${task_intent#task-intent=}"
+    task_intent="${task_intent#intent=}"
+    task_intent="${task_intent:-${ROBOCLAWS_TASK_INTENT:-cleanup}}"
     operator_messages_path="${operator_messages_path#operator_messages_path=}"
     operator_messages_path="${operator_messages_path#operator-messages-path=}"
-    task_intent_mode="${task_intent_mode#task_intent_mode=}"
-    task_intent_mode="${task_intent_mode#task-intent-mode=}"
-    task_intent_mode="${task_intent_mode:-default_cleanup}"
     skill_name="${skill_name#skill_name=}"
     skill_name="${skill_name#skill-name=}"
     skill_name="${skill_name:-${ROBOCLAWS_TASK_SKILL:-}}"
@@ -135,7 +137,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
         "$runtime_map_prior" "$backend_override" "$map_mode"
         "$scene_source" "$scene_index" "$isaac_scene_usd_path"
         "$min_generated_mess_count_override" "$generated_mess_object_ids"
-        "$task_name" "$operator_messages_path" "$task_intent_mode"
+        "$task_surface" "$task_intent" "$operator_messages_path"
       )
       if [[ -n "$skill_name" || -n "$goal_contract_json" || -n "$goal_contract_path" || -n "$run_dir_override" ]]; then
         trace_args+=("$skill_name" "$goal_contract_json" "$goal_contract_path")
@@ -143,22 +145,15 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
       if [[ -n "$run_dir_override" ]]; then
         trace_args+=("$run_dir_override")
       fi
-      printf 'just\tmolmo::household-cleanup-impl'
+      printf 'just\tmolmo::household-world-impl'
       for arg in "${trace_args[@]}"; do
         printf '\t%s' "$arg"
       done
       printf '\n'
       exit 0
     fi
-    task_intent="${ROBOCLAWS_TASK_INTENT:-}"
-    if [[ -z "$task_intent" ]]; then
-      case "$task_name" in
-        semantic-map-build) task_intent="map-build" ;;
-        *) task_intent="cleanup" ;;
-      esac
-    fi
     if [[ -z "$skill_name" ]]; then
-      if [[ "$task_name" == "semantic-map-build" || "$task_intent" == "open-ended" ]]; then
+      if [[ "$task_intent" == "map-build" || "$task_intent" == "open-ended" ]]; then
         skill_name="household-open-task"
       else
         skill_name="molmo-realworld-cleanup"
@@ -168,6 +163,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     if [[ "$task_intent" == "open-ended" ]]; then
       open_ended_intent="true"
     fi
+    task_run_id="${task_surface}.${task_intent}"
     if [[ -z "$goal_contract_json" && -z "$goal_contract_path" ]]; then
       goal_contract_json="$(
         ROBOCLAWS_TASK_INTENT="$task_intent" ROBOCLAWS_TASK_PROMPT="$task" .venv/bin/python -c 'import os; from roboclaws.launch.catalog import SURFACE_SPECS; from roboclaws.launch.goals import normalize_goal_contract; from roboclaws.launch.intents import TASK_INTENT_SPECS; print(normalize_goal_contract(surface=SURFACE_SPECS["household-world"], intent=TASK_INTENT_SPECS[os.environ["ROBOCLAWS_TASK_INTENT"]], raw_prompt=os.environ.get("ROBOCLAWS_TASK_PROMPT", "")).to_json())'
@@ -586,7 +582,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
           codex_bin="$PWD/${docker_shim_dir}/codex"
           claude_bin="$PWD/${docker_shim_dir}/claude"
           export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_run_id}}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
@@ -612,10 +608,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
         fi
         prompt_args=(
           --profile "$profile"
-          --task-name "$task_name"
+          --intent "$task_intent"
           --task "$task"
           --target-cleanup-count "$prompt_cleanup_count"
-          --task-intent-mode "$task_intent_mode"
           --prompt-mode "$prompt_mode"
           --raw-fpv-candidate-budget "$prompt_raw_fpv_candidate_budget"
           --max-observe-per-waypoint "$prompt_max_observe_per_waypoint"
@@ -628,9 +623,6 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
               ;;
           esac
         fi
-        if [[ -n "$task_intent" ]]; then
-          prompt_args+=(--intent "$task_intent")
-        fi
         prompt_args+=("${goal_contract_args[@]}")
         kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup "${prompt_args[@]}")"
 
@@ -640,14 +632,13 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
           --output-dir "$run_dir"
           --seed "$seed"
           --policy "$policy"
-          --task-name "$task_name"
+          --intent "$task_intent"
           --backend "$backend"
           --task "$task"
-          --task-intent-mode "$task_intent_mode"
           --generated-mess-count "$generated_mess_count"
           "${generated_mess_object_args[@]}"
           --perception-mode "$perception_mode"
-          --cleanup-profile "$profile"
+          --evidence-lane "$profile"
           --scene-source "$scene_source"
           --scene-index "$scene_index"
           "${map_bundle_args[@]}"
@@ -725,9 +716,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
-            --task-name "$task_name"
+            --task-surface "$task_surface"
+            --intent "$task_intent"
             --skill-name "$skill_name"
-            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -818,9 +809,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
-            --task-name "$task_name"
+            --task-surface "$task_surface"
+            --intent "$task_intent"
             --skill-name "$skill_name"
-            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -873,9 +864,9 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
-            --task-name "$task_name"
+            --task-surface "$task_surface"
+            --intent "$task_intent"
             --skill-name "$skill_name"
-            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -1059,7 +1050,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --task "$task" \
             --fixture-hint-mode room_only \
             --perception-mode "$perception_mode" \
-            --cleanup-profile "$profile" \
+            --evidence-lane "$profile" \
             "${map_bundle_args[@]}" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
@@ -1082,13 +1073,12 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
-            --task-intent-mode "$task_intent_mode" \
             "${goal_contract_args[@]}" \
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
             --perception-mode "$perception_mode" \
-            --cleanup-profile "$profile" \
+            --evidence-lane "$profile" \
             "${map_bundle_args[@]}" \
             "${visual_args[@]}" \
             "${visual_grounding_args[@]}" \
@@ -1147,28 +1137,28 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
 
 # Cheap default: deterministic MCP smoke on the synthetic backend.
 quick-check driver="mcp-smoke" profile="smoke" seed="7" output_dir="output/molmo/quick-check" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-cleanup-impl "{{driver}}" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl "{{driver}}" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Canonical human review report: direct cleanup, real MolmoSpaces/RBY1M visuals.
 review-report seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-cleanup-impl direct world-oracle-labels "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl direct world-oracle-labels "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Deterministic ADR-0003 MCP tool smoke with real MolmoSpaces/RBY1M visuals.
 mcp-smoke-report seed="7" output_dir="output/molmo/mcp-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-cleanup-impl mcp-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl mcp-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # OpenClaw-shaped/policy-labeled smoke with real MolmoSpaces/RBY1M visuals.
 [private]
 openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-cleanup-impl openclaw-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl openclaw-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Raw camera-input evidence report. This proves camera artifact plumbing, not cleanup success.
 camera-raw-fpv-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-cleanup-impl direct camera-raw-fpv "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl direct camera-raw-fpv "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
 codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
-    just molmo::household-cleanup-impl codex-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+    just molmo::household-world-impl codex-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
 status path="":
@@ -1181,7 +1171,7 @@ status path="":
 
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
 claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
-    just molmo::household-cleanup-impl claude-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+    just molmo::household-world-impl claude-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Local rehearsal for the opt-in hosted Molmo live CI job.
 ci-rehearsal entry="kimi-k2.6" dry_run="":
@@ -1289,7 +1279,7 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 [private]
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" port="18788":
-    just molmo::household-cleanup-impl openclaw-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" 0.0.0.0 "{{port}}"
+    just molmo::household-world-impl openclaw-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" 0.0.0.0 "{{port}}"
 
 # Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.
 scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda" render_width="960" render_height="640" lighting_profile="default":

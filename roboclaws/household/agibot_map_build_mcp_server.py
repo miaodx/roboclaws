@@ -14,19 +14,17 @@ from roboclaws.household.agibot_map_build_mcp_tools import (
     dispatch_agibot_semantic_map_build_tool,
     register_agibot_semantic_map_build_tools,
 )
-from roboclaws.household.agibot_sdk_runner import (
-    AGIBOT_GDK_BACKEND_VARIANT,
-    AGIBOT_SDK_RUNNER_BACKEND,
-    BLOCKED_MANIPULATION_TOOLS,
-    AgibotSDKRunnerAdapter,
-)
+from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS, AgibotSDKRunnerAdapter
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.profiles import (
+    AGIBOT_GDK_BACKEND_VARIANT,
+    AGIBOT_SDK_RUNNER_BACKEND,
     CAMERA_GROUNDED_LABELS_LANE,
     CAMERA_RAW_FPV_LANE,
+    agibot_gdk_evidence_metadata,
     camera_labeler_from_visual_grounding_pipeline,
     camera_labeler_to_visual_grounding_pipeline,
-    cleanup_profile_names,
+    evidence_lane_names,
     validate_evidence_lane_camera_labeler,
 )
 from roboclaws.household.realworld_contract import (
@@ -59,7 +57,7 @@ MCP_SERVER_NAME = "agibot_semantic_map_build"
 AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 DEFAULT_TASK_PROMPT = "Build a semantic map from Agibot G2 public navigation and camera evidence."
-AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(cleanup_profile_names())
+AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(evidence_lane_names())
 
 
 def make_agibot_semantic_map_build_mcp(
@@ -247,9 +245,9 @@ class AgibotSemanticMapBuildMCPServer:
         run_result = {
             "schema": AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
             "contract": REALWORLD_CONTRACT,
-            "cleanup_profile": "real_robot_cleanup_v1",
             "backend": AGIBOT_SDK_RUNNER_BACKEND,
             "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
+            "backend_evidence": agibot_gdk_evidence_metadata(),
             "policy": self.policy,
             "planner": self.policy,
             "agent_driven": True,
@@ -653,8 +651,8 @@ def _readiness_from_trace(
             item.get("failure_type", "").startswith("operator_") for item in responses
         ),
         "public_contract_note": (
-            "Agibot intent=map-build keeps real_robot_cleanup_v1 public tools stable "
-            "while the SDK runner owns GDK map, camera, and PNC evidence."
+            "Agibot intent=map-build uses task-neutral household public tools while "
+            "the SDK runner owns GDK map, camera, and PNC evidence."
         ),
     }
 

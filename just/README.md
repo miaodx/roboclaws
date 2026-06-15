@@ -325,10 +325,10 @@ Real proposer pipeline ids such as `grounding-dino` and `yoloe` report
 installed sidecar dependencies and model weights. Retired hosted VLM ids such
 as `grounding-dino+mimo-v2.5`, `mimo-v2.5-direct`, and `qwen3-vl-direct` are not
 active adapter slots. The adapter catalog records the optional sidecar extra and
-current redacted runtime readiness for each target adapter. The older
-`scripts/visual_grounding/serve_fake_visual_grounding.py`
-entry point remains a compatibility shim for tests and local scripts that need
-the deterministic fake endpoint directly.
+current redacted runtime readiness for each target adapter.
+`scripts/visual_grounding/serve_fake_visual_grounding.py` is a deterministic
+fake-service utility for tests and local scripts that need that endpoint
+directly.
 
 Prompt mappings for agents:
 

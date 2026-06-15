@@ -6,14 +6,14 @@
   "role": "perception_probe",
   "status": "experimental",
   "mcp": {
-    "profiles": ["household_world_v1"],
+    "profiles": ["household_world"],
     "required_tools": [],
     "optional_tools": [],
     "privileged_tools": [],
     "boundary_notes": "This skill consumes public RAW-FPV artifacts only. It must not receive private labels, hidden target ids, acceptable destination truth, executable observed-object handles, detector candidates, or camera-label producer candidates."
   },
   "capability_requirements": {
-    "profiles": ["household_world_v1"],
+    "profiles": ["household_world"],
     "backend_variants": ["artifact_only"],
     "notes": "Offline perception probe only; output labels are not live cleanup handles and do not change camera-raw-fpv actionability."
   },

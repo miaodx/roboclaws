@@ -93,7 +93,11 @@ def _is_map_evidence_refresh_run(run_result: dict[str, Any]) -> bool:
         "evidence refresh",
         "map evidence",
     )
-    return run_result.get("task_name") == "semantic-map-build" and any(
+    task_identity = {
+        str(run_result.get("task_name") or ""),
+        str(run_result.get("task_intent") or ""),
+    }
+    return bool({"household-world.map-build", "map-build"} & task_identity) and any(
         marker in task_prompt for marker in prompt_markers
     )
 

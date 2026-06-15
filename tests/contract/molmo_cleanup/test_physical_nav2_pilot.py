@@ -58,7 +58,8 @@ def test_physical_nav2_pilot_attempts_map_waypoints_and_blocks_manipulation(
     report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
     persisted = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
 
-    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
+    assert run_result["evidence_lane"] == "physical-robot-evidence"
+    assert run_result["evidence_lane_metadata"]["evidence_lane"] == "physical-robot-evidence"
     assert run_result["primitive_provenance"] == NAV2_ACTION_PROVENANCE
     assert readiness["status"] == "physical_navigation_pilot_complete"
     assert readiness["physical_navigation_pilot"] is True

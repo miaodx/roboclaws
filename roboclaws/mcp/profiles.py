@@ -8,11 +8,9 @@ from typing import Any
 
 PROFILE_SCHEMA = "roboclaws_mcp_contract_profile_v1"
 
-HOUSEHOLD_WORLD_PROFILE = "household_world_v1"
-HOUSEHOLD_MANIPULATION_PROFILE = "household_manipulation_v1"
-HOUSEHOLD_EPISODE_PROFILE = "household_episode_v1"
-MOLMOSPACES_CLEANUP_PROFILE = "molmospaces_cleanup_v1"
-REAL_ROBOT_CLEANUP_PROFILE = "real_robot_cleanup_v1"
+HOUSEHOLD_WORLD_PROFILE = "household_world"
+HOUSEHOLD_MANIPULATION_PROFILE = "household_manipulation"
+HOUSEHOLD_EPISODE_PROFILE = "household_episode"
 
 FAMILY_PERCEPTION = "perception"
 FAMILY_LOCALIZATION = "localization"
@@ -120,10 +118,6 @@ def contract_profile_names() -> tuple[str, ...]:
     return tuple(_PROFILES)
 
 
-def legacy_contract_profile_names() -> tuple[str, ...]:
-    return tuple(_LEGACY_PROFILES)
-
-
 def contract_profile(profile_id: str) -> ContractProfile:
     normalized = normalize_profile_id(profile_id)
     try:
@@ -137,17 +131,6 @@ def contract_profile(profile_id: str) -> ContractProfile:
 
 def contract_profile_metadata(profile_id: str) -> dict[str, Any]:
     return contract_profile(profile_id).metadata()
-
-
-def legacy_contract_profile_metadata(profile_id: str) -> dict[str, Any]:
-    normalized = normalize_profile_id(profile_id)
-    try:
-        return _LEGACY_PROFILES[normalized].metadata()
-    except KeyError as exc:
-        expected = ", ".join(legacy_contract_profile_names())
-        raise ValueError(
-            f"unsupported legacy MCP contract profile {profile_id!r} (expected one of: {expected})"
-        ) from exc
 
 
 def normalize_profile_id(profile_id: str) -> str:
@@ -180,8 +163,6 @@ def validate_contract_profile(profile: ContractProfile) -> None:
 
 def validate_all_contract_profiles() -> None:
     for profile in _PROFILES.values():
-        validate_contract_profile(profile)
-    for profile in _LEGACY_PROFILES.values():
         validate_contract_profile(profile)
 
 
@@ -540,241 +521,10 @@ _HOUSEHOLD_EPISODE_PROFILE = ContractProfile(
     summary="Composable household task lifecycle profile for explicit run completion.",
 )
 
-_MOLMO_PROFILE = ContractProfile(
-    profile_id=MOLMOSPACES_CLEANUP_PROFILE,
-    version=1,
-    backend="molmospaces",
-    backend_variants=("api_semantic_synthetic", "molmospaces_subprocess"),
-    domain="cleanup",
-    capability_families=(
-        FAMILY_PERCEPTION,
-        FAMILY_LOCALIZATION,
-        FAMILY_MAPPING,
-        FAMILY_NAVIGATION,
-        FAMILY_MANIPULATION,
-        FAMILY_EPISODE,
-    ),
-    public_tools=(
-        *_HOUSEHOLD_WORLD_TOOLS,
-        *_HOUSEHOLD_MANIPULATION_TOOLS,
-        _HOUSEHOLD_OPERATOR_MESSAGES_TOOL,
-        _HOUSEHOLD_DONE_TOOL,
-    ),
-    privileged_tools=(),
-    privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
-    summary=(
-        "Legacy cleanup-shaped MolmoSpaces profile composed from the household "
-        "world, manipulation, and lifecycle capability modules."
-    ),
-)
-
-_REAL_ROBOT_PROFILE = ContractProfile(
-    profile_id=REAL_ROBOT_CLEANUP_PROFILE,
-    version=1,
-    backend="physical_robot",
-    backend_variants=("nav2_ros2", "agibot_gdk"),
-    domain="cleanup",
-    capability_families=(
-        FAMILY_PERCEPTION,
-        FAMILY_LOCALIZATION,
-        FAMILY_MAPPING,
-        FAMILY_NAVIGATION,
-        FAMILY_MANIPULATION,
-        FAMILY_EPISODE,
-    ),
-    public_tools=(
-        _tool(
-            "metric_map",
-            "mapping.metric_map",
-            FAMILY_MAPPING,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION, PROVENANCE_AGIBOT_GDK_MAP_CONTEXT),
-            "Return a backend-neutral real-robot map plus public fixture semantics.",
-        ),
-        _tool(
-            "navigate_to_room",
-            "navigation.navigate_to_room",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Resolve a room-level cleanup goal to a bounded physical waypoint action.",
-        ),
-        _tool(
-            "navigate_to_waypoint",
-            "navigation.navigate_to_waypoint",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Send a bounded waypoint goal through a physical navigation backend.",
-        ),
-        _tool(
-            "observe",
-            "perception.observe",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
-            "Observe robot-local public candidates at the reached waypoint.",
-        ),
-        _tool(
-            "adjust_camera",
-            "perception.adjust_camera",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
-            "Adjust bounded active camera yaw/pitch when the robot camera supports it.",
-        ),
-        _tool(
-            "declare_visual_candidates",
-            "perception.declare_visual_candidates",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_COMPOSED,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
-            "Register model-declared cleanup candidates from public robot-camera evidence.",
-        ),
-        _tool(
-            "navigate_to_visual_candidate",
-            "navigation.navigate_to_visual_candidate",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_COMPOSED,
-            (
-                PROVENANCE_CAMERA_ARTIFACT,
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Ground one visual cleanup candidate and navigate toward it when possible.",
-        ),
-        _tool(
-            "inspect_visible_object",
-            "perception.inspect_visible_object",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
-            "Inspect a robot-camera-visible public object handle.",
-        ),
-        _tool(
-            "resolve_target_query",
-            "mapping.resolve_target_query",
-            FAMILY_MAPPING,
-            CLASSIFICATION_COMPOSED,
-            (
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Resolve a target query against public runtime-map target candidates.",
-        ),
-        _tool(
-            "navigate_to_object",
-            "navigation.navigate_to_object",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (
-                PROVENANCE_CAMERA_ARTIFACT,
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Navigate toward a public observed object handle using the physical pilot boundary.",
-        ),
-        _tool(
-            "navigate_to_receptacle",
-            "navigation.navigate_to_receptacle",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Resolve a fixture to its preferred public waypoint and navigate there.",
-        ),
-        _tool(
-            "pick",
-            "manipulation.pick",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_BLOCKED_CAPABILITY,),
-            "Return a structured blocked-capability response until manipulation is proven.",
-        ),
-        _tool(
-            "place",
-            "manipulation.place",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_BLOCKED_CAPABILITY,),
-            "Return a structured blocked-capability response until manipulation is proven.",
-        ),
-        _tool(
-            "place_inside",
-            "manipulation.place_inside",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_BLOCKED_CAPABILITY,),
-            "Return a structured blocked-capability response until manipulation is proven.",
-        ),
-        _tool(
-            "open_receptacle",
-            "manipulation.open_receptacle",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_BLOCKED_CAPABILITY,),
-            "Return a structured blocked-capability response until manipulation is proven.",
-        ),
-        _tool(
-            "close_receptacle",
-            "manipulation.close_receptacle",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_BLOCKED_CAPABILITY,),
-            "Return a structured blocked-capability response until manipulation is proven.",
-        ),
-        _tool(
-            "check_operator_messages",
-            "episode.check_operator_messages",
-            FAMILY_EPISODE,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_BLOCKED_CAPABILITY,),
-            "Return no public steering messages until the physical pilot route enables steering.",
-        ),
-        _tool(
-            "done",
-            "episode.done",
-            FAMILY_EPISODE,
-            CLASSIFICATION_CANONICAL,
-            (
-                PROVENANCE_NAV2_ACTION,
-                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
-                PROVENANCE_BLOCKED_CAPABILITY,
-            ),
-            "Terminate the navigation and perception pilot episode.",
-        ),
-    ),
-    privileged_tools=(),
-    privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
-    summary=(
-        "Real robot cleanup-shaped profile for physical navigation and "
-        "perception pilots; manipulation remains blocked."
-    ),
-)
-
 _PROFILES = {
     HOUSEHOLD_WORLD_PROFILE: _HOUSEHOLD_WORLD_PROFILE,
     HOUSEHOLD_MANIPULATION_PROFILE: _HOUSEHOLD_MANIPULATION_PROFILE,
     HOUSEHOLD_EPISODE_PROFILE: _HOUSEHOLD_EPISODE_PROFILE,
-}
-
-_LEGACY_PROFILES = {
-    MOLMOSPACES_CLEANUP_PROFILE: _MOLMO_PROFILE,
-    REAL_ROBOT_CLEANUP_PROFILE: _REAL_ROBOT_PROFILE,
 }
 
 validate_all_contract_profiles()

@@ -15,8 +15,6 @@ if __package__ in {None, ""}:
 from roboclaws.household.agibot_contract_rehearsal import (  # noqa: E402
     REHEARSAL_MODE_CLEANUP_ACTIONS,
     REHEARSAL_MODE_CONTRACT,
-    REHEARSAL_TASK_HOUSEHOLD_CLEANUP,
-    REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
     RUNTIME_FIXTURE,
     RUNTIME_MOLMOSPACES_SUBPROCESS,
     run_molmospaces_agibot_contract_rehearsal,
@@ -36,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         result = run_molmospaces_agibot_prehardware_rehearsal(
             run_dir=run_dir,
-            task_name=args.task_name,
+            intent=args.intent,
             profile=args.profile,
             task_prompt=args.task_prompt,
             seed=args.seed,
@@ -77,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
                 "status": result["cleanup_status"],
                 "confidence_layer": result["confidence_layer"],
                 "flow": args.flow,
-                "task_name": args.task_name,
+                "intent": args.intent,
                 "rehearsal_mode": result.get("rehearsal_mode", ""),
                 "runtime": result["runtime"],
                 "simulated": result["simulated"],
@@ -121,10 +119,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--task-name",
-        choices=(REHEARSAL_TASK_SEMANTIC_MAP_BUILD, REHEARSAL_TASK_HOUSEHOLD_CLEANUP),
-        default=REHEARSAL_TASK_HOUSEHOLD_CLEANUP,
-        help="Public task shape to rehearse when --flow prehardware is selected.",
+        "--intent",
+        choices=("cleanup", "map-build", "open-ended"),
+        default="cleanup",
+        help="Public household intent to rehearse when --flow prehardware is selected.",
     )
     parser.add_argument(
         "--profile",

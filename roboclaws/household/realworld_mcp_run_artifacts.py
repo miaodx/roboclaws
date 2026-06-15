@@ -18,7 +18,7 @@ from roboclaws.household.planner_proof_attachment import attach_planner_proof
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
 from roboclaws.household.profiles import (
     camera_labeler_from_visual_grounding_pipeline,
-    cleanup_profile_metadata_for_run,
+    evidence_lane_metadata_for_run,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -67,7 +67,7 @@ class RealWorldMCPDoneArtifactInputs:
     perception_mode: str
     map_bundle_dir: Path | None
     runtime_map_prior_source: str
-    cleanup_profile: str | None
+    evidence_lane: str | None
     record_robot_views: bool
     planner_proof_run_result: Path | None
     robot_view_steps: list[dict[str, Any]]
@@ -339,10 +339,10 @@ def _attach_profile_metadata(
     inputs: RealWorldMCPDoneArtifactInputs,
     run_result: dict[str, Any],
 ) -> None:
-    if inputs.cleanup_profile is None:
+    if inputs.evidence_lane is None:
         return
-    profile_metadata = cleanup_profile_metadata_for_run(
-        profile_name=inputs.cleanup_profile,
+    profile_metadata = evidence_lane_metadata_for_run(
+        evidence_lane_name=inputs.evidence_lane,
         backend=_backend_name(inputs),
         perception_mode=inputs.perception_mode,
         record_robot_views=inputs.record_robot_views,
@@ -351,8 +351,7 @@ def _attach_profile_metadata(
         ),
     )
     run_result["evidence_lane"] = profile_metadata["evidence_lane"]
-    run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
-    run_result["cleanup_profile_metadata"] = profile_metadata
+    run_result["evidence_lane_metadata"] = profile_metadata
 
 
 def _with_run_metadata(
@@ -459,7 +458,6 @@ def _task_intent(inputs: RealWorldMCPDoneArtifactInputs) -> str:
     goal_contract_payload = _goal_contract_payload(inputs)
     return normalize_household_intent(
         goal_contract_payload.get("intent") or inputs.task_intent,
-        task_name=inputs.task_name,
     )
 
 

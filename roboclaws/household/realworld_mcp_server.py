@@ -46,11 +46,9 @@ from roboclaws.household.semantic_timeline import (
     successful_semantic_phases,
 )
 from roboclaws.household.task_intent import (
-    HOUSEHOLD_INTENT_OPEN_ENDED,
-    TASK_INTENT_MODE_DEFAULT,
-    household_intent_from_goal_contract,
-    normalize_household_intent,
-    normalize_task_intent_mode,
+    household_runtime_intent,
+    household_task_identity_from_contract,
+    household_task_name,
 )
 from roboclaws.household.types import CleanupScenario
 from roboclaws.household.visual_grounding import (
@@ -98,12 +96,13 @@ def make_molmo_realworld_cleanup_mcp(
     port: int = DEFAULT_PORT,
     policy: str = "realworld_contract_smoke_agent",
     agent_driven: bool | None = None,
-    task_name: str = "household-cleanup",
+    task_surface: str = "household-world",
+    task_intent: str = "cleanup",
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     fixture_hint_mode: str = "room_only",
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
-    cleanup_profile: str | None = None,
+    evidence_lane: str | None = None,
     planner_proof_run_result: Path | None = None,
     map_bundle_dir: str | Path | None = None,
     runtime_map_prior: dict[str, Any] | None = None,
@@ -112,7 +111,6 @@ def make_molmo_realworld_cleanup_mcp(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     goal_contract: GoalContract | None = None,
     operator_messages_path: str | Path | None = None,
     agent_sdk_camera_grounded_composite_tools: bool = False,
@@ -128,12 +126,13 @@ def make_molmo_realworld_cleanup_mcp(
         port=port,
         policy=policy,
         agent_driven=agent_driven,
-        task_name=task_name,
+        task_surface=task_surface,
+        task_intent=task_intent,
         task_prompt=task_prompt,
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
         planner_proof_run_result=planner_proof_run_result,
         map_bundle_dir=map_bundle_dir,
         runtime_map_prior=runtime_map_prior,
@@ -142,7 +141,6 @@ def make_molmo_realworld_cleanup_mcp(
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
-        task_intent_mode=task_intent_mode,
         goal_contract=goal_contract,
         operator_messages_path=operator_messages_path,
         agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
@@ -165,12 +163,13 @@ class RealWorldMolmoCleanupMCPServer:
         port: int = DEFAULT_PORT,
         policy: str = "realworld_contract_smoke_agent",
         agent_driven: bool | None = None,
-        task_name: str = "household-cleanup",
+        task_surface: str = "household-world",
+        task_intent: str = "cleanup",
         task_prompt: str = DEFAULT_REALWORLD_TASK,
         fixture_hint_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
-        cleanup_profile: str | None = None,
+        evidence_lane: str | None = None,
         planner_proof_run_result: Path | None = None,
         map_bundle_dir: str | Path | None = None,
         runtime_map_prior: dict[str, Any] | None = None,
@@ -179,7 +178,6 @@ class RealWorldMolmoCleanupMCPServer:
         visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
-        task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
         goal_contract: GoalContract | None = None,
         operator_messages_path: str | Path | None = None,
         agent_sdk_camera_grounded_composite_tools: bool = False,
@@ -191,17 +189,12 @@ class RealWorldMolmoCleanupMCPServer:
         self.host = host
         self.port = int(port)
         self.policy = policy
-        self.task_name = task_name
+        self.task_surface = task_surface
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
-        self.task_intent_mode = normalize_task_intent_mode(task_intent_mode)
         self.goal_contract = goal_contract or _goal_contract_from_env()
-        self.task_intent = household_intent_from_goal_contract(
-            self.goal_contract,
-            fallback=HOUSEHOLD_INTENT_OPEN_ENDED
-            if self.task_intent_mode != TASK_INTENT_MODE_DEFAULT
-            else "",
-        )
+        self.task_intent = household_runtime_intent(self.goal_contract, task_intent)
+        self.task_name = household_task_name(surface=self.task_surface, intent=self.task_intent)
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         self.runtime_map_prior_source = runtime_map_prior_source
         contract = _build_realworld_mcp_contract(
@@ -214,9 +207,8 @@ class RealWorldMolmoCleanupMCPServer:
             map_bundle_dir=self.map_bundle_dir,
             runtime_map_prior=runtime_map_prior,
             map_mode=map_mode,
-            cleanup_profile=cleanup_profile,
+            evidence_lane=evidence_lane,
             task_intent=self.task_intent,
-            task_intent_mode=self.task_intent_mode,
             visual_grounding=visual_grounding,
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
@@ -228,17 +220,15 @@ class RealWorldMolmoCleanupMCPServer:
         self.backend_name = str(backend_name()) if callable(backend_name) else ""
         self.scenario = contract.scenario
         self.task_prompt = task_prompt
-        self.task_intent_mode = normalize_task_intent_mode(
-            getattr(contract, "task_intent_mode", self.task_intent_mode)
-        )
-        self.task_intent = normalize_household_intent(
-            getattr(contract, "task_intent", self.task_intent),
-            task_name=self.task_name,
+        self.task_intent, self.task_name = household_task_identity_from_contract(
+            contract,
+            surface=self.task_surface,
+            fallback_intent=self.task_intent,
         )
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
-        self.cleanup_profile = cleanup_profile
+        self.evidence_lane = evidence_lane
         self.planner_proof_run_result = planner_proof_run_result
         self.operator_messages_path = (
             Path(operator_messages_path) if operator_messages_path is not None else None
@@ -280,10 +270,9 @@ class RealWorldMolmoCleanupMCPServer:
             policy=policy,
             agent_driven=self.agent_driven,
             task_intent=self.task_intent,
-            task_intent_mode=self.task_intent_mode,
             goal_contract=self.goal_contract.to_payload() if self.goal_contract is not None else {},
             perception_mode=self.perception_mode,
-            cleanup_profile=self.cleanup_profile,
+            evidence_lane=self.evidence_lane,
             visual_grounding_pipeline_id=contract.visual_grounding_pipeline_id,
             agent_sdk_camera_grounded_composite_tools=(
                 self.agent_sdk_camera_grounded_composite_tools
@@ -479,7 +468,7 @@ class RealWorldMolmoCleanupMCPServer:
                 perception_mode=self.perception_mode,
                 map_bundle_dir=self.map_bundle_dir,
                 runtime_map_prior_source=self.runtime_map_prior_source,
-                cleanup_profile=self.cleanup_profile,
+                evidence_lane=self.evidence_lane,
                 record_robot_views=self.record_robot_views,
                 planner_proof_run_result=self.planner_proof_run_result,
                 robot_view_steps=self.robot_view_steps,
@@ -848,9 +837,8 @@ def _build_realworld_mcp_contract(
     map_bundle_dir: Path | None,
     runtime_map_prior: dict[str, Any] | None,
     map_mode: str,
-    cleanup_profile: str | None,
+    evidence_lane: str | None,
     task_intent: str,
-    task_intent_mode: str,
     visual_grounding: str,
     visual_grounding_base_url: str | None,
     visual_grounding_timeout_s: float | None,
@@ -863,8 +851,6 @@ def _build_realworld_mcp_contract(
     base_contract = base_contract or CleanupBackendSession(scenario)
     acceptance_config = _public_acceptance_config_from_backend(base_contract)
     acceptance_config["task_intent"] = task_intent
-    if task_intent_mode != TASK_INTENT_MODE_DEFAULT:
-        acceptance_config["task_intent_mode"] = task_intent_mode
     return RealWorldCleanupContract(
         base_contract,
         task_prompt=task_prompt,
@@ -873,7 +859,7 @@ def _build_realworld_mcp_contract(
         map_bundle_dir=map_bundle_dir,
         runtime_map_prior=runtime_map_prior,
         map_mode=map_mode,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
         public_acceptance_config=acceptance_config,
         visual_grounding_client=visual_grounding_client_from_env(
             visual_grounding,

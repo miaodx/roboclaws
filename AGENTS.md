@@ -274,16 +274,20 @@ This is a thin demo repo. Priorities:
 
 ### 5.1 Legacy support policy
 
-This repo has no backward-compatibility burden for obsolete demo surfaces. When
-you see code, docs, tests, skills, or recipes labeled `legacy`, `current-contract`,
-or kept only for compatibility, treat them as removal or replacement candidates,
-not as APIs to preserve.
+This repo has no general backward-compatibility burden. When you see code, docs,
+tests, skills, or recipes labeled `legacy`, `current-contract`, or kept only for
+compatibility, treat them as removal or replacement candidates, not as APIs to
+preserve.
 
 Prefer the current docs and active profile contracts over preserving old paths.
 If a legacy surface conflicts with a cleaner current design, update or delete
 the legacy surface and its tests/docs in the same scoped change. Preserve a
 legacy path only when the user explicitly asks for it or when it is still the
 sole working route for the requested demo.
+
+Do not add lower-level runner, artifact, `just`, or dispatcher shims solely for
+old names or old call shapes. Persisted schema and artifact version identifiers
+remain versioned contracts unless the active task explicitly changes them.
 
 ---
 

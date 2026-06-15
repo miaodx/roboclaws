@@ -321,7 +321,7 @@ def _agent_kwargs(
     runtime_config: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "name": f"roboclaws-{request.task_name}",
+        "name": f"roboclaws-{request.run_id}",
         "instructions": instructions,
         "mcp_servers": [server],
         "mcp_config": {

@@ -118,7 +118,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
 
 
 def test_apple2apple_grid_accepts_explicit_offline_runtime_map_prior(tmp_path: Path) -> None:
-    prior = "output/checks/semantic-map-build-final/seed-7/runtime_metric_map.json"
+    prior = "output/checks/household-world-map-build-final/seed-7/runtime_metric_map.json"
     grid = build_apple2apple_test_grid(
         output_dir=tmp_path / "grid",
         task="clean",

@@ -12,6 +12,10 @@ from roboclaws.household.agibot_sdk_runner import (
     AgibotSDKRunnerAdapter,
 )
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
+from roboclaws.household.profiles import (
+    PHYSICAL_ROBOT_EVIDENCE_LANE,
+    physical_robot_evidence_metadata,
+)
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CLEANUP_WORKLIST_SCHEMA,
@@ -20,7 +24,6 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
-from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, legacy_contract_profile_metadata
 
 
 class AgibotCleanupBackendSession:
@@ -470,9 +473,10 @@ class AgibotCleanupMCPContract:
 
     def run_result_overrides(self) -> dict[str, Any]:
         return {
-            "cleanup_profile": REAL_ROBOT_CLEANUP_PROFILE,
-            "cleanup_profile_metadata": legacy_contract_profile_metadata(
-                REAL_ROBOT_CLEANUP_PROFILE
+            "evidence_lane": PHYSICAL_ROBOT_EVIDENCE_LANE,
+            "evidence_lane_metadata": physical_robot_evidence_metadata(
+                backend=AGIBOT_SDK_RUNNER_BACKEND,
+                backend_variant=AGIBOT_GDK_BACKEND_VARIANT,
             ),
             "backend": AGIBOT_SDK_RUNNER_BACKEND,
             "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,

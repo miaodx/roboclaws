@@ -19,7 +19,7 @@ from roboclaws.household.backend_contract import (  # noqa: E402
 )
 from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
 from roboclaws.household.profiles import (  # noqa: E402
-    cleanup_profile_names,
+    evidence_lane_names,
 )
 from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
@@ -38,7 +38,6 @@ from roboclaws.household.semantic_cleanup_loop import (  # noqa: E402
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND  # noqa: E402
 from roboclaws.household.task_intent import (  # noqa: E402
     HOUSEHOLD_INTENT_OPEN_ENDED,
-    TASK_INTENT_MODE_DEFAULT,
     household_intent_from_goal_contract,
 )
 from roboclaws.household.visual_grounding import (  # noqa: E402
@@ -55,7 +54,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--goal-contract", type=Path)
     parser.add_argument("--goal-contract-json")
     parser.add_argument("--policy", default="realworld_contract_smoke_agent")
@@ -85,8 +83,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--visual-grounding-base-url")
     parser.add_argument("--visual-grounding-timeout-s", type=float)
     parser.add_argument(
-        "--cleanup-profile",
-        choices=cleanup_profile_names(),
+        "--evidence-lane",
+        choices=evidence_lane_names(),
         help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
@@ -115,12 +113,11 @@ def run_smoke(
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
-    cleanup_profile: str | None = None,
+    evidence_lane: str | None = None,
     runtime_map_prior_path: str | Path | None = None,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     goal_contract_json: str | None = None,
     goal_contract_path: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -166,13 +163,12 @@ def run_smoke(
         perception_mode=perception_mode,
         map_bundle_dir=selected_bundle_dir,
         record_robot_views=record_robot_views,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
         runtime_map_prior=runtime_map_prior,
         runtime_map_prior_source=str(runtime_map_prior_path or ""),
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
-        task_intent_mode=task_intent_mode,
         goal_contract=goal_contract,
     )
     try:
@@ -381,12 +377,11 @@ def main(argv: list[str] | None = None) -> int:
         include_robot=args.include_robot,
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
-        cleanup_profile=args.cleanup_profile,
+        evidence_lane=args.evidence_lane,
         runtime_map_prior_path=args.runtime_map_prior,
         visual_grounding=args.visual_grounding,
         visual_grounding_base_url=args.visual_grounding_base_url,
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
-        task_intent_mode=args.task_intent_mode,
         goal_contract_json=args.goal_contract_json,
         goal_contract_path=args.goal_contract,
     )
