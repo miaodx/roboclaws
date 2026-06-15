@@ -18,7 +18,6 @@ from roboclaws.household.agibot_map_defaults import (
     DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
 )
 from roboclaws.household.agibot_sdk_runner import (
-    AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
     AgibotSDKRunnerAdapter,
     _human_takeover_stop_required,
@@ -29,6 +28,7 @@ from roboclaws.household.artifact_report import (
     is_cleanup_run_result_artifact,
     rerender_cleanup_report_from_artifact_path,
 )
+from roboclaws.household.profiles import AGIBOT_SDK_RUNNER_BACKEND
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

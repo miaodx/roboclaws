@@ -191,12 +191,14 @@ def test_retired_photo_coding_agent_routes_are_not_advertised() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     code_text = CODE_JUST.read_text(encoding="utf-8")
     mcp_text = MCP_JUST.read_text(encoding="utf-8")
+    docker_text = CODING_AGENT_DOCKER_SH.read_text(encoding="utf-8")
 
     assert "photo-chairs" not in agent_text
     assert "capture-object-photo" not in agent_text
     assert "capture-object-photo" not in code_text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-semantic-map-build" in agent_text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup" in agent_text
+    assert "household-world.map-build" in docker_text
+    assert "semantic-map-build" not in docker_text
+    assert "molmo-realworld-cleanup" in docker_text
     assert "allow_privileged_tools" not in mcp_text
     assert "--allow-privileged-tools" not in mcp_text
 

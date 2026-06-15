@@ -178,7 +178,7 @@ def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^household-cleanup-impl driver=\"mcp-smoke\" profile=\"smoke\"",
+        r"^household-world-impl driver=\"mcp-smoke\" profile=\"smoke\"",
         r"^quick-check driver=\"mcp-smoke\" profile=\"smoke\"",
         r"^review-report seeds=\"1 2 3\"",
         r"^mcp-smoke-report seed=\"7\"",
@@ -194,12 +194,12 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     expected_calls = (
-        'just molmo::household-cleanup-impl "{{driver}}" "{{profile}}"',
-        "just molmo::household-cleanup-impl direct world-oracle-labels",
-        "just molmo::household-cleanup-impl mcp-smoke world-oracle-labels",
-        "just molmo::household-cleanup-impl direct camera-raw-fpv",
-        'just molmo::household-cleanup-impl codex-live "{{profile}}"',
-        'just molmo::household-cleanup-impl claude-live "{{profile}}"',
+        'just molmo::household-world-impl "{{driver}}" "{{profile}}"',
+        "just molmo::household-world-impl direct world-oracle-labels",
+        "just molmo::household-world-impl mcp-smoke world-oracle-labels",
+        "just molmo::household-world-impl direct camera-raw-fpv",
+        'just molmo::household-world-impl codex-live "{{profile}}"',
+        'just molmo::household-world-impl claude-live "{{profile}}"',
     )
     for call in expected_calls:
         assert call in text
@@ -218,7 +218,7 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
         'driver="${driver#driver=}"',
         'profile="${profile#profile=}"',
         "unsupported cleanup lane",
-        "--cleanup-profile",
+        "--evidence-lane",
         "--expect-profile",
         "mcp-smoke/openclaw-smoke for deterministic substitutes",
         "scripts/dev/coding_agent_docker.sh ensure",

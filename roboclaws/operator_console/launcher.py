@@ -421,7 +421,6 @@ def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, 
         "host",
         "port",
         "operator_messages_path",
-        "task_intent_mode",
     }
     for key, value in overrides.items():
         if key not in allowed:

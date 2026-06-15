@@ -773,7 +773,6 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "profile",
         "task_surface",
         "task_intent",
-        "task_intent_mode",
         "status",
         "ok",
         "success",

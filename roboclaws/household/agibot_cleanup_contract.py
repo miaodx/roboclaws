@@ -5,16 +5,16 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.household.agibot_sdk_runner import (
-    AGIBOT_GDK_BACKEND_VARIANT,
     AGIBOT_GDK_NORMAL_NAVI_PROVENANCE,
-    AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
     AgibotSDKRunnerAdapter,
 )
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.profiles import (
+    AGIBOT_GDK_BACKEND_VARIANT,
+    AGIBOT_SDK_RUNNER_BACKEND,
     PHYSICAL_ROBOT_EVIDENCE_LANE,
-    physical_robot_evidence_metadata,
+    agibot_gdk_evidence_metadata,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -474,10 +474,7 @@ class AgibotCleanupMCPContract:
     def run_result_overrides(self) -> dict[str, Any]:
         return {
             "evidence_lane": PHYSICAL_ROBOT_EVIDENCE_LANE,
-            "evidence_lane_metadata": physical_robot_evidence_metadata(
-                backend=AGIBOT_SDK_RUNNER_BACKEND,
-                backend_variant=AGIBOT_GDK_BACKEND_VARIANT,
-            ),
+            "evidence_lane_metadata": agibot_gdk_evidence_metadata(),
             "backend": AGIBOT_SDK_RUNNER_BACKEND,
             "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
             "primitive_provenance": AGIBOT_GDK_NORMAL_NAVI_PROVENANCE
