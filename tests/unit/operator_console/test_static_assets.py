@@ -116,7 +116,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "renderStartAction" in app
     assert "compactRunId" in app
     assert "compactDisplayRunId" in app
-    assert '"$2$3-$4$5$7"' in app
+    assert "compactRunPart" in app
     assert "Run Attached" in app
     assert "Use Steer or Ask Why" in app
     assert "/api/readiness" in app
@@ -227,7 +227,7 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'panels.add("chase")' in app
     assert 'panels.add("blank-chase")' in app
     assert "No chase frame yet" in app
-    assert "decision-proof-20260608" in html
+    assert "header-layout-20260615" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
     assert '"chase topdown"' in css
@@ -321,6 +321,45 @@ def test_static_app_routes_destructive_actions_through_styled_dialog() -> None:
     # Run title reaches the 28px display role only once a run is active.
     assert ".top-run-bar.run-active #run-title" in css
     assert "font-variant-numeric: tabular-nums" in css
+
+
+def test_static_app_keeps_long_run_header_within_fixed_top_bar() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+    desktop_controls = css.split(".global-controls {", 1)[1].split("\n}", 1)[0]
+    responsive_controls = css.split("@media (max-width: 1360px)", 1)[1].split(
+        ".global-controls {",
+        1,
+    )[1].split("\n  }", 1)[0]
+
+    assert 'href="/styles.css?v=header-layout-20260615"' in html
+    assert 'src="/app.js?v=header-layout-20260615"' in html
+    assert ".run-meta {\n  display: flex;" in css
+    assert "flex-wrap: nowrap;" in css
+    assert ".run-meta > *" in css
+    assert "#run-title {\n  flex: 1 1 auto;" in css
+    assert "overflow: hidden" in css
+    assert ".global-controls {\n  display: flex;" in css
+    assert "flex: 0 0 auto;" in desktop_controls
+    assert "flex-wrap: nowrap;" in desktop_controls
+    assert "min-width: max-content;" in desktop_controls
+    assert ".global-controls button" in css
+    assert "white-space: nowrap;" in css
+    assert "@media (max-width: 1360px)" in css
+    assert "justify-content: flex-start;" in responsive_controls
+    assert "flex-wrap: wrap;" in responsive_controls
+    assert "#run-title {\n    flex-basis: 100%;" in css
+    assert "function compactRunPart(part)" in app
+    assert (
+        "return `${fullTimestamp[2]}${fullTimestamp[3]}-"
+        "${fullTimestamp[4]}${fullTimestamp[5]}`"
+    ) in app
+    assert (
+        "return `${shortTimestamp[1]}${shortTimestamp[2]}_"
+        "${shortTimestamp[3]}${shortTimestamp[4]}`"
+    ) in app
+    assert '"$2$3-$4$5$7"' not in app
 
 
 def test_static_app_hides_pause_until_a_route_supports_it() -> None:

@@ -1986,17 +1986,28 @@ function formatElapsed(seconds) {
 }
 
 function compactRunId(runId) {
-  return String(runId || "").replace(
-    /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(.*)$/,
-    "$2$3-$4$5$7"
-  );
+  return compactRunPart(String(runId || ""));
 }
 
 function compactDisplayRunId(displayRunId) {
-  return String(displayRunId || "").replace(
-    /^(\d{2})(\d{2})_(\d{2})(\d{2})(.*)$/,
-    "$1$2_$3$4$5"
+  return String(displayRunId || "")
+    .split("/")
+    .map((part) => compactRunPart(part))
+    .join("/");
+}
+
+function compactRunPart(part) {
+  const fullTimestamp = String(part || "").match(
+    /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:[-_].*)?$/
   );
+  if (fullTimestamp) {
+    return `${fullTimestamp[2]}${fullTimestamp[3]}-${fullTimestamp[4]}${fullTimestamp[5]}`;
+  }
+  const shortTimestamp = String(part || "").match(/^(\d{2})(\d{2})_(\d{2})(\d{2})(?:[-_].*)?$/);
+  if (shortTimestamp) {
+    return `${shortTimestamp[1]}${shortTimestamp[2]}_${shortTimestamp[3]}${shortTimestamp[4]}`;
+  }
+  return String(part || "");
 }
 
 function escapeHtml(value) {
