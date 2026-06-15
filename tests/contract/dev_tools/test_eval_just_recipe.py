@@ -45,6 +45,53 @@ def test_agent_eval_public_facade_routes_promotion_cli() -> None:
     assert "regression_sample_id=regression.cleanup_demo" in trace
 
 
+def test_agent_eval_public_facade_routes_eval_harness_recommend() -> None:
+    trace = _trace_agent_eval(
+        "recommend",
+        "plan=docs/plans/2026-06-15-eval-harness-skill-entrypoint.md",
+        "budget=focused",
+        "output_dir=output/eval-harness/trace",
+    )
+
+    assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
+    assert "recommend" in trace
+    assert "plan=docs/plans/2026-06-15-eval-harness-skill-entrypoint.md" in trace
+    assert "budget=focused" in trace
+    assert "output_dir=output/eval-harness/trace" in trace
+
+
+def test_agent_eval_public_facade_routes_eval_harness_execute() -> None:
+    trace = _trace_agent_eval("execute", "since=origin/main", "budget=focused")
+
+    assert trace[:5] == ["cmd", ".venv/bin/python", "-m", "roboclaws.cli.main", "eval"]
+    assert "execute" in trace
+    assert "since=origin/main" in trace
+    assert "budget=focused" in trace
+
+
+def test_eval_harness_recommend_rejects_suite_override() -> None:
+    python_bin = REPO_ROOT / ".venv" / "bin" / "python"
+    if not python_bin.exists():
+        python_bin = Path("python3")
+    result = subprocess.run(
+        [
+            str(python_bin),
+            "-m",
+            "roboclaws.cli.main",
+            "eval",
+            "recommend",
+            "suite=cleanup_capability",
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "recommend does not accept suite=<suite>" in result.stderr
+
+
 def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
     route, plan_trace = _trace_surface_run_with_plan(
         "surface=household-world",
@@ -60,7 +107,7 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
 
     assert route[:5] == [
         "just",
-        "molmo::household-cleanup-impl",
+        "molmo::household-world-impl",
         "codex-live",
         "smoke",
         "7",

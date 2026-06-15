@@ -10,12 +10,12 @@ private-data, MCP/tool, command-surface, or architecture-layer decision, create
 a short ADR in `docs/adr/` and link it from the plan. Keep execution details in
 the plan.
 
-For agent-facing implementation plans, prefer an adaptive validation section
+For agent-facing implementation plans, prefer an eval-harness section
 that starts with:
 
 ```bash
-just agent::harness agent-validation recommend plan=docs/plans/<plan>.md budget=focused
-just agent::harness agent-validation execute plan=docs/plans/<plan>.md budget=focused
+just agent::eval recommend plan=docs/plans/<plan>.md budget=focused
+just agent::eval execute plan=docs/plans/<plan>.md budget=focused
 ```
 
 Add explicit overrides only when the plan already knows a required axis such as
@@ -58,7 +58,8 @@ aid, not a source of truth for current priority.
 - [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
 - [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
 - [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
-- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
+- [Eval Harness Skill Entrypoint](2026-06-15-eval-harness-skill-entrypoint.md)
+- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md) (historical)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
 - [Report Performance Analysis Skill](2026-06-11-report-performance-analysis-skill.md)
@@ -115,7 +116,8 @@ aid, not a source of truth for current priority.
 
 - [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
 - [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
-- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
+- [Eval Harness Skill Entrypoint](2026-06-15-eval-harness-skill-entrypoint.md)
+- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md) (historical)
 - [Task Surface, Intent, And Goal Contract Refactor](task-surface-intent-goal-contract-refactor.md)
 - [Domain-First Launch Architecture](refactor-reduce-entropy-domain-first-launch-architecture.md)
 - [Operator Console Agent Interaction](operator-console-agent-interaction.md)

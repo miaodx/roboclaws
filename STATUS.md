@@ -58,13 +58,17 @@ environment-dependent validation items, not active implementation blockers.
 
 No current implementation blocker for deterministic eval work. Opt-in live eval
 execution reaches the live product route on this host, and Codex CLI detached
-live routes now have eval-side artifact polling. The latest real provider proof
-was blocked by provider 502 responses and correctly classified as
-`model_or_provider_unavailable`. Default non-direct eval requests remain blocked
+live routes now have eval-side artifact polling. The latest focused
+eval-harness live proof ran selected live rows instead of downgrading them to
+deterministic success: direct product/eval rows passed, live cleanup aggregates
+failed with `harness_bug_unclassified`, and the RAW-FPV Codex live product row
+recorded `environment_blocked`. Default non-direct eval requests remain blocked
 identity/preflight packets instead of being downgraded. Remaining validation
-blockers are external: a successful live-agent `pass^k` proof needs a healthy
-provider/runtime route, and OpenClaw Gateway proof must run separately off the
-work network before OpenClaw can be called healthy.
+blockers are external or product-route-specific: a successful live-agent
+`pass^k` proof needs a healthy provider/runtime route and agent behavior that
+reaches `done`, RAW-FPV live cleanup needs live-session capacity, and OpenClaw
+Gateway proof must run separately off the work network before OpenClaw can be
+called healthy.
 
 ## Human Review Surface
 

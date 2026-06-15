@@ -870,7 +870,6 @@ harness target *args:
 
     case "$target" in
       molmo-realworld-cleanup|\
-      agent-validation|\
       molmo-cleanup-codex-perf|\
       molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\

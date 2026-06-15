@@ -316,15 +316,15 @@ def test_public_just_summary_is_small_facade() -> None:
     assert summary.isdisjoint(hidden_recipes)
 
 
-def test_harness_agent_validation_recipe_writes_recommendation(tmp_path: Path) -> None:
+def test_agent_eval_recommend_writes_eval_harness_manifest(tmp_path: Path) -> None:
     binary = just_bin()
     env = os.environ.copy()
     env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
-    output_dir = tmp_path / "agent-validation"
+    output_dir = tmp_path / "eval-harness"
     result = subprocess.run(
         [
             binary,
-            "harness::agent-validation",
+            "agent::eval",
             "recommend",
             f"output_dir={output_dir}",
             "changed_file=roboclaws/agents/drivers/openai_agents_live.py",
@@ -337,30 +337,30 @@ def test_harness_agent_validation_recipe_writes_recommendation(tmp_path: Path) -
         text=True,
     )
 
-    assert f"agent validation matrix: {output_dir / 'validation_matrix.json'}" in result.stdout
-    manifest = json.loads((output_dir / "validation_matrix.json").read_text(encoding="utf-8"))
-    assert manifest["schema"] == "agent_validation_matrix_v1"
-    selected_gate_ids = {gate["gate_id"] for gate in manifest["gates"] if gate["selected"]}
-    assert "openai-agents-sdk-open-task" in selected_gate_ids
-    assert (output_dir / "validation_matrix.md").exists()
-    assert (output_dir / "validation_matrix.html").exists()
+    assert f"eval harness manifest: {output_dir / 'eval_harness.json'}" in result.stdout
+    manifest = json.loads((output_dir / "eval_harness.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "roboclaws_eval_harness_manifest_v1"
+    selected_row_ids = {row["row_id"] for row in manifest["rows"] if row["selected"]}
+    assert "openai-agents-sdk-open-task-live-eval" in selected_row_ids
+    assert (output_dir / "eval_harness.md").exists()
+    assert (output_dir / "eval_harness.html").exists()
 
 
-def test_agent_harness_allows_agent_validation_target() -> None:
-    route = trace_agent_harness(
-        "agent-validation",
-        "recommend",
-        "plan=docs/plans/2026-06-11-agent-validation-matrix-skill.md",
-        "budget=focused",
+def test_agent_harness_rejects_removed_agent_validation_target() -> None:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "agent::harness", "agent-validation", "recommend"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
     )
 
-    assert route == [
-        "just",
-        "harness::agent-validation",
-        "recommend",
-        "plan=docs/plans/2026-06-11-agent-validation-matrix-skill.md",
-        "budget=focused",
-    ]
+    assert result.returncode != 0
+    assert "unsupported harness target 'agent-validation'" in result.stderr
 
 
 def test_old_codex_cleanup_harness_routes_are_unsupported() -> None:
@@ -456,15 +456,14 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
     assert '"skill" "$robot_views"' in harness_text
 
 
-def test_agent_harness_advertises_agent_validation_not_fixed_harness() -> None:
+def test_agent_harness_no_longer_advertises_agent_validation() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = (JUST_DIR / "harness.just").read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert "agent-validation" in agent_text
-    assert re.search(
-        r"^agent-validation mode=\"recommend\" \*overrides:", harness_text, re.MULTILINE
-    )
+    assert "agent-validation" not in agent_text
+    assert "agent-validation" not in harness_text
+    assert re.search(r"^eval \*overrides:", agent_text, re.MULTILINE)
     assert "codex-cleanup-harness8" not in agent_text
     assert "codex-cleanup-harness8" not in harness_text
     assert "codex-harness8" not in molmo_text
@@ -1192,7 +1191,10 @@ def test_openclaw_module_no_longer_exposes_direct_game_recipe() -> None:
     assert "openclaw::run" not in text
 
 
-@pytest.mark.parametrize("target", ("navigator", "regression", "sim", "openclaw"))
+@pytest.mark.parametrize(
+    "target",
+    ("navigator", "regression", "sim", "openclaw", "agent-validation"),
+)
 def test_agent_harness_rejects_retired_targets(target: str) -> None:
     binary = just_bin()
     env = os.environ.copy()

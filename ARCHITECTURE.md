@@ -34,13 +34,16 @@ replacement for the launch surface:
 Product run
   just run::surface ...
 
-Validation matrix
-  just agent::harness agent-validation ...
-  Selects which gates a plan, diff, or explicit axis set must run.
+Eval harness
+  just agent::eval recommend|execute ...
+  Selects and runs deterministic gates, product rows, eval suites, live-agent
+  evals, blocked evidence, and regression-promotion guidance for a plan, diff,
+  or explicit request.
 
 Eval suite
-  Versioned capability benchmark: samples, trials, graders, aggregate metrics,
-  failure classes, and replayable regression evidence.
+  Versioned capability benchmark artifact under the facade: samples, trials,
+  graders, aggregate metrics, failure classes, and replayable regression
+  evidence.
 
 Harness recipes
   Lower-level runners and probes used by product, validation, and eval flows.
@@ -226,6 +229,13 @@ deterministic runner is exposed as `just agent::eval suite=smoke_regression
 budget=smoke`. Do not add a third-party eval framework until deterministic
 household suites have proven the sample, artifact, grader, privacy, and result
 packet contracts that Roboclaws needs.
+
+The maintained orchestration facade is `eval-harness`, exposed through
+`just agent::eval recommend|execute|suite|promote-regression`. It supersedes the
+old separate `agent-validation-matrix` entrypoint. Eval-harness manifests use
+`roboclaws_eval_harness_manifest_v1` and may link maintainer-only private
+artifacts, but must not inline private scorer truth, hidden targets, acceptable
+destinations, generated mess sets, private manifests, or raw provider logs.
 
 Live eval execution is opt-in. Non-direct eval requests can record blocked
 identity/preflight packets without launching real providers; `live_execution=run`

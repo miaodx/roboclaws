@@ -400,19 +400,19 @@ When a user asks in natural language to run a demo, cleanup task, or proof task,
 translate it to the composable public surface/preset command instead of
 searching for a bespoke recipe name.
 
-When a plan, diff, PR, or handoff asks which verification gates to run for
-agent-facing changes, prefer the adaptive matrix:
+When a plan, diff, PR, or handoff asks which verification gates or evals to run
+for agent-facing changes, prefer the eval harness:
 
 ```bash
-just agent::harness agent-validation recommend plan=<path> budget=focused
-just agent::harness agent-validation execute since=<base> budget=focused
+just agent::eval recommend plan=<path> budget=focused
+just agent::eval execute since=<base> budget=focused
 ```
 
-Use this instead of hand-writing fixed live/product gate lists. The matrix
-selects deterministic, product, live-agent, Agent SDK, perception/DINO,
-simulator, and map/cleanup-consumer gates from plan, diff, or explicit axis
-signals, and records run/skipped/blocked rationale under
-`output/agent-validation-matrix/`.
+Use this instead of hand-writing fixed live/product/eval lists. The harness
+selects deterministic gates, product rows, eval-suite rows, live-agent eval
+rows, perception/DINO rows, simulator rows, and map/cleanup-consumer rows from
+plan, diff, or explicit axis signals, and records run/skipped/blocked rationale
+under `output/eval-harness/`.
 
 Primary grammar:
 
