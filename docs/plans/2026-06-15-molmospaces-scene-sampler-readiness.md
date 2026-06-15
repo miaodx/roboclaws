@@ -373,6 +373,22 @@ MolmoSpaces scene sources:
 - `procthor-objaverse-val`
 - `holodeck-objaverse-val`
 
+Those are the non-current source targets we want the next Flow to try to
+support on the primary MolmoSpaces MuJoCo path. The current source,
+`procthor-10k-val`, is not part of "other sources"; it remains in scope because
+its eval-stress projection still needs to grow from five admitted samples to
+ten.
+
+All remaining plan material is promoted into next-Flow development input rather
+than parked work:
+
+- source evidence and decisions are implementation constraints;
+- current limits are blockers to resolve or normalize;
+- vertical slices below are the development backlog;
+- acceptance and verification sections are the definition of done;
+- only items explicitly declared out of scope by the next Flow should move to
+  `TODOS.md` or `THOUGHTS.md`.
+
 The next Flow should try to make those three sources supported on the primary
 MolmoSpaces MuJoCo path. Here, "supported" means three UI-ready samples for the
 default operator-console scene rail and up to ten eval-stress-ready samples for
