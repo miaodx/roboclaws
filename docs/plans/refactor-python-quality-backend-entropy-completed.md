@@ -323,6 +323,15 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac runtime/render
   metadata tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac scene-camera request geometry, view-spec loading,
+  lane-orbit/backend-transform math, USD-bound target extraction, and
+  image-variance checks moved from the backend worker into
+  `isaac_scene_camera_geometry.py`, with worker-private wrappers preserved for
+  existing tests and capture hooks. Metric: `isaac_lab_backend_worker.py` 5634
+  -> 5524 lines; Ruff complexity stayed at 0 and oversized modules stayed at
+  62. Proof: focused Isaac scene-camera geometry/capture tests, ruff, format
+  check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

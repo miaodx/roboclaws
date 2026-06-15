@@ -21,12 +21,10 @@ from PIL import Image, ImageDraw
 
 from roboclaws.household.backend import HELD_LOCATION_ID
 from roboclaws.household.camera_control import (
-    ANCHOR_ORBIT_CAMERA_MODEL,
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
-    load_camera_control_request,
     normalize_camera_control_request,
 )
 from roboclaws.household.color_management import apply_camera_color_profile
@@ -173,6 +171,20 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureHooks,
     IsaacSceneCameraCaptureRequest,
     capture_isaac_lab_scene_camera_views,
+)
+from scripts.isaac_lab_cleanup.isaac_scene_camera_geometry import (
+    apply_scene_transform_to_point,
+    backend_transform_for_lane,
+    bounds_from_usd_prim_path,
+    camera_vec3,
+    eye_from_lookat_spec,
+    image_has_variance,
+    isaac_scene_camera_view_spec,
+    lane_camera_orbit,
+    load_camera_view_specs,
+)
+from scripts.isaac_lab_cleanup.isaac_scene_camera_geometry import (
+    load_camera_request_from_args as _load_camera_request_from_args_impl,
 )
 from scripts.isaac_lab_cleanup.isaac_scene_index_geometry import (
     authored_reference_asset_paths,
@@ -1961,11 +1973,7 @@ def _rgb_tensor_to_uint8(value: Any, *, np: Any) -> Any:
 
 
 def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    raw_views = payload.get("views") if isinstance(payload, dict) else payload
-    if not isinstance(raw_views, list):
-        raise ValueError("camera view spec must be a list or an object with a views list")
-    return [dict(item) for item in raw_views if isinstance(item, dict)]
+    return load_camera_view_specs(path)
 
 
 def _load_camera_request_from_args(
@@ -1975,15 +1983,12 @@ def _load_camera_request_from_args(
     width: int,
     height: int,
 ) -> dict[str, Any]:
-    if camera_request_path is not None:
-        return load_camera_control_request(camera_request_path, width=width, height=height)
-    if view_specs_path is not None:
-        return normalize_camera_control_request(
-            _load_camera_view_specs(view_specs_path),
-            width=width,
-            height=height,
-        )
-    raise ValueError("camera_views requires --camera-request-path or --view-specs-path")
+    return _load_camera_request_from_args_impl(
+        view_specs_path=view_specs_path,
+        camera_request_path=camera_request_path,
+        width=width,
+        height=height,
+    )
 
 
 def _isaac_scene_camera_view_spec(
@@ -1992,103 +1997,23 @@ def _isaac_scene_camera_view_spec(
     index: int,
     stage_utils: Any | None = None,
 ) -> dict[str, Any]:
-    view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
-    safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
-    usd_prim_path = str(raw_spec.get("usd_prim_path") or "")
-    usd_bounds = _bounds_from_usd_prim_path(
+    return isaac_scene_camera_view_spec(
+        raw_spec,
+        index=index,
         stage_utils=stage_utils,
-        usd_prim_path=usd_prim_path,
-        min_target_z=float(raw_spec.get("min_target_z", 0.6)),
     )
-    usd_bounds_target = usd_bounds.get("target") if isinstance(usd_bounds, dict) else None
-    target_source = "usd_prim_world_bounds" if usd_bounds_target is not None else ""
-    if raw_spec.get("camera_model") == CANONICAL_CAMERA_MODEL:
-        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
-        target_source = "canonical_explicit_target"
-    elif usd_bounds_target is not None:
-        target = usd_bounds_target
-    else:
-        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
-        target_source = "explicit_target_or_default"
-    backend_transform = _backend_transform_for_lane(raw_spec, "isaaclab-prepared-usd")
-    if "eye" in raw_spec and raw_spec.get("eye") is not None:
-        eye = _camera_vec3(
-            raw_spec.get("eye"),
-            default=[target[0], target[1] - 4.0, target[2] + 2.0],
-        )
-        if backend_transform:
-            eye = _apply_scene_transform_to_point(eye, backend_transform)
-            target = _apply_scene_transform_to_point(target, backend_transform)
-    else:
-        camera_orbit = _lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")
-        eye = _eye_from_lookat_spec(
-            target=target,
-            distance=float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0))),
-            azimuth=float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 225.0))),
-            elevation=abs(
-                float(camera_orbit.get("elevation_deg", raw_spec.get("elevation", 35.0)))
-            ),
-        )
-    return {
-        "view_id": safe_view_id,
-        "label": str(raw_spec.get("label") or view_id),
-        "anchor_id": str(raw_spec.get("anchor_id") or ""),
-        "anchor_kind": str(raw_spec.get("anchor_kind") or ""),
-        "robot_view_role": str(raw_spec.get("robot_view_role") or ""),
-        "camera_basis": str(raw_spec.get("camera_basis") or ""),
-        "camera_mode": str(raw_spec.get("camera_mode") or "free_camera"),
-        "usd_prim_path": usd_prim_path,
-        "eye": eye,
-        "target": target,
-        "lookat": target,
-        "backend_eye": eye,
-        "backend_target": target,
-        "usd_bounds_target": usd_bounds_target,
-        "usd_bounds": usd_bounds,
-        "target_source": target_source,
-        "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
-        "coordinate_frame": str(raw_spec.get("coordinate_frame") or ""),
-        "camera_orbit": dict(_lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")),
-        "lens": dict(raw_spec.get("lens")) if isinstance(raw_spec.get("lens"), dict) else {},
-        "calibration_status": str(raw_spec.get("calibration_status") or ""),
-        "coordinate_convention": str(raw_spec.get("coordinate_convention") or ""),
-    }
 
 
 def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
-    lane_orbits = raw_spec.get("lane_camera_orbits")
-    if isinstance(lane_orbits, dict):
-        lane_orbit = lane_orbits.get(lane_id)
-        if isinstance(lane_orbit, dict):
-            return lane_orbit
-    camera_orbit = raw_spec.get("camera_orbit")
-    return camera_orbit if isinstance(camera_orbit, dict) else {}
+    return lane_camera_orbit(raw_spec, lane_id)
 
 
 def _backend_transform_for_lane(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
-    transforms = raw_spec.get("backend_transforms")
-    if isinstance(transforms, dict):
-        transform = transforms.get(lane_id)
-        if isinstance(transform, dict):
-            return transform
-    return {}
+    return backend_transform_for_lane(raw_spec, lane_id)
 
 
 def _apply_scene_transform_to_point(point: list[float], transform: dict[str, Any]) -> list[float]:
-    scale = float(transform.get("xy_scale", 1.0))
-    rotation_rad = math.radians(float(transform.get("rotation_z_deg", 0.0)))
-    raw_translation = transform.get("translation")
-    translation = raw_translation if isinstance(raw_translation, list) else []
-    tx = float(translation[0]) if len(translation) > 0 else 0.0
-    ty = float(translation[1]) if len(translation) > 1 else 0.0
-    tz = float(translation[2]) if len(translation) > 2 else 0.0
-    x = float(point[0])
-    y = float(point[1])
-    return [
-        scale * (math.cos(rotation_rad) * x - math.sin(rotation_rad) * y) + tx,
-        scale * (math.sin(rotation_rad) * x + math.cos(rotation_rad) * y) + ty,
-        float(point[2]) + tz,
-    ]
+    return apply_scene_transform_to_point(point, transform)
 
 
 def _horizontal_aperture_from_lens(
@@ -2112,42 +2037,11 @@ def _bounds_from_usd_prim_path(
     usd_prim_path: str,
     min_target_z: float,
 ) -> dict[str, Any] | None:
-    if stage_utils is None or not usd_prim_path:
-        return None
-    from pxr import Usd, UsdGeom
-
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        return None
-    stage = get_current_stage()
-    if stage is None:
-        return None
-    prim = stage.GetPrimAtPath(usd_prim_path)
-    if not prim or not prim.IsValid():
-        return None
-    cache = UsdGeom.BBoxCache(
-        Usd.TimeCode.Default(),
-        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+    return bounds_from_usd_prim_path(
+        stage_utils=stage_utils,
+        usd_prim_path=usd_prim_path,
+        min_target_z=min_target_z,
     )
-    bbox = cache.ComputeWorldBound(prim).ComputeAlignedBox()
-    min_point = [float(value) for value in bbox.GetMin()]
-    max_point = [float(value) for value in bbox.GetMax()]
-    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
-    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
-        return None
-    if max(size) <= 0:
-        return None
-    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
-    target = list(center)
-    target[2] = max(target[2], min_target_z)
-    return {
-        "min": min_point,
-        "max": max_point,
-        "size": size,
-        "center": center,
-        "target": target,
-        "target_z_floor": min_target_z,
-    }
 
 
 def _eye_from_lookat_spec(
@@ -2157,24 +2051,20 @@ def _eye_from_lookat_spec(
     azimuth: float,
     elevation: float,
 ) -> list[float]:
-    azimuth_rad = math.radians(azimuth)
-    elevation_rad = math.radians(elevation)
-    horizontal = math.cos(elevation_rad) * distance
-    return [
-        float(target[0]) + math.sin(azimuth_rad) * horizontal,
-        float(target[1]) + math.cos(azimuth_rad) * horizontal,
-        float(target[2]) + math.sin(elevation_rad) * distance,
-    ]
+    return eye_from_lookat_spec(
+        target=target,
+        distance=distance,
+        azimuth=azimuth,
+        elevation=elevation,
+    )
 
 
 def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return [float(default[0]), float(default[1]), float(default[2])]
-    return [float(value[0]), float(value[1]), float(value[2])]
+    return camera_vec3(value, default=default)
 
 
 def _image_has_variance(array: Any, *, np: Any) -> bool:
-    return bool(np.max(array) > np.min(array))
+    return image_has_variance(array, np=np)
 
 
 def _module_version(module_name: str) -> str | None:
