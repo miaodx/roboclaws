@@ -160,6 +160,12 @@ First slice implemented on 2026-06-15.
   That keeps future real scanner candidates from being incorrectly blocked on
   `trusted_category_provenance` or `preview_metadata` after source assets and
   preview packets are prepared.
+- Scanner-run output now includes per-source summaries with candidate, ready,
+  executed, skipped, and failed counts. Running the expanded `0:19` scanner
+  plan on this host records `status=no_ready_candidates` with 35 candidates,
+  0 ready candidates, 0 executed commands, and per-source
+  `no_ready_candidates` summaries for `procthor-10k-val`, `ithor`,
+  `procthor-objaverse-val`, and `holodeck-objaverse-val`.
 
 Verification run on 2026-06-15:
 
@@ -193,6 +199,9 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_sce
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-admission-gate --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_scanner_runner.py -q
+ruff check scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
+.venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py --plan /tmp/roboclaws-scene-sampler-range-0-19/scene_sampler_scanner_execution_plan.json --output /tmp/roboclaws-scene-sampler-range-0-19/scanner_run.json
 ```
 
 Current limits feeding the next Flow:

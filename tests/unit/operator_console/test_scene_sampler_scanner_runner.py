@@ -88,6 +88,16 @@ def test_scanner_runner_skips_blocked_candidates_without_running_commands(tmp_pa
     assert result["schema"] == "molmospaces_scene_sampler_scanner_run_v1"
     assert result["status"] == "no_ready_candidates"
     assert result["skipped_candidate_count"] == 1
+    assert result["sources"]["ithor"] == {
+        "scene_source": "ithor",
+        "status": "no_ready_candidates",
+        "candidate_count": 1,
+        "ready_candidate_count": 0,
+        "executed_candidate_count": 0,
+        "skipped_candidate_count": 1,
+        "failed_candidate_count": 0,
+        "world_ids": ["molmospaces/ithor/1"],
+    }
     assert result["rows"][0]["status"] == "skipped_blocked_candidate"
     assert calls == []
     assert json.loads(output_path.read_text(encoding="utf-8")) == result
@@ -109,6 +119,9 @@ def test_scanner_runner_dry_run_records_ready_commands_without_execution(tmp_pat
 
     assert result["status"] == "dry_run"
     assert result["ready_candidate_count"] == 1
+    assert result["sources"]["ithor"]["status"] == "ready_not_executed"
+    assert result["sources"]["ithor"]["ready_candidate_count"] == 1
+    assert result["sources"]["ithor"]["executed_candidate_count"] == 0
     assert [item["name"] for item in result["rows"][0]["commands"]] == [
         "preview",
         "map_build_product_smoke",
@@ -136,6 +149,9 @@ def test_scanner_runner_executes_ready_preview_then_map_build(tmp_path: Path) ->
 
     assert result["status"] == "success"
     assert result["executed_candidate_count"] == 1
+    assert result["sources"]["ithor"]["status"] == "executed"
+    assert result["sources"]["ithor"]["executed_candidate_count"] == 1
+    assert result["sources"]["ithor"]["failed_candidate_count"] == 0
     assert result["rows"][0]["status"] == "passed"
     assert [item["name"] for item in result["rows"][0]["commands"]] == [
         "preview",
@@ -147,3 +163,26 @@ def test_scanner_runner_executes_ready_preview_then_map_build(tmp_path: Path) ->
         "scripts/operator_console/render_scene_previews.py",
     ]
     assert calls[1][0][:2] == ["just", "run::surface"]
+
+
+def test_scanner_runner_source_summary_records_failures(tmp_path: Path) -> None:
+    runner = _load_runner()
+    plan_path = tmp_path / "plan.json"
+    output_path = tmp_path / "scanner_run.json"
+    _write_plan(plan_path, [_candidate(scanner_status="ready_for_product_smoke")])
+
+    def fake_run(argv, **kwargs):
+        return SimpleNamespace(returncode=17, stdout="", stderr="preview failed")
+
+    result = runner.run_scanner_plan(
+        plan_path=plan_path,
+        output_path=output_path,
+        run_command=fake_run,
+    )
+
+    assert result["status"] == "failed"
+    assert result["failed_candidate_count"] == 1
+    assert result["sources"]["ithor"]["status"] == "failed"
+    assert result["sources"]["ithor"]["executed_candidate_count"] == 1
+    assert result["sources"]["ithor"]["failed_candidate_count"] == 1
+    assert result["rows"][0]["failed_command"] == "preview"

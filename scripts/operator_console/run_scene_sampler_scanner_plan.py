@@ -119,6 +119,7 @@ def run_scanner_plan(
             1 for row in rows if row["status"].startswith("skipped_")
         ),
         "failed_candidate_count": failed_count,
+        "sources": _source_run_summaries(rows),
         "rows": rows,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -215,6 +216,52 @@ def _candidate_row_base(candidate: dict[str, Any]) -> dict[str, Any]:
         "missing_paths": candidate.get("missing_paths") or [],
         "next_action": candidate.get("next_action", ""),
     }
+
+
+def _source_run_summaries(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    summaries: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        source = str(row.get("scene_source") or "unknown")
+        summary = summaries.setdefault(
+            source,
+            {
+                "scene_source": source,
+                "status": "no_candidates",
+                "candidate_count": 0,
+                "ready_candidate_count": 0,
+                "executed_candidate_count": 0,
+                "skipped_candidate_count": 0,
+                "failed_candidate_count": 0,
+                "world_ids": [],
+            },
+        )
+        summary["candidate_count"] += 1
+        if row.get("scanner_status") == "ready_for_product_smoke":
+            summary["ready_candidate_count"] += 1
+        if row.get("status") in {"passed", "failed"}:
+            summary["executed_candidate_count"] += 1
+        if str(row.get("status") or "").startswith("skipped_"):
+            summary["skipped_candidate_count"] += 1
+        if row.get("status") == "failed":
+            summary["failed_candidate_count"] += 1
+        world_id = str(row.get("world_id") or "")
+        if world_id:
+            summary["world_ids"].append(world_id)
+    for summary in summaries.values():
+        summary["status"] = _source_run_status(summary)
+    return dict(sorted(summaries.items()))
+
+
+def _source_run_status(summary: dict[str, Any]) -> str:
+    if int(summary.get("failed_candidate_count") or 0):
+        return "failed"
+    if int(summary.get("executed_candidate_count") or 0):
+        return "executed"
+    if int(summary.get("ready_candidate_count") or 0):
+        return "ready_not_executed"
+    if int(summary.get("candidate_count") or 0):
+        return "no_ready_candidates"
+    return "no_candidates"
 
 
 def _run_shell_words(name: str, command: str, *, run_command: RunCommand) -> dict[str, Any]:
