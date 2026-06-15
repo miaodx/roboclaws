@@ -35,6 +35,7 @@ def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
     assert payload["aggregate"]["pass_at_1"] == 1.0
     assert payload["aggregate"]["pass_at_k"] == {"1": 1.0}
     assert payload["aggregate"]["pass_caret_k"] == {"1": 1.0}
+    assert "sampler_projection" not in payload["aggregate"]
 
     result = payload["results"][0]
     assert result["status"] == "passed"
@@ -47,6 +48,7 @@ def test_eval_runner_writes_result_bundle_and_report(tmp_path: Path) -> None:
     report_html = run.report_path.read_text()
     assert "run_result" in report_html
     assert 'href="runs/cleanup_smoke_seed7/trial-0000/run_result.json"' in report_html
+    assert "Scene Sampler Projection" not in report_html
 
 
 def test_eval_runner_classifies_missing_product_artifacts(tmp_path: Path) -> None:
@@ -439,12 +441,24 @@ def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
     assert payload["aggregate"]["sample_count"] == 5
     assert payload["aggregate"]["passed"] == 5
     assert payload["aggregate"]["failed"] == 0
+    sampler_projection = payload["aggregate"]["sampler_projection"]
+    assert sampler_projection["summary"]["ready_sample_count"] == 5
+    assert sampler_projection["summary"]["remaining_sample_count"] == 35
+    assert sampler_projection["summary"]["partial_source_count"] == 1
+    assert sampler_projection["summary"]["blocked_source_count"] == 3
+    assert sampler_projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
+    assert sampler_projection["scene_sources"]["procthor-10k-val"]["needed_count"] == 5
+    assert sampler_projection["scene_sources"]["ithor"]["support_status"] == "blocked"
     result = payload["results"][0]
     assert result["grader_outputs"]["sampler_admission"]["status"] == "passed"
     assert result["grader_outputs"]["sampler_admission"]["scene_source"] == "procthor-10k-val"
     assert result["grader_outputs"]["sampler_admission"]["category_provenance"] == (
         "prepared_visual_label_manifest"
     )
+    report_html = run.report_path.read_text()
+    assert "Scene Sampler Projection" in report_html
+    assert "Ready samples: 5 /" in report_html
+    assert "remaining:\n    35" in report_html
 
 
 def test_sampler_admission_rejects_heuristic_category_provenance(tmp_path: Path) -> None:

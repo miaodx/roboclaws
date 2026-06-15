@@ -217,6 +217,11 @@ First slice implemented on 2026-06-15.
   statuses, passed/required/missing gates, candidate file provenance, and source
   path status. A scanner run can now explain why a candidate executed or was
   skipped without re-reading the admission artifact.
+- Eval result bundles and eval HTML reports now surface the
+  `scene_sampler_stress` sampler projection summary from suite metadata. A smoke
+  run that executes the five currently admitted samples also reports the full
+  40-sample target, 35 remaining samples, one partial source, and three blocked
+  sources, so a green smoke run is not confused with completed sampler coverage.
 
 Verification run on 2026-06-15:
 
@@ -280,6 +285,9 @@ ruff check scripts/operator_console/run_scene_sampler_source_prep.py tests/unit/
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/launch/test_scene_sampler.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-scanner-evidence --candidate-range 0:19 --no-generated-eval
 .venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py --plan /tmp/roboclaws-scene-sampler-scanner-evidence/scene_sampler_scanner_execution_plan.json --output /tmp/roboclaws-scene-sampler-scanner-evidence/scanner_run.json
+./scripts/dev/run_pytest_standalone.sh tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_models.py -q
+ruff check roboclaws/evals/reports.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_models.py
+just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/roboclaws-scene-sampler-eval-projection-report
 ```
 
 Current limits feeding the next Flow:
