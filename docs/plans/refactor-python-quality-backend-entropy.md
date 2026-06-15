@@ -4828,3 +4828,17 @@ Stop this refactor loop when:
   complexity-by-file summary; this file grew from 350 to 370 lines, reinforcing
   that the next loop should prioritize backend/cleanup seams with net line
   reduction.
+- 2026-06-15: Continued the map-bundle residual by extracting non-blocking
+  room-only fixture pose selection from
+  `roboclaws/maps/bundle.py::_normalize_room_only_fixture_poses(...)`. Nav2
+  bundle projection, room-only fixture hint normalization, candidate slot
+  rotation, and waypoint-collision avoidance remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/maps/bundle.py` passed;
+  `ruff check roboclaws/maps/bundle.py` passed;
+  `ruff format --check roboclaws/maps/bundle.py tests/contract/maps/test_nav2_map_bundle_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/maps/test_nav2_map_bundle_contract.py`
+  passed with 6 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 58 to 57 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/maps/bundle.py` no longer appears in the complexity-by-file
+  summary; the file grew from 643 to 660 lines.

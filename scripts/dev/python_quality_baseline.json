@@ -390,16 +390,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/maps/bundle.py|C901|_normalize_room_only_fixture_poses",
-        "limit": 10,
-        "message": "`_normalize_room_only_fixture_poses` is too complex (11 > 10)",
-        "path": "roboclaws/maps/bundle.py",
-        "row": 379,
-        "symbol": "_normalize_room_only_fixture_poses",
-        "value": 11
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/reports/live_performance.py|C901|_estimate_model_work_s",
         "limit": 10,
         "message": "`_estimate_model_work_s` is too complex (12 > 10)",
