@@ -371,6 +371,13 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
   Isaac backend tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac semantic-pose USD stage application moved from the backend
+  worker into `isaac_semantic_pose_stage.py`, with worker wrappers preserving
+  current camera-capture hooks and stage-application tests. Metric:
+  `isaac_lab_backend_worker.py` 4578 -> 4495 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
+  ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

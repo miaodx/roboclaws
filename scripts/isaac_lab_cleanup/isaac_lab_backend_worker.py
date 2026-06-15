@@ -392,6 +392,18 @@ from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
     SemanticPoseRobotViewRequest,
     real_semantic_pose_robot_view_images,
 )
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_stage import (
+    IsaacSemanticPoseStageHooks,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_stage import (
+    apply_semantic_pose_state_to_stage as _apply_semantic_pose_state_to_stage_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_stage import (
+    semantic_pose_target_position as _semantic_pose_target_position_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_stage import (
+    world_position_to_parent_local_translate as _world_position_to_parent_local_translate_impl,
+)
 from scripts.isaac_lab_cleanup.isaac_semantic_pose_state import (
     initial_semantic_pose_state,
     record_semantic_pose_event,
@@ -1427,97 +1439,17 @@ def _apply_semantic_pose_state_to_stage(
     stage_utils: Any,
     semantic_pose_state: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    pose_state = _dict(semantic_pose_state)
-    if not pose_state:
-        return {
-            "schema": "isaac_semantic_pose_stage_application_v1",
-            "status": "not_requested",
-            "applied_object_count": 0,
-            "failed_object_count": 0,
-            "rendered_to_usd": False,
-        }
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        raise RuntimeError("Isaac stage utils do not expose get_current_stage")
-    stage = get_current_stage()
-    if stage is None:
-        raise RuntimeError("Isaac semantic-pose rerender has no current USD stage")
-    from pxr import Gf, UsdGeom
-
-    object_poses = _dict(pose_state.get("object_poses"))
-    receptacle_index = _dict(pose_state.get("receptacle_index"))
-    applied: list[dict[str, Any]] = []
-    failed: list[dict[str, Any]] = []
-    for object_id, raw_pose in object_poses.items():
-        pose = _dict(raw_pose)
-        object_prim_path = str(pose.get("usd_prim_path") or "")
-        support_id = str(pose.get("support_receptacle_id") or "")
-        if not object_prim_path or pose.get("attached_to_robot") is True:
-            continue
-        object_prim = stage.GetPrimAtPath(object_prim_path)
-        if not object_prim or not object_prim.IsValid():
-            failed.append({"object_id": str(object_id), "reason": "missing_object_prim"})
-            continue
-        target = _semantic_pose_target_position(
-            support_id=support_id,
-            receptacle_index=receptacle_index,
-            fallback_pose=_dict(pose),
-        )
-        if target is None:
-            failed.append({"object_id": str(object_id), "reason": "missing_target_pose"})
-            continue
-        try:
-            local_translate = _world_position_to_parent_local_translate(
-                UsdGeom=UsdGeom,
-                prim=object_prim,
-                world_position=target,
-            )
-        except RuntimeError as exc:
-            failed.append(
-                {
-                    "object_id": str(object_id),
-                    "reason": "parent_local_transform_failed",
-                    "detail": str(exc),
-                }
-            )
-            continue
-        try:
-            translate_application = _set_usd_xform_translate(
-                UsdGeom=UsdGeom,
-                Gf=Gf,
-                prim=object_prim,
-                translate=local_translate,
-            )
-        except RuntimeError as exc:
-            failed.append(
-                {
-                    "object_id": str(object_id),
-                    "reason": "translate_authoring_failed",
-                    "detail": str(exc),
-                }
-            )
-            continue
-        applied.append(
-            {
-                "object_id": str(object_id),
-                "object_usd_prim_path": object_prim_path,
-                "support_receptacle_id": support_id,
-                "target_position": list(target),
-                "authored_translate": list(local_translate),
-                "authored_translate_frame": "parent_local",
-                "translate_application_method": translate_application.get("method"),
-                "authored_xform_op": translate_application.get("xform_op"),
-            }
-        )
-    return {
-        "schema": "isaac_semantic_pose_stage_application_v1",
-        "status": "applied" if applied and not failed else ("partial" if applied else "blocked"),
-        "applied_object_count": len(applied),
-        "failed_object_count": len(failed),
-        "applied_objects": applied,
-        "failed_objects": failed,
-        "rendered_to_usd": bool(applied) and not failed,
-    }
+    return _apply_semantic_pose_state_to_stage_impl(
+        stage_utils=stage_utils,
+        semantic_pose_state=semantic_pose_state,
+        hooks=IsaacSemanticPoseStageHooks(
+            dict_value=_dict,
+            set_usd_xform_translate=_set_usd_xform_translate,
+            semantic_pose_target_position=_semantic_pose_target_position,
+            vec3=_vec3,
+            world_position_to_parent_local_translate=_world_position_to_parent_local_translate,
+        ),
+    )
 
 
 def _world_position_to_parent_local_translate(
@@ -1526,18 +1458,11 @@ def _world_position_to_parent_local_translate(
     prim: Any,
     world_position: tuple[float, float, float],
 ) -> tuple[float, float, float]:
-    parent = prim.GetParent() if hasattr(prim, "GetParent") else None
-    if parent is None or not parent:
-        return tuple(float(value) for value in world_position)
-    try:
-        parent_world = UsdGeom.Xformable(parent).ComputeLocalToWorldTransform(0.0)
-        world_to_parent = parent_world.GetInverse()
-        local = world_to_parent.Transform(tuple(float(value) for value in world_position))
-        return (float(local[0]), float(local[1]), float(local[2]))
-    except Exception as exc:
-        raise RuntimeError(
-            "could not convert world semantic pose into parent-local USD frame"
-        ) from exc
+    return _world_position_to_parent_local_translate_impl(
+        UsdGeom=UsdGeom,
+        prim=prim,
+        world_position=world_position,
+    )
 
 
 def _semantic_pose_target_position(
@@ -1546,21 +1471,13 @@ def _semantic_pose_target_position(
     receptacle_index: dict[str, Any],
     fallback_pose: dict[str, Any],
 ) -> tuple[float, float, float] | None:
-    exact_position = _vec3(fallback_pose.get("position"))
-    if exact_position is not None:
-        return (exact_position[0], exact_position[1], exact_position[2])
-    support = _dict(receptacle_index.get(support_id))
-    pose = _dict(support.get("support_pose")) or fallback_pose
-    try:
-        x = float(pose.get("x"))
-        y = float(pose.get("y"))
-    except (TypeError, ValueError):
-        return None
-    try:
-        z = float(pose.get("z") or 0.0)
-    except (TypeError, ValueError):
-        z = 0.0
-    return (x, y, z + 0.18)
+    return _semantic_pose_target_position_impl(
+        support_id=support_id,
+        receptacle_index=receptacle_index,
+        fallback_pose=fallback_pose,
+        dict_value=_dict,
+        vec3=_vec3,
+    )
 
 
 def _load_current_stage_payloads(stage_utils: Any) -> None:
