@@ -392,6 +392,14 @@ logs before choosing the next slice.
   4264 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
   Proof: focused Isaac backend tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac snapshot, robot-view, scene-camera, locations, and
+  output-provenance command orchestration moved from the backend worker into
+  `isaac_worker_outputs.py`, with worker-private wrappers preserving CLI
+  dispatch, monkeypatch hooks, and artifact payload shapes. Metric:
+  `isaac_lab_backend_worker.py` 4264 -> 3999 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

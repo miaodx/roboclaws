@@ -20,7 +20,6 @@ from PIL import Image
 from roboclaws.household.backend import HELD_LOCATION_ID
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
-    CANONICAL_CAMERA_MODEL,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     normalize_camera_control_request,
 )
@@ -30,12 +29,7 @@ from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-    ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
-)
-from roboclaws.household.robot_view_camera_control import (
-    backend_local_robot_view_camera_control_contract,
-    robot_mounted_head_camera_control_contract,
 )
 from roboclaws.household.types import (
     CleanupObject,
@@ -465,6 +459,33 @@ from scripts.isaac_lab_cleanup.isaac_worker_commands import (
 )
 from scripts.isaac_lab_cleanup.isaac_worker_commands import (
     place as _place_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    IsaacWorkerOutputHooks,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    camera_capture_provenance as _camera_capture_provenance_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    camera_capture_variant as _camera_capture_variant_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    locations_command as _locations_command_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    robot_view_camera_control_contract as _robot_view_camera_control_contract_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    robot_view_rendered_robot_pose as _robot_view_rendered_robot_pose_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    write_camera_views as _write_camera_views_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    write_robot_views as _write_robot_views_impl,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_outputs import (
+    write_snapshot as _write_snapshot_impl,
 )
 from scripts.isaac_lab_cleanup.isaac_worker_protocol import (
     count_tool_request as _count_tool_request_impl,
@@ -3207,249 +3228,54 @@ def done(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
     return _done_impl(args, state, hooks=_isaac_worker_command_hooks())
 
 
+def _isaac_worker_output_hooks() -> IsaacWorkerOutputHooks:
+    return IsaacWorkerOutputHooks(
+        camera_capture_provenance=_camera_capture_provenance,
+        camera_capture_variant=_camera_capture_variant,
+        capture_scene_camera_views=capture_scene_camera_views,
+        copy_real_robot_view_images=_copy_real_robot_view_images,
+        copy_real_snapshot_image=_copy_real_snapshot_image,
+        count=_count,
+        dict_value=_dict,
+        error=_error,
+        has_xy=_has_xy,
+        load_camera_request_from_args=_load_camera_request_from_args,
+        native_render_diagnostics_from_state=_native_render_diagnostics_from_state,
+        ok=_ok,
+        real_rendering_proven=_real_rendering_proven,
+        real_robot_view_images=_real_robot_view_images,
+        real_semantic_pose_robot_view_images=_real_semantic_pose_robot_view_images,
+        real_snapshot_source_image=_real_snapshot_source_image,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        robot_view_camera_control_contract=_robot_view_camera_control_contract,
+        robot_view_command_provenance=_robot_view_command_provenance,
+        robot_view_focus=_robot_view_focus,
+        robot_view_rendered_robot_pose=_robot_view_rendered_robot_pose,
+        safe_file_stem=_safe_file_stem,
+        write_placeholder_image=_write_placeholder_image,
+        write_state_from_state_arg=write_state_from_state_arg,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
+    )
+
+
 def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "snapshot")
-    if _real_rendering_proven(state):
-        try:
-            source_path = _real_snapshot_source_image(state)
-            shape = _copy_real_snapshot_image(
-                source_path,
-                args.output_path,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        except RuntimeError as exc:
-            return _error("snapshot", "real_snapshot_image_invalid", reason=str(exc))
-        write_state_from_state_arg(state)
-        return _ok(
-            "snapshot",
-            output_path=str(args.output_path),
-            visual_artifact_provenance=REAL_SMOKE_CAPTURE_METHOD,
-            placeholder_visuals=False,
-            native_render_diagnostics=_native_render_diagnostics_from_state(state),
-            snapshot_provenance={
-                "source": "isaac_runtime_rgb_capture",
-                "source_path": str(source_path),
-                "output_path": str(args.output_path),
-                "visual_artifact_provenance": REAL_SMOKE_CAPTURE_METHOD,
-                "placeholder_visuals": False,
-                "static_isaac_capture": True,
-                "semantic_pose_rendered": False,
-                "shape": shape,
-                "reason": (
-                    "Snapshot reuses a real Isaac RGB capture. Semantic pose edits "
-                    "are not rendered back into the USD stage yet."
-                ),
-            },
-        )
-    _write_placeholder_image(
-        args.output_path,
-        title=args.title,
-        subtitle=state["runtime"]["renderer_mode"],
-        state=state,
-        width=args.render_width,
-        height=args.render_height,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "snapshot",
-        output_path=str(args.output_path),
-        visual_artifact_provenance=state["runtime"]["visual_artifact_provenance"],
-        placeholder_visuals=True,
-        native_render_diagnostics=_native_render_diagnostics_from_state(state),
-        snapshot_provenance={
-            "source": "placeholder_protocol_image",
-            "output_path": str(args.output_path),
-            "visual_artifact_provenance": state["runtime"]["visual_artifact_provenance"],
-            "placeholder_visuals": True,
-            "static_isaac_capture": False,
-            "semantic_pose_rendered": False,
-            "reason": "Snapshot is a CI-safe placeholder because real Isaac rendering is unproven.",
-        },
-    )
+    return _write_snapshot_impl(args, state, hooks=_isaac_worker_output_hooks())
 
 
 def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "robot_views")
-    if state.get("robot") is None:
-        return _error("robot_views", "robot_not_included")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    safe_label = _safe_file_stem(args.label)
-    views = {
-        "fpv": args.output_dir / f"{safe_label}.fpv.png",
-        "chase": args.output_dir / f"{safe_label}.chase.png",
-        "map": args.output_dir / f"{safe_label}.map.png",
-        "verify": args.output_dir / f"{safe_label}.verify.png",
-    }
-    real_views = _real_semantic_pose_robot_view_images(
-        state,
-        views,
-        width=args.render_width,
-        height=args.render_height,
-        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
-        isaac_aa_op=args.isaac_aa_op,
-        isaac_tonemap_op=args.isaac_tonemap_op,
-        isaac_exposure_bias=args.isaac_exposure_bias,
-        isaac_colorcorr_gain=args.isaac_colorcorr_gain,
-        focus_object_id=args.focus_object_id,
-        focus_receptacle_id=args.focus_receptacle_id,
-    )
-    semantic_pose_state_refreshed = bool(real_views)
-    if not real_views:
-        real_views = _real_robot_view_images(state)
-    shapes: dict[str, list[int]] = {}
-    if real_views:
-        try:
-            shapes = _copy_real_robot_view_images(
-                real_views,
-                views,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        except RuntimeError as exc:
-            return _error(
-                "robot_views",
-                "real_robot_view_images_invalid",
-                reason=str(exc),
-            )
-    elif _real_rendering_proven(state):
-        return _error(
-            "robot_views",
-            "real_robot_view_images_unavailable",
-            reason=(
-                "Real Isaac rendering was proven, but FPV/chase/map/verify view images "
-                "were not recorded in worker state."
-            ),
-        )
-    else:
-        for view_name, path in views.items():
-            _write_placeholder_image(
-                path,
-                title=f"{args.label} {view_name}",
-                subtitle=state["runtime"]["renderer_mode"],
-                state=state,
-                width=args.render_width,
-                height=args.render_height,
-                focus_object_id=args.focus_object_id,
-                focus_receptacle_id=args.focus_receptacle_id,
-            )
-            shapes[view_name] = [args.render_height, args.render_width, 3]
-    write_state_from_state_arg(state)
-    robot_pose = _robot_view_rendered_robot_pose(state)
-    focus = _robot_view_focus(
-        state,
-        robot_pose,
-        focus_object_id=args.focus_object_id,
-        focus_receptacle_id=args.focus_receptacle_id,
-    )
-    return _ok(
-        "robot_views",
-        output_dir=str(args.output_dir),
-        view_variant=ISAACLAB_ROBOT_VIEW_VARIANT,
-        view_provenance=_robot_view_command_provenance(
-            state,
-            semantic_pose_state_refreshed=semantic_pose_state_refreshed,
-        ),
-        camera_control_contract=_robot_view_camera_control_contract(
-            state,
-            robot_pose=robot_pose,
-            focus=focus,
-        ),
-        robot_pose=robot_pose,
-        robot_trajectory=[robot_pose],
-        room_outline_count=len(state.get("room_outlines") or []),
-        color_profile=_dict(state.get("robot_view_color_profile")),
-        color_management=_dict(state.get("robot_view_color_management")),
-        lighting_profile=_dict(state.get("robot_view_lighting_profile")),
-        lighting_diagnostics=_dict(state.get("robot_view_lighting_diagnostics")),
-        camera_diagnostics=_dict(state.get("robot_view_camera_diagnostics")),
-        native_render_diagnostics=_native_render_diagnostics_from_state(state),
-        focus=focus,
-        views={key: str(path) for key, path in views.items()},
-        shapes=shapes,
-        render_resolution={"width": args.render_width, "height": args.render_height},
-        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
-    )
+    return _write_robot_views_impl(args, state, hooks=_isaac_worker_output_hooks())
 
 
 def _robot_view_rendered_robot_pose(state: dict[str, Any]) -> dict[str, Any]:
-    semantic_robot_pose = _dict(_dict(state.get("semantic_pose_state")).get("robot_pose"))
-    if _has_xy(semantic_robot_pose):
-        return semantic_robot_pose
-    return _robot_pose_for_receptacle(
-        state,
-        str(state.get("current_receptacle_id") or "floor_01"),
-    )
+    return _robot_view_rendered_robot_pose_impl(state, hooks=_isaac_worker_output_hooks())
 
 
 def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "camera_views")
-    runtime = _dict(state.get("runtime"))
-    scene_usd = str(state.get("scene_usd") or "")
-    if runtime.get("runtime_mode") != "real":
-        return _error("camera_views", "real_runtime_required")
-    if not scene_usd or not Path(scene_usd).is_file():
-        return _error("camera_views", "local_scene_usd_required", scene_usd=scene_usd)
-    camera_request = _load_camera_request_from_args(
-        view_specs_path=args.view_specs_path,
-        camera_request_path=args.camera_request_path,
-        width=args.render_width,
-        height=args.render_height,
-    )
-    capture = capture_scene_camera_views(
-        scene_usd=Path(scene_usd),
-        camera_request=camera_request,
-        output_dir=args.output_dir,
-        width=args.render_width,
-        height=args.render_height,
-        semantic_pose_state=_dict(state.get("semantic_pose_state")),
-    )
-    semantic_pose_application = _dict(capture.get("semantic_pose_stage_application"))
-    state["scene_camera_view_capture"] = {
-        "schema": "isaac_scene_camera_view_capture_v1",
-        "capture_method": "isaac_lab_camera_rgb_scene_probe",
-        "scene_usd": scene_usd,
-        "render_steps": int(capture.get("render_steps") or 0),
-        "view_count": len(capture.get("views") or []),
-        "semantic_pose_stage_application": semantic_pose_application,
-        "semantic_pose_rendered": semantic_pose_application.get("rendered_to_usd") is True,
-    }
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    if semantic_pose_application.get("rendered_to_usd") is True:
-        semantic_pose_state["rendered_to_usd"] = True
-        semantic_pose_state["scene_camera_view_capture"] = dict(state["scene_camera_view_capture"])
-        state["semantic_pose_state"] = semantic_pose_state
-    write_state_from_state_arg(state)
-    view_variant = _camera_capture_variant(capture)
-    provenance = _camera_capture_provenance(capture)
-    return _ok(
-        "camera_views",
-        camera_control_api=capture.get("camera_control_api") or CAMERA_CONTROL_API_NAME,
-        camera_request_schema=capture.get("camera_request_schema"),
-        calibration_status=capture.get("calibration_status"),
-        lighting_profile=capture.get("lighting_profile") or {},
-        lighting_diagnostics=capture.get("lighting_diagnostics") or {},
-        color_profile=capture.get("color_profile") or {},
-        color_management=capture.get("color_management") or {},
-        native_render_diagnostics=capture.get("native_render_diagnostics") or {},
-        lens=capture.get("lens") or {},
-        derived_lens=capture.get("derived_lens") or {},
-        view_variant=view_variant,
-        visual_artifact_provenance=provenance,
-        scene_usd=scene_usd,
-        views=capture.get("views") or [],
-        images=capture.get("images") or {},
-        shapes=capture.get("shapes") or {},
-        scene_bounds=capture.get("scene_bounds"),
-        semantic_pose_stage_application=semantic_pose_application,
-        semantic_pose_rendered=semantic_pose_application.get("rendered_to_usd") is True,
-        render_steps=int(capture.get("render_steps") or 0),
-        render_resolution={"width": args.render_width, "height": args.render_height},
-    )
+    return _write_camera_views_impl(args, state, hooks=_isaac_worker_output_hooks())
 
 
-def _locations_command(_: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return {"ok": True, "tool": "locations", "final_locations": state["locations"]}
+def _locations_command(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    return _locations_command_impl(args, state)
 
 
 _STATE_COMMANDS: dict[str, _IsaacWorkerCommand] = {
@@ -3476,93 +3302,12 @@ def _robot_view_camera_control_contract(
     robot_pose: dict[str, Any] | None = None,
     focus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    provenance = _dict(state.get("robot_view_provenance"))
-    semantic_pose_state_refreshed = provenance.get("semantic_pose_state_refreshed")
-    robot_import = _dict(state.get("robot_import"))
-    mounted_head_camera = bool(
-        provenance.get("robot_mounted_head_camera")
-        or robot_import.get("status") == "imported"
-        or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
+    return _robot_view_camera_control_contract_impl(
+        state,
+        robot_pose=robot_pose,
+        focus=focus,
+        hooks=_isaac_worker_output_hooks(),
     )
-    head_camera_equivalent = (
-        bool(provenance.get("head_camera_equivalent")) and not mounted_head_camera
-    )
-    if mounted_head_camera or head_camera_equivalent or robot_import:
-        status = (
-            "robot_mounted_head_camera_robot_view"
-            if mounted_head_camera
-            else "robot_head_camera_equivalent_robot_view"
-        )
-        camera_model = (
-            "robot_mounted_head_camera_v1"
-            if mounted_head_camera
-            else "robot_head_camera_equivalent_v1"
-        )
-        contract = robot_mounted_head_camera_control_contract(
-            backend=ISAACLAB_SUBPROCESS_BACKEND,
-            status=status,
-            camera_model=camera_model,
-            fpv_source=str(
-                provenance.get("fpv")
-                or (
-                    "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-                    if mounted_head_camera
-                    else "isaac_lab_head_camera_equivalent:fpv"
-                )
-            ),
-            verify_source=str(provenance.get("verify") or "isaac_lab_semantic_pose_verify_camera"),
-            chase_source="robot_relative_camera_follower",
-            pose_source=str(
-                _dict(robot_pose).get("pose_source") or "roboclaws_shared_scene_frame_support_pose"
-            ),
-            lens_source=(
-                "rby1m_mujoco_robot_0/head_camera_extrinsics_and_fov"
-                if mounted_head_camera
-                else "rby1m_head_camera_contract_pending_isaac_robot_import"
-            ),
-            camera_prim_path=str(robot_import.get("head_camera_prim_path") or ""),
-            robot_asset=robot_import,
-            robot_pose=dict(robot_pose or {}),
-            focus=dict(focus or {}),
-            color_profile=_dict(state.get("robot_view_color_profile")),
-            color_management=_dict(state.get("robot_view_color_management")),
-            lighting_profile=_dict(state.get("robot_view_lighting_profile")),
-        )
-        contract.update(
-            {
-                "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
-                "evidence_note": (
-                    "Isaac cleanup FPV uses the imported RBY1M mounted head camera "
-                    "when the robot USD import artifact is present. Without that "
-                    "artifact it remains explicitly marked as head-camera-equivalent. "
-                    "Chase is rendered from a robot-relative rear/high report camera; "
-                    "map remains auxiliary report evidence."
-                ),
-            }
-        )
-        return contract
-    contract = backend_local_robot_view_camera_control_contract(
-        backend=ISAACLAB_SUBPROCESS_BACKEND,
-        status="backend_local_scene_bounds_camera",
-        fpv_source=str(provenance.get("fpv") or "isaac_lab_scene_bounds_fpv"),
-        verify_source=str(provenance.get("verify") or "isaac_lab_scene_bounds_verify"),
-        pose_source="isaac_support_pose_near_current_receptacle",
-        lens_source="isaac_robot_view_pinhole_defaults_24mm_20.955mm_aperture",
-    )
-    contract.update(
-        {
-            "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
-            "robot_pose": dict(robot_pose or {}),
-            "focus": dict(focus or {}),
-            "evidence_note": (
-                "Isaac cleanup robot views currently use backend-local scene-bounds/support-pose "
-                "camera placement, not roboclaws.camera_control.render_views. They are useful "
-                "report evidence, but they are not yet proof that the agent-facing FPV is "
-                "backend-swappable at identical scene-frame pose/FOV."
-            ),
-        }
-    )
-    return contract
 
 
 def _isaac_robot_pose_hooks() -> IsaacRobotPoseHooks:
@@ -3657,21 +3402,11 @@ def _scene_index_center_xy(state: dict[str, Any]) -> tuple[float, float]:
 
 
 def _camera_capture_variant(capture: dict[str, Any]) -> str:
-    if any(
-        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
-        for item in capture.get("views") or []
-    ):
-        return "isaaclab-canonical-eye-target-camera-control-v1"
-    return "isaaclab-anchor-orbit-camera-control-v1"
+    return _camera_capture_variant_impl(capture)
 
 
 def _camera_capture_provenance(capture: dict[str, Any]) -> str:
-    if any(
-        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
-        for item in capture.get("views") or []
-    ):
-        return "isaac_lab_camera_rgb_canonical_eye_target_scene_probe"
-    return "isaac_lab_camera_rgb_anchor_orbit_scene_probe"
+    return _camera_capture_provenance_impl(capture)
 
 
 def _real_semantic_pose_robot_view_images(
