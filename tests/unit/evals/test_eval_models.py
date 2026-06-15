@@ -288,6 +288,11 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
         "scene_sampler.procthor-10k-val.3.map_build",
         "scene_sampler.procthor-10k-val.5.map_build",
         "scene_sampler.procthor-10k-val.9.map_build",
+        "scene_sampler.procthor-10k-val.10.map_build",
+        "scene_sampler.procthor-10k-val.11.map_build",
+        "scene_sampler.procthor-10k-val.12.map_build",
+        "scene_sampler.procthor-10k-val.13.map_build",
+        "scene_sampler.procthor-10k-val.15.map_build",
     }
     suite_sample_ids = {sample_id for suite in suites for sample_id in suite.sample_ids}
     assert {sample.sample_id for sample in loaded} <= suite_sample_ids
@@ -296,13 +301,13 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     assert scene_suite.suite_id == "household_world.scene_sampler_stress"
     assert "sampler_admission" in scene_suite.required_graders
     projection = scene_suite.metadata["sampler_projection"]
-    assert projection["summary"]["ready_sample_count"] == 5
-    assert projection["summary"]["partial_source_count"] == 1
+    assert projection["summary"]["ready_sample_count"] == 10
+    assert projection["summary"]["partial_source_count"] == 0
     assert projection["summary"]["blocked_source_count"] == 3
-    assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
+    assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["target_count"] == 10
-    assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "partial"
-    assert projection["scene_sources"]["procthor-10k-val"]["partial_gap_count"] == 5
+    assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "complete"
+    assert projection["scene_sources"]["procthor-10k-val"]["partial_gap_count"] == 0
     assert projection["scene_sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
         "environment_blocked"
     )

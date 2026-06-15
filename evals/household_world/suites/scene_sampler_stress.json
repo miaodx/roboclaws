@@ -8,14 +8,24 @@
     "scene_sampler.procthor-10k-val.2.map_build",
     "scene_sampler.procthor-10k-val.3.map_build",
     "scene_sampler.procthor-10k-val.5.map_build",
-    "scene_sampler.procthor-10k-val.9.map_build"
+    "scene_sampler.procthor-10k-val.9.map_build",
+    "scene_sampler.procthor-10k-val.10.map_build",
+    "scene_sampler.procthor-10k-val.11.map_build",
+    "scene_sampler.procthor-10k-val.12.map_build",
+    "scene_sampler.procthor-10k-val.13.map_build",
+    "scene_sampler.procthor-10k-val.15.map_build"
   ],
   "sample_refs": [
     "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_2_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_3_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_5_map_build.json",
-    "evals/household_world/samples/scene_sampler/procthor-10k-val_9_map_build.json"
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_9_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_10_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_11_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_12_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_13_map_build.json",
+    "evals/household_world/samples/scene_sampler/procthor-10k-val_15_map_build.json"
   ],
   "required_graders": [
     "artifacts",
@@ -39,20 +49,25 @@
       "scene_sources": {
         "procthor-10k-val": {
           "target_count": 10,
-          "ready_count": 5,
-          "partial_gap_count": 5,
-          "needed_count": 5,
+          "ready_count": 10,
+          "partial_gap_count": 0,
+          "needed_count": 0,
           "blocked_count": 0,
           "rejected_count": 3,
           "blocked_or_rejected_row_count": 3,
-          "support_status": "partial",
-          "status": "partial_or_blocked",
+          "support_status": "complete",
+          "status": "complete",
           "sample_ids": [
             "scene_sampler.procthor-10k-val.0.map_build",
             "scene_sampler.procthor-10k-val.2.map_build",
             "scene_sampler.procthor-10k-val.3.map_build",
             "scene_sampler.procthor-10k-val.5.map_build",
-            "scene_sampler.procthor-10k-val.9.map_build"
+            "scene_sampler.procthor-10k-val.9.map_build",
+            "scene_sampler.procthor-10k-val.10.map_build",
+            "scene_sampler.procthor-10k-val.11.map_build",
+            "scene_sampler.procthor-10k-val.12.map_build",
+            "scene_sampler.procthor-10k-val.13.map_build",
+            "scene_sampler.procthor-10k-val.15.map_build"
           ],
           "blocked_rows": [
             {
@@ -286,14 +301,14 @@
       "summary": {
         "source_count": 4,
         "target_sample_count": 40,
-        "ready_sample_count": 5,
-        "partial_source_count": 1,
+        "ready_sample_count": 10,
+        "partial_source_count": 0,
         "blocked_source_count": 3,
-        "complete_source_count": 0,
+        "complete_source_count": 1,
         "blocked_row_count": 3,
         "rejected_row_count": 3,
         "blocked_or_rejected_row_count": 6,
-        "remaining_sample_count": 35
+        "remaining_sample_count": 30
       }
     }
   }

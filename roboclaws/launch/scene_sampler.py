@@ -36,8 +36,63 @@ SUPPORTED_SCENE_SOURCES: tuple[str, ...] = (
 
 _CURRENT_ALIAS_INDICES: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 7, 9)
 _UI_SELECTED_INDICES: tuple[int, ...] = (0, 2, 9)
-_EVAL_READY_INDICES: tuple[int, ...] = (0, 2, 3, 5, 9)
+_EVAL_READY_INDICES: tuple[int, ...] = (0, 2, 3, 5, 9, 10, 11, 12, 13, 15)
+_SCANNER_EVAL_READY_METADATA: dict[int, dict[str, Any]] = {
+    10: {
+        "room_count": 4,
+        "waypoint_count": 8,
+        "quality_score": 1.0,
+        "coverage_score": 0.4,
+        "product_smoke_run_dir": (
+            "output/scene-sampler-scanner/product-smoke/"
+            "molmospaces-procthor-10k-val-10/0615_2303/seed-7"
+        ),
+    },
+    11: {
+        "room_count": 4,
+        "waypoint_count": 8,
+        "quality_score": 1.0,
+        "coverage_score": 0.4,
+        "product_smoke_run_dir": (
+            "output/scene-sampler-scanner/product-smoke/"
+            "molmospaces-procthor-10k-val-11/0615_2303/seed-7"
+        ),
+    },
+    12: {
+        "room_count": 10,
+        "waypoint_count": 20,
+        "quality_score": 1.0,
+        "coverage_score": 1.0,
+        "product_smoke_run_dir": (
+            "output/scene-sampler-scanner/product-smoke/"
+            "molmospaces-procthor-10k-val-12/0615_2304/seed-7"
+        ),
+    },
+    13: {
+        "room_count": 4,
+        "waypoint_count": 8,
+        "quality_score": 1.0,
+        "coverage_score": 0.4,
+        "product_smoke_run_dir": (
+            "output/scene-sampler-scanner/product-smoke/"
+            "molmospaces-procthor-10k-val-13/0615_2306/seed-7"
+        ),
+    },
+    15: {
+        "room_count": 10,
+        "waypoint_count": 20,
+        "quality_score": 1.0,
+        "coverage_score": 1.0,
+        "product_smoke_run_dir": (
+            "output/scene-sampler-scanner/product-smoke/"
+            "molmospaces-procthor-10k-val-15/0615_2308/seed-7"
+        ),
+    },
+}
 _PREVIEW_ROOT = Path(__file__).resolve().parents[1] / "operator_console" / "static" / "previews"
+_SCANNER_OUTPUT_ROOT = Path("output") / "scene-sampler-scanner"
+_SCANNER_PREVIEW_ROOT = _SCANNER_OUTPUT_ROOT / "previews"
+_SCANNER_PRODUCT_SMOKE_ROOT = _SCANNER_OUTPUT_ROOT / "product-smoke"
 _LABEL_MANIFEST_PATH = (
     Path(__file__).resolve().parents[2]
     / "data"
@@ -157,7 +212,8 @@ def sampler_manifest() -> dict[str, Any]:
 def sampler_rows() -> tuple[SceneSamplerRow, ...]:
     """Return all known source rows, including blocked source-family packets."""
 
-    rows = [_ready_row(index) for index in _CURRENT_ALIAS_INDICES]
+    known_indices = sorted({*_CURRENT_ALIAS_INDICES, *_EVAL_READY_INDICES})
+    rows = [_ready_row(index) for index in known_indices]
     rows.extend(_blocked_source_row(scene_source) for scene_source in SUPPORTED_SCENE_SOURCES[1:])
     return tuple(rows)
 
@@ -591,7 +647,17 @@ def candidate_readiness_report(
     for source in SUPPORTED_SCENE_SOURCES:
         source_availability = availability["sources"][source]
         candidates = []
-        for index in candidate_indices:
+        source_candidate_indices = sorted(
+            {
+                *candidate_indices,
+                *(
+                    int(row.scene_index)
+                    for row in sampler_rows()
+                    if row.scene_source == source and row.scene_index is not None
+                ),
+            }
+        )
+        for index in source_candidate_indices:
             row = rows_by_source_index.get((source, index))
             if row is not None:
                 candidates.append(_candidate_packet_from_sampler_row(row))
@@ -603,6 +669,10 @@ def candidate_readiness_report(
                     source_availability=source_availability,
                 )
             )
+        candidates = _assign_dynamic_candidate_lanes(
+            source=source,
+            candidates=candidates,
+        )
         ui_ready_count = sum(1 for item in candidates if item["ui_ready"])
         eval_ready_count = sum(1 for item in candidates if item["eval_ready"])
         sources[source] = {
@@ -731,17 +801,24 @@ def source_prep_report(
             for item in source_availability.get("candidate_files") or []
             if isinstance(item, dict)
         ]
-        missing_resources = _missing_source_resources(
-            source=source,
-            source_availability=source_availability,
-            candidate_scene_refs=candidate_scene_refs,
+        source_complete = source_selection.get("status") == "complete"
+        missing_resources = (
+            []
+            if source_complete
+            else _missing_source_resources(
+                source=source,
+                source_availability=source_availability,
+                candidate_scene_refs=candidate_scene_refs,
+            )
         )
         recommended_end = max_candidate_index
         next_eval_count = len(source_selection.get("next_eval_scan_world_ids") or [])
         eval_needed = int(source_selection.get("eval_needed_count") or 0)
         if next_eval_count < eval_needed:
             recommended_end = max(recommended_end, 19)
-        next_scan_candidates = source_selection.get("next_scan_candidates") or []
+        next_scan_candidates = (
+            [] if source_complete else source_selection.get("next_scan_candidates") or []
+        )
         sources[source] = {
             "scene_source": source,
             "scene_family": _family_split(source)[0],
@@ -773,7 +850,7 @@ def source_prep_report(
             "missing_resource_summary": _resource_reason_counts(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
-            "install_candidates": _source_prep_install_candidates(
+            "install_candidates": [] if source_complete else _source_prep_install_candidates(
                 dataset_name=dataset_name,
                 split=split,
                 candidates=next_scan_candidates,
@@ -1098,9 +1175,11 @@ def validate_sampler_manifest(manifest: dict[str, Any] | None = None) -> None:
 
 
 def _ready_row(scene_index: int) -> SceneSamplerRow:
-    preview = _preview_metadata(scene_index)
+    scanner_metadata = _SCANNER_EVAL_READY_METADATA.get(scene_index)
+    preview = _ready_row_preview_metadata(scene_index)
     room_ids = _room_ids(preview)
-    waypoint_count = _waypoint_count(preview)
+    room_count = int((scanner_metadata or {}).get("room_count") or len(room_ids))
+    waypoint_count = int((scanner_metadata or {}).get("waypoint_count") or _waypoint_count(preview))
     view_statuses = _view_statuses(preview)
     all_views_reviewable = all(
         view_statuses.get(view) == "reviewable" for view in _required_views()
@@ -1108,7 +1187,7 @@ def _ready_row(scene_index: int) -> SceneSamplerRow:
     ui_ready = scene_index in _UI_SELECTED_INDICES
     eval_ready = scene_index in _EVAL_READY_INDICES
     rejected_reason = ""
-    if len(room_ids) < 3:
+    if room_count < 3:
         rejected_reason = "fewer_than_three_public_navigation_areas"
     elif not all_views_reviewable:
         rejected_reason = "preview_not_reviewable"
@@ -1133,19 +1212,36 @@ def _ready_row(scene_index: int) -> SceneSamplerRow:
         backend=PRIMARY_MOLMOSPACES_BACKEND,
         readiness_status=status,
         lanes=tuple(lanes),
-        world_id=f"molmospaces/val_{scene_index}",
-        legacy_world_id=f"molmospaces/val_{scene_index}",
-        room_count=len(room_ids),
+        world_id=_procthor_world_id(scene_index),
+        legacy_world_id=_procthor_legacy_world_id(scene_index),
+        room_count=room_count,
         waypoint_count=waypoint_count,
         category_provenance="prepared_visual_label_manifest",
         category_manifest=str(_LABEL_MANIFEST_PATH.relative_to(_repo_root())),
-        preview_assets=_preview_assets(scene_index),
+        preview_assets=_ready_row_preview_assets(scene_index),
         selected_reason=selected_reason,
         blocked_reason=rejected_reason,
         failure_class="map_actionability_failure" if rejected_reason else "",
-        quality_score=_quality_score(preview),
-        coverage_score=_coverage_score(room_count=len(room_ids), waypoint_count=waypoint_count),
+        quality_score=float(
+            (scanner_metadata or {}).get("quality_score") or _quality_score(preview)
+        ),
+        coverage_score=float(
+            (scanner_metadata or {}).get("coverage_score")
+            or _coverage_score(room_count=room_count, waypoint_count=waypoint_count)
+        ),
     )
+
+
+def _procthor_world_id(scene_index: int) -> str:
+    if scene_index in _CURRENT_ALIAS_INDICES:
+        return f"molmospaces/val_{scene_index}"
+    return f"molmospaces/procthor-10k-val/{scene_index}"
+
+
+def _procthor_legacy_world_id(scene_index: int) -> str:
+    if scene_index in _CURRENT_ALIAS_INDICES:
+        return f"molmospaces/val_{scene_index}"
+    return ""
 
 
 def _eval_sample_launch_overrides(row: SceneSamplerRow) -> dict[str, Any]:
@@ -1214,6 +1310,38 @@ def _preview_metadata(scene_index: int) -> dict[str, Any]:
     return payload
 
 
+def _ready_row_preview_metadata(scene_index: int) -> dict[str, Any]:
+    if scene_index in _SCANNER_EVAL_READY_METADATA:
+        preview = _scanner_preview_metadata("procthor-10k-val", scene_index)
+        return preview or _static_scanner_preview_metadata(scene_index)
+    return _preview_metadata(scene_index)
+
+
+def _static_scanner_preview_metadata(scene_index: int) -> dict[str, Any]:
+    metadata = _SCANNER_EVAL_READY_METADATA[scene_index]
+    room_count = int(metadata["room_count"])
+    waypoint_count = int(metadata["waypoint_count"])
+    room_ids = [f"room_{index}" for index in range(room_count)]
+    projected_waypoints = [
+        {"waypoint_id": f"wp_{index}", "room_id": room_ids[index % room_count]}
+        for index in range(waypoint_count)
+    ]
+    views = {
+        view: {"image_diagnostics": {"visual_status": "reviewable"}}
+        for view in _required_views()
+    }
+    views["map"]["semantic_projection"] = {
+        "rendered_waypoint_count": waypoint_count,
+        "projected_waypoints": projected_waypoints,
+    }
+    return {
+        "scene_source": "procthor-10k-val",
+        "scene_index": scene_index,
+        "backend": PRIMARY_MOLMOSPACES_BACKEND,
+        "views": views,
+    }
+
+
 def _view_statuses(preview: dict[str, Any]) -> dict[str, str]:
     views = preview.get("views") if isinstance(preview.get("views"), dict) else {}
     return {
@@ -1266,6 +1394,16 @@ def _preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
         ("map", f"/previews/molmospaces-{scene_name}-map.png"),
         ("chase", f"/previews/molmospaces-{scene_name}-chase.png"),
         ("topdown", f"/previews/molmospaces-{scene_name}-topdown.png"),
+    )
+
+
+def _ready_row_preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
+    if scene_index not in _SCANNER_EVAL_READY_METADATA:
+        return _preview_assets(scene_index)
+    slug = _world_id_slug(f"molmospaces/procthor-10k-val/{scene_index}")
+    return tuple(
+        (view, str(_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png"))
+        for view in _required_views()
     )
 
 
@@ -1590,6 +1728,8 @@ def _source_prep_status(
     source_selection: dict[str, Any],
     missing_resources: list[dict[str, Any]],
 ) -> str:
+    if source_selection.get("status") == "complete":
+        return "complete"
     if source_availability.get("module_available") is False:
         return "blocked_molmospaces_module"
     if not source_availability.get("scene_root_available"):
@@ -2300,10 +2440,306 @@ def _world_id_slug(world_id: str) -> str:
     return "".join(ch if ch.isalnum() else "-" for ch in world_id).strip("-")
 
 
+def _scanner_preview_metadata(source: str, scene_index: int) -> dict[str, Any] | None:
+    """Load operator-run scanner preview metadata when it exists."""
+
+    world_id = f"molmospaces/{source}/{scene_index}"
+    path = _SCANNER_PREVIEW_ROOT / f"{_world_id_slug(world_id)}-preview.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    if payload.get("scene_source") != source:
+        return None
+    if payload.get("scene_index") != scene_index:
+        return None
+    if payload.get("backend") != PRIMARY_MOLMOSPACES_BACKEND:
+        return None
+    return payload
+
+
+def _scanner_product_smoke_artifacts(source: str, scene_index: int) -> dict[str, Any]:
+    """Return the latest map-build smoke artifacts for a scanner candidate."""
+
+    world_id = f"molmospaces/{source}/{scene_index}"
+    root = _SCANNER_PRODUCT_SMOKE_ROOT / _world_id_slug(world_id)
+    run_dirs = sorted(
+        [path for path in root.glob("*/seed-*") if path.is_dir()],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for run_dir in run_dirs:
+        runtime_map_path = run_dir / "runtime_metric_map.json"
+        run_result_path = run_dir / "run_result.json"
+        runtime_map = _read_json_if_exists(runtime_map_path)
+        run_result = _read_json_if_exists(run_result_path)
+        if (runtime_map or {}).get("schema") != "runtime_metric_map_v1":
+            continue
+        return {
+            "status": "available",
+            "run_dir": str(run_dir),
+            "runtime_metric_map": str(runtime_map_path),
+            "run_result": str(run_result_path) if run_result_path.exists() else "",
+            "runtime_map": runtime_map,
+            "run_result_payload": run_result,
+        }
+    return {
+        "status": "missing",
+        "run_dir": "",
+        "runtime_metric_map": "",
+        "run_result": "",
+        "runtime_map": {},
+        "run_result_payload": {},
+    }
+
+
+def _read_json_if_exists(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return payload
+
+
+def _scanner_candidate_packet(
+    *,
+    packet: dict[str, Any],
+    preview: dict[str, Any],
+    smoke: dict[str, Any],
+) -> dict[str, Any]:
+    room_count = max(_preview_room_count(preview), _runtime_room_count(smoke))
+    waypoint_count = max(_waypoint_count(preview), _runtime_waypoint_count(smoke))
+    preview_statuses = _view_statuses(preview)
+    category_provenance = _scanner_category_provenance(smoke)
+    map_build_ready = _scanner_map_build_ready(smoke)
+    missing_gates = _scanner_missing_gates(
+        {
+            **packet,
+            "preview_statuses": preview_statuses,
+            "room_count": room_count,
+            "waypoint_count": waypoint_count,
+            "category_provenance": category_provenance,
+            "eval_ready": map_build_ready,
+        }
+    )
+    quality_issue = _scanner_quality_issue(missing_gates)
+    readiness_status = READINESS_BLOCKED
+    failure_class = "environment_blocked"
+    blocked_reason = _scanner_blocked_reason(
+        source=str(packet.get("scene_source") or ""),
+        scene_index=packet.get("scene_index"),
+        missing_gates=missing_gates,
+        smoke=smoke,
+    )
+    if map_build_ready and not quality_issue and not missing_gates:
+        readiness_status = READINESS_READY
+        failure_class = ""
+        blocked_reason = ""
+    elif quality_issue:
+        readiness_status = READINESS_REJECTED
+        failure_class = "map_actionability_failure"
+        blocked_reason = quality_issue
+    selected_reason = (
+        "scanner_evidence_admitted_for_source_sampler"
+        if readiness_status == READINESS_READY
+        else quality_issue or "scanner_evidence_incomplete_for_source_sampler"
+    )
+    return {
+        **packet,
+        "readiness_status": readiness_status,
+        "lanes": [],
+        "ui_ready": False,
+        "eval_ready": readiness_status == READINESS_READY,
+        "room_count": room_count,
+        "waypoint_count": waypoint_count,
+        "category_provenance": category_provenance,
+        "category_manifest": "",
+        "preview_statuses": preview_statuses,
+        "preview_assets": _scanner_preview_assets(
+            source=str(packet.get("scene_source") or ""),
+            scene_index=int(packet.get("scene_index") or 0),
+        ),
+        "selected_reason": selected_reason,
+        "blocked_reason": blocked_reason,
+        "failure_class": failure_class,
+        "quality_score": _quality_score(preview),
+        "coverage_score": _coverage_score(room_count=room_count, waypoint_count=waypoint_count),
+        "scanner_evidence": {
+            "preview_metadata": str(
+                _SCANNER_PREVIEW_ROOT
+                / f"{_world_id_slug(str(packet.get('world_id') or ''))}-preview.json"
+            ),
+            "product_smoke_status": smoke.get("status", ""),
+            "product_smoke_run_dir": smoke.get("run_dir", ""),
+            "runtime_metric_map": smoke.get("runtime_metric_map", ""),
+            "run_result": smoke.get("run_result", ""),
+        },
+    }
+
+
+def _assign_dynamic_candidate_lanes(
+    *,
+    source: str,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if source == "procthor-10k-val":
+        return candidates
+    eligible = [
+        candidate
+        for candidate in candidates
+        if candidate.get("readiness_status") == READINESS_READY
+        and candidate.get("eval_ready")
+        and candidate.get("scene_index") is not None
+    ]
+    eligible.sort(key=lambda item: int(item.get("scene_index") or 0))
+    ui_ids = {
+        int(candidate.get("scene_index") or 0)
+        for candidate in eligible[:UI_TARGET_PER_SCENE_SOURCE]
+        if len(eligible) >= UI_TARGET_PER_SCENE_SOURCE
+    }
+    eval_ids = {
+        int(candidate.get("scene_index") or 0)
+        for candidate in eligible[:EVAL_TARGET_PER_SCENE_SOURCE]
+    }
+    updated: list[dict[str, Any]] = []
+    for candidate in candidates:
+        scene_index = candidate.get("scene_index")
+        lanes: list[str] = []
+        if candidate.get("readiness_status") == READINESS_READY and scene_index is not None:
+            parsed_index = int(scene_index)
+            if parsed_index in ui_ids:
+                lanes.append(UI_LANE)
+            if parsed_index in eval_ids:
+                lanes.append(EVAL_STRESS_LANE)
+        updated.append(
+            {
+                **candidate,
+                "lanes": lanes,
+                "ui_ready": UI_LANE in lanes,
+                "eval_ready": EVAL_STRESS_LANE in lanes,
+            }
+        )
+    return updated
+
+
+def _scanner_quality_issue(missing_gates: list[str]) -> str:
+    if "source_asset_available" in missing_gates or "map_build_artifacts" in missing_gates:
+        return ""
+    if "preview_metadata" in missing_gates:
+        return "preview_not_reviewable"
+    if "public_room_count" in missing_gates:
+        return "fewer_than_three_public_navigation_areas"
+    if "public_waypoints" in missing_gates:
+        return "fewer_than_three_public_waypoints"
+    if "trusted_category_provenance" in missing_gates:
+        return "missing_trusted_category_provenance"
+    return ""
+
+
+def _scanner_blocked_reason(
+    *,
+    source: str,
+    scene_index: Any,
+    missing_gates: list[str],
+    smoke: dict[str, Any],
+) -> str:
+    if "source_asset_available" in missing_gates:
+        return (
+            f"{source}/{scene_index} source asset is unavailable; run manual source prep "
+            "before scanner admission."
+        )
+    if "map_build_artifacts" in missing_gates:
+        if smoke.get("status") == "available":
+            return (
+                f"{source}/{scene_index} map-build smoke artifact did not satisfy scanner "
+                "admission."
+            )
+        return (
+            f"{source}/{scene_index} is missing map-build product-smoke runtime_metric_map.json; "
+            "run scanner product smoke before eval admission."
+        )
+    if missing_gates:
+        return f"{source}/{scene_index} is missing scanner gates: {', '.join(missing_gates)}"
+    return ""
+
+
+def _preview_room_count(preview: dict[str, Any]) -> int:
+    return len(_room_ids(preview))
+
+
+def _runtime_room_count(smoke: dict[str, Any]) -> int:
+    runtime_map = smoke.get("runtime_map")
+    if not isinstance(runtime_map, dict):
+        return 0
+    return len(
+        {
+            str(room.get("room_id") or "")
+            for room in runtime_map.get("rooms") or []
+            if isinstance(room, dict) and room.get("room_id")
+        }
+    )
+
+
+def _runtime_waypoint_count(smoke: dict[str, Any]) -> int:
+    runtime_map = smoke.get("runtime_map")
+    if not isinstance(runtime_map, dict):
+        return 0
+    waypoint_ids = {
+        str(candidate.get("waypoint_id") or "")
+        for candidate in runtime_map.get("generated_exploration_candidates") or []
+        if isinstance(candidate, dict) and candidate.get("waypoint_id")
+    }
+    if waypoint_ids:
+        return len(waypoint_ids)
+    return len(
+        [
+            candidate
+            for candidate in runtime_map.get("target_candidates") or []
+            if isinstance(candidate, dict)
+            and candidate.get("candidate_type") == "generated_exploration_candidate"
+        ]
+    )
+
+
+def _scanner_category_provenance(smoke: dict[str, Any]) -> str:
+    runtime_map = smoke.get("runtime_map")
+    if not isinstance(runtime_map, dict):
+        return "unavailable"
+    rooms = [room for room in runtime_map.get("rooms") or [] if isinstance(room, dict)]
+    if any(room.get("public_room_source") == "base_navigation_map" for room in rooms):
+        return "source_metadata"
+    hints = [
+        hint for hint in runtime_map.get("room_category_hints") or [] if isinstance(hint, dict)
+    ]
+    if any(hint.get("classification_status") == "map_prior" for hint in hints):
+        return "source_metadata"
+    return "unavailable"
+
+
+def _scanner_map_build_ready(smoke: dict[str, Any]) -> bool:
+    runtime_map = smoke.get("runtime_map")
+    if not isinstance(runtime_map, dict) or runtime_map.get("schema") != "runtime_metric_map_v1":
+        return False
+    run_result = smoke.get("run_result_payload")
+    if isinstance(run_result, dict) and run_result.get("terminate_reason"):
+        return str(run_result.get("terminate_reason") or "").endswith("complete")
+    return True
+
+
+def _scanner_preview_assets(source: str, scene_index: int) -> list[dict[str, str]]:
+    slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
+    return [
+        {"view": view, "path": str(_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png")}
+        for view in _required_views()
+    ]
+
+
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
     preview_statuses: dict[str, str] = {}
     if row.scene_source == "procthor-10k-val" and row.scene_index is not None:
-        preview_statuses = _view_statuses(_preview_metadata(row.scene_index))
+        preview_statuses = _view_statuses(_ready_row_preview_metadata(row.scene_index))
     return {
         "scene_family": row.scene_family,
         "scene_split": row.scene_split,
@@ -2350,7 +2786,7 @@ def _blocked_candidate_packet(
             f"{source}/{scene_index} has no sampler preview, room, waypoint, or "
             "map-build readiness packet yet; run scene preparation before admission."
         )
-    return {
+    packet = {
         "scene_family": family,
         "scene_split": split,
         "scene_source": source,
@@ -2375,6 +2811,16 @@ def _blocked_candidate_packet(
         "source_availability_status": source_availability.get("status"),
         "candidate_file": candidate_file,
     }
+    if not isinstance(candidate_file, dict) or not candidate_file.get("exists"):
+        return packet
+    preview = _scanner_preview_metadata(source, scene_index)
+    if preview is None:
+        return packet
+    return _scanner_candidate_packet(
+        packet=packet,
+        preview=preview,
+        smoke=_scanner_product_smoke_artifacts(source, scene_index),
+    )
 
 
 def _selection_candidate_summary(candidate: dict[str, Any]) -> dict[str, Any]:
