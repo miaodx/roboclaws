@@ -2502,120 +2502,179 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert "Planner Proof Bundle Runner" in html
-    assert "Source Cleanup Artifact" in html
-    assert "Proof Execution Horizon" in html
-    assert "multi_step_motion" in html
-    assert "Proof Request Selection" in html
-    assert "Grasp Feasibility Mitigation Decision" in html
-    assert "decision-card" in html
-    assert "grasp_cache_mitigation" in html
-    assert "mitigate_missing_grasp_cache_before_retry" in html
-    assert "Grasp Cache Availability Preflight" in html
-    assert "Grasp Cache Generation Preflight" in html
-    assert "python_module_sklearn" in html
-    assert "manifold_executable_missing" in html
-    assert "run_rigid.py" in html
-    assert "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz" in html
-    assert "has_grasp_folder_only" in html
-    assert "objects/thor/Bread_1.xml" in html
-    assert "available_for_unproven_requests" in html
-    assert "Prior Proof Evidence" in html
-    assert "Proof Probe Commands" in html
-    assert "Semantic subphases" in html
-    assert "surface / place" in html
-    assert "Proof Probe Results" in html
-    assert "Cleanup Rerun Command" in html
-    assert "dry_run" in html
-    assert "proof_001" in html
-    assert "proof_001_fallback_01" in html
-    assert "observed_001" in html
-    assert "sink/alt" in html
-    assert "HouseInvalidForTask" in html
-    assert "Fallback status" in html
-    assert "generated" in html
-    assert "Fallback required" in html
-    assert "prior_task_feasibility_blocked" in html
-    assert "Generated Fallback Requests" in html
-    assert "Discovered Runtime Aliases" in html
-    assert "Discovered aliases" in html
-    assert "sink/body_alt" in html
-    assert "valid_name_sibling_from_prior_keyerror" in html
-    assert "Filtered Fallback Aliases" in html
-    assert "Filtered aliases" in html
-    assert "Sink|1|2" in html
-    assert "not_exact_scene_runtime_alias" in html
-    assert "Filtered Fallback Pairs" in html
-    assert "Filtered pairs" in html
-    assert "Target Feasibility Blockers" in html
-    assert "Target blockers" in html
-    assert "Grasp Feasibility Blockers" in html
-    assert "Grasp Feasibility Blocker Matrix" in html
-    assert "Grasp blockers" in html
-    assert "Prior match" in html
-    assert "request_id" in html
-    assert "source_request" in html
-    assert "fallback_pair" in html
-    assert "worker_exception" in html
-    assert "pickup/body" in html
-    assert "sink/body_alt" in html
-    assert "prior_task_feasibility_blocked_pair" in html
-    assert "fallback_generated" in html
-    assert "RBY1M/CuRobo Warmup" in html
-    assert "config_import" in html
-    assert "torch_extensions" in html
-    assert "Task feasibility" in html
-    assert "blocked" in html
-    assert "Grasp-feasible blocked" in html
-    assert "Grasp Feasibility Signature Matrix" in html
-    assert "Grasp-load failures" in html
-    assert "grasp_cache_missing" in html
-    assert "Bread_1" in html
-    assert "PriorBread_1" in html
-    assert "prior/pickup" in html
-    assert "Diagnostic views" in html
-    assert "Task feasibility blocker" in html
-    assert "grasp_feasibility" in html
-    assert "3 grasp failures; 1 candidate-removal calls" in html
-    assert "standalone_observed_001_to_sink_01" in html
-    assert "prior-proof/run_result.json" in html
-    assert "prior-proof/report.html" in html
-    assert "prior-proof/initial.png" in html
-    assert "prior-proof/final.png" in html
-    assert 'src="prior-proof/initial.png"' in html
-    assert 'src="prior-proof/final.png"' in html
-    assert 'src="proofs/001/initial.png"' in html
-    assert 'src="proofs/001/final.png"' in html
-    assert f'src="{tmp_path}/prior-proof/initial.png"' not in html
-    assert f'src="{tmp_path}/proofs/001/initial.png"' not in html
-    assert "Robot placement profile" in html
-    assert "relaxed" in html
-    assert "place_robot_near max tries" in html
-    assert "Exact sampler adapter applied" in html
-    assert "Exact sampler adapter class" in html
-    assert "PickAndPlaceTaskSampler" in html
-    assert "Exact sampler adapter target" in html
-    assert "Task sampler placement failures" in html
-    assert "Task sampler asset failures" in html
-    assert "Post-placement grasp failures" in html
-    assert "Post-placement candidate name misses" in html
-    assert "Post-Placement Rejection Views" in html
-    assert "Post-placement rejection flow: pickup/body" in html
-    assert "Placement free-space fraction" in html
-    assert "0.000017" in html
-    assert "Failed to place robot near object: pickup/body" in html
-    assert "sink/body" in html
-    assert "Timeouts" in html
-    assert "Config-import timeouts" in html
-    assert "Last worker stage" in html
-    assert "rby1m_config_import" in html
-    assert "Worker stages" in html
-    assert "planner_probe_stdout.txt" in html
-    assert "planner_probe_stderr.txt" in html
-    assert "initial.png" in html
-    assert "final.png" in html
-    assert "report.html" in html
-    assert "--planner-proof-run-result" in html
+    _assert_planner_proof_bundle_runner_overview(html)
+    _assert_planner_proof_bundle_runner_selection(html)
+    _assert_planner_proof_bundle_runner_proof_results(html, tmp_path)
+    _assert_planner_proof_bundle_runner_sampler_diagnostics(html)
+    _assert_planner_proof_bundle_runner_artifacts(html)
+
+
+def _assert_html_contains(html: str, fragments: tuple[str, ...]) -> None:
+    missing = [fragment for fragment in fragments if fragment not in html]
+    assert not missing, f"Missing expected HTML fragments: {missing}"
+
+
+def _assert_html_omits(html: str, fragments: tuple[str, ...]) -> None:
+    unexpected = [fragment for fragment in fragments if fragment in html]
+    assert not unexpected, f"Unexpected HTML fragments: {unexpected}"
+
+
+def _assert_planner_proof_bundle_runner_overview(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Planner Proof Bundle Runner",
+            "Source Cleanup Artifact",
+            "Proof Execution Horizon",
+            "multi_step_motion",
+            "Grasp Feasibility Mitigation Decision",
+            "decision-card",
+            "grasp_cache_mitigation",
+            "mitigate_missing_grasp_cache_before_retry",
+            "Grasp Cache Availability Preflight",
+            "Grasp Cache Generation Preflight",
+            "python_module_sklearn",
+            "manifold_executable_missing",
+            "run_rigid.py",
+            "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz",
+            "has_grasp_folder_only",
+            "objects/thor/Bread_1.xml",
+            "available_for_unproven_requests",
+            "RBY1M/CuRobo Warmup",
+            "config_import",
+            "torch_extensions",
+            "Cleanup Rerun Command",
+            "--planner-proof-run-result",
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_selection(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Proof Request Selection",
+            "dry_run",
+            "proof_001",
+            "proof_001_fallback_01",
+            "observed_001",
+            "sink/alt",
+            "HouseInvalidForTask",
+            "Fallback status",
+            "generated",
+            "Fallback required",
+            "prior_task_feasibility_blocked",
+            "Generated Fallback Requests",
+            "Discovered Runtime Aliases",
+            "Discovered aliases",
+            "sink/body_alt",
+            "valid_name_sibling_from_prior_keyerror",
+            "Filtered Fallback Aliases",
+            "Filtered aliases",
+            "Sink|1|2",
+            "not_exact_scene_runtime_alias",
+            "Filtered Fallback Pairs",
+            "Filtered pairs",
+            "Target Feasibility Blockers",
+            "Target blockers",
+            "Grasp Feasibility Blockers",
+            "Grasp Feasibility Blocker Matrix",
+            "Grasp blockers",
+            "Prior match",
+            "request_id",
+            "source_request",
+            "fallback_pair",
+            "worker_exception",
+            "pickup/body",
+            "prior_task_feasibility_blocked_pair",
+            "fallback_generated",
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_proof_results(html: str, tmp_path: Path) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Prior Proof Evidence",
+            "Proof Probe Commands",
+            "Semantic subphases",
+            "surface / place",
+            "Proof Probe Results",
+            "Task feasibility",
+            "blocked",
+            "Grasp-feasible blocked",
+            "Grasp Feasibility Signature Matrix",
+            "Grasp-load failures",
+            "grasp_cache_missing",
+            "Bread_1",
+            "PriorBread_1",
+            "prior/pickup",
+            "Diagnostic views",
+            "Task feasibility blocker",
+            "grasp_feasibility",
+            "3 grasp failures; 1 candidate-removal calls",
+            "standalone_observed_001_to_sink_01",
+            "prior-proof/run_result.json",
+            "prior-proof/report.html",
+            "prior-proof/initial.png",
+            "prior-proof/final.png",
+            'src="prior-proof/initial.png"',
+            'src="prior-proof/final.png"',
+            'src="proofs/001/initial.png"',
+            'src="proofs/001/final.png"',
+        ),
+    )
+    _assert_html_omits(
+        html,
+        (
+            f'src="{tmp_path}/prior-proof/initial.png"',
+            f'src="{tmp_path}/proofs/001/initial.png"',
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_sampler_diagnostics(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Robot placement profile",
+            "relaxed",
+            "place_robot_near max tries",
+            "Exact sampler adapter applied",
+            "Exact sampler adapter class",
+            "PickAndPlaceTaskSampler",
+            "Exact sampler adapter target",
+            "Task sampler placement failures",
+            "Task sampler asset failures",
+            "Post-placement grasp failures",
+            "Post-placement candidate name misses",
+            "Post-Placement Rejection Views",
+            "Post-placement rejection flow: pickup/body",
+            "Placement free-space fraction",
+            "0.000017",
+            "Failed to place robot near object: pickup/body",
+            "sink/body",
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_artifacts(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Timeouts",
+            "Config-import timeouts",
+            "Last worker stage",
+            "rby1m_config_import",
+            "Worker stages",
+            "planner_probe_stdout.txt",
+            "planner_probe_stderr.txt",
+            "initial.png",
+            "final.png",
+            "report.html",
+        ),
+    )
 
 
 def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:

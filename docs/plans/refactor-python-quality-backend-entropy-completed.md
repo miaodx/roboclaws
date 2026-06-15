@@ -138,6 +138,11 @@ logs before choosing the next slice.
   modules. Proof: focused scene-sampler/eval tests, ruff, format check, and
   ratchet.
 
+- 2026-06-16: Planner proof bundle runner report assertions moved behind
+  focused HTML helper families while preserving rendered report coverage.
+  Metric: 20 -> 19 complexity rows; oversized modules unchanged at 62. Proof:
+  focused report test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
