@@ -299,16 +299,6 @@
     ],
     "violations": [
       {
-        "code": "PLR0915",
-        "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
-        "limit": 50,
-        "message": "Too many statements (64 > 50)",
-        "path": "roboclaws/household/physical_nav2_pilot.py",
-        "row": 86,
-        "symbol": "run_physical_nav2_cleanup_pilot",
-        "value": 64
-      },
-      {
         "code": "C901",
         "key": "skills/agent-validation-matrix/scripts/select_validation_matrix.py|C901|_detect_signals",
         "limit": 10,

@@ -5300,3 +5300,20 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this
   realworld-contract visual-candidate declaration patch so the unrelated staged
   `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/physical_nav2_pilot.py::run_physical_nav2_cleanup_pilot(...)`
+  into map-bundle input loading, inspection waypoint sweep, fixture preferred
+  waypoint sweep, and blocked-manipulation recording helpers. The physical
+  Nav2 pilot still validates and snapshots the map bundle, enforces the robot
+  profile file, records metric-map and fixture-hint trace entries, observes
+  reached waypoints, blocks manipulation tools, writes `trace.jsonl` and
+  `run_result.json`, and renders the cleanup report with the same public
+  readiness payload. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/physical_nav2_pilot.py`
+  passed; `ruff check roboclaws/household/physical_nav2_pilot.py tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`
+  passed with 1 test. The quality baseline was refreshed from 29 to 28 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this physical
+  Nav2 pilot patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
