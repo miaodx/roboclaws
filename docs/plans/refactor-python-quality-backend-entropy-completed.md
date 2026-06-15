@@ -286,6 +286,14 @@ logs before choosing the next slice.
   Proof: focused Isaac segmentation/fake/real-init tests, ruff, format check,
   and ratchet.
 
+- 2026-06-16: Isaac robot-view camera geometry, RBY1M camera constants, FOV
+  metadata, chase-camera pose math, static head-pitch math, and tensor/vector
+  coercion moved from the backend worker into `isaac_camera_geometry.py`, with
+  worker-private wrappers and constants preserved for tests/capture hooks.
+  Metric: `isaac_lab_backend_worker.py` 6278 -> 6155 lines; Ruff complexity
+  stayed at 0 and oversized modules stayed at 62. Proof: focused Isaac camera
+  geometry/robot-pose tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

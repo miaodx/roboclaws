@@ -50,7 +50,6 @@ from roboclaws.household.isaac_lab_backend import (
 from roboclaws.household.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
     robot_mounted_head_camera_control_contract,
-    robot_view_display_color_profile,
 )
 from roboclaws.household.robot_view_pose import resolve_cleanup_robot_pose
 from roboclaws.household.scenario import build_cleanup_scenario
@@ -69,6 +68,40 @@ from scripts.isaac_lab_cleanup.isaac_camera_capture import (
     IsaacCameraCaptureHooks,
     IsaacCameraCaptureRequest,
     capture_isaac_lab_camera_views,
+)
+from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
+    ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+    RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+    RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
+    RBY1M_HEAD_CAMERA_ZERO_POSITION_M,
+    RBY1M_HEAD_PITCH_PIVOT_M,
+    horizontal_aperture_from_lens,
+    isaac_camera_view_poses,
+    matrix4d_rowmajor,
+    normalize_quat,
+    optional_float,
+    quat_from_axis_angle,
+    quat_multiply,
+    robot_pose_yaw_deg,
+    robot_relative_chase_eye_target,
+    rotate_point_y_about_pivot,
+    static_head_camera_pose_for_pitch,
+    tensor_first_vec3,
+    usd_attr_float,
+    usd_camera_fov_metadata,
+    usd_vec,
+)
+from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
+    RBY1M_CHASE_CAMERA_OFFSET_M as _RBY1M_CHASE_CAMERA_OFFSET_M,
+)
+from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
+    RBY1M_CHASE_CAMERA_TARGET_OFFSET_M as _RBY1M_CHASE_CAMERA_TARGET_OFFSET_M,
+)
+from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
+    RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ as _RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ,
+)
+from scripts.isaac_lab_cleanup.isaac_camera_geometry import (
+    robot_view_color_profile as isaac_robot_view_color_profile,
 )
 from scripts.isaac_lab_cleanup.isaac_capture_quality import (
     apply_isaac_capture_quality_overrides,
@@ -250,6 +283,9 @@ MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS = {
     "countertop",
 }
 MAX_SEGMENTATION_CANDIDATES = _MAX_SEGMENTATION_CANDIDATES
+RBY1M_CHASE_CAMERA_OFFSET_M = _RBY1M_CHASE_CAMERA_OFFSET_M
+RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = _RBY1M_CHASE_CAMERA_TARGET_OFFSET_M
+RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = _RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_ROBOT_VIEW_RERENDER_METHOD = "isaac_lab_camera_rgb_semantic_pose_robot_views"
@@ -260,14 +296,6 @@ ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = _ISAAC_DESCENDANT_SUPPORT_SURFACE_SOUR
 ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = _ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE
 ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = _ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE
 ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = "isaac_rby1m_robot_import_plan_v1"
-ISAAC_RBY1M_HEAD_CAMERA_PRIM = "/World/robot_0/head_camera"
-RBY1M_HEAD_PITCH_PIVOT_M = (0.022, 0.0, 1.506)
-RBY1M_HEAD_CAMERA_ZERO_POSITION_M = (0.072, 0.0, 1.556)
-RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = (-0.5, -0.5, 0.5, 0.5)
-RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = 45.0
-RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = 24.0
-RBY1M_CHASE_CAMERA_OFFSET_M = (-1.3, 0.0, 2.705)
-RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = (0.0, 0.0, 1.405)
 ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
 ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
     "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
@@ -1590,15 +1618,7 @@ def _scale_stage_light_intensities(
 
 
 def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:
-    profile = _json_roundtrip(robot_view_display_color_profile())
-    luminance_gain = _dict(profile.get("backend_luminance_gain"))
-    luminance_gain["isaaclab_subprocess"] = 1.0
-    luminance_gain["isaaclab-prepared-usd"] = 1.0
-    profile["backend_luminance_gain"] = luminance_gain
-    profile["backend_luminance_gain_source"] = "robot_view_display_default_no_scene_probe_delta"
-    if isinstance(override, dict) and override:
-        profile.update(override)
-    return profile
+    return isaac_robot_view_color_profile(override)
 
 
 def _stage_light_paths(
@@ -1656,81 +1676,18 @@ def _isaac_camera_view_poses(
     scene_bounds: dict[str, list[float]] | None = None,
     semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, tuple[Any, Any]]:
-    def tensor(values: list[list[float]]) -> Any:
-        return torch.tensor(values, dtype=torch.float32, device=device)
-
-    pose = _dict(_dict(semantic_pose_state).get("robot_pose"))
-    if scene_bounds:
-        center = scene_bounds["center"]
-        size = scene_bounds["size"]
-        span_x = max(size[0], 1.5)
-        span_y = max(size[1], 1.5)
-        span = max(span_x, span_y, size[2], 2.0)
-        floor_z = scene_bounds["min"][2]
-        target_z = max(floor_z + 0.9, center[2])
-        target = [center[0], center[1], target_z]
-        chase_eye_target = _robot_relative_chase_eye_target(pose)
-        chase_pose = (
-            (tensor([[*chase_eye_target[0]]]), tensor([[*chase_eye_target[1]]]))
-            if chase_eye_target is not None
-            else (
-                tensor([[center[0] + span_x * 0.55, center[1] - span_y * 0.75, floor_z + 2.4]]),
-                tensor([[center[0], center[1], target_z * 0.9]]),
-            )
-        )
-        return {
-            "fpv": (
-                tensor([[center[0] - span_x * 0.35, center[1] - span_y * 0.55, floor_z + 1.25]]),
-                tensor([target]),
-            ),
-            "chase": chase_pose,
-            "map": (
-                tensor([[center[0], center[1], scene_bounds["max"][2] + span * 1.25]]),
-                tensor([[center[0], center[1], floor_z]]),
-            ),
-            "verify": (
-                tensor([[center[0] - span_x * 0.18, center[1] - span_y * 0.35, floor_z + 1.6]]),
-                tensor([[center[0] + span_x * 0.08, center[1] + span_y * 0.05, target_z]]),
-            ),
-        }
-
-    chase_eye_target = _robot_relative_chase_eye_target(pose)
-    chase_pose = (
-        (tensor([[*chase_eye_target[0]]]), tensor([[*chase_eye_target[1]]]))
-        if chase_eye_target is not None
-        else (tensor([[2.4, -2.6, 1.8]]), tensor([[0.0, 0.0, 0.35]]))
+    return isaac_camera_view_poses(
+        torch=torch,
+        device=device,
+        scene_bounds=scene_bounds,
+        semantic_pose_state=semantic_pose_state,
     )
-    return {
-        "fpv": (tensor([[1.35, -1.35, 1.1]]), tensor([[0.05, 0.0, 0.55]])),
-        "chase": chase_pose,
-        "map": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
-        "verify": (tensor([[0.9, -1.0, 0.85]]), tensor([[0.2, -0.15, 0.55]])),
-    }
 
 
 def _robot_relative_chase_eye_target(
     pose: dict[str, Any],
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
-    if not _has_xy(pose):
-        return None
-    yaw_deg = _robot_pose_yaw_deg(pose)
-    if yaw_deg is None:
-        return None
-    yaw = math.radians(float(yaw_deg))
-    cos_yaw = math.cos(yaw)
-    sin_yaw = math.sin(yaw)
-
-    def transform(offset: tuple[float, float, float]) -> tuple[float, float, float]:
-        return (
-            float(pose["x"]) + offset[0] * cos_yaw - offset[1] * sin_yaw,
-            float(pose["y"]) + offset[0] * sin_yaw + offset[1] * cos_yaw,
-            float(pose.get("z", 0.0)) + offset[2],
-        )
-
-    return (
-        transform(RBY1M_CHASE_CAMERA_OFFSET_M),
-        transform(RBY1M_CHASE_CAMERA_TARGET_OFFSET_M),
-    )
+    return robot_relative_chase_eye_target(pose)
 
 
 def _ensure_rby1m_robot_on_stage(
@@ -1900,14 +1857,7 @@ def _apply_static_head_camera_pitch(
 def _static_head_camera_pose_for_pitch(
     head_pitch: float,
 ) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
-    position = _rotate_point_y_about_pivot(
-        RBY1M_HEAD_CAMERA_ZERO_POSITION_M,
-        pivot=RBY1M_HEAD_PITCH_PIVOT_M,
-        angle_rad=head_pitch,
-    )
-    pitch_quat = _quat_from_axis_angle((0.0, 1.0, 0.0), head_pitch)
-    quat = _quat_multiply(pitch_quat, RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ)
-    return position, quat
+    return static_head_camera_pose_for_pitch(head_pitch)
 
 
 def _rotate_point_y_about_pivot(
@@ -1916,60 +1866,27 @@ def _rotate_point_y_about_pivot(
     pivot: tuple[float, float, float],
     angle_rad: float,
 ) -> tuple[float, float, float]:
-    dx = point[0] - pivot[0]
-    dy = point[1] - pivot[1]
-    dz = point[2] - pivot[2]
-    cos_pitch = math.cos(angle_rad)
-    sin_pitch = math.sin(angle_rad)
-    return (
-        pivot[0] + cos_pitch * dx + sin_pitch * dz,
-        pivot[1] + dy,
-        pivot[2] - sin_pitch * dx + cos_pitch * dz,
-    )
+    return rotate_point_y_about_pivot(point, pivot=pivot, angle_rad=angle_rad)
 
 
 def _quat_from_axis_angle(
     axis: tuple[float, float, float],
     angle_rad: float,
 ) -> tuple[float, float, float, float]:
-    norm = math.sqrt(sum(float(value) * float(value) for value in axis))
-    if norm <= 0.0:
-        return (1.0, 0.0, 0.0, 0.0)
-    half = angle_rad * 0.5
-    scale = math.sin(half) / norm
-    return _normalize_quat(
-        (
-            math.cos(half),
-            float(axis[0]) * scale,
-            float(axis[1]) * scale,
-            float(axis[2]) * scale,
-        )
-    )
+    return quat_from_axis_angle(axis, angle_rad)
 
 
 def _quat_multiply(
     left: tuple[float, float, float, float],
     right: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    lw, lx, ly, lz = left
-    rw, rx, ry, rz = right
-    return _normalize_quat(
-        (
-            lw * rw - lx * rx - ly * ry - lz * rz,
-            lw * rx + lx * rw + ly * rz - lz * ry,
-            lw * ry - lx * rz + ly * rw + lz * rx,
-            lw * rz + lx * ry - ly * rx + lz * rw,
-        )
-    )
+    return quat_multiply(left, right)
 
 
 def _normalize_quat(
     quat: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    norm = math.sqrt(sum(value * value for value in quat))
-    if norm <= 0.0:
-        return (1.0, 0.0, 0.0, 0.0)
-    return tuple(float(value / norm) for value in quat)  # type: ignore[return-value]
+    return normalize_quat(quat)
 
 
 def _static_head_pitch_note(head_pitch_application: dict[str, Any]) -> str:
@@ -2134,77 +2051,36 @@ def _usd_camera_fov_metadata(
     width: int,
     height: int,
 ) -> dict[str, float]:
-    if focal_length is None or horizontal_aperture is None or width <= 0 or height <= 0:
-        return {}
-    horizontal_fov = math.degrees(
-        2.0 * math.atan(float(horizontal_aperture) / (2.0 * focal_length))
+    return usd_camera_fov_metadata(
+        focal_length=focal_length,
+        horizontal_aperture=horizontal_aperture,
+        width=width,
+        height=height,
     )
-    vertical_aperture = float(horizontal_aperture) * float(height) / float(width)
-    vertical_fov = math.degrees(2.0 * math.atan(vertical_aperture / (2.0 * focal_length)))
-    return {
-        "vertical_aperture_mm": round(vertical_aperture, 6),
-        "vertical_fov_deg": round(vertical_fov, 6),
-        "horizontal_fov_deg": round(horizontal_fov, 6),
-    }
 
 
 def _matrix4d_rowmajor(matrix: Any) -> list[float]:
-    return [round(float(matrix[row][column]), 6) for row in range(4) for column in range(4)]
+    return matrix4d_rowmajor(matrix)
 
 
 def _usd_attr_float(attr: Any) -> float | None:
-    if not attr:
-        return None
-    value = attr.Get()
-    if value is None:
-        return None
-    return round(float(value), 6)
+    return usd_attr_float(attr)
 
 
 def _usd_vec(attr: Any) -> list[float] | None:
-    if not attr:
-        return None
-    value = attr.Get()
-    if value is None:
-        return None
-    try:
-        return [round(float(item), 6) for item in value]
-    except TypeError:
-        return None
+    return usd_vec(attr)
 
 
 def _tensor_first_vec3(value: Any) -> list[float]:
-    if hasattr(value, "detach"):
-        value = value.detach()
-    if hasattr(value, "cpu"):
-        value = value.cpu()
-    if hasattr(value, "tolist"):
-        value = value.tolist()
-    if isinstance(value, list) and value and isinstance(value[0], list):
-        value = value[0]
-    if not isinstance(value, list | tuple) or len(value) < 3:
-        return []
-    return [round(float(value[index]), 6) for index in range(3)]
+    return tensor_first_vec3(value)
 
 
 def _robot_pose_yaw_deg(pose: dict[str, Any]) -> float | None:
-    if not isinstance(pose, dict):
-        return None
-    try:
-        if "theta" in pose:
-            return round(math.degrees(float(pose["theta"])), 6)
-        if "yaw_deg" in pose:
-            return round(float(pose["yaw_deg"]), 6)
-    except (TypeError, ValueError):
-        return None
-    return None
+    return robot_pose_yaw_deg(pose)
 
 
 def _optional_float(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    return optional_float(value)
 
 
 def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
@@ -2376,11 +2252,12 @@ def _horizontal_aperture_from_lens(
     height: int,
     focal_length: float,
 ) -> float:
-    if "vertical_fov_deg" in lens:
-        vertical_fov_rad = math.radians(float(lens["vertical_fov_deg"]))
-        vertical_aperture = 2.0 * focal_length * math.tan(vertical_fov_rad / 2.0)
-        return vertical_aperture * float(width) / float(height)
-    return float(lens.get("horizontal_aperture_mm", 20.955))
+    return horizontal_aperture_from_lens(
+        lens,
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
 
 
 def _bounds_from_usd_prim_path(
