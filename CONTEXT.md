@@ -66,13 +66,15 @@ A reusable package of model operating knowledge, scripts, heuristics, examples,
 and checks that attempts goals by calling available tools.
 _Avoid_: robot capability claim, MCP contract, backend primitive
 
-**Agent Validation Matrix**:
-An agent-facing verification skill that selects and optionally executes the
-relevant deterministic, product, live-agent, Agent SDK, perception, simulator,
-or hardware gates for a plan or diff. It records why gates were selected,
-skipped, run, or blocked. It is not an MCP capability, task skill, or fixed
-benchmark grid.
-_Avoid_: manual checklist, hidden evaluator, one-size-fits-all harness
+**Eval Harness**:
+The maintained agent-facing verification and evaluation facade. It selects and
+optionally executes relevant deterministic gates, product rows, eval suites,
+live-agent eval rows, perception rows, simulator rows, or hardware proof rows
+for a plan, diff, or explicit capability request. It records why rows were
+selected, skipped, run, failed, or blocked. It is not an MCP capability, task
+skill, public robot surface, or fixed benchmark grid.
+_Avoid_: Agent Validation Matrix, manual checklist, hidden evaluator,
+one-size-fits-all harness
 
 **Report Performance Artifact Contract**:
 A durable maintainer artifact contract for comparing live-agent report
