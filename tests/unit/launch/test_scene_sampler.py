@@ -178,6 +178,24 @@ def test_scene_sampler_rejects_unknown_source_aware_world_ids() -> None:
 def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
     projection = eval_projection_metadata()
 
+    _assert_scene_sampler_projection_summary(projection)
+    _assert_complete_projection_source(
+        projection["scene_sources"]["procthor-10k-val"],
+        scene_source="procthor-10k-val",
+        expected_rejected_indices={1, 4, 7},
+    )
+    _assert_complete_projection_source(
+        projection["scene_sources"]["procthor-objaverse-val"],
+        scene_source="procthor-objaverse-val",
+        expected_rejected_indices={2, 3, 6, 8, 9},
+    )
+    _assert_rejected_ithor_projection_source(projection["scene_sources"]["ithor"])
+    _assert_blocked_holodeck_projection_source(
+        projection["scene_sources"]["holodeck-objaverse-val"]
+    )
+
+
+def _assert_scene_sampler_projection_summary(projection: dict[str, object]) -> None:
     assert projection["summary"] == {
         "source_count": 4,
         "target_sample_count": 40,
@@ -192,75 +210,68 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
         "remaining_sample_count": 20,
     }
 
-    procthor = projection["scene_sources"]["procthor-10k-val"]
-    assert procthor["target_count"] == 10
-    assert procthor["ready_count"] == 10
-    assert procthor["partial_gap_count"] == 0
-    assert procthor["needed_count"] == 0
-    assert procthor["blocked_count"] == 0
-    assert procthor["rejected_count"] == 3
-    assert procthor["blocked_or_rejected_row_count"] == 3
-    assert procthor["support_status"] == "complete"
-    assert procthor["status"] == "complete"
-    assert procthor["sample_ids"] == [
-        eval_sample_id(row) for row in eval_sampler_rows() if row.scene_source == "procthor-10k-val"
+
+def _assert_complete_projection_source(
+    source_projection: dict[str, object],
+    *,
+    scene_source: str,
+    expected_rejected_indices: set[int],
+) -> None:
+    assert source_projection["target_count"] == 10
+    assert source_projection["ready_count"] == 10
+    assert source_projection["partial_gap_count"] == 0
+    assert source_projection["needed_count"] == 0
+    assert source_projection["blocked_count"] == 0
+    assert source_projection["rejected_count"] == len(expected_rejected_indices)
+    assert source_projection["blocked_or_rejected_row_count"] == len(expected_rejected_indices)
+    assert source_projection["support_status"] == "complete"
+    assert source_projection["status"] == "complete"
+    assert source_projection["sample_ids"] == [
+        eval_sample_id(row) for row in eval_sampler_rows() if row.scene_source == scene_source
     ]
     blocked_indices = {
         row["scene_index"]
-        for row in procthor["blocked_rows"]
+        for row in source_projection["blocked_rows"]
         if row["readiness_status"] == READINESS_REJECTED
     }
-    assert blocked_indices == {1, 4, 7}
-    assert any(
-        row["scene_index"] == 4 and row["blocked_reason"] == "preview_not_reviewable"
-        for row in procthor["blocked_rows"]
+    assert blocked_indices == expected_rejected_indices
+    if scene_source == "procthor-10k-val":
+        assert any(
+            row["scene_index"] == 4 and row["blocked_reason"] == "preview_not_reviewable"
+            for row in source_projection["blocked_rows"]
+        )
+
+
+def _assert_rejected_ithor_projection_source(source_projection: dict[str, object]) -> None:
+    assert source_projection["ready_count"] == 0
+    assert source_projection["partial_gap_count"] == 10
+    assert source_projection["needed_count"] == 10
+    assert source_projection["blocked_count"] == 0
+    assert source_projection["rejected_count"] == 12
+    assert source_projection["blocked_or_rejected_row_count"] == 12
+    assert source_projection["support_status"] == "rejected"
+    assert source_projection["status"] == "rejected"
+    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == set(range(1, 13))
+    assert all(
+        row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
+    )
+    assert all(
+        row["failure_class"] == "map_actionability_failure"
+        for row in source_projection["blocked_rows"]
     )
 
-    objaverse = projection["scene_sources"]["procthor-objaverse-val"]
-    assert objaverse["target_count"] == 10
-    assert objaverse["ready_count"] == 10
-    assert objaverse["partial_gap_count"] == 0
-    assert objaverse["needed_count"] == 0
-    assert objaverse["blocked_count"] == 0
-    assert objaverse["rejected_count"] == 5
-    assert objaverse["blocked_or_rejected_row_count"] == 5
-    assert objaverse["support_status"] == "complete"
-    assert objaverse["status"] == "complete"
-    assert objaverse["sample_ids"] == [
-        eval_sample_id(row)
-        for row in eval_sampler_rows()
-        if row.scene_source == "procthor-objaverse-val"
-    ]
-    assert {
-        row["scene_index"]
-        for row in objaverse["blocked_rows"]
-        if row["readiness_status"] == READINESS_REJECTED
-    } == {2, 3, 6, 8, 9}
 
-    ithor = projection["scene_sources"]["ithor"]
-    assert ithor["ready_count"] == 0
-    assert ithor["partial_gap_count"] == 10
-    assert ithor["needed_count"] == 10
-    assert ithor["blocked_count"] == 0
-    assert ithor["rejected_count"] == 12
-    assert ithor["blocked_or_rejected_row_count"] == 12
-    assert ithor["support_status"] == "rejected"
-    assert ithor["status"] == "rejected"
-    assert {row["scene_index"] for row in ithor["blocked_rows"]} == set(range(1, 13))
-    assert all(row["readiness_status"] == READINESS_REJECTED for row in ithor["blocked_rows"])
-    assert all(row["failure_class"] == "map_actionability_failure" for row in ithor["blocked_rows"])
-
-    holodeck = projection["scene_sources"]["holodeck-objaverse-val"]
-    assert holodeck["ready_count"] == 0
-    assert holodeck["partial_gap_count"] == 10
-    assert holodeck["needed_count"] == 10
-    assert holodeck["blocked_count"] == 1
-    assert holodeck["rejected_count"] == 0
-    assert holodeck["blocked_or_rejected_row_count"] == 1
-    assert holodeck["support_status"] == "blocked"
-    assert holodeck["status"] == "partial_or_blocked"
-    assert holodeck["blocked_rows"][0]["readiness_status"] == READINESS_BLOCKED
-    assert holodeck["blocked_rows"][0]["failure_class"] == "environment_blocked"
+def _assert_blocked_holodeck_projection_source(source_projection: dict[str, object]) -> None:
+    assert source_projection["ready_count"] == 0
+    assert source_projection["partial_gap_count"] == 10
+    assert source_projection["needed_count"] == 10
+    assert source_projection["blocked_count"] == 1
+    assert source_projection["rejected_count"] == 0
+    assert source_projection["blocked_or_rejected_row_count"] == 1
+    assert source_projection["support_status"] == "blocked"
+    assert source_projection["status"] == "partial_or_blocked"
+    assert source_projection["blocked_rows"][0]["readiness_status"] == READINESS_BLOCKED
+    assert source_projection["blocked_rows"][0]["failure_class"] == "environment_blocked"
 
 
 def test_scene_sampler_eval_suite_payload_matches_committed_fixture() -> None:

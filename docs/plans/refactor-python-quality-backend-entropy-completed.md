@@ -125,6 +125,12 @@ logs before choosing the next slice.
   modules unchanged at 62. Proof: focused scene-sampler/eval tests, ruff,
   format check, and ratchet.
 
+- 2026-06-16: Scene-sampler projection launch test split source-specific
+  assertions into focused helpers, removing the last scene-sampler test row
+  from the complexity list. Metric: 21 -> 20 complexity rows; oversized modules
+  unchanged at 62. Proof: focused scene-sampler/eval tests, ruff, format check,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
