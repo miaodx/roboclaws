@@ -82,6 +82,12 @@ First slice implemented on 2026-06-15.
   deterministic scanner worklist projection that records how many UI/eval
   samples each source still needs and which source-aware world ids should be
   scanned next.
+- The exporter supports `--require-selection-capacity-source <scene_source>` so
+  a future scanner gate can fail when the current candidate worklist cannot
+  cover the remaining UI/eval target. Today this intentionally fails for
+  `procthor-10k-val` because indices `0..9` only leave two blocked scan
+  candidates after the five ready and three rejected rows, while five more
+  eval-ready samples are still needed.
 
 Verification run on 2026-06-15:
 
@@ -164,6 +170,10 @@ Next Flow implementation slices:
      `--require-ui-supported-source procthor-10k-val` should pass today, while
      `--require-eval-complete-source procthor-10k-val` should fail until the
      source reaches ten eval-stress samples.
+   - Selection-capacity threshold mode is also available. For example,
+     `--require-selection-capacity-source procthor-10k-val` should fail until
+     the candidate range expands beyond `0..9` or enough new candidates are
+     admitted to cover the remaining eval-stress gap.
 
 2. **`procthor-10k-val` Stress Fill**
    - Scan additional non-contiguous `procthor-10k-val` candidates until ten

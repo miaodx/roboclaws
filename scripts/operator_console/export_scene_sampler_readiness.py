@@ -39,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         write_selection_gaps=not args.no_selection_gaps,
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
+        required_selection_capacity_sources=tuple(args.require_selection_capacity_sources),
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["status"] == "success" else 2
@@ -81,6 +82,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "May be passed multiple times."
         ),
     )
+    parser.add_argument(
+        "--require-selection-capacity-source",
+        action="append",
+        dest="require_selection_capacity_sources",
+        default=[],
+        metavar="SCENE_SOURCE",
+        help=(
+            "Fail unless SCENE_SOURCE has enough next scan candidates to cover both "
+            "current UI and eval-stress gaps. May be passed multiple times."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -95,11 +107,13 @@ def export_readiness_artifacts(
     write_selection_gaps: bool = True,
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
+    required_selection_capacity_sources: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Write deterministic sampler artifacts for review and later scanner slices."""
 
     validate_sampler_manifest()
     readiness = readiness_report()
+    selection = selection_gap_report()
     output_dir.mkdir(parents=True, exist_ok=True)
     artifacts: dict[str, str] = {}
     if write_manifest:
@@ -124,12 +138,14 @@ def export_readiness_artifacts(
         artifacts["candidate_readiness"] = str(candidate_path)
     if write_selection_gaps:
         selection_path = output_dir / "scene_sampler_selection_gaps.json"
-        _write_json(selection_path, selection_gap_report())
+        _write_json(selection_path, selection)
         artifacts["selection_gaps"] = str(selection_path)
     failures = _threshold_failures(
         readiness,
+        selection,
         required_ui_supported_sources=required_ui_supported_sources,
         required_eval_complete_sources=required_eval_complete_sources,
+        required_selection_capacity_sources=required_selection_capacity_sources,
     )
     return {
         "schema": "molmospaces_scene_sampler_readiness_export_v1",
@@ -146,9 +162,11 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _threshold_failures(
     readiness: dict[str, Any],
+    selection: dict[str, Any],
     *,
     required_ui_supported_sources: tuple[str, ...],
     required_eval_complete_sources: tuple[str, ...],
+    required_selection_capacity_sources: tuple[str, ...],
 ) -> list[dict[str, Any]]:
     sources = readiness.get("sources") if isinstance(readiness.get("sources"), dict) else {}
     failures: list[dict[str, Any]] = []
@@ -192,6 +210,36 @@ def _threshold_failures(
                     "reason": "eval_not_complete",
                     "ready_count": payload.get("eval_ready_count"),
                     "target_count": payload.get("eval_target_count"),
+                }
+            )
+    selection_sources = (
+        selection.get("sources") if isinstance(selection.get("sources"), dict) else {}
+    )
+    for source in required_selection_capacity_sources:
+        payload = selection_sources.get(source)
+        if not isinstance(payload, dict):
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "selection_capacity",
+                    "reason": "unknown_scene_source",
+                }
+            )
+            continue
+        ui_needed = int(payload.get("ui_needed_count") or 0)
+        eval_needed = int(payload.get("eval_needed_count") or 0)
+        ui_available = len(payload.get("next_ui_scan_world_ids") or [])
+        eval_available = len(payload.get("next_eval_scan_world_ids") or [])
+        if ui_available < ui_needed or eval_available < eval_needed:
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "selection_capacity",
+                    "reason": "insufficient_candidate_scan_capacity",
+                    "ui_needed_count": ui_needed,
+                    "ui_available_count": ui_available,
+                    "eval_needed_count": eval_needed,
+                    "eval_available_count": eval_available,
                 }
             )
     return failures

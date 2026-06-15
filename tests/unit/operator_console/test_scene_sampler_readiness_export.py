@@ -76,6 +76,38 @@ def test_scene_sampler_readiness_export_fails_missing_eval_completion(tmp_path) 
     ]
 
 
+def test_scene_sampler_readiness_export_fails_missing_selection_capacity(tmp_path) -> None:
+    result = export_readiness_artifacts(
+        output_dir=tmp_path,
+        required_selection_capacity_sources=("procthor-10k-val",),
+    )
+
+    assert result["status"] == "failed"
+    assert result["threshold_failures"] == [
+        {
+            "scene_source": "procthor-10k-val",
+            "threshold": "selection_capacity",
+            "reason": "insufficient_candidate_scan_capacity",
+            "ui_needed_count": 0,
+            "ui_available_count": 0,
+            "eval_needed_count": 5,
+            "eval_available_count": 2,
+        }
+    ]
+
+
+def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidates_exist(
+    tmp_path,
+) -> None:
+    result = export_readiness_artifacts(
+        output_dir=tmp_path,
+        required_selection_capacity_sources=("ithor",),
+    )
+
+    assert result["status"] == "success"
+    assert result["threshold_failures"] == []
+
+
 def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     tmp_path,
     capsys,
