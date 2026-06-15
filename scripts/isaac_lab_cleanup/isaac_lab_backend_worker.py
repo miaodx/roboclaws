@@ -18,11 +18,9 @@ from PIL import Image
 
 from roboclaws.household.backend import HELD_LOCATION_ID
 from roboclaws.household.camera_control import (
-    CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     normalize_camera_control_request,
 )
-from roboclaws.household.color_management import apply_camera_color_profile
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -214,6 +212,7 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureHooks,
     IsaacSceneCameraCaptureRequest,
     capture_isaac_lab_scene_camera_views,
+    capture_scene_camera_request_with_existing_sim,
 )
 from scripts.isaac_lab_cleanup.isaac_scene_camera_geometry import (
     apply_scene_transform_to_point,
@@ -1012,117 +1011,29 @@ def _capture_scene_camera_request_with_existing_sim(
     np: Any,
     scene_bounds: dict[str, Any],
 ) -> dict[str, Any]:
-    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
-    resolution = camera_request["render_resolution"]
-    width = int(resolution["width"])
-    height = int(resolution["height"])
-    lighting_diagnostics = _ensure_capture_lighting(
-        stage_utils,
-        profile=camera_request.get("lighting_profile"),
-    )
-    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
-    color_profile = camera_request.get("color_profile") or {}
-    focal_length = float(lens.get("focal_length_mm", 24.0))
-    horizontal_aperture = _horizontal_aperture_from_lens(
-        lens,
+    return capture_scene_camera_request_with_existing_sim(
+        camera_request=camera_request,
+        output_dir=output_dir,
         width=width,
         height=height,
-        focal_length=focal_length,
-    )
-    sim_utils.create_prim("/World/RoboclawsSceneRequestCameraRig", "Xform")
-    camera = camera_type(
-        cfg=camera_cfg_type(
-            prim_path="/World/RoboclawsSceneRequestCameraRig/Camera",
-            update_period=0.0,
-            height=height,
-            width=width,
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=focal_length,
-                focus_distance=4.0,
-                horizontal_aperture=horizontal_aperture,
-            ),
-        )
-    )
-    sim.reset()
-    native_render_diagnostics = _isaac_native_render_diagnostics(
+        sim=sim,
+        sim_utils=sim_utils,
+        stage_utils=stage_utils,
+        camera_type=camera_type,
+        camera_cfg_type=camera_cfg_type,
+        torch=torch,
+        np=np,
+        scene_bounds=scene_bounds,
+        normalize_camera_control_request=normalize_camera_control_request,
+        ensure_capture_lighting=_ensure_capture_lighting,
+        horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+        isaac_native_render_diagnostics=_isaac_native_render_diagnostics,
+        camera_render_product_paths=_camera_render_product_paths,
+        isaac_scene_camera_view_spec=_isaac_scene_camera_view_spec,
+        rgb_tensor_to_uint8=_rgb_tensor_to_uint8,
+        image_has_variance=_image_has_variance,
         renderer_mode=REAL_SMOKE_RENDERER_MODE,
-        capture_method="isaac_lab_camera_rgb_scene_probe",
-        view_kind="scene_camera_request",
-        render_resolution={"width": width, "height": height},
-        camera_prim_paths=["/World/RoboclawsSceneRequestCameraRig/Camera"],
-        render_product_paths=_camera_render_product_paths(camera),
-        isaac_lab_isp_active=False,
     )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    saved: dict[str, str] = {}
-    shapes: dict[str, list[int]] = {}
-    color_diagnostics: dict[str, dict[str, Any]] = {}
-    views: list[dict[str, Any]] = []
-    total_render_steps = 0
-    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
-        spec = _isaac_scene_camera_view_spec(
-            raw_spec,
-            index=index,
-            stage_utils=stage_utils,
-        )
-        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
-        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
-        camera.set_world_poses_from_view(position, target)
-        rgb_image = None
-        for _ in range(24):
-            sim.step()
-            total_render_steps += 1
-            camera.update(dt=sim.get_physics_dt())
-            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                break
-        if rgb_image is None:
-            raise RuntimeError(
-                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
-            )
-        if not _image_has_variance(rgb_image, np=np):
-            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
-        rgb_image, color_diagnostic = apply_camera_color_profile(
-            rgb_image,
-            np=np,
-            profile=color_profile,
-            backend="isaaclab-prepared-usd",
-            view_id=str(spec["view_id"]),
-        )
-        output_path = output_dir / f"{spec['view_id']}.png"
-        Image.fromarray(rgb_image, mode="RGB").save(output_path)
-        saved[str(spec["view_id"])] = str(output_path)
-        shapes[str(spec["view_id"])] = list(rgb_image.shape)
-        color_diagnostics[str(spec["view_id"])] = color_diagnostic
-        views.append(
-            {
-                **spec,
-                "image_path": str(output_path),
-                "shape": list(rgb_image.shape),
-            }
-        )
-    return {
-        "schema": "isaac_scene_camera_views_v1",
-        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
-        "camera_request_schema": camera_request.get("schema"),
-        "calibration_status": camera_request.get("calibration_status"),
-        "lighting_profile": camera_request.get("lighting_profile") or {},
-        "color_profile": color_profile,
-        "color_management": color_diagnostics,
-        "lighting_diagnostics": lighting_diagnostics,
-        "native_render_diagnostics": native_render_diagnostics,
-        "lens": camera_request.get("lens") or {},
-        "derived_lens": {
-            "focal_length_mm": focal_length,
-            "horizontal_aperture_mm": horizontal_aperture,
-        },
-        "render_steps": total_render_steps,
-        "scene_bounds": scene_bounds,
-        "views": views,
-        "images": saved,
-        "shapes": shapes,
-    }
 
 
 def capture_scene_camera_views(
