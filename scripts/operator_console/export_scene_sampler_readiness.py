@@ -55,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
         required_selection_capacity_sources=tuple(args.require_selection_capacity_sources),
+        required_scanner_ready_sources=tuple(args.require_scanner_ready_sources),
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["status"] == "success" else 2
@@ -135,6 +136,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "current UI and eval-stress gaps. May be passed multiple times."
         ),
     )
+    parser.add_argument(
+        "--require-scanner-ready-source",
+        action="append",
+        dest="require_scanner_ready_sources",
+        default=[],
+        metavar="SCENE_SOURCE",
+        help=(
+            "Fail unless SCENE_SOURCE has at least one candidate ready for preview plus "
+            "map-build product smoke. May be passed multiple times."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -155,6 +167,7 @@ def export_readiness_artifacts(
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
     required_selection_capacity_sources: tuple[str, ...] = (),
+    required_scanner_ready_sources: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Write deterministic sampler artifacts for review and later scanner slices."""
 
@@ -207,12 +220,12 @@ def export_readiness_artifacts(
             scanner_admission_report(candidate_indices=candidate_indices),
         )
         artifacts["scanner_admission"] = str(scanner_admission_path)
+    scanner_execution: dict[str, Any] | None = None
+    if write_scanner_execution_plan or required_scanner_ready_sources:
+        scanner_execution = scanner_execution_plan(candidate_indices=candidate_indices)
     if write_scanner_execution_plan:
         scanner_execution_path = output_dir / "scene_sampler_scanner_execution_plan.json"
-        _write_json(
-            scanner_execution_path,
-            scanner_execution_plan(candidate_indices=candidate_indices),
-        )
+        _write_json(scanner_execution_path, scanner_execution or {})
         artifacts["scanner_execution_plan"] = str(scanner_execution_path)
     if write_generated_eval:
         generated_eval_dir = output_dir / "generated_eval"
@@ -235,6 +248,8 @@ def export_readiness_artifacts(
         required_ui_supported_sources=required_ui_supported_sources,
         required_eval_complete_sources=required_eval_complete_sources,
         required_selection_capacity_sources=required_selection_capacity_sources,
+        required_scanner_ready_sources=required_scanner_ready_sources,
+        scanner_execution=scanner_execution,
     )
     return {
         "schema": "molmospaces_scene_sampler_readiness_export_v1",
@@ -290,6 +305,8 @@ def _threshold_failures(
     required_ui_supported_sources: tuple[str, ...],
     required_eval_complete_sources: tuple[str, ...],
     required_selection_capacity_sources: tuple[str, ...],
+    required_scanner_ready_sources: tuple[str, ...],
+    scanner_execution: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     sources = readiness.get("sources") if isinstance(readiness.get("sources"), dict) else {}
     failures: list[dict[str, Any]] = []
@@ -363,6 +380,36 @@ def _threshold_failures(
                     "ui_available_count": ui_available,
                     "eval_needed_count": eval_needed,
                     "eval_available_count": eval_available,
+                }
+            )
+    scanner_sources = (
+        scanner_execution.get("sources")
+        if isinstance(scanner_execution, dict)
+        and isinstance(scanner_execution.get("sources"), dict)
+        else {}
+    )
+    for source in required_scanner_ready_sources:
+        payload = scanner_sources.get(source)
+        if not isinstance(payload, dict):
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "scanner_ready",
+                    "reason": "unknown_scene_source",
+                }
+            )
+            continue
+        ready_count = int(payload.get("ready_for_product_smoke_count") or 0)
+        if ready_count < 1:
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "scanner_ready",
+                    "reason": "no_ready_product_smoke_candidates",
+                    "ready_for_product_smoke_count": ready_count,
+                    "candidate_count": int(payload.get("candidate_count") or 0),
+                    "blocked_count": int(payload.get("blocked_count") or 0),
+                    "prep_status": payload.get("prep_status", ""),
                 }
             )
     return failures

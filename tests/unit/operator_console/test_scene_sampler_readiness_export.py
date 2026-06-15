@@ -262,6 +262,29 @@ def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidate
     assert "for role in ('base', 'physics', 'ceiling')" in install_command
 
 
+def test_scene_sampler_readiness_export_fails_when_scanner_source_has_no_ready_candidate(
+    tmp_path,
+) -> None:
+    result = export_readiness_artifacts(
+        output_dir=tmp_path,
+        candidate_indices=tuple(range(20)),
+        required_scanner_ready_sources=("ithor",),
+    )
+
+    assert result["status"] == "failed"
+    assert result["threshold_failures"] == [
+        {
+            "scene_source": "ithor",
+            "threshold": "scanner_ready",
+            "reason": "no_ready_product_smoke_candidates",
+            "ready_for_product_smoke_count": 0,
+            "candidate_count": 10,
+            "blocked_count": 10,
+            "prep_status": "blocked_missing_resources",
+        }
+    ]
+
+
 def test_scene_sampler_readiness_export_candidate_index_options_are_sorted_unique() -> None:
     assert _candidate_indices(candidate_indexes=(4, 1), candidate_ranges=("2:3", "3:5")) == (
         1,
@@ -289,3 +312,25 @@ def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
     assert payload["threshold_failures"][0]["ready_count"] == 5
+
+
+def test_scene_sampler_readiness_export_cli_accepts_scanner_ready_threshold(
+    tmp_path,
+    capsys,
+) -> None:
+    code = main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--candidate-range",
+            "0:19",
+            "--require-scanner-ready-source",
+            "ithor",
+        ]
+    )
+
+    assert code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "failed"
+    assert payload["threshold_failures"][0]["threshold"] == "scanner_ready"
+    assert payload["threshold_failures"][0]["blocked_count"] == 10

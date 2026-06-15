@@ -185,6 +185,10 @@ First slice implemented on 2026-06-15.
   `ithor`, `procthor-objaverse-val`, and `holodeck-objaverse-val` work explicit:
   expand the candidate range when capacity is insufficient, otherwise run
   source prep before scanner admission when assets are still blocked.
+- Readiness export now supports `--require-scanner-ready-source <scene_source>`.
+  This gate fails until a source has at least one scanner candidate marked
+  `ready_for_product_smoke`, so source-prep work can prove when preview plus
+  map-build product-smoke execution is actually allowed.
 
 Verification run on 2026-06-15:
 
@@ -230,6 +234,9 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_sce
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
 ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-next-flow-worklist --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
+ruff check scripts/operator_console/export_scene_sampler_readiness.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-scanner-ready-gate --candidate-range 0:19 --require-scanner-ready-source ithor --no-generated-eval
 ```
 
 Current limits feeding the next Flow:
@@ -331,6 +338,10 @@ Next Flow implementation slices:
      `--require-ui-supported-source procthor-10k-val` should pass today, while
      `--require-eval-complete-source procthor-10k-val` should fail until the
      source reaches ten eval-stress samples.
+   - Scanner-ready threshold mode is available for source-prep proof. For
+     example, `--require-scanner-ready-source ithor` should fail until at least
+     one `ithor` candidate has local source assets and can run preview plus
+     map-build product smoke.
    - Selection-capacity threshold mode is also available. For example,
      `--require-selection-capacity-source procthor-10k-val` should fail until
      the candidate range expands beyond `0..9` or enough new candidates are
