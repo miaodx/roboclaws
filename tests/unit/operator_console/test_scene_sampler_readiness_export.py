@@ -90,6 +90,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert source_prep["probe_mode"] == "no_download_no_vlm"
     assert source_prep["download_policy"] == "manual_operator_only"
     assert "missing_resource_summary" in source_prep["summary"]
+    assert "prep_status_counts" in source_prep["summary"]
+    assert "worklist" in source_prep["summary"]
     assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
         'get_scenes("ithor", "train")'
     )

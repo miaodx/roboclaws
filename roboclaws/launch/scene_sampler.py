@@ -841,6 +841,8 @@ def source_prep_report(
                     if isinstance(resource, dict)
                 ]
             ),
+            "prep_status_counts": _source_prep_status_counts(sources),
+            "worklist": _source_prep_worklist(sources),
         },
         "sources": sources,
     }
@@ -1544,6 +1546,50 @@ def _resource_reason_counts(resources: list[dict[str, Any]]) -> dict[str, dict[s
         "by_resource_type": dict(sorted(by_type.items())),
         "by_reason": dict(sorted(by_reason.items())),
     }
+
+
+def _source_prep_status_counts(sources: dict[str, dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for source in sources.values():
+        status = str(source.get("prep_status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _source_prep_worklist(sources: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "scene_source": source.get("scene_source", ""),
+            "prep_status": source.get("prep_status", ""),
+            "next_action": _source_prep_next_action(str(source.get("prep_status") or "")),
+            "missing_resource_count": int(source.get("missing_resource_count") or 0),
+            "missing_resource_summary": source.get("missing_resource_summary") or {},
+            "next_scan_world_ids": source.get("next_scan_world_ids") or [],
+            "install_candidate_count": len(source.get("install_candidates") or []),
+            "recommended_candidate_range": source.get("recommended_candidate_range", ""),
+            "operator_command_names": [
+                command.get("name")
+                for command in source.get("operator_commands") or []
+                if isinstance(command, dict) and command.get("name")
+            ],
+        }
+        for source in sources.values()
+        if source.get("prep_status") != "complete"
+    ]
+
+
+def _source_prep_next_action(prep_status: str) -> str:
+    if prep_status == "complete":
+        return "none"
+    if prep_status == "ready_for_scanner":
+        return "run_scanner_admission"
+    if prep_status == "blocked_molmospaces_module":
+        return "install_repo_dev_runtime"
+    if prep_status == "blocked_scene_root":
+        return "configure_or_install_molmospaces_scene_root"
+    if prep_status == "blocked_missing_resources":
+        return "run_manual_source_prep"
+    return "inspect_source_prep"
 
 
 def _source_prep_operator_commands(

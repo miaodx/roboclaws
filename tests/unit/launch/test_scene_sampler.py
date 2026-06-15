@@ -484,6 +484,12 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
         "candidate_xml_missing": 40,
         "source_dir_missing": 4,
     }
+    assert report["summary"]["prep_status_counts"] == {
+        "blocked_molmospaces_module": 4,
+    }
+    assert report["summary"]["worklist"][0]["scene_source"] == "procthor-10k-val"
+    assert report["summary"]["worklist"][0]["next_action"] == "install_repo_dev_runtime"
+    assert report["summary"]["worklist"][0]["install_candidate_count"] == 2
 
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["prep_status"] == "blocked_molmospaces_module"
