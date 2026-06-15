@@ -161,6 +161,12 @@ logs before choosing the next slice.
   new `52>50` helper row. Proof: focused report test, ruff, format check, and
   ratchet.
 
+- 2026-06-16: Real Isaac worker semantic-pose recapture test split runtime
+  setup, capture hooks, worker commands, result assertions, and persisted-state
+  assertions into focused helpers. Metric: dirty worktree ratchet 17 -> 15
+  complexity rows; oversized modules unchanged at 62. Proof: focused Isaac
+  backend test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

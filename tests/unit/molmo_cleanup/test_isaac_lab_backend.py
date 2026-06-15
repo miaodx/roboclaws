@@ -3669,6 +3669,21 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    context = _setup_semantic_pose_recapture_runtime(monkeypatch, tmp_path)
+    _patch_semantic_pose_recapture_captures(monkeypatch, context)
+    _init_real_worker_with_scene_usd(context)
+    _navigate_real_worker_to_receptacle(context)
+    result = _write_semantic_pose_robot_views(context)
+
+    _assert_semantic_pose_recapture_result(result)
+    state = isaac_lab_backend_worker.read_state(context.state_path)
+    _assert_semantic_pose_recapture_state(state)
+
+
+def _setup_semantic_pose_recapture_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> SimpleNamespace:
     run_dir = tmp_path / "run"
     state_path = tmp_path / "state.json"
     image_path = run_dir / "isaac_runtime_smoke.png"
@@ -3686,6 +3701,13 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         isaac_lab_backend_worker,
         "ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH",
         tmp_path / "missing_rby1m_holobase_isaac.import_summary.json",
+    )
+    context = SimpleNamespace(
+        run_dir=run_dir,
+        state_path=state_path,
+        image_path=image_path,
+        robot_view_images=robot_view_images,
+        scene_usd=scene_usd,
     )
 
     def fake_real_runtime_smoke(
@@ -3722,6 +3744,18 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             "receptacle_index": _unit_isaac_receptacle_index(),
         }
 
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "real_runtime_smoke",
+        fake_real_runtime_smoke,
+    )
+    return context
+
+
+def _patch_semantic_pose_recapture_captures(
+    monkeypatch: pytest.MonkeyPatch,
+    context: SimpleNamespace,
+) -> None:
     def fake_capture_semantic_pose_robot_views(
         *,
         state: dict[str, object],
@@ -3734,7 +3768,7 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         focus_receptacle_id: str | None = None,
     ) -> dict[str, object]:
         del focus_object_id, focus_receptacle_id
-        assert scene_usd == run_dir / "scene.usda"
+        assert scene_usd == context.scene_usd
         assert width == 64
         assert height == 48
         assert render_settle_frames == 16
@@ -3783,7 +3817,7 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         simulation_app: object,
         semantic_pose_state: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        assert scene_usd == run_dir / "scene.usda"
+        assert scene_usd == context.scene_usd
         assert simulation_app == "unit-simulation-app"
         assert semantic_pose_state is not None
         assert camera_request["api_name"] == "roboclaws.camera_control.render_views"
@@ -3812,11 +3846,6 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
 
     monkeypatch.setattr(
         isaac_lab_backend_worker,
-        "real_runtime_smoke",
-        fake_real_runtime_smoke,
-    )
-    monkeypatch.setattr(
-        isaac_lab_backend_worker,
         "capture_semantic_pose_robot_views",
         fake_capture_semantic_pose_robot_views,
     )
@@ -3825,25 +3854,31 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         "_capture_isaac_lab_scene_camera_views",
         fake_capture_scene_camera_views,
     )
+
+
+def _init_real_worker_with_scene_usd(context: SimpleNamespace) -> None:
     init_args = isaac_lab_backend_worker.parse_args(
         [
             "--state-path",
-            str(state_path),
+            str(context.state_path),
             "init",
             "--run-dir",
-            str(run_dir),
+            str(context.run_dir),
             "--runtime-mode",
             "real",
             "--include-robot",
             "--scene-usd-path",
-            str(scene_usd),
+            str(context.scene_usd),
         ]
     )
     isaac_lab_backend_worker.init_state(init_args)
+
+
+def _navigate_real_worker_to_receptacle(context: SimpleNamespace) -> None:
     nav_args = isaac_lab_backend_worker.parse_args(
         [
             "--state-path",
-            str(state_path),
+            str(context.state_path),
             "navigate_to_receptacle",
             "--receptacle-id",
             "sink_01",
@@ -3851,18 +3886,21 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     )
     nav_result = isaac_lab_backend_worker.navigate_to_receptacle(
         nav_args,
-        isaac_lab_backend_worker.read_state(state_path),
+        isaac_lab_backend_worker.read_state(context.state_path),
     )
     assert nav_result["ok"] is True
     assert nav_result["robot_pose"]["pose_source"] == "roboclaws_shared_scene_frame_support_pose"
+
+
+def _write_semantic_pose_robot_views(context: SimpleNamespace) -> dict[str, object]:
     result = isaac_lab_backend_worker.write_robot_views(
         isaac_lab_backend_worker.parse_args(
             [
                 "--state-path",
-                str(state_path),
+                str(context.state_path),
                 "robot_views",
                 "--output-dir",
-                str(run_dir / "robot_views"),
+                str(context.run_dir / "robot_views"),
                 "--label",
                 "0001_semantic_pose",
                 "--render-width",
@@ -3873,9 +3911,13 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
                 "16",
             ]
         ),
-        isaac_lab_backend_worker.read_state(state_path),
+        isaac_lab_backend_worker.read_state(context.state_path),
     )
+    assert isinstance(result, dict)
+    return result
 
+
+def _assert_semantic_pose_recapture_result(result: dict[str, object]) -> None:
     assert result["ok"] is True
     assert result["view_provenance"]["semantic_pose_state_refreshed"] is True
     assert result["view_provenance"]["canonical_camera_control"] is False
@@ -3897,7 +3939,9 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         "eye_target_scene_camera"
     )
     assert "isaac_lab_camera_rgb_head_camera_equivalent" in json.dumps(result["view_provenance"])
-    state = isaac_lab_backend_worker.read_state(state_path)
+
+
+def _assert_semantic_pose_recapture_state(state: dict[str, object]) -> None:
     assert state["semantic_pose_state"]["rendered_to_usd"] is True
     assert state["robot_view_provenance"]["semantic_pose_state_refreshed"] is True
     assert state["robot_view_provenance"]["canonical_camera_control"] is False
