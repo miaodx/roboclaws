@@ -219,6 +219,12 @@ logs before choosing the next slice.
   focused helpers. Metric: 6 -> 5 complexity rows; oversized modules unchanged
   at 62. Proof: focused Isaac backend test, ruff, format check, and ratchet.
 
+- 2026-06-16: Planner manipulation checker report fixture builder became
+  table-driven, with policy-exception and task-sampler diagnostics fragments in
+  focused helpers. Metric: 5 -> 3 complexity rows; oversized modules unchanged
+  at 62. Proof: planner manipulation checker contract file, ruff, format check,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
