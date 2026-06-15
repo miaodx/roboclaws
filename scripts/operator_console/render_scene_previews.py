@@ -27,6 +27,7 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
     RealWorldCleanupContract,
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
+from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
 from scripts.operator_console.semantic_map_preview import (  # noqa: E402
     render_semantic_map_preview as _render_semantic_map_preview,
@@ -126,7 +127,8 @@ def render_molmospaces_preview(
     height: int,
     skip_existing: bool = False,
 ) -> dict[str, Any]:
-    scene_index = _molmospaces_scene_index(world_id)
+    scene_ref = _molmospaces_scene_ref(world_id)
+    scene_index = scene_ref.scene_index
     slug = _world_slug(world_id)
     fpv_path = output_dir / f"{slug}-fpv.png"
     map_path = output_dir / f"{slug}-map.png"
@@ -142,6 +144,7 @@ def render_molmospaces_preview(
     ):
         return {
             "world_id": world_id,
+            "scene_source": scene_ref.scene_source,
             "scene_index": scene_index,
             "status": "skipped",
             "fpv": str(fpv_path),
@@ -155,7 +158,7 @@ def render_molmospaces_preview(
     backend = MolmoSpacesSubprocessBackend(
         run_dir=run_dir / "backend",
         seed=seed,
-        scene_source="procthor-10k-val",
+        scene_source=scene_ref.scene_source,
         scene_index=scene_index,
         include_robot=True,
         robot_name="rby1m",
@@ -173,6 +176,7 @@ def render_molmospaces_preview(
         if not navigation.get("ok"):
             return {
                 "world_id": world_id,
+                "scene_source": scene_ref.scene_source,
                 "scene_index": scene_index,
                 "status": "navigate_failed",
                 "waypoint_id": waypoint.get("waypoint_id"),
@@ -190,6 +194,7 @@ def render_molmospaces_preview(
         if not raw_fpv.is_file():
             return {
                 "world_id": world_id,
+                "scene_source": scene_ref.scene_source,
                 "scene_index": scene_index,
                 "status": "fpv_missing",
                 "waypoint_id": waypoint.get("waypoint_id"),
@@ -198,6 +203,7 @@ def render_molmospaces_preview(
         if not raw_chase.is_file():
             return {
                 "world_id": world_id,
+                "scene_source": scene_ref.scene_source,
                 "scene_index": scene_index,
                 "status": "chase_missing",
                 "waypoint_id": waypoint.get("waypoint_id"),
@@ -241,6 +247,7 @@ def render_molmospaces_preview(
         if not raw_topdown.is_file():
             return {
                 "world_id": world_id,
+                "scene_source": scene_ref.scene_source,
                 "scene_index": scene_index,
                 "status": "topdown_missing",
                 "waypoint_id": waypoint.get("waypoint_id"),
@@ -266,6 +273,7 @@ def render_molmospaces_preview(
         shutil.copyfile(raw_topdown, topdown_path)
         metadata = _preview_metadata(
             world_id=world_id,
+            scene_source=scene_ref.scene_source,
             scene_index=scene_index,
             seed=seed,
             width=width,
@@ -292,6 +300,7 @@ def render_molmospaces_preview(
         )
         return {
             "world_id": world_id,
+            "scene_source": scene_ref.scene_source,
             "scene_index": scene_index,
             "status": "rendered",
             "waypoint_id": waypoint.get("waypoint_id"),
@@ -308,6 +317,7 @@ def render_molmospaces_preview(
 def _preview_metadata(
     *,
     world_id: str,
+    scene_source: str,
     scene_index: int,
     seed: int,
     width: int,
@@ -342,7 +352,7 @@ def _preview_metadata(
         "world_id": world_id,
         "backend": "mujoco",
         "renderer": "molmospaces_subprocess_mujoco",
-        "scene_source": "procthor-10k-val",
+        "scene_source": scene_source,
         "scene_index": scene_index,
         "seed": seed,
         "render_resolution": {"width": width, "height": height},
@@ -619,10 +629,11 @@ def _selected_world_ids(raw_world_ids: list[str]) -> tuple[str, ...]:
 
 
 def _molmospaces_scene_index(world_id: str) -> int:
-    prefix = "molmospaces/val_"
-    if not world_id.startswith(prefix):
-        raise ValueError(f"unsupported preview world: {world_id}")
-    return int(world_id.removeprefix(prefix))
+    return _molmospaces_scene_ref(world_id).scene_index
+
+
+def _molmospaces_scene_ref(world_id: str):
+    return parse_molmospaces_world_id(world_id)
 
 
 def _world_slug(world_id: str) -> str:

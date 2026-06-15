@@ -5,9 +5,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from roboclaws.launch.scene_sampler import MolmoSpacesSceneRef
 from scripts.operator_console.render_scene_previews import (
     PREVIEW_METADATA_SCHEMA,
     _first_public_waypoint,
+    _molmospaces_scene_ref,
     _preview_metadata,
     _render_semantic_map_preview,
     _scene_alignment,
@@ -66,6 +68,7 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
 
     metadata = _preview_metadata(
         world_id="molmospaces/val_9",
+        scene_source="procthor-10k-val",
         scene_index=9,
         seed=7,
         width=900,
@@ -126,6 +129,7 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
     )
 
     assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
+    assert metadata["scene_source"] == "procthor-10k-val"
     assert metadata["views"]["fpv"]["view"] == "raw_fpv"
     assert metadata["views"]["fpv"]["provenance"] == (
         "mujoco_robot_head_camera_first_public_waypoint"
@@ -150,6 +154,32 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
     assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
     assert metadata["views"]["topdown"]["path"].endswith("-topdown.png")
     assert metadata["views"]["topdown"]["image_diagnostics"]["visual_status"] == "low_detail"
+
+
+def test_molmospaces_preview_scene_ref_preserves_legacy_alias_source() -> None:
+    assert _molmospaces_scene_ref("molmospaces/val_9") == MolmoSpacesSceneRef(
+        scene_source="procthor-10k-val",
+        scene_index=9,
+    )
+
+
+def test_molmospaces_preview_scene_ref_accepts_source_aware_world_id() -> None:
+    assert _molmospaces_scene_ref("molmospaces/ithor/3") == MolmoSpacesSceneRef(
+        scene_source="ithor",
+        scene_index=3,
+    )
+    assert _molmospaces_scene_ref("molmospaces/procthor-objaverse-val/12") == (
+        MolmoSpacesSceneRef(scene_source="procthor-objaverse-val", scene_index=12)
+    )
+
+
+def test_molmospaces_preview_scene_ref_rejects_unknown_source_or_index() -> None:
+    with pytest.raises(ValueError, match="unsupported MolmoSpaces scene_source"):
+        _molmospaces_scene_ref("molmospaces/unknown-source/1")
+    with pytest.raises(ValueError, match="unsupported MolmoSpaces scene index"):
+        _molmospaces_scene_ref("molmospaces/ithor/not-an-index")
+    with pytest.raises(ValueError, match="negative MolmoSpaces scene index"):
+        _molmospaces_scene_ref("molmospaces/ithor/-1")
 
 
 def test_preview_helpers_use_first_public_waypoint_and_scene_bounds() -> None:

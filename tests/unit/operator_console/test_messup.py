@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from roboclaws.operator_console.messup import preview_messup_from_inventory
+from roboclaws.operator_console.messup import _molmospaces_scene_ref, preview_messup_from_inventory
 
 
 def test_messup_preview_reports_ready_when_requested_targets_are_available() -> None:
@@ -58,3 +58,7 @@ def test_messup_preview_explains_partial_scene_without_blocking_baseline() -> No
     )
     assert remote_rule["object_count"] == 1
     assert remote_rule["target_receptacle_count"] == 0
+
+
+def test_messup_preview_scene_ref_accepts_source_aware_world_id() -> None:
+    assert _molmospaces_scene_ref("molmospaces/ithor/3") == ("ithor", 3)

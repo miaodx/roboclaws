@@ -60,6 +60,14 @@ First slice implemented on 2026-06-15.
   sampler and writes the canonical manifest, eval projection, and per-source
   readiness report without downloading assets or calling live VLMs. It also
   supports explicit UI/eval threshold checks for source-specific gates.
+- Source-aware MolmoSpaces world-id parsing is now canonical in
+  `roboclaws/launch/scene_sampler.py`. Legacy `molmospaces/val_N` ids parse as
+  `procthor-10k-val` aliases, while new ids such as
+  `molmospaces/ithor/3` and `molmospaces/holodeck-objaverse-val/12` preserve
+  their explicit `scene_source`.
+- Operator-console preview rendering and mess-up preview inventory loading now
+  use the canonical parser, so future non-`procthor-10k-val` rows will not
+  silently render or inspect the wrong scene source.
 
 Verification run on 2026-06-15:
 
@@ -71,6 +79,8 @@ just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/robocla
 just agent::eval suite=map_build_consumer budget=focused output_dir=/tmp/roboclaws-map-build-consumer-eval
 just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused output_dir=/tmp/roboclaws-scene-sampler-harness
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline output_dir=/tmp/roboclaws-scene-sampler-product
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
+ruff check roboclaws/launch/scene_sampler.py roboclaws/operator_console/messup.py scripts/operator_console/render_scene_previews.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_messup.py
 ```
 
 Known partial scope:
@@ -159,6 +169,10 @@ Next Flow implementation slices:
    - Use explicit source-aware ids for newly visible non-`procthor-10k-val`
      worlds, such as `molmospaces/ithor/<index>` or
      `molmospaces/procthor-objaverse-val/<index>`.
+   - Initial parser support is implemented in `parse_molmospaces_world_id()`
+     and is already consumed by preview rendering and mess-up preview inventory
+     loading. The remaining work is to feed scanner-admitted rows into
+     `WORLD_SPECS` and the default console scene rail.
    - Ensure default operator-console worlds are only UI-admitted rows; hidden
      aliases or blocked rows must not appear in the default scene rail.
 

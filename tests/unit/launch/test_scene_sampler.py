@@ -10,10 +10,12 @@ from roboclaws.launch.scene_sampler import (
     READINESS_BLOCKED,
     READINESS_REJECTED,
     UI_LANE,
+    MolmoSpacesSceneRef,
     eval_projection_metadata,
     eval_sample_id,
     eval_sampler_rows,
     legacy_molmospaces_world_ids,
+    parse_molmospaces_world_id,
     readiness_report,
     sampler_manifest,
     sampler_rows,
@@ -78,6 +80,29 @@ def test_legacy_molmospaces_alias_worlds_remain_launchable() -> None:
 
         assert plan.world == world_id
         assert "scene_source=procthor-10k-val" in plan.overrides
+
+
+def test_scene_sampler_parses_legacy_and_source_aware_world_ids() -> None:
+    assert parse_molmospaces_world_id("molmospaces/val_9") == MolmoSpacesSceneRef(
+        scene_source="procthor-10k-val",
+        scene_index=9,
+    )
+    assert parse_molmospaces_world_id("molmospaces/ithor/3") == MolmoSpacesSceneRef(
+        scene_source="ithor",
+        scene_index=3,
+    )
+    assert parse_molmospaces_world_id("molmospaces/holodeck-objaverse-val/12") == (
+        MolmoSpacesSceneRef(scene_source="holodeck-objaverse-val", scene_index=12)
+    )
+
+
+def test_scene_sampler_rejects_unknown_source_aware_world_ids() -> None:
+    with pytest.raises(ValueError, match="unsupported MolmoSpaces scene_source"):
+        parse_molmospaces_world_id("molmospaces/unknown-source/1")
+    with pytest.raises(ValueError, match="unsupported MolmoSpaces scene index"):
+        parse_molmospaces_world_id("molmospaces/ithor/not-an-index")
+    with pytest.raises(ValueError, match="negative MolmoSpaces scene index"):
+        parse_molmospaces_world_id("molmospaces/ithor/-1")
 
 
 def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:

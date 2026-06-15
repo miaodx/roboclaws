@@ -11,6 +11,7 @@ from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
     RELOCATION_SETUP_OPTIONS,
 )
+from roboclaws.launch.scene_sampler import parse_molmospaces_world_id
 from roboclaws.launch.worlds import WORLD_SPECS
 
 MESSUP_PREVIEW_SCHEMA = "operator_console_messup_preview_v1"
@@ -194,11 +195,15 @@ def _load_molmospaces_inventory(world_id: str) -> tuple[list[dict[str, Any]], li
 
 
 def _molmospaces_scene_ref(world_id: str) -> tuple[str, int]:
-    spec = WORLD_SPECS[world_id]
-    overrides = _override_map(spec.default_overrides)
-    scene_source = overrides.get("scene_source") or spec.scene_source or "procthor-10k-val"
-    raw_index = overrides.get("scene_index") or world_id.rsplit("_", 1)[-1]
-    return scene_source, int(raw_index)
+    spec = WORLD_SPECS.get(world_id)
+    if spec is not None:
+        overrides = _override_map(spec.default_overrides)
+        scene_source = overrides.get("scene_source") or spec.scene_source or "procthor-10k-val"
+        raw_index = overrides.get("scene_index")
+        if raw_index is not None:
+            return scene_source, int(raw_index)
+    scene_ref = parse_molmospaces_world_id(world_id)
+    return scene_ref.scene_source, scene_ref.scene_index
 
 
 def _rule_diagnostics(

@@ -38,6 +38,14 @@ _LABEL_MANIFEST_PATH = Path(__file__).resolve().parents[2] / "data" / "molmospac
 
 
 @dataclass(frozen=True)
+class MolmoSpacesSceneRef:
+    """A parsed MolmoSpaces world id with explicit source identity."""
+
+    scene_source: str
+    scene_index: int
+
+
+@dataclass(frozen=True)
 class SceneSamplerRow:
     """One source-qualified scene sampler candidate or blocked source row."""
 
@@ -169,6 +177,37 @@ def legacy_molmospaces_world_ids() -> tuple[str, ...]:
     """Return all current source-opaque aliases kept launchable for migration."""
 
     return tuple(f"molmospaces/val_{index}" for index in _CURRENT_ALIAS_INDICES)
+
+
+def parse_molmospaces_world_id(world_id: str) -> MolmoSpacesSceneRef:
+    """Parse legacy and source-aware MolmoSpaces world ids.
+
+    Legacy ids such as ``molmospaces/val_9`` are preserved as
+    ``procthor-10k-val`` aliases. New source-aware ids use
+    ``molmospaces/<scene_source>/<index>``.
+    """
+
+    legacy_prefix = "molmospaces/val_"
+    if world_id.startswith(legacy_prefix):
+        return MolmoSpacesSceneRef(
+            scene_source="procthor-10k-val",
+            scene_index=_parse_scene_index(
+                world_id.removeprefix(legacy_prefix),
+                world_id=world_id,
+            ),
+        )
+
+    parts = world_id.split("/")
+    if len(parts) == 3 and parts[0] == "molmospaces":
+        scene_source = parts[1]
+        if scene_source not in SUPPORTED_SCENE_SOURCES:
+            raise ValueError(f"unsupported MolmoSpaces scene_source {scene_source!r}: {world_id}")
+        return MolmoSpacesSceneRef(
+            scene_source=scene_source,
+            scene_index=_parse_scene_index(parts[2], world_id=world_id),
+        )
+
+    raise ValueError(f"unsupported MolmoSpaces world id: {world_id}")
 
 
 def ui_molmospaces_world_ids() -> tuple[str, ...]:
@@ -509,6 +548,16 @@ def _family_split(scene_source: str) -> tuple[str, str]:
         if scene_source.endswith(split):
             return scene_source[: -len(split)], split.removeprefix("-")
     return scene_source, "not_applicable"
+
+
+def _parse_scene_index(raw_value: str, *, world_id: str) -> int:
+    try:
+        scene_index = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"unsupported MolmoSpaces scene index {raw_value!r}: {world_id}") from exc
+    if scene_index < 0:
+        raise ValueError(f"unsupported negative MolmoSpaces scene index {scene_index}: {world_id}")
+    return scene_index
 
 
 def _validate_ready_row(row: dict[str, Any], *, label_manifest: dict[str, Any]) -> None:
