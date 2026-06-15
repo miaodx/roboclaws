@@ -154,6 +154,13 @@ logs before choosing the next slice.
   modules unchanged at 62. Proof: focused scene-camera report test, ruff,
   format check, and ratchet.
 
+- 2026-06-16: Planner manipulation probe report assertions moved into focused
+  overview, cleanup-binding, sampler-failure, and runtime-diagnostics helper
+  families. Metric: removed the `93>50` report row; dirty worktree ratchet
+  stayed at 17 because unrelated scene-sampler readiness edits introduced a
+  new `52>50` helper row. Proof: focused report test, ruff, format check, and
+  ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

@@ -3279,79 +3279,114 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
     html = report_path.read_text(encoding="utf-8")
 
-    assert "Planner-Backed Manipulation Probe" in html
-    assert "Manipulation Provenance" in html
-    assert "Planner Proof Quality" in html
-    assert "Runtime Diagnostics" in html
-    assert "Planner Probe Diagnostic Views" in html
-    assert "Task sampler diagnostic: pickup/body" in html
-    assert "Planner Probe Cleanup Binding" in html
-    assert "Task Sampler Robot Placement Profile" in html
-    assert "relaxed" in html
-    assert "place_robot_near max tries" in html
-    assert "Exact task config applied" in html
-    assert "Exact task config blockers" in html
-    assert "cleanup_scene_xml_missing" in html
-    assert "Exact sampler adapter class" in html
-    assert "Exact sampler adapter object" in html
-    assert "Exact pickup candidate action" in html
+    _assert_planner_manipulation_probe_overview(html)
+    _assert_planner_manipulation_probe_cleanup_binding(html)
+    _assert_planner_manipulation_probe_sampler_failures(html)
+    _assert_planner_manipulation_probe_runtime_diagnostics(html)
 
-    assert "Exact pickup retry budget" in html
-    assert "injected_requested_candidate_name" in html
-    assert "PickAndPlaceTaskSampler" in html
-    assert "Task Sampler Failure Diagnostics" in html
-    assert "Placement failures" in html
-    assert "Effective max tries" in html
-    assert "Post-Placement Candidate Rejections" in html
-    assert "Grasp Collision Diagnostics" in html
-    assert "Non-colliding grasps" in html
-    assert "Zero non-colliding" in html
-    assert "Post-Placement Rejection Views" in html
-    assert "Post-placement rejection flow: pickup/body" in html
-    assert "Removed by grasp threshold" in html
-    assert "Candidate Removal Effectiveness" in html
-    assert "Effective removals" in html
-    assert "Candidate name misses" in html
-    assert "Removal-call delta" in html
-    assert "Placement Scene Diagnostics" in html
-    assert "Free-space fraction" in html
-    assert "0.000017" in html
-    assert "Nearest free distance" in html
-    assert "Failed to place robot near object: pickup/body" in html
-    assert "asset-book" in html
-    assert "pickup/body" in html
-    assert "sink/body" in html
-    assert "Planner object alias" in html
-    assert "navigate_to_receptacle" in html
-    assert "CUDA Memory Headroom" in html
-    assert "CuRobo Memory Profile" in html
-    assert "Policy Exception Diagnostics" in html
-    assert "curobo_no_planned_trajectory" in html
-    assert "_execute_trajectory was called with no planned trajectory" in html
-    assert "pre_grasp" in html
-    assert "Trajectory len" in html
-    assert "CuRobo Extension Cache" in html
-    assert "lbfgs_step_cu" in html
-    assert "Warp Compatibility" in html
-    assert "Adapter applied" in html
-    assert "Worker Stage Timeline" in html
-    assert "Capability Blockers" in html
-    assert "PickAndPlacePlannerPolicy" in html
-    assert "rby1m_config_import_start" in html
-    assert "rby1m_config_import" in html
-    assert "faulthandler=True" in html
-    assert "renderer_adapter=True" in html
-    assert "MUJOCO_GL=egl" in html
-    assert "CUDA_HOME=/usr/local/cuda" in html
-    assert "torch_cuda_available=True" in html
-    assert "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" in html
-    assert "execute_policy_run_start" in html
-    assert "num_ik_seeds" in html
-    assert "Collision avoidance" in html
-    assert "10.6 GiB" in html
-    assert "curobo" in html
-    assert "RBY1M CuRobo Gate" in html
-    assert "wrong_embodiment" in html
+
+def _assert_planner_manipulation_probe_overview(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Planner-Backed Manipulation Probe",
+            "Manipulation Provenance",
+            "Planner Proof Quality",
+            "Runtime Diagnostics",
+            "Planner Probe Diagnostic Views",
+            "Task sampler diagnostic: pickup/body",
+            "Planner Probe Cleanup Binding",
+            "Capability Blockers",
+            "RBY1M CuRobo Gate",
+            "wrong_embodiment",
+        ),
+    )
+
+
+def _assert_planner_manipulation_probe_cleanup_binding(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Task Sampler Robot Placement Profile",
+            "relaxed",
+            "place_robot_near max tries",
+            "Exact task config applied",
+            "Exact task config blockers",
+            "cleanup_scene_xml_missing",
+            "Exact sampler adapter class",
+            "Exact sampler adapter object",
+            "Exact pickup candidate action",
+            "Exact pickup retry budget",
+            "injected_requested_candidate_name",
+            "PickAndPlaceTaskSampler",
+            "pickup/body",
+            "sink/body",
+            "Planner object alias",
+            "navigate_to_receptacle",
+        ),
+    )
+
+
+def _assert_planner_manipulation_probe_sampler_failures(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Task Sampler Failure Diagnostics",
+            "Placement failures",
+            "Effective max tries",
+            "Post-Placement Candidate Rejections",
+            "Grasp Collision Diagnostics",
+            "Non-colliding grasps",
+            "Zero non-colliding",
+            "Post-Placement Rejection Views",
+            "Post-placement rejection flow: pickup/body",
+            "Removed by grasp threshold",
+            "Candidate Removal Effectiveness",
+            "Effective removals",
+            "Candidate name misses",
+            "Removal-call delta",
+            "Placement Scene Diagnostics",
+            "Free-space fraction",
+            "0.000017",
+            "Nearest free distance",
+            "Failed to place robot near object: pickup/body",
+            "asset-book",
+        ),
+    )
+
+
+def _assert_planner_manipulation_probe_runtime_diagnostics(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "CUDA Memory Headroom",
+            "CuRobo Memory Profile",
+            "Policy Exception Diagnostics",
+            "curobo_no_planned_trajectory",
+            "_execute_trajectory was called with no planned trajectory",
+            "pre_grasp",
+            "Trajectory len",
+            "CuRobo Extension Cache",
+            "lbfgs_step_cu",
+            "Warp Compatibility",
+            "Adapter applied",
+            "Worker Stage Timeline",
+            "PickAndPlacePlannerPolicy",
+            "rby1m_config_import_start",
+            "rby1m_config_import",
+            "faulthandler=True",
+            "renderer_adapter=True",
+            "MUJOCO_GL=egl",
+            "CUDA_HOME=/usr/local/cuda",
+            "torch_cuda_available=True",
+            "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True",
+            "execute_policy_run_start",
+            "num_ik_seeds",
+            "Collision avoidance",
+            "10.6 GiB",
+            "curobo",
+        ),
+    )
 
 
 def test_planner_manipulation_probe_report_renders_proof_quality(tmp_path: Path) -> None:
