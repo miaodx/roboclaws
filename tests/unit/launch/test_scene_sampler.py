@@ -14,6 +14,7 @@ from roboclaws.launch.scene_sampler import (
     eval_sample_id,
     eval_sampler_rows,
     legacy_molmospaces_world_ids,
+    readiness_report,
     sampler_manifest,
     sampler_rows,
     ui_molmospaces_world_ids,
@@ -148,3 +149,25 @@ def test_scene_sampler_limits_eval_stress_rows_per_source() -> None:
 
     with pytest.raises(ValueError, match="more than 10 eval-stress samples"):
         validate_sampler_manifest(manifest)
+
+
+def test_scene_sampler_readiness_report_is_per_source() -> None:
+    report = readiness_report()
+
+    assert report["schema"] == "molmospaces_scene_sampler_readiness_report_v1"
+    assert report["summary"]["source_count"] == 4
+    assert report["summary"]["ui_supported_source_count"] == 1
+    assert report["summary"]["eval_complete_source_count"] == 0
+    procthor = report["sources"]["procthor-10k-val"]
+    assert procthor["ui_status"] == "ready"
+    assert procthor["ui_ready_count"] == 3
+    assert procthor["eval_status"] == "partial_or_blocked"
+    assert procthor["eval_ready_count"] == 5
+
+    for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
+        source_report = report["sources"][source]
+        assert source_report["ui_status"] == "not_visible"
+        assert source_report["ui_ready_count"] == 0
+        assert source_report["eval_status"] == "partial_or_blocked"
+        assert source_report["eval_ready_count"] == 0
+        assert source_report["blocked_rows"][0]["failure_class"] == "environment_blocked"

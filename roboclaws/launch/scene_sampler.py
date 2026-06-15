@@ -223,6 +223,64 @@ def eval_projection_metadata() -> dict[str, Any]:
     }
 
 
+def readiness_report() -> dict[str, Any]:
+    """Return per-source UI/eval readiness counts for scanner artifacts."""
+
+    rows = sampler_rows()
+    by_source: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        scene_family, scene_split = _family_split(source)
+        source_rows = [row for row in rows if row.scene_source == source]
+        ui_rows = [row for row in source_rows if row.ui_ready]
+        eval_rows = [row for row in source_rows if row.eval_ready]
+        blocked_rows = [row for row in source_rows if row.blocked_reason]
+        ready_rows = [row for row in source_rows if row.readiness_status == READINESS_READY]
+        by_source[source] = {
+            "scene_family": scene_family,
+            "scene_split": scene_split,
+            "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
+            "ui_ready_count": len(ui_rows),
+            "ui_status": (
+                "ready" if len(ui_rows) == UI_TARGET_PER_SCENE_SOURCE else "not_visible"
+            ),
+            "ui_world_ids": [row.world_id for row in ui_rows],
+            "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
+            "eval_ready_count": len(eval_rows),
+            "eval_status": (
+                "complete"
+                if len(eval_rows) == EVAL_TARGET_PER_SCENE_SOURCE
+                else "partial_or_blocked"
+            ),
+            "eval_sample_ids": [eval_sample_id(row) for row in eval_rows],
+            "ready_rows": [row.to_dict() for row in ready_rows],
+            "blocked_rows": [row.to_dict() for row in blocked_rows],
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_readiness_report_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "primary_backend": PRIMARY_MOLMOSPACES_BACKEND,
+        "sources": by_source,
+        "summary": {
+            "source_count": len(SUPPORTED_SCENE_SOURCES),
+            "ui_supported_source_count": sum(
+                1
+                for source in SUPPORTED_SCENE_SOURCES
+                if by_source[source]["ui_status"] == "ready"
+            ),
+            "eval_complete_source_count": sum(
+                1
+                for source in SUPPORTED_SCENE_SOURCES
+                if by_source[source]["eval_status"] == "complete"
+            ),
+            "blocked_or_partial_source_count": sum(
+                1
+                for source in SUPPORTED_SCENE_SOURCES
+                if by_source[source]["eval_status"] != "complete"
+            ),
+        },
+    }
+
+
 def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
     """Load the prepared room-category label manifest used for admission."""
 

@@ -55,6 +55,10 @@ First slice implemented on 2026-06-15.
   local assets and preview readiness are prepared.
 - Eval harness selection now includes `scene-sampler-stress-eval-suite` for
   scene-sampler, launch-catalog, or eval-harness signals.
+- Readiness artifact exporter:
+  `scripts/operator_console/export_scene_sampler_readiness.py` validates the
+  sampler and writes the canonical manifest, eval projection, and per-source
+  readiness report without downloading assets or calling live VLMs.
 
 Verification run on 2026-06-15:
 
@@ -76,6 +80,10 @@ Known partial scope:
 - The static smoke eval verifies runtime-map artifact readiness and sampler
   admission metadata; full scene-specific runtime output remains a product-run
   or later scanner proof.
+- The readiness exporter is a deterministic preparation artifact scaffold. It
+  does not yet render or admit new `ithor`, `procthor-objaverse-val`, or
+  `holodeck-objaverse-val` samples; those remain blocked until local assets and
+  preview/map-build evidence exist.
 
 ## Next Flow Development Plan
 
@@ -114,6 +122,11 @@ Next Flow implementation slices:
    - Output machine-readable readiness packets with preview status, public room
      count, waypoint count, category provenance, selected reason, and canonical
      `failure_class`.
+   - Current scaffold: run
+     `python scripts/operator_console/export_scene_sampler_readiness.py` to
+     write validated sampler artifacts under `output/scene-sampler-readiness/`.
+     A later slice should replace or extend the static facts with real scanner
+     candidate output for new source families.
 
 2. **`procthor-10k-val` Stress Fill**
    - Scan additional non-contiguous `procthor-10k-val` candidates until ten
@@ -182,6 +195,7 @@ ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaw
 just agent::eval suite=scene_sampler_stress budget=smoke
 just agent::eval suite=map_build_consumer budget=focused
 just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused
+python scripts/operator_console/export_scene_sampler_readiness.py
 ```
 
 Run at least one product smoke for any newly UI-admitted source:
