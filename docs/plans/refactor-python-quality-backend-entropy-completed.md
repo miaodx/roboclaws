@@ -225,6 +225,12 @@ logs before choosing the next slice.
   at 62. Proof: planner manipulation checker contract file, ruff, format check,
   and ratchet.
 
+- 2026-06-16: Realworld cleanup checker Isaac robot-view fixture split image
+  writing, report/artifact wiring, per-step provenance, camera-control
+  contracts, and summary construction into focused helpers. Metric: 3 -> 1
+  complexity rows; oversized modules unchanged at 62. Proof: realworld cleanup
+  checker contract file, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
