@@ -19,11 +19,6 @@ from roboclaws.household.camera_control import (
     load_camera_control_request,
     normalize_camera_control_request,
 )
-from roboclaws.household.generated_mess import (
-    generated_mess_success_threshold,
-    select_generated_mess_targets,
-    targets_from_generated_mess_manifest,
-)
 from scripts.molmo_cleanup.molmospaces_actions import (
     MolmoActionHooks,
 )
@@ -530,6 +525,12 @@ from scripts.molmo_cleanup.molmospaces_worker_protocol import (
 from scripts.molmo_cleanup.molmospaces_worker_protocol import (
     write_state as _write_state_impl_protocol,
 )
+from scripts.molmo_cleanup.molmospaces_worker_state import (
+    MolmoInitHooks,
+)
+from scripts.molmo_cleanup.molmospaces_worker_state import (
+    init_state as _init_state_impl,
+)
 
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
@@ -761,149 +762,17 @@ def init_state(
     generated_mess_object_ids: tuple[str, ...] = (),
     generated_mess_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
-    from molmo_spaces.molmo_spaces_constants import get_robot_path, get_scenes, get_scenes_root
-    from molmo_spaces.utils.lazy_loading_utils import (
-        install_scene_with_objects_and_grasps_from_path,
-    )
-    from molmo_spaces.utils.scene_metadata_utils import get_scene_metadata
-
-    scene_xml, scene_resolution = _prepare_molmospaces_scene(
+    return _init_state_impl(
+        state_path=state_path,
+        seed=seed,
         scene_source=scene_source,
         scene_index=scene_index,
-        get_scenes=get_scenes,
-        get_scenes_root=get_scenes_root,
-        install_scene_with_objects_and_grasps_from_path=(
-            install_scene_with_objects_and_grasps_from_path
-        ),
-    )
-    if not scene_xml.is_file():
-        raise FileNotFoundError(scene_xml)
-
-    robot_xml: Path | None = None
-    if include_robot:
-        robot_xml = get_robot_path(robot_name) / _robot_xml_name(robot_name)
-        if not robot_xml.is_file():
-            raise FileNotFoundError(robot_xml)
-        model, data = _load_robot_model_data(scene_xml, robot_xml)
-    else:
-        model, data = _load_model_data(scene_xml)
-    metadata = get_scene_metadata(scene_xml)
-    if metadata is None:
-        raise RuntimeError(f"missing scene metadata for {scene_xml}")
-
-    receptacles = _collect_receptacles(model, data, metadata)
-    objects = _collect_dynamic_objects(model, data, metadata)
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    generated_mess_manifest = _load_generated_mess_manifest(generated_mess_manifest_path)
-    if generated_mess_manifest:
-        targets = targets_from_generated_mess_manifest(
-            objects,
-            receptacles,
-            generated_mess_manifest,
-            target_count=generated_mess_count,
-        )
-    elif generated_mess_count > 0:
-        targets = select_generated_mess_targets(
-            objects,
-            receptacles,
-            target_count=generated_mess_count,
-            seed=seed,
-            object_ids=generated_mess_object_ids or None,
-        )
-    else:
-        targets = []
-    if len(targets) < generated_mess_count:
-        raise RuntimeError(
-            f"expected at least {generated_mess_count} cleanup targets, found {len(targets)}"
-        )
-
-    state = {
-        "backend": BACKEND,
-        "seed": seed,
-        "scene_source": scene_source,
-        "scene_index": scene_index,
-        "scene_xml": str(scene_xml),
-        "scene_resolution": scene_resolution,
-        "robot_included": include_robot,
-        "robot_name": robot_name if include_robot else None,
-        "robot_xml": str(robot_xml) if robot_xml is not None else None,
-        "python_executable": sys.executable,
-        "runtime": {
-            "python_version": sys.version.split()[0],
-            "mujoco_version": mujoco.__version__,
-            "mujoco_renderer_runtime": "standard-mujoco",
-        },
-        "model_stats": {
-            "nbody": int(model.nbody),
-            "ngeom": int(model.ngeom),
-            "njnt": int(model.njnt),
-            "nq": int(model.nq),
-        },
-        "metadata_object_count": len(metadata.get("objects", {})),
-        "objects": {item["object_id"]: item for item in objects},
-        "receptacles": {item["receptacle_id"]: item for item in receptacles},
-        "selected_object_ids": [target["object_id"] for target in targets],
-        "generated_mess_manifest": generated_mess_manifest,
-        "requested_generated_mess_count": generated_mess_count,
-        "generated_mess_count": len(targets),
-        "qpos": [float(value) for value in data.qpos],
-        "held_object_id": None,
-        "current_receptacle_id": None,
-        "open_receptacle_ids": [],
-        "mess_placement_diagnostics": [],
-        "placement_diagnostics": [],
-        "tool_event_counts": {},
-    }
-    _seed_misplaced_objects(model, data, state, targets)
-    _refresh_object_positions(model, data, state)
-    state["room_outlines"] = _collect_room_outlines(model, data, state)
-    if include_robot and targets:
-        initial_receptacle = state["receptacles"][_target_start_receptacle_id(state, targets[0])]
-        robot_pose = _robot_pose_near_receptacle(state, initial_receptacle)
-        _set_robot_pose(model, data, robot_pose)
-        state["robot_pose"] = robot_pose
-        state["robot_trajectory"] = [robot_pose]
-        state["robot_camera_names"] = _robot_camera_names(model)
-        state["robot_body_name"] = "robot_0/base"
-        state["robot_control_provenance"] = "semantic_robot_base_and_head_qpos"
-        state["robot_view_provenance"] = {
-            "fpv": "rby1m_head_camera_target_framed",
-            "chase": "rby1m_follower_camera",
-            "map": "public_sim_state_report",
-            "verify": "public_sim_state_report_focus_camera",
-        }
-    state["qpos"] = [float(value) for value in data.qpos]
-    state["current_receptacle_id"] = (
-        _target_start_receptacle_id(state, targets[0]) if targets else _first_receptacle_id(state)
-    )
-    state["private_manifest"] = {
-        "scenario_id": _scenario_id(scene_source=scene_source, scene_index=scene_index, seed=seed),
-        "success_threshold": generated_mess_success_threshold(len(targets)),
-        "targets": [
-            {
-                "object_id": target["object_id"],
-                "valid_receptacle_ids": [target["target_receptacle_id"]],
-            }
-            for target in targets
-        ],
-    }
-    state["scenario_public"] = _public_scenario(state)
-    _write_state(state_path, state)
-    return _ok(
-        "init",
-        backend=BACKEND,
-        scenario=state["scenario_public"],
-        private_manifest=state["private_manifest"],
-        generated_mess_manifest=state.get("generated_mess_manifest") or None,
-        requested_generated_mess_count=state["requested_generated_mess_count"],
-        generated_mess_count=state["generated_mess_count"],
-        scene_xml=state["scene_xml"],
-        scene_resolution=state["scene_resolution"],
-        runtime=state["runtime"],
-        model_stats=state["model_stats"],
-        metadata_object_count=state["metadata_object_count"],
-        robot=_robot_result_payload(state, model) if include_robot else None,
+        include_robot=include_robot,
+        robot_name=robot_name,
+        generated_mess_count=generated_mess_count,
+        generated_mess_object_ids=generated_mess_object_ids,
+        generated_mess_manifest_path=generated_mess_manifest_path,
+        hooks=_molmo_init_hooks(),
     )
 
 
@@ -1416,6 +1285,32 @@ def _molmo_scenario_hooks() -> MolmoScenarioHooks:
         placement_diagnostic=_placement_diagnostic,
         load_model_data_for_state=_load_model_data_for_state,
         apply_qpos=_apply_qpos,
+    )
+
+
+def _molmo_init_hooks() -> MolmoInitHooks:
+    return MolmoInitHooks(
+        backend=BACKEND,
+        collect_dynamic_objects=_collect_dynamic_objects,
+        collect_receptacles=_collect_receptacles,
+        collect_room_outlines=_collect_room_outlines,
+        first_receptacle_id=_first_receptacle_id,
+        load_generated_mess_manifest=_load_generated_mess_manifest,
+        load_model_data=_load_model_data,
+        load_robot_model_data=_load_robot_model_data,
+        ok=_ok,
+        prepare_molmospaces_scene=_prepare_molmospaces_scene,
+        public_scenario=_public_scenario,
+        refresh_object_positions=_refresh_object_positions,
+        robot_camera_names=_robot_camera_names,
+        robot_pose_near_receptacle=_robot_pose_near_receptacle,
+        robot_result_payload=_robot_result_payload,
+        robot_xml_name=_robot_xml_name,
+        scenario_id=_scenario_id,
+        seed_misplaced_objects=_seed_misplaced_objects,
+        set_robot_pose=_set_robot_pose,
+        target_start_receptacle_id=_target_start_receptacle_id,
+        write_state=_write_state,
     )
 
 

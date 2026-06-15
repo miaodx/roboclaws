@@ -495,6 +495,15 @@ logs before choosing the next slice.
   stayed at 0 and oversized modules stayed at 62. Proof: focused Molmo
   subprocess backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: MolmoSpaces `init_state` scene/model setup, generated-mess
+  target selection, initial state payload, robot-start placement, and init
+  response assembly moved into `molmospaces_worker_state.py`, with the
+  subprocess worker retaining a thin `init_state` delegate and wrapper hooks.
+  Metric: `molmospaces_subprocess_worker.py` 2377 -> 2272 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Molmo subprocess/backend init-state tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
