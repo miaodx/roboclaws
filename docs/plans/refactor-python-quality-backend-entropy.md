@@ -4639,3 +4639,17 @@ Stop this refactor loop when:
   from 75 to 74 Ruff complexity violations, with oversized modules unchanged at
   59. `RealWorldMolmoCleanupMCPServer.__init__` no longer appears in the
   complexity summary.
+- 2026-06-15: Continued the robot-camera apple-to-apple parity residual by
+  splitting `run_comparison(...)` setup into path, initial manifest, lane
+  initialization, generated-mess summary, and blocked-manifest helpers. The
+  MuJoCo and Isaac worker command arguments, canonical generated mess manifest,
+  lane summaries, target-selection flow, per-location render loop, and report
+  output schema remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py -q`
+  passed with 39 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 74 to 73 Ruff complexity violations, with oversized modules unchanged at
+  59. `run_comparison(...)` no longer appears in the complexity summary.

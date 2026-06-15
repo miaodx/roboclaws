@@ -10,7 +10,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from PIL import Image, ImageChops, ImageFilter, ImageStat
 
@@ -81,6 +81,16 @@ VISUAL_PHYSICS_PROTECTION = {
     ),
 }
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
+
+
+class _ComparisonRunPaths(NamedTuple):
+    output_dir: Path
+    canonical_scene_state: Path
+    generated_mess_manifest: Path
+    mujoco_state: Path
+    isaac_state: Path
+    mujoco_run_dir: Path
+    isaac_run_dir: Path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -261,194 +271,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
-    output_dir = args.output_dir
+    paths = _comparison_run_paths(args.output_dir)
+    output_dir = paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
-    canonical_scene_state_path = output_dir / "canonical_scene_state.json"
-    generated_mess_manifest_path = output_dir / "generated_mess_manifest.json"
-    mujoco_state_path = output_dir / "mujoco_state.json"
-    isaac_state_path = output_dir / "isaac_state.json"
-    mujoco_run_dir = output_dir / "mujoco"
-    isaac_run_dir = output_dir / "isaac"
     isaac_robot_view_color_profile = _load_optional_json(args.isaac_robot_view_color_profile_path)
     capture_quality = _capture_quality_probe_config(args)
+    manifest = _initial_comparison_manifest(args, capture_quality=capture_quality)
 
-    manifest: dict[str, Any] = {
-        "schema": SCHEMA,
-        "status": "running",
-        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "purpose": (
-            "Sim-only render comparison of robot-view cameras. This does not execute "
-            "cleanup, pick/place, scoring, or planner-backed manipulation proof."
-        ),
-        "scene": {
-            "scene_source": args.scene_source,
-            "scene_index": args.scene_index,
-            "scene_usd_path": str(args.scene_usd_path),
-            "seed": args.seed,
-            "generated_mess_count": args.generated_mess_count,
-            "render_width": args.render_width,
-            "render_height": args.render_height,
-            "saved_report_width": capture_quality["render_resolution_saved"]["width"],
-            "saved_report_height": capture_quality["render_resolution_saved"]["height"],
-            "metric_width": capture_quality["metric_resolution"]["width"],
-            "metric_height": capture_quality["metric_resolution"]["height"],
-        },
-        "capture_quality_probe": capture_quality,
-        "camera_contract": _robot_camera_contract(),
-        "lanes": {},
-        "locations": [],
-        "artifacts": {
-            "manifest": "comparison_manifest.json",
-            "report": "report.html",
-            "generated_mess_manifest": "generated_mess_manifest.json",
-        },
-    }
-
-    canonical_mess_manifest: dict[str, Any] = {}
-    try:
-        _run_json(
-            [
-                str(args.mujoco_python),
-                "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-                "--state-path",
-                str(canonical_scene_state_path),
-                "init",
-                "--seed",
-                str(args.seed),
-                "--scene-source",
-                args.scene_source,
-                "--scene-index",
-                str(args.scene_index),
-                "--generated-mess-count",
-                str(args.generated_mess_count),
-            ],
-            cwd=Path.cwd(),
-        )
-        canonical_mess_manifest = _canonical_generated_mess_manifest_from_state(
-            _read_json(canonical_scene_state_path),
-            args=args,
-        )
-        if int(canonical_mess_manifest.get("generated_mess_count") or 0) < int(
-            args.generated_mess_count
-        ):
-            raise RuntimeError(
-                "canonical generated mess manifest did not contain enough targets "
-                f"({canonical_mess_manifest.get('generated_mess_count')} < "
-                f"{args.generated_mess_count})"
-            )
-        _write_json(generated_mess_manifest_path, canonical_mess_manifest)
-        manifest["mess_generation"] = _mess_generation_summary(
-            canonical_mess_manifest,
-            output_dir=output_dir,
-            manifest_path=generated_mess_manifest_path,
-        )
-        mujoco_init = _run_json(
-            [
-                str(args.mujoco_python),
-                "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
-                "--state-path",
-                str(mujoco_state_path),
-                "init",
-                "--seed",
-                str(args.seed),
-                "--scene-source",
-                args.scene_source,
-                "--scene-index",
-                str(args.scene_index),
-                "--generated-mess-count",
-                str(args.generated_mess_count),
-                "--generated-mess-manifest-path",
-                str(generated_mess_manifest_path),
-                "--include-robot",
-                "--robot-name",
-                "rby1m",
-            ],
-            cwd=Path.cwd(),
-        )
-        isaac_init_command = [
-            str(args.isaac_python),
-            "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-            "--state-path",
-            str(isaac_state_path),
-            "init",
-            "--run-dir",
-            str(isaac_run_dir),
-            "--seed",
-            str(args.seed),
-            "--scene-source",
-            args.scene_source,
-            "--scene-index",
-            str(args.scene_index),
-            "--generated-mess-count",
-            str(args.generated_mess_count),
-            "--generated-mess-manifest-path",
-            str(generated_mess_manifest_path),
-            "--runtime-mode",
-            "real",
-            "--include-robot",
-            "--robot-name",
-            "rby1m",
-            "--scene-usd-path",
-            str(args.scene_usd_path),
-        ]
-        isaac_init = _run_json(
-            isaac_init_command,
-            cwd=Path.cwd(),
-        )
-        _validate_generated_mess_init(
-            lane_id=MUJOCO_LANE_ID,
-            init_result=mujoco_init,
-            canonical_manifest=canonical_mess_manifest,
-        )
-        _validate_generated_mess_init(
-            lane_id=ISAAC_LANE_ID,
-            init_result=isaac_init,
-            canonical_manifest=canonical_mess_manifest,
-        )
-    except Exception as exc:
-        if canonical_mess_manifest and "mess_generation" not in manifest:
-            manifest["mess_generation"] = _mess_generation_summary(
-                canonical_mess_manifest,
-                output_dir=output_dir,
-                manifest_path=generated_mess_manifest_path,
-            )
-        manifest["status"] = "blocked"
-        manifest["blocker"] = str(exc)
-        _write_outputs(manifest, output_dir)
+    lane_states = _initialize_comparison_lanes(args, paths, manifest)
+    if lane_states is None:
         return manifest
-
-    manifest["lanes"][MUJOCO_LANE_ID] = _lane_init_summary(mujoco_init)
-    manifest["lanes"][ISAAC_LANE_ID] = _lane_init_summary(isaac_init)
-    manifest["lanes"][ISAAC_LANE_ID]["robot_import"] = isaac_init.get("robot_import", {})
-
-    mujoco_state = _read_json(mujoco_state_path)
-    isaac_state = _read_json(isaac_state_path)
-    try:
-        _validate_generated_mess_state_locations(
-            lane_id=MUJOCO_LANE_ID,
-            state=mujoco_state,
-            canonical_manifest=canonical_mess_manifest,
-        )
-        _validate_generated_mess_state_locations(
-            lane_id=ISAAC_LANE_ID,
-            state=isaac_state,
-            canonical_manifest=canonical_mess_manifest,
-        )
-        _validate_generated_mess_placement_diagnostics(
-            lane_id=MUJOCO_LANE_ID,
-            state=mujoco_state,
-            canonical_manifest=canonical_mess_manifest,
-        )
-        _validate_generated_mess_placement_diagnostics(
-            lane_id=ISAAC_LANE_ID,
-            state=isaac_state,
-            canonical_manifest=canonical_mess_manifest,
-        )
-    except Exception as exc:
-        manifest["status"] = "blocked"
-        manifest["blocker"] = str(exc)
-        _write_outputs(manifest, output_dir)
-        return manifest
+    mujoco_state, isaac_state = lane_states
     _attach_state_artifact_summaries(
         manifest,
         output_dir=output_dir,
@@ -479,7 +312,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                         str(args.mujoco_python),
                         "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
                         "--state-path",
-                        str(mujoco_state_path),
+                        str(paths.mujoco_state),
                         "navigate_to_receptacle",
                         "--receptacle-id",
                         target["target_id"],
@@ -492,17 +325,17 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                         str(args.mujoco_python),
                         "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
                         "--state-path",
-                        str(mujoco_state_path),
+                        str(paths.mujoco_state),
                         "frame_comparison_object",
                         "--object-id",
                         target["target_id"],
                     ],
                     cwd=Path.cwd(),
                 )
-            mujoco_state = _read_json(mujoco_state_path)
+            mujoco_state = _read_json(paths.mujoco_state)
             robot_pose = dict(mujoco_state.get("robot_pose") or nav.get("robot_pose") or {})
             _patch_isaac_robot_pose(
-                isaac_state_path,
+                paths.isaac_state,
                 robot_pose,
                 target=target,
                 color_profile=isaac_robot_view_color_profile,
@@ -512,10 +345,10 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.mujoco_python),
                     "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
                     "--state-path",
-                    str(mujoco_state_path),
+                    str(paths.mujoco_state),
                     "robot_views",
                     "--output-dir",
-                    str(mujoco_run_dir / "robot_views"),
+                    str(paths.mujoco_run_dir / "robot_views"),
                     "--label",
                     label,
                     "--render-width",
@@ -531,10 +364,10 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.isaac_python),
                     "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
                     "--state-path",
-                    str(isaac_state_path),
+                    str(paths.isaac_state),
                     "robot_views",
                     "--output-dir",
-                    str(isaac_run_dir / "robot_views"),
+                    str(paths.isaac_run_dir / "robot_views"),
                     "--label",
                     label,
                     "--render-width",
@@ -592,6 +425,226 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     )
     _write_outputs(manifest, output_dir)
     return manifest
+
+
+def _comparison_run_paths(output_dir: Path) -> _ComparisonRunPaths:
+    return _ComparisonRunPaths(
+        output_dir=output_dir,
+        canonical_scene_state=output_dir / "canonical_scene_state.json",
+        generated_mess_manifest=output_dir / "generated_mess_manifest.json",
+        mujoco_state=output_dir / "mujoco_state.json",
+        isaac_state=output_dir / "isaac_state.json",
+        mujoco_run_dir=output_dir / "mujoco",
+        isaac_run_dir=output_dir / "isaac",
+    )
+
+
+def _initial_comparison_manifest(
+    args: argparse.Namespace,
+    *,
+    capture_quality: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schema": SCHEMA,
+        "status": "running",
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "purpose": (
+            "Sim-only render comparison of robot-view cameras. This does not execute "
+            "cleanup, pick/place, scoring, or planner-backed manipulation proof."
+        ),
+        "scene": {
+            "scene_source": args.scene_source,
+            "scene_index": args.scene_index,
+            "scene_usd_path": str(args.scene_usd_path),
+            "seed": args.seed,
+            "generated_mess_count": args.generated_mess_count,
+            "render_width": args.render_width,
+            "render_height": args.render_height,
+            "saved_report_width": capture_quality["render_resolution_saved"]["width"],
+            "saved_report_height": capture_quality["render_resolution_saved"]["height"],
+            "metric_width": capture_quality["metric_resolution"]["width"],
+            "metric_height": capture_quality["metric_resolution"]["height"],
+        },
+        "capture_quality_probe": capture_quality,
+        "camera_contract": _robot_camera_contract(),
+        "lanes": {},
+        "locations": [],
+        "artifacts": {
+            "manifest": "comparison_manifest.json",
+            "report": "report.html",
+            "generated_mess_manifest": "generated_mess_manifest.json",
+        },
+    }
+
+
+def _initialize_comparison_lanes(
+    args: argparse.Namespace,
+    paths: _ComparisonRunPaths,
+    manifest: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    canonical_mess_manifest: dict[str, Any] = {}
+    try:
+        mujoco_init, isaac_init, canonical_mess_manifest = _run_lane_initializers(
+            args,
+            paths,
+        )
+        manifest["mess_generation"] = _mess_generation_summary(
+            canonical_mess_manifest,
+            output_dir=paths.output_dir,
+            manifest_path=paths.generated_mess_manifest,
+        )
+        _validate_generated_mess_init(
+            lane_id=MUJOCO_LANE_ID,
+            init_result=mujoco_init,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_init(
+            lane_id=ISAAC_LANE_ID,
+            init_result=isaac_init,
+            canonical_manifest=canonical_mess_manifest,
+        )
+    except Exception as exc:
+        if canonical_mess_manifest and "mess_generation" not in manifest:
+            manifest["mess_generation"] = _mess_generation_summary(
+                canonical_mess_manifest,
+                output_dir=paths.output_dir,
+                manifest_path=paths.generated_mess_manifest,
+            )
+        _block_comparison_manifest(manifest, paths.output_dir, exc)
+        return None
+
+    manifest["lanes"][MUJOCO_LANE_ID] = _lane_init_summary(mujoco_init)
+    manifest["lanes"][ISAAC_LANE_ID] = _lane_init_summary(isaac_init)
+    manifest["lanes"][ISAAC_LANE_ID]["robot_import"] = isaac_init.get("robot_import", {})
+    mujoco_state = _read_json(paths.mujoco_state)
+    isaac_state = _read_json(paths.isaac_state)
+    try:
+        _validate_generated_mess_state_locations(
+            lane_id=MUJOCO_LANE_ID,
+            state=mujoco_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_state_locations(
+            lane_id=ISAAC_LANE_ID,
+            state=isaac_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_placement_diagnostics(
+            lane_id=MUJOCO_LANE_ID,
+            state=mujoco_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_placement_diagnostics(
+            lane_id=ISAAC_LANE_ID,
+            state=isaac_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+    except Exception as exc:
+        _block_comparison_manifest(manifest, paths.output_dir, exc)
+        return None
+    return mujoco_state, isaac_state
+
+
+def _run_lane_initializers(
+    args: argparse.Namespace,
+    paths: _ComparisonRunPaths,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    _run_json(
+        [
+            str(args.mujoco_python),
+            "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+            "--state-path",
+            str(paths.canonical_scene_state),
+            "init",
+            "--seed",
+            str(args.seed),
+            "--scene-source",
+            args.scene_source,
+            "--scene-index",
+            str(args.scene_index),
+            "--generated-mess-count",
+            str(args.generated_mess_count),
+        ],
+        cwd=Path.cwd(),
+    )
+    canonical_mess_manifest = _canonical_generated_mess_manifest_from_state(
+        _read_json(paths.canonical_scene_state),
+        args=args,
+    )
+    if int(canonical_mess_manifest.get("generated_mess_count") or 0) < int(
+        args.generated_mess_count
+    ):
+        raise RuntimeError(
+            "canonical generated mess manifest did not contain enough targets "
+            f"({canonical_mess_manifest.get('generated_mess_count')} < "
+            f"{args.generated_mess_count})"
+        )
+    _write_json(paths.generated_mess_manifest, canonical_mess_manifest)
+    mujoco_init = _run_json(_mujoco_init_command(args, paths), cwd=Path.cwd())
+    isaac_init = _run_json(_isaac_init_command(args, paths), cwd=Path.cwd())
+    return mujoco_init, isaac_init, canonical_mess_manifest
+
+
+def _mujoco_init_command(args: argparse.Namespace, paths: _ComparisonRunPaths) -> list[str]:
+    return [
+        str(args.mujoco_python),
+        "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+        "--state-path",
+        str(paths.mujoco_state),
+        "init",
+        "--seed",
+        str(args.seed),
+        "--scene-source",
+        args.scene_source,
+        "--scene-index",
+        str(args.scene_index),
+        "--generated-mess-count",
+        str(args.generated_mess_count),
+        "--generated-mess-manifest-path",
+        str(paths.generated_mess_manifest),
+        "--include-robot",
+        "--robot-name",
+        "rby1m",
+    ]
+
+
+def _isaac_init_command(args: argparse.Namespace, paths: _ComparisonRunPaths) -> list[str]:
+    return [
+        str(args.isaac_python),
+        "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "--state-path",
+        str(paths.isaac_state),
+        "init",
+        "--run-dir",
+        str(paths.isaac_run_dir),
+        "--seed",
+        str(args.seed),
+        "--scene-source",
+        args.scene_source,
+        "--scene-index",
+        str(args.scene_index),
+        "--generated-mess-count",
+        str(args.generated_mess_count),
+        "--generated-mess-manifest-path",
+        str(paths.generated_mess_manifest),
+        "--runtime-mode",
+        "real",
+        "--include-robot",
+        "--robot-name",
+        "rby1m",
+        "--scene-usd-path",
+        str(args.scene_usd_path),
+    ]
+
+
+def _block_comparison_manifest(
+    manifest: dict[str, Any],
+    output_dir: Path,
+    exc: Exception,
+) -> None:
+    manifest["status"] = "blocked"
+    manifest["blocker"] = str(exc)
+    _write_outputs(manifest, output_dir)
 
 
 def refresh_report_only(

@@ -148,7 +148,7 @@
         "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py"
       },
       {
-        "lines": 5279,
+        "lines": 5332,
         "max_module_lines": 800,
         "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py"
       },
@@ -667,16 +667,6 @@
         "row": 2033,
         "symbol": "_install_grasp_collision_diagnostics",
         "value": 11
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|PLR0915|run_comparison",
-        "limit": 50,
-        "message": "Too many statements (76 > 50)",
-        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
-        "row": 263,
-        "symbol": "run_comparison",
-        "value": 76
       },
       {
         "code": "C901",
