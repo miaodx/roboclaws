@@ -5107,3 +5107,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this checker
   split so the unrelated staged `eval-harness` rename was not blessed into the
   baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py::_decision(...)`
+  into decision-feature extraction, first-divergence selection, and evidence
+  assembly helpers. The comparison schema, divergent-layer keys,
+  root-cause classifications, next-action strings, and evidence strings remain
+  unchanged. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+  passed; `ruff format --check scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+  passed with 2 tests. The quality baseline was refreshed from 44 to 43 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this AOV
+  comparison patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.

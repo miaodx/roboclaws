@@ -375,16 +375,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py|C901|_decision",
-        "limit": 10,
-        "message": "`_decision` is too complex (12 > 10)",
-        "path": "scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py",
-        "row": 141,
-        "symbol": "_decision",
-        "value": 12
-      },
-      {
-        "code": "C901",
         "key": "scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py|C901|_parse_urdf_tree",
         "limit": 10,
         "message": "`_parse_urdf_tree` is too complex (13 > 10)",
