@@ -340,6 +340,14 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused Isaac fake/real
   robot-view and snapshot tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac semantic-pose initial state, event recording, waypoint
+  pose events, and shared pose-state payload assembly moved from the backend
+  worker into `isaac_semantic_pose_state.py`, with injected worker resolvers
+  preserving existing object/receptacle pose payloads. Metric:
+  `isaac_lab_backend_worker.py` 5446 -> 5355 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac action,
+  waypoint, and semantic-pose recapture tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

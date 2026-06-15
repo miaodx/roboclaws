@@ -259,6 +259,12 @@ from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
     SemanticPoseRobotViewRequest,
     real_semantic_pose_robot_view_images,
 )
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_state import (
+    initial_semantic_pose_state,
+    record_semantic_pose_event,
+    record_waypoint_pose_event,
+    semantic_pose_state_from_backend_state,
+)
 from scripts.isaac_lab_cleanup.isaac_stage_lighting import (
     current_stage_bounds,
     ensure_capture_lighting,
@@ -2276,19 +2282,14 @@ def _initial_semantic_pose_state(
     scene_binding_diagnostics: dict[str, Any] | None,
     initial_receptacle_id: str,
 ) -> dict[str, Any]:
-    state = {
-        "scenario": scenario.public_payload(),
-        "locations": scenario.object_locations(),
-        "containment": {},
-        "held_object_id": None,
-        "current_receptacle_id": initial_receptacle_id,
-        "open_receptacle_ids": [],
-        "object_index": object_index,
-        "receptacle_index": receptacle_index,
-        "scene_binding_diagnostics": scene_binding_diagnostics or {},
-        "object_pose_overrides": {},
-    }
-    return _semantic_pose_state_from_backend_state(state, transform_events=[])
+    return initial_semantic_pose_state(
+        scenario=scenario,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+        initial_receptacle_id=initial_receptacle_id,
+        semantic_pose_state_from_backend_state=_semantic_pose_state_from_backend_state,
+    )
 
 
 def _initial_semantic_pose_state_from_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -2300,30 +2301,16 @@ def _semantic_pose_state_from_backend_state(
     *,
     transform_events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    return {
-        "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
-        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "rendered_to_usd": False,
-        "planner_backed": False,
-        "physical_robot": False,
-        "semantic_pose_only": True,
-        "robot_pose": _robot_pose_for_receptacle(
-            state,
-            str(state.get("current_receptacle_id") or ""),
-        ),
-        "held_object_id": state.get("held_object_id"),
-        "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
-        "object_poses": _semantic_object_poses_from_state(state),
-        "articulations": _semantic_articulations_from_state(state),
-        "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
-        "transform_events": transform_events,
-        "evidence_note": (
-            "Semantic cleanup primitives update backend JSON pose/articulation state "
-            "against public USD prim handles. These edits are not rendered back into "
-            "the Isaac USD stage and are not planner-backed manipulation proof."
-        ),
-    }
+    return semantic_pose_state_from_backend_state(
+        state,
+        transform_events=transform_events,
+        state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        semantic_object_poses_from_state=_semantic_object_poses_from_state,
+        semantic_articulations_from_state=_semantic_articulations_from_state,
+    )
 
 
 def _record_semantic_pose_event(
@@ -2338,64 +2325,26 @@ def _record_semantic_pose_event(
     relation: str = "",
     **extra: Any,
 ) -> dict[str, Any]:
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    events = [
-        dict(item)
-        for item in semantic_pose_state.get("transform_events", [])
-        if isinstance(item, dict)
-    ]
-    event = {
-        "schema": ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
-        "sequence": len(events) + 1,
-        "tool": tool,
-        "state_mutation": state_mutation,
-        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "rendered_to_usd": False,
-        "planner_backed": False,
-        "physical_robot": False,
-        "object_id": object_id,
-        "object_usd_prim_path": _object_usd_prim_path(state, object_id),
-        "receptacle_id": receptacle_id,
-        "receptacle_usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
-        "previous_location_id": previous_location_id,
-        "location_id": location_id,
-        "location_relation": relation,
-        "robot_pose": _robot_pose_for_receptacle(
-            state,
-            str(state.get("current_receptacle_id") or receptacle_id),
-        ),
-    }
-    event.update({key: value for key, value in extra.items() if value is not None})
-    events.append(event)
-    semantic_pose_state.update(
-        {
-            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-            "rendered_to_usd": False,
-            "planner_backed": False,
-            "physical_robot": False,
-            "semantic_pose_only": True,
-            "robot_pose": _robot_pose_for_receptacle(
-                state,
-                str(state.get("current_receptacle_id") or receptacle_id),
-            ),
-            "held_object_id": state.get("held_object_id"),
-            "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
-            "object_poses": _semantic_object_poses_from_state(state),
-            "articulations": _semantic_articulations_from_state(state),
-            "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
-            "transform_events": events,
-            "evidence_note": (
-                "Semantic cleanup primitives update backend JSON pose/articulation state "
-                "against public USD prim handles. These edits are not rendered back into "
-                "the Isaac USD stage and are not planner-backed manipulation proof."
-            ),
-        }
+    return record_semantic_pose_event(
+        state,
+        tool=tool,
+        state_mutation=state_mutation,
+        event_schema=ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+        state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        semantic_object_poses_from_state=_semantic_object_poses_from_state,
+        semantic_articulations_from_state=_semantic_articulations_from_state,
+        object_usd_prim_path=_object_usd_prim_path,
+        receptacle_usd_prim_path=_receptacle_usd_prim_path,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        previous_location_id=previous_location_id,
+        location_id=location_id,
+        relation=relation,
+        **extra,
     )
-    state["semantic_pose_state"] = semantic_pose_state
-    return event
 
 
 def _record_waypoint_pose_event(
@@ -2406,59 +2355,19 @@ def _record_waypoint_pose_event(
     previous_waypoint_id: str = "",
     previous_room_id: str = "",
 ) -> dict[str, Any]:
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    events = [
-        dict(item)
-        for item in semantic_pose_state.get("transform_events", [])
-        if isinstance(item, dict)
-    ]
-    waypoint_id = str(waypoint.get("waypoint_id") or "")
-    room_id = str(waypoint.get("room_id") or "")
-    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
-    event = {
-        "schema": ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
-        "sequence": len(events) + 1,
-        "tool": "navigate_to_waypoint",
-        "state_mutation": "isaac_waypoint_pose",
-        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "rendered_to_usd": False,
-        "planner_backed": False,
-        "physical_robot": False,
-        "waypoint_id": waypoint_id,
-        "room_id": room_id,
-        "fixture_ids": fixture_ids,
-        "previous_waypoint_id": previous_waypoint_id,
-        "previous_room_id": previous_room_id,
-        "robot_pose": dict(robot_pose),
-    }
-    events.append(event)
-    semantic_pose_state.update(
-        {
-            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-            "rendered_to_usd": False,
-            "planner_backed": False,
-            "physical_robot": False,
-            "semantic_pose_only": True,
-            "robot_pose": dict(robot_pose),
-            "held_object_id": state.get("held_object_id"),
-            "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
-            "object_poses": _semantic_object_poses_from_state(state),
-            "articulations": _semantic_articulations_from_state(state),
-            "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
-            "transform_events": events,
-            "evidence_note": (
-                "Semantic cleanup primitives update backend JSON pose/articulation state "
-                "against public USD prim handles. Waypoint navigation updates the robot "
-                "pose used by Isaac robot-view rendering, but it is not planner-backed "
-                "navigation proof."
-            ),
-        }
+    return record_waypoint_pose_event(
+        state,
+        waypoint=waypoint,
+        robot_pose=robot_pose,
+        event_schema=ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+        state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        semantic_object_poses_from_state=_semantic_object_poses_from_state,
+        semantic_articulations_from_state=_semantic_articulations_from_state,
+        previous_waypoint_id=previous_waypoint_id,
+        previous_room_id=previous_room_id,
     )
-    state["semantic_pose_state"] = semantic_pose_state
-    return event
 
 
 def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
