@@ -4698,3 +4698,20 @@ Stop this refactor loop when:
   passed after a deliberate baseline refresh. The quality baseline was lowered
   from 71 to 70 Ruff complexity violations, with oversized modules unchanged at
   59. `roboclaws/launch/runners.py` no longer appears in the complexity summary.
+- 2026-06-15: Continued the backend-neutral generated-mess residual by splitting
+  `roboclaws/household/generated_mess.py` target selection and manifest
+  materialization helpers. Rule eligibility, round-robin target selection,
+  manifest target-list validation, single-target materialization, receptacle id
+  validation, relation validation, and placement-index validation are now named
+  helpers while `select_generated_mess_targets(...)`,
+  `build_generated_mess_manifest(...)`, and
+  `targets_from_generated_mess_manifest(...)` keep the same public contracts.
+  Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/generated_mess.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py`
+  passed; `ruff format --check roboclaws/household/generated_mess.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+  passed with 88 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 70 to 68 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/generated_mess.py` no longer appears in the
+  complexity-by-file summary.

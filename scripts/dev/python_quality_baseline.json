@@ -350,26 +350,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/household/generated_mess.py|C901|select_generated_mess_targets",
-        "limit": 10,
-        "message": "`select_generated_mess_targets` is too complex (12 > 10)",
-        "path": "roboclaws/household/generated_mess.py",
-        "row": 20,
-        "symbol": "select_generated_mess_targets",
-        "value": 12
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/generated_mess.py|C901|targets_from_generated_mess_manifest",
-        "limit": 10,
-        "message": "`targets_from_generated_mess_manifest` is too complex (12 > 10)",
-        "path": "roboclaws/household/generated_mess.py",
-        "row": 173,
-        "symbol": "targets_from_generated_mess_manifest",
-        "value": 12
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/household/grasp_cache_generation.py|C901|run_grasp_cache_generation",
         "limit": 10,
         "message": "`run_grasp_cache_generation` is too complex (11 > 10)",
