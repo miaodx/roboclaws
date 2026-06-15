@@ -31,9 +31,11 @@ def main(argv: list[str] | None = None) -> int:
         write_manifest=not args.no_manifest,
         write_eval_projection=not args.no_eval_projection,
         write_readiness_report=not args.no_readiness_report,
+        required_ui_supported_sources=tuple(args.require_ui_supported_sources),
+        required_eval_complete_sources=tuple(args.require_eval_complete_sources),
     )
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 0
+    return 0 if report["status"] == "success" else 2
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -48,6 +50,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-manifest", action="store_true")
     parser.add_argument("--no-eval-projection", action="store_true")
     parser.add_argument("--no-readiness-report", action="store_true")
+    parser.add_argument(
+        "--require-ui-supported-source",
+        action="append",
+        dest="require_ui_supported_sources",
+        default=[],
+        metavar="SCENE_SOURCE",
+        help=(
+            "Fail unless SCENE_SOURCE has exactly the sampler UI target count ready. "
+            "May be passed multiple times."
+        ),
+    )
+    parser.add_argument(
+        "--require-eval-complete-source",
+        action="append",
+        dest="require_eval_complete_sources",
+        default=[],
+        metavar="SCENE_SOURCE",
+        help=(
+            "Fail unless SCENE_SOURCE has exactly the sampler eval-stress target count ready. "
+            "May be passed multiple times."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -57,10 +81,13 @@ def export_readiness_artifacts(
     write_manifest: bool = True,
     write_eval_projection: bool = True,
     write_readiness_report: bool = True,
+    required_ui_supported_sources: tuple[str, ...] = (),
+    required_eval_complete_sources: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Write deterministic sampler artifacts for review and later scanner slices."""
 
     validate_sampler_manifest()
+    readiness = readiness_report()
     output_dir.mkdir(parents=True, exist_ok=True)
     artifacts: dict[str, str] = {}
     if write_manifest:
@@ -73,18 +100,77 @@ def export_readiness_artifacts(
         artifacts["eval_projection"] = str(projection_path)
     if write_readiness_report:
         readiness_path = output_dir / "scene_sampler_readiness_report.json"
-        _write_json(readiness_path, readiness_report())
+        _write_json(readiness_path, readiness)
         artifacts["readiness_report"] = str(readiness_path)
+    failures = _threshold_failures(
+        readiness,
+        required_ui_supported_sources=required_ui_supported_sources,
+        required_eval_complete_sources=required_eval_complete_sources,
+    )
     return {
         "schema": "molmospaces_scene_sampler_readiness_export_v1",
-        "status": "success",
+        "status": "failed" if failures else "success",
         "output_dir": str(output_dir),
         "artifacts": artifacts,
+        "threshold_failures": failures,
     }
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _threshold_failures(
+    readiness: dict[str, Any],
+    *,
+    required_ui_supported_sources: tuple[str, ...],
+    required_eval_complete_sources: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    sources = readiness.get("sources") if isinstance(readiness.get("sources"), dict) else {}
+    failures: list[dict[str, Any]] = []
+    for source in required_ui_supported_sources:
+        payload = sources.get(source)
+        if not isinstance(payload, dict):
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "ui_supported",
+                    "reason": "unknown_scene_source",
+                }
+            )
+            continue
+        if payload.get("ui_status") != "ready":
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "ui_supported",
+                    "reason": "ui_not_ready",
+                    "ready_count": payload.get("ui_ready_count"),
+                    "target_count": payload.get("ui_target_count"),
+                }
+            )
+    for source in required_eval_complete_sources:
+        payload = sources.get(source)
+        if not isinstance(payload, dict):
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "eval_complete",
+                    "reason": "unknown_scene_source",
+                }
+            )
+            continue
+        if payload.get("eval_status") != "complete":
+            failures.append(
+                {
+                    "scene_source": source,
+                    "threshold": "eval_complete",
+                    "reason": "eval_not_complete",
+                    "ready_count": payload.get("eval_ready_count"),
+                    "target_count": payload.get("eval_target_count"),
+                }
+            )
+    return failures
 
 
 if __name__ == "__main__":  # pragma: no cover

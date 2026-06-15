@@ -58,7 +58,8 @@ First slice implemented on 2026-06-15.
 - Readiness artifact exporter:
   `scripts/operator_console/export_scene_sampler_readiness.py` validates the
   sampler and writes the canonical manifest, eval projection, and per-source
-  readiness report without downloading assets or calling live VLMs.
+  readiness report without downloading assets or calling live VLMs. It also
+  supports explicit UI/eval threshold checks for source-specific gates.
 
 Verification run on 2026-06-15:
 
@@ -127,6 +128,10 @@ Next Flow implementation slices:
      write validated sampler artifacts under `output/scene-sampler-readiness/`.
      A later slice should replace or extend the static facts with real scanner
      candidate output for new source families.
+   - Strict threshold mode is available for gates. For example,
+     `--require-ui-supported-source procthor-10k-val` should pass today, while
+     `--require-eval-complete-source procthor-10k-val` should fail until the
+     source reaches ten eval-stress samples.
 
 2. **`procthor-10k-val` Stress Fill**
    - Scan additional non-contiguous `procthor-10k-val` candidates until ten
@@ -196,6 +201,8 @@ just agent::eval suite=scene_sampler_stress budget=smoke
 just agent::eval suite=map_build_consumer budget=focused
 just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused
 python scripts/operator_console/export_scene_sampler_readiness.py
+python scripts/operator_console/export_scene_sampler_readiness.py \
+  --require-ui-supported-source procthor-10k-val
 ```
 
 Run at least one product smoke for any newly UI-admitted source:
