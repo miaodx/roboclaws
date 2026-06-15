@@ -385,26 +385,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py|C901|_rewrite_texture_scale_inputs",
-        "limit": 10,
-        "message": "`_rewrite_texture_scale_inputs` is too complex (11 > 10)",
-        "path": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py",
-        "row": 267,
-        "symbol": "_rewrite_texture_scale_inputs",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py|C901|make_material_response_probe_usd",
-        "limit": 10,
-        "message": "`make_material_response_probe_usd` is too complex (12 > 10)",
-        "path": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py",
-        "row": 86,
-        "symbol": "make_material_response_probe_usd",
-        "value": 12
-      },
-      {
-        "code": "C901",
         "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_configure_exact_cleanup_task",
         "limit": 10,
         "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",

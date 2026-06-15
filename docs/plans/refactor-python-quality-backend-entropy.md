@@ -5122,3 +5122,19 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this AOV
   comparison patch so the unrelated staged `eval-harness` rename was not
   blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  probe request validation, full-scene rewrites, summary assembly, summary
+  writing, and texture-scale value rewriting into focused helpers. The CLI
+  flags, comparison-only summary schema, material-block rewrite behavior,
+  texture-scale modes, and targeted diffuse-texture injection behavior remain
+  unchanged. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py tests/unit/molmo_cleanup/test_molmospaces_material_response_probe_usd.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py tests/unit/molmo_cleanup/test_molmospaces_material_response_probe_usd.py`
+  passed; `ruff format scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmospaces_material_response_probe_usd.py`
+  passed with 6 tests. The quality baseline was refreshed from 43 to 41 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this material
+  response probe patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
