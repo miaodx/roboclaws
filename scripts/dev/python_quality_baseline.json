@@ -455,26 +455,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py|C901|_label_full_trace",
-        "limit": 10,
-        "message": "`_label_full_trace` is too complex (13 > 10)",
-        "path": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py",
-        "row": 431,
-        "symbol": "_label_full_trace",
-        "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py|PLR0912|_label_full_trace",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py",
-        "row": 431,
-        "symbol": "_label_full_trace",
-        "value": 13
-      },
-      {
-        "code": "C901",
         "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_configure_exact_cleanup_task",
         "limit": 10,
         "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",

@@ -5001,3 +5001,17 @@ Stop this refactor loop when:
   complexity violations with oversized modules unchanged at 58. The ratchet
   write/ok proof used a temporary clean worktree containing only this patch so
   the unrelated staged `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/generate_raw_fpv_private_labels.py::_label_full_trace(...)`
+  into observe-response labeling and replay-action helpers. Full-trace replay
+  still observes raw-FPV frames in order, applies the max-observation cap,
+  replays pick/navigate/place actions through placement bindings, and preserves
+  generated-target versus visible-movable label scope. Evidence:
+  `ruff check scripts/molmo_cleanup/generate_raw_fpv_private_labels.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`
+  passed; `ruff format --check scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py::test_raw_fpv_probe_keeps_private_labels_out_of_prompt_inputs tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py::test_raw_fpv_probe_scores_live_like_top_candidate_and_duplicates`
+  passed with 2 tests. The quality baseline was refreshed from 52 to 50 Ruff
+  complexity violations with oversized modules unchanged at 58. This is a
+  static/unit-covered replay-labeler cleanup; it does not claim a real
+  MolmoSpaces full-trace relabeling run.
