@@ -47,11 +47,36 @@ def _write_plan(path: Path, candidates: list[dict[str, object]]) -> None:
 
 def _candidate(*, scanner_status: str = "blocked_missing_resources") -> dict[str, object]:
     return {
+        "scene_family": "ithor",
+        "scene_split": "not_applicable",
         "scene_source": "ithor",
         "scene_index": 1,
         "world_id": "molmospaces/ithor/1",
         "scanner_status": scanner_status,
         "admission_status": "blocked",
+        "readiness_status": "blocked",
+        "lanes": [],
+        "failure_class": "environment_blocked",
+        "blocked_reason": "source assets missing",
+        "selected_reason": "scanner_candidate_ready_for_product_smoke",
+        "room_count": 4,
+        "waypoint_count": 4,
+        "category_provenance": "prepared_visual_label_manifest",
+        "preview_statuses": {
+            "fpv": "reviewable",
+            "map": "reviewable",
+            "chase": "reviewable",
+            "topdown": "reviewable",
+        },
+        "passed_gates": ["preview_metadata", "public_room_count"],
+        "required_gates": [
+            "source_asset_available",
+            "preview_metadata",
+            "public_room_count",
+            "public_waypoints",
+            "trusted_category_provenance",
+            "map_build_artifacts",
+        ],
         "missing_gates": (
             ["source_asset_available"]
             if scanner_status != "ready_for_product_smoke"
@@ -60,6 +85,12 @@ def _candidate(*, scanner_status: str = "blocked_missing_resources") -> dict[str
         "missing_paths": ["/tmp/FloorPlan1_physics.xml"]
         if scanner_status != "ready_for_product_smoke"
         else [],
+        "candidate_file": {
+            "exists": scanner_status == "ready_for_product_smoke",
+            "path": "/tmp/FloorPlan1_physics.xml",
+        },
+        "primary_path": "/tmp/FloorPlan1_physics.xml",
+        "path_status": "available",
         "preview_command": (
             ".venv/bin/python scripts/operator_console/render_scene_previews.py "
             "--world molmospaces/ithor/1"
@@ -99,6 +130,13 @@ def test_scanner_runner_skips_blocked_candidates_without_running_commands(tmp_pa
         "world_ids": ["molmospaces/ithor/1"],
     }
     assert result["rows"][0]["status"] == "skipped_blocked_candidate"
+    assert result["rows"][0]["scene_family"] == "ithor"
+    assert result["rows"][0]["failure_class"] == "environment_blocked"
+    assert result["rows"][0]["room_count"] == 4
+    assert result["rows"][0]["waypoint_count"] == 4
+    assert result["rows"][0]["category_provenance"] == "prepared_visual_label_manifest"
+    assert result["rows"][0]["preview_statuses"]["fpv"] == "reviewable"
+    assert result["rows"][0]["candidate_file"]["path"] == "/tmp/FloorPlan1_physics.xml"
     assert calls == []
     assert json.loads(output_path.read_text(encoding="utf-8")) == result
 

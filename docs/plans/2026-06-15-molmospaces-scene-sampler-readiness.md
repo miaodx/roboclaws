@@ -210,6 +210,13 @@ First slice implemented on 2026-06-15.
   needed for selected source/world candidates. It is dry-run by default and only
   executes install commands with an explicit `--execute`, preserving the
   no-implicit-download policy for sampler/export/CI flows.
+- Scanner execution plan and scanner-run output now carry candidate evidence
+  through the execution boundary: `scene_family`, `scene_split`,
+  `readiness_status`, `lanes`, `failure_class`, `blocked_reason`,
+  `selected_reason`, room/waypoint counts, category provenance, preview
+  statuses, passed/required/missing gates, candidate file provenance, and source
+  path status. A scanner run can now explain why a candidate executed or was
+  skipped without re-reading the admission artifact.
 
 Verification run on 2026-06-15:
 
@@ -269,6 +276,10 @@ ruff check scripts/operator_console/export_scene_sampler_readiness.py tests/unit
 ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_source_prep_runner.py -q
 ruff check scripts/operator_console/run_scene_sampler_source_prep.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py
 .venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py --prep /tmp/roboclaws-scene-sampler-source-prep-worklist/scene_sampler_source_prep.json --output /tmp/roboclaws-scene-sampler-source-prep-worklist/source_prep_run.json --source ithor
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/launch/test_scene_sampler.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/launch/test_scene_sampler.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-scanner-evidence --candidate-range 0:19 --no-generated-eval
+.venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py --plan /tmp/roboclaws-scene-sampler-scanner-evidence/scene_sampler_scanner_execution_plan.json --output /tmp/roboclaws-scene-sampler-scanner-evidence/scanner_run.json
 ```
 
 Current limits feeding the next Flow:

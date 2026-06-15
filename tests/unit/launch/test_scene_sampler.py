@@ -687,6 +687,23 @@ def test_scene_sampler_scanner_execution_plan_records_commands(monkeypatch) -> N
     assert plan["summary"]["blocked_source_count"] == 4
     assert candidate["world_id"] == "molmospaces/ithor/0"
     assert candidate["scanner_status"] == "blocked_missing_resources"
+    assert candidate["scene_family"] == "ithor"
+    assert candidate["scene_split"] == "not_applicable"
+    assert candidate["readiness_status"] == "blocked"
+    assert candidate["failure_class"] == "environment_blocked"
+    assert candidate["room_count"] == 0
+    assert candidate["waypoint_count"] == 0
+    assert candidate["category_provenance"] == "unavailable"
+    assert candidate["required_gates"] == [
+        "source_asset_available",
+        "preview_metadata",
+        "public_room_count",
+        "public_waypoints",
+        "trusted_category_provenance",
+        "map_build_artifacts",
+    ]
+    assert "source_asset_available" in candidate["missing_gates"]
+    assert candidate["candidate_file"]["source"] == "legacy_val_xml_path"
     assert candidate["install_command"].startswith(".venv/bin/python - <<'PY'")
     assert "render_scene_previews.py --world molmospaces/ithor/0" in candidate[
         "preview_command"

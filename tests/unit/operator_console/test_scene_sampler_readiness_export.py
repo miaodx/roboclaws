@@ -138,6 +138,14 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "blocked_missing_resources",
         "ready_for_product_smoke",
     }
+    assert ithor_scanner["scene_family"] == "ithor"
+    assert ithor_scanner["failure_class"] == "environment_blocked"
+    assert ithor_scanner["room_count"] == 0
+    assert ithor_scanner["waypoint_count"] == 0
+    assert ithor_scanner["category_provenance"] == "unavailable"
+    assert "source_asset_available" in ithor_scanner["required_gates"]
+    assert "source_asset_available" in ithor_scanner["missing_gates"]
+    assert ithor_scanner["candidate_file"]["source"] == "molmospaces_get_scenes"
     assert "render_scene_previews.py --world molmospaces/ithor/1" in ithor_scanner[
         "preview_command"
     ]

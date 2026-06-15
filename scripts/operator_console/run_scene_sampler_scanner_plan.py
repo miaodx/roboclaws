@@ -207,13 +207,29 @@ def _run_candidate(
 
 def _candidate_row_base(candidate: dict[str, Any]) -> dict[str, Any]:
     return {
+        "scene_family": candidate.get("scene_family", ""),
+        "scene_split": candidate.get("scene_split", ""),
         "scene_source": candidate.get("scene_source", ""),
         "scene_index": candidate.get("scene_index"),
         "world_id": candidate.get("world_id", ""),
         "scanner_status": candidate.get("scanner_status", ""),
         "admission_status": candidate.get("admission_status", ""),
+        "readiness_status": candidate.get("readiness_status", ""),
+        "lanes": candidate.get("lanes") or [],
+        "failure_class": candidate.get("failure_class", ""),
+        "blocked_reason": candidate.get("blocked_reason", ""),
+        "selected_reason": candidate.get("selected_reason", ""),
+        "room_count": candidate.get("room_count", 0),
+        "waypoint_count": candidate.get("waypoint_count", 0),
+        "category_provenance": candidate.get("category_provenance", ""),
+        "preview_statuses": candidate.get("preview_statuses", {}),
+        "passed_gates": candidate.get("passed_gates") or [],
+        "required_gates": candidate.get("required_gates") or [],
         "missing_gates": candidate.get("missing_gates") or [],
         "missing_paths": candidate.get("missing_paths") or [],
+        "candidate_file": candidate.get("candidate_file") or {},
+        "primary_path": candidate.get("primary_path", ""),
+        "path_status": candidate.get("path_status", ""),
         "next_action": candidate.get("next_action", ""),
     }
 
