@@ -23,7 +23,7 @@
         "path": "roboclaws/household/agibot_sdk_runner.py"
       },
       {
-        "lines": 2187,
+        "lines": 1844,
         "max_module_lines": 800,
         "path": "roboclaws/household/planner_proof_requests.py"
       },
@@ -427,46 +427,6 @@
         "row": 86,
         "symbol": "run_physical_nav2_cleanup_pilot",
         "value": 64
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/planner_proof_requests.py|C901|_discovered_runtime_aliases_by_source_request",
-        "limit": 10,
-        "message": "`_discovered_runtime_aliases_by_source_request` is too complex (11 > 10)",
-        "path": "roboclaws/household/planner_proof_requests.py",
-        "row": 1439,
-        "symbol": "_discovered_runtime_aliases_by_source_request",
-        "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/planner_proof_requests.py|C901|_prior_fallback_candidate_filters_by_source_request",
-        "limit": 10,
-        "message": "`_prior_fallback_candidate_filters_by_source_request` is too complex (14 > 10)",
-        "path": "roboclaws/household/planner_proof_requests.py",
-        "row": 1517,
-        "symbol": "_prior_fallback_candidate_filters_by_source_request",
-        "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/planner_proof_requests.py|PLR0912|_prior_fallback_candidate_filters_by_source_request",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/household/planner_proof_requests.py",
-        "row": 1517,
-        "symbol": "_prior_fallback_candidate_filters_by_source_request",
-        "value": 13
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/planner_proof_requests.py|PLR0915|_prior_fallback_candidate_filters_by_source_request",
-        "limit": 50,
-        "message": "Too many statements (52 > 50)",
-        "path": "roboclaws/household/planner_proof_requests.py",
-        "row": 1517,
-        "symbol": "_prior_fallback_candidate_filters_by_source_request",
-        "value": 52
       },
       {
         "code": "C901",

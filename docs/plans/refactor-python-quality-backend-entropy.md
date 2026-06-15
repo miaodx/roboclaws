@@ -4593,3 +4593,19 @@ Stop this refactor loop when:
   1996 lines and no longer appears in the complexity-by-file summary; the new
   stage helper module is 785 lines, below the oversized-module threshold.
   Remaining Candidate C work is limited to planner-proof fallback rows.
+- 2026-06-15: Completed the remaining Candidate C planner-proof fallback rows
+  by moving prior fallback alias discovery, carried-filter hydration, prior
+  generated-result filtering, and helper parsers into
+  `roboclaws/household/planner_proof_fallbacks.py`. The public
+  `planner_proof_requests.py` APIs and proof request payloads are unchanged;
+  the fallback module preserves prior evidence fields such as `last_worker_stage`
+  and proof-quality summaries. Evidence:
+  `ruff check roboclaws/household/planner_proof_requests.py roboclaws/household/planner_proof_fallbacks.py tests/unit/molmo_cleanup/test_molmo_planner_proof_requests.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_planner_proof_requests.py -q`
+  passed with 26 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 80 to 76 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/planner_proof_requests.py` dropped from 2187 to 1844
+  lines and no longer appears in the complexity-by-file summary. Candidate C is
+  complete for this backend-quality loop.
