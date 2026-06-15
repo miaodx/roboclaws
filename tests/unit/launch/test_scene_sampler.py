@@ -307,6 +307,16 @@ def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
     assert report["molmospaces_module_available"] is False
     assert "molmospaces_module_stdout" in report
     assert "scene_root_stdout" in report
+    assert report["summary"] == {
+        "source_count": 4,
+        "available_source_count": 0,
+        "blocked_source_count": 4,
+        "scene_root_available_source_count": 0,
+        "source_dir_available_count": 0,
+        "scene_index_map_available_count": 0,
+        "missing_candidate_count": 8,
+        "invalid_candidate_count": 0,
+    }
     for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
         source_report = report["sources"][source]
         assert source_report["status"] == "blocked"
@@ -395,6 +405,14 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert report["probe_mode"] == "no_download_no_vlm"
     assert report["download_policy"] == "manual_operator_only"
     assert report["summary"]["source_count"] == 4
+    assert report["summary"]["missing_resource_summary"]["by_resource_type"] == {
+        "scene_source_dir": 4,
+        "scene_xml": 40,
+    }
+    assert report["summary"]["missing_resource_summary"]["by_reason"] == {
+        "candidate_xml_missing": 40,
+        "source_dir_missing": 4,
+    }
 
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["prep_status"] == "blocked_molmospaces_module"
@@ -407,6 +425,10 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
         item["resource_type"] == "scene_xml" and item["scene_index"] == 6
         for item in procthor["missing_resources"]
     )
+    assert procthor["missing_resource_summary"]["by_resource_type"] == {
+        "scene_source_dir": 1,
+        "scene_xml": 10,
+    }
 
     ithor = report["sources"]["ithor"]
     assert ithor["molmospaces_get_scenes_call"] == 'get_scenes("ithor", "train")'
@@ -456,6 +478,11 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
 
     assert report["schema"] == "molmospaces_scene_sampler_scanner_admission_v1"
     assert report["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert report["summary"]["admitted_count"] == 5
+    assert report["summary"]["blocked_count"] == 32
+    assert report["summary"]["rejected_count"] == 3
+    assert report["summary"]["missing_gate_counts"]["source_asset_available"] == 32
+    assert report["summary"]["missing_gate_counts"]["preview_metadata"] == 32
     procthor = report["sources"]["procthor-10k-val"]
     val_0 = next(item for item in procthor["admission_rows"] if item["scene_index"] == 0)
     assert val_0["admission_status"] == "admitted"
@@ -577,6 +604,10 @@ def test_scene_sampler_scanner_execution_plan_records_commands(monkeypatch) -> N
 
     assert plan["schema"] == "molmospaces_scene_sampler_scanner_execution_plan_v1"
     assert plan["download_policy"] == "manual_operator_only"
+    assert plan["summary"]["candidate_count"] == 33
+    assert plan["summary"]["ready_for_product_smoke_count"] == 0
+    assert plan["summary"]["blocked_count"] == 33
+    assert plan["summary"]["blocked_source_count"] == 4
     assert candidate["world_id"] == "molmospaces/ithor/0"
     assert candidate["scanner_status"] == "blocked_missing_resources"
     assert candidate["install_command"].startswith(".venv/bin/python - <<'PY'")

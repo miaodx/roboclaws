@@ -172,6 +172,13 @@ First slice implemented on 2026-06-15.
   path under `get_scenes_root()` before calling
   `install_scene_with_objects_and_grasps_from_path`. This keeps manual
   operator prep aligned with source-aware runtime resolution.
+- No-download readiness artifacts now carry top-level rollups for blocked
+  evidence: source availability summarizes available/blocked source counts,
+  source prep summarizes missing resources by type and reason, scanner
+  admission summarizes admitted/blocked/rejected rows plus missing gate counts,
+  and scanner execution summarizes ready/blocked product-smoke candidates.
+  The detailed per-candidate rows remain available, but future flows can read
+  source/gate/resource status directly from summaries.
 
 Verification run on 2026-06-15:
 
@@ -211,6 +218,9 @@ ruff check scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-source-prep-snippets --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-summary-rollups --candidate-range 0:19 --no-generated-eval
 ```
 
 Current limits feeding the next Flow:

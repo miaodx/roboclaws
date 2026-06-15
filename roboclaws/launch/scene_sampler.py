@@ -585,6 +585,7 @@ def source_availability_report(
         "scene_root": str(root) if root is not None else "",
         "scene_root_reason": root_reason,
         "scene_root_stdout": root_stdout,
+        "summary": _source_availability_summary(sources),
         "sources": sources,
     }
 
@@ -779,6 +780,7 @@ def source_prep_report(
                 if item.get("source") == "molmospaces_get_scenes"
             ],
             "missing_resource_count": len(missing_resources),
+            "missing_resource_summary": _resource_reason_counts(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [
                 item.get("world_id") for item in next_scan_candidates
@@ -814,6 +816,14 @@ def source_prep_report(
             "missing_resource_count": sum(
                 int(source.get("missing_resource_count") or 0)
                 for source in sources.values()
+            ),
+            "missing_resource_summary": _resource_reason_counts(
+                [
+                    resource
+                    for source in sources.values()
+                    for resource in source.get("missing_resources", [])
+                    if isinstance(resource, dict)
+                ]
             ),
         },
         "sources": sources,
@@ -867,6 +877,7 @@ def scanner_execution_plan(
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
         "candidate_indices": list(candidate_indices),
+        "summary": _scanner_execution_summary(sources),
         "sources": sources,
     }
 
@@ -918,6 +929,7 @@ def scanner_admission_report(
         "probe_mode": "no_download_no_backend_no_vlm",
         "candidate_indices": list(candidate_indices),
         "required_gates": list(_scanner_required_gates()),
+        "summary": _scanner_admission_summary(sources),
         "sources": sources,
     }
 
@@ -1258,6 +1270,39 @@ def _source_availability_blocked_reason(
     return ""
 
 
+def _source_availability_summary(
+    sources: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "source_count": len(sources),
+        "available_source_count": sum(
+            1 for source in sources.values() if source.get("status") == "available"
+        ),
+        "blocked_source_count": sum(
+            1 for source in sources.values() if source.get("status") != "available"
+        ),
+        "scene_root_available_source_count": sum(
+            1 for source in sources.values() if source.get("scene_root_available")
+        ),
+        "source_dir_available_count": sum(
+            1 for source in sources.values() if source.get("source_dir_available")
+        ),
+        "scene_index_map_available_count": sum(
+            1
+            for source in sources.values()
+            if source.get("scene_index_map_status") == "available"
+        ),
+        "missing_candidate_count": sum(
+            len(source.get("missing_candidate_indices") or [])
+            for source in sources.values()
+        ),
+        "invalid_candidate_count": sum(
+            len(source.get("invalid_candidate_indices") or [])
+            for source in sources.values()
+        ),
+    }
+
+
 def _molmospaces_get_scenes_args(scene_source: str) -> tuple[str, str]:
     if scene_source == "ithor":
         return "ithor", "train"
@@ -1469,6 +1514,20 @@ def _source_prep_status(
     if source_selection.get("status") != "complete":
         return "ready_for_scanner"
     return "complete"
+
+
+def _resource_reason_counts(resources: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    by_type: dict[str, int] = {}
+    by_reason: dict[str, int] = {}
+    for resource in resources:
+        resource_type = str(resource.get("resource_type") or "unknown")
+        reason = str(resource.get("reason") or "unknown")
+        by_type[resource_type] = by_type.get(resource_type, 0) + 1
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+    return {
+        "by_resource_type": dict(sorted(by_type.items())),
+        "by_reason": dict(sorted(by_reason.items())),
+    }
 
 
 def _source_prep_operator_commands(
@@ -1759,6 +1818,60 @@ def _scanner_execution_candidate(
             if scanner_status == "ready_for_product_smoke"
             else admission.get("next_action", "run_manual_source_prep_before_scanner")
         ),
+    }
+
+
+def _scanner_execution_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "source_count": len(sources),
+        "candidate_count": sum(
+            int(source.get("candidate_count") or 0) for source in sources.values()
+        ),
+        "ready_for_product_smoke_count": sum(
+            int(source.get("ready_for_product_smoke_count") or 0)
+            for source in sources.values()
+        ),
+        "blocked_count": sum(
+            int(source.get("blocked_count") or 0) for source in sources.values()
+        ),
+        "blocked_source_count": sum(
+            1
+            for source in sources.values()
+            if int(source.get("ready_for_product_smoke_count") or 0) == 0
+            and int(source.get("candidate_count") or 0) > 0
+        ),
+        "ready_source_count": sum(
+            1
+            for source in sources.values()
+            if int(source.get("ready_for_product_smoke_count") or 0) > 0
+        ),
+    }
+
+
+def _scanner_admission_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    missing_gate_counts: dict[str, int] = {}
+    for source in sources.values():
+        for row in source.get("admission_rows") or []:
+            if not isinstance(row, dict):
+                continue
+            for gate in row.get("missing_gates") or []:
+                key = str(gate)
+                missing_gate_counts[key] = missing_gate_counts.get(key, 0) + 1
+    return {
+        "source_count": len(sources),
+        "admitted_count": sum(
+            int((source.get("summary") or {}).get("admitted_count") or 0)
+            for source in sources.values()
+        ),
+        "blocked_count": sum(
+            int((source.get("summary") or {}).get("blocked_count") or 0)
+            for source in sources.values()
+        ),
+        "rejected_count": sum(
+            int((source.get("summary") or {}).get("rejected_count") or 0)
+            for source in sources.values()
+        ),
+        "missing_gate_counts": dict(sorted(missing_gate_counts.items())),
     }
 
 

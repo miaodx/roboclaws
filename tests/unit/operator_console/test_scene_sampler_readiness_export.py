@@ -62,6 +62,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     )
     assert availability["schema"] == "molmospaces_scene_source_availability_report_v1"
     assert availability["probe_mode"] == "no_download_no_vlm"
+    assert availability["summary"]["source_count"] == 4
+    assert "blocked_source_count" in availability["summary"]
     assert availability["sources"]["ithor"]["failure_class"] in {
         "",
         "environment_blocked",
@@ -75,6 +77,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert source_prep["schema"] == "molmospaces_scene_sampler_source_prep_v1"
     assert source_prep["probe_mode"] == "no_download_no_vlm"
     assert source_prep["download_policy"] == "manual_operator_only"
+    assert "missing_resource_summary" in source_prep["summary"]
     assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
         'get_scenes("ithor", "train")'
     )
@@ -99,6 +102,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     )
     assert scanner_admission["schema"] == "molmospaces_scene_sampler_scanner_admission_v1"
     assert scanner_admission["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert scanner_admission["summary"]["source_count"] == 4
+    assert "missing_gate_counts" in scanner_admission["summary"]
     assert scanner_admission["sources"]["procthor-10k-val"]["summary"][
         "admitted_count"
     ] == 5
@@ -107,6 +112,8 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "molmospaces_scene_sampler_scanner_execution_plan_v1"
     )
     assert scanner_execution["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert scanner_execution["summary"]["source_count"] == 4
+    assert "ready_for_product_smoke_count" in scanner_execution["summary"]
     ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
     assert ithor_scanner["world_id"] == "molmospaces/ithor/1"
     assert ithor_scanner["scanner_status"] in {
