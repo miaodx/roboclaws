@@ -179,6 +179,12 @@ logs before choosing the next slice.
   Metric: 14 -> 13 complexity rows; oversized modules unchanged at 62. Proof:
   focused realworld-contract test, ruff, format check, and ratchet.
 
+- 2026-06-16: Robot visual timeline report test split render-context setup,
+  robot-view step builders, layout/lightbox/semantic-substep/pose/caveat
+  assertions, and yaw-rendering proof into focused helpers. Metric: 13 -> 12
+  complexity rows; oversized modules unchanged at 62. Proof: focused report
+  test, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

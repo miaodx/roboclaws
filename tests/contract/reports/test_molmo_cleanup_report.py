@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
@@ -211,6 +212,27 @@ def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None
 
 
 def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
+    context = _robot_visual_timeline_report_context(tmp_path)
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=context.scenario,
+        run_result=context.run_result,
+        trace_events=[],
+        before_snapshot=context.before,
+        after_snapshot=context.after,
+        robot_view_steps=_robot_visual_timeline_steps(),
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    _assert_robot_visual_timeline_layout(html)
+    _assert_robot_visual_timeline_lightbox(html)
+    _assert_robot_visual_timeline_semantic_substeps(html)
+    _assert_robot_visual_timeline_pose_and_focus(html)
+    _assert_robot_visual_timeline_static_isaac_caveat(html)
+    _assert_robot_visual_timeline_yaw_rendering(tmp_path, context)
+
+
+def _robot_visual_timeline_report_context(tmp_path: Path) -> SimpleNamespace:
     scenario = build_cleanup_scenario(seed=7)
     score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
     before = write_state_snapshot(
@@ -228,7 +250,16 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (tmp_path / "robot_views" / name).parent.mkdir(exist_ok=True)
         (tmp_path / "robot_views" / name).write_bytes(b"placeholder")
-    run_result = {
+    return SimpleNamespace(
+        scenario=scenario,
+        before=before,
+        after=after,
+        run_result=_robot_visual_timeline_run_result(score),
+    )
+
+
+def _robot_visual_timeline_run_result(score: object) -> dict[str, object]:
+    return {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
         "score": score.to_dict(),
@@ -249,118 +280,84 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
                         "location_relation": "on",
                     },
                 ],
-            }
+            },
         ],
     }
 
-    report_path = render_cleanup_report(
-        run_dir=tmp_path,
-        scenario=scenario,
-        run_result=run_result,
-        trace_events=[],
-        before_snapshot=before,
-        after_snapshot=after,
-        robot_view_steps=[
-            {
-                "action": "before",
-                "robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0},
-                "view_provenance": {
-                    "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
-                    "map": "isaac_lab_camera_rgb_static_robot_views:map",
-                    "semantic_pose_state_refreshed": False,
-                    "evidence_note": (
-                        "Robot-view images are static captures from the loaded USD scene."
-                    ),
-                },
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "chase": "robot_views/step.chase.png",
-                    "map": "robot_views/step.map.png",
-                    "verify": "robot_views/bootstrap.verify.png",
-                },
-                "focus": {
-                    "has_focus": False,
-                    "fpv_visibility": {
-                        "status": "ok",
-                        "object_pixels": 0,
-                        "receptacle_pixels": 0,
-                    },
-                    "visibility": {
-                        "status": "ok",
-                        "object_pixels": 0,
-                        "receptacle_pixels": 0,
-                    },
-                },
-            },
-            {
-                "action": "goto sink",
-                "semantic_phase": "navigate_to_receptacle",
-                "view_provenance": {
-                    "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
-                    "map": "isaac_lab_camera_rgb_static_robot_views:map",
-                    "semantic_pose_state_refreshed": False,
-                    "evidence_note": (
-                        "Robot-view images are static captures from the loaded USD scene."
-                    ),
-                },
-                "robot_pose": {
-                    "x": 1.0,
-                    "y": 2.0,
-                    "theta": 0.5,
-                    "theta_source": "target_facing_base_yaw",
-                    "head_pitch": 0.6,
-                    "head_pitch_source": "target_framing_head_pitch",
-                    "robot_room_id": "room_1",
-                    "target_room_id": "room_1",
-                    "same_room_as_target": True,
-                },
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "chase": "robot_views/step.chase.png",
-                    "map": "robot_views/step.map.png",
-                    "verify": "robot_views/step.verify.png",
-                },
-                "focus": {
-                    "has_focus": True,
-                    "object_label": "Mug mug",
-                    "receptacle_label": "Sink sink",
-                    "provenance": "public_mujoco_state_report_aid",
-                    "fpv_visibility": {
-                        "status": "ok",
-                        "object_pixels": 12,
-                        "receptacle_pixels": 80,
-                    },
-                    "visibility": {
-                        "status": "ok",
-                        "object_pixels": 24,
-                        "receptacle_pixels": 120,
-                    },
-                },
-            },
-            {
-                "action": "pick mug_01",
-                "semantic_phase": "pick",
-                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "verify": "robot_views/step.verify.png",
-                },
-                "focus": {"has_focus": True},
-            },
-            {
-                "action": "place mug_01",
-                "semantic_phase": "place",
-                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "verify": "robot_views/step.verify.png",
-                },
-                "focus": {"has_focus": True},
-            },
-        ],
-    )
 
-    html = report_path.read_text(encoding="utf-8")
+def _robot_visual_timeline_steps() -> list[dict[str, object]]:
+    static_view_provenance = {
+        "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
+        "map": "isaac_lab_camera_rgb_static_robot_views:map",
+        "semantic_pose_state_refreshed": False,
+        "evidence_note": "Robot-view images are static captures from the loaded USD scene.",
+    }
+    return [
+        {
+            "action": "before",
+            "robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0},
+            "view_provenance": static_view_provenance,
+            "views": {
+                "fpv": "robot_views/step.fpv.png",
+                "chase": "robot_views/step.chase.png",
+                "map": "robot_views/step.map.png",
+                "verify": "robot_views/bootstrap.verify.png",
+            },
+            "focus": {
+                "has_focus": False,
+                "fpv_visibility": {"status": "ok", "object_pixels": 0, "receptacle_pixels": 0},
+                "visibility": {"status": "ok", "object_pixels": 0, "receptacle_pixels": 0},
+            },
+        },
+        {
+            "action": "goto sink",
+            "semantic_phase": "navigate_to_receptacle",
+            "view_provenance": static_view_provenance,
+            "robot_pose": {
+                "x": 1.0,
+                "y": 2.0,
+                "theta": 0.5,
+                "theta_source": "target_facing_base_yaw",
+                "head_pitch": 0.6,
+                "head_pitch_source": "target_framing_head_pitch",
+                "robot_room_id": "room_1",
+                "target_room_id": "room_1",
+                "same_room_as_target": True,
+            },
+            "views": {
+                "fpv": "robot_views/step.fpv.png",
+                "chase": "robot_views/step.chase.png",
+                "map": "robot_views/step.map.png",
+                "verify": "robot_views/step.verify.png",
+            },
+            "focus": {
+                "has_focus": True,
+                "object_label": "Mug mug",
+                "receptacle_label": "Sink sink",
+                "provenance": "public_mujoco_state_report_aid",
+                "fpv_visibility": {"status": "ok", "object_pixels": 12, "receptacle_pixels": 80},
+                "visibility": {"status": "ok", "object_pixels": 24, "receptacle_pixels": 120},
+            },
+        },
+        _robot_visual_timeline_action_step("pick mug_01", "pick"),
+        _robot_visual_timeline_action_step("place mug_01", "place"),
+    ]
+
+
+def _robot_visual_timeline_action_step(action: str, phase: str) -> dict[str, object]:
+    return {
+        "action": action,
+        "semantic_phase": phase,
+        "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
+        "views": {
+            "fpv": "robot_views/step.fpv.png",
+            "verify": "robot_views/step.verify.png",
+        },
+        "focus": {"has_focus": True},
+    }
+
+
+def _assert_robot_visual_timeline_layout(html: str) -> None:
     assert "Robot View Timeline" in html
     assert 'data-report-tab-button="timeline"' in html
     assert html.index('data-report-tab-button="timeline"') < html.index(
@@ -369,7 +366,9 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert '<details class="robot-timeline-details" open>' in html
     assert "captured robot-view" in html
     assert "Top-down Scene View" in html
-    assert "Semantic Substeps" in html
+
+
+def _assert_robot_visual_timeline_lightbox(html: str) -> None:
     assert "Pick/place visual checks" in html
     assert '<details class="comparison-item" open>' in html
     assert '<a class="image-link" href="robot_views/step.fpv.png" data-lightbox-image' in html
@@ -382,6 +381,10 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert 'class="image-lightbox"' in html
     assert "Close image review" in html
     assert "sim-only-grid-single" in html
+
+
+def _assert_robot_visual_timeline_semantic_substeps(html: str) -> None:
+    assert "Semantic Substeps" in html
     assert '<details class="semantic-card">' in html
     assert "semantic-card-status" in html
     assert SEMANTIC_LOOP_DISPLAY_NOTE in html
@@ -392,6 +395,9 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "Subphase" in html
     assert "Role" in html
     assert "object_done" not in html
+
+
+def _assert_robot_visual_timeline_pose_and_focus(html: str) -> None:
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
     assert "robot_views/bootstrap.verify.png" not in html
@@ -403,13 +409,19 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "public_mujoco_state_report_aid" in html
     assert "target_facing_base_yaw" in html
     assert "target_framing_head_pitch" in html
+
+
+def _assert_robot_visual_timeline_yaw_rendering(
+    tmp_path: Path,
+    context: SimpleNamespace,
+) -> None:
     assert "yaw_deg=257.0" in render_cleanup_report(
         run_dir=tmp_path,
-        scenario=scenario,
-        run_result=run_result,
+        scenario=context.scenario,
+        run_result=context.run_result,
         trace_events=[],
-        before_snapshot=before,
-        after_snapshot=after,
+        before_snapshot=context.before,
+        after_snapshot=context.after,
         robot_view_steps=[
             {
                 "action": "isaac waypoint",
@@ -421,6 +433,9 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
             }
         ],
     ).read_text(encoding="utf-8")
+
+
+def _assert_robot_visual_timeline_static_isaac_caveat(html: str) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
