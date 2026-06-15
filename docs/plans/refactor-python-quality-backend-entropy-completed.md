@@ -264,6 +264,13 @@ logs before choosing the next slice.
   Proof: focused Isaac support-pose/support-surface tests, ruff, format check,
   and ratchet.
 
+- 2026-06-16: Isaac scene-index room-outline and USD reference-asset diagnostic
+  helpers moved from the backend worker into `isaac_scene_index_geometry.py`,
+  keeping worker-private aliases and the `_usd_world_bounds` room-outline
+  wrapper. Metric: `isaac_lab_backend_worker.py` 7020 -> 6923 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Isaac room-outline/placement tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
