@@ -436,7 +436,25 @@ def _define_obj_mesh(*, stage: Any, mesh_path: Path, prim_path: str) -> None:
 def _parse_urdf_tree(urdf_path: Path) -> dict[str, Any]:
     tree = ET.parse(urdf_path)
     root = tree.getroot()
-    link_names = [str(item.attrib.get("name") or "") for item in root.findall("link")]
+    link_names = _urdf_link_names(root)
+    child_to_parent = _urdf_child_to_parent(root)
+    return {
+        "link_transforms": _urdf_link_transforms(link_names, child_to_parent),
+        "visuals": _urdf_visuals_by_link(root, urdf_path=urdf_path, link_names=link_names),
+        "child_to_parent": child_to_parent,
+    }
+
+
+def _urdf_link_names(root: ET.Element) -> list[str]:
+    return [str(item.attrib.get("name") or "") for item in root.findall("link")]
+
+
+def _urdf_visuals_by_link(
+    root: ET.Element,
+    *,
+    urdf_path: Path,
+    link_names: list[str],
+) -> dict[str, list[dict[str, Any]]]:
     visuals: dict[str, list[dict[str, Any]]] = {name: [] for name in link_names if name}
     for link in root.findall("link"):
         link_name = str(link.attrib.get("name") or "")
@@ -454,6 +472,10 @@ def _parse_urdf_tree(urdf_path: Path) -> dict[str, Any]:
                     "origin_matrix": _origin_matrix(origin),
                 }
             )
+    return visuals
+
+
+def _urdf_child_to_parent(root: ET.Element) -> dict[str, tuple[str, list[list[float]]]]:
     child_to_parent: dict[str, tuple[str, list[list[float]]]] = {}
     for joint in root.findall("joint"):
         parent = joint.find("parent")
@@ -465,6 +487,13 @@ def _parse_urdf_tree(urdf_path: Path) -> dict[str, Any]:
         if not parent_name or not child_name:
             continue
         child_to_parent[child_name] = (parent_name, _origin_matrix(joint.find("origin")))
+    return child_to_parent
+
+
+def _urdf_link_transforms(
+    link_names: list[str],
+    child_to_parent: dict[str, tuple[str, list[list[float]]]],
+) -> dict[str, list[list[float]]]:
     transforms: dict[str, list[list[float]]] = {}
 
     def link_transform(link_name: str) -> list[list[float]]:
@@ -481,11 +510,7 @@ def _parse_urdf_tree(urdf_path: Path) -> dict[str, Any]:
     for link_name in link_names:
         if link_name:
             link_transform(link_name)
-    return {
-        "link_transforms": transforms,
-        "visuals": visuals,
-        "child_to_parent": child_to_parent,
-    }
+    return transforms
 
 
 def _head_camera_pose_from_urdf(

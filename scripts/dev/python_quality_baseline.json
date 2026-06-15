@@ -360,16 +360,6 @@
       },
       {
         "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py|C901|_parse_urdf_tree",
-        "limit": 10,
-        "message": "`_parse_urdf_tree` is too complex (13 > 10)",
-        "path": "scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py",
-        "row": 436,
-        "symbol": "_parse_urdf_tree",
-        "value": 13
-      },
-      {
-        "code": "C901",
         "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_configure_exact_cleanup_task",
         "limit": 10,
         "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",

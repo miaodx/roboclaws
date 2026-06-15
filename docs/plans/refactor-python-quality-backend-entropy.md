@@ -5184,3 +5184,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this preview
   rendering patch so the unrelated staged `eval-harness` rename was not
   blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py::_parse_urdf_tree(...)`
+  into focused URDF link-name, visual, child-parent, and transform helpers. A
+  new parser unit test covers link transform composition, visual mesh path
+  extraction, visual origin matrices, and child-to-parent mapping without
+  importing Isaac or `pxr`. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  passed; `ruff format scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  left both files unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  passed with 1 test. The quality baseline was refreshed from 37 to 36 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this RBY1M
+  importer parser patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
