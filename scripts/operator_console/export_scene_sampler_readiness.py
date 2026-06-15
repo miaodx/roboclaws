@@ -18,6 +18,7 @@ from roboclaws.launch.scene_sampler import (  # noqa: E402
     eval_projection_metadata,
     readiness_report,
     sampler_manifest,
+    source_availability_report,
     validate_sampler_manifest,
 )
 
@@ -31,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         write_manifest=not args.no_manifest,
         write_eval_projection=not args.no_eval_projection,
         write_readiness_report=not args.no_readiness_report,
+        write_source_availability=not args.no_source_availability,
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
     )
@@ -50,6 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-manifest", action="store_true")
     parser.add_argument("--no-eval-projection", action="store_true")
     parser.add_argument("--no-readiness-report", action="store_true")
+    parser.add_argument("--no-source-availability", action="store_true")
     parser.add_argument(
         "--require-ui-supported-source",
         action="append",
@@ -81,6 +84,7 @@ def export_readiness_artifacts(
     write_manifest: bool = True,
     write_eval_projection: bool = True,
     write_readiness_report: bool = True,
+    write_source_availability: bool = True,
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
 ) -> dict[str, Any]:
@@ -102,6 +106,10 @@ def export_readiness_artifacts(
         readiness_path = output_dir / "scene_sampler_readiness_report.json"
         _write_json(readiness_path, readiness)
         artifacts["readiness_report"] = str(readiness_path)
+    if write_source_availability:
+        availability_path = output_dir / "scene_sampler_source_availability.json"
+        _write_json(availability_path, source_availability_report())
+        artifacts["source_availability"] = str(availability_path)
     failures = _threshold_failures(
         readiness,
         required_ui_supported_sources=required_ui_supported_sources,

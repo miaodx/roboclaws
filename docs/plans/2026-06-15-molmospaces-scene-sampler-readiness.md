@@ -68,6 +68,11 @@ First slice implemented on 2026-06-15.
 - Operator-console preview rendering and mess-up preview inventory loading now
   use the canonical parser, so future non-`procthor-10k-val` rows will not
   silently render or inspect the wrong scene source.
+- Readiness export now includes
+  `scene_sampler_source_availability.json`, a no-download/no-VLM source
+  availability probe that records MolmoSpaces module, scene root, source
+  directory, and candidate XML visibility per source with normalized
+  `environment_blocked` reasons.
 
 Verification run on 2026-06-15:
 
@@ -81,6 +86,7 @@ just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline output_dir=/tmp/roboclaws-scene-sampler-product
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
 ruff check roboclaws/launch/scene_sampler.py roboclaws/operator_console/messup.py scripts/operator_console/render_scene_previews.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_messup.py
+python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-readiness-availability --require-ui-supported-source procthor-10k-val
 ```
 
 Known partial scope:
@@ -95,6 +101,10 @@ Known partial scope:
   does not yet render or admit new `ithor`, `procthor-objaverse-val`, or
   `holodeck-objaverse-val` samples; those remain blocked until local assets and
   preview/map-build evidence exist.
+- On this checkpoint environment, the no-download source availability probe
+  reports `molmo_spaces` as not importable, so real candidate scanning remains
+  blocked until the declared MolmoSpaces runtime is installed in the repo-local
+  environment.
 
 ## Next Flow Development Plan
 
@@ -136,8 +146,10 @@ Next Flow implementation slices:
    - Current scaffold: run
      `python scripts/operator_console/export_scene_sampler_readiness.py` to
      write validated sampler artifacts under `output/scene-sampler-readiness/`.
-     A later slice should replace or extend the static facts with real scanner
-     candidate output for new source families.
+     The export now includes no-download source availability evidence. A later
+     slice should replace or extend the static facts with real scanner
+     candidate output for new source families after the MolmoSpaces runtime and
+     scene assets are visible.
    - Strict threshold mode is available for gates. For example,
      `--require-ui-supported-source procthor-10k-val` should pass today, while
      `--require-eval-complete-source procthor-10k-val` should fail until the

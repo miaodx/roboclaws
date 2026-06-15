@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -320,6 +321,66 @@ def readiness_report() -> dict[str, Any]:
     }
 
 
+def source_availability_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return no-download source/asset visibility evidence for scanner readiness."""
+
+    module_available, module_reason = _molmospaces_module_status()
+    root, root_reason = _molmospaces_scene_root_status(module_available=module_available)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_dir = root / source if root is not None else None
+        source_exists = bool(source_dir and source_dir.is_dir())
+        candidate_files = []
+        missing_files = []
+        for index in candidate_indices:
+            candidate_path = source_dir / f"val_{index}.xml" if source_dir else None
+            row = {
+                "scene_index": index,
+                "path": str(candidate_path) if candidate_path else "",
+                "exists": bool(candidate_path and candidate_path.is_file()),
+            }
+            candidate_files.append(row)
+            if not row["exists"]:
+                missing_files.append(index)
+        status = "available" if source_exists and not missing_files else "blocked"
+        sources[source] = {
+            "scene_source": source,
+            "status": status,
+            "module_available": module_available,
+            "scene_root": str(root) if root is not None else "",
+            "scene_root_available": bool(root and root.is_dir()),
+            "source_dir": str(source_dir) if source_dir is not None else "",
+            "source_dir_available": source_exists,
+            "candidate_indices": list(candidate_indices),
+            "candidate_files": candidate_files,
+            "missing_candidate_indices": missing_files,
+            "blocked_reason": _source_availability_blocked_reason(
+                module_available=module_available,
+                module_reason=module_reason,
+                root=root,
+                root_reason=root_reason,
+                source=source,
+                source_exists=source_exists,
+                missing_files=missing_files,
+            ),
+            "failure_class": "" if status == "available" else "environment_blocked",
+        }
+    return {
+        "schema": "molmospaces_scene_source_availability_report_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_vlm",
+        "candidate_indices": list(candidate_indices),
+        "molmospaces_module_available": module_available,
+        "molmospaces_module_reason": module_reason,
+        "scene_root": str(root) if root is not None else "",
+        "scene_root_reason": root_reason,
+        "sources": sources,
+    }
+
+
 def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
     """Load the prepared room-category label manifest used for admission."""
 
@@ -548,6 +609,64 @@ def _family_split(scene_source: str) -> tuple[str, str]:
         if scene_source.endswith(split):
             return scene_source[: -len(split)], split.removeprefix("-")
     return scene_source, "not_applicable"
+
+
+def _molmospaces_module_status() -> tuple[bool, str]:
+    try:
+        importlib.import_module("molmo_spaces.molmo_spaces_constants")
+    except ModuleNotFoundError as exc:
+        return False, f"module_not_importable:{exc.name}"
+    except Exception as exc:  # pragma: no cover - dependency import failures vary by host.
+        return False, f"module_import_failed:{type(exc).__name__}:{exc}"
+    return True, "module_importable"
+
+
+def _molmospaces_scene_root_status(*, module_available: bool) -> tuple[Path | None, str]:
+    if not module_available:
+        return None, "molmo_spaces_module_unavailable"
+    try:
+        constants = importlib.import_module("molmo_spaces.molmo_spaces_constants")
+        root = Path(constants.get_scenes_root())
+    except Exception as exc:  # pragma: no cover - dependency import failures vary by host.
+        return None, f"scene_root_unavailable:{type(exc).__name__}:{exc}"
+    if not root.is_dir():
+        return root, "scene_root_missing"
+    return root, "scene_root_available"
+
+
+def _source_availability_blocked_reason(
+    *,
+    module_available: bool,
+    module_reason: str,
+    root: Path | None,
+    root_reason: str,
+    source: str,
+    source_exists: bool,
+    missing_files: list[int],
+) -> str:
+    if not module_available:
+        return (
+            "MolmoSpaces Python module is not importable in this environment "
+            f"({module_reason}); run uv sync --extra dev or install the declared MolmoSpaces "
+            "runtime before source admission."
+        )
+    if root is None or not root.is_dir():
+        return (
+            "MolmoSpaces scene root is unavailable "
+            f"({root_reason}); configure MLSPACES_ASSETS_DIR or install scene assets before "
+            "source admission."
+        )
+    if not source_exists:
+        return (
+            f"MolmoSpaces scene source directory is missing for {source}: {root / source}; "
+            "install that source before scanner admission."
+        )
+    if missing_files:
+        return (
+            f"MolmoSpaces scene source {source} is missing candidate XML files for indices "
+            f"{missing_files}; run source preparation before sampler admission."
+        )
+    return ""
 
 
 def _parse_scene_index(raw_value: str, *, world_id: str) -> int:

@@ -19,6 +19,7 @@ from roboclaws.launch.scene_sampler import (
     readiness_report,
     sampler_manifest,
     sampler_rows,
+    source_availability_report,
     ui_molmospaces_world_ids,
     validate_sampler_manifest,
 )
@@ -196,3 +197,27 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
         assert source_report["eval_status"] == "partial_or_blocked"
         assert source_report["eval_ready_count"] == 0
         assert source_report["blocked_rows"][0]["failure_class"] == "environment_blocked"
+
+
+def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
+    monkeypatch,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces"),
+    )
+
+    report = source_availability_report(candidate_indices=(0, 2))
+
+    assert report["schema"] == "molmospaces_scene_source_availability_report_v1"
+    assert report["probe_mode"] == "no_download_no_vlm"
+    assert report["molmospaces_module_available"] is False
+    for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
+        source_report = report["sources"][source]
+        assert source_report["status"] == "blocked"
+        assert source_report["failure_class"] == "environment_blocked"
+        assert "module is not importable" in source_report["blocked_reason"]
+        assert source_report["candidate_indices"] == [0, 2]

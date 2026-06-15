@@ -11,10 +11,18 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert result["status"] == "success"
     assert result["threshold_failures"] == []
     artifacts = result["artifacts"]
-    assert set(artifacts) == {"manifest", "eval_projection", "readiness_report"}
+    assert set(artifacts) == {
+        "manifest",
+        "eval_projection",
+        "readiness_report",
+        "source_availability",
+    }
     manifest = json.loads((tmp_path / "scene_sampler_manifest.json").read_text())
     projection = json.loads((tmp_path / "scene_sampler_eval_projection.json").read_text())
     readiness = json.loads((tmp_path / "scene_sampler_readiness_report.json").read_text())
+    availability = json.loads(
+        (tmp_path / "scene_sampler_source_availability.json").read_text()
+    )
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
@@ -22,6 +30,12 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert readiness["sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
         "environment_blocked"
     )
+    assert availability["schema"] == "molmospaces_scene_source_availability_report_v1"
+    assert availability["probe_mode"] == "no_download_no_vlm"
+    assert availability["sources"]["ithor"]["failure_class"] in {
+        "",
+        "environment_blocked",
+    }
 
 
 def test_scene_sampler_readiness_export_can_require_ui_supported_source(tmp_path) -> None:
