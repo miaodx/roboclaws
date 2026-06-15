@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageStat
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageStat
 
 if __package__ in {None, ""}:
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +41,12 @@ DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
 DEFAULT_WORK_DIR = Path("output/operator-console-scene-previews")
 DEFAULT_WIDTH = 900
 DEFAULT_HEIGHT = 560
+B1_MAP12_WORLD_ID = "b1-map12"
+B1_MAP_BUNDLE_DIR = Path("assets/maps/b1-map12-room-semantics")
+B1_SCENE_USD_PATH = Path(
+    "data/robot-data-lab/scene-engine/data/"
+    "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,11 +59,13 @@ def main(argv: list[str] | None = None) -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Render operator-console scene previews from backend cameras. "
-            "MolmoSpaces previews are real MuJoCo renders: Raw FPV is captured "
-            "from the first public waypoint, Chase is the robot follower camera, "
-            "and Top-down is a separate scene camera render rather than a "
-            "semantic-map fallback."
+            "Render operator-console scene previews. MolmoSpaces previews are real "
+            "MuJoCo renders: Raw FPV is captured from the first public waypoint, "
+            "Chase is the robot follower camera, and Top-down is a separate scene "
+            "camera render rather than a semantic-map fallback. B1 / Map 12 "
+            "previews are static digital-twin overview assets generated from the "
+            "committed map bundle and scene semantic overlay so the console can "
+            "show the experimental digital twin before Isaac starts."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -91,15 +99,23 @@ def render_previews(args: argparse.Namespace) -> dict[str, Any]:
 
     results = []
     for world_id in _selected_world_ids(args.world):
-        result = render_molmospaces_preview(
-            world_id=world_id,
-            output_dir=output_dir,
-            work_dir=work_dir,
-            seed=int(args.seed),
-            width=max(1, int(args.width)),
-            height=max(1, int(args.height)),
-            skip_existing=bool(args.skip_existing),
-        )
+        if world_id == B1_MAP12_WORLD_ID:
+            result = render_b1_map12_preview(
+                output_dir=output_dir,
+                width=max(1, int(args.width)),
+                height=max(1, int(args.height)),
+                skip_existing=bool(args.skip_existing),
+            )
+        else:
+            result = render_molmospaces_preview(
+                world_id=world_id,
+                output_dir=output_dir,
+                work_dir=work_dir,
+                seed=int(args.seed),
+                width=max(1, int(args.width)),
+                height=max(1, int(args.height)),
+                skip_existing=bool(args.skip_existing),
+            )
         results.append(result)
 
     status = (
@@ -314,6 +330,116 @@ def render_molmospaces_preview(
         backend.close()
 
 
+def render_b1_map12_preview(
+    *,
+    output_dir: Path,
+    width: int,
+    height: int,
+    skip_existing: bool = False,
+) -> dict[str, Any]:
+    slug = _world_slug(B1_MAP12_WORLD_ID)
+    fpv_path = output_dir / f"{slug}-fpv.png"
+    map_path = output_dir / f"{slug}-map.png"
+    chase_path = output_dir / f"{slug}-chase.png"
+    topdown_path = output_dir / f"{slug}-topdown.png"
+    metadata_path = output_dir / f"{slug}-preview.json"
+    if (
+        skip_existing
+        and fpv_path.exists()
+        and map_path.exists()
+        and chase_path.exists()
+        and topdown_path.exists()
+        and metadata_path.exists()
+    ):
+        return {
+            "world_id": B1_MAP12_WORLD_ID,
+            "scene_source": "b1-gaussian-digital-twin",
+            "status": "skipped",
+            "fpv": str(fpv_path),
+            "map": str(map_path),
+            "chase": str(chase_path),
+            "topdown": str(topdown_path),
+            "metadata": str(metadata_path),
+        }
+
+    map_bundle = B1_MAP_BUNDLE_DIR
+    if not map_bundle.is_dir():
+        return {
+            "world_id": B1_MAP12_WORLD_ID,
+            "scene_source": "b1-gaussian-digital-twin",
+            "status": "map_bundle_missing",
+            "map_bundle": str(map_bundle),
+        }
+    required_assets = (
+        map_bundle / "preview.png",
+        map_bundle / "room_semantic_topdown.png",
+        map_bundle / "semantics.json",
+        map_bundle / "room_semantic_overlay.json",
+    )
+    missing = [str(path) for path in required_assets if not path.is_file()]
+    if missing:
+        return {
+            "world_id": B1_MAP12_WORLD_ID,
+            "scene_source": "b1-gaussian-digital-twin",
+            "status": "map_bundle_incomplete",
+            "missing": missing,
+        }
+
+    semantics = json.loads((map_bundle / "semantics.json").read_text(encoding="utf-8"))
+    overlay = json.loads((map_bundle / "room_semantic_overlay.json").read_text(encoding="utf-8"))
+    map_image = _fit_preview_image(
+        Image.open(map_bundle / "preview.png"), width=width, height=height
+    )
+    topdown_image = _fit_preview_image(
+        Image.open(map_bundle / "room_semantic_topdown.png"),
+        width=width,
+        height=height,
+    )
+    map_image.save(map_path)
+    topdown_image.save(topdown_path)
+    _render_b1_room_overview(
+        semantics=semantics,
+        overlay=overlay,
+        base_image=topdown_image,
+        output_path=fpv_path,
+        width=width,
+        height=height,
+        variant="room_overview",
+    )
+    _render_b1_scene_evidence_overview(
+        semantics=semantics,
+        overlay=overlay,
+        base_image=map_image,
+        output_path=chase_path,
+        width=width,
+        height=height,
+    )
+    metadata = _b1_map12_preview_metadata(
+        width=width,
+        height=height,
+        fpv_path=fpv_path,
+        map_path=map_path,
+        chase_path=chase_path,
+        topdown_path=topdown_path,
+        semantics=semantics,
+        overlay=overlay,
+    )
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "world_id": B1_MAP12_WORLD_ID,
+        "scene_source": "b1-gaussian-digital-twin",
+        "status": "rendered",
+        "fpv": str(fpv_path),
+        "map": str(map_path),
+        "chase": str(chase_path),
+        "topdown": str(topdown_path),
+        "metadata": str(metadata_path),
+    }
+
+
 def _preview_metadata(
     *,
     world_id: str,
@@ -479,6 +605,371 @@ def _select_chase_preview(
     }
 
 
+def _b1_map12_preview_metadata(
+    *,
+    width: int,
+    height: int,
+    fpv_path: Path,
+    map_path: Path,
+    chase_path: Path,
+    topdown_path: Path,
+    semantics: dict[str, Any],
+    overlay: dict[str, Any],
+) -> dict[str, Any]:
+    rooms = semantics.get("rooms") if isinstance(semantics.get("rooms"), list) else []
+    waypoints = (
+        semantics.get("inspection_waypoints")
+        if isinstance(semantics.get("inspection_waypoints"), list)
+        else []
+    )
+    correspondence = (
+        overlay.get("scene_map_correspondence_v1")
+        if isinstance(overlay.get("scene_map_correspondence_v1"), list)
+        else []
+    )
+    return {
+        "schema": PREVIEW_METADATA_SCHEMA,
+        "generated_at": _utc_timestamp(),
+        "world_id": B1_MAP12_WORLD_ID,
+        "backend": "isaaclab",
+        "renderer": "static_b1_map12_digital_twin_overview",
+        "scene_source": "b1-gaussian-digital-twin",
+        "scene_usd_path": str(B1_SCENE_USD_PATH),
+        "map_bundle": str(B1_MAP_BUNDLE_DIR),
+        "render_resolution": {"width": width, "height": height},
+        "views": {
+            "fpv": {
+                "path": fpv_path.name,
+                "view": "digital_twin_room_overview",
+                "provenance": "b1_map12_room_semantic_overlay_static_overview",
+                "camera_semantics": "overview_slot_not_live_robot_camera",
+                "semantic_map_fallback": False,
+                "image_diagnostics": _image_diagnostics(fpv_path),
+            },
+            "map": {
+                "path": map_path.name,
+                "view": "source_map_preview",
+                "provenance": "b1_map12_room_semantics_preview_png",
+                "alignment_status": str(
+                    (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
+                ),
+                "display_frame": semantics.get("display_frame"),
+                "semantic_map_fallback": False,
+                "image_diagnostics": _image_diagnostics(map_path),
+            },
+            "chase": {
+                "path": chase_path.name,
+                "view": "digital_twin_scene_evidence_overview",
+                "provenance": "b1_map12_scene_map_correspondence_static_overview",
+                "camera_semantics": "overview_slot_not_live_robot_camera",
+                "correspondence_schema": overlay.get("scene_map_correspondence_schema"),
+                "correspondence_count": len(correspondence),
+                "semantic_map_fallback": False,
+                "image_diagnostics": _image_diagnostics(chase_path),
+            },
+            "topdown": {
+                "path": topdown_path.name,
+                "view": "semantic_room_topdown",
+                "provenance": "b1_map12_room_semantic_topdown_png",
+                "alignment_status": str(
+                    (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
+                ),
+                "semantic_map_fallback": False,
+                "room_count": len(rooms),
+                "inspection_waypoint_count": len(waypoints),
+                "image_diagnostics": _image_diagnostics(topdown_path),
+            },
+        },
+    }
+
+
+def _fit_preview_image(image: Image.Image, *, width: int, height: int) -> Image.Image:
+    source = image.convert("RGB")
+    source.thumbnail((width, height), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGB", (width, height), (228, 231, 235))
+    x = (width - source.width) // 2
+    y = (height - source.height) // 2
+    canvas.paste(source, (x, y))
+    return canvas
+
+
+def _render_b1_room_overview(
+    *,
+    semantics: dict[str, Any],
+    overlay: dict[str, Any],
+    base_image: Image.Image,
+    output_path: Path,
+    width: int,
+    height: int,
+    variant: str,
+) -> None:
+    image = _map_canvas(base_image, width=width, height=height)
+    draw = ImageDraw.Draw(image, "RGBA")
+    transform = _map_transform(semantics, width=width, height=height)
+    room_colors = {
+        "meeting_room": (99, 102, 241, 58),
+        "kitchen": (16, 185, 129, 62),
+        "living_room": (245, 158, 11, 58),
+        "corridor": (14, 165, 233, 54),
+        "storage_room": (168, 85, 247, 54),
+    }
+    outline_colors = {
+        "meeting_room": (79, 70, 229, 180),
+        "kitchen": (5, 150, 105, 180),
+        "living_room": (217, 119, 6, 180),
+        "corridor": (2, 132, 199, 180),
+        "storage_room": (126, 34, 206, 180),
+    }
+    rooms = [item for item in semantics.get("rooms") or [] if isinstance(item, dict)]
+    for room in rooms:
+        polygon = _room_polygon(room)
+        if len(polygon) < 3:
+            continue
+        category = str(room.get("category") or "")
+        points = [transform(x, y) for x, y in polygon]
+        draw.polygon(points, fill=room_colors.get(category, (100, 116, 139, 46)))
+        draw.line(
+            [*points, points[0]],
+            fill=outline_colors.get(category, (71, 85, 105, 170)),
+            width=2,
+        )
+        label = str(room.get("room_label") or room.get("room_id") or "")
+        cx, cy = _polygon_center(polygon)
+        _draw_label(draw, transform(cx, cy), label, fill=(17, 24, 39, 230))
+
+    for waypoint in semantics.get("inspection_waypoints") or []:
+        if not isinstance(waypoint, dict):
+            continue
+        point = _xy(waypoint)
+        if point is None:
+            continue
+        px, py = transform(*point)
+        draw.ellipse((px - 6, py - 6, px + 6, py + 6), fill=(5, 150, 105, 230))
+
+    _draw_b1_overview_header(
+        draw,
+        width=width,
+        title="B1 / Map 12 Digital Twin",
+        subtitle=f"{len(rooms)} semantic rooms, static overview",
+    )
+    _draw_b1_overview_footer(
+        draw,
+        width=width,
+        height=height,
+        text=f"{variant}: generated from room_semantic_overlay.json and semantics.json",
+    )
+    image.save(output_path)
+
+
+def _render_b1_scene_evidence_overview(
+    *,
+    semantics: dict[str, Any],
+    overlay: dict[str, Any],
+    base_image: Image.Image,
+    output_path: Path,
+    width: int,
+    height: int,
+) -> None:
+    image = _map_canvas(base_image, width=width, height=height)
+    draw = ImageDraw.Draw(image, "RGBA")
+    transform = _map_transform(semantics, width=width, height=height)
+    correspondences = [
+        item for item in overlay.get("scene_map_correspondence_v1") or [] if isinstance(item, dict)
+    ]
+    by_partition = {
+        str(item.get("asset_partition_id") or ""): item
+        for item in correspondences
+        if isinstance(item, dict)
+    }
+    for index, room in enumerate(
+        item for item in semantics.get("rooms") or [] if isinstance(item, dict)
+    ):
+        polygon = _room_polygon(room)
+        if len(polygon) < 3:
+            continue
+        points = [transform(x, y) for x, y in polygon]
+        alpha = 36 + (index % 3) * 18
+        draw.polygon(points, fill=(15, 23, 42, alpha))
+        draw.line([*points, points[0]], fill=(15, 23, 42, 160), width=2)
+        cx, cy = _polygon_center(polygon)
+        match = by_partition.get(str(room.get("asset_partition_id") or ""))
+        status = str((match or {}).get("alignment_status") or room.get("alignment_status") or "")
+        label = str(room.get("asset_partition_id") or room.get("room_id") or "")
+        _draw_label(
+            draw,
+            transform(cx, cy),
+            f"{label} / {status}",
+            fill=(15, 23, 42, 235),
+            background=(255, 255, 255, 210),
+        )
+
+    fixtures = [item for item in semantics.get("fixtures") or [] if isinstance(item, dict)]
+    for fixture in fixtures:
+        pose = fixture.get("pose")
+        if not isinstance(pose, dict):
+            continue
+        point = _xy(pose)
+        if point is None:
+            continue
+        px, py = transform(*point)
+        draw.rounded_rectangle(
+            (px - 5, py - 5, px + 5, py + 5),
+            radius=2,
+            fill=(180, 83, 9, 230),
+        )
+
+    _draw_b1_overview_header(
+        draw,
+        width=width,
+        title="Scene Correspondence",
+        subtitle=f"{len(correspondences)} partitions, {len(fixtures)} public fixtures",
+    )
+    _draw_b1_overview_footer(
+        draw,
+        width=width,
+        height=height,
+        text="Static digital-twin evidence view, not a live chase camera frame",
+    )
+    image.save(output_path)
+
+
+def _map_canvas(base_image: Image.Image, *, width: int, height: int) -> Image.Image:
+    image = _fit_preview_image(base_image, width=width, height=height)
+    image = ImageEnhance.Color(image).enhance(1.08)
+    image = ImageEnhance.Contrast(image).enhance(1.07)
+    return image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=80, threshold=4))
+
+
+def _map_transform(semantics: dict[str, Any], *, width: int, height: int):
+    points: list[tuple[float, float]] = []
+    for room in semantics.get("rooms") or []:
+        if isinstance(room, dict):
+            points.extend(_room_polygon(room))
+    for waypoint in semantics.get("inspection_waypoints") or []:
+        if isinstance(waypoint, dict):
+            point = _xy(waypoint)
+            if point is not None:
+                points.append(point)
+    for fixture in semantics.get("fixtures") or []:
+        if isinstance(fixture, dict) and isinstance(fixture.get("pose"), dict):
+            point = _xy(fixture["pose"])
+            if point is not None:
+                points.append(point)
+    if not points:
+        points = [(-1.0, -1.0), (1.0, 1.0)]
+    min_x = min(x for x, _ in points)
+    max_x = max(x for x, _ in points)
+    min_y = min(y for _, y in points)
+    max_y = max(y for _, y in points)
+    pad_x = max((max_x - min_x) * 0.12, 0.5)
+    pad_y = max((max_y - min_y) * 0.12, 0.5)
+    min_x -= pad_x
+    max_x += pad_x
+    min_y -= pad_y
+    max_y += pad_y
+    span_x = max(max_x - min_x, 1.0)
+    span_y = max(max_y - min_y, 1.0)
+    plot_left = width * 0.08
+    plot_right = width * 0.92
+    plot_top = height * 0.16
+    plot_bottom = height * 0.88
+    scale = min((plot_right - plot_left) / span_x, (plot_bottom - plot_top) / span_y)
+    offset_x = (width - span_x * scale) / 2.0
+    offset_y = plot_top + ((plot_bottom - plot_top) - span_y * scale) / 2.0
+
+    def transform(x: float, y: float) -> tuple[float, float]:
+        return (
+            offset_x + (x - min_x) * scale,
+            offset_y + (max_y - y) * scale,
+        )
+
+    return transform
+
+
+def _room_polygon(room: dict[str, Any]) -> list[tuple[float, float]]:
+    polygon = room.get("polygon")
+    if not isinstance(polygon, list):
+        return []
+    points = []
+    for item in polygon:
+        if not isinstance(item, dict):
+            continue
+        point = _xy(item)
+        if point is not None:
+            points.append(point)
+    return points
+
+
+def _xy(item: dict[str, Any]) -> tuple[float, float] | None:
+    try:
+        return float(item["x"]), float(item["y"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _polygon_center(points: list[tuple[float, float]]) -> tuple[float, float]:
+    if not points:
+        return (0.0, 0.0)
+    return (
+        sum(x for x, _ in points) / len(points),
+        sum(y for _, y in points) / len(points),
+    )
+
+
+def _draw_label(
+    draw: ImageDraw.ImageDraw,
+    point: tuple[float, float],
+    text: str,
+    *,
+    fill: tuple[int, int, int, int],
+    background: tuple[int, int, int, int] = (255, 255, 255, 185),
+) -> None:
+    if not text:
+        return
+    x, y = point
+    text = text[:42]
+    bbox = draw.textbbox((x, y), text)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    rect = (
+        x - text_width / 2 - 5,
+        y - text_height / 2 - 4,
+        x + text_width / 2 + 5,
+        y + text_height / 2 + 4,
+    )
+    draw.rounded_rectangle(rect, radius=4, fill=background)
+    draw.text((x - text_width / 2, y - text_height / 2 - 1), text, fill=fill)
+
+
+def _draw_b1_overview_header(
+    draw: ImageDraw.ImageDraw,
+    *,
+    width: int,
+    title: str,
+    subtitle: str,
+) -> None:
+    draw.rounded_rectangle((18, 18, min(width - 18, 472), 74), radius=8, fill=(255, 255, 255, 230))
+    draw.text((34, 30), title, fill=(15, 23, 42, 245))
+    draw.text((34, 52), subtitle, fill=(71, 85, 105, 235))
+
+
+def _draw_b1_overview_footer(
+    draw: ImageDraw.ImageDraw,
+    *,
+    width: int,
+    height: int,
+    text: str,
+) -> None:
+    margin = 18
+    y = height - 44
+    draw.rounded_rectangle(
+        (margin, y, min(width - margin, 640), height - 16),
+        radius=8,
+        fill=(255, 255, 255, 218),
+    )
+    draw.text((margin + 16, y + 10), text[:92], fill=(51, 65, 85, 238))
+
+
 def _topdown_camera_request(
     state: dict[str, Any],
     *,
@@ -625,7 +1116,7 @@ def _public_waypoints(metric_map: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _selected_world_ids(raw_world_ids: list[str]) -> tuple[str, ...]:
-    return tuple(raw_world_ids or MOLMOSPACES_CONSOLE_WORLD_IDS)
+    return tuple(raw_world_ids or (*MOLMOSPACES_CONSOLE_WORLD_IDS, B1_MAP12_WORLD_ID))
 
 
 def _molmospaces_scene_index(world_id: str) -> int:

@@ -208,8 +208,10 @@ def test_static_app_renders_scene_preview_assets() -> None:
         for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
         for view_name in ("chase", "fpv", "map", "topdown")
     )
-    preview_files = sorted(path.name for path in preview_dir.glob("molmospaces-val_*-*.png"))
-    assert preview_files == expected_preview_files
+    molmospaces_preview_files = sorted(
+        path.name for path in preview_dir.glob("molmospaces-val_*-*.png")
+    )
+    assert molmospaces_preview_files == expected_preview_files
     metadata_files = sorted(
         path.name for path in preview_dir.glob("molmospaces-val_*-preview.json")
     )
@@ -217,8 +219,15 @@ def test_static_app_renders_scene_preview_assets() -> None:
         f"molmospaces-val_{scene_index}-preview.json"
         for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
     ]
-    assert not any(name.startswith("molmospaces-val_6-") for name in preview_files)
-    assert not any(name.startswith("molmospaces-val_8-") for name in preview_files)
+    assert not any(name.startswith("molmospaces-val_6-") for name in molmospaces_preview_files)
+    assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
+    b1_preview_files = sorted(path.name for path in preview_dir.glob("b1-map12-*.png"))
+    assert b1_preview_files == [
+        "b1-map12-chase.png",
+        "b1-map12-fpv.png",
+        "b1-map12-map.png",
+        "b1-map12-topdown.png",
+    ]
 
     for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES:
         for view_name in ("fpv", "map", "chase", "topdown"):
@@ -240,6 +249,18 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
+    for view_name in ("fpv", "map", "chase", "topdown"):
+        path = preview_dir / f"b1-map12-{view_name}.png"
+        assert path.is_file()
+        assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
+    assert b1_metadata["world_id"] == "b1-map12"
+    assert b1_metadata["backend"] == "isaaclab"
+    assert b1_metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
+    assert b1_metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
+    assert b1_metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
+    assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
+    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["chase"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 

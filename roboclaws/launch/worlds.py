@@ -108,7 +108,12 @@ WORLD_SPECS: dict[str, WorldSpec] = {
             "2rd_floor_seperated/storey_1/configuration/scene_base.usd",
             "robot_views=on",
         ),
-        preview_assets=(("map", "/asset-previews/maps/b1-map12-room-semantics/preview.png"),),
+        preview_assets=(
+            ("fpv", "/previews/b1-map12-fpv.png"),
+            ("map", "/previews/b1-map12-map.png"),
+            ("chase", "/previews/b1-map12-chase.png"),
+            ("topdown", "/previews/b1-map12-topdown.png"),
+        ),
     ),
     "planner-proof/default": WorldSpec(
         id="planner-proof/default",

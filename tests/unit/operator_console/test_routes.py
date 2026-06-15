@@ -58,13 +58,27 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
         },
     }
     assert "topdown" not in worlds["agibot-g2/map-12"]["preview_assets"]
-    assert "topdown" not in worlds["b1-map12"]["preview_assets"]
     assert worlds["agibot-g2/map-12"]["preview_assets"]["map"]["href"] == (
         "/asset-previews/maps/agibot-robot-map-12/preview.png"
     )
-    assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == (
-        "/asset-previews/maps/b1-map12-room-semantics/preview.png"
-    )
+    assert worlds["b1-map12"]["preview_assets"] == {
+        "fpv": {
+            "path": "/previews/b1-map12-fpv.png",
+            "href": "/previews/b1-map12-fpv.png",
+        },
+        "map": {
+            "path": "/previews/b1-map12-map.png",
+            "href": "/previews/b1-map12-map.png",
+        },
+        "chase": {
+            "path": "/previews/b1-map12-chase.png",
+            "href": "/previews/b1-map12-chase.png",
+        },
+        "topdown": {
+            "path": "/previews/b1-map12-topdown.png",
+            "href": "/previews/b1-map12-topdown.png",
+        },
+    }
     assert "ai2thor/FloorPlan201" not in worlds
     assert "ai2thor-games/FloorPlan201" not in worlds
     assert worlds["planner-proof/default"]["preview_assets"] == {
@@ -128,6 +142,27 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
         assert metadata["views"]["topdown"]["provenance"] == (
             "mujoco_camera_control_canonical_eye_target"
         )
+
+
+def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
+    preview_root = (
+        Path(__file__).resolve().parents[3] / "roboclaws/operator_console/static/previews"
+    )
+
+    metadata = json.loads((preview_root / "b1-map12-preview.json").read_text(encoding="utf-8"))
+
+    assert metadata["schema"] == "operator_console_scene_preview_v1"
+    assert metadata["world_id"] == "b1-map12"
+    assert metadata["backend"] == "isaaclab"
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
+    assert metadata["views"]["fpv"]["camera_semantics"] == "overview_slot_not_live_robot_camera"
+    assert metadata["views"]["map"]["view"] == "source_map_preview"
+    assert metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
+    assert metadata["views"]["chase"]["correspondence_count"] >= 1
+    assert metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
+    assert metadata["views"]["topdown"]["room_count"] >= 1
+    assert metadata["views"]["topdown"]["inspection_waypoint_count"] >= 1
 
 
 def test_console_combinations_are_catalog_backed_axes() -> None:

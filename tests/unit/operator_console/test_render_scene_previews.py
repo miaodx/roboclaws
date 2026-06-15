@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from PIL import Image
 
 from roboclaws.launch.scene_sampler import MolmoSpacesSceneRef
 from scripts.operator_console.render_scene_previews import (
+    B1_MAP12_WORLD_ID,
     PREVIEW_METADATA_SCHEMA,
     _first_public_waypoint,
     _molmospaces_scene_ref,
@@ -15,6 +17,7 @@ from scripts.operator_console.render_scene_previews import (
     _scene_alignment,
     _scene_center_and_span,
     _topdown_camera_request,
+    render_b1_map12_preview,
 )
 from scripts.operator_console.semantic_map_preview import (
     semantic_map_preview_projection_summary,
@@ -180,6 +183,75 @@ def test_molmospaces_preview_scene_ref_rejects_unknown_source_or_index() -> None
         _molmospaces_scene_ref("molmospaces/ithor/not-an-index")
     with pytest.raises(ValueError, match="negative MolmoSpaces scene index"):
         _molmospaces_scene_ref("molmospaces/ithor/-1")
+
+
+def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypatch) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle = tmp_path / "b1-map12-room-semantics"
+    bundle.mkdir()
+    Image.new("RGB", (120, 90), (230, 230, 230)).save(bundle / "preview.png")
+    Image.new("RGB", (160, 90), (225, 225, 225)).save(bundle / "room_semantic_topdown.png")
+    semantics = {
+        "display_frame": None,
+        "spatial_contract": {"alignment_status": "candidate"},
+        "rooms": [
+            {
+                "room_id": "meeting_room_a",
+                "room_label": "Meeting room A",
+                "asset_partition_id": "meeting_room_a",
+                "category": "meeting_room",
+                "alignment_status": "candidate",
+                "polygon": [
+                    {"x": 0.0, "y": 0.0},
+                    {"x": 4.0, "y": 0.0},
+                    {"x": 4.0, "y": 3.0},
+                    {"x": 0.0, "y": 3.0},
+                ],
+            }
+        ],
+        "inspection_waypoints": [
+            {"waypoint_id": "scan_1", "x": 1.0, "y": 1.0},
+        ],
+        "fixtures": [
+            {"fixture_id": "table_1", "pose": {"x": 2.0, "y": 2.0}},
+        ],
+    }
+    overlay = {
+        "scene_map_correspondence_schema": "scene_map_correspondence_v1",
+        "scene_map_correspondence_v1": [
+            {
+                "asset_partition_id": "meeting_room_a",
+                "navigation_area_id": "west_corridor",
+                "alignment_status": "candidate",
+            }
+        ],
+    }
+    (bundle / "semantics.json").write_text(
+        json.dumps(semantics, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (bundle / "room_semantic_overlay.json").write_text(
+        json.dumps(overlay, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+
+    result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
+
+    assert result["world_id"] == B1_MAP12_WORLD_ID
+    assert result["status"] == "rendered"
+    for view_name in ("fpv", "map", "chase", "topdown"):
+        path = tmp_path / f"b1-map12-{view_name}.png"
+        assert path.is_file()
+        assert Image.open(path).size == (320, 200)
+    metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
+    assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
+    assert metadata["backend"] == "isaaclab"
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
+    assert metadata["views"]["chase"]["correspondence_count"] == 1
+    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 1
 
 
 def test_preview_helpers_use_first_public_waypoint_and_scene_bounds() -> None:
