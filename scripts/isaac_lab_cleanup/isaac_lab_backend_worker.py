@@ -41,6 +41,7 @@ from scripts.isaac_lab_cleanup import (
     isaac_placement_resolution,
     isaac_robot_pose_focus,
     isaac_scenario_builders,
+    isaac_scenario_state,
     isaac_scene_camera_geometry,
     isaac_semantic_pose_stage,
     isaac_worker_commands,
@@ -198,6 +199,7 @@ from scripts.isaac_lab_cleanup.isaac_scenario_builders import (
     scene_specific_scenario_if_needed,
     scene_target_receptacle_id,
 )
+from scripts.isaac_lab_cleanup.isaac_scenario_state import IsaacScenarioStateHooks
 from scripts.isaac_lab_cleanup.isaac_scene_bindings import (
     SCENE_BINDING_SCHEMA as _SCENE_BINDING_SCHEMA,
 )
@@ -2295,65 +2297,31 @@ def _record_waypoint_pose_event(
     )
 
 
+def _isaac_scenario_state_hooks() -> IsaacScenarioStateHooks:
+    return IsaacScenarioStateHooks(
+        dict_value=_dict,
+        isaac_placement_diagnostic=_isaac_placement_diagnostic,
+        receptacle_prefers_inside=_receptacle_prefers_inside,
+        receptacle_requires_open=_receptacle_requires_open,
+        receptacles_by_id=_receptacles_by_id,
+        resolve_isaac_placement=_resolve_isaac_placement,
+        round_vec3=_round_vec3,
+        vec3=_vec3,
+    )
+
+
 def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
-    targets = [_dict(item) for item in _dict(state.get("private_manifest")).get("targets", [])]
-    if not targets:
-        return
-    manifest_targets = _manifest_target_by_object_id(state)
-    target_receptacle_ids = {
-        receptacle_id
-        for target in targets
-        for receptacle_id in target.get("valid_receptacle_ids", [])
-        if str(receptacle_id)
-    }
-    wrong_pool = _mess_wrong_receptacle_pool(state, target_receptacle_ids)
-    if not wrong_pool:
-        return
-    diagnostics = [
-        dict(item) for item in state.get("mess_placement_diagnostics", []) if isinstance(item, dict)
-    ]
-    for index, target in enumerate(targets):
-        object_id = str(target.get("object_id") or "")
-        if not object_id:
-            continue
-        target_ids = {str(item) for item in target.get("valid_receptacle_ids", []) if str(item)}
-        manifest_target = manifest_targets.get(object_id)
-        wrong = _target_start_receptacle(state, wrong_pool, index, target_ids, manifest_target)
-        receptacle_id = str(wrong.get("receptacle_id") or "")
-        if not receptacle_id:
-            continue
-        relation = _target_relation(wrong, manifest_target)
-        placement_index = _target_placement_index(index, manifest_target)
-        placement_resolution = _apply_object_location(
-            state,
-            object_id=object_id,
-            receptacle_id=receptacle_id,
-            relation=relation,
-            placement_index=placement_index,
-            source="canonical_mess_manifest" if manifest_target else "mess_seed",
-        )
-        diagnostic = _isaac_placement_diagnostic(
-            state=state,
-            object_id=object_id,
-            receptacle_id=receptacle_id,
-            relation=relation,
-            source="canonical_mess_manifest" if manifest_target else "mess_seed",
-            placement_index=placement_index,
-            placement_resolution=placement_resolution,
-        )
-        diagnostics.append(diagnostic)
-    state["mess_placement_diagnostics"] = diagnostics
+    return isaac_scenario_state.seed_generated_mess_placements(
+        state,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _manifest_target_by_object_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    manifest = _dict(state.get("generated_mess_manifest"))
-    targets: dict[str, dict[str, Any]] = {}
-    for raw_target in manifest.get("targets", []):
-        target = _dict(raw_target)
-        object_id = str(target.get("object_id") or "")
-        if object_id:
-            targets[object_id] = target
-    return targets
+    return isaac_scenario_state.manifest_target_by_object_id(
+        state,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _target_start_receptacle(
@@ -2363,60 +2331,40 @@ def _target_start_receptacle(
     target_ids: set[str],
     manifest_target: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    if manifest_target:
-        start_receptacle_id = str(manifest_target.get("start_receptacle_id") or "")
-        if start_receptacle_id:
-            receptacle = _receptacles_by_id(state).get(start_receptacle_id)
-            if receptacle is None:
-                raise ValueError(
-                    "generated mess manifest start receptacle id is unavailable: "
-                    f"{manifest_target.get('object_id')} -> {start_receptacle_id}"
-                )
-            return receptacle
-    wrong = wrong_pool[index % len(wrong_pool)]
-    if len(wrong_pool) > 1 and str(wrong.get("receptacle_id") or "") in target_ids:
-        wrong = wrong_pool[(index + 1) % len(wrong_pool)]
-    return wrong
+    return isaac_scenario_state.target_start_receptacle(
+        state,
+        wrong_pool,
+        index,
+        target_ids,
+        manifest_target,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _target_relation(
     receptacle: dict[str, Any],
     manifest_target: dict[str, Any] | None,
 ) -> str:
-    if manifest_target:
-        relation = str(manifest_target.get("relation") or "")
-        if relation in {"on", "inside"}:
-            return relation
-    return "inside" if _receptacle_prefers_inside(receptacle) else "on"
+    return isaac_scenario_state.target_relation(
+        receptacle,
+        manifest_target,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
-    if not manifest_target:
-        return index
-    try:
-        return int(manifest_target.get("placement_index"))
-    except (TypeError, ValueError):
-        return index
+    return isaac_scenario_state.target_placement_index(index, manifest_target)
 
 
 def _mess_wrong_receptacle_pool(
     state: dict[str, Any],
     target_receptacle_ids: set[str],
 ) -> list[dict[str, Any]]:
-    receptacles = list(_receptacles_by_id(state).values())
-    wrong_pool = [
-        item
-        for item in receptacles
-        if str(item.get("receptacle_id") or "") not in target_receptacle_ids
-        and not _receptacle_requires_open(item)
-    ]
-    if not wrong_pool:
-        wrong_pool = [
-            item
-            for item in receptacles
-            if str(item.get("receptacle_id") or "") not in target_receptacle_ids
-        ]
-    return wrong_pool or receptacles
+    return isaac_scenario_state.mess_wrong_receptacle_pool(
+        state,
+        target_receptacle_ids,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _apply_object_location(
@@ -2428,44 +2376,15 @@ def _apply_object_location(
     placement_index: int,
     source: str,
 ) -> dict[str, Any]:
-    resolution = _resolve_isaac_placement(
+    return isaac_scenario_state.apply_object_location(
         state,
         object_id=object_id,
         receptacle_id=receptacle_id,
-        index=placement_index,
         relation=relation,
+        placement_index=placement_index,
         source=source,
+        hooks=_isaac_scenario_state_hooks(),
     )
-    state.setdefault("locations", {})[object_id] = receptacle_id
-    containment = dict(state.get("containment") or {})
-    containment[object_id] = {
-        "contained_in": receptacle_id if relation == "inside" else "",
-        "location_relation": relation,
-    }
-    state["containment"] = containment
-    overrides = dict(state.get("object_pose_overrides") or {})
-    position = _vec3(resolution.get("position"))
-    if position is not None:
-        overrides[object_id] = {
-            "position": _round_vec3(position),
-            "position_source": ISAAC_PLACEMENT_RESOLVER_SOURCE,
-            "support_receptacle_id": receptacle_id,
-            "relation": relation,
-            "support_status": resolution.get("support_status"),
-            "contact_proof": resolution.get("contact_proof"),
-            "resolution_source": resolution.get("resolution_source"),
-            "source": source,
-        }
-    else:
-        overrides.pop(object_id, None)
-    state["object_pose_overrides"] = overrides
-    _set_public_scenario_object_location(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-    )
-    return resolution
 
 
 def _set_public_scenario_object_location(
@@ -2475,25 +2394,20 @@ def _set_public_scenario_object_location(
     receptacle_id: str,
     relation: str,
 ) -> None:
-    scenario = _dict(state.get("scenario"))
-    for item in scenario.get("objects", []):
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("object_id") or "") != object_id:
-            continue
-        item["location_id"] = receptacle_id
-        item["contained_in"] = receptacle_id if relation == "inside" else ""
-        item["location_relation"] = relation
-        break
+    return isaac_scenario_state.set_public_scenario_object_location(
+        state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        relation=relation,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _first_target_object_location(state: dict[str, Any]) -> str:
-    for target in _dict(state.get("private_manifest")).get("targets", []):
-        object_id = str(_dict(target).get("object_id") or "")
-        location_id = str(_dict(state.get("locations")).get(object_id) or "")
-        if location_id:
-            return location_id
-    return ""
+    return isaac_scenario_state.first_target_object_location(
+        state,
+        hooks=_isaac_scenario_state_hooks(),
+    )
 
 
 def _isaac_placement_hooks() -> IsaacPlacementHooks:

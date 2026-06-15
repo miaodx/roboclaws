@@ -520,6 +520,15 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
   Isaac backend tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Isaac generated-mess placement seeding, manifest target lookup,
+  wrong-receptacle selection, object location writeback, and first-target
+  location selection moved from the backend worker into
+  `isaac_scenario_state.py`, with worker-private wrappers preserving current
+  init and command hook call shapes. Metric: `isaac_lab_backend_worker.py`
+  3828 -> 3742 lines; Ruff complexity stayed at 0 and oversized modules stayed
+  at 62. Proof: focused Isaac backend tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
