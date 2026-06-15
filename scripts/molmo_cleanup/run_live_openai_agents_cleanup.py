@@ -73,6 +73,15 @@ from scripts.molmo_cleanup.openai_agents_metrics import (
     model_service_fallback_metrics as _model_service_fallback_metrics,
 )
 from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_cache_metrics as _cache_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_context_growth_metrics as _context_growth_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_context_metrics as _context_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
     openai_agents_event_metrics as _openai_agents_event_metrics,
 )
 from scripts.molmo_cleanup.openai_agents_metrics import (
@@ -2487,220 +2496,6 @@ def _mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
     }
 
 
-def _context_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
-    response_spans = _response_span_end_events(run_dir)
-    kickoff_prompt_chars = _int_or_none(timing.get("kickoff_prompt_chars")) or 0
-    attempts = timing.get("openai_agents_attempts")
-    if not isinstance(attempts, list):
-        attempts = []
-    continuation_prompt_chars = sum(
-        _int_or_none(attempt.get("continuation_prompt_chars")) or 0
-        for attempt in attempts
-        if isinstance(attempt, dict)
-    )
-    base_payload: dict[str, Any] = {
-        "kickoff_prompt_chars": kickoff_prompt_chars,
-        "kickoff_prompt_estimated_tokens": _estimated_tokens_from_chars(kickoff_prompt_chars),
-        "continuation_prompt_chars": continuation_prompt_chars,
-        "continuation_prompt_estimated_tokens": _estimated_tokens_from_chars(
-            continuation_prompt_chars
-        ),
-        "context_window_failure_detected": _context_window_failure_detected(timing, run_dir),
-    }
-    if not response_spans:
-        return {
-            "available": False,
-            "source": "unavailable",
-            "limitations": ["span_usage_missing"],
-            **base_payload,
-        }
-
-    usage_rows: list[dict[str, int | float | None]] = []
-    limitations: list[str] = []
-    for event in response_spans:
-        usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
-        if not usage:
-            limitations.append("response_span_usage_missing")
-            continue
-        input_tokens = _int_or_none(usage.get("input_tokens"))
-        if input_tokens is None:
-            limitations.append("response_span_input_tokens_missing")
-            continue
-        cached_tokens = _cached_input_tokens(usage)
-        output_tokens = _int_or_none(usage.get("output_tokens")) or 0
-        reasoning_tokens = _reasoning_tokens(usage) or 0
-        usage_rows.append(
-            {
-                "input_tokens": input_tokens,
-                "cached_tokens": min(max(cached_tokens, 0), input_tokens),
-                "output_tokens": output_tokens,
-                "reasoning_tokens": reasoning_tokens,
-                "duration_s": _float_or_none(event.get("duration_s")),
-            }
-        )
-
-    if not usage_rows:
-        return {
-            "available": False,
-            "source": "openai_agents_span_usage",
-            "limitations": sorted(set(limitations or ["span_usage_missing"])),
-            "response_span_count": len(response_spans),
-            **base_payload,
-        }
-
-    input_values = [int(row["input_tokens"] or 0) for row in usage_rows]
-    total_input = sum(input_values)
-    total_cached = sum(int(row["cached_tokens"] or 0) for row in usage_rows)
-    total_uncached = max(0, total_input - total_cached)
-    total_output = sum(int(row["output_tokens"] or 0) for row in usage_rows)
-    total_reasoning = sum(int(row["reasoning_tokens"] or 0) for row in usage_rows)
-    durations = [
-        float(row["duration_s"])
-        for row in usage_rows
-        if _float_or_none(row.get("duration_s")) is not None
-    ]
-    return {
-        "available": True,
-        "source": "openai_agents_span_usage",
-        "limitations": sorted(set(limitations)),
-        "response_span_count": len(usage_rows),
-        "total_input_tokens": total_input,
-        "total_cached_input_tokens": total_cached,
-        "total_uncached_input_tokens": total_uncached,
-        "cache_hit_ratio": _ratio(total_cached, total_input),
-        "max_input_tokens": max(input_values),
-        "p50_input_tokens": _nearest_rank_percentile(input_values, 0.50),
-        "p95_input_tokens": _nearest_rank_percentile(input_values, 0.95),
-        "total_output_tokens": total_output,
-        "total_reasoning_tokens": total_reasoning,
-        "max_reasoning_tokens": max(int(row["reasoning_tokens"] or 0) for row in usage_rows),
-        "first_response_cached_tokens": int(usage_rows[0]["cached_tokens"] or 0),
-        "response_span_duration_s": _round_duration(sum(durations)) if durations else None,
-        **base_payload,
-    }
-
-
-def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> dict[str, Any]:
-    model_settings = (
-        timing.get("sdk_model_settings")
-        if isinstance(timing.get("sdk_model_settings"), dict)
-        else {}
-    )
-    stable_prefix = (
-        timing.get("kickoff_prompt_stable_prefix")
-        if isinstance(timing.get("kickoff_prompt_stable_prefix"), dict)
-        else {}
-    )
-    if not context_metrics.get("available"):
-        return {
-            "available": False,
-            "source": context_metrics.get("source") or "unavailable",
-            "limitations": context_metrics.get("limitations") or ["span_usage_missing"],
-            "cache_tools_list": bool(timing.get("cache_tools_list")),
-            "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
-            "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
-            "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
-        }
-    total_input = _int_or_none(context_metrics.get("total_input_tokens")) or 0
-    total_cached = _int_or_none(context_metrics.get("total_cached_input_tokens")) or 0
-    return {
-        "available": True,
-        "source": "openai_agents_span_usage",
-        "limitations": list(context_metrics.get("limitations") or []),
-        "cache_tools_list": bool(timing.get("cache_tools_list")),
-        "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
-        "provider_prompt_cache_observed": total_cached > 0,
-        "cached_input_token_ratio": _ratio(total_cached, total_input),
-        "first_response_cached_tokens": context_metrics.get("first_response_cached_tokens"),
-        "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
-        "prompt_profile_id": str(timing.get("prompt_profile_id") or "baseline"),
-        "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
-    }
-
-
-def _context_growth_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
-    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
-    if not trace_events:
-        return {
-            "available": False,
-            "source": "unavailable",
-            "limitations": ["trace_missing"],
-            "continuation_attempt_count": _continuation_attempt_count(timing),
-        }
-
-    response_events = [event for event in trace_events if event.get("event") == "response"]
-    observe_events = [event for event in response_events if event.get("tool") == "observe"]
-    raw_fpv_events = [
-        event
-        for event in response_events
-        if "raw_fpv" in json.dumps(event, sort_keys=True, ensure_ascii=True)
-    ]
-    response_sizes = [len(json.dumps(event, sort_keys=True)) for event in response_events]
-    return {
-        "available": True,
-        "source": "live_timing_and_trace",
-        "limitations": [],
-        "trace_event_count": len(trace_events),
-        "observe_response_count": len(observe_events),
-        "raw_fpv_observation_count": len(raw_fpv_events),
-        "tool_response_bytes_total": sum(response_sizes),
-        "largest_tool_response_bytes": max(response_sizes) if response_sizes else 0,
-        "agent_visible_state_bytes_p95": _nearest_rank_percentile(response_sizes, 0.95)
-        if response_sizes
-        else 0,
-        "continuation_attempt_count": _continuation_attempt_count(timing),
-    }
-
-
-def _response_span_end_events(run_dir: Path) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
-    for path in sorted(run_dir.glob("openai-agents-spans*.jsonl")):
-        for event in _read_jsonl_path(path):
-            if event.get("event") == "span_end" and event.get("span_type") == "response":
-                events.append(event)
-    return events
-
-
-def _cached_input_tokens(usage: dict[str, Any]) -> int:
-    details = usage.get("input_tokens_details")
-    if isinstance(details, dict):
-        nested = _int_or_none(details.get("cached_tokens"))
-        if nested is not None:
-            return nested
-    return _int_or_none(usage.get("cached_input_tokens")) or 0
-
-
-def _reasoning_tokens(usage: dict[str, Any]) -> int | None:
-    details = usage.get("output_tokens_details")
-    if isinstance(details, dict):
-        return _int_or_none(details.get("reasoning_tokens"))
-    return _int_or_none(usage.get("reasoning_tokens"))
-
-
-def _context_window_failure_detected(timing: dict[str, Any], run_dir: Path) -> bool:
-    haystack_parts = [
-        str(timing.get("reason") or ""),
-        str(timing.get("provider_reason") or ""),
-        str(timing.get("detail") or ""),
-    ]
-    for path in sorted(run_dir.glob("openai-agents-*.jsonl")):
-        text = path.read_text(encoding="utf-8", errors="replace")[:200_000].lower()
-        haystack_parts.append(text)
-    haystack = " ".join(haystack_parts).lower()
-    return any(
-        marker in haystack
-        for marker in (
-            "context window",
-            "context length",
-            "context_length",
-            "maximum context",
-            "input exceeds the context",
-            "context-budget",
-            "provider_context_failure",
-        )
-    )
-
-
 def _model_or_sdk_unattributed_seconds(timing: dict[str, Any]) -> float | None:
     runner_timing = (
         timing.get("runner_timing") if isinstance(timing.get("runner_timing"), dict) else {}
@@ -2853,35 +2648,10 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def _nearest_rank_percentile(values: list[int], percentile: float) -> int | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = max(0, min(len(ordered) - 1, int(len(ordered) * percentile + 0.999999) - 1))
-    return ordered[index]
-
-
-def _ratio(numerator: int, denominator: int) -> float | None:
-    if denominator <= 0:
-        return None
-    return round(numerator / denominator, 6)
-
-
 def _estimated_tokens_from_chars(char_count: int) -> int:
     if char_count <= 0:
         return 0
     return max(1, round(char_count / 4))
-
-
-def _continuation_attempt_count(timing: dict[str, Any]) -> int:
-    attempts = timing.get("openai_agents_attempts")
-    if not isinstance(attempts, list):
-        return 0
-    return sum(
-        1
-        for attempt in attempts
-        if isinstance(attempt, dict) and int(attempt.get("attempt_index") or 0) > 0
-    )
 
 
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
