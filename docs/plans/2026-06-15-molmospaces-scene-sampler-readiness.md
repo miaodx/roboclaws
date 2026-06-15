@@ -29,6 +29,10 @@ next_flow_scope:
   - add sampler readiness support for procthor-objaverse-val
   - add sampler readiness support for holodeck-objaverse-val
   - turn remaining plan slices into scanner, source-prep, UI, eval, and docs work
+next_flow_policy:
+  - treat readiness gates, target sources, vertical slices, acceptance criteria, and verification as implementation scope
+  - classify every candidate/source as admitted, normalized blocked, or rejected instead of leaving parked notes
+  - preserve no-implicit-download and no-implicit-live-VLM behavior in sampler, eval, and CI paths
 ---
 
 # MolmoSpaces Scene Sampler Readiness
@@ -332,11 +336,26 @@ MolmoSpaces scene sources:
 - `procthor-objaverse-val`
 - `holodeck-objaverse-val`
 
+The next Flow should try to make those three sources supported on the primary
+MolmoSpaces MuJoCo path. Here, "supported" means three UI-ready samples for the
+default operator-console scene rail and up to ten eval-stress-ready samples for
+the eval projection. If local assets, loader support, preview rendering,
+metadata, waypoint generation, or map-build proof are unavailable, the source
+still belongs to the next Flow: it should end as a normalized blocked row with a
+specific reason, not as an omitted source or a vague follow-up.
+
 The current source must also be finished:
 
 - `procthor-10k-val`: raise eval-stress coverage from five admitted samples to
   ten admitted samples while keeping the operator-console UI set at exactly
   three default-visible samples.
+
+Everything else in this plan is also next-Flow development input. The next Flow
+should consume the target-source list, readiness gates, small/full demo shape,
+vertical slices, acceptance criteria, and verification commands below as the
+execution contract. The only acceptable outcomes for a scoped source/candidate
+are admitted, normalized blocked with evidence, or rejected with a stable
+quality/readiness reason.
 
 The plan has a lot of parked-looking information because source admission is
 intentionally evidence-gated. A scene source can be unsupported for several
