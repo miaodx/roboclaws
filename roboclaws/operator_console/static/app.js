@@ -19,6 +19,7 @@ const state = {
   setupSelectionKey: "",
   messupStatusKey: "",
   syncAxesFromRoute: false,
+  latestOperatorResultText: "",
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -1182,9 +1183,13 @@ function renderStartAction(route, readiness) {
   if (mode === "ask_why") {
     els.startButton.textContent = "Ask Why";
     els.startButton.disabled = !state.activeRunId;
-    els.startHelp.textContent = state.activeRunId
-      ? "Ask Why will read public artifacts for the attached run."
-      : "Attach a run before asking why.";
+    if (state.latestOperatorResultText) {
+      els.startHelp.textContent = state.latestOperatorResultText;
+    } else {
+      els.startHelp.textContent = state.activeRunId
+        ? "Ask Why will read public artifacts for the attached run."
+        : "Attach a run before asking why.";
+    }
     return;
   }
   if (mode === "steer") {
@@ -1455,6 +1460,7 @@ async function sendNextGoal({ confirmed = false } = {}) {
     return;
   }
   els.startHelp.textContent = operatorMessageResultText(result);
+  state.latestOperatorResultText = els.startHelp.textContent;
   pollState();
 }
 
@@ -1716,10 +1722,16 @@ function renderOperatorMode(payload = state.activeState || {}) {
     button.classList.toggle("active", button.dataset.operatorMode === state.operatorMode);
   });
   const messages = payload.operator_messages || {};
+  const askWhyText = latestAskWhyText(messages);
+  if (askWhyText) {
+    state.latestOperatorResultText = askWhyText;
+  }
   if (messages.operator_message_pending) {
     els.startHelp.textContent = `${
       messages.pending_steer_count || 1
     } steer message(s) waiting for agent checkpoint.`;
+  } else if (state.operatorMode === "ask_why" && state.latestOperatorResultText) {
+    els.startHelp.textContent = state.latestOperatorResultText;
   }
 }
 
@@ -1749,6 +1761,7 @@ async function sendOperatorMessage() {
   els.taskPrompt.value = "";
   els.promptCount.textContent = "0 / 2000";
   els.startHelp.textContent = operatorMessageResultText(result);
+  state.latestOperatorResultText = els.startHelp.textContent;
   pollState();
 }
 
@@ -1764,6 +1777,14 @@ function operatorMessageResultText(result) {
     return `Steer message ${result.status || "queued"}; waiting for check_operator_messages.`;
   }
   return "Operator message recorded.";
+}
+
+function latestAskWhyText(messages) {
+  const latest = messages.latest_message || {};
+  if (latest.command_type !== "ask_why") {
+    return "";
+  }
+  return operatorMessageResultText(latest);
 }
 
 function renderArtifacts(items) {
