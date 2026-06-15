@@ -28,8 +28,6 @@ from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
 )
 from roboclaws.household.types import (
-    CleanupObject,
-    CleanupReceptacle,
     CleanupScenario,
 )
 from scripts.isaac_lab_cleanup import (
@@ -2795,202 +2793,35 @@ def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
     return isaac_scenario_builders.scenario_from_state(state)
 
 
-def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
-    return load_generated_mess_manifest(path)
-
-
-def _scenario_for_init(
-    args: argparse.Namespace,
-    *,
-    generated_mess_manifest: dict[str, Any] | None = None,
-) -> CleanupScenario:
-    return scenario_for_init(args, generated_mess_manifest=generated_mess_manifest)
-
-
-def _scenario_source(args: argparse.Namespace) -> str:
-    return isaac_scenario_builders.scenario_source(args)
-
-
-def _effective_scene_index(args: argparse.Namespace) -> int:
-    return effective_scene_index(args)
-
-
-def _scene_index_from_usd_path(path: Any) -> int | None:
-    return scene_index_from_usd_path(path)
-
-
-def _scene_specific_scenario_if_needed(
-    *,
-    args: argparse.Namespace,
-    generated_mess_manifest: dict[str, Any] | None,
-    scene_binding_diagnostics: dict[str, Any],
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-    real_smoke: dict[str, Any] | None,
-) -> CleanupScenario | None:
-    return scene_specific_scenario_if_needed(
-        args=args,
-        generated_mess_manifest=generated_mess_manifest,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        real_smoke=real_smoke,
-    )
-
-
-def _scenario_from_scene_index(
-    *,
-    scene_source: str,
-    scene_index: int,
-    seed: int,
-    generated_mess_count: int,
-    generated_mess_object_ids: tuple[str, ...] = (),
-    generated_mess_manifest: dict[str, Any] | None = None,
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> CleanupScenario | None:
-    return scenario_from_scene_index(
-        scene_source=scene_source,
-        scene_index=scene_index,
-        seed=seed,
-        generated_mess_count=generated_mess_count,
-        generated_mess_object_ids=generated_mess_object_ids,
-        generated_mess_manifest=generated_mess_manifest,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-    )
-
-
-def _cleanup_receptacle_index_for_mess_generation(
-    receptacle_index: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    return cleanup_receptacle_index_for_mess_generation(receptacle_index)
-
-
-def _cleanup_receptacle_from_scene_index(
-    handle: str,
-    entry: dict[str, Any],
-) -> CleanupReceptacle:
-    return cleanup_receptacle_from_scene_index(handle, entry)
-
-
-def _scene_object_name(handle: str, entry: dict[str, Any]) -> str:
-    return scene_object_name(handle, entry)
-
-
-def _scene_object_category(entry: dict[str, Any]) -> str:
-    return scene_object_category(entry)
-
-
-def _scene_cleanup_object_category(entry: dict[str, Any]) -> str:
-    return scene_cleanup_object_category(entry)
-
-
-def _canonical_cleanup_category(category: str, aliases: tuple[str, ...]) -> str:
-    return canonical_cleanup_category(category, aliases)
-
-
-def _scene_target_receptacle_id(
-    entry: dict[str, Any],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> str:
-    return scene_target_receptacle_id(entry, receptacle_index)
-
-
-def _first_receptacle_matching_aliases(
-    receptacle_index: dict[str, dict[str, Any]],
-    aliases: tuple[str, ...],
-) -> str:
-    return first_receptacle_matching_aliases(receptacle_index, aliases)
-
-
-def _scene_source_receptacle_id(
-    entry: dict[str, Any],
-    receptacle_index: dict[str, dict[str, Any]],
-    *,
-    target_id: str,
-) -> str:
-    return scene_source_receptacle_id(entry, receptacle_index, target_id=target_id)
-
-
-def _scene_entry_tokens(handle: str, entry: dict[str, Any]) -> set[str]:
-    return scene_entry_tokens(handle, entry)
-
-
+_load_generated_mess_manifest = load_generated_mess_manifest
+_scenario_for_init = scenario_for_init
+_scenario_source = isaac_scenario_builders.scenario_source
+_effective_scene_index = effective_scene_index
+_scene_index_from_usd_path = scene_index_from_usd_path
+_scene_specific_scenario_if_needed = scene_specific_scenario_if_needed
+_scenario_from_scene_index = scenario_from_scene_index
+_cleanup_receptacle_index_for_mess_generation = cleanup_receptacle_index_for_mess_generation
+_cleanup_receptacle_from_scene_index = cleanup_receptacle_from_scene_index
+_scene_object_name = scene_object_name
+_scene_object_category = scene_object_category
+_scene_cleanup_object_category = scene_cleanup_object_category
+_canonical_cleanup_category = canonical_cleanup_category
+_scene_target_receptacle_id = scene_target_receptacle_id
+_first_receptacle_matching_aliases = first_receptacle_matching_aliases
+_scene_source_receptacle_id = scene_source_receptacle_id
+_scene_entry_tokens = scene_entry_tokens
 _SCENE_CLEANUP_TARGET_ALIASES = SCENE_CLEANUP_TARGET_ALIASES
 _SCENE_STRICT_CLEANUP_TARGET_ALIASES = SCENE_STRICT_CLEANUP_TARGET_ALIASES
 _CANONICAL_CLEANUP_CATEGORY_ALIASES = CANONICAL_CLEANUP_CATEGORY_ALIASES
 
-
-def _scenario_from_generated_mess_manifest_or_limit(
-    scenario: CleanupScenario,
-    *,
-    generated_mess_count: int,
-    generated_mess_manifest: dict[str, Any] | None = None,
-) -> CleanupScenario:
-    return scenario_from_generated_mess_manifest_or_limit(
-        scenario,
-        generated_mess_count=generated_mess_count,
-        generated_mess_manifest=generated_mess_manifest,
-    )
-
-
-def _limit_scenario_to_generated_mess_count(
-    scenario: CleanupScenario,
-    *,
-    generated_mess_count: int,
-) -> CleanupScenario:
-    return limit_scenario_to_generated_mess_count(
-        scenario,
-        generated_mess_count=generated_mess_count,
-    )
-
-
-def _scenario_without_private_targets(
-    scenario: CleanupScenario,
-    *,
-    scenario_id: str,
-    objects: tuple[CleanupObject, ...],
-) -> CleanupScenario:
-    return scenario_without_private_targets(
-        scenario,
-        scenario_id=scenario_id,
-        objects=objects,
-    )
-
-
-def _scenario_from_map_bundle(
-    bundle_dir: Path,
-    *,
-    seed: int,
-    generated_mess_count: int,
-) -> CleanupScenario:
-    return scenario_from_map_bundle(
-        bundle_dir,
-        seed=seed,
-        generated_mess_count=generated_mess_count,
-    )
-
-
-def _initial_receptacle_id(scenario: CleanupScenario) -> str:
-    return initial_receptacle_id(scenario)
-
-
-def _cleanup_receptacle_from_fixture(fixture: dict[str, Any]) -> CleanupReceptacle:
-    return cleanup_receptacle_from_fixture(fixture)
-
-
-def _map_aligned_target_specs(fixtures: list[dict[str, Any]]) -> list[dict[str, str]]:
-    return map_aligned_target_specs(fixtures)
-
-
-def _first_fixture_matching(
-    fixtures: list[dict[str, Any]],
-    aliases: tuple[str, ...],
-    *,
-    exclude_fixture_id: str = "",
-) -> dict[str, Any] | None:
-    return first_fixture_matching(fixtures, aliases, exclude_fixture_id=exclude_fixture_id)
+_scenario_from_generated_mess_manifest_or_limit = scenario_from_generated_mess_manifest_or_limit
+_limit_scenario_to_generated_mess_count = limit_scenario_to_generated_mess_count
+_scenario_without_private_targets = scenario_without_private_targets
+_scenario_from_map_bundle = scenario_from_map_bundle
+_initial_receptacle_id = initial_receptacle_id
+_cleanup_receptacle_from_fixture = cleanup_receptacle_from_fixture
+_map_aligned_target_specs = map_aligned_target_specs
+_first_fixture_matching = first_fixture_matching
 
 
 def _norm(value: Any) -> str:

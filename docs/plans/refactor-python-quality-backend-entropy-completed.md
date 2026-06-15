@@ -570,6 +570,13 @@ logs before choosing the next slice.
   Proof: focused Isaac backend tests, ruff, format check, py_compile, and
   ratchet.
 
+- 2026-06-16: Isaac scenario-builder delegate wrappers in the backend worker
+  were collapsed into worker-private aliases to the extracted builder module,
+  preserving direct test names while removing wrapper-only bulk. Metric:
+  `isaac_lab_backend_worker.py` 3114 -> 2945 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac backend tests,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
