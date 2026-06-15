@@ -6,12 +6,36 @@ import importlib
 import io
 import json
 import platform
-import shlex
 import sys
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from roboclaws.launch.scene_sampler_scanner import (
+    coverage_score as _scanner_coverage_score,
+)
+from roboclaws.launch.scene_sampler_scanner import (
+    next_flow_artifact_paths,
+    next_flow_blocked_reason_samples,
+    next_flow_missing_gate_counts,
+    next_flow_next_action,
+    next_flow_recommended_commands,
+    next_flow_scan_world_ids,
+    next_flow_status,
+    next_flow_summary,
+    scanner_admission_summary,
+    scanner_candidate_packet,
+    scanner_execution_candidate,
+    scanner_execution_summary,
+    scanner_missing_gates,
+    scanner_next_action,
+    scanner_preview_assets,
+    scanner_preview_metadata,
+    scanner_product_smoke_artifacts,
+    scanner_required_gates,
+    world_id_slug,
+)
 
 SAMPLER_MANIFEST_SCHEMA = "molmospaces_scene_sampler_manifest_v1"
 SAMPLER_LABEL_MANIFEST_SCHEMA = "molmospaces_scene_room_labels_v1"
@@ -919,7 +943,7 @@ def scanner_execution_plan(
             world_id = str(install_candidate.get("world_id") or "")
             admission = admission_by_world_id.get(world_id) or {}
             candidates.append(
-                _scanner_execution_candidate(
+                scanner_execution_candidate(
                     install_candidate=install_candidate,
                     admission=admission,
                 )
@@ -943,7 +967,7 @@ def scanner_execution_plan(
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
         "candidate_indices": list(candidate_indices),
-        "summary": _scanner_execution_summary(sources),
+        "summary": scanner_execution_summary(sources),
         "sources": sources,
     }
 
@@ -955,7 +979,7 @@ def next_flow_worklist_report(
 ) -> dict[str, Any]:
     """Return one next-Flow worklist across sampler selection, prep, and scanner gates."""
 
-    artifact_paths = _next_flow_artifact_paths(output_dir=output_dir)
+    artifact_paths = next_flow_artifact_paths(output_dir=output_dir)
     projection = eval_projection_metadata()
     readiness = readiness_report()
     selection = selection_gap_report(candidate_indices=candidate_indices)
@@ -977,8 +1001,8 @@ def next_flow_worklist_report(
             and item.get("scanner_status") == "ready_for_product_smoke"
             and item.get("world_id")
         ]
-        missing_gate_counts = _next_flow_missing_gate_counts(source_admission)
-        next_action = _next_flow_next_action(
+        missing_gate_counts = next_flow_missing_gate_counts(source_admission)
+        next_action = next_flow_next_action(
             readiness_source=source_readiness,
             selection_source=source_selection,
             prep_source=source_prep_payload,
@@ -988,7 +1012,7 @@ def next_flow_worklist_report(
             "scene_source": source,
             "scene_family": source_prep_payload.get("scene_family", ""),
             "scene_split": source_prep_payload.get("scene_split", ""),
-            "flow_status": _next_flow_status(
+            "flow_status": next_flow_status(
                 readiness_source=source_readiness,
                 prep_source=source_prep_payload,
                 scanner_source=source_execution,
@@ -1014,11 +1038,11 @@ def next_flow_worklist_report(
             ),
             "scanner_blocked_candidate_count": int(source_execution.get("blocked_count") or 0),
             "scanner_ready_world_ids": scanner_ready_world_ids,
-            "next_scan_world_ids": _next_flow_scan_world_ids(source_selection),
+            "next_scan_world_ids": next_flow_scan_world_ids(source_selection),
             "missing_resource_count": int(source_prep_payload.get("missing_resource_count") or 0),
             "missing_resource_summary": source_prep_payload.get("missing_resource_summary") or {},
             "missing_gate_counts": missing_gate_counts,
-            "blocked_reason_samples": _next_flow_blocked_reason_samples(
+            "blocked_reason_samples": next_flow_blocked_reason_samples(
                 projection_source=source_projection,
                 prep_source=source_prep_payload,
                 scanner_source=source_execution,
@@ -1031,7 +1055,7 @@ def next_flow_worklist_report(
             "recommended_candidate_range": source_prep_payload.get(
                 "recommended_candidate_range", ""
             ),
-            "recommended_commands": _next_flow_recommended_commands(
+            "recommended_commands": next_flow_recommended_commands(
                 source=source,
                 next_action=next_action,
                 recommended_candidate_range=str(
@@ -1040,7 +1064,7 @@ def next_flow_worklist_report(
                 artifact_paths=artifact_paths,
             ),
         }
-    summary = _next_flow_summary(sources)
+    summary = next_flow_summary(sources)
     return {
         "schema": "molmospaces_scene_sampler_next_flow_worklist_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
@@ -1100,7 +1124,7 @@ def scanner_admission_report(
         "probe_mode": "no_download_no_backend_no_vlm",
         "candidate_indices": list(candidate_indices),
         "required_gates": list(_scanner_required_gates()),
-        "summary": _scanner_admission_summary(sources),
+        "summary": scanner_admission_summary(sources),
         "sources": sources,
     }
 
@@ -1125,53 +1149,16 @@ def validate_sampler_manifest(manifest: dict[str, Any] | None = None) -> None:
     """Validate sampler rows against source-count and provenance gates."""
 
     payload = manifest or sampler_manifest()
-    if payload.get("schema") != SAMPLER_MANIFEST_SCHEMA:
-        raise ValueError("invalid sampler manifest schema")
-    rows = payload.get("rows")
-    if not isinstance(rows, list):
-        raise ValueError("sampler manifest rows must be a list")
+    rows = _manifest_rows(payload)
     label_manifest = load_room_label_manifest()
     _validate_label_manifest(label_manifest)
     by_source: dict[str, list[dict[str, Any]]] = {source: [] for source in SUPPORTED_SCENE_SOURCES}
     for row in rows:
-        if not isinstance(row, dict):
-            raise ValueError("sampler row must be an object")
-        source = str(row.get("scene_source") or "")
-        if source not in by_source:
-            raise ValueError(f"unsupported scene_source {source!r}")
-        status = str(row.get("readiness_status") or "")
-        if status == READINESS_READY:
-            _validate_ready_row(row, label_manifest=label_manifest)
-        elif status == READINESS_BLOCKED:
-            if not row.get("blocked_reason") or not row.get("failure_class"):
-                raise ValueError(f"blocked sampler row for {source} needs reason and failure_class")
-        elif status != READINESS_REJECTED:
-            raise ValueError(f"unknown readiness_status {status!r}")
+        source = _validate_sampler_row(row, label_manifest=label_manifest)
         by_source[source].append(row)
 
     for source, source_rows in by_source.items():
-        ui_ready = [
-            row
-            for row in source_rows
-            if row.get("readiness_status") == READINESS_READY and UI_LANE in row.get("lanes", [])
-        ]
-        if 0 < len(ui_ready) < 3:
-            raise ValueError(f"scene_source {source} exposes fewer than three UI-ready samples")
-        if len(ui_ready) > UI_TARGET_PER_SCENE_SOURCE:
-            raise ValueError(
-                f"scene_source {source} exposes more than {UI_TARGET_PER_SCENE_SOURCE} UI samples"
-            )
-        eval_ready = [
-            row
-            for row in source_rows
-            if row.get("readiness_status") == READINESS_READY
-            and EVAL_STRESS_LANE in row.get("lanes", [])
-        ]
-        if len(eval_ready) > EVAL_TARGET_PER_SCENE_SOURCE:
-            raise ValueError(
-                f"scene_source {source} exposes more than "
-                f"{EVAL_TARGET_PER_SCENE_SOURCE} eval-stress samples"
-            )
+        _validate_source_lane_counts(source=source, source_rows=source_rows)
 
 
 def _ready_row(scene_index: int) -> SceneSamplerRow:
@@ -1384,7 +1371,7 @@ def _quality_score(preview: dict[str, Any]) -> float:
 
 
 def _coverage_score(*, room_count: int, waypoint_count: int) -> float:
-    return round(min(1.0, (room_count / 10.0 + waypoint_count / 20.0) / 2.0), 3)
+    return _scanner_coverage_score(room_count=room_count, waypoint_count=waypoint_count)
 
 
 def _preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
@@ -1938,14 +1925,7 @@ def _install_command_ref_helper() -> str:
 
 
 def _scanner_required_gates() -> tuple[str, ...]:
-    return (
-        "source_asset_available",
-        "preview_metadata",
-        "public_room_count",
-        "public_waypoints",
-        "trusted_category_provenance",
-        "map_build_artifacts",
-    )
+    return scanner_required_gates()
 
 
 def _scanner_admission_row(candidate: dict[str, Any]) -> dict[str, Any]:
@@ -2000,48 +1980,11 @@ def _scanner_admission_row_base(candidate: dict[str, Any]) -> dict[str, Any]:
 
 
 def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
-    missing = []
-    candidate_file = candidate.get("candidate_file")
-    if not isinstance(candidate_file, dict) or not candidate_file.get("exists"):
-        missing.append("source_asset_available")
-    preview_statuses = candidate.get("preview_statuses")
-    if not isinstance(preview_statuses, dict) or not all(
-        _scanner_preview_status_passes(preview_statuses.get(view)) for view in _required_views()
-    ):
-        missing.append("preview_metadata")
-    if int(candidate.get("room_count") or 0) < 3:
-        missing.append("public_room_count")
-    if int(candidate.get("waypoint_count") or 0) < 3:
-        missing.append("public_waypoints")
-    if candidate.get("category_provenance") not in {
-        "source_metadata",
-        "prepared_visual_label_manifest",
-        "prepared_visual_room_label_manifest",
-    }:
-        missing.append("trusted_category_provenance")
-    if not candidate.get("eval_ready"):
-        missing.append("map_build_artifacts")
-    return missing
+    return scanner_missing_gates(candidate, required_views=_required_views())
 
 
 def _scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str]) -> str:
-    candidate_file = candidate.get("candidate_file")
-    if "source_asset_available" in missing_gates:
-        if (
-            isinstance(candidate_file, dict)
-            and candidate_file.get("status") == "missing_from_index_map"
-        ):
-            return "choose_valid_source_specific_candidate_index"
-        return "run_manual_source_prep_before_scanner"
-    if "preview_metadata" in missing_gates:
-        return "render_preview_metadata_with_explicit_operator_command"
-    if "map_build_artifacts" in missing_gates:
-        return "run_map_build_product_smoke_before_eval_admission"
-    return "run_scanner_admission_checks"
-
-
-def _scanner_preview_status_passes(status: Any) -> bool:
-    return str(status or "") in {"available", "reviewable"}
+    return scanner_next_action(candidate, missing_gates=missing_gates)
 
 
 def _scanner_execution_candidate(
@@ -2176,37 +2119,6 @@ def _next_flow_missing_gate_counts(source_admission: dict[str, Any]) -> dict[str
     return dict(sorted(counts.items()))
 
 
-def _next_flow_blocked_reason_samples(
-    *,
-    projection_source: dict[str, Any],
-    prep_source: dict[str, Any],
-    scanner_source: dict[str, Any],
-) -> list[str]:
-    reasons: list[str] = []
-    for row in projection_source.get("blocked_rows") or []:
-        if isinstance(row, dict) and row.get("blocked_reason"):
-            reasons.append(str(row["blocked_reason"]))
-    for resource in prep_source.get("missing_resources") or []:
-        if not isinstance(resource, dict):
-            continue
-        reason = str(resource.get("reason") or "")
-        path = str(resource.get("path") or "")
-        if reason and path:
-            reasons.append(f"{reason}: {path}")
-        elif reason:
-            reasons.append(reason)
-    for candidate in scanner_source.get("candidates") or []:
-        if isinstance(candidate, dict) and candidate.get("blocked_reason"):
-            reasons.append(str(candidate["blocked_reason"]))
-    deduped: list[str] = []
-    for reason in reasons:
-        if reason and reason not in deduped:
-            deduped.append(reason)
-        if len(deduped) == 3:
-            break
-    return deduped
-
-
 def _next_flow_artifact_paths(*, output_dir: Path | None) -> dict[str, str]:
     base = output_dir or Path("output/scene-sampler-readiness")
     scanner_dir = Path("output/scene-sampler-scanner")
@@ -2218,95 +2130,6 @@ def _next_flow_artifact_paths(*, output_dir: Path | None) -> dict[str, str]:
         "source_prep_run": str(scanner_dir / "source_prep_run.json"),
         "scanner_run": str(scanner_dir / "scanner_run.json"),
     }
-
-
-def _next_flow_recommended_commands(
-    *,
-    source: str,
-    next_action: str,
-    recommended_candidate_range: str,
-    artifact_paths: dict[str, str],
-) -> list[dict[str, str]]:
-    source_arg = shlex.quote(source)
-    candidate_range = recommended_candidate_range or "0:19"
-    commands = [
-        {
-            "name": "source_prep_dry_run",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
-                f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
-                f"--source {source_arg}"
-            ),
-            "execution_policy": "dry_run_default",
-        },
-        {
-            "name": "source_prep_execute",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
-                f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
-                f"--source {source_arg} --execute"
-            ),
-            "execution_policy": "manual_operator_only",
-        },
-        {
-            "name": "refresh_readiness_after_prep",
-            "command": (
-                ".venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py "
-                f"--output-dir {_quote_artifact_path(artifact_paths, 'readiness_output_dir')} "
-                f"--candidate-range {shlex.quote(candidate_range)} "
-                f"--require-selection-capacity-source {source_arg} "
-                f"--require-scanner-ready-source {source_arg} "
-                "--no-generated-eval"
-            ),
-            "execution_policy": "no_download_no_vlm_gate",
-        },
-        {
-            "name": "scanner_dry_run",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
-                f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
-                f"--source {source_arg} --dry-run"
-            ),
-            "execution_policy": "dry_run_default",
-        },
-        {
-            "name": "scanner_execute_ready_candidates",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
-                f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
-                f"--source {source_arg}"
-            ),
-            "execution_policy": "ready_candidates_only",
-        },
-    ]
-    if next_action == "expand_candidate_range":
-        commands.insert(
-            0,
-            {
-                "name": "expand_candidate_range",
-                "command": (
-                    ".venv/bin/python scripts/operator_console/"
-                    "export_scene_sampler_readiness.py "
-                    f"--output-dir {_quote_artifact_path(artifact_paths, 'readiness_output_dir')} "
-                    f"--candidate-range {shlex.quote(candidate_range)} "
-                    f"--require-selection-capacity-source {source_arg} --no-generated-eval"
-                ),
-                "execution_policy": "no_download_no_vlm_gate",
-            },
-        )
-    return commands
-
-
-def _quote_artifact_path(artifact_paths: dict[str, str], key: str) -> str:
-    return shlex.quote(str(artifact_paths[key]))
 
 
 def _next_flow_scan_world_ids(selection_source: dict[str, Any]) -> list[str]:
@@ -2323,71 +2146,6 @@ def _next_flow_scan_world_ids(selection_source: dict[str, Any]) -> list[str]:
         if raw_world_id and raw_world_id not in world_ids:
             world_ids.append(raw_world_id)
     return world_ids
-
-
-def _next_flow_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    actionable_sources = [
-        source for source in sources.values() if source.get("next_action") != "none"
-    ]
-    return {
-        "source_count": len(sources),
-        "complete_source_count": sum(
-            1 for source in sources.values() if source.get("flow_status") == "complete"
-        ),
-        "incomplete_source_count": len(actionable_sources),
-        "ui_supported_source_count": sum(
-            1 for source in sources.values() if source.get("ui_status") == "ready"
-        ),
-        "eval_complete_source_count": sum(
-            1 for source in sources.values() if source.get("eval_status") == "complete"
-        ),
-        "ui_needed_count": sum(
-            int(source.get("ui_needed_count") or 0) for source in sources.values()
-        ),
-        "eval_needed_count": sum(
-            int(source.get("eval_needed_count") or 0) for source in sources.values()
-        ),
-        "scanner_ready_source_count": sum(
-            1
-            for source in sources.values()
-            if int(source.get("scanner_ready_candidate_count") or 0) > 0
-        ),
-        "source_prep_required_count": sum(
-            1
-            for source in sources.values()
-            if str(source.get("next_action") or "")
-            in {
-                "run_manual_source_prep",
-                "configure_or_install_molmospaces_scene_root",
-                "install_repo_dev_runtime",
-            }
-        ),
-        "next_actions": _next_flow_action_counts(actionable_sources),
-        "worklist": [_next_flow_worklist_item(source) for source in actionable_sources],
-    }
-
-
-def _next_flow_action_counts(sources: list[dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for source in sources:
-        action = str(source.get("next_action") or "unknown")
-        counts[action] = counts.get(action, 0) + 1
-    return dict(sorted(counts.items()))
-
-
-def _next_flow_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "scene_source": source.get("scene_source", ""),
-        "flow_status": source.get("flow_status", ""),
-        "next_action": source.get("next_action", ""),
-        "ui_needed_count": int(source.get("ui_needed_count") or 0),
-        "eval_needed_count": int(source.get("eval_needed_count") or 0),
-        "selection_capacity_status": source.get("selection_capacity_status", ""),
-        "prep_status": source.get("prep_status", ""),
-        "scanner_ready_candidate_count": int(source.get("scanner_ready_candidate_count") or 0),
-        "next_scan_world_ids": source.get("next_scan_world_ids") or [],
-        "recommended_candidate_range": source.get("recommended_candidate_range", ""),
-    }
 
 
 def _scanner_admission_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -2437,70 +2195,24 @@ def _map_build_product_smoke_command(world_id: str) -> str:
 
 
 def _world_id_slug(world_id: str) -> str:
-    return "".join(ch if ch.isalnum() else "-" for ch in world_id).strip("-")
+    return world_id_slug(world_id)
 
 
 def _scanner_preview_metadata(source: str, scene_index: int) -> dict[str, Any] | None:
-    """Load operator-run scanner preview metadata when it exists."""
-
-    world_id = f"molmospaces/{source}/{scene_index}"
-    path = _SCANNER_PREVIEW_ROOT / f"{_world_id_slug(world_id)}-preview.json"
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    if payload.get("scene_source") != source:
-        return None
-    if payload.get("scene_index") != scene_index:
-        return None
-    if payload.get("backend") != PRIMARY_MOLMOSPACES_BACKEND:
-        return None
-    return payload
+    return scanner_preview_metadata(
+        source=source,
+        scene_index=scene_index,
+        preview_root=_SCANNER_PREVIEW_ROOT,
+        backend=PRIMARY_MOLMOSPACES_BACKEND,
+    )
 
 
 def _scanner_product_smoke_artifacts(source: str, scene_index: int) -> dict[str, Any]:
-    """Return the latest map-build smoke artifacts for a scanner candidate."""
-
-    world_id = f"molmospaces/{source}/{scene_index}"
-    root = _SCANNER_PRODUCT_SMOKE_ROOT / _world_id_slug(world_id)
-    run_dirs = sorted(
-        [path for path in root.glob("*/seed-*") if path.is_dir()],
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
+    return scanner_product_smoke_artifacts(
+        source=source,
+        scene_index=scene_index,
+        product_smoke_root=_SCANNER_PRODUCT_SMOKE_ROOT,
     )
-    for run_dir in run_dirs:
-        runtime_map_path = run_dir / "runtime_metric_map.json"
-        run_result_path = run_dir / "run_result.json"
-        runtime_map = _read_json_if_exists(runtime_map_path)
-        run_result = _read_json_if_exists(run_result_path)
-        if (runtime_map or {}).get("schema") != "runtime_metric_map_v1":
-            continue
-        return {
-            "status": "available",
-            "run_dir": str(run_dir),
-            "runtime_metric_map": str(runtime_map_path),
-            "run_result": str(run_result_path) if run_result_path.exists() else "",
-            "runtime_map": runtime_map,
-            "run_result_payload": run_result,
-        }
-    return {
-        "status": "missing",
-        "run_dir": "",
-        "runtime_metric_map": "",
-        "run_result": "",
-        "runtime_map": {},
-        "run_result_payload": {},
-    }
-
-
-def _read_json_if_exists(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    if not isinstance(payload, dict):
-        return {}
-    return payload
 
 
 def _scanner_candidate_packet(
@@ -2509,74 +2221,13 @@ def _scanner_candidate_packet(
     preview: dict[str, Any],
     smoke: dict[str, Any],
 ) -> dict[str, Any]:
-    room_count = max(_preview_room_count(preview), _runtime_room_count(smoke))
-    waypoint_count = max(_waypoint_count(preview), _runtime_waypoint_count(smoke))
-    preview_statuses = _view_statuses(preview)
-    category_provenance = _scanner_category_provenance(smoke)
-    map_build_ready = _scanner_map_build_ready(smoke)
-    missing_gates = _scanner_missing_gates(
-        {
-            **packet,
-            "preview_statuses": preview_statuses,
-            "room_count": room_count,
-            "waypoint_count": waypoint_count,
-            "category_provenance": category_provenance,
-            "eval_ready": map_build_ready,
-        }
-    )
-    quality_issue = _scanner_quality_issue(missing_gates)
-    readiness_status = READINESS_BLOCKED
-    failure_class = "environment_blocked"
-    blocked_reason = _scanner_blocked_reason(
-        source=str(packet.get("scene_source") or ""),
-        scene_index=packet.get("scene_index"),
-        missing_gates=missing_gates,
+    return scanner_candidate_packet(
+        packet=packet,
+        preview=preview,
         smoke=smoke,
+        preview_root=_SCANNER_PREVIEW_ROOT,
+        required_views=_required_views(),
     )
-    if map_build_ready and not quality_issue and not missing_gates:
-        readiness_status = READINESS_READY
-        failure_class = ""
-        blocked_reason = ""
-    elif quality_issue:
-        readiness_status = READINESS_REJECTED
-        failure_class = "map_actionability_failure"
-        blocked_reason = quality_issue
-    selected_reason = (
-        "scanner_evidence_admitted_for_source_sampler"
-        if readiness_status == READINESS_READY
-        else quality_issue or "scanner_evidence_incomplete_for_source_sampler"
-    )
-    return {
-        **packet,
-        "readiness_status": readiness_status,
-        "lanes": [],
-        "ui_ready": False,
-        "eval_ready": readiness_status == READINESS_READY,
-        "room_count": room_count,
-        "waypoint_count": waypoint_count,
-        "category_provenance": category_provenance,
-        "category_manifest": "",
-        "preview_statuses": preview_statuses,
-        "preview_assets": _scanner_preview_assets(
-            source=str(packet.get("scene_source") or ""),
-            scene_index=int(packet.get("scene_index") or 0),
-        ),
-        "selected_reason": selected_reason,
-        "blocked_reason": blocked_reason,
-        "failure_class": failure_class,
-        "quality_score": _quality_score(preview),
-        "coverage_score": _coverage_score(room_count=room_count, waypoint_count=waypoint_count),
-        "scanner_evidence": {
-            "preview_metadata": str(
-                _SCANNER_PREVIEW_ROOT
-                / f"{_world_id_slug(str(packet.get('world_id') or ''))}-preview.json"
-            ),
-            "product_smoke_status": smoke.get("status", ""),
-            "product_smoke_run_dir": smoke.get("run_dir", ""),
-            "runtime_metric_map": smoke.get("runtime_metric_map", ""),
-            "run_result": smoke.get("run_result", ""),
-        },
-    }
 
 
 def _assign_dynamic_candidate_lanes(
@@ -2624,116 +2275,13 @@ def _assign_dynamic_candidate_lanes(
     return updated
 
 
-def _scanner_quality_issue(missing_gates: list[str]) -> str:
-    if "source_asset_available" in missing_gates or "map_build_artifacts" in missing_gates:
-        return ""
-    if "preview_metadata" in missing_gates:
-        return "preview_not_reviewable"
-    if "public_room_count" in missing_gates:
-        return "fewer_than_three_public_navigation_areas"
-    if "public_waypoints" in missing_gates:
-        return "fewer_than_three_public_waypoints"
-    if "trusted_category_provenance" in missing_gates:
-        return "missing_trusted_category_provenance"
-    return ""
-
-
-def _scanner_blocked_reason(
-    *,
-    source: str,
-    scene_index: Any,
-    missing_gates: list[str],
-    smoke: dict[str, Any],
-) -> str:
-    if "source_asset_available" in missing_gates:
-        return (
-            f"{source}/{scene_index} source asset is unavailable; run manual source prep "
-            "before scanner admission."
-        )
-    if "map_build_artifacts" in missing_gates:
-        if smoke.get("status") == "available":
-            return (
-                f"{source}/{scene_index} map-build smoke artifact did not satisfy scanner "
-                "admission."
-            )
-        return (
-            f"{source}/{scene_index} is missing map-build product-smoke runtime_metric_map.json; "
-            "run scanner product smoke before eval admission."
-        )
-    if missing_gates:
-        return f"{source}/{scene_index} is missing scanner gates: {', '.join(missing_gates)}"
-    return ""
-
-
-def _preview_room_count(preview: dict[str, Any]) -> int:
-    return len(_room_ids(preview))
-
-
-def _runtime_room_count(smoke: dict[str, Any]) -> int:
-    runtime_map = smoke.get("runtime_map")
-    if not isinstance(runtime_map, dict):
-        return 0
-    return len(
-        {
-            str(room.get("room_id") or "")
-            for room in runtime_map.get("rooms") or []
-            if isinstance(room, dict) and room.get("room_id")
-        }
-    )
-
-
-def _runtime_waypoint_count(smoke: dict[str, Any]) -> int:
-    runtime_map = smoke.get("runtime_map")
-    if not isinstance(runtime_map, dict):
-        return 0
-    waypoint_ids = {
-        str(candidate.get("waypoint_id") or "")
-        for candidate in runtime_map.get("generated_exploration_candidates") or []
-        if isinstance(candidate, dict) and candidate.get("waypoint_id")
-    }
-    if waypoint_ids:
-        return len(waypoint_ids)
-    return len(
-        [
-            candidate
-            for candidate in runtime_map.get("target_candidates") or []
-            if isinstance(candidate, dict)
-            and candidate.get("candidate_type") == "generated_exploration_candidate"
-        ]
-    )
-
-
-def _scanner_category_provenance(smoke: dict[str, Any]) -> str:
-    runtime_map = smoke.get("runtime_map")
-    if not isinstance(runtime_map, dict):
-        return "unavailable"
-    rooms = [room for room in runtime_map.get("rooms") or [] if isinstance(room, dict)]
-    if any(room.get("public_room_source") == "base_navigation_map" for room in rooms):
-        return "source_metadata"
-    hints = [
-        hint for hint in runtime_map.get("room_category_hints") or [] if isinstance(hint, dict)
-    ]
-    if any(hint.get("classification_status") == "map_prior" for hint in hints):
-        return "source_metadata"
-    return "unavailable"
-
-
-def _scanner_map_build_ready(smoke: dict[str, Any]) -> bool:
-    runtime_map = smoke.get("runtime_map")
-    if not isinstance(runtime_map, dict) or runtime_map.get("schema") != "runtime_metric_map_v1":
-        return False
-    run_result = smoke.get("run_result_payload")
-    if isinstance(run_result, dict) and run_result.get("terminate_reason"):
-        return str(run_result.get("terminate_reason") or "").endswith("complete")
-    return True
-
-
 def _scanner_preview_assets(source: str, scene_index: int) -> list[dict[str, str]]:
-    slug = _world_id_slug(f"molmospaces/{source}/{scene_index}")
-    return [
-        {"view": view, "path": str(_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png")}
-        for view in _required_views()
-    ]
+    return scanner_preview_assets(
+        source=source,
+        scene_index=scene_index,
+        preview_root=_SCANNER_PREVIEW_ROOT,
+        required_views=_required_views(),
+    )
 
 
 def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
@@ -3003,6 +2551,68 @@ def _parse_scene_index(raw_value: str, *, world_id: str) -> int:
     if scene_index < 0:
         raise ValueError(f"unsupported negative MolmoSpaces scene index {scene_index}: {world_id}")
     return scene_index
+
+
+def _manifest_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if payload.get("schema") != SAMPLER_MANIFEST_SCHEMA:
+        raise ValueError("invalid sampler manifest schema")
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        raise ValueError("sampler manifest rows must be a list")
+    if not all(isinstance(row, dict) for row in rows):
+        raise ValueError("sampler row must be an object")
+    return rows
+
+
+def _validate_sampler_row(
+    row: dict[str, Any],
+    *,
+    label_manifest: dict[str, Any],
+) -> str:
+    source = str(row.get("scene_source") or "")
+    if source not in SUPPORTED_SCENE_SOURCES:
+        raise ValueError(f"unsupported scene_source {source!r}")
+    status = str(row.get("readiness_status") or "")
+    if status == READINESS_READY:
+        _validate_ready_row(row, label_manifest=label_manifest)
+    elif status == READINESS_BLOCKED:
+        _validate_blocked_row(row, source=source)
+    elif status != READINESS_REJECTED:
+        raise ValueError(f"unknown readiness_status {status!r}")
+    return source
+
+
+def _validate_blocked_row(row: dict[str, Any], *, source: str) -> None:
+    if not row.get("blocked_reason") or not row.get("failure_class"):
+        raise ValueError(f"blocked sampler row for {source} needs reason and failure_class")
+
+
+def _validate_source_lane_counts(
+    *,
+    source: str,
+    source_rows: list[dict[str, Any]],
+) -> None:
+    ui_ready = _rows_in_lane(source_rows, lane=UI_LANE)
+    if 0 < len(ui_ready) < 3:
+        raise ValueError(f"scene_source {source} exposes fewer than three UI-ready samples")
+    if len(ui_ready) > UI_TARGET_PER_SCENE_SOURCE:
+        raise ValueError(
+            f"scene_source {source} exposes more than {UI_TARGET_PER_SCENE_SOURCE} UI samples"
+        )
+    eval_ready = _rows_in_lane(source_rows, lane=EVAL_STRESS_LANE)
+    if len(eval_ready) > EVAL_TARGET_PER_SCENE_SOURCE:
+        raise ValueError(
+            f"scene_source {source} exposes more than "
+            f"{EVAL_TARGET_PER_SCENE_SOURCE} eval-stress samples"
+        )
+
+
+def _rows_in_lane(source_rows: list[dict[str, Any]], *, lane: str) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in source_rows
+        if row.get("readiness_status") == READINESS_READY and lane in row.get("lanes", [])
+    ]
 
 
 def _validate_ready_row(row: dict[str, Any], *, label_manifest: dict[str, Any]) -> None:
