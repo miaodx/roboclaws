@@ -236,6 +236,12 @@ logs before choosing the next slice.
   Ruff complexity rows; oversized modules unchanged at 62. Proof:
   operator-console render-preview tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac runtime-smoke USD generation moved from the backend worker
+  into `isaac_runtime_smoke_usd.py`, keeping worker-private aliases for the
+  existing command/tests. Metric: `isaac_lab_backend_worker.py` 7809 -> 7636
+  lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Isaac backend tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

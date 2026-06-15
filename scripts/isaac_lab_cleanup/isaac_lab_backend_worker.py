@@ -79,6 +79,15 @@ from scripts.isaac_lab_cleanup.isaac_capture_quality import (
 from scripts.isaac_lab_cleanup.isaac_capture_quality import (
     restore_isaac_capture_quality_overrides as _restore_isaac_capture_quality_overrides,
 )
+from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
+    GENERATED_SCENE_KINDS,
+)
+from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
+    generated_scene_filename as _generated_scene_filename,
+)
+from scripts.isaac_lab_cleanup.isaac_runtime_smoke_usd import (
+    write_generated_runtime_smoke_usd as _write_generated_runtime_smoke_usd,
+)
 from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureHooks,
     IsaacSceneCameraCaptureRequest,
@@ -115,15 +124,6 @@ ISAAC_SEGMENTATION_DATA_TYPES = (
     "semantic_segmentation",
     "instance_segmentation_fast",
     "instance_id_segmentation_fast",
-)
-GENERATED_SCENE_KINDS = ("roboclaws_smoke", "isaac_official_blocks")
-ISAAC_OFFICIAL_ASSET_ROOT = (
-    "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac"
-)
-ISAAC_OFFICIAL_BLOCK_ASSETS = (
-    "Props/Blocks/blue_block.usd",
-    "Props/Blocks/red_block.usd",
-    "Props/Blocks/green_block.usd",
 )
 MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS = {
     "sink",
@@ -669,179 +669,6 @@ def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
             str(DEFAULT_HEIGHT),
         ]
     )
-
-
-def _generated_scene_filename(scene_kind: str) -> str:
-    if scene_kind == "isaac_official_blocks":
-        return "roboclaws_isaac_official_blocks_scene.usda"
-    return "roboclaws_phase_a_smoke_scene.usda"
-
-
-def _write_generated_runtime_smoke_usd(
-    usd_path: Path,
-    scenario: CleanupScenario,
-    *,
-    scene_kind: str = "roboclaws_smoke",
-) -> int:
-    if scene_kind == "isaac_official_blocks":
-        return _write_isaac_official_blocks_runtime_smoke_usd(usd_path, scenario)
-    return _write_roboclaws_runtime_smoke_usd(usd_path, scenario)
-
-
-def _write_roboclaws_runtime_smoke_usd(
-    usd_path: Path,
-    scenario: CleanupScenario,
-) -> int:
-    from pxr import Gf, Usd, UsdGeom, UsdLux
-
-    usd_path.parent.mkdir(parents=True, exist_ok=True)
-    stage = Usd.Stage.CreateNew(str(usd_path))
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-    world = UsdGeom.Xform.Define(stage, "/World")
-    stage.SetDefaultPrim(world.GetPrim())
-
-    floor = UsdGeom.Cube.Define(stage, "/World/Floor")
-    floor.CreateSizeAttr(1.0)
-    floor.CreateDisplayColorAttr([Gf.Vec3f(0.28, 0.31, 0.33)])
-    UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
-    UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.0, 3.0, 0.05))
-
-    selected_object_ids = _selected_cleanup_object_ids(scenario) or [
-        scenario.objects[0].object_id if scenario.objects else "object"
-    ]
-    selected_object_id_set = set(selected_object_ids)
-    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
-    source_receptacle_ids = [
-        obj.location_id for obj in scenario.objects if obj.object_id in selected_object_id_set
-    ]
-    receptacle_ids = _dedupe(
-        [
-            *source_receptacle_ids,
-            *selected_receptacle_ids,
-            *(item.receptacle_id for item in scenario.receptacles[:1]),
-        ]
-    )
-    if not receptacle_ids:
-        receptacle_ids = ["fixture"]
-
-    fixture_positions: dict[str, tuple[float, float, float]] = {}
-    for index, receptacle_id in enumerate(receptacle_ids):
-        x = (index % 3 - 1) * 0.95
-        y = (index // 3) * 0.85
-        z = 0.35
-        fixture_positions[receptacle_id] = (x, y, z)
-        fixture = UsdGeom.Cube.Define(
-            stage,
-            f"/World/Receptacles/{_usd_safe_name(receptacle_id)}",
-        )
-        fixture.CreateSizeAttr(1.0)
-        fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.46, 0.75)])
-        UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(x, y, z))
-        UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(0.9, 0.55, 0.25))
-
-    objects_by_id = {item.object_id: item for item in scenario.objects}
-    for index, object_id in enumerate(selected_object_ids):
-        cleanup_object = UsdGeom.Sphere.Define(
-            stage,
-            f"/World/Objects/{_usd_safe_name(object_id)}",
-        )
-        cleanup_object.CreateRadiusAttr(0.16)
-        cleanup_object.CreateDisplayColorAttr([Gf.Vec3f(0.95, 0.42, 0.12)])
-        source_id = objects_by_id.get(object_id).location_id if object_id in objects_by_id else ""
-        x, y, z = fixture_positions.get(source_id, (0.0, 0.0, 0.35))
-        UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
-            Gf.Vec3d(x + 0.18 + 0.08 * index, y - 0.16, z + 0.38)
-        )
-
-    key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
-    key_light.CreateIntensityAttr(5000.0)
-    UsdGeom.XformCommonAPI(key_light).SetRotate(Gf.Vec3f(-45.0, 0.0, 35.0))
-
-    camera = UsdGeom.Camera.Define(stage, "/World/ReferenceCamera")
-    camera.CreateFocalLengthAttr(24.0)
-    camera.CreateHorizontalApertureAttr(20.955)
-    UsdGeom.XformCommonAPI(camera).SetTranslate(Gf.Vec3d(2.4, -2.6, 1.8))
-
-    stage.GetRootLayer().Save()
-    return sum(1 for _ in stage.Traverse())
-
-
-def _write_isaac_official_blocks_runtime_smoke_usd(
-    usd_path: Path,
-    scenario: CleanupScenario,
-) -> int:
-    from pxr import Gf, Usd, UsdGeom, UsdLux
-
-    usd_path.parent.mkdir(parents=True, exist_ok=True)
-    stage = Usd.Stage.CreateNew(str(usd_path))
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-    world = UsdGeom.Xform.Define(stage, "/World")
-    stage.SetDefaultPrim(world.GetPrim())
-
-    floor = UsdGeom.Cube.Define(stage, "/World/Floor")
-    floor.CreateSizeAttr(1.0)
-    floor.CreateDisplayColorAttr([Gf.Vec3f(0.24, 0.26, 0.28)])
-    UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
-    UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.2, 3.2, 0.05))
-
-    selected_object_ids = _selected_cleanup_object_ids(scenario) or [
-        scenario.objects[0].object_id if scenario.objects else "official_block"
-    ]
-    selected_object_id_set = set(selected_object_ids)
-    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
-    source_receptacle_ids = [
-        obj.location_id for obj in scenario.objects if obj.object_id in selected_object_id_set
-    ]
-    receptacle_ids = _dedupe(
-        [
-            *source_receptacle_ids,
-            *selected_receptacle_ids,
-            *(item.receptacle_id for item in scenario.receptacles[:1]),
-        ]
-    )
-    if not receptacle_ids:
-        receptacle_ids = ["fixture"]
-
-    fixture_positions: dict[str, tuple[float, float, float]] = {}
-    for index, receptacle_id in enumerate(receptacle_ids):
-        x = (index % 3 - 1) * 0.95
-        y = (index // 3) * 0.85
-        z = 0.28
-        fixture_positions[receptacle_id] = (x, y, z)
-        fixture = UsdGeom.Cube.Define(
-            stage,
-            f"/World/Receptacles/{_usd_safe_name(receptacle_id)}",
-        )
-        fixture.CreateSizeAttr(1.0)
-        fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.44, 0.72)])
-        UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(x, y, z))
-        UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(0.9, 0.55, 0.18))
-
-    objects_by_id = {item.object_id: item for item in scenario.objects}
-    for index, object_id in enumerate(selected_object_ids):
-        object_prim_path = f"/World/Objects/{_usd_safe_name(object_id)}"
-        cleanup_object = UsdGeom.Xform.Define(stage, object_prim_path)
-        cleanup_asset = UsdGeom.Xform.Define(stage, f"{object_prim_path}/Asset")
-        asset = ISAAC_OFFICIAL_BLOCK_ASSETS[index % len(ISAAC_OFFICIAL_BLOCK_ASSETS)]
-        cleanup_asset.GetPrim().GetReferences().AddReference(f"{ISAAC_OFFICIAL_ASSET_ROOT}/{asset}")
-        source_id = objects_by_id.get(object_id).location_id if object_id in objects_by_id else ""
-        x, y, z = fixture_positions.get(source_id, (0.0, 0.0, 0.28))
-        UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
-            Gf.Vec3d(x + 0.22 + 0.12 * index, y - 0.18, z + 0.26)
-        )
-        UsdGeom.XformCommonAPI(cleanup_object).SetScale(Gf.Vec3f(1.6, 1.6, 1.6))
-
-    key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
-    key_light.CreateIntensityAttr(5000.0)
-    UsdGeom.XformCommonAPI(key_light).SetRotate(Gf.Vec3f(-45.0, 0.0, 35.0))
-
-    camera = UsdGeom.Camera.Define(stage, "/World/ReferenceCamera")
-    camera.CreateFocalLengthAttr(24.0)
-    camera.CreateHorizontalApertureAttr(20.955)
-    UsdGeom.XformCommonAPI(camera).SetTranslate(Gf.Vec3d(2.4, -2.6, 1.8))
-
-    stage.GetRootLayer().Save()
-    return sum(1 for _ in stage.Traverse())
 
 
 def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
