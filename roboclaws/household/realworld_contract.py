@@ -2100,33 +2100,56 @@ class RealWorldCleanupContract:
 
         anchors: list[dict[str, Any]] = []
         seen: set[str] = set()
+        self._append_generated_public_semantic_anchors(anchors=anchors, seen=seen)
+        self._append_fixture_public_semantic_anchors(anchors=anchors, seen=seen)
+        self._append_prior_public_semantic_anchors(anchors=anchors, seen=seen)
+        for anchor in anchors:
+            _assert_no_forbidden_agent_view_keys(anchor)
+        return anchors
 
-        if self.map_mode == MINIMAL_MAP_MODE:
-            for waypoint in self._public_waypoints:
-                waypoint_id = str(waypoint.get("waypoint_id") or "")
-                if waypoint_id not in self._observed_waypoint_ids:
-                    continue
-                for anchor in (
-                    self._room_area_public_semantic_anchor(waypoint),
-                    self._waypoint_public_semantic_anchor(waypoint),
-                ):
-                    anchor_id = str(anchor.get("anchor_id") or "")
-                    if anchor_id and anchor_id not in seen:
-                        anchors.append(anchor)
-                        seen.add(anchor_id)
+    def _append_generated_public_semantic_anchors(
+        self,
+        *,
+        anchors: list[dict[str, Any]],
+        seen: set[str],
+    ) -> None:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return
+        for waypoint in self._public_waypoints:
+            waypoint_id = str(waypoint.get("waypoint_id") or "")
+            if waypoint_id not in self._observed_waypoint_ids:
+                continue
+            for anchor in (
+                self._room_area_public_semantic_anchor(waypoint),
+                self._waypoint_public_semantic_anchor(waypoint),
+            ):
+                anchor_id = str(anchor.get("anchor_id") or "")
+                if anchor_id and anchor_id not in seen:
+                    anchors.append(anchor)
+                    seen.add(anchor_id)
 
+    def _append_fixture_public_semantic_anchors(
+        self,
+        *,
+        anchors: list[dict[str, Any]],
+        seen: set[str],
+    ) -> None:
         for fixture_id, anchor_id in sorted(
             self._public_anchor_ids_by_private_fixture_id.items(),
             key=lambda item: item[1],
         ):
             anchor = self._fixture_public_semantic_anchor(fixture_id, anchor_id)
-            if not anchor:
-                continue
-            if anchor_id in seen:
+            if not anchor or anchor_id in seen:
                 continue
             anchors.append(anchor)
             seen.add(anchor_id)
 
+    def _append_prior_public_semantic_anchors(
+        self,
+        *,
+        anchors: list[dict[str, Any]],
+        seen: set[str],
+    ) -> None:
         for prior_anchor in self._runtime_map_anchor_priors:
             anchor_id = str(prior_anchor.get("anchor_id") or "")
             if anchor_id and anchor_id in seen:
@@ -2134,10 +2157,6 @@ class RealWorldCleanupContract:
             anchors.append(dict(prior_anchor))
             if anchor_id:
                 seen.add(anchor_id)
-
-        for anchor in anchors:
-            _assert_no_forbidden_agent_view_keys(anchor)
-        return anchors
 
     def _room_area_public_semantic_anchor(self, waypoint: dict[str, Any]) -> dict[str, Any]:
         room_id = str(waypoint.get("room_id") or "generated_area")

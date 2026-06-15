@@ -5270,3 +5270,16 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this
   realworld-contract waypoint projection patch so the unrelated staged
   `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_contract.py::_runtime_public_semantic_anchors(...)`
+  into generated-waypoint, fixture, and prior-anchor append helpers. The
+  Runtime Metric Map public semantic anchor ordering, de-duplication,
+  forbidden-key guard, generated room/waypoint anchors, fixture anchors, and
+  prior-anchor inclusion remain unchanged. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates`
+  passed with 1 test. The quality baseline was refreshed from 31 to 30 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  realworld-contract public semantic anchor patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
