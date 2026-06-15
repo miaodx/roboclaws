@@ -34,7 +34,6 @@ DEFAULT_PROMPT = (
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     load_dotenv(args.env_file)
-
     api_key = os.environ.get(args.api_key_env, "").strip()
     if not api_key:
         print(
@@ -49,11 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     base_url = args.base_url.rstrip("/")
-    image_bytes = image_path.read_bytes()
-    image_b64 = base64.b64encode(image_bytes).decode("ascii")
-    image_data_url = f"data:{args.mime_type};base64,{image_b64}"
-    prompt = args.prompt
-
+    image_bytes, image_data_url = image_input(image_path, mime_type=args.mime_type)
     stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")
     output_dir = args.output_dir / stamp
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -61,81 +56,25 @@ def main(argv: list[str] | None = None) -> int:
     apis = ["chat", "responses"] if args.api == "both" else [args.api]
     results: list[dict[str, Any]] = []
     for api in apis:
-        started = time.monotonic()
-        try:
-            if api == "chat":
-                payload = chat_payload(args.model, prompt, image_data_url)
-                response = post_json(
-                    url=f"{base_url}/chat/completions",
-                    payload=payload,
-                    api_key=api_key,
-                    timeout_s=args.timeout_s,
-                )
-                output_text = chat_output_text(response)
-            elif api == "responses":
-                payload = responses_payload(args.model, prompt, image_data_url)
-                response = post_json(
-                    url=f"{base_url}/responses",
-                    payload=payload,
-                    api_key=api_key,
-                    timeout_s=args.timeout_s,
-                )
-                output_text = responses_output_text(response)
-            else:
-                raise AssertionError(api)
-            elapsed_ms = round((time.monotonic() - started) * 1000)
-            status = "ok"
-            error: dict[str, Any] | None = None
-        except urllib.error.HTTPError as exc:
-            elapsed_ms = round((time.monotonic() - started) * 1000)
-            response = http_error_payload(exc)
-            output_text = ""
-            status = "http_error"
-            error = {"code": exc.code, "reason": exc.reason}
-        except Exception as exc:  # noqa: BLE001 - standalone diagnostic script
-            elapsed_ms = round((time.monotonic() - started) * 1000)
-            response = {}
-            output_text = ""
-            status = "error"
-            error = {"type": type(exc).__name__, "message": str(exc)}
-
-        (output_dir / f"{api}_response.json").write_text(
-            json.dumps(response, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+        result = probe_api(
+            api,
+            base_url=base_url,
+            model=args.model,
+            prompt=args.prompt,
+            image_data_url=image_data_url,
+            api_key=api_key,
+            timeout_s=args.timeout_s,
         )
-        (output_dir / f"{api}_output.txt").write_text(output_text + "\n", encoding="utf-8")
-        (output_dir / f"{api}_request_meta.json").write_text(
-            json.dumps(
-                {
-                    "api": api,
-                    "url": f"{base_url}/{'chat/completions' if api == 'chat' else 'responses'}",
-                    "model": args.model,
-                    "prompt": prompt,
-                    "image_path": str(image_path),
-                    "image_mime_type": args.mime_type,
-                    "image_sha256": hashlib.sha256(image_bytes).hexdigest(),
-                    "image_bytes": len(image_bytes),
-                    "api_key_env": args.api_key_env,
-                    "api_key_present": bool(api_key),
-                },
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
+        write_api_artifacts(
+            result,
+            output_dir=output_dir,
+            image_path=image_path,
+            image_bytes=image_bytes,
+            mime_type=args.mime_type,
+            api_key_env=args.api_key_env,
+            api_key_present=bool(api_key),
         )
-        results.append(
-            {
-                "api": api,
-                "status": status,
-                "elapsed_ms": elapsed_ms,
-                "output_text": output_text,
-                "error": error,
-                "response_path": str(output_dir / f"{api}_response.json"),
-                "output_path": str(output_dir / f"{api}_output.txt"),
-            }
-        )
+        results.append(summary_result(result, output_dir))
 
     summary = {
         "model": args.model,
@@ -151,6 +90,165 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if all(item["status"] == "ok" for item in results) else 1
+
+
+def image_input(image_path: Path, *, mime_type: str) -> tuple[bytes, str]:
+    image_bytes = image_path.read_bytes()
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    return image_bytes, f"data:{mime_type};base64,{image_b64}"
+
+
+def probe_api(
+    api: str,
+    *,
+    base_url: str,
+    model: str,
+    prompt: str,
+    image_data_url: str,
+    api_key: str,
+    timeout_s: float,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    try:
+        response, output_text = call_api(
+            api,
+            base_url=base_url,
+            model=model,
+            prompt=prompt,
+            image_data_url=image_data_url,
+            api_key=api_key,
+            timeout_s=timeout_s,
+        )
+        status = "ok"
+        error: dict[str, Any] | None = None
+    except urllib.error.HTTPError as exc:
+        response = http_error_payload(exc)
+        output_text = ""
+        status = "http_error"
+        error = {"code": exc.code, "reason": exc.reason}
+    except Exception as exc:  # noqa: BLE001 - standalone diagnostic script
+        response = {}
+        output_text = ""
+        status = "error"
+        error = {"type": type(exc).__name__, "message": str(exc)}
+    return {
+        "api": api,
+        "url": api_url(base_url, api),
+        "model": model,
+        "prompt": prompt,
+        "response": response,
+        "output_text": output_text,
+        "status": status,
+        "elapsed_ms": round((time.monotonic() - started) * 1000),
+        "error": error,
+    }
+
+
+def call_api(
+    api: str,
+    *,
+    base_url: str,
+    model: str,
+    prompt: str,
+    image_data_url: str,
+    api_key: str,
+    timeout_s: float,
+) -> tuple[dict[str, Any], str]:
+    if api == "chat":
+        response = post_json(
+            url=api_url(base_url, api),
+            payload=chat_payload(model, prompt, image_data_url),
+            api_key=api_key,
+            timeout_s=timeout_s,
+        )
+        return response, chat_output_text(response)
+    if api == "responses":
+        response = post_json(
+            url=api_url(base_url, api),
+            payload=responses_payload(model, prompt, image_data_url),
+            api_key=api_key,
+            timeout_s=timeout_s,
+        )
+        return response, responses_output_text(response)
+    raise AssertionError(api)
+
+
+def api_url(base_url: str, api: str) -> str:
+    return f"{base_url}/{'chat/completions' if api == 'chat' else 'responses'}"
+
+
+def write_api_artifacts(
+    result: dict[str, Any],
+    *,
+    output_dir: Path,
+    image_path: Path,
+    image_bytes: bytes,
+    mime_type: str,
+    api_key_env: str,
+    api_key_present: bool,
+) -> None:
+    api = str(result["api"])
+    (output_dir / f"{api}_response.json").write_text(
+        json.dumps(result["response"], ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / f"{api}_output.txt").write_text(
+        str(result["output_text"]) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / f"{api}_request_meta.json").write_text(
+        json.dumps(
+            request_meta(
+                result,
+                image_path=image_path,
+                image_bytes=image_bytes,
+                mime_type=mime_type,
+                api_key_env=api_key_env,
+                api_key_present=api_key_present,
+            ),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def request_meta(
+    result: dict[str, Any],
+    *,
+    image_path: Path,
+    image_bytes: bytes,
+    mime_type: str,
+    api_key_env: str,
+    api_key_present: bool,
+) -> dict[str, Any]:
+    return {
+        "api": result["api"],
+        "url": result["url"],
+        "model": result["model"],
+        "prompt": result["prompt"],
+        "image_path": str(image_path),
+        "image_mime_type": mime_type,
+        "image_sha256": hashlib.sha256(image_bytes).hexdigest(),
+        "image_bytes": len(image_bytes),
+        "api_key_env": api_key_env,
+        "api_key_present": api_key_present,
+    }
+
+
+def summary_result(result: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+    api = str(result["api"])
+    return {
+        "api": api,
+        "status": result["status"],
+        "elapsed_ms": result["elapsed_ms"],
+        "output_text": result["output_text"],
+        "error": result["error"],
+        "response_path": str(output_dir / f"{api}_response.json"),
+        "output_path": str(output_dir / f"{api}_output.txt"),
+    }
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

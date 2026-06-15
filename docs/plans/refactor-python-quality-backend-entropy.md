@@ -5064,3 +5064,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this report
   helper split so the unrelated staged `eval-harness` rename was not blessed
   into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/dev/probe_mify_v25_image.py::main(...)` into image input, per-API
+  probe, API call, artifact writing, request metadata, and summary-result
+  helpers. The diagnostic script's CLI, request payloads, output file names,
+  summary schema, and exit-code policy remain unchanged. Evidence:
+  `ruff check scripts/dev/probe_mify_v25_image.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/dev/probe_mify_v25_image.py`
+  passed; `ruff format scripts/dev/probe_mify_v25_image.py` left the file
+  unchanged; `python -m py_compile scripts/dev/probe_mify_v25_image.py` passed;
+  `python scripts/dev/probe_mify_v25_image.py --help` printed the CLI help
+  without making a network request. The quality baseline was refreshed from 47
+  to 46 Ruff complexity violations with oversized modules unchanged at 58. The
+  ratchet write/ok proof used a temporary clean worktree containing only this
+  diagnostic-script split so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.

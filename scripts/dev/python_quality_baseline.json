@@ -374,16 +374,6 @@
         "value": 11
       },
       {
-        "code": "PLR0915",
-        "key": "scripts/dev/probe_mify_v25_image.py|PLR0915|main",
-        "limit": 50,
-        "message": "Too many statements (53 > 50)",
-        "path": "scripts/dev/probe_mify_v25_image.py",
-        "row": 34,
-        "symbol": "main",
-        "value": 53
-      },
-      {
         "code": "C901",
         "key": "scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py|C901|validate",
         "limit": 10,
