@@ -4762,3 +4762,20 @@ Stop this refactor loop when:
   from 66 to 64 Ruff complexity violations, with oversized modules unchanged at
   59. This slice validated the fake worker/mock-covered adapter contract only;
   it does not claim a real Isaac Lab runtime proof.
+- 2026-06-15: Continued the camera-control normalization residual by making
+  `roboclaws/household/camera_control.py::_color_profile(...)` table-driven for
+  backend/view luminance, RGB, and tone-adjustment profile fields and their
+  source metadata. The camera-control request schema, default display profile,
+  backend gain defaults, replay normalization, and tone-adjustment output shape
+  remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/camera_control.py`
+  passed; `ruff check roboclaws/household/camera_control.py` passed;
+  `ruff format --check roboclaws/household/camera_control.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_comparison_default_color_profile_contract tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_replay_normalizes_legacy_profile tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_replay_normalizes_view_gain tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_replay_normalizes_rgb_gain tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_normalizes_backend_tone_adjustment tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_applies_backend_luminance_gain tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_prefers_backend_view_luminance_gain tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_prefers_backend_view_rgb_gain tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_applies_backend_tone_adjustment`
+  passed with 9 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 64 to 63 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/camera_control.py` dropped by 39 net lines. A
+  broader `ruff check --select C901,PLR0912,PLR0915` over the scene-camera test
+  file still reports an existing oversized report-rendering test unrelated to
+  this slice.

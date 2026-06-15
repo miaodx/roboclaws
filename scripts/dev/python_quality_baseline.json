@@ -330,16 +330,6 @@
       },
       {
         "code": "C901",
-        "key": "roboclaws/household/camera_control.py|C901|_color_profile",
-        "limit": 10,
-        "message": "`_color_profile` is too complex (13 > 10)",
-        "path": "roboclaws/household/camera_control.py",
-        "row": 445,
-        "symbol": "_color_profile",
-        "value": 13
-      },
-      {
-        "code": "C901",
         "key": "roboclaws/household/cleanup_routine.py|C901|run_cleanup_routine",
         "limit": 10,
         "message": "`run_cleanup_routine` is too complex (12 > 10)",
