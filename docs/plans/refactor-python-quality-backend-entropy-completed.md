@@ -278,6 +278,14 @@ logs before choosing the next slice.
   Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
   focused Isaac render-diagnostics tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Isaac segmentation tensor diagnostics, label-map parsing, bbox
+  extraction, and selected-USD-prim matching moved from the backend worker into
+  `isaac_segmentation_diagnostics.py`, keeping worker-private wrapper names for
+  capture hooks and tests. Metric: `isaac_lab_backend_worker.py` 6598 -> 6278
+  lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused Isaac segmentation/fake/real-init tests, ruff, format check,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
