@@ -241,7 +241,7 @@ the relevant detailed guide.
 
 ## Preflight Contract
 
-Preflight status: DRAFT.
+Preflight status: APPROVED AND IMPLEMENTED.
 
 Task source: plan path plus conversation.
 
@@ -345,3 +345,17 @@ Recommended order:
 3. Add minimal cross-links to human docs if needed.
 4. Run the focused searches above.
 5. Record any discovered behavior/doc disagreement as a follow-up candidate.
+
+## Closeout Evidence
+
+Implemented in commit `e5d81aab` (`docs: clarify thin server architecture`),
+which updated only `ARCHITECTURE.md`, `AGENTS.md`, and this plan.
+
+Verification on 2026-06-15:
+
+- `rg -n "direct-VLM|VLM Direct|AI2-THOR|openclaw-gateway|openai-agents-sdk|Thin Runtime / Server Adapter|Server logic stays thin|live_execution" README.md ARCHITECTURE.md STATUS.md AGENTS.md docs/human`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_eval_just_recipe.py tests/contract/mcp/test_semantic_profiles.py`
+
+Both checks passed. The remaining dirty worktree changes belong to a separate
+eval-harness rename/performance slice and were not included in this
+architecture-layer refresh.
