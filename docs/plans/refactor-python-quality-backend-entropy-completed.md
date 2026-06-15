@@ -203,6 +203,12 @@ logs before choosing the next slice.
   at 62. Proof: focused physical Agibot pilot test, ruff, format check, and
   ratchet.
 
+- 2026-06-16: Isaac semantic-pose stage tests now share fake USD stage, parent
+  transform, translate-op, PXR install, and semantic-pose state helpers instead
+  of redefining nested fake classes per case. Metric: 9 -> 7 complexity rows;
+  oversized modules unchanged at 62. Proof: focused Isaac backend tests, ruff,
+  format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

@@ -2078,84 +2078,173 @@ def test_isaac_semantic_pose_stage_application_uses_exact_pose(
     assert result["applied_objects"][0]["target_position"] == [9.0, 8.0, 7.0]
 
 
+class _FakeSemanticPoseParent:
+    def __bool__(self) -> bool:
+        return True
+
+
+class _FakeSemanticPosePrim:
+    def __init__(self) -> None:
+        self.parent = _FakeSemanticPoseParent()
+
+    def IsValid(self) -> bool:
+        return True
+
+    def GetParent(self) -> _FakeSemanticPoseParent:
+        return self.parent
+
+
+class _FakeSinglePrimStage:
+    def __init__(self, expected_path: str) -> None:
+        self.expected_path = expected_path
+        self.prim = _FakeSemanticPosePrim()
+
+    def GetPrimAtPath(self, path: str) -> _FakeSemanticPosePrim:
+        assert path == self.expected_path
+        return self.prim
+
+
+class _OffsetParentWorldTransform:
+    def __init__(self, offset: tuple[float, float, float]) -> None:
+        self.offset = offset
+
+    def GetInverse(self) -> "_OffsetParentWorldTransform":
+        return self
+
+    def Transform(self, value: object) -> tuple[float, float, float]:
+        x, y, z = value
+        offset_x, offset_y, offset_z = self.offset
+        return (float(x) - offset_x, float(y) - offset_y, float(z) - offset_z)
+
+
+class _FakeSemanticPoseGf:
+    @staticmethod
+    def Vec3d(*values: float) -> tuple[float, float, float]:
+        return (float(values[0]), float(values[1]), float(values[2]))
+
+
+class _FakeSemanticPoseOrientOp:
+    def GetOpName(self) -> str:
+        return "xformOp:orient"
+
+
+class _RecordingTranslateOp:
+    def __init__(self, translations: list[object]) -> None:
+        self.translations = translations
+
+    def GetOpName(self) -> str:
+        return "xformOp:translate"
+
+    def Set(self, value: object) -> bool:
+        self.translations.append(value)
+        return True
+
+
+def _offset_parent_xformable_type(offset: tuple[float, float, float]) -> type:
+    class _FakeXformable:
+        def __init__(self, parent: _FakeSemanticPoseParent) -> None:
+            self.parent = parent
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> _OffsetParentWorldTransform:
+            assert time_code == 0.0
+            return _OffsetParentWorldTransform(offset)
+
+    return _FakeXformable
+
+
+def _existing_translate_xformable_type(
+    translations: list[object],
+    offset: tuple[float, float, float],
+) -> type:
+    class _FakeXformable:
+        def __init__(self, prim: object) -> None:
+            self.prim = prim
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> _OffsetParentWorldTransform:
+            assert time_code == 0.0
+            return _OffsetParentWorldTransform(offset)
+
+        def GetOrderedXformOps(self) -> list[object]:
+            assert isinstance(self.prim, _FakeSemanticPosePrim)
+            return [_RecordingTranslateOp(translations), _FakeSemanticPoseOrientOp()]
+
+    return _FakeXformable
+
+
+def _recording_xform_common_api_type(
+    translations: list[object],
+    *,
+    failure_message: str | None = None,
+) -> type:
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakeSemanticPosePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            if failure_message is not None:
+                raise AssertionError(failure_message)
+            translations.append(value)
+
+    return _FakeXformCommonAPI
+
+
+def _install_semantic_pose_stage_pxr(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    xform_common_api: type,
+    xformable: type,
+) -> None:
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeSemanticPoseGf,
+        UsdGeom=types.SimpleNamespace(
+            XformCommonAPI=xform_common_api,
+            Xformable=xformable,
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeSemanticPoseGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+
+def _semantic_pose_stage_state(
+    *,
+    object_id: str,
+    usd_prim_path: str,
+    position: list[float],
+    support_receptacle_id: str,
+) -> dict[str, object]:
+    return {
+        "object_poses": {
+            object_id: {
+                "usd_prim_path": usd_prim_path,
+                "support_receptacle_id": support_receptacle_id,
+                "position": position,
+            }
+        },
+        "receptacle_index": {},
+    }
+
+
 def test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     translations: list[object] = []
-
-    class _FakeParent:
-        def __bool__(self) -> bool:
-            return True
-
-    class _FakePrim:
-        def __init__(self) -> None:
-            self.parent = _FakeParent()
-
-        def IsValid(self) -> bool:
-            return True
-
-        def GetParent(self) -> _FakeParent:
-            return self.parent
-
-    class _FakeStage:
-        def __init__(self) -> None:
-            self.prim = _FakePrim()
-
-        def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path == "/World/Room/Objects/mug_01"
-            return self.prim
-
-    class _FakeParentWorldTransform:
-        def GetInverse(self) -> "_FakeParentWorldTransform":
-            return self
-
-        def Transform(self, value: object) -> tuple[float, float, float]:
-            x, y, z = value
-            return (float(x) - 10.0, float(y) - 20.0, float(z) - 0.5)
-
-    class _FakeXformable:
-        def __init__(self, parent: _FakeParent) -> None:
-            self.parent = parent
-
-        def ComputeLocalToWorldTransform(self, time_code: float) -> _FakeParentWorldTransform:
-            assert time_code == 0.0
-            return _FakeParentWorldTransform()
-
-    class _FakeXformCommonAPI:
-        def __init__(self, prim: _FakePrim) -> None:
-            self.prim = prim
-
-        def SetTranslate(self, value: object) -> None:
-            translations.append(value)
-
-    class _FakeGf:
-        @staticmethod
-        def Vec3d(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
-
-    fake_pxr = types.SimpleNamespace(
-        Gf=_FakeGf,
-        UsdGeom=types.SimpleNamespace(
-            XformCommonAPI=_FakeXformCommonAPI,
-            Xformable=_FakeXformable,
-        ),
+    _install_semantic_pose_stage_pxr(
+        monkeypatch,
+        xform_common_api=_recording_xform_common_api_type(translations),
+        xformable=_offset_parent_xformable_type((10.0, 20.0, 0.5)),
     )
-    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
-    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
-    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
 
     result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
-        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
-        semantic_pose_state={
-            "object_poses": {
-                "mug_01": {
-                    "usd_prim_path": "/World/Room/Objects/mug_01",
-                    "support_receptacle_id": "sink_01",
-                    "position": [12.0, 23.0, 4.5],
-                }
-            },
-            "receptacle_index": {},
-        },
+        stage_utils=SimpleNamespace(
+            get_current_stage=lambda: _FakeSinglePrimStage("/World/Room/Objects/mug_01")
+        ),
+        semantic_pose_state=_semantic_pose_stage_state(
+            object_id="mug_01",
+            usd_prim_path="/World/Room/Objects/mug_01",
+            position=[12.0, 23.0, 4.5],
+            support_receptacle_id="sink_01",
+        ),
     )
 
     assert result["status"] == "applied"
@@ -2169,96 +2258,25 @@ def test_isaac_semantic_pose_stage_application_updates_existing_translate_op(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     translations: list[object] = []
-
-    class _FakeParent:
-        def __bool__(self) -> bool:
-            return True
-
-    class _FakePrim:
-        def __init__(self) -> None:
-            self.parent = _FakeParent()
-
-        def IsValid(self) -> bool:
-            return True
-
-        def GetParent(self) -> _FakeParent:
-            return self.parent
-
-    class _FakeStage:
-        def __init__(self) -> None:
-            self.prim = _FakePrim()
-
-        def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path == "/World/Geometry/teddy"
-            return self.prim
-
-    class _FakeParentWorldTransform:
-        def GetInverse(self) -> "_FakeParentWorldTransform":
-            return self
-
-        def Transform(self, value: object) -> tuple[float, float, float]:
-            x, y, z = value
-            return (float(x) - 3.0, float(y) - 4.0, float(z) - 5.0)
-
-    class _FakeTranslateOp:
-        def GetOpName(self) -> str:
-            return "xformOp:translate"
-
-        def Set(self, value: object) -> bool:
-            translations.append(value)
-            return True
-
-    class _FakeOrientOp:
-        def GetOpName(self) -> str:
-            return "xformOp:orient"
-
-    class _FakeXformable:
-        def __init__(self, prim: object) -> None:
-            self.prim = prim
-
-        def ComputeLocalToWorldTransform(self, time_code: float) -> _FakeParentWorldTransform:
-            assert time_code == 0.0
-            return _FakeParentWorldTransform()
-
-        def GetOrderedXformOps(self) -> list[object]:
-            assert isinstance(self.prim, _FakePrim)
-            return [_FakeTranslateOp(), _FakeOrientOp()]
-
-    class _FakeXformCommonAPI:
-        def __init__(self, prim: _FakePrim) -> None:
-            self.prim = prim
-
-        def SetTranslate(self, value: object) -> None:
-            raise AssertionError("existing translate op should be authored directly")
-
-    class _FakeGf:
-        @staticmethod
-        def Vec3d(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
-
-    fake_pxr = types.SimpleNamespace(
-        Gf=_FakeGf,
-        UsdGeom=types.SimpleNamespace(
-            XformCommonAPI=_FakeXformCommonAPI,
-            Xformable=_FakeXformable,
+    _install_semantic_pose_stage_pxr(
+        monkeypatch,
+        xform_common_api=_recording_xform_common_api_type(
+            translations,
+            failure_message="existing translate op should be authored directly",
         ),
+        xformable=_existing_translate_xformable_type(translations, (3.0, 4.0, 5.0)),
     )
-    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
-    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
-    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
 
     result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
-        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
-        semantic_pose_state={
-            "object_poses": {
-                "teddy": {
-                    "usd_prim_path": "/World/Geometry/teddy",
-                    "support_receptacle_id": "desk",
-                    "position": [8.0, 10.0, 12.0],
-                }
-            },
-            "receptacle_index": {},
-        },
+        stage_utils=SimpleNamespace(
+            get_current_stage=lambda: _FakeSinglePrimStage("/World/Geometry/teddy")
+        ),
+        semantic_pose_state=_semantic_pose_stage_state(
+            object_id="teddy",
+            usd_prim_path="/World/Geometry/teddy",
+            position=[8.0, 10.0, 12.0],
+            support_receptacle_id="desk",
+        ),
     )
 
     assert result["status"] == "applied"
