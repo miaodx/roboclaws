@@ -1,6 +1,6 @@
 ---
 plan_scope: molmospaces-scene-sampler-readiness
-status: First slice implemented
+status: Partially implemented; next Flow scoped
 created: 2026-06-15
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -204,6 +204,12 @@ First slice implemented on 2026-06-15.
   candidate readiness, selection-gap, source-prep, scanner-admission, and
   scanner-execution summaries, so a next Flow or CI gate can read one packet
   before opening detailed artifact files.
+- Source-prep runner:
+  `scripts/operator_console/run_scene_sampler_source_prep.py` consumes
+  `scene_sampler_source_prep.json` and records the manual install commands
+  needed for selected source/world candidates. It is dry-run by default and only
+  executes install commands with an explicit `--execute`, preserving the
+  no-implicit-download policy for sampler/export/CI flows.
 
 Verification run on 2026-06-15:
 
@@ -260,6 +266,9 @@ ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sample
 ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
 ruff check scripts/operator_console/export_scene_sampler_readiness.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-export-summary --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_source_prep_runner.py -q
+ruff check scripts/operator_console/run_scene_sampler_source_prep.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py
+.venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py --prep /tmp/roboclaws-scene-sampler-source-prep-worklist/scene_sampler_source_prep.json --output /tmp/roboclaws-scene-sampler-source-prep-worklist/source_prep_run.json --source ithor
 ```
 
 Current limits feeding the next Flow:
@@ -296,19 +305,32 @@ Current limits feeding the next Flow:
 
 ## Next Flow Development Plan
 
-The remaining sampler work is now explicit next-Flow development scope, not a
-loose parked-todo list. In this plan, "other sources" means exactly these
-planned MolmoSpaces scene sources:
+The remaining sampler work is next-Flow development scope, not a loose
+parked-todo list. In this plan, "other sources" means exactly these planned
+MolmoSpaces scene sources:
 
 - `ithor`
 - `procthor-objaverse-val`
 - `holodeck-objaverse-val`
 
-The next Flow should also finish the current source's stress target:
+The current source must also be finished:
 
 - `procthor-10k-val`: raise eval-stress coverage from five admitted samples to
   ten admitted samples while keeping the operator-console UI set at exactly
   three default-visible samples.
+
+The plan has a lot of parked-looking information because source admission is
+intentionally evidence-gated. A scene source can be unsupported for several
+different reasons: missing local XML/assets, source loader mismatch, missing
+preview evidence, insufficient public rooms/navigation areas, missing prepared
+category provenance, or missing map-build/actionability proof. Those are not
+separate product ideas; they are the blocker taxonomy the next Flow must either
+resolve or preserve as normalized blocked rows. After the next Flow, every row
+should land in one of these states:
+
+- admitted to UI and/or eval projections;
+- blocked with a concrete asset/runtime/metadata/preview/map-build reason;
+- rejected with a stable quality/readiness reason.
 
 Recommended next Flow goal:
 
@@ -322,69 +344,27 @@ sources represented by normalized blocked eval rows.
 
 Next Flow implementation slices:
 
-1. **Scanner And Candidate Preparation**
-   - Backend scene resolution is now source-aware in
-     `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`; scanner work can
-     call product/map-build routes with non-`procthor-10k-val` source ids
-     without the worker silently falling back to `val_<index>.xml` paths.
-   - Public launch resolution now accepts hidden source-aware candidate world
-     ids such as `molmospaces/ithor/1`, so the scanner can product-smoke
-     candidate ids emitted by the readiness artifacts before those ids are
-     exposed in the operator console.
-   - `scene_sampler_scanner_execution_plan.json` now turns those scanner
-     candidates into explicit install, preview-render, and map-build product
-     smoke commands while preserving current blocked status when local scene
-     XML/resources are missing.
-   - Turn the current static preview/readiness facts into a repeatable scanner
-     or preparation command that can inspect candidate indices per
-     `scene_source`, skip blocked candidates without side effects, and run
-     preview plus map-build product-smoke commands only for candidates that are
-     explicitly `ready_for_product_smoke`.
-   - The scanner may use existing local assets and preview renderers, but must
-     not download large assets or call live VLMs implicitly.
-   - Output machine-readable readiness packets with preview status, public room
+1. **Source Prep Runner And Gate**
+   - Use `scene_sampler_source_prep.json` plus
+     `scripts/operator_console/run_scene_sampler_source_prep.py` as the manual
+     source-prep entry point.
+   - Dry-run must remain the default. Asset install commands may run only with
+     explicit `--execute`, selected by `--source` or `--world` when needed.
+   - Re-run the exporter after prep and require
+     `--require-scanner-ready-source <scene_source>` before scanner/product
+     smoke runs are allowed for that source.
+   - Expected output: `source_prep_run.json` with per-source dry-run/executed/
+     failed counts and no implicit downloads in sampler, eval, or CI paths.
+
+2. **Scanner Candidate Execution**
+   - Consume `scene_sampler_scanner_execution_plan.json`.
+   - Skip blocked candidates without side effects.
+   - For candidates marked `ready_for_product_smoke`, run preview rendering and
+     `preset=map-build` product smoke through source-aware world ids such as
+     `molmospaces/ithor/1`.
+   - Output machine-readable candidate packets with preview status, public room
      count, waypoint count, category provenance, selected reason, and canonical
      `failure_class`.
-   - Current scaffold: run
-     `.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py`
-     or `uv run python scripts/operator_console/export_scene_sampler_readiness.py`
-     to write validated sampler artifacts under
-     `output/scene-sampler-readiness/`.
-     The export now includes no-download source availability evidence,
-     candidate readiness packets, selection-gap worklists, and a
-     source-preparation artifact with manual operator commands. It also writes
-     a scanner-admission dry-run artifact that names missing gates before any
-     backend render or live labeler is allowed. A later slice should replace or
-     extend the static facts with real scanner candidate output for new source
-     families after the MolmoSpaces runtime and scene assets are visible.
-   - Strict threshold mode is available for gates. For example,
-     `--require-ui-supported-source procthor-10k-val` should pass today, while
-     `--require-eval-complete-source procthor-10k-val` should fail until the
-     source reaches ten eval-stress samples.
-   - Scanner-ready threshold mode is available for source-prep proof. For
-     example, `--require-scanner-ready-source ithor` should fail until at least
-     one `ithor` candidate has local source assets and can run preview plus
-     map-build product smoke.
-   - Selection-capacity threshold mode is also available. For example,
-     `--require-selection-capacity-source procthor-10k-val` should fail until
-     the candidate range expands beyond `0..9` or enough new candidates are
-     admitted to cover the remaining eval-stress gap.
-   - Candidate-range mode is available for that expansion. For example,
-     `--candidate-range 0:19 --require-selection-capacity-source procthor-10k-val`
-     should pass the capacity gate while still leaving actual scene admission to
-     later scanner evidence.
-
-2. **Source Prep / Install-Plan Artifact**
-   - Add a no-download artifact that lists the exact missing
-     `scene_source`, `scene_index`, and XML/resource path needed for scanner
-     work.
-   - Include explicit operator commands or MolmoSpaces install ids for
-     preparing `ithor`, `procthor-objaverse-val`,
-     `holodeck-objaverse-val`, and the expanded `procthor-10k-val`
-     candidate range.
-   - Keep this as a prep plan, not an implicit downloader. The scanner and CI
-     must continue to report normalized blocked rows until assets are actually
-     present in the repo-local MolmoSpaces runtime.
 
 3. **`procthor-10k-val` Stress Fill**
    - Scan additional non-contiguous `procthor-10k-val` candidates until ten
@@ -394,6 +374,9 @@ Next Flow implementation slices:
      that reason.
    - Generate or update eval sample JSON and projection metadata from the
      scanner output.
+   - If ten samples cannot be admitted from the prepared range, record exact
+     rejected/blocked candidate reasons and expand the candidate range instead
+     of weakening the ten-sample target.
 
 4. **Cross-Source Readiness**
    - Add source-aware candidate rows for `ithor`,
@@ -433,7 +416,7 @@ Next Flow implementation slices:
 
 7. **Docs And Status Alignment**
    - Update `docs/human/molmospaces-settings.md` and
-     `docs/human/evaluation.md` after the next supported sample matrix changes.
+     `docs/human/evaluation.md` after the supported sample matrix changes.
    - Update `STATUS.md` only if the repo-level current focus or blocker changes.
 
 Everything above is next-Flow implementation scope. Items can finish as either
