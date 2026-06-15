@@ -241,14 +241,18 @@ def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
     monkeypatch.setattr(
         scene_sampler,
         "_molmospaces_module_status",
-        lambda: (False, "module_not_importable:molmo_spaces"),
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
     )
 
     report = source_availability_report(candidate_indices=(0, 2))
 
     assert report["schema"] == "molmospaces_scene_source_availability_report_v1"
     assert report["probe_mode"] == "no_download_no_vlm"
+    assert report["python_executable"]
+    assert report["python_version"]
     assert report["molmospaces_module_available"] is False
+    assert "molmospaces_module_stdout" in report
+    assert "scene_root_stdout" in report
     for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
         source_report = report["sources"][source]
         assert source_report["status"] == "blocked"
@@ -265,7 +269,7 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     monkeypatch.setattr(
         scene_sampler,
         "_molmospaces_module_status",
-        lambda: (False, "module_not_importable:molmo_spaces"),
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
     )
 
     report = candidate_readiness_report(candidate_indices=(0, 1, 2))
@@ -295,7 +299,7 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     monkeypatch.setattr(
         scene_sampler,
         "_molmospaces_module_status",
-        lambda: (False, "module_not_importable:molmo_spaces"),
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
     )
 
     report = selection_gap_report(candidate_indices=tuple(range(10)))

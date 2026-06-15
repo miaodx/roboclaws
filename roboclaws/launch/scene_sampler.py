@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import importlib
+import io
 import json
+import platform
+import sys
+from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -416,8 +420,10 @@ def source_availability_report(
 ) -> dict[str, Any]:
     """Return no-download source/asset visibility evidence for scanner readiness."""
 
-    module_available, module_reason = _molmospaces_module_status()
-    root, root_reason = _molmospaces_scene_root_status(module_available=module_available)
+    module_available, module_reason, module_stdout = _molmospaces_module_status()
+    root, root_reason, root_stdout = _molmospaces_scene_root_status(
+        module_available=module_available
+    )
     sources: dict[str, dict[str, Any]] = {}
     for source in SUPPORTED_SCENE_SOURCES:
         source_dir = root / source if root is not None else None
@@ -461,11 +467,15 @@ def source_availability_report(
         "schema": "molmospaces_scene_source_availability_report_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
+        "python_executable": sys.executable,
+        "python_version": platform.python_version(),
         "candidate_indices": list(candidate_indices),
         "molmospaces_module_available": module_available,
         "molmospaces_module_reason": module_reason,
+        "molmospaces_module_stdout": module_stdout,
         "scene_root": str(root) if root is not None else "",
         "scene_root_reason": root_reason,
+        "scene_root_stdout": root_stdout,
         "sources": sources,
     }
 
@@ -831,27 +841,34 @@ def _family_split(scene_source: str) -> tuple[str, str]:
     return scene_source, "not_applicable"
 
 
-def _molmospaces_module_status() -> tuple[bool, str]:
+def _molmospaces_module_status() -> tuple[bool, str, str]:
+    stdout = io.StringIO()
     try:
-        importlib.import_module("molmo_spaces.molmo_spaces_constants")
+        with redirect_stdout(stdout):
+            importlib.import_module("molmo_spaces.molmo_spaces_constants")
     except ModuleNotFoundError as exc:
-        return False, f"module_not_importable:{exc.name}"
+        return False, f"module_not_importable:{exc.name}", stdout.getvalue()
     except Exception as exc:  # pragma: no cover - dependency import failures vary by host.
-        return False, f"module_import_failed:{type(exc).__name__}:{exc}"
-    return True, "module_importable"
+        return False, f"module_import_failed:{type(exc).__name__}:{exc}", stdout.getvalue()
+    return True, "module_importable", stdout.getvalue()
 
 
-def _molmospaces_scene_root_status(*, module_available: bool) -> tuple[Path | None, str]:
+def _molmospaces_scene_root_status(
+    *,
+    module_available: bool,
+) -> tuple[Path | None, str, str]:
     if not module_available:
-        return None, "molmo_spaces_module_unavailable"
+        return None, "molmo_spaces_module_unavailable", ""
+    stdout = io.StringIO()
     try:
-        constants = importlib.import_module("molmo_spaces.molmo_spaces_constants")
-        root = Path(constants.get_scenes_root())
+        with redirect_stdout(stdout):
+            constants = importlib.import_module("molmo_spaces.molmo_spaces_constants")
+            root = Path(constants.get_scenes_root())
     except Exception as exc:  # pragma: no cover - dependency import failures vary by host.
-        return None, f"scene_root_unavailable:{type(exc).__name__}:{exc}"
+        return None, f"scene_root_unavailable:{type(exc).__name__}:{exc}", stdout.getvalue()
     if not root.is_dir():
-        return root, "scene_root_missing"
-    return root, "scene_root_available"
+        return root, "scene_root_missing", stdout.getvalue()
+    return root, "scene_root_available", stdout.getvalue()
 
 
 def _source_availability_blocked_reason(

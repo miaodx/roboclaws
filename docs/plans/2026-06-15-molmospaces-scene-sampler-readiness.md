@@ -111,7 +111,7 @@ just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline output_dir=/tmp/roboclaws-scene-sampler-product
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
 ruff check roboclaws/launch/scene_sampler.py roboclaws/operator_console/messup.py scripts/operator_console/render_scene_previews.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_messup.py
-python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-readiness-availability --require-ui-supported-source procthor-10k-val
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-readiness-availability --require-ui-supported-source procthor-10k-val
 ```
 
 Known partial scope:
@@ -126,10 +126,18 @@ Known partial scope:
   does not yet render or admit new `ithor`, `procthor-objaverse-val`, or
   `holodeck-objaverse-val` samples; those remain blocked until local assets and
   preview/map-build evidence exist.
-- On this checkpoint environment, the no-download source availability probe
-  reports `molmo_spaces` as not importable, so real candidate scanning remains
-  blocked until the declared MolmoSpaces runtime is installed in the repo-local
-  environment.
+- Run source availability and scanner prep through the repo-local runtime
+  (`.venv/bin/python` or `uv run`), not the host default Python. On this host,
+  the host default Python is a conda Python 3.13 that cannot import
+  `molmo_spaces`, while the repo-local Python 3.12 runtime can. Under the
+  repo-local runtime, the current blocker is missing candidate XML files:
+  non-`procthor-10k-val` source directories exist but have no `val_<index>.xml`
+  candidates, and `procthor-10k-val` does not yet have enough expanded-range
+  candidate XMLs to scan/admit ten eval samples.
+- The availability probe records `python_executable`, `python_version`, and
+  captured MolmoSpaces import/scene-root stdout in the artifact. This keeps the
+  exporter CLI stdout valid JSON even when upstream MolmoSpaces prints
+  `Using SCENES_ROOT: ...` during import.
 
 ## Next Flow Development Plan
 
@@ -168,9 +176,11 @@ Next Flow implementation slices:
    - Output machine-readable readiness packets with preview status, public room
      count, waypoint count, category provenance, selected reason, and canonical
      `failure_class`.
-  - Current scaffold: run
-     `python scripts/operator_console/export_scene_sampler_readiness.py` to
-     write validated sampler artifacts under `output/scene-sampler-readiness/`.
+   - Current scaffold: run
+     `.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py`
+     or `uv run python scripts/operator_console/export_scene_sampler_readiness.py`
+     to write validated sampler artifacts under
+     `output/scene-sampler-readiness/`.
      The export now includes no-download source availability evidence,
      candidate readiness packets, and selection-gap worklists. A later slice
      should replace or extend the static facts with real scanner candidate
@@ -189,7 +199,19 @@ Next Flow implementation slices:
      should pass the capacity gate while still leaving actual scene admission to
      later scanner evidence.
 
-2. **`procthor-10k-val` Stress Fill**
+2. **Source Prep / Install-Plan Artifact**
+   - Add a no-download artifact that lists the exact missing
+     `scene_source`, `scene_index`, and XML/resource path needed for scanner
+     work.
+   - Include explicit operator commands or MolmoSpaces install ids for
+     preparing `ithor`, `procthor-objaverse-val`,
+     `holodeck-objaverse-val`, and the expanded `procthor-10k-val`
+     candidate range.
+   - Keep this as a prep plan, not an implicit downloader. The scanner and CI
+     must continue to report normalized blocked rows until assets are actually
+     present in the repo-local MolmoSpaces runtime.
+
+3. **`procthor-10k-val` Stress Fill**
    - Scan additional non-contiguous `procthor-10k-val` candidates until ten
      samples pass eval-stress admission.
    - Keep `val_0`, `val_2`, and `val_9` as the visible UI set unless the scan
@@ -198,7 +220,7 @@ Next Flow implementation slices:
    - Generate or update eval sample JSON and projection metadata from the
      scanner output.
 
-3. **Cross-Source Readiness**
+4. **Cross-Source Readiness**
    - Add source-aware candidate rows for `ithor`,
      `procthor-objaverse-val`, and `holodeck-objaverse-val`.
    - For each source, admit three UI samples only after all UI readiness gates
@@ -209,7 +231,7 @@ Next Flow implementation slices:
      artifacts are unavailable, keep normalized blocked rows with exact
      asset/runtime reasons instead of silently omitting the source.
 
-4. **World Id And Console Projection**
+5. **World Id And Console Projection**
    - Preserve existing `molmospaces/val_N` aliases for
      `procthor-10k-val`.
    - Use explicit source-aware ids for newly visible non-`procthor-10k-val`
@@ -222,7 +244,7 @@ Next Flow implementation slices:
    - Ensure default operator-console worlds are only UI-admitted rows; hidden
      aliases or blocked rows must not appear in the default scene rail.
 
-5. **Eval Projection And Harness**
+6. **Eval Projection And Harness**
    - Extend `scene_sampler_stress` so aggregate metadata reports ready,
      partial, and blocked counts per `scene_source`.
    - Keep static suite/sample JSON unless dynamic `sample_manifest` support
@@ -234,7 +256,7 @@ Next Flow implementation slices:
      provenance such as `heuristic_room_label`, `heuristic_room_count`, and
      `room_area_fallback`.
 
-6. **Docs And Status Alignment**
+7. **Docs And Status Alignment**
    - Update `docs/human/molmospaces-settings.md` and
      `docs/human/evaluation.md` after the next supported sample matrix changes.
    - Update `STATUS.md` only if the repo-level current focus or blocker changes.
@@ -263,8 +285,8 @@ ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaw
 just agent::eval suite=scene_sampler_stress budget=smoke
 just agent::eval suite=map_build_consumer budget=focused
 just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused
-python scripts/operator_console/export_scene_sampler_readiness.py
-python scripts/operator_console/export_scene_sampler_readiness.py \
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py \
   --require-ui-supported-source procthor-10k-val
 ```
 
