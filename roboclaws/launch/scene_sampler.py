@@ -6,6 +6,7 @@ import importlib
 import io
 import json
 import platform
+import shlex
 import sys
 from contextlib import redirect_stdout
 from dataclasses import dataclass
@@ -871,9 +872,11 @@ def scanner_execution_plan(
 def next_flow_worklist_report(
     *,
     candidate_indices: tuple[int, ...] = tuple(range(10)),
+    output_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Return one next-Flow worklist across sampler selection, prep, and scanner gates."""
 
+    artifact_paths = _next_flow_artifact_paths(output_dir=output_dir)
     projection = eval_projection_metadata()
     readiness = readiness_report()
     selection = selection_gap_report(candidate_indices=candidate_indices)
@@ -949,6 +952,14 @@ def next_flow_worklist_report(
             "recommended_candidate_range": source_prep_payload.get(
                 "recommended_candidate_range", ""
             ),
+            "recommended_commands": _next_flow_recommended_commands(
+                source=source,
+                next_action=next_action,
+                recommended_candidate_range=str(
+                    source_prep_payload.get("recommended_candidate_range") or ""
+                ),
+                artifact_paths=artifact_paths,
+            ),
         }
     return {
         "schema": "molmospaces_scene_sampler_next_flow_worklist_v1",
@@ -956,6 +967,7 @@ def next_flow_worklist_report(
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
         "candidate_indices": list(candidate_indices),
+        "artifact_paths": artifact_paths,
         "summary": _next_flow_summary(sources),
         "sources": sources,
     }
@@ -2049,6 +2061,108 @@ def _next_flow_blocked_reason_samples(
         if len(deduped) == 3:
             break
     return deduped
+
+
+def _next_flow_artifact_paths(*, output_dir: Path | None) -> dict[str, str]:
+    base = output_dir or Path("output/scene-sampler-readiness")
+    scanner_dir = Path("output/scene-sampler-scanner")
+    return {
+        "readiness_output_dir": str(base),
+        "source_prep": str(base / "scene_sampler_source_prep.json"),
+        "scanner_execution_plan": str(base / "scene_sampler_scanner_execution_plan.json"),
+        "next_flow_worklist": str(base / "scene_sampler_next_flow_worklist.json"),
+        "source_prep_run": str(scanner_dir / "source_prep_run.json"),
+        "scanner_run": str(scanner_dir / "scanner_run.json"),
+    }
+
+
+def _next_flow_recommended_commands(
+    *,
+    source: str,
+    next_action: str,
+    recommended_candidate_range: str,
+    artifact_paths: dict[str, str],
+) -> list[dict[str, str]]:
+    source_arg = shlex.quote(source)
+    candidate_range = recommended_candidate_range or "0:19"
+    commands = [
+        {
+            "name": "source_prep_dry_run",
+            "command": (
+                ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
+                f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
+                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
+                f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
+                f"--source {source_arg}"
+            ),
+            "execution_policy": "dry_run_default",
+        },
+        {
+            "name": "source_prep_execute",
+            "command": (
+                ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
+                f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
+                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
+                f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
+                f"--source {source_arg} --execute"
+            ),
+            "execution_policy": "manual_operator_only",
+        },
+        {
+            "name": "refresh_readiness_after_prep",
+            "command": (
+                ".venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py "
+                f"--output-dir {_quote_artifact_path(artifact_paths, 'readiness_output_dir')} "
+                f"--candidate-range {shlex.quote(candidate_range)} "
+                f"--require-selection-capacity-source {source_arg} "
+                f"--require-scanner-ready-source {source_arg} "
+                "--no-generated-eval"
+            ),
+            "execution_policy": "no_download_no_vlm_gate",
+        },
+        {
+            "name": "scanner_dry_run",
+            "command": (
+                ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
+                f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
+                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
+                f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
+                f"--source {source_arg} --dry-run"
+            ),
+            "execution_policy": "dry_run_default",
+        },
+        {
+            "name": "scanner_execute_ready_candidates",
+            "command": (
+                ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
+                f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
+                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
+                f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
+                f"--source {source_arg}"
+            ),
+            "execution_policy": "ready_candidates_only",
+        },
+    ]
+    if next_action == "expand_candidate_range":
+        commands.insert(
+            0,
+            {
+                "name": "expand_candidate_range",
+                "command": (
+                    ".venv/bin/python scripts/operator_console/"
+                    "export_scene_sampler_readiness.py "
+                    f"--output-dir {_quote_artifact_path(artifact_paths, 'readiness_output_dir')} "
+                    f"--candidate-range {shlex.quote(candidate_range)} "
+                    f"--require-selection-capacity-source {source_arg} --no-generated-eval"
+                ),
+                "execution_policy": "no_download_no_vlm_gate",
+            },
+        )
+    return commands
+
+
+def _quote_artifact_path(artifact_paths: dict[str, str], key: str) -> str:
+    return shlex.quote(str(artifact_paths[key]))
 
 
 def _next_flow_scan_world_ids(selection_source: dict[str, Any]) -> list[str]:

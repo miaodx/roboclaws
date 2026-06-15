@@ -240,7 +240,7 @@ def export_readiness_artifacts(
         _write_json(scanner_execution_path, scanner_execution or {})
         artifacts["scanner_execution_plan"] = str(scanner_execution_path)
     next_flow_worklist = (
-        next_flow_worklist_report(candidate_indices=candidate_indices)
+        next_flow_worklist_report(candidate_indices=candidate_indices, output_dir=output_dir)
         if write_next_flow_worklist
         else None
     )

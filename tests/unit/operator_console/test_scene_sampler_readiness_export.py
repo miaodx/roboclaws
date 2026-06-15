@@ -135,6 +135,10 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert next_flow["summary"]["eval_needed_count"] == 35
     assert "worklist" in next_flow["summary"]
     assert result["summary"]["next_flow_worklist"]["source_count"] == 4
+    assert next_flow["artifact_paths"]["readiness_output_dir"] == str(tmp_path)
+    assert next_flow["artifact_paths"]["source_prep"] == str(
+        tmp_path / "scene_sampler_source_prep.json"
+    )
     assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "ready"
     assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 5
     assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
@@ -156,6 +160,22 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "molmospaces/ithor/3",
     ]
     assert next_flow["sources"]["ithor"]["missing_gate_counts"]["source_asset_available"] == 10
+    ithor_commands = next_flow["sources"]["ithor"]["recommended_commands"]
+    assert [command["name"] for command in ithor_commands] == [
+        "expand_candidate_range",
+        "source_prep_dry_run",
+        "source_prep_execute",
+        "refresh_readiness_after_prep",
+        "scanner_dry_run",
+        "scanner_execute_ready_candidates",
+    ]
+    assert "--require-selection-capacity-source ithor" in ithor_commands[0]["command"]
+    assert "--worklist" in ithor_commands[1]["command"]
+    assert "--execute" not in ithor_commands[1]["command"]
+    assert "--execute" in ithor_commands[2]["command"]
+    assert "--require-scanner-ready-source ithor" in ithor_commands[3]["command"]
+    assert "run_scene_sampler_scanner_plan.py" in ithor_commands[4]["command"]
+    assert "--dry-run" in ithor_commands[4]["command"]
     ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
     assert ithor_scanner["world_id"] == "molmospaces/ithor/1"
     assert ithor_scanner["scanner_status"] in {
