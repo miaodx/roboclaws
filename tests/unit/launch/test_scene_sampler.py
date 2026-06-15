@@ -36,6 +36,7 @@ from roboclaws.launch.worlds import (
     MOLMOSPACES_CONSOLE_WORLD_IDS,
     MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS,
     WORLD_SPECS,
+    world_spec,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -92,6 +93,31 @@ def test_legacy_molmospaces_alias_worlds_remain_launchable() -> None:
 
         assert plan.world == world_id
         assert "scene_source=procthor-10k-val" in plan.overrides
+
+
+def test_source_aware_candidate_worlds_are_launchable_but_not_default_visible() -> None:
+    world_id = "molmospaces/ithor/1"
+
+    spec = world_spec(world_id)
+    plan = resolve_surface_launch(
+        [
+            "surface=household-world",
+            f"world={world_id}",
+            "backend=mujoco",
+            "preset=map-build",
+            "agent_engine=direct-runner",
+            "evidence_lane=world-oracle-labels",
+        ]
+    )
+
+    assert world_id not in WORLD_SPECS
+    assert world_id not in MOLMOSPACES_CONSOLE_WORLD_IDS
+    assert spec.availability == "hidden"
+    assert spec.sampler_metadata["selected_reason"] == "dynamic_source_aware_scanner_candidate"
+    assert plan.world == world_id
+    assert "scene_source=ithor" in plan.overrides
+    assert "scene_index=1" in plan.overrides
+    assert "map_bundle=none" in plan.overrides
 
 
 def test_scene_sampler_parses_legacy_and_source_aware_world_ids() -> None:

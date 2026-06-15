@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from roboclaws.launch.scene_sampler import (
     legacy_molmospaces_world_ids,
+    parse_molmospaces_world_id,
     sampler_rows,
     ui_molmospaces_world_ids,
 )
@@ -138,4 +139,34 @@ DEFAULT_WORLD_BY_SURFACE: dict[str, str] = {
 def world_spec(world_id: str) -> WorldSpec:
     """Return a world spec by id."""
 
-    return WORLD_SPECS[world_id]
+    spec = WORLD_SPECS.get(world_id)
+    if spec is not None:
+        return spec
+    return _source_aware_molmospaces_candidate_world_spec(world_id)
+
+
+def _source_aware_molmospaces_candidate_world_spec(world_id: str) -> WorldSpec:
+    scene_ref = parse_molmospaces_world_id(world_id)
+    return WorldSpec(
+        id=world_id,
+        label=f"MolmoSpaces {scene_ref.scene_source} #{scene_ref.scene_index}",
+        surface_id="household-world",
+        available_backends=("mujoco",),
+        scene_source=scene_ref.scene_source,
+        tags=("household", "molmospaces", "source-aware-sampler", "scanner-candidate"),
+        default_backend="mujoco",
+        resource_kind="simulator",
+        availability="hidden",
+        default_overrides=(
+            f"scene_source={scene_ref.scene_source}",
+            f"scene_index={scene_ref.scene_index}",
+            "map_bundle=none",
+        ),
+        sampler_metadata={
+            "schema": "molmospaces_scene_sampler_world_metadata_v1",
+            "scene_source": scene_ref.scene_source,
+            "scene_index": scene_ref.scene_index,
+            "lanes": [],
+            "selected_reason": "dynamic_source_aware_scanner_candidate",
+        },
+    )

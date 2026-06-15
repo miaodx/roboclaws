@@ -123,6 +123,11 @@ First slice implemented on 2026-06-15.
 - Operator-console mess-up preview inventory loading now uses the same
   source-aware scene resolution path, so future source-aware UI rows do not
   silently probe a wrong legacy `val_<index>.xml` location before launch.
+- Public launch resolution now accepts source-aware MolmoSpaces scanner
+  candidate world ids such as `molmospaces/ithor/1` by creating hidden dynamic
+  world specs with explicit `scene_source`, `scene_index`, and `map_bundle=none`
+  overrides. These candidates are launchable for scanner/product smoke work but
+  remain absent from the default operator-console scene rail until admitted.
 
 Verification run on 2026-06-15:
 
@@ -141,6 +146,8 @@ ruff check roboclaws/launch/scene_sampler.py roboclaws/operator_console/messup.p
 ruff check scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py
 ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_messup.py -q
 ruff check roboclaws/operator_console/messup.py tests/unit/operator_console/test_messup.py
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/launch/test_environment_setup_catalog.py -q
+ruff check roboclaws/launch/worlds.py roboclaws/launch/catalog.py tests/unit/launch/test_scene_sampler.py
 ```
 
 Known partial scope:
@@ -201,6 +208,10 @@ Next Flow implementation slices:
      `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`; scanner work can
      call product/map-build routes with non-`procthor-10k-val` source ids
      without the worker silently falling back to `val_<index>.xml` paths.
+   - Public launch resolution now accepts hidden source-aware candidate world
+     ids such as `molmospaces/ithor/1`, so the scanner can product-smoke
+     candidate ids emitted by the readiness artifacts before those ids are
+     exposed in the operator console.
    - Turn the current static preview/readiness facts into a repeatable scanner
      or preparation command that can inspect candidate indices per
      `scene_source`.
