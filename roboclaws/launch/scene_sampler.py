@@ -381,6 +381,70 @@ def source_availability_report(
     }
 
 
+def candidate_readiness_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return no-download candidate packets for the next scanner/admission step."""
+
+    availability = source_availability_report(candidate_indices=candidate_indices)
+    rows_by_source_index = {
+        (row.scene_source, row.scene_index): row
+        for row in sampler_rows()
+        if row.scene_index is not None
+    }
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_availability = availability["sources"][source]
+        candidates = []
+        for index in candidate_indices:
+            row = rows_by_source_index.get((source, index))
+            if row is not None:
+                candidates.append(_candidate_packet_from_sampler_row(row))
+                continue
+            candidates.append(
+                _blocked_candidate_packet(
+                    source=source,
+                    scene_index=index,
+                    source_availability=source_availability,
+                )
+            )
+        ui_ready_count = sum(1 for item in candidates if item["ui_ready"])
+        eval_ready_count = sum(1 for item in candidates if item["eval_ready"])
+        sources[source] = {
+            "scene_source": source,
+            "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
+            "ui_ready_count": ui_ready_count,
+            "ui_status": "ready" if ui_ready_count == UI_TARGET_PER_SCENE_SOURCE else "not_visible",
+            "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
+            "eval_ready_count": eval_ready_count,
+            "eval_status": (
+                "complete"
+                if eval_ready_count == EVAL_TARGET_PER_SCENE_SOURCE
+                else "partial_or_blocked"
+            ),
+            "candidate_count": len(candidates),
+            "ready_candidate_count": sum(
+                1 for item in candidates if item["readiness_status"] == READINESS_READY
+            ),
+            "blocked_candidate_count": sum(
+                1 for item in candidates if item["readiness_status"] == READINESS_BLOCKED
+            ),
+            "rejected_candidate_count": sum(
+                1 for item in candidates if item["readiness_status"] == READINESS_REJECTED
+            ),
+            "source_availability": source_availability,
+            "candidates": candidates,
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_candidate_readiness_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_vlm",
+        "candidate_indices": list(candidate_indices),
+        "sources": sources,
+    }
+
+
 def load_room_label_manifest(path: Path | None = None) -> dict[str, Any]:
     """Load the prepared room-category label manifest used for admission."""
 
@@ -667,6 +731,85 @@ def _source_availability_blocked_reason(
             f"{missing_files}; run source preparation before sampler admission."
         )
     return ""
+
+
+def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
+    preview_statuses: dict[str, str] = {}
+    if row.scene_source == "procthor-10k-val" and row.scene_index is not None:
+        preview_statuses = _view_statuses(_preview_metadata(row.scene_index))
+    return {
+        "scene_family": row.scene_family,
+        "scene_split": row.scene_split,
+        "scene_source": row.scene_source,
+        "scene_index": row.scene_index,
+        "backend": row.backend,
+        "world_id": row.world_id,
+        "readiness_status": row.readiness_status,
+        "lanes": list(row.lanes),
+        "ui_ready": row.ui_ready,
+        "eval_ready": row.eval_ready,
+        "room_count": row.room_count,
+        "waypoint_count": row.waypoint_count,
+        "category_provenance": row.category_provenance,
+        "category_manifest": row.category_manifest,
+        "preview_statuses": preview_statuses,
+        "preview_assets": [
+            {"view": view, "path": path} for view, path in row.preview_assets
+        ],
+        "selected_reason": row.selected_reason,
+        "blocked_reason": row.blocked_reason,
+        "failure_class": row.failure_class,
+        "quality_score": row.quality_score,
+        "coverage_score": row.coverage_score,
+    }
+
+
+def _blocked_candidate_packet(
+    *,
+    source: str,
+    scene_index: int,
+    source_availability: dict[str, Any],
+) -> dict[str, Any]:
+    family, split = _family_split(source)
+    candidate_file = next(
+        (
+            item
+            for item in source_availability.get("candidate_files") or []
+            if item.get("scene_index") == scene_index
+        ),
+        {},
+    )
+    blocked_reason = str(source_availability.get("blocked_reason") or "")
+    if not blocked_reason:
+        blocked_reason = (
+            f"{source}/{scene_index} has no sampler preview, room, waypoint, or "
+            "map-build readiness packet yet; run scene preparation before admission."
+        )
+    return {
+        "scene_family": family,
+        "scene_split": split,
+        "scene_source": source,
+        "scene_index": scene_index,
+        "backend": PRIMARY_MOLMOSPACES_BACKEND,
+        "world_id": f"molmospaces/{source}/{scene_index}",
+        "readiness_status": READINESS_BLOCKED,
+        "lanes": [],
+        "ui_ready": False,
+        "eval_ready": False,
+        "room_count": 0,
+        "waypoint_count": 0,
+        "category_provenance": "unavailable",
+        "category_manifest": "",
+        "preview_statuses": {},
+        "preview_assets": [],
+        "selected_reason": "blocked_until_candidate_readiness_packet_exists",
+        "blocked_reason": blocked_reason,
+        "failure_class": "environment_blocked",
+        "quality_score": 0.0,
+        "coverage_score": 0.0,
+        "source_availability_status": source_availability.get("status"),
+        "candidate_file": candidate_file,
+    }
 
 
 def _parse_scene_index(raw_value: str, *, world_id: str) -> int:

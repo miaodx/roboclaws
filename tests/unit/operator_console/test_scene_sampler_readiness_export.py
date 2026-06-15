@@ -12,6 +12,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert result["threshold_failures"] == []
     artifacts = result["artifacts"]
     assert set(artifacts) == {
+        "candidate_readiness",
         "manifest",
         "eval_projection",
         "readiness_report",
@@ -23,6 +24,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     availability = json.loads(
         (tmp_path / "scene_sampler_source_availability.json").read_text()
     )
+    candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
@@ -36,6 +38,9 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "",
         "environment_blocked",
     }
+    assert candidates["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
+    assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
+    assert candidates["sources"]["ithor"]["blocked_candidate_count"] == 10
 
 
 def test_scene_sampler_readiness_export_can_require_ui_supported_source(tmp_path) -> None:

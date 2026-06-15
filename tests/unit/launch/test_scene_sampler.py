@@ -11,6 +11,7 @@ from roboclaws.launch.scene_sampler import (
     READINESS_REJECTED,
     UI_LANE,
     MolmoSpacesSceneRef,
+    candidate_readiness_report,
     eval_projection_metadata,
     eval_sample_id,
     eval_sampler_rows,
@@ -221,3 +222,33 @@ def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
         assert source_report["failure_class"] == "environment_blocked"
         assert "module is not importable" in source_report["blocked_reason"]
         assert source_report["candidate_indices"] == [0, 2]
+
+
+def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows(
+    monkeypatch,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces"),
+    )
+
+    report = candidate_readiness_report(candidate_indices=(0, 1, 2))
+
+    assert report["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
+    procthor = report["sources"]["procthor-10k-val"]
+    assert procthor["ui_ready_count"] == 2
+    assert procthor["eval_ready_count"] == 2
+    assert procthor["candidate_count"] == 3
+    assert procthor["ready_candidate_count"] == 2
+    assert procthor["rejected_candidate_count"] == 1
+    val_1 = next(item for item in procthor["candidates"] if item["scene_index"] == 1)
+    assert val_1["readiness_status"] == READINESS_REJECTED
+    assert val_1["blocked_reason"] == "fewer_than_three_public_navigation_areas"
+
+    ithor = report["sources"]["ithor"]
+    assert ithor["blocked_candidate_count"] == 3
+    assert ithor["candidates"][0]["world_id"] == "molmospaces/ithor/0"
+    assert ithor["candidates"][0]["failure_class"] == "environment_blocked"
