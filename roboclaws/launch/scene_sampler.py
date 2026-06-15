@@ -241,29 +241,86 @@ def eval_projection_metadata() -> dict[str, Any]:
 
     rows = eval_sampler_rows()
     by_source: dict[str, dict[str, Any]] = {}
+    total_ready_count = 0
+    total_blocked_count = 0
+    total_rejected_count = 0
+    total_blocked_or_rejected_row_count = 0
+    total_remaining_count = 0
     for source in SUPPORTED_SCENE_SOURCES:
         ready = [row for row in rows if row.scene_source == source]
-        blocked = [
+        blocked_or_rejected = [
             row
             for row in sampler_rows()
             if row.scene_source == source and row.blocked_reason
         ]
+        blocked = [
+            row for row in blocked_or_rejected if row.readiness_status == READINESS_BLOCKED
+        ]
+        rejected = [
+            row for row in blocked_or_rejected if row.readiness_status == READINESS_REJECTED
+        ]
+        ready_count = len(ready)
+        blocked_count = len(blocked)
+        rejected_count = len(rejected)
+        blocked_or_rejected_row_count = len(blocked_or_rejected)
+        remaining_count = max(0, EVAL_TARGET_PER_SCENE_SOURCE - ready_count)
+        support_status = _eval_projection_support_status(
+            ready_count=ready_count,
+            blocked_count=blocked_count,
+            target_count=EVAL_TARGET_PER_SCENE_SOURCE,
+        )
+        total_ready_count += ready_count
+        total_blocked_count += blocked_count
+        total_rejected_count += rejected_count
+        total_blocked_or_rejected_row_count += blocked_or_rejected_row_count
+        total_remaining_count += remaining_count
         by_source[source] = {
             "target_count": EVAL_TARGET_PER_SCENE_SOURCE,
-            "ready_count": len(ready),
+            "ready_count": ready_count,
+            "partial_gap_count": remaining_count,
+            "needed_count": remaining_count,
+            "blocked_count": blocked_count,
+            "rejected_count": rejected_count,
+            "blocked_or_rejected_row_count": blocked_or_rejected_row_count,
+            "support_status": support_status,
             "status": (
                 "complete"
-                if len(ready) == EVAL_TARGET_PER_SCENE_SOURCE
+                if ready_count == EVAL_TARGET_PER_SCENE_SOURCE
                 else "partial_or_blocked"
             ),
             "sample_ids": [eval_sample_id(row) for row in ready],
-            "blocked_rows": [row.to_dict() for row in blocked],
+            "blocked_rows": [row.to_dict() for row in blocked_or_rejected],
         }
     return {
         "schema": SAMPLER_PROJECTION_SCHEMA,
         "projection": EVAL_STRESS_LANE,
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "scene_sources": by_source,
+        "summary": {
+            "source_count": len(SUPPORTED_SCENE_SOURCES),
+            "target_sample_count": len(SUPPORTED_SCENE_SOURCES)
+            * EVAL_TARGET_PER_SCENE_SOURCE,
+            "ready_sample_count": total_ready_count,
+            "partial_source_count": sum(
+                1
+                for payload in by_source.values()
+                if payload["support_status"] == "partial"
+            ),
+            "blocked_source_count": sum(
+                1
+                for payload in by_source.values()
+                if payload["support_status"] == "blocked"
+            ),
+            "complete_source_count": sum(
+                1
+                for payload in by_source.values()
+                if payload["support_status"] == "complete"
+            ),
+            "blocked_row_count": total_blocked_count,
+            "rejected_row_count": total_rejected_count,
+            "blocked_or_rejected_row_count": total_blocked_or_rejected_row_count,
+            "remaining_sample_count": total_remaining_count,
+        },
     }
 
 
@@ -1024,6 +1081,21 @@ def _blocked_source_row(scene_source: str) -> SceneSamplerRow:
         ),
         failure_class="environment_blocked",
     )
+
+
+def _eval_projection_support_status(
+    *,
+    ready_count: int,
+    blocked_count: int,
+    target_count: int,
+) -> str:
+    if ready_count == target_count:
+        return "complete"
+    if ready_count > 0:
+        return "partial"
+    if blocked_count > 0:
+        return "blocked"
+    return "not_started"
 
 
 def _preview_metadata(scene_index: int) -> dict[str, Any]:

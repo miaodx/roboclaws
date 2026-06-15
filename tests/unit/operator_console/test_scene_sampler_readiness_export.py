@@ -52,6 +52,10 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
+    assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "partial"
+    assert projection["scene_sources"]["ithor"]["support_status"] == "blocked"
+    assert projection["summary"]["ready_sample_count"] == 5
+    assert projection["summary"]["remaining_sample_count"] == 35
     assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert readiness["sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
         "environment_blocked"

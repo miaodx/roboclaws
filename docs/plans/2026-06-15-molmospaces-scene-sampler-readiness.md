@@ -148,6 +148,13 @@ First slice implemented on 2026-06-15.
   `status=no_ready_candidates`, `candidate_count=33`,
   `ready_candidate_count=0`, `executed_candidate_count=0`, and
   `skipped_candidate_count=33`.
+- Eval projection metadata now records explicit per-source and aggregate
+  readiness counts for the stress set: `support_status`, `ready_count`,
+  `needed_count`, `partial_gap_count`, `blocked_count`, `rejected_count`, and a
+  summary with complete, partial, blocked, ready, remaining, blocked-row, and
+  rejected-row counts. This lets the eval suite and exported readiness
+  artifacts prove `procthor-10k-val` is partial and the three other source
+  targets are blocked without inferring that state from raw `blocked_rows`.
 
 Verification run on 2026-06-15:
 
@@ -174,6 +181,10 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_sce
 ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_scanner_runner.py -q
 ruff check scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
 .venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/evals/test_eval_models.py -q
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-projection-summary --no-source-availability --no-candidate-readiness --no-selection-gaps --no-source-prep --no-scanner-admission --no-scanner-execution-plan --no-generated-eval
 ```
 
 Current limits feeding the next Flow:

@@ -147,9 +147,28 @@ def test_scene_sampler_rejects_unknown_source_aware_world_ids() -> None:
 def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
     projection = eval_projection_metadata()
 
+    assert projection["summary"] == {
+        "source_count": 4,
+        "target_sample_count": 40,
+        "ready_sample_count": 5,
+        "partial_source_count": 1,
+        "blocked_source_count": 3,
+        "complete_source_count": 0,
+        "blocked_row_count": 3,
+        "rejected_row_count": 3,
+        "blocked_or_rejected_row_count": 6,
+        "remaining_sample_count": 35,
+    }
+
     procthor = projection["scene_sources"]["procthor-10k-val"]
     assert procthor["target_count"] == 10
     assert procthor["ready_count"] == 5
+    assert procthor["partial_gap_count"] == 5
+    assert procthor["needed_count"] == 5
+    assert procthor["blocked_count"] == 0
+    assert procthor["rejected_count"] == 3
+    assert procthor["blocked_or_rejected_row_count"] == 3
+    assert procthor["support_status"] == "partial"
     assert procthor["status"] == "partial_or_blocked"
     assert procthor["sample_ids"] == [eval_sample_id(row) for row in eval_sampler_rows()]
     blocked_indices = {
@@ -166,6 +185,12 @@ def test_scene_sampler_records_partial_and_blocked_source_projection() -> None:
     for source in ("ithor", "procthor-objaverse-val", "holodeck-objaverse-val"):
         source_projection = projection["scene_sources"][source]
         assert source_projection["ready_count"] == 0
+        assert source_projection["partial_gap_count"] == 10
+        assert source_projection["needed_count"] == 10
+        assert source_projection["blocked_count"] == 1
+        assert source_projection["rejected_count"] == 0
+        assert source_projection["blocked_or_rejected_row_count"] == 1
+        assert source_projection["support_status"] == "blocked"
         assert source_projection["status"] == "partial_or_blocked"
         assert source_projection["blocked_rows"][0]["readiness_status"] == READINESS_BLOCKED
         assert source_projection["blocked_rows"][0]["failure_class"] == "environment_blocked"

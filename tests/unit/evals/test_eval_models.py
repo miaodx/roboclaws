@@ -296,11 +296,17 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     assert scene_suite.suite_id == "household_world.scene_sampler_stress"
     assert "sampler_admission" in scene_suite.required_graders
     projection = scene_suite.metadata["sampler_projection"]
+    assert projection["summary"]["ready_sample_count"] == 5
+    assert projection["summary"]["partial_source_count"] == 1
+    assert projection["summary"]["blocked_source_count"] == 3
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 5
     assert projection["scene_sources"]["procthor-10k-val"]["target_count"] == 10
+    assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "partial"
+    assert projection["scene_sources"]["procthor-10k-val"]["partial_gap_count"] == 5
     assert projection["scene_sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
         "environment_blocked"
     )
+    assert projection["scene_sources"]["ithor"]["support_status"] == "blocked"
 
 
 def _minimal_suite_payload(sample_id: str) -> dict:

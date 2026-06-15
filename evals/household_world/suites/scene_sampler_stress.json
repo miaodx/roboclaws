@@ -40,6 +40,12 @@
         "procthor-10k-val": {
           "target_count": 10,
           "ready_count": 5,
+          "partial_gap_count": 5,
+          "needed_count": 5,
+          "blocked_count": 0,
+          "rejected_count": 3,
+          "blocked_or_rejected_row_count": 3,
+          "support_status": "partial",
           "status": "partial_or_blocked",
           "sample_ids": [
             "scene_sampler.procthor-10k-val.0.map_build",
@@ -171,6 +177,12 @@
         "ithor": {
           "target_count": 10,
           "ready_count": 0,
+          "partial_gap_count": 10,
+          "needed_count": 10,
+          "blocked_count": 1,
+          "rejected_count": 0,
+          "blocked_or_rejected_row_count": 1,
+          "support_status": "blocked",
           "status": "partial_or_blocked",
           "sample_ids": [],
           "blocked_rows": [
@@ -201,6 +213,12 @@
         "procthor-objaverse-val": {
           "target_count": 10,
           "ready_count": 0,
+          "partial_gap_count": 10,
+          "needed_count": 10,
+          "blocked_count": 1,
+          "rejected_count": 0,
+          "blocked_or_rejected_row_count": 1,
+          "support_status": "blocked",
           "status": "partial_or_blocked",
           "sample_ids": [],
           "blocked_rows": [
@@ -231,6 +249,12 @@
         "holodeck-objaverse-val": {
           "target_count": 10,
           "ready_count": 0,
+          "partial_gap_count": 10,
+          "needed_count": 10,
+          "blocked_count": 1,
+          "rejected_count": 0,
+          "blocked_or_rejected_row_count": 1,
+          "support_status": "blocked",
           "status": "partial_or_blocked",
           "sample_ids": [],
           "blocked_rows": [
@@ -258,6 +282,18 @@
             }
           ]
         }
+      },
+      "summary": {
+        "source_count": 4,
+        "target_sample_count": 40,
+        "ready_sample_count": 5,
+        "partial_source_count": 1,
+        "blocked_source_count": 3,
+        "complete_source_count": 0,
+        "blocked_row_count": 3,
+        "rejected_row_count": 3,
+        "blocked_or_rejected_row_count": 6,
+        "remaining_sample_count": 35
       }
     }
   }
