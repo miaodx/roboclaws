@@ -420,6 +420,8 @@ def next_flow_recommended_commands(
     recommended_candidate_range: str,
     artifact_paths: dict[str, str],
 ) -> list[dict[str, str]]:
+    if next_action in {"none", "do_not_scan_without_new_human_curation"}:
+        return []
     source_arg = shlex.quote(source)
     candidate_range = recommended_candidate_range or "0:19"
     prep_base = (

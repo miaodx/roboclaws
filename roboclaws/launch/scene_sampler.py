@@ -777,6 +777,11 @@ def selection_gap_report(
             for item in source_candidates
             if item["readiness_status"] == READINESS_REJECTED
         ]
+        if (
+            eval_ready_count == 0
+            and len(rejected_candidate_indices) >= EVAL_TARGET_PER_SCENE_SOURCE
+        ):
+            scanner_candidates = []
         ui_scan_candidates = scanner_candidates[:ui_needed]
         eval_scan_candidates = scanner_candidates[:eval_needed]
         source_availability_status = (source_payload.get("source_availability") or {}).get("status")

@@ -144,7 +144,9 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
     assert selection["sources"]["procthor-10k-val"]["selection_capacity_status"] == "complete"
     assert selection["sources"]["procthor-10k-val"]["next_action"] == "none"
     assert selection["sources"]["ithor"]["ui_needed_count"] == 3
-    assert selection["sources"]["ithor"]["next_action"] == "expand_candidate_range"
+    assert selection["sources"]["ithor"]["next_action"] == (
+        "do_not_scan_without_new_human_curation"
+    )
     assert source_prep["schema"] == "molmospaces_scene_sampler_source_prep_v1"
     assert source_prep["probe_mode"] == "no_download_no_vlm"
     assert source_prep["download_policy"] == "manual_operator_only"
@@ -158,6 +160,7 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
         "run_scanner_admission",
         "expand_candidate_range",
         "inspect_source_prep",
+        "do_not_scan_without_new_human_curation",
     }
     assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
         'get_scenes("ithor", "train")'
@@ -214,6 +217,10 @@ def _assert_next_flow(
     assert next_flow["summary"]["source_count"] == 4
     assert next_flow["summary"]["ui_needed_count"] == 6
     assert next_flow["summary"]["eval_needed_count"] == 20
+    assert next_flow["summary"]["next_actions"] == {
+        "do_not_scan_without_new_human_curation": 2,
+    }
+    assert next_flow["summary"]["rejected_exhausted_source_count"] == 2
     assert "worklist" in next_flow["summary"]
     assert next_flow["worklist"] == next_flow["summary"]["worklist"]
     assert next_flow["worklist"][0]["scene_source"] in {
@@ -236,14 +243,18 @@ def _assert_next_flow(
     assert next_flow["sources"]["procthor-objaverse-val"]["next_action"] == "none"
     assert next_flow["sources"]["ithor"]["ui_needed_count"] == 3
     assert next_flow["sources"]["ithor"]["eval_needed_count"] == 10
-    assert next_flow["sources"]["ithor"]["next_action"] == "expand_candidate_range"
+    assert next_flow["sources"]["ithor"]["flow_status"] == "rejected_exhausted"
+    assert next_flow["sources"]["ithor"]["next_action"] == (
+        "do_not_scan_without_new_human_curation"
+    )
     assert next_flow["sources"]["ithor"]["recommended_candidate_range"] == "0:19"
-    assert "source_asset_available" in next_flow["sources"]["ithor"]["missing_gate_counts"]
     ithor_commands = next_flow["sources"]["ithor"]["recommended_commands"]
-    assert "source_prep_dry_run" in [command["name"] for command in ithor_commands]
-    assert "source_prep_execute" in [command["name"] for command in ithor_commands]
-    assert any("--worklist" in command["command"] for command in ithor_commands)
-    assert any("--execute" in command["command"] for command in ithor_commands)
+    assert ithor_commands == []
+    holodeck = next_flow["sources"]["holodeck-objaverse-val"]
+    assert holodeck["flow_status"] == "rejected_exhausted"
+    assert holodeck["next_action"] == "do_not_scan_without_new_human_curation"
+    assert holodeck["recommended_commands"] == []
+    assert holodeck["blocked_reason_samples"] == ["fewer_than_three_public_navigation_areas"]
     if scanner_execution["sources"]["ithor"]["candidates"]:
         ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
         assert ithor_scanner["world_id"].startswith("molmospaces/ithor/")
@@ -390,9 +401,9 @@ def test_scene_sampler_readiness_export_fails_when_scanner_source_has_no_ready_c
             "threshold": "scanner_ready",
             "reason": "no_ready_product_smoke_candidates",
             "ready_for_product_smoke_count": 0,
-            "candidate_count": 8,
-            "blocked_count": 8,
-            "prep_status": "blocked_molmospaces_module",
+            "candidate_count": 0,
+            "blocked_count": 0,
+            "prep_status": "rejected_exhausted",
         }
     ]
 
@@ -446,4 +457,5 @@ def test_scene_sampler_readiness_export_cli_accepts_scanner_ready_threshold(
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "failed"
     assert payload["threshold_failures"][0]["threshold"] == "scanner_ready"
-    assert payload["threshold_failures"][0]["blocked_count"] == 8
+    assert payload["threshold_failures"][0]["blocked_count"] == 0
+    assert payload["threshold_failures"][0]["prep_status"] == "rejected_exhausted"
