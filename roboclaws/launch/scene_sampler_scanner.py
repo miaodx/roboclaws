@@ -7,6 +7,14 @@ import shlex
 from pathlib import Path
 from typing import Any
 
+_SOURCE_PREP_ACTIONS = {
+    "complete": "none",
+    "ready_for_scanner": "run_scanner_admission",
+    "blocked_molmospaces_module": "install_repo_dev_runtime",
+    "blocked_scene_root": "configure_or_install_molmospaces_scene_root",
+    "blocked_missing_resources": "run_manual_source_prep",
+}
+
 
 def scanner_required_gates() -> tuple[str, ...]:
     return (
@@ -33,11 +41,11 @@ def scanner_preview_metadata(
         payload = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None
-    if payload.get("scene_source") != source:
-        return None
-    if payload.get("scene_index") != scene_index:
-        return None
-    if payload.get("backend") != backend:
+    if (
+        payload.get("scene_source") != source
+        or payload.get("scene_index") != scene_index
+        or payload.get("backend") != backend
+    ):
         return None
     return payload
 
@@ -207,17 +215,7 @@ def scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str]) 
 
 
 def source_prep_next_action(prep_status: str) -> str:
-    if prep_status == "complete":
-        return "none"
-    if prep_status == "ready_for_scanner":
-        return "run_scanner_admission"
-    if prep_status == "blocked_molmospaces_module":
-        return "install_repo_dev_runtime"
-    if prep_status == "blocked_scene_root":
-        return "configure_or_install_molmospaces_scene_root"
-    if prep_status == "blocked_missing_resources":
-        return "run_manual_source_prep"
-    return "inspect_source_prep"
+    return _SOURCE_PREP_ACTIONS.get(prep_status, "inspect_source_prep")
 
 
 def scanner_execution_candidate(
@@ -426,27 +424,29 @@ def next_flow_recommended_commands(
 ) -> list[dict[str, str]]:
     source_arg = shlex.quote(source)
     candidate_range = recommended_candidate_range or "0:19"
+    prep_base = (
+        ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
+        f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
+        f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
+        f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
+        f"--source {source_arg}"
+    )
+    scanner_base = (
+        ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
+        f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
+        f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
+        f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
+        f"--source {source_arg}"
+    )
     commands = [
         {
             "name": "source_prep_dry_run",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
-                f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
-                f"--source {source_arg}"
-            ),
+            "command": prep_base,
             "execution_policy": "dry_run_default",
         },
         {
             "name": "source_prep_execute",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
-                f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'source_prep_run')} "
-                f"--source {source_arg} --execute"
-            ),
+            "command": f"{prep_base} --execute",
             "execution_policy": "manual_operator_only",
         },
         {
@@ -463,24 +463,12 @@ def next_flow_recommended_commands(
         },
         {
             "name": "scanner_dry_run",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
-                f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
-                f"--source {source_arg} --dry-run"
-            ),
+            "command": f"{scanner_base} --dry-run",
             "execution_policy": "dry_run_default",
         },
         {
             "name": "scanner_execute_ready_candidates",
-            "command": (
-                ".venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py "
-                f"--plan {_quote_artifact_path(artifact_paths, 'scanner_execution_plan')} "
-                f"--worklist {_quote_artifact_path(artifact_paths, 'next_flow_worklist')} "
-                f"--output {_quote_artifact_path(artifact_paths, 'scanner_run')} "
-                f"--source {source_arg}"
-            ),
+            "command": scanner_base,
             "execution_policy": "ready_candidates_only",
         },
     ]
@@ -642,8 +630,7 @@ def scanner_preview_assets(
 ) -> list[dict[str, str]]:
     slug = world_id_slug(f"molmospaces/{source}/{scene_index}")
     return [
-        {"view": view, "path": str(preview_root / f"{slug}-{view}.png")}
-        for view in required_views
+        {"view": view, "path": str(preview_root / f"{slug}-{view}.png")} for view in required_views
     ]
 
 
