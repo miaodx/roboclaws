@@ -4,6 +4,8 @@ import json
 import re
 from pathlib import Path
 
+from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_SCENE_INDICES
+
 STATIC_ROOT = Path(__file__).resolve().parents[3] / "roboclaws" / "operator_console" / "static"
 
 
@@ -180,9 +182,24 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "state.activeRunId" in app
     assert "Grounding will appear after a camera-grounded run starts." in app
 
+    expected_preview_files = sorted(
+        f"molmospaces-val_{scene_index}-{view_name}.png"
+        for scene_index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+        for view_name in ("chase", "fpv", "map", "topdown")
+    )
     preview_files = sorted(path.name for path in preview_dir.glob("molmospaces-val_*-*.png"))
-    assert len(preview_files) == 36
-    for scene_index in (0, 1, 2, 3, 4, 5, 7, 9):
+    assert preview_files == expected_preview_files
+    metadata_files = sorted(
+        path.name for path in preview_dir.glob("molmospaces-val_*-preview.json")
+    )
+    assert metadata_files == [
+        f"molmospaces-val_{scene_index}-preview.json"
+        for scene_index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+    ]
+    assert not any(name.startswith("molmospaces-val_6-") for name in preview_files)
+    assert not any(name.startswith("molmospaces-val_8-") for name in preview_files)
+
+    for scene_index in MOLMOSPACES_CONSOLE_SCENE_INDICES:
         for view_name in ("fpv", "map", "chase", "topdown"):
             path = preview_dir / f"molmospaces-val_{scene_index}-{view_name}.png"
             assert path.is_file()

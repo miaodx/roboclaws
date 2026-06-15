@@ -42,6 +42,28 @@ from roboclaws.operator_console.state import derive_operator_state, redacted_art
 PAUSE_UNAVAILABLE_REASON = "Pause is unavailable for this route. Use Stop or Emergency Stop."
 
 
+def _registered_preview_asset_names() -> frozenset[str]:
+    """Return catalog-backed /previews asset names, including scene metadata."""
+
+    names: set[str] = set()
+    for world in list_worlds():
+        preview_assets = world.get("preview_assets") or {}
+        if not isinstance(preview_assets, dict):
+            continue
+        for asset in preview_assets.values():
+            if not isinstance(asset, dict):
+                continue
+            path = str(asset.get("path") or asset.get("href") or "")
+            if not path.startswith("/previews/"):
+                continue
+            name = path.removeprefix("/previews/")
+            names.add(name)
+            if name.endswith(".png") and "-" in name:
+                scene_name = name.rsplit("-", 1)[0]
+                names.add(f"{scene_name}-preview.json")
+    return frozenset(names)
+
+
 def _selection_task_selector(intent_id: str) -> str:
     return intent_id if intent_id in {"cleanup", "map-build"} else "open-task"
 
@@ -260,7 +282,11 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         rel = Path(unquote(request_path.removeprefix("/previews/")))
         path = (self.static_root / "previews" / rel).resolve()
         preview_root = (self.static_root / "previews").resolve()
-        if not _is_relative_to(path, preview_root) or not path.exists():
+        if not _is_relative_to(path, preview_root):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        relative_name = path.relative_to(preview_root).as_posix()
+        if relative_name not in _registered_preview_asset_names() or not path.exists():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         self._file(path)
