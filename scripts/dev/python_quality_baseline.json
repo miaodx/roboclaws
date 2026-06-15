@@ -168,7 +168,7 @@
         "path": "scripts/visual_grounding/adapters.py"
       },
       {
-        "lines": 1566,
+        "lines": 1253,
         "max_module_lines": 800,
         "path": "scripts/visual_grounding/run_visual_grounding_benchmark.py"
       },
@@ -737,16 +737,6 @@
         "row": 1268,
         "symbol": "_yolo_candidates_from_model",
         "value": 11
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/visual_grounding/run_visual_grounding_benchmark.py|PLR0915|_score_predictions",
-        "limit": 50,
-        "message": "Too many statements (60 > 50)",
-        "path": "scripts/visual_grounding/run_visual_grounding_benchmark.py",
-        "row": 500,
-        "symbol": "_score_predictions",
-        "value": 60
       },
       {
         "code": "C901",

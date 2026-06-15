@@ -4609,3 +4609,18 @@ Stop this refactor loop when:
   59. `roboclaws/household/planner_proof_requests.py` dropped from 2187 to 1844
   lines and no longer appears in the complexity-by-file summary. Candidate C is
   complete for this backend-quality loop.
+- 2026-06-15: Continued the visual-grounding benchmark residual candidate by
+  moving benchmark scoring into `scripts/visual_grounding/benchmark_scoring.py`.
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py::_score_predictions`
+  remains available as an imported delegate for current tests, while category
+  matching, bbox IoU matching, destination-hint/actionability scoring,
+  duplicate accounting, and private label detail assembly live in the focused
+  helper. Evidence:
+  `ruff check scripts/visual_grounding/run_visual_grounding_benchmark.py scripts/visual_grounding/benchmark_scoring.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+  passed with 18 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 76 to 75 Ruff complexity violations, with oversized modules unchanged at
+  59. `scripts/visual_grounding/run_visual_grounding_benchmark.py` dropped from
+  1566 to 1253 lines and no longer appears in the complexity-by-file summary.
