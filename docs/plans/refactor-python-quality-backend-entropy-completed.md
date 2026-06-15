@@ -332,6 +332,14 @@ logs before choosing the next slice.
   62. Proof: focused Isaac scene-camera geometry/capture tests, ruff, format
   check, and ratchet.
 
+- 2026-06-16: Isaac real robot-view image reuse, snapshot source selection,
+  nonblank RGB copying, and robot-view provenance payloads moved from the
+  backend worker into `isaac_robot_view_artifacts.py`, preserving worker
+  wrappers used by mapping diagnostics and robot-view hooks. Metric:
+  `isaac_lab_backend_worker.py` 5524 -> 5446 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused Isaac fake/real
+  robot-view and snapshot tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

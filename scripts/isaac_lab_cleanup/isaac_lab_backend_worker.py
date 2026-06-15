@@ -140,6 +140,20 @@ from scripts.isaac_lab_cleanup.isaac_robot_import import (
     repo_path,
     robot_payload,
 )
+from scripts.isaac_lab_cleanup.isaac_robot_view_artifacts import (
+    copy_nonblank_rgb_image,
+    copy_real_robot_view_images,
+    copy_real_snapshot_image,
+    has_required_robot_view_images,
+    pil_image_has_variance,
+    real_rendering_proven,
+    real_robot_view_images,
+    real_smoke_robot_view_images,
+    real_snapshot_source_image,
+    robot_view_command_provenance,
+    robot_view_provenance,
+    semantic_pose_robot_view_provenance,
+)
 from scripts.isaac_lab_cleanup.isaac_runtime_diagnostics import (
     module_version,
 )
@@ -4448,14 +4462,7 @@ def _support_pose_position(pose: dict[str, Any]) -> list[float] | None:
 
 
 def _real_robot_view_images(state: dict[str, Any]) -> dict[str, str]:
-    images = {
-        key: str(value)
-        for key, value in _dict(state.get("robot_view_images")).items()
-        if key in ROBOT_VIEW_KEYS and value
-    }
-    if _has_required_robot_view_images(images):
-        return images
-    return {}
+    return real_robot_view_images(state, robot_view_keys=ROBOT_VIEW_KEYS)
 
 
 def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -4479,20 +4486,11 @@ def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, An
 
 
 def _real_smoke_robot_view_images(real_smoke: dict[str, Any] | None) -> dict[str, str]:
-    if real_smoke is None:
-        return {}
-    images = {
-        key: str(value)
-        for key, value in _dict(real_smoke.get("robot_view_images")).items()
-        if key in ROBOT_VIEW_KEYS and value
-    }
-    if not _has_required_robot_view_images(images):
-        return {}
-    return images if all(Path(value).is_file() for value in images.values()) else {}
+    return real_smoke_robot_view_images(real_smoke, robot_view_keys=ROBOT_VIEW_KEYS)
 
 
 def _has_required_robot_view_images(images: dict[str, str]) -> bool:
-    return all(bool(images.get(key)) for key in ROBOT_VIEW_KEYS)
+    return has_required_robot_view_images(images, robot_view_keys=ROBOT_VIEW_KEYS)
 
 
 def _copy_real_robot_view_images(
@@ -4502,30 +4500,17 @@ def _copy_real_robot_view_images(
     width: int,
     height: int,
 ) -> dict[str, list[int]]:
-    shapes: dict[str, list[int]] = {}
-    for key in ROBOT_VIEW_KEYS:
-        source = Path(source_images[key])
-        target = target_images[key]
-        shapes[key] = _copy_nonblank_rgb_image(
-            source,
-            target,
-            width=width,
-            height=height,
-            description=f"real Isaac {key} view image",
-        )
-    return shapes
+    return copy_real_robot_view_images(
+        source_images,
+        target_images,
+        width=width,
+        height=height,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+    )
 
 
 def _real_snapshot_source_image(state: dict[str, Any]) -> Path:
-    real_smoke = _dict(state.get("real_runtime_smoke"))
-    image_path = str(real_smoke.get("image_path") or "")
-    if image_path:
-        return Path(image_path)
-    robot_views = _real_robot_view_images(state)
-    fpv_path = str(robot_views.get("fpv") or "")
-    if fpv_path:
-        return Path(fpv_path)
-    raise RuntimeError("real Isaac rendering is proven, but no RGB snapshot source is recorded")
+    return real_snapshot_source_image(state, robot_view_keys=ROBOT_VIEW_KEYS)
 
 
 def _copy_real_snapshot_image(
@@ -4535,13 +4520,7 @@ def _copy_real_snapshot_image(
     width: int,
     height: int,
 ) -> list[int]:
-    return _copy_nonblank_rgb_image(
-        source,
-        target,
-        width=width,
-        height=height,
-        description="real Isaac snapshot source image",
-    )
+    return copy_real_snapshot_image(source, target, width=width, height=height)
 
 
 def _copy_nonblank_rgb_image(
@@ -4552,71 +4531,33 @@ def _copy_nonblank_rgb_image(
     height: int,
     description: str,
 ) -> list[int]:
-    if not source.is_file():
-        raise RuntimeError(f"missing {description}: {source}")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    same_path = source.resolve() == target.resolve()
-    with Image.open(source) as image:
-        rgb = image.convert("RGB")
-        if not _pil_image_has_variance(rgb):
-            raise RuntimeError(f"{description} appears blank: {source}")
-        if not same_path and rgb.size != (width, height):
-            rgb = rgb.resize((width, height))
-        if not same_path:
-            rgb.save(target)
-        return [rgb.height, rgb.width, 3]
+    return copy_nonblank_rgb_image(
+        source,
+        target,
+        width=width,
+        height=height,
+        description=description,
+    )
 
 
 def _pil_image_has_variance(image: Image.Image) -> bool:
-    return any(high > low for low, high in image.getextrema())
+    return pil_image_has_variance(image)
 
 
 def _real_rendering_proven(state: dict[str, Any]) -> bool:
-    rendering = _dict(_dict(state.get("runtime")).get("rendering"))
-    return rendering.get("real_rendering_proven") is True
+    return real_rendering_proven(state)
 
 
 def _robot_view_provenance(
     runtime_mode: str,
     real_smoke: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    if _has_required_robot_view_images(_real_smoke_robot_view_images(real_smoke)):
-        method = str(real_smoke.get("robot_view_capture_method") or REAL_ROBOT_VIEW_CAPTURE_METHOD)
-        provenance = {key: f"{method}:{key}" for key in ROBOT_VIEW_KEYS}
-        mounted_head_camera = bool(real_smoke.get("robot_view_uses_mounted_head_camera"))
-        if mounted_head_camera:
-            provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-        else:
-            provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
-        provenance["semantic_pose_state_refreshed"] = False
-        provenance["canonical_camera_control"] = False
-        provenance["robot_mounted_head_camera"] = mounted_head_camera
-        provenance["head_camera_equivalent"] = not mounted_head_camera
-        provenance["evidence_note"] = (
-            "Robot-view images are static captures from the loaded USD scene during init. "
-            "FPV uses the imported RBY1M mounted head camera when the robot USD import "
-            "artifact is present; otherwise it is marked as a head-camera equivalent. "
-            "Semantic pose edits are tracked in backend JSON state and are not rendered "
-            "back into Isaac yet."
-        )
-        return provenance
-    if runtime_mode == "real":
-        provenance = {key: "isaac_robot_view_capture_pending" for key in ROBOT_VIEW_KEYS}
-        provenance.update(
-            {
-                "semantic_pose_state_refreshed": False,
-                "evidence_note": "Real Isaac robot-view captures were not recorded.",
-            }
-        )
-        return provenance
-    provenance = {key: "fake_protocol_placeholder_image" for key in ROBOT_VIEW_KEYS}
-    provenance.update(
-        {
-            "semantic_pose_state_refreshed": False,
-            "evidence_note": "CI fake mode writes deterministic placeholder robot-view images.",
-        }
+    return robot_view_provenance(
+        runtime_mode,
+        real_smoke,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        real_robot_view_capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
     )
-    return provenance
 
 
 def _robot_view_command_provenance(
@@ -4624,19 +4565,12 @@ def _robot_view_command_provenance(
     *,
     semantic_pose_state_refreshed: bool,
 ) -> dict[str, Any]:
-    if semantic_pose_state_refreshed:
-        provenance = _dict(state.get("robot_view_provenance"))
-        return _semantic_pose_robot_view_provenance(
-            mounted_head_camera=bool(
-                provenance.get("robot_mounted_head_camera")
-                or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
-            ),
-            head_camera_equivalent=bool(
-                provenance.get("head_camera_equivalent")
-                or _dict(state.get("semantic_pose_view_capture")).get("head_camera_equivalent")
-            ),
-        )
-    return _dict(state.get("robot_view_provenance"))
+    return robot_view_command_provenance(
+        state,
+        semantic_pose_state_refreshed=semantic_pose_state_refreshed,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
+    )
 
 
 def _semantic_pose_robot_view_provenance(
@@ -4644,24 +4578,12 @@ def _semantic_pose_robot_view_provenance(
     mounted_head_camera: bool = False,
     head_camera_equivalent: bool = False,
 ) -> dict[str, Any]:
-    provenance = {key: f"{REAL_ROBOT_VIEW_RERENDER_METHOD}:{key}" for key in ROBOT_VIEW_KEYS}
-    if mounted_head_camera:
-        provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-    elif head_camera_equivalent:
-        provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
-    provenance["semantic_pose_state_refreshed"] = True
-    provenance["canonical_camera_control"] = False
-    provenance["robot_mounted_head_camera"] = mounted_head_camera
-    provenance["head_camera_equivalent"] = head_camera_equivalent
-    provenance["evidence_note"] = (
-        "Robot-view images were recaptured from the loaded USD scene after applying "
-        "backend semantic pose state. FPV is either the imported RBY1M mounted head "
-        "camera or an explicit head-camera-equivalent view; chase is a robot-relative "
-        "rear/high report view and map remains auxiliary report evidence. "
-        "This is still semantic pose rendering, not planner-backed or "
-        "physics-backed manipulation."
+    return semantic_pose_robot_view_provenance(
+        mounted_head_camera=mounted_head_camera,
+        head_camera_equivalent=head_camera_equivalent,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
     )
-    return provenance
 
 
 def _safe_file_stem(value: str) -> str:
