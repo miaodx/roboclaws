@@ -652,9 +652,9 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
 
 
 def test_scene_sampler_source_prep_install_command_resolves_dict_scene_refs() -> None:
-    import roboclaws.launch.scene_sampler as scene_sampler
+    from roboclaws.launch.scene_sampler_prep import install_candidate_command
 
-    command = scene_sampler._install_candidate_command(
+    command = install_candidate_command(
         dataset_name="procthor-10k",
         split="val",
         scene_index=4,

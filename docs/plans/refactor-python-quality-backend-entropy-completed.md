@@ -131,6 +131,13 @@ logs before choosing the next slice.
   unchanged at 62. Proof: focused scene-sampler/eval tests, ruff, format check,
   and ratchet.
 
+- 2026-06-16: Scene-sampler source prep and availability helpers moved into
+  `scene_sampler_prep.py`, keeping `scene_sampler.py` as the public sampler
+  facade. Metric: `scene_sampler.py` 2457 -> 1975 lines and no longer above the
+  2000-line hard ceiling; ratchet remains 20 complexity rows and 62 oversized
+  modules. Proof: focused scene-sampler/eval tests, ruff, format check, and
+  ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
