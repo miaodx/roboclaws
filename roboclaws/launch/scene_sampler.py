@@ -874,7 +874,9 @@ def source_prep_report(
             "missing_resource_summary": _resource_reason_counts(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
-            "install_candidates": [] if source_complete else _source_prep_install_candidates(
+            "install_candidates": []
+            if source_complete
+            else _source_prep_install_candidates(
                 dataset_name=dataset_name,
                 split=split,
                 candidates=next_scan_candidates,
@@ -1314,8 +1316,7 @@ def _static_scanner_preview_metadata(scene_index: int) -> dict[str, Any]:
         for index in range(waypoint_count)
     ]
     views = {
-        view: {"image_diagnostics": {"visual_status": "reviewable"}}
-        for view in _required_views()
+        view: {"image_diagnostics": {"visual_status": "reviewable"}} for view in _required_views()
     }
     views["map"]["semantic_projection"] = {
         "rendered_waypoint_count": waypoint_count,
@@ -1389,8 +1390,7 @@ def _ready_row_preview_assets(scene_index: int) -> tuple[tuple[str, str], ...]:
         return _preview_assets(scene_index)
     slug = _world_id_slug(f"molmospaces/procthor-10k-val/{scene_index}")
     return tuple(
-        (view, str(_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png"))
-        for view in _required_views()
+        (view, str(_SCANNER_PREVIEW_ROOT / f"{slug}-{view}.png")) for view in _required_views()
     )
 
 
@@ -1985,213 +1985,6 @@ def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
 
 def _scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str]) -> str:
     return scanner_next_action(candidate, missing_gates=missing_gates)
-
-
-def _scanner_execution_candidate(
-    *,
-    install_candidate: dict[str, Any],
-    admission: dict[str, Any],
-) -> dict[str, Any]:
-    world_id = str(install_candidate.get("world_id") or "")
-    scene_source = str(install_candidate.get("scene_source") or "")
-    scene_index = install_candidate.get("scene_index")
-    missing_paths = [str(path) for path in install_candidate.get("missing_paths") or [] if path]
-    candidate_file_exists = not missing_paths and bool(install_candidate.get("primary_path"))
-    missing_gates = [str(gate) for gate in admission.get("missing_gates") or [] if gate]
-    scanner_status = (
-        "ready_for_product_smoke"
-        if candidate_file_exists and "source_asset_available" not in missing_gates
-        else "blocked_missing_resources"
-    )
-    if admission.get("next_action") == "choose_valid_source_specific_candidate_index":
-        scanner_status = "blocked_invalid_candidate_index"
-    return {
-        "scene_family": admission.get("scene_family", ""),
-        "scene_split": admission.get("scene_split", ""),
-        "scene_source": scene_source,
-        "scene_index": scene_index,
-        "world_id": world_id,
-        "scanner_status": scanner_status,
-        "admission_status": admission.get("admission_status", ""),
-        "readiness_status": admission.get("readiness_status", ""),
-        "lanes": admission.get("lanes") or [],
-        "failure_class": admission.get("failure_class", ""),
-        "blocked_reason": admission.get("blocked_reason", ""),
-        "selected_reason": admission.get("selected_reason", ""),
-        "room_count": admission.get("room_count", 0),
-        "waypoint_count": admission.get("waypoint_count", 0),
-        "category_provenance": admission.get("category_provenance", ""),
-        "preview_statuses": admission.get("preview_statuses", {}),
-        "passed_gates": admission.get("passed_gates") or [],
-        "required_gates": admission.get("required_gates") or list(_scanner_required_gates()),
-        "missing_gates": missing_gates,
-        "missing_paths": missing_paths,
-        "candidate_file": admission.get("candidate_file", {}),
-        "primary_path": install_candidate.get("primary_path", ""),
-        "path_status": install_candidate.get("path_status", ""),
-        "install_command": install_candidate.get("install_command", ""),
-        "preview_command": _preview_scanner_command(world_id),
-        "map_build_product_smoke_command": _map_build_product_smoke_command(world_id),
-        "next_action": (
-            "run_preview_then_map_build_product_smoke"
-            if scanner_status == "ready_for_product_smoke"
-            else admission.get("next_action", "run_manual_source_prep_before_scanner")
-        ),
-    }
-
-
-def _scanner_execution_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "source_count": len(sources),
-        "candidate_count": sum(
-            int(source.get("candidate_count") or 0) for source in sources.values()
-        ),
-        "ready_for_product_smoke_count": sum(
-            int(source.get("ready_for_product_smoke_count") or 0) for source in sources.values()
-        ),
-        "blocked_count": sum(int(source.get("blocked_count") or 0) for source in sources.values()),
-        "blocked_source_count": sum(
-            1
-            for source in sources.values()
-            if int(source.get("ready_for_product_smoke_count") or 0) == 0
-            and int(source.get("candidate_count") or 0) > 0
-        ),
-        "ready_source_count": sum(
-            1
-            for source in sources.values()
-            if int(source.get("ready_for_product_smoke_count") or 0) > 0
-        ),
-    }
-
-
-def _next_flow_status(
-    *,
-    readiness_source: dict[str, Any],
-    prep_source: dict[str, Any],
-    scanner_source: dict[str, Any],
-) -> str:
-    if (
-        readiness_source.get("ui_status") == "ready"
-        and readiness_source.get("eval_status") == "complete"
-    ):
-        return "complete"
-    if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
-        return "scanner_ready"
-    prep_status = str(prep_source.get("prep_status") or "")
-    if prep_status.startswith("blocked_"):
-        return prep_status
-    return "needs_scanner_or_selection"
-
-
-def _next_flow_next_action(
-    *,
-    readiness_source: dict[str, Any],
-    selection_source: dict[str, Any],
-    prep_source: dict[str, Any],
-    scanner_source: dict[str, Any],
-) -> str:
-    if (
-        readiness_source.get("ui_status") == "ready"
-        and readiness_source.get("eval_status") == "complete"
-    ):
-        return "none"
-    if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
-        return "run_scanner_plan_for_ready_candidates"
-    selection_action = str(selection_source.get("next_action") or "")
-    if selection_action == "expand_candidate_range":
-        return "expand_candidate_range"
-    prep_action = _source_prep_next_action(str(prep_source.get("prep_status") or ""))
-    if prep_action != "inspect_source_prep":
-        return prep_action
-    if selection_action:
-        return selection_action
-    return "inspect_next_flow_worklist"
-
-
-def _next_flow_missing_gate_counts(source_admission: dict[str, Any]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for row in source_admission.get("admission_rows") or []:
-        if not isinstance(row, dict):
-            continue
-        for gate in row.get("missing_gates") or []:
-            key = str(gate)
-            counts[key] = counts.get(key, 0) + 1
-    return dict(sorted(counts.items()))
-
-
-def _next_flow_artifact_paths(*, output_dir: Path | None) -> dict[str, str]:
-    base = output_dir or Path("output/scene-sampler-readiness")
-    scanner_dir = Path("output/scene-sampler-scanner")
-    return {
-        "readiness_output_dir": str(base),
-        "source_prep": str(base / "scene_sampler_source_prep.json"),
-        "scanner_execution_plan": str(base / "scene_sampler_scanner_execution_plan.json"),
-        "next_flow_worklist": str(base / "scene_sampler_next_flow_worklist.json"),
-        "source_prep_run": str(scanner_dir / "source_prep_run.json"),
-        "scanner_run": str(scanner_dir / "scanner_run.json"),
-    }
-
-
-def _next_flow_scan_world_ids(selection_source: dict[str, Any]) -> list[str]:
-    world_ids: list[str] = []
-    for key in ("next_ui_scan_world_ids", "next_eval_scan_world_ids"):
-        for world_id in selection_source.get(key) or []:
-            raw_world_id = str(world_id or "")
-            if raw_world_id and raw_world_id not in world_ids:
-                world_ids.append(raw_world_id)
-    for candidate in selection_source.get("next_scan_candidates") or []:
-        if not isinstance(candidate, dict):
-            continue
-        raw_world_id = str(candidate.get("world_id") or "")
-        if raw_world_id and raw_world_id not in world_ids:
-            world_ids.append(raw_world_id)
-    return world_ids
-
-
-def _scanner_admission_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    missing_gate_counts: dict[str, int] = {}
-    for source in sources.values():
-        for row in source.get("admission_rows") or []:
-            if not isinstance(row, dict):
-                continue
-            for gate in row.get("missing_gates") or []:
-                key = str(gate)
-                missing_gate_counts[key] = missing_gate_counts.get(key, 0) + 1
-    return {
-        "source_count": len(sources),
-        "admitted_count": sum(
-            int((source.get("summary") or {}).get("admitted_count") or 0)
-            for source in sources.values()
-        ),
-        "blocked_count": sum(
-            int((source.get("summary") or {}).get("blocked_count") or 0)
-            for source in sources.values()
-        ),
-        "rejected_count": sum(
-            int((source.get("summary") or {}).get("rejected_count") or 0)
-            for source in sources.values()
-        ),
-        "missing_gate_counts": dict(sorted(missing_gate_counts.items())),
-    }
-
-
-def _preview_scanner_command(world_id: str) -> str:
-    return (
-        ".venv/bin/python scripts/operator_console/render_scene_previews.py "
-        f"--world {world_id} "
-        "--output-dir output/scene-sampler-scanner/previews "
-        "--work-dir output/scene-sampler-scanner/work"
-    )
-
-
-def _map_build_product_smoke_command(world_id: str) -> str:
-    return (
-        "just run::surface surface=household-world "
-        f"world={world_id} "
-        "backend=mujoco preset=map-build agent_engine=direct-runner "
-        "evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline "
-        f"output_dir=output/scene-sampler-scanner/product-smoke/{_world_id_slug(world_id)}"
-    )
 
 
 def _world_id_slug(world_id: str) -> str:
