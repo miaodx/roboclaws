@@ -512,6 +512,14 @@ logs before choosing the next slice.
   stayed at 62. Proof: focused Molmo subprocess/backend init-state tests, ruff,
   format check, py_compile, and ratchet.
 
+- 2026-06-16: Isaac backend worker delegate imports switched from per-symbol
+  `_impl` aliases to helper-module namespace calls for placement, command,
+  output, scenario, camera-request, semantic-pose-stage, and worker-protocol
+  helpers while preserving worker-private wrapper names and monkeypatch
+  surfaces. Metric: `isaac_lab_backend_worker.py` 3999 -> 3828 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: focused
+  Isaac backend tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
