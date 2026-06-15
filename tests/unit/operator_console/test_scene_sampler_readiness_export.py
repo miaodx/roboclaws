@@ -239,7 +239,10 @@ def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidate
     assert install_candidates[0]["scene_index"] == 1
     assert install_candidates[0]["world_id"] == "molmospaces/ithor/1"
     assert install_candidates[0]["primary_path"].endswith("FloorPlan1_physics.xml")
-    assert "mapping[1]" in install_candidates[0]["install_command"]
+    install_command = install_candidates[0]["install_command"]
+    assert "mapping[1]" in install_command
+    assert "_scene_xml_path_from_ref(scene_ref, get_scenes_root())" in install_command
+    assert "for role in ('base', 'physics', 'ceiling')" in install_command
 
 
 def test_scene_sampler_readiness_export_candidate_index_options_are_sorted_unique() -> None:

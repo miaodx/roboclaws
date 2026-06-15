@@ -1500,12 +1500,15 @@ def _source_prep_operator_commands(
             "command": (
                 ".venv/bin/python - <<'PY'\n"
                 "from molmo_spaces.molmo_spaces_constants import get_scenes\n"
+                "from molmo_spaces.molmo_spaces_constants import get_scenes_root\n"
                 "from molmo_spaces.utils.lazy_loading_utils import "
                 "install_scene_with_objects_and_grasps_from_path\n"
+                f"{_install_command_ref_helper()}"
                 f'mapping = get_scenes("{dataset_name}", "{split}")["{split}"]\n'
-                "scene_index, scene_path = next(\n"
-                "    (index, path) for index, path in sorted(mapping.items()) if path\n"
+                "scene_index, scene_ref = next(\n"
+                "    (index, ref) for index, ref in sorted(mapping.items()) if ref\n"
                 ")\n"
+                "scene_path = _scene_xml_path_from_ref(scene_ref, get_scenes_root())\n"
                 "install_scene_with_objects_and_grasps_from_path(scene_path)\n"
                 "PY"
             ),
@@ -1570,12 +1573,39 @@ def _install_candidate_command(
     return (
         ".venv/bin/python - <<'PY'\n"
         "from molmo_spaces.molmo_spaces_constants import get_scenes\n"
+        "from molmo_spaces.molmo_spaces_constants import get_scenes_root\n"
         "from molmo_spaces.utils.lazy_loading_utils import "
         "install_scene_with_objects_and_grasps_from_path\n"
+        f"{_install_command_ref_helper()}"
         f'mapping = get_scenes("{dataset_name}", "{split}")["{split}"]\n'
-        f"scene_path = mapping[{parsed_index}]\n"
+        f"scene_ref = mapping[{parsed_index}]\n"
+        "scene_path = _scene_xml_path_from_ref(scene_ref, get_scenes_root())\n"
         "install_scene_with_objects_and_grasps_from_path(scene_path)\n"
         "PY"
+    )
+
+
+def _install_command_ref_helper() -> str:
+    return (
+        "from pathlib import Path\n"
+        "\n"
+        "def _scene_xml_path_from_ref(scene_ref, scenes_root):\n"
+        "    if isinstance(scene_ref, dict):\n"
+        "        for role in ('base', 'physics', 'ceiling'):\n"
+        "            raw_path = scene_ref.get(role)\n"
+        "            if raw_path:\n"
+        "                return _scene_path(raw_path, scenes_root)\n"
+        "        for raw_path in scene_ref.values():\n"
+        "            if raw_path:\n"
+        "                return _scene_path(raw_path, scenes_root)\n"
+        "    return _scene_path(scene_ref, scenes_root)\n"
+        "\n"
+        "def _scene_path(raw_path, scenes_root):\n"
+        "    path = Path(str(raw_path))\n"
+        "    if path.is_absolute():\n"
+        "        return path\n"
+        "    return Path(scenes_root) / path\n"
+        "\n"
     )
 
 

@@ -417,11 +417,30 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     ]
     assert ithor["install_candidates"][0]["world_id"] == "molmospaces/ithor/0"
     assert ithor["install_candidates"][0]["primary_path"] == ""
-    assert "mapping[0]" in ithor["install_candidates"][0]["install_command"]
+    install_command = ithor["install_candidates"][0]["install_command"]
+    assert "mapping[0]" in install_command
+    assert "_scene_xml_path_from_ref(scene_ref, get_scenes_root())" in install_command
+    assert "for role in ('base', 'physics', 'ceiling')" in install_command
     assert any(
         command["name"] == "rerun_readiness_after_prep"
         for command in ithor["operator_commands"]
     )
+
+
+def test_scene_sampler_source_prep_install_command_resolves_dict_scene_refs() -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    command = scene_sampler._install_candidate_command(
+        dataset_name="procthor-10k",
+        split="val",
+        scene_index=4,
+    )
+
+    assert 'mapping = get_scenes("procthor-10k", "val")["val"]' in command
+    assert "scene_ref = mapping[4]" in command
+    assert "_scene_xml_path_from_ref(scene_ref, get_scenes_root())" in command
+    assert "for role in ('base', 'physics', 'ceiling')" in command
+    assert "install_scene_with_objects_and_grasps_from_path(scene_path)" in command
 
 
 def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatch) -> None:

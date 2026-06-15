@@ -166,6 +166,12 @@ First slice implemented on 2026-06-15.
   0 ready candidates, 0 executed commands, and per-source
   `no_ready_candidates` summaries for `procthor-10k-val`, `ithor`,
   `procthor-objaverse-val`, and `holodeck-objaverse-val`.
+- Source-prep install snippets now resolve MolmoSpaces `get_scenes(...)` refs
+  the same way the runtime loader does: direct paths and dict refs such as
+  `base` / `physics` / `ceiling` are converted to an installable scene XML
+  path under `get_scenes_root()` before calling
+  `install_scene_with_objects_and_grasps_from_path`. This keeps manual
+  operator prep aligned with source-aware runtime resolution.
 
 Verification run on 2026-06-15:
 
@@ -202,6 +208,9 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_sce
 ./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_scene_sampler_scanner_runner.py -q
 ruff check scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
 .venv/bin/python scripts/operator_console/run_scene_sampler_scanner_plan.py --plan /tmp/roboclaws-scene-sampler-range-0-19/scene_sampler_scanner_execution_plan.json --output /tmp/roboclaws-scene-sampler-range-0-19/scanner_run.json
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-source-prep-snippets --candidate-range 0:19 --no-generated-eval
 ```
 
 Current limits feeding the next Flow:
