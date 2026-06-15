@@ -5035,3 +5035,18 @@ Stop this refactor loop when:
   write/ok proof used a temporary clean worktree containing only this checker
   patch so the unrelated staged `eval-harness` rename was not blessed into the
   baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/unit/agents/test_provider_timing_proxy.py::_proxy_streaming_case(...)`
+  into streaming-upstream setup, proxy config, streamed-response readback, and
+  metric/privacy assertion helpers. The proxy behavior under test is unchanged:
+  streamed chunks still pass through, request/response byte counts are recorded,
+  upstream auth/body forwarding is verified, and privacy findings remain empty.
+  Evidence: `ruff check tests/unit/agents/test_provider_timing_proxy.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 tests/unit/agents/test_provider_timing_proxy.py`
+  passed; `ruff format tests/unit/agents/test_provider_timing_proxy.py` left
+  the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_timing_proxy.py`
+  passed with 2 tests. The quality baseline was refreshed from 49 to 48 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this test
+  split patch so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.

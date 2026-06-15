@@ -684,16 +684,6 @@
         "value": 117
       },
       {
-        "code": "PLR0915",
-        "key": "tests/unit/agents/test_provider_timing_proxy.py|PLR0915|_proxy_streaming_case",
-        "limit": 50,
-        "message": "Too many statements (58 > 50)",
-        "path": "tests/unit/agents/test_provider_timing_proxy.py",
-        "row": 33,
-        "symbol": "_proxy_streaming_case",
-        "value": 58
-      },
-      {
         "code": "C901",
         "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|C901|test_isaac_head_camera_robot_pose_application_uses_shared_pose",
         "limit": 10,

@@ -15,6 +15,9 @@ from roboclaws.agents.provider_timing_proxy import (
 )
 from roboclaws.reports.live_performance import privacy_findings_for_run_dir
 
+REQUEST_BODY = b"secret prompt text"
+RESPONSE_BODY = b"data: first\n\ndata: second\n\n"
+
 
 def test_replace_base_url_origin_preserves_upstream_path() -> None:
     assert (
@@ -31,12 +34,40 @@ def test_provider_timing_proxy_streams_counts_bytes_and_redacts(tmp_path: Path) 
 
 
 async def _proxy_streaming_case(tmp_path: Path) -> None:
-    upstream_stop = asyncio.Event()
     proxy_stop = asyncio.Event()
     upstream_port = free_local_port()
     proxy_port = free_local_port()
     received: dict[str, object] = {}
 
+    upstream_runner = await _start_streaming_upstream(upstream_port, received)
+    proxy_task = asyncio.create_task(
+        serve_provider_timing_proxy(
+            _proxy_config(
+                tmp_path=tmp_path,
+                upstream_port=upstream_port,
+                proxy_port=proxy_port,
+            ),
+            stop_event=proxy_stop,
+        )
+    )
+    await _wait_for_port(proxy_port)
+
+    response_body, first_chunk_seen = await _read_streamed_proxy_response(proxy_port)
+
+    proxy_stop.set()
+    await proxy_task
+    await upstream_runner.cleanup()
+
+    assert response_body == RESPONSE_BODY
+    assert first_chunk_seen
+    _assert_received_request(received)
+    _assert_proxy_metrics(tmp_path)
+
+
+async def _start_streaming_upstream(
+    upstream_port: int,
+    received: dict[str, object],
+) -> web.AppRunner:
     async def handle(request: web.Request) -> web.StreamResponse:
         body = await request.read()
         received["body"] = body.decode("utf-8")
@@ -61,45 +92,47 @@ async def _proxy_streaming_case(tmp_path: Path) -> None:
     await upstream_runner.setup()
     upstream_site = web.TCPSite(upstream_runner, "127.0.0.1", upstream_port)
     await upstream_site.start()
+    return upstream_runner
 
-    proxy_task = asyncio.create_task(
-        serve_provider_timing_proxy(
-            ProviderTimingProxyConfig(
-                upstream_base_url=f"http://127.0.0.1:{upstream_port}/v1",
-                metrics_path=tmp_path / "run" / "provider_request_metrics.jsonl",
-                bind_port=proxy_port,
-                agent_engine="codex-cli",
-                provider_profile="codex-env",
-                model="gpt-5.5",
-            ),
-            stop_event=proxy_stop,
-        )
+
+def _proxy_config(
+    *,
+    tmp_path: Path,
+    upstream_port: int,
+    proxy_port: int,
+) -> ProviderTimingProxyConfig:
+    return ProviderTimingProxyConfig(
+        upstream_base_url=f"http://127.0.0.1:{upstream_port}/v1",
+        metrics_path=tmp_path / "run" / "provider_request_metrics.jsonl",
+        bind_port=proxy_port,
+        agent_engine="codex-cli",
+        provider_profile="codex-env",
+        model="gpt-5.5",
     )
-    await _wait_for_port(proxy_port)
 
+
+async def _read_streamed_proxy_response(proxy_port: int) -> tuple[bytes, bool]:
     first_chunk_at: float | None = None
     chunks: list[bytes] = []
     async with ClientSession() as session:
         async with session.post(
             f"http://127.0.0.1:{proxy_port}/v1/responses",
-            data=b"secret prompt text",
+            data=REQUEST_BODY,
             headers={"authorization": "Bearer sk-test-secret"},
         ) as response:
             async for chunk in response.content.iter_chunked(64):
                 if first_chunk_at is None:
                     first_chunk_at = time.monotonic()
                 chunks.append(chunk)
+    return b"".join(chunks), first_chunk_at is not None
 
-    proxy_stop.set()
-    upstream_stop.set()
-    await proxy_task
-    await upstream_runner.cleanup()
 
-    assert b"".join(chunks) == b"data: first\n\ndata: second\n\n"
-    assert first_chunk_at is not None
+def _assert_received_request(received: dict[str, object]) -> None:
     assert received["body"] == "secret prompt text"
     assert received["authorization"] == "Bearer sk-test-secret"
 
+
+def _assert_proxy_metrics(tmp_path: Path) -> None:
     metrics_path = tmp_path / "run" / "provider_request_metrics.jsonl"
     rows = [json.loads(line) for line in metrics_path.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 1
@@ -110,8 +143,8 @@ async def _proxy_streaming_case(tmp_path: Path) -> None:
     assert row["method"] == "POST"
     assert row["path"] == "/v1/responses"
     assert row["status_code"] == 200
-    assert row["request_body_bytes"] == len(b"secret prompt text")
-    assert row["response_body_bytes"] == len(b"data: first\n\ndata: second\n\n")
+    assert row["request_body_bytes"] == len(REQUEST_BODY)
+    assert row["response_body_bytes"] == len(RESPONSE_BODY)
     assert row["streaming"] is True
     assert row["provider_request_id"] == "safe-upstream-id"
     assert row["duration_s"] >= row["time_to_first_byte_s"] >= 0
