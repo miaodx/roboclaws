@@ -72,8 +72,18 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert candidates["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["ithor"]["blocked_candidate_count"] == 10
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
+    assert selection["summary"]["source_count"] == 4
+    assert "worklist" in selection["summary"]
     assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
+    assert selection["sources"]["procthor-10k-val"][
+        "selection_capacity_status"
+    ] in {"candidate_range_insufficient", "candidate_range_sufficient"}
     assert selection["sources"]["ithor"]["ui_needed_count"] == 3
+    assert selection["sources"]["ithor"]["next_action"] in {
+        "expand_candidate_range",
+        "run_source_prep_before_scanner",
+        "run_scanner_admission",
+    }
     assert source_prep["schema"] == "molmospaces_scene_sampler_source_prep_v1"
     assert source_prep["probe_mode"] == "no_download_no_vlm"
     assert source_prep["download_policy"] == "manual_operator_only"

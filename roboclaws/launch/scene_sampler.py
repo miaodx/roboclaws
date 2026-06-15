@@ -681,18 +681,32 @@ def selection_gap_report(
         ]
         ui_scan_candidates = scanner_candidates[:ui_needed]
         eval_scan_candidates = scanner_candidates[:eval_needed]
+        source_availability_status = (
+            source_payload.get("source_availability") or {}
+        ).get("status")
+        capacity_status = _selection_capacity_status(
+            ui_needed=ui_needed,
+            ui_available=len(ui_scan_candidates),
+            eval_needed=eval_needed,
+            eval_available=len(eval_scan_candidates),
+        )
         sources[source] = {
             "scene_source": source,
             "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
             "ui_ready_count": ui_ready_count,
             "ui_needed_count": ui_needed,
+            "ui_scan_candidate_count": len(ui_scan_candidates),
             "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
             "eval_ready_count": eval_ready_count,
             "eval_needed_count": eval_needed,
+            "eval_scan_candidate_count": len(eval_scan_candidates),
             "status": "complete" if ui_needed == 0 and eval_needed == 0 else "incomplete",
-            "source_availability_status": (
-                source_payload.get("source_availability") or {}
-            ).get("status"),
+            "source_availability_status": source_availability_status,
+            "selection_capacity_status": capacity_status,
+            "next_action": _selection_next_action(
+                capacity_status=capacity_status,
+                source_availability_status=source_availability_status,
+            ),
             "next_ui_scan_world_ids": [item["world_id"] for item in ui_scan_candidates],
             "next_eval_scan_world_ids": [item["world_id"] for item in eval_scan_candidates],
             "next_scan_candidates": [
@@ -710,6 +724,7 @@ def selection_gap_report(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
         "candidate_indices": list(candidate_indices),
+        "summary": _selection_gap_summary(sources),
         "sources": sources,
     }
 
@@ -2000,6 +2015,106 @@ def _unique_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]
         seen.add(key)
         unique.append(candidate)
     return unique
+
+
+def _selection_capacity_status(
+    *,
+    ui_needed: int,
+    ui_available: int,
+    eval_needed: int,
+    eval_available: int,
+) -> str:
+    if ui_needed == 0 and eval_needed == 0:
+        return "complete"
+    if ui_available < ui_needed or eval_available < eval_needed:
+        return "candidate_range_insufficient"
+    return "candidate_range_sufficient"
+
+
+def _selection_next_action(
+    *,
+    capacity_status: str,
+    source_availability_status: Any,
+) -> str:
+    if capacity_status == "complete":
+        return "none"
+    if capacity_status == "candidate_range_insufficient":
+        return "expand_candidate_range"
+    if source_availability_status != "available":
+        return "run_source_prep_before_scanner"
+    return "run_scanner_admission"
+
+
+def _selection_gap_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    worklist = [
+        _selection_source_worklist_item(source)
+        for source in sources.values()
+        if source.get("status") != "complete"
+    ]
+    return {
+        "source_count": len(sources),
+        "complete_source_count": sum(
+            1 for source in sources.values() if source.get("status") == "complete"
+        ),
+        "incomplete_source_count": sum(
+            1 for source in sources.values() if source.get("status") != "complete"
+        ),
+        "ui_needed_count": sum(
+            int(source.get("ui_needed_count") or 0) for source in sources.values()
+        ),
+        "eval_needed_count": sum(
+            int(source.get("eval_needed_count") or 0) for source in sources.values()
+        ),
+        "ui_scan_candidate_count": sum(
+            int(source.get("ui_scan_candidate_count") or 0) for source in sources.values()
+        ),
+        "eval_scan_candidate_count": sum(
+            int(source.get("eval_scan_candidate_count") or 0) for source in sources.values()
+        ),
+        "candidate_range_sufficient_source_count": sum(
+            1
+            for source in sources.values()
+            if source.get("selection_capacity_status") == "candidate_range_sufficient"
+        ),
+        "candidate_range_insufficient_source_count": sum(
+            1
+            for source in sources.values()
+            if source.get("selection_capacity_status") == "candidate_range_insufficient"
+        ),
+        "source_prep_required_count": sum(
+            1
+            for source in sources.values()
+            if source.get("next_action") == "run_source_prep_before_scanner"
+        ),
+        "next_actions": _selection_action_counts(worklist),
+        "worklist": worklist,
+    }
+
+
+def _selection_source_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_source": source.get("scene_source", ""),
+        "next_action": source.get("next_action", ""),
+        "selection_capacity_status": source.get("selection_capacity_status", ""),
+        "source_availability_status": source.get("source_availability_status", ""),
+        "ui_needed_count": int(source.get("ui_needed_count") or 0),
+        "ui_scan_candidate_count": int(source.get("ui_scan_candidate_count") or 0),
+        "eval_needed_count": int(source.get("eval_needed_count") or 0),
+        "eval_scan_candidate_count": int(source.get("eval_scan_candidate_count") or 0),
+        "next_scan_world_ids": [
+            item.get("world_id")
+            for item in source.get("next_scan_candidates") or []
+            if isinstance(item, dict) and item.get("world_id")
+        ],
+    }
+
+
+def _selection_action_counts(worklist: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in worklist:
+        action = str(item.get("next_action") or "unknown")
+        counts[action] = counts.get(action, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _parse_scene_index(raw_value: str, *, world_id: str) -> int:

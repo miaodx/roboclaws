@@ -369,9 +369,34 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     report = selection_gap_report(candidate_indices=tuple(range(10)))
 
     assert report["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
+    assert report["summary"]["ui_needed_count"] == 9
+    assert report["summary"]["eval_needed_count"] == 35
+    assert report["summary"]["candidate_range_sufficient_source_count"] == 3
+    assert report["summary"]["candidate_range_insufficient_source_count"] == 1
+    assert report["summary"]["source_prep_required_count"] == 3
+    assert report["summary"]["next_actions"] == {
+        "expand_candidate_range": 1,
+        "run_source_prep_before_scanner": 3,
+    }
+    assert report["summary"]["worklist"][0] == {
+        "scene_source": "procthor-10k-val",
+        "next_action": "expand_candidate_range",
+        "selection_capacity_status": "candidate_range_insufficient",
+        "source_availability_status": "blocked",
+        "ui_needed_count": 0,
+        "ui_scan_candidate_count": 0,
+        "eval_needed_count": 5,
+        "eval_scan_candidate_count": 2,
+        "next_scan_world_ids": [
+            "molmospaces/procthor-10k-val/6",
+            "molmospaces/procthor-10k-val/8",
+        ],
+    }
     procthor = report["sources"]["procthor-10k-val"]
     assert procthor["ui_needed_count"] == 0
     assert procthor["eval_needed_count"] == 5
+    assert procthor["selection_capacity_status"] == "candidate_range_insufficient"
+    assert procthor["next_action"] == "expand_candidate_range"
     assert procthor["next_ui_scan_world_ids"] == []
     assert procthor["next_eval_scan_world_ids"] == [
         "molmospaces/procthor-10k-val/6",
@@ -382,12 +407,44 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     ithor = report["sources"]["ithor"]
     assert ithor["ui_needed_count"] == 3
     assert ithor["eval_needed_count"] == 10
+    assert ithor["selection_capacity_status"] == "candidate_range_sufficient"
+    assert ithor["next_action"] == "run_source_prep_before_scanner"
     assert ithor["next_ui_scan_world_ids"] == [
         "molmospaces/ithor/0",
         "molmospaces/ithor/1",
         "molmospaces/ithor/2",
     ]
     assert ithor["next_eval_scan_world_ids"][:3] == ithor["next_ui_scan_world_ids"]
+
+
+def test_scene_sampler_selection_gap_report_records_expanded_range_capacity(
+    monkeypatch,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(
+        scene_sampler,
+        "_molmospaces_module_status",
+        lambda: (False, "module_not_importable:molmo_spaces", ""),
+    )
+
+    report = selection_gap_report(candidate_indices=tuple(range(20)))
+
+    assert report["summary"]["candidate_range_insufficient_source_count"] == 0
+    assert report["summary"]["candidate_range_sufficient_source_count"] == 4
+    assert report["summary"]["source_prep_required_count"] == 4
+    assert report["summary"]["next_actions"] == {"run_source_prep_before_scanner": 4}
+    procthor = report["sources"]["procthor-10k-val"]
+    assert procthor["selection_capacity_status"] == "candidate_range_sufficient"
+    assert procthor["next_action"] == "run_source_prep_before_scanner"
+    assert procthor["eval_scan_candidate_count"] == 5
+    assert procthor["next_eval_scan_world_ids"][:5] == [
+        "molmospaces/procthor-10k-val/6",
+        "molmospaces/procthor-10k-val/8",
+        "molmospaces/procthor-10k-val/10",
+        "molmospaces/procthor-10k-val/11",
+        "molmospaces/procthor-10k-val/12",
+    ]
 
 
 def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -> None:

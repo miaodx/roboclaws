@@ -179,6 +179,12 @@ First slice implemented on 2026-06-15.
   and scanner execution summarizes ready/blocked product-smoke candidates.
   The detailed per-candidate rows remain available, but future flows can read
   source/gate/resource status directly from summaries.
+- Selection-gap artifacts now include a next-Flow worklist: per-source
+  `selection_capacity_status`, `next_action`, UI/eval scan-candidate counts,
+  and a top-level worklist/summary. This makes the remaining `procthor-10k-val`,
+  `ithor`, `procthor-objaverse-val`, and `holodeck-objaverse-val` work explicit:
+  expand the candidate range when capacity is insufficient, otherwise run
+  source prep before scanner admission when assets are still blocked.
 
 Verification run on 2026-06-15:
 
@@ -221,6 +227,9 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_sce
 ./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-summary-rollups --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
+ruff check roboclaws/launch/scene_sampler.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-next-flow-worklist --candidate-range 0:19 --no-generated-eval
 ```
 
 Current limits feeding the next Flow:
