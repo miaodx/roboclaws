@@ -504,6 +504,14 @@ logs before choosing the next slice.
   Molmo subprocess/backend init-state tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-16: MolmoSpaces subprocess worker delegate imports switched from
+  per-symbol `_impl` aliases to helper-module namespace imports, preserving
+  worker-private wrapper names while removing import-block hard-ceiling weight.
+  Metric: `molmospaces_subprocess_worker.py` 2272 -> 1811 lines, clearing the
+  2000-line hard ceiling; Ruff complexity stayed at 0 and oversized modules
+  stayed at 62. Proof: focused Molmo subprocess/backend init-state tests, ruff,
+  format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
