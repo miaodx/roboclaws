@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 
-from scripts.operator_console.export_scene_sampler_readiness import export_readiness_artifacts, main
+from scripts.operator_console.export_scene_sampler_readiness import (
+    _candidate_indices,
+    export_readiness_artifacts,
+    main,
+)
 
 
 def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
@@ -96,6 +100,30 @@ def test_scene_sampler_readiness_export_fails_missing_selection_capacity(tmp_pat
     ]
 
 
+def test_scene_sampler_readiness_export_selection_capacity_can_use_expanded_range(
+    tmp_path,
+) -> None:
+    result = export_readiness_artifacts(
+        output_dir=tmp_path,
+        candidate_indices=tuple(range(20)),
+        required_selection_capacity_sources=("procthor-10k-val",),
+    )
+
+    selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
+
+    assert result["status"] == "success"
+    assert result["threshold_failures"] == []
+    assert result["candidate_indices"][0] == 0
+    assert result["candidate_indices"][-1] == 19
+    assert selection["sources"]["procthor-10k-val"]["next_eval_scan_world_ids"][:5] == [
+        "molmospaces/procthor-10k-val/6",
+        "molmospaces/procthor-10k-val/8",
+        "molmospaces/procthor-10k-val/10",
+        "molmospaces/procthor-10k-val/11",
+        "molmospaces/procthor-10k-val/12",
+    ]
+
+
 def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidates_exist(
     tmp_path,
 ) -> None:
@@ -106,6 +134,16 @@ def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidate
 
     assert result["status"] == "success"
     assert result["threshold_failures"] == []
+
+
+def test_scene_sampler_readiness_export_candidate_index_options_are_sorted_unique() -> None:
+    assert _candidate_indices(candidate_indexes=(4, 1), candidate_ranges=("2:3", "3:5")) == (
+        1,
+        2,
+        3,
+        4,
+        5,
+    )
 
 
 def test_scene_sampler_readiness_export_cli_returns_failure_for_unmet_threshold(

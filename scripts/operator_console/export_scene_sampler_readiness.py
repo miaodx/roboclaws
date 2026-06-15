@@ -29,8 +29,13 @@ DEFAULT_OUTPUT_DIR = Path("output/scene-sampler-readiness")
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    candidate_indices = _candidate_indices(
+        candidate_indexes=tuple(args.candidate_indexes),
+        candidate_ranges=tuple(args.candidate_ranges),
+    )
     report = export_readiness_artifacts(
         output_dir=args.output_dir,
+        candidate_indices=candidate_indices,
         write_manifest=not args.no_manifest,
         write_eval_projection=not args.no_eval_projection,
         write_readiness_report=not args.no_readiness_report,
@@ -60,6 +65,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-source-availability", action="store_true")
     parser.add_argument("--no-candidate-readiness", action="store_true")
     parser.add_argument("--no-selection-gaps", action="store_true")
+    parser.add_argument(
+        "--candidate-index",
+        action="append",
+        type=int,
+        dest="candidate_indexes",
+        default=[],
+        metavar="INDEX",
+        help=(
+            "Candidate scene index to include in no-download availability, candidate, "
+            "and selection-gap artifacts. Defaults to 0..9 when no index/range is passed."
+        ),
+    )
+    parser.add_argument(
+        "--candidate-range",
+        action="append",
+        dest="candidate_ranges",
+        default=[],
+        metavar="START:END",
+        help=(
+            "Inclusive candidate scene-index range to include, for example 0:19. "
+            "May be passed multiple times."
+        ),
+    )
     parser.add_argument(
         "--require-ui-supported-source",
         action="append",
@@ -99,6 +127,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def export_readiness_artifacts(
     *,
     output_dir: Path,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
     write_manifest: bool = True,
     write_eval_projection: bool = True,
     write_readiness_report: bool = True,
@@ -113,7 +142,7 @@ def export_readiness_artifacts(
 
     validate_sampler_manifest()
     readiness = readiness_report()
-    selection = selection_gap_report()
+    selection = selection_gap_report(candidate_indices=candidate_indices)
     output_dir.mkdir(parents=True, exist_ok=True)
     artifacts: dict[str, str] = {}
     if write_manifest:
@@ -130,11 +159,17 @@ def export_readiness_artifacts(
         artifacts["readiness_report"] = str(readiness_path)
     if write_source_availability:
         availability_path = output_dir / "scene_sampler_source_availability.json"
-        _write_json(availability_path, source_availability_report())
+        _write_json(
+            availability_path,
+            source_availability_report(candidate_indices=candidate_indices),
+        )
         artifacts["source_availability"] = str(availability_path)
     if write_candidate_readiness:
         candidate_path = output_dir / "scene_sampler_candidate_readiness.json"
-        _write_json(candidate_path, candidate_readiness_report())
+        _write_json(
+            candidate_path,
+            candidate_readiness_report(candidate_indices=candidate_indices),
+        )
         artifacts["candidate_readiness"] = str(candidate_path)
     if write_selection_gaps:
         selection_path = output_dir / "scene_sampler_selection_gaps.json"
@@ -151,6 +186,7 @@ def export_readiness_artifacts(
         "schema": "molmospaces_scene_sampler_readiness_export_v1",
         "status": "failed" if failures else "success",
         "output_dir": str(output_dir),
+        "candidate_indices": list(candidate_indices),
         "artifacts": artifacts,
         "threshold_failures": failures,
     }
@@ -158,6 +194,39 @@ def export_readiness_artifacts(
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _candidate_indices(
+    *,
+    candidate_indexes: tuple[int, ...],
+    candidate_ranges: tuple[str, ...],
+) -> tuple[int, ...]:
+    values: set[int] = set()
+    for index in candidate_indexes:
+        if index < 0:
+            raise ValueError(f"candidate-index must be >= 0, got {index}")
+        values.add(index)
+    for raw_range in candidate_ranges:
+        values.update(_parse_candidate_range(raw_range))
+    if not values:
+        values.update(range(10))
+    return tuple(sorted(values))
+
+
+def _parse_candidate_range(raw_range: str) -> range:
+    try:
+        raw_start, raw_end = raw_range.split(":", 1)
+        start = int(raw_start)
+        end = int(raw_end)
+    except ValueError as exc:
+        raise ValueError(
+            f"candidate-range must be START:END with integer bounds, got {raw_range!r}"
+        ) from exc
+    if start < 0 or end < 0:
+        raise ValueError(f"candidate-range bounds must be >= 0, got {raw_range!r}")
+    if end < start:
+        raise ValueError(f"candidate-range end must be >= start, got {raw_range!r}")
+    return range(start, end + 1)
 
 
 def _threshold_failures(

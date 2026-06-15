@@ -88,6 +88,11 @@ First slice implemented on 2026-06-15.
   `procthor-10k-val` because indices `0..9` only leave two blocked scan
   candidates after the five ready and three rejected rows, while five more
   eval-ready samples are still needed.
+- The exporter supports `--candidate-index` and `--candidate-range START:END`
+  to expand the no-download availability, candidate-readiness, and
+  selection-gap projections before a real scanner run. For example, expanding
+  `procthor-10k-val` to `--candidate-range 0:19` gives enough source-aware
+  candidate ids to cover the current eval-stress gap.
 
 Verification run on 2026-06-15:
 
@@ -174,6 +179,10 @@ Next Flow implementation slices:
      `--require-selection-capacity-source procthor-10k-val` should fail until
      the candidate range expands beyond `0..9` or enough new candidates are
      admitted to cover the remaining eval-stress gap.
+   - Candidate-range mode is available for that expansion. For example,
+     `--candidate-range 0:19 --require-selection-capacity-source procthor-10k-val`
+     should pass the capacity gate while still leaving actual scene admission to
+     later scanner evidence.
 
 2. **`procthor-10k-val` Stress Fill**
    - Scan additional non-contiguous `procthor-10k-val` candidates until ten
