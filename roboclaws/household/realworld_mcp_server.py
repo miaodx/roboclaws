@@ -204,32 +204,24 @@ class RealWorldMolmoCleanupMCPServer:
         )
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         self.runtime_map_prior_source = runtime_map_prior_source
-        if contract is None:
-            scenario = scenario or build_cleanup_scenario()
-            base_contract = base_contract or CleanupBackendSession(scenario)
-            acceptance_config = _public_acceptance_config_from_backend(base_contract)
-            acceptance_config["task_intent"] = self.task_intent
-            if self.task_intent_mode != TASK_INTENT_MODE_DEFAULT:
-                acceptance_config["task_intent_mode"] = self.task_intent_mode
-            contract = RealWorldCleanupContract(
-                base_contract,
-                task_prompt=task_prompt,
-                fixture_hint_mode=fixture_hint_mode,
-                perception_mode=perception_mode,
-                map_bundle_dir=self.map_bundle_dir,
-                runtime_map_prior=runtime_map_prior,
-                map_mode=map_mode,
-                cleanup_profile=cleanup_profile,
-                public_acceptance_config=acceptance_config,
-                visual_grounding_client=visual_grounding_client_from_env(
-                    visual_grounding,
-                    base_url=visual_grounding_base_url,
-                    timeout_s=visual_grounding_timeout_s,
-                ),
-                visual_grounding_pipeline_id=visual_grounding,
-                visual_grounding_artifact_base_dir=self.run_dir,
-                visual_grounding_run_id=f"seed-{scenario.seed if scenario else 'run'}",
-            )
+        contract = _build_realworld_mcp_contract(
+            contract=contract,
+            scenario=scenario,
+            base_contract=base_contract,
+            task_prompt=task_prompt,
+            fixture_hint_mode=fixture_hint_mode,
+            perception_mode=perception_mode,
+            map_bundle_dir=self.map_bundle_dir,
+            runtime_map_prior=runtime_map_prior,
+            map_mode=map_mode,
+            cleanup_profile=cleanup_profile,
+            task_intent=self.task_intent,
+            task_intent_mode=self.task_intent_mode,
+            visual_grounding=visual_grounding,
+            visual_grounding_base_url=visual_grounding_base_url,
+            visual_grounding_timeout_s=visual_grounding_timeout_s,
+            run_dir=self.run_dir,
+        )
         self.contract = contract
         self.base_contract = contract.contract
         backend_name = getattr(contract, "backend_name", None)
@@ -843,6 +835,55 @@ def _complete_semantic_substep_handles(substeps: list[dict[str, Any]]) -> list[s
         if has_complete_semantic_sequence(phases):
             handles.append(str(item.get("object_id") or ""))
     return [handle for handle in handles if handle]
+
+
+def _build_realworld_mcp_contract(
+    *,
+    contract: RealWorldCleanupContract | None,
+    scenario: CleanupScenario | None,
+    base_contract: CleanupBackendSession | None,
+    task_prompt: str,
+    fixture_hint_mode: str,
+    perception_mode: str,
+    map_bundle_dir: Path | None,
+    runtime_map_prior: dict[str, Any] | None,
+    map_mode: str,
+    cleanup_profile: str | None,
+    task_intent: str,
+    task_intent_mode: str,
+    visual_grounding: str,
+    visual_grounding_base_url: str | None,
+    visual_grounding_timeout_s: float | None,
+    run_dir: Path,
+) -> RealWorldCleanupContract:
+    if contract is not None:
+        return contract
+
+    scenario = scenario or build_cleanup_scenario()
+    base_contract = base_contract or CleanupBackendSession(scenario)
+    acceptance_config = _public_acceptance_config_from_backend(base_contract)
+    acceptance_config["task_intent"] = task_intent
+    if task_intent_mode != TASK_INTENT_MODE_DEFAULT:
+        acceptance_config["task_intent_mode"] = task_intent_mode
+    return RealWorldCleanupContract(
+        base_contract,
+        task_prompt=task_prompt,
+        fixture_hint_mode=fixture_hint_mode,
+        perception_mode=perception_mode,
+        map_bundle_dir=map_bundle_dir,
+        runtime_map_prior=runtime_map_prior,
+        map_mode=map_mode,
+        cleanup_profile=cleanup_profile,
+        public_acceptance_config=acceptance_config,
+        visual_grounding_client=visual_grounding_client_from_env(
+            visual_grounding,
+            base_url=visual_grounding_base_url,
+            timeout_s=visual_grounding_timeout_s,
+        ),
+        visual_grounding_pipeline_id=visual_grounding,
+        visual_grounding_artifact_base_dir=run_dir,
+        visual_grounding_run_id=f"seed-{scenario.seed}",
+    )
 
 
 def _compact_visual_grounding_pipeline(pipeline: dict[str, Any]) -> dict[str, Any]:

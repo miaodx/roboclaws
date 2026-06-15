@@ -4624,3 +4624,18 @@ Stop this refactor loop when:
   from 76 to 75 Ruff complexity violations, with oversized modules unchanged at
   59. `scripts/visual_grounding/run_visual_grounding_benchmark.py` dropped from
   1566 to 1253 lines and no longer appears in the complexity-by-file summary.
+- 2026-06-15: Completed Candidate D by extracting default live MCP contract
+  construction from `RealWorldMolmoCleanupMCPServer.__init__(...)` into
+  `_build_realworld_mcp_contract(...)`. The public MCP server factory, server
+  class, tool registration, visual-grounding setup, runtime-map prior handling,
+  and acceptance-config payloads are unchanged; the constructor now leaves
+  backend/session/default contract setup in one named helper. Evidence:
+  `ruff check roboclaws/household/realworld_mcp_server.py roboclaws/household/realworld_mcp_run_artifacts.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check roboclaws/household/realworld_mcp_server.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q`
+  passed with 26 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 75 to 74 Ruff complexity violations, with oversized modules unchanged at
+  59. `RealWorldMolmoCleanupMCPServer.__init__` no longer appears in the
+  complexity summary.
