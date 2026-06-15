@@ -226,6 +226,16 @@ First slice implemented on 2026-06-15.
   run that executes the five currently admitted samples also reports the full
   40-sample target, 35 remaining samples, one partial source, and three blocked
   sources, so a green smoke run is not confused with completed sampler coverage.
+- Readiness export now writes `scene_sampler_next_flow_worklist.json`, a
+  single next-Flow worklist that merges eval projection, selection gaps, source
+  prep, scanner admission, and scanner execution status. It records per-source
+  UI/eval targets and gaps, source-aware next scan world ids, prep/scanner
+  status, missing-resource summaries, missing-gate counts, blocked reason
+  samples, operator command names, and recommended candidate ranges. On this
+  host with candidate range `0:19`, the unified worklist reports all four
+  source targets as `blocked_missing_resources` with `next_action:
+  run_manual_source_prep`, `procthor-10k-val` still needing five eval samples,
+  and the three other source targets each needing three UI and ten eval samples.
 
 Verification run on 2026-06-15:
 
@@ -292,6 +302,9 @@ ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/run_scene_
 ./scripts/dev/run_pytest_standalone.sh tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_models.py -q
 ruff check roboclaws/evals/reports.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_models.py
 just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/roboclaws-scene-sampler-eval-projection-report
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py -q
+ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-next-flow-worklist-artifact --candidate-range 0:19 --no-generated-eval
 ```
 
 Current limits feeding the next Flow:

@@ -28,6 +28,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "generated_eval_suite",
         "manifest",
         "eval_projection",
+        "next_flow_worklist",
         "readiness_report",
         "scanner_admission",
         "scanner_execution_plan",
@@ -38,18 +39,15 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     manifest = json.loads((tmp_path / "scene_sampler_manifest.json").read_text())
     projection = json.loads((tmp_path / "scene_sampler_eval_projection.json").read_text())
     readiness = json.loads((tmp_path / "scene_sampler_readiness_report.json").read_text())
-    availability = json.loads(
-        (tmp_path / "scene_sampler_source_availability.json").read_text()
-    )
+    availability = json.loads((tmp_path / "scene_sampler_source_availability.json").read_text())
     candidates = json.loads((tmp_path / "scene_sampler_candidate_readiness.json").read_text())
     selection = json.loads((tmp_path / "scene_sampler_selection_gaps.json").read_text())
     source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
-    scanner_admission = json.loads(
-        (tmp_path / "scene_sampler_scanner_admission.json").read_text()
-    )
+    scanner_admission = json.loads((tmp_path / "scene_sampler_scanner_admission.json").read_text())
     scanner_execution = json.loads(
         (tmp_path / "scene_sampler_scanner_execution_plan.json").read_text()
     )
+    next_flow = json.loads((tmp_path / "scene_sampler_next_flow_worklist.json").read_text())
     generated_suite = json.loads(
         (tmp_path / "generated_eval/scene_sampler_stress.json").read_text()
     )
@@ -81,9 +79,10 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert selection["summary"]["source_count"] == 4
     assert "worklist" in selection["summary"]
     assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
-    assert selection["sources"]["procthor-10k-val"][
-        "selection_capacity_status"
-    ] in {"candidate_range_insufficient", "candidate_range_sufficient"}
+    assert selection["sources"]["procthor-10k-val"]["selection_capacity_status"] in {
+        "candidate_range_insufficient",
+        "candidate_range_sufficient",
+    }
     assert selection["sources"]["ithor"]["ui_needed_count"] == 3
     assert selection["sources"]["ithor"]["next_action"] in {
         "expand_candidate_range",
@@ -99,15 +98,15 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
         'get_scenes("ithor", "train")'
     )
-    assert source_prep["sources"]["procthor-objaverse-val"][
-        "molmospaces_get_scenes_call"
-    ] == 'get_scenes("procthor-objaverse", "val")'
-    assert source_prep["sources"]["holodeck-objaverse-val"][
-        "molmospaces_get_scenes_call"
-    ] == 'get_scenes("holodeck-objaverse", "val")'
-    assert source_prep["sources"]["procthor-10k-val"][
-        "recommended_candidate_range"
-    ] == "0:19"
+    assert (
+        source_prep["sources"]["procthor-objaverse-val"]["molmospaces_get_scenes_call"]
+        == 'get_scenes("procthor-objaverse", "val")'
+    )
+    assert (
+        source_prep["sources"]["holodeck-objaverse-val"]["molmospaces_get_scenes_call"]
+        == 'get_scenes("holodeck-objaverse", "val")'
+    )
+    assert source_prep["sources"]["procthor-10k-val"]["recommended_candidate_range"] == "0:19"
     assert "molmospaces_scene_version" in source_prep["sources"]["procthor-10k-val"]
     assert source_prep["sources"]["procthor-10k-val"]["scene_index_map_status"] in {
         "available",
@@ -122,16 +121,41 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert scanner_admission["probe_mode"] == "no_download_no_backend_no_vlm"
     assert scanner_admission["summary"]["source_count"] == 4
     assert "missing_gate_counts" in scanner_admission["summary"]
-    assert scanner_admission["sources"]["procthor-10k-val"]["summary"][
-        "admitted_count"
-    ] == 5
+    assert scanner_admission["sources"]["procthor-10k-val"]["summary"]["admitted_count"] == 5
     assert scanner_admission["sources"]["ithor"]["needed_ui_count"] == 3
-    assert scanner_execution["schema"] == (
-        "molmospaces_scene_sampler_scanner_execution_plan_v1"
-    )
+    assert scanner_execution["schema"] == ("molmospaces_scene_sampler_scanner_execution_plan_v1")
     assert scanner_execution["probe_mode"] == "no_download_no_backend_no_vlm"
     assert scanner_execution["summary"]["source_count"] == 4
     assert "ready_for_product_smoke_count" in scanner_execution["summary"]
+    assert next_flow["schema"] == "molmospaces_scene_sampler_next_flow_worklist_v1"
+    assert next_flow["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert next_flow["download_policy"] == "manual_operator_only"
+    assert next_flow["summary"]["source_count"] == 4
+    assert next_flow["summary"]["ui_needed_count"] == 9
+    assert next_flow["summary"]["eval_needed_count"] == 35
+    assert "worklist" in next_flow["summary"]
+    assert result["summary"]["next_flow_worklist"]["source_count"] == 4
+    assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "ready"
+    assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 5
+    assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
+    assert next_flow["sources"]["procthor-10k-val"]["next_action"] in {
+        "expand_candidate_range",
+        "run_manual_source_prep",
+        "run_scanner_plan_for_ready_candidates",
+    }
+    assert next_flow["sources"]["ithor"]["ui_needed_count"] == 3
+    assert next_flow["sources"]["ithor"]["eval_needed_count"] == 10
+    assert next_flow["sources"]["ithor"]["next_action"] in {
+        "run_manual_source_prep",
+        "run_scanner_plan_for_ready_candidates",
+        "expand_candidate_range",
+    }
+    assert next_flow["sources"]["ithor"]["next_scan_world_ids"][:3] == [
+        "molmospaces/ithor/1",
+        "molmospaces/ithor/2",
+        "molmospaces/ithor/3",
+    ]
+    assert next_flow["sources"]["ithor"]["missing_gate_counts"]["source_asset_available"] == 10
     ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
     assert ithor_scanner["world_id"] == "molmospaces/ithor/1"
     assert ithor_scanner["scanner_status"] in {
@@ -146,20 +170,19 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     assert "source_asset_available" in ithor_scanner["required_gates"]
     assert "source_asset_available" in ithor_scanner["missing_gates"]
     assert ithor_scanner["candidate_file"]["source"] == "molmospaces_get_scenes"
-    assert "render_scene_previews.py --world molmospaces/ithor/1" in ithor_scanner[
-        "preview_command"
-    ]
+    assert (
+        "render_scene_previews.py --world molmospaces/ithor/1" in ithor_scanner["preview_command"]
+    )
     assert "world=molmospaces/ithor/1" in ithor_scanner["map_build_product_smoke_command"]
     assert generated_suite == json.loads(
-        (
-            REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json"
-        ).read_text(encoding="utf-8")
+        (REPO_ROOT / "evals/household_world/suites/scene_sampler_stress.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert len(artifacts["generated_eval_samples"]) == 5
     generated_sample = json.loads(
         (
-            tmp_path
-            / "generated_eval/samples/scene_sampler/procthor-10k-val_0_map_build.json"
+            tmp_path / "generated_eval/samples/scene_sampler/procthor-10k-val_0_map_build.json"
         ).read_text(encoding="utf-8")
     )
     committed_sample = json.loads(
@@ -261,12 +284,8 @@ def test_scene_sampler_readiness_export_selection_capacity_passes_when_candidate
         "molmospaces/ithor/2",
         "molmospaces/ithor/3",
     ]
-    assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][0] == (
-        "molmospaces/ithor/1"
-    )
-    assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][-1] == (
-        "molmospaces/ithor/10"
-    )
+    assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][0] == ("molmospaces/ithor/1")
+    assert selection["sources"]["ithor"]["next_eval_scan_world_ids"][-1] == ("molmospaces/ithor/10")
     source_prep = json.loads((tmp_path / "scene_sampler_source_prep.json").read_text())
     install_candidates = source_prep["sources"]["ithor"]["install_candidates"]
     assert install_candidates[0]["scene_index"] == 1

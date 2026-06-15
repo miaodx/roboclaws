@@ -37,8 +37,11 @@ _CURRENT_ALIAS_INDICES: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 7, 9)
 _UI_SELECTED_INDICES: tuple[int, ...] = (0, 2, 9)
 _EVAL_READY_INDICES: tuple[int, ...] = (0, 2, 3, 5, 9)
 _PREVIEW_ROOT = Path(__file__).resolve().parents[1] / "operator_console" / "static" / "previews"
-_LABEL_MANIFEST_PATH = Path(__file__).resolve().parents[2] / "data" / "molmospaces" / (
-    "scene_sampler_room_labels.json"
+_LABEL_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "molmospaces"
+    / ("scene_sampler_room_labels.json")
 )
 
 
@@ -115,9 +118,7 @@ class SceneSamplerRow:
             "waypoint_count": self.waypoint_count,
             "category_provenance": self.category_provenance,
             "category_manifest": self.category_manifest,
-            "preview_assets": [
-                {"view": view, "path": path} for view, path in self.preview_assets
-            ],
+            "preview_assets": [{"view": view, "path": path} for view, path in self.preview_assets],
             "selected_reason": self.selected_reason,
             "blocked_reason": self.blocked_reason,
             "failure_class": self.failure_class,
@@ -249,13 +250,9 @@ def eval_projection_metadata() -> dict[str, Any]:
     for source in SUPPORTED_SCENE_SOURCES:
         ready = [row for row in rows if row.scene_source == source]
         blocked_or_rejected = [
-            row
-            for row in sampler_rows()
-            if row.scene_source == source and row.blocked_reason
+            row for row in sampler_rows() if row.scene_source == source and row.blocked_reason
         ]
-        blocked = [
-            row for row in blocked_or_rejected if row.readiness_status == READINESS_BLOCKED
-        ]
+        blocked = [row for row in blocked_or_rejected if row.readiness_status == READINESS_BLOCKED]
         rejected = [
             row for row in blocked_or_rejected if row.readiness_status == READINESS_REJECTED
         ]
@@ -284,9 +281,7 @@ def eval_projection_metadata() -> dict[str, Any]:
             "blocked_or_rejected_row_count": blocked_or_rejected_row_count,
             "support_status": support_status,
             "status": (
-                "complete"
-                if ready_count == EVAL_TARGET_PER_SCENE_SOURCE
-                else "partial_or_blocked"
+                "complete" if ready_count == EVAL_TARGET_PER_SCENE_SOURCE else "partial_or_blocked"
             ),
             "sample_ids": [eval_sample_id(row) for row in ready],
             "blocked_rows": [row.to_dict() for row in blocked_or_rejected],
@@ -298,23 +293,16 @@ def eval_projection_metadata() -> dict[str, Any]:
         "scene_sources": by_source,
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
-            "target_sample_count": len(SUPPORTED_SCENE_SOURCES)
-            * EVAL_TARGET_PER_SCENE_SOURCE,
+            "target_sample_count": len(SUPPORTED_SCENE_SOURCES) * EVAL_TARGET_PER_SCENE_SOURCE,
             "ready_sample_count": total_ready_count,
             "partial_source_count": sum(
-                1
-                for payload in by_source.values()
-                if payload["support_status"] == "partial"
+                1 for payload in by_source.values() if payload["support_status"] == "partial"
             ),
             "blocked_source_count": sum(
-                1
-                for payload in by_source.values()
-                if payload["support_status"] == "blocked"
+                1 for payload in by_source.values() if payload["support_status"] == "blocked"
             ),
             "complete_source_count": sum(
-                1
-                for payload in by_source.values()
-                if payload["support_status"] == "complete"
+                1 for payload in by_source.values() if payload["support_status"] == "complete"
             ),
             "blocked_row_count": total_blocked_count,
             "rejected_row_count": total_rejected_count,
@@ -430,9 +418,7 @@ def readiness_report() -> dict[str, Any]:
             "scene_split": scene_split,
             "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
             "ui_ready_count": len(ui_rows),
-            "ui_status": (
-                "ready" if len(ui_rows) == UI_TARGET_PER_SCENE_SOURCE else "not_visible"
-            ),
+            "ui_status": ("ready" if len(ui_rows) == UI_TARGET_PER_SCENE_SOURCE else "not_visible"),
             "ui_world_ids": [row.world_id for row in ui_rows],
             "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
             "eval_ready_count": len(eval_rows),
@@ -453,9 +439,7 @@ def readiness_report() -> dict[str, Any]:
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
             "ui_supported_source_count": sum(
-                1
-                for source in SUPPORTED_SCENE_SOURCES
-                if by_source[source]["ui_status"] == "ready"
+                1 for source in SUPPORTED_SCENE_SOURCES if by_source[source]["ui_status"] == "ready"
             ),
             "eval_complete_source_count": sum(
                 1
@@ -676,15 +660,12 @@ def selection_gap_report(
             if (
                 item["readiness_status"] == READINESS_BLOCKED
                 and not item["eval_ready"]
-                and (item.get("candidate_file") or {}).get("status")
-                != "missing_from_index_map"
+                and (item.get("candidate_file") or {}).get("status") != "missing_from_index_map"
             )
         ]
         ui_scan_candidates = scanner_candidates[:ui_needed]
         eval_scan_candidates = scanner_candidates[:eval_needed]
-        source_availability_status = (
-            source_payload.get("source_availability") or {}
-        ).get("status")
+        source_availability_status = (source_payload.get("source_availability") or {}).get("status")
         capacity_status = _selection_capacity_status(
             ui_needed=ui_needed,
             ui_available=len(ui_scan_candidates),
@@ -774,18 +755,10 @@ def source_prep_report(
             "molmospaces_dataset_name": dataset_name,
             "molmospaces_split": split,
             "molmospaces_get_scenes_call": f'get_scenes("{dataset_name}", "{split}")',
-            "molmospaces_scene_version": source_availability.get(
-                "molmospaces_scene_version", ""
-            ),
-            "scene_index_map_status": source_availability.get(
-                "scene_index_map_status", ""
-            ),
-            "scene_index_map_reason": source_availability.get(
-                "scene_index_map_reason", ""
-            ),
-            "scene_index_map_stdout": source_availability.get(
-                "scene_index_map_stdout", ""
-            ),
+            "molmospaces_scene_version": source_availability.get("molmospaces_scene_version", ""),
+            "scene_index_map_status": source_availability.get("scene_index_map_status", ""),
+            "scene_index_map_reason": source_availability.get("scene_index_map_reason", ""),
+            "scene_index_map_stdout": source_availability.get("scene_index_map_stdout", ""),
             "scene_asset_id": source,
             "source_dir": source_availability.get("source_dir", ""),
             "source_dir_available": bool(source_availability.get("source_dir_available")),
@@ -798,17 +771,13 @@ def source_prep_report(
             "missing_resource_count": len(missing_resources),
             "missing_resource_summary": _resource_reason_counts(missing_resources),
             "missing_resources": missing_resources,
-            "next_scan_world_ids": [
-                item.get("world_id") for item in next_scan_candidates
-            ],
+            "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
             "install_candidates": _source_prep_install_candidates(
                 dataset_name=dataset_name,
                 split=split,
                 candidates=next_scan_candidates,
             ),
-            "recommended_candidate_range": f"0:{recommended_end}"
-            if recommended_end >= 0
-            else "",
+            "recommended_candidate_range": f"0:{recommended_end}" if recommended_end >= 0 else "",
             "operator_commands": _source_prep_operator_commands(
                 source=source,
                 dataset_name=dataset_name,
@@ -830,8 +799,7 @@ def source_prep_report(
                 if str(source.get("prep_status", "")).startswith("blocked_")
             ),
             "missing_resource_count": sum(
-                int(source.get("missing_resource_count") or 0)
-                for source in sources.values()
+                int(source.get("missing_resource_count") or 0) for source in sources.values()
             ),
             "missing_resource_summary": _resource_reason_counts(
                 [
@@ -900,6 +868,99 @@ def scanner_execution_plan(
     }
 
 
+def next_flow_worklist_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return one next-Flow worklist across sampler selection, prep, and scanner gates."""
+
+    projection = eval_projection_metadata()
+    readiness = readiness_report()
+    selection = selection_gap_report(candidate_indices=candidate_indices)
+    source_prep = source_prep_report(candidate_indices=candidate_indices)
+    scanner_admission = scanner_admission_report(candidate_indices=candidate_indices)
+    scanner_execution = scanner_execution_plan(candidate_indices=candidate_indices)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_projection = projection["scene_sources"][source]
+        source_readiness = readiness["sources"][source]
+        source_selection = selection["sources"][source]
+        source_prep_payload = source_prep["sources"][source]
+        source_admission = scanner_admission["sources"][source]
+        source_execution = scanner_execution["sources"][source]
+        scanner_ready_world_ids = [
+            item.get("world_id")
+            for item in source_execution.get("candidates") or []
+            if isinstance(item, dict)
+            and item.get("scanner_status") == "ready_for_product_smoke"
+            and item.get("world_id")
+        ]
+        missing_gate_counts = _next_flow_missing_gate_counts(source_admission)
+        next_action = _next_flow_next_action(
+            readiness_source=source_readiness,
+            selection_source=source_selection,
+            prep_source=source_prep_payload,
+            scanner_source=source_execution,
+        )
+        sources[source] = {
+            "scene_source": source,
+            "scene_family": source_prep_payload.get("scene_family", ""),
+            "scene_split": source_prep_payload.get("scene_split", ""),
+            "flow_status": _next_flow_status(
+                readiness_source=source_readiness,
+                prep_source=source_prep_payload,
+                scanner_source=source_execution,
+            ),
+            "next_action": next_action,
+            "ui_target_count": UI_TARGET_PER_SCENE_SOURCE,
+            "ui_ready_count": int(source_readiness.get("ui_ready_count") or 0),
+            "ui_needed_count": int(source_selection.get("ui_needed_count") or 0),
+            "ui_status": source_readiness.get("ui_status", ""),
+            "ui_world_ids": source_readiness.get("ui_world_ids") or [],
+            "eval_target_count": EVAL_TARGET_PER_SCENE_SOURCE,
+            "eval_ready_count": int(source_readiness.get("eval_ready_count") or 0),
+            "eval_needed_count": int(source_selection.get("eval_needed_count") or 0),
+            "eval_status": source_readiness.get("eval_status", ""),
+            "eval_support_status": source_projection.get("support_status", ""),
+            "eval_sample_ids": source_readiness.get("eval_sample_ids") or [],
+            "selection_capacity_status": source_selection.get("selection_capacity_status", ""),
+            "source_availability_status": source_selection.get("source_availability_status", ""),
+            "prep_status": source_prep_payload.get("prep_status", ""),
+            "scanner_candidate_count": int(source_execution.get("candidate_count") or 0),
+            "scanner_ready_candidate_count": int(
+                source_execution.get("ready_for_product_smoke_count") or 0
+            ),
+            "scanner_blocked_candidate_count": int(source_execution.get("blocked_count") or 0),
+            "scanner_ready_world_ids": scanner_ready_world_ids,
+            "next_scan_world_ids": _next_flow_scan_world_ids(source_selection),
+            "missing_resource_count": int(source_prep_payload.get("missing_resource_count") or 0),
+            "missing_resource_summary": source_prep_payload.get("missing_resource_summary") or {},
+            "missing_gate_counts": missing_gate_counts,
+            "blocked_reason_samples": _next_flow_blocked_reason_samples(
+                projection_source=source_projection,
+                prep_source=source_prep_payload,
+                scanner_source=source_execution,
+            ),
+            "operator_command_names": [
+                command.get("name")
+                for command in source_prep_payload.get("operator_commands") or []
+                if isinstance(command, dict) and command.get("name")
+            ],
+            "recommended_candidate_range": source_prep_payload.get(
+                "recommended_candidate_range", ""
+            ),
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_next_flow_worklist_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_backend_no_vlm",
+        "download_policy": "manual_operator_only",
+        "candidate_indices": list(candidate_indices),
+        "summary": _next_flow_summary(sources),
+        "sources": sources,
+    }
+
+
 def scanner_admission_report(
     *,
     candidate_indices: tuple[int, ...] = tuple(range(10)),
@@ -925,8 +986,7 @@ def scanner_admission_report(
             "needed_ui_count": int(source_selection.get("ui_needed_count") or 0),
             "needed_eval_count": int(source_selection.get("eval_needed_count") or 0),
             "next_scan_world_ids": [
-                item.get("world_id")
-                for item in source_selection.get("next_scan_candidates") or []
+                item.get("world_id") for item in source_selection.get("next_scan_candidates") or []
             ],
             "admission_rows": admission_rows,
             "summary": {
@@ -1006,8 +1066,7 @@ def validate_sampler_manifest(manifest: dict[str, Any] | None = None) -> None:
             raise ValueError(f"scene_source {source} exposes fewer than three UI-ready samples")
         if len(ui_ready) > UI_TARGET_PER_SCENE_SOURCE:
             raise ValueError(
-                f"scene_source {source} exposes more than "
-                f"{UI_TARGET_PER_SCENE_SOURCE} UI samples"
+                f"scene_source {source} exposes more than {UI_TARGET_PER_SCENE_SOURCE} UI samples"
             )
         eval_ready = [
             row
@@ -1038,9 +1097,7 @@ def _ready_row(scene_index: int) -> SceneSamplerRow:
     elif not all_views_reviewable:
         rejected_reason = "preview_not_reviewable"
     status = (
-        READINESS_READY
-        if (ui_ready or eval_ready) and not rejected_reason
-        else READINESS_REJECTED
+        READINESS_READY if (ui_ready or eval_ready) and not rejected_reason else READINESS_REJECTED
     )
     lanes: list[str] = []
     if ui_ready and status == READINESS_READY:
@@ -1151,9 +1208,9 @@ def _view_statuses(preview: dict[str, Any]) -> dict[str, str]:
 
 
 def _room_ids(preview: dict[str, Any]) -> tuple[str, ...]:
-    semantic_projection = (
-        ((preview.get("views") or {}).get("map") or {}).get("semantic_projection") or {}
-    )
+    semantic_projection = ((preview.get("views") or {}).get("map") or {}).get(
+        "semantic_projection"
+    ) or {}
     waypoints = semantic_projection.get("projected_waypoints") or []
     return tuple(
         sorted(
@@ -1167,9 +1224,9 @@ def _room_ids(preview: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _waypoint_count(preview: dict[str, Any]) -> int:
-    semantic_projection = (
-        ((preview.get("views") or {}).get("map") or {}).get("semantic_projection") or {}
-    )
+    semantic_projection = ((preview.get("views") or {}).get("map") or {}).get(
+        "semantic_projection"
+    ) or {}
     return int(
         semantic_projection.get("rendered_waypoint_count")
         or len(semantic_projection.get("projected_waypoints") or [])
@@ -1306,17 +1363,13 @@ def _source_availability_summary(
             1 for source in sources.values() if source.get("source_dir_available")
         ),
         "scene_index_map_available_count": sum(
-            1
-            for source in sources.values()
-            if source.get("scene_index_map_status") == "available"
+            1 for source in sources.values() if source.get("scene_index_map_status") == "available"
         ),
         "missing_candidate_count": sum(
-            len(source.get("missing_candidate_indices") or [])
-            for source in sources.values()
+            len(source.get("missing_candidate_indices") or []) for source in sources.values()
         ),
         "invalid_candidate_count": sum(
-            len(source.get("invalid_candidate_indices") or [])
-            for source in sources.values()
+            len(source.get("invalid_candidate_indices") or []) for source in sources.values()
         ),
     }
 
@@ -1353,9 +1406,7 @@ def _molmospaces_scene_index_map(
     try:
         with redirect_stdout(stdout):
             constants = importlib.import_module("molmo_spaces.molmo_spaces_constants")
-            mapping, version = constants.get_scenes(
-                dataset_name, split, return_version=True
-            )
+            mapping, version = constants.get_scenes(dataset_name, split, return_version=True)
     except Exception as exc:  # pragma: no cover - dependency failures vary by host.
         return {
             "source": source,
@@ -1766,9 +1817,7 @@ def _scanner_admission_row(candidate: dict[str, Any]) -> dict[str, Any]:
         **_scanner_admission_row_base(candidate),
         "admission_status": "blocked",
         "lanes": [],
-        "passed_gates": [
-            gate for gate in _scanner_required_gates() if gate not in missing_gates
-        ],
+        "passed_gates": [gate for gate in _scanner_required_gates() if gate not in missing_gates],
         "missing_gates": missing_gates,
         "next_action": _scanner_next_action(candidate, missing_gates=missing_gates),
     }
@@ -1801,8 +1850,7 @@ def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
         missing.append("source_asset_available")
     preview_statuses = candidate.get("preview_statuses")
     if not isinstance(preview_statuses, dict) or not all(
-        _scanner_preview_status_passes(preview_statuses.get(view))
-        for view in _required_views()
+        _scanner_preview_status_passes(preview_statuses.get(view)) for view in _required_views()
     ):
         missing.append("preview_metadata")
     if int(candidate.get("room_count") or 0) < 3:
@@ -1848,13 +1896,9 @@ def _scanner_execution_candidate(
     world_id = str(install_candidate.get("world_id") or "")
     scene_source = str(install_candidate.get("scene_source") or "")
     scene_index = install_candidate.get("scene_index")
-    missing_paths = [
-        str(path) for path in install_candidate.get("missing_paths") or [] if path
-    ]
+    missing_paths = [str(path) for path in install_candidate.get("missing_paths") or [] if path]
     candidate_file_exists = not missing_paths and bool(install_candidate.get("primary_path"))
-    missing_gates = [
-        str(gate) for gate in admission.get("missing_gates") or [] if gate
-    ]
+    missing_gates = [str(gate) for gate in admission.get("missing_gates") or [] if gate]
     scanner_status = (
         "ready_for_product_smoke"
         if candidate_file_exists and "source_asset_available" not in missing_gates
@@ -1904,12 +1948,9 @@ def _scanner_execution_summary(sources: dict[str, dict[str, Any]]) -> dict[str, 
             int(source.get("candidate_count") or 0) for source in sources.values()
         ),
         "ready_for_product_smoke_count": sum(
-            int(source.get("ready_for_product_smoke_count") or 0)
-            for source in sources.values()
+            int(source.get("ready_for_product_smoke_count") or 0) for source in sources.values()
         ),
-        "blocked_count": sum(
-            int(source.get("blocked_count") or 0) for source in sources.values()
-        ),
+        "blocked_count": sum(int(source.get("blocked_count") or 0) for source in sources.values()),
         "blocked_source_count": sum(
             1
             for source in sources.values()
@@ -1921,6 +1962,173 @@ def _scanner_execution_summary(sources: dict[str, dict[str, Any]]) -> dict[str, 
             for source in sources.values()
             if int(source.get("ready_for_product_smoke_count") or 0) > 0
         ),
+    }
+
+
+def _next_flow_status(
+    *,
+    readiness_source: dict[str, Any],
+    prep_source: dict[str, Any],
+    scanner_source: dict[str, Any],
+) -> str:
+    if (
+        readiness_source.get("ui_status") == "ready"
+        and readiness_source.get("eval_status") == "complete"
+    ):
+        return "complete"
+    if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
+        return "scanner_ready"
+    prep_status = str(prep_source.get("prep_status") or "")
+    if prep_status.startswith("blocked_"):
+        return prep_status
+    return "needs_scanner_or_selection"
+
+
+def _next_flow_next_action(
+    *,
+    readiness_source: dict[str, Any],
+    selection_source: dict[str, Any],
+    prep_source: dict[str, Any],
+    scanner_source: dict[str, Any],
+) -> str:
+    if (
+        readiness_source.get("ui_status") == "ready"
+        and readiness_source.get("eval_status") == "complete"
+    ):
+        return "none"
+    if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
+        return "run_scanner_plan_for_ready_candidates"
+    selection_action = str(selection_source.get("next_action") or "")
+    if selection_action == "expand_candidate_range":
+        return "expand_candidate_range"
+    prep_action = _source_prep_next_action(str(prep_source.get("prep_status") or ""))
+    if prep_action != "inspect_source_prep":
+        return prep_action
+    if selection_action:
+        return selection_action
+    return "inspect_next_flow_worklist"
+
+
+def _next_flow_missing_gate_counts(source_admission: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in source_admission.get("admission_rows") or []:
+        if not isinstance(row, dict):
+            continue
+        for gate in row.get("missing_gates") or []:
+            key = str(gate)
+            counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _next_flow_blocked_reason_samples(
+    *,
+    projection_source: dict[str, Any],
+    prep_source: dict[str, Any],
+    scanner_source: dict[str, Any],
+) -> list[str]:
+    reasons: list[str] = []
+    for row in projection_source.get("blocked_rows") or []:
+        if isinstance(row, dict) and row.get("blocked_reason"):
+            reasons.append(str(row["blocked_reason"]))
+    for resource in prep_source.get("missing_resources") or []:
+        if not isinstance(resource, dict):
+            continue
+        reason = str(resource.get("reason") or "")
+        path = str(resource.get("path") or "")
+        if reason and path:
+            reasons.append(f"{reason}: {path}")
+        elif reason:
+            reasons.append(reason)
+    for candidate in scanner_source.get("candidates") or []:
+        if isinstance(candidate, dict) and candidate.get("blocked_reason"):
+            reasons.append(str(candidate["blocked_reason"]))
+    deduped: list[str] = []
+    for reason in reasons:
+        if reason and reason not in deduped:
+            deduped.append(reason)
+        if len(deduped) == 3:
+            break
+    return deduped
+
+
+def _next_flow_scan_world_ids(selection_source: dict[str, Any]) -> list[str]:
+    world_ids: list[str] = []
+    for key in ("next_ui_scan_world_ids", "next_eval_scan_world_ids"):
+        for world_id in selection_source.get(key) or []:
+            raw_world_id = str(world_id or "")
+            if raw_world_id and raw_world_id not in world_ids:
+                world_ids.append(raw_world_id)
+    for candidate in selection_source.get("next_scan_candidates") or []:
+        if not isinstance(candidate, dict):
+            continue
+        raw_world_id = str(candidate.get("world_id") or "")
+        if raw_world_id and raw_world_id not in world_ids:
+            world_ids.append(raw_world_id)
+    return world_ids
+
+
+def _next_flow_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    actionable_sources = [
+        source for source in sources.values() if source.get("next_action") != "none"
+    ]
+    return {
+        "source_count": len(sources),
+        "complete_source_count": sum(
+            1 for source in sources.values() if source.get("flow_status") == "complete"
+        ),
+        "incomplete_source_count": len(actionable_sources),
+        "ui_supported_source_count": sum(
+            1 for source in sources.values() if source.get("ui_status") == "ready"
+        ),
+        "eval_complete_source_count": sum(
+            1 for source in sources.values() if source.get("eval_status") == "complete"
+        ),
+        "ui_needed_count": sum(
+            int(source.get("ui_needed_count") or 0) for source in sources.values()
+        ),
+        "eval_needed_count": sum(
+            int(source.get("eval_needed_count") or 0) for source in sources.values()
+        ),
+        "scanner_ready_source_count": sum(
+            1
+            for source in sources.values()
+            if int(source.get("scanner_ready_candidate_count") or 0) > 0
+        ),
+        "source_prep_required_count": sum(
+            1
+            for source in sources.values()
+            if str(source.get("next_action") or "")
+            in {
+                "run_manual_source_prep",
+                "configure_or_install_molmospaces_scene_root",
+                "install_repo_dev_runtime",
+            }
+        ),
+        "next_actions": _next_flow_action_counts(actionable_sources),
+        "worklist": [_next_flow_worklist_item(source) for source in actionable_sources],
+    }
+
+
+def _next_flow_action_counts(sources: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for source in sources:
+        action = str(source.get("next_action") or "unknown")
+        counts[action] = counts.get(action, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _next_flow_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_source": source.get("scene_source", ""),
+        "flow_status": source.get("flow_status", ""),
+        "next_action": source.get("next_action", ""),
+        "ui_needed_count": int(source.get("ui_needed_count") or 0),
+        "eval_needed_count": int(source.get("eval_needed_count") or 0),
+        "selection_capacity_status": source.get("selection_capacity_status", ""),
+        "prep_status": source.get("prep_status", ""),
+        "scanner_ready_candidate_count": int(source.get("scanner_ready_candidate_count") or 0),
+        "next_scan_world_ids": source.get("next_scan_world_ids") or [],
+        "recommended_candidate_range": source.get("recommended_candidate_range", ""),
     }
 
 
@@ -1994,9 +2202,7 @@ def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
         "category_provenance": row.category_provenance,
         "category_manifest": row.category_manifest,
         "preview_statuses": preview_statuses,
-        "preview_assets": [
-            {"view": view, "path": path} for view, path in row.preview_assets
-        ],
+        "preview_assets": [{"view": view, "path": path} for view, path in row.preview_assets],
         "selected_reason": row.selected_reason,
         "blocked_reason": row.blocked_reason,
         "failure_class": row.failure_class,
@@ -2108,9 +2314,7 @@ def _candidate_readiness_summary(sources: dict[str, dict[str, Any]]) -> dict[str
             1 for source in sources.values() if source.get("eval_status") == "complete"
         ),
         "blocked_source_count": sum(
-            1
-            for source in sources.values()
-            if int(source.get("blocked_candidate_count") or 0) > 0
+            1 for source in sources.values() if int(source.get("blocked_candidate_count") or 0) > 0
         ),
     }
 

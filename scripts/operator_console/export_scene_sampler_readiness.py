@@ -20,6 +20,7 @@ from roboclaws.launch.scene_sampler import (  # noqa: E402
     eval_sample_payload,
     eval_sampler_rows,
     eval_suite_payload,
+    next_flow_worklist_report,
     readiness_report,
     sampler_manifest,
     scanner_admission_report,
@@ -51,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         write_source_prep=not args.no_source_prep,
         write_scanner_admission=not args.no_scanner_admission,
         write_scanner_execution_plan=not args.no_scanner_execution_plan,
+        write_next_flow_worklist=not args.no_next_flow_worklist,
         write_generated_eval=not args.no_generated_eval,
         required_ui_supported_sources=tuple(args.require_ui_supported_sources),
         required_eval_complete_sources=tuple(args.require_eval_complete_sources),
@@ -79,6 +81,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-source-prep", action="store_true")
     parser.add_argument("--no-scanner-admission", action="store_true")
     parser.add_argument("--no-scanner-execution-plan", action="store_true")
+    parser.add_argument("--no-next-flow-worklist", action="store_true")
     parser.add_argument("--no-generated-eval", action="store_true")
     parser.add_argument(
         "--candidate-index",
@@ -163,6 +166,7 @@ def export_readiness_artifacts(
     write_source_prep: bool = True,
     write_scanner_admission: bool = True,
     write_scanner_execution_plan: bool = True,
+    write_next_flow_worklist: bool = True,
     write_generated_eval: bool = True,
     required_ui_supported_sources: tuple[str, ...] = (),
     required_eval_complete_sources: tuple[str, ...] = (),
@@ -187,9 +191,7 @@ def export_readiness_artifacts(
         else None
     )
     source_prep = (
-        source_prep_report(candidate_indices=candidate_indices)
-        if write_source_prep
-        else None
+        source_prep_report(candidate_indices=candidate_indices) if write_source_prep else None
     )
     scanner_admission = (
         scanner_admission_report(candidate_indices=candidate_indices)
@@ -237,6 +239,15 @@ def export_readiness_artifacts(
         scanner_execution_path = output_dir / "scene_sampler_scanner_execution_plan.json"
         _write_json(scanner_execution_path, scanner_execution or {})
         artifacts["scanner_execution_plan"] = str(scanner_execution_path)
+    next_flow_worklist = (
+        next_flow_worklist_report(candidate_indices=candidate_indices)
+        if write_next_flow_worklist
+        else None
+    )
+    if write_next_flow_worklist:
+        next_flow_worklist_path = output_dir / "scene_sampler_next_flow_worklist.json"
+        _write_json(next_flow_worklist_path, next_flow_worklist or {})
+        artifacts["next_flow_worklist"] = str(next_flow_worklist_path)
     if write_generated_eval:
         generated_eval_dir = output_dir / "generated_eval"
         generated_samples_dir = generated_eval_dir / "samples" / "scene_sampler"
@@ -277,6 +288,7 @@ def export_readiness_artifacts(
             source_prep=source_prep,
             scanner_admission=scanner_admission,
             scanner_execution=scanner_execution,
+            next_flow_worklist=next_flow_worklist,
         ),
         "threshold_failures": failures,
     }
@@ -297,13 +309,12 @@ def _export_summary(
     source_prep: dict[str, Any] | None,
     scanner_admission: dict[str, Any] | None,
     scanner_execution: dict[str, Any] | None,
+    next_flow_worklist: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
         "supported_scene_sources": manifest.get("supported_scene_sources", []),
         "ui_world_ids": (manifest.get("projections") or {}).get("ui_world_ids", []),
-        "eval_sample_ids": (manifest.get("projections") or {}).get(
-            "eval_sample_ids", []
-        ),
+        "eval_sample_ids": (manifest.get("projections") or {}).get("eval_sample_ids", []),
         "eval_projection": projection.get("summary", {}),
         "readiness": readiness.get("summary", {}),
         "source_availability": (availability or {}).get("summary", {}),
@@ -312,6 +323,7 @@ def _export_summary(
         "source_prep": (source_prep or {}).get("summary", {}),
         "scanner_admission": (scanner_admission or {}).get("summary", {}),
         "scanner_execution": (scanner_execution or {}).get("summary", {}),
+        "next_flow_worklist": (next_flow_worklist or {}).get("summary", {}),
     }
 
 
