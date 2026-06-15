@@ -119,6 +119,12 @@ logs before choosing the next slice.
   `scene_sampler.py`, and one launch test. Proof: focused scene-sampler/eval
   tests, ruff, format check, and ratchet.
 
+- 2026-06-16: Scene-sampler readiness export script split payload construction,
+  artifact writes, generated eval emission, summary assembly, and threshold
+  checks into focused helpers. Metric: 25 -> 21 complexity rows; oversized
+  modules unchanged at 62. Proof: focused scene-sampler/eval tests, ruff,
+  format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
