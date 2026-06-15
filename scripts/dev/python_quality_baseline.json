@@ -58,7 +58,7 @@
         "path": "roboclaws/household/scene_camera_comparison.py"
       },
       {
-        "lines": 846,
+        "lines": 841,
         "max_module_lines": 800,
         "path": "roboclaws/household/semantic_timeline.py"
       },
@@ -417,26 +417,6 @@
         "row": 5547,
         "symbol": "_inspection_waypoints_from_bundle_projection",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/household/semantic_timeline.py|C901|semantic_substeps",
-        "limit": 10,
-        "message": "`semantic_substeps` is too complex (14 > 10)",
-        "path": "roboclaws/household/semantic_timeline.py",
-        "row": 420,
-        "symbol": "semantic_substeps",
-        "value": 14
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/household/semantic_timeline.py|PLR0912|semantic_substeps",
-        "limit": 12,
-        "message": "Too many branches (13 > 12)",
-        "path": "roboclaws/household/semantic_timeline.py",
-        "row": 420,
-        "symbol": "semantic_substeps",
-        "value": 13
       },
       {
         "code": "C901",

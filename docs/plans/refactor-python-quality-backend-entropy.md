@@ -4779,3 +4779,18 @@ Stop this refactor loop when:
   broader `ruff check --select C901,PLR0912,PLR0915` over the scene-camera test
   file still reports an existing oversized report-rendering test unrelated to
   this slice.
+- 2026-06-15: Continued the semantic-timeline residual by extracting active
+  object context advancement from
+  `roboclaws/household/semantic_timeline.py::semantic_substeps(...)` and pruning
+  an unused adjacent-navigation helper. Semantic substep grouping, phase names,
+  source/target receptacle fields, visual-candidate phase mapping, primitive
+  evidence consumers, and report/checker payloads remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/semantic_timeline.py`
+  passed; `ruff check roboclaws/household/semantic_timeline.py` passed;
+  `ruff format --check roboclaws/household/semantic_timeline.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmo_semantic_cleanup_loop.py tests/unit/molmo_cleanup/test_molmo_planner_primitive_executor.py tests/unit/molmo_cleanup/test_molmo_planner_probe_primitive_executor.py tests/contract/reports/test_molmo_cleanup_artifact_report.py`
+  passed with 27 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 63 to 61 Ruff complexity violations, with oversized modules unchanged at
+  59, and `roboclaws/household/semantic_timeline.py` dropped from 846 to 841
+  lines.
