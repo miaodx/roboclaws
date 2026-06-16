@@ -239,8 +239,8 @@ def _assert_scene_sampler_projection_summary(projection: dict[str, object]) -> N
         "blocked_source_count": 0,
         "complete_source_count": 2,
         "blocked_row_count": 0,
-        "rejected_row_count": 40,
-        "blocked_or_rejected_row_count": 40,
+        "rejected_row_count": 59,
+        "blocked_or_rejected_row_count": 59,
         "remaining_sample_count": 20,
     }
 
@@ -281,11 +281,22 @@ def _assert_rejected_ithor_projection_source(source_projection: dict[str, object
     assert source_projection["partial_gap_count"] == 10
     assert source_projection["needed_count"] == 10
     assert source_projection["blocked_count"] == 0
-    assert source_projection["rejected_count"] == 12
-    assert source_projection["blocked_or_rejected_row_count"] == 12
+    assert source_projection["rejected_count"] == 21
+    assert source_projection["blocked_or_rejected_row_count"] == 21
     assert source_projection["support_status"] == "rejected"
     assert source_projection["status"] == "rejected"
-    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == set(range(1, 13))
+    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == {
+        *range(1, 13),
+        209,
+        210,
+        211,
+        303,
+        305,
+        404,
+        406,
+        408,
+        411,
+    }
     assert all(
         row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
     )
@@ -300,11 +311,23 @@ def _assert_rejected_holodeck_projection_source(source_projection: dict[str, obj
     assert source_projection["partial_gap_count"] == 10
     assert source_projection["needed_count"] == 10
     assert source_projection["blocked_count"] == 0
-    assert source_projection["rejected_count"] == 20
-    assert source_projection["blocked_or_rejected_row_count"] == 20
+    assert source_projection["rejected_count"] == 30
+    assert source_projection["blocked_or_rejected_row_count"] == 30
     assert source_projection["support_status"] == "rejected"
     assert source_projection["status"] == "rejected"
-    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == set(range(20))
+    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == {
+        *range(20),
+        71,
+        106,
+        157,
+        173,
+        280,
+        292,
+        323,
+        349,
+        360,
+        396,
+    }
     assert all(
         row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
     )
@@ -408,7 +431,18 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
     assert ithor["ui_ready_count"] == 0
     assert ithor["eval_status"] == "partial_or_blocked"
     assert ithor["eval_ready_count"] == 0
-    assert {row["scene_index"] for row in ithor["blocked_rows"]} == set(range(1, 13))
+    assert {row["scene_index"] for row in ithor["blocked_rows"]} == {
+        *range(1, 13),
+        209,
+        210,
+        211,
+        303,
+        305,
+        404,
+        406,
+        408,
+        411,
+    }
     assert all(row["failure_class"] == "map_actionability_failure" for row in ithor["blocked_rows"])
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
@@ -416,7 +450,19 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
     assert holodeck["ui_ready_count"] == 0
     assert holodeck["eval_status"] == "partial_or_blocked"
     assert holodeck["eval_ready_count"] == 0
-    assert {row["scene_index"] for row in holodeck["blocked_rows"]} == set(range(20))
+    assert {row["scene_index"] for row in holodeck["blocked_rows"]} == {
+        *range(20),
+        71,
+        106,
+        157,
+        173,
+        280,
+        292,
+        323,
+        349,
+        360,
+        396,
+    }
     assert all(
         row["failure_class"] == "map_actionability_failure" for row in holodeck["blocked_rows"]
     )
@@ -476,10 +522,10 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     assert report["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert report["summary"] == {
         "source_count": 4,
-        "candidate_count": 61,
+        "candidate_count": 80,
         "ready_candidate_count": 20,
         "blocked_candidate_count": 1,
-        "rejected_candidate_count": 40,
+        "rejected_candidate_count": 59,
         "ui_ready_count": 6,
         "ui_needed_count": 6,
         "eval_ready_count": 20,
@@ -512,23 +558,35 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
 
     ithor = report["sources"]["ithor"]
     assert ithor["blocked_candidate_count"] == 1
-    assert ithor["rejected_candidate_count"] == 12
+    assert ithor["rejected_candidate_count"] == 21
     assert ithor["candidates"][0]["world_id"] == "molmospaces/ithor/0"
     assert ithor["candidates"][0]["failure_class"] == "environment_blocked"
     assert {
         item["scene_index"]
         for item in ithor["candidates"]
         if item["readiness_status"] == READINESS_REJECTED
-    } == set(range(1, 13))
+    } == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 209, 210, 211, 303, 305, 404, 406, 408, 411}
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["blocked_candidate_count"] == 0
-    assert holodeck["rejected_candidate_count"] == 20
+    assert holodeck["rejected_candidate_count"] == 30
     assert {
         item["scene_index"]
         for item in holodeck["candidates"]
         if item["readiness_status"] == READINESS_REJECTED
-    } == set(range(20))
+    } == {
+        *range(20),
+        71,
+        106,
+        157,
+        173,
+        280,
+        292,
+        323,
+        349,
+        360,
+        396,
+    }
 
 
 def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
@@ -597,7 +655,19 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     assert holodeck["next_action"] == "do_not_scan_without_new_human_curation"
     assert holodeck["next_ui_scan_world_ids"] == []
     assert holodeck["next_eval_scan_world_ids"] == []
-    assert holodeck["rejected_candidate_indices"] == list(range(20))
+    assert holodeck["rejected_candidate_indices"] == [
+        *range(20),
+        71,
+        106,
+        157,
+        173,
+        280,
+        292,
+        323,
+        349,
+        360,
+        396,
+    ]
 
 
 def test_scene_sampler_selection_gap_report_records_expanded_range_capacity(
@@ -639,7 +709,10 @@ def test_scene_sampler_selection_gap_marks_ithor_rejected_when_assets_are_visibl
     assert ithor["next_action"] == "do_not_scan_without_new_human_curation"
     assert ithor["next_ui_scan_world_ids"] == []
     assert ithor["next_eval_scan_world_ids"] == []
-    assert ithor["rejected_candidate_indices"] == list(range(1, 13))
+    rejected_ithor = set(ithor["rejected_candidate_indices"])
+    assert set(range(1, 13)).issubset(rejected_ithor)
+    assert {209, 210, 211, 303, 305}.issubset(rejected_ithor)
+    assert {404, 406, 408, 411}.issubset(rejected_ithor)
 
     prep = source_prep_report(candidate_indices=tuple(range(13)))
     assert prep["sources"]["ithor"]["prep_status"] in {
@@ -674,9 +747,13 @@ def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> Non
     ithor = report["sources"]["ithor"]
     assert ithor["profile_status"] == "metadata_worklist_ready"
     assert ithor["next_action"] == "metadata_first_human_curation"
-    assert ithor["known_rejected_indices"] == list(range(1, 13))
+    assert set(range(1, 13)).issubset(ithor["known_rejected_indices"])
+    assert {209, 210, 211, 303, 305}.issubset(ithor["known_rejected_indices"])
+    assert {404, 406, 408, 411}.issubset(ithor["known_rejected_indices"])
     assert ithor["metadata_worklist_candidate_count"] == 10
-    assert all(index not in range(1, 13) for index in ithor["metadata_worklist_indices"])
+    assert all(
+        index not in ithor["known_rejected_indices"] for index in ithor["metadata_worklist_indices"]
+    )
     assert ithor["metadata_worklist_world_ids"][0].startswith("molmospaces/ithor/")
     assert ithor["metadata_worklist_candidates"][0]["admission_effect"] == "none_profile_only"
     assert "candidate_file" in ithor["metadata_worklist_candidates"][0]
@@ -684,11 +761,36 @@ def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> Non
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["profile_status"] == "metadata_worklist_ready"
     assert holodeck["next_action"] == "metadata_first_human_curation"
-    assert holodeck["known_rejected_indices"] == list(range(20))
+    assert set(range(20)).issubset(holodeck["known_rejected_indices"])
+    assert {71, 106, 157, 173, 280, 292, 323, 349, 360, 396}.issubset(
+        holodeck["known_rejected_indices"]
+    )
     assert holodeck["metadata_worklist_candidate_count"] == 10
-    assert min(holodeck["metadata_worklist_indices"]) >= 20
+    assert all(
+        index not in holodeck["known_rejected_indices"]
+        for index in holodeck["metadata_worklist_indices"]
+    )
     assert holodeck["metadata_worklist_world_ids"][0].startswith(
         "molmospaces/holodeck-objaverse-val/"
+    )
+
+
+def test_scene_sampler_candidate_profile_does_not_reoffer_failed_preview_candidates() -> None:
+    report = candidate_profile_report(candidate_indices=(404, 406, 408, 411))
+
+    ithor = report["sources"]["ithor"]
+    assert {404, 406, 408, 411}.issubset(ithor["known_rejected_indices"])
+    assert {404, 406, 408, 411}.isdisjoint(ithor["metadata_worklist_indices"])
+
+    failed = {
+        candidate["scene_index"]: candidate
+        for candidate in ithor["candidates"]
+        if candidate["scene_index"] in {404, 406, 408, 411}
+    }
+    assert failed[404]["known_blocked_reason"] == "missing_public_inspection_waypoints"
+    assert all(
+        candidate["next_action"] == "do_not_scan_without_gate_change_or_new_curation"
+        for candidate in failed.values()
     )
 
 
@@ -1133,7 +1235,7 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
     assert report["probe_mode"] == "no_download_no_backend_no_vlm"
     assert report["summary"]["admitted_count"] == 20
     assert report["summary"]["blocked_count"] == 3
-    assert report["summary"]["rejected_count"] == 40
+    assert report["summary"]["rejected_count"] == 59
     assert report["summary"]["missing_gate_counts"]["source_asset_available"] == 3
     assert report["summary"]["missing_gate_counts"]["preview_metadata"] == 3
     procthor = report["sources"]["procthor-10k-val"]

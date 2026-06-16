@@ -1305,9 +1305,9 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
     ui_ready = scene_index in source_ui_indices(source)
     eval_ready = scene_index in source_eval_indices(source)
     rejected_reason = str((metadata or {}).get("blocked_reason") or "")
-    if room_count < 3:
+    if room_count < 3 and not rejected_reason:
         rejected_reason = "fewer_than_three_public_navigation_areas"
-    elif not all_views_reviewable:
+    elif not all_views_reviewable and not rejected_reason:
         rejected_reason = "preview_not_reviewable"
     status = (
         READINESS_READY if (ui_ready or eval_ready) and not rejected_reason else READINESS_REJECTED

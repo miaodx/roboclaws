@@ -9,7 +9,7 @@
       "scene_sources": {
         "holodeck-objaverse-val": {
           "blocked_count": 0,
-          "blocked_or_rejected_row_count": 20,
+          "blocked_or_rejected_row_count": 30,
           "blocked_rows": [
             {
               "backend": "mujoco",
@@ -790,12 +790,402 @@
               "selected_reason": "fewer_than_three_public_navigation_areas",
               "waypoint_count": 2,
               "world_id": "molmospaces/holodeck-objaverse-val/19"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-71-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-71-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-71-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-71-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 71,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/71"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-106-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-106-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-106-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-106-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 106,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/106"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-157-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-157-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-157-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-157-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 157,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/157"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-173-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-173-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-173-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-173-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 173,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/173"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-280-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-280-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-280-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-280-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 280,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/280"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-292-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-292-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-292-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-292-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 292,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/292"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-323-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-323-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-323-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-323-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 323,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/323"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-349-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-349-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-349-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-349-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 349,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/349"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-360-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-360-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-360-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-360-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 360,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/360"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-396-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-396-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-396-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-holodeck-objaverse-val-396-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "holodeck-objaverse",
+              "scene_index": 396,
+              "scene_source": "holodeck-objaverse-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/holodeck-objaverse-val/396"
             }
           ],
           "needed_count": 10,
           "partial_gap_count": 10,
           "ready_count": 0,
-          "rejected_count": 20,
+          "rejected_count": 30,
           "sample_ids": [],
           "status": "rejected",
           "support_status": "rejected",
@@ -803,7 +1193,7 @@
         },
         "ithor": {
           "blocked_count": 0,
-          "blocked_or_rejected_row_count": 12,
+          "blocked_or_rejected_row_count": 21,
           "blocked_rows": [
             {
               "backend": "mujoco",
@@ -1272,12 +1662,363 @@
               "selected_reason": "fewer_than_three_public_navigation_areas",
               "waypoint_count": 2,
               "world_id": "molmospaces/ithor/12"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-209-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-209-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-209-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-209-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "ithor",
+              "scene_index": 209,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/ithor/209"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-210-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-210-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-210-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-210-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "ithor",
+              "scene_index": 210,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/ithor/210"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-211-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-211-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-211-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-211-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "ithor",
+              "scene_index": 211,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/ithor/211"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-303-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-303-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-303-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-303-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "ithor",
+              "scene_index": 303,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/ithor/303"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.1,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-305-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-305-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-305-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-305-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 1,
+              "scene_family": "ithor",
+              "scene_index": 305,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 2,
+              "world_id": "molmospaces/ithor/305"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "missing_public_inspection_waypoints",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-404-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-404-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-404-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-404-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "ithor",
+              "scene_index": 404,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "missing_public_inspection_waypoints",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/ithor/404"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "missing_public_inspection_waypoints",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-406-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-406-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-406-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-406-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "ithor",
+              "scene_index": 406,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "missing_public_inspection_waypoints",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/ithor/406"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "missing_public_inspection_waypoints",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-408-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-408-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-408-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-408-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "ithor",
+              "scene_index": 408,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "missing_public_inspection_waypoints",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/ithor/408"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "missing_public_inspection_waypoints",
+              "category_manifest": "",
+              "category_provenance": "source_metadata",
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "",
+              "preview_assets": [
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-411-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-411-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-411-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "output/scene-sampler-scanner/previews/molmospaces-ithor-411-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "ithor",
+              "scene_index": 411,
+              "scene_source": "ithor",
+              "scene_split": "not_applicable",
+              "selected_reason": "missing_public_inspection_waypoints",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/ithor/411"
             }
           ],
           "needed_count": 10,
           "partial_gap_count": 10,
           "ready_count": 0,
-          "rejected_count": 12,
+          "rejected_count": 21,
           "sample_ids": [],
           "status": "rejected",
           "support_status": "rejected",
@@ -1879,13 +2620,13 @@
         "ui_target_per_scene_source": 3
       },
       "summary": {
-        "blocked_or_rejected_row_count": 40,
+        "blocked_or_rejected_row_count": 59,
         "blocked_row_count": 0,
         "blocked_source_count": 0,
         "complete_source_count": 2,
         "partial_source_count": 0,
         "ready_sample_count": 20,
-        "rejected_row_count": 40,
+        "rejected_row_count": 59,
         "rejected_source_count": 2,
         "remaining_sample_count": 20,
         "source_count": 4,
