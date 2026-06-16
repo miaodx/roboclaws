@@ -782,6 +782,13 @@ logs before choosing the next slice.
   server, and cleanup-checker contract tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-17: B1 Map 12 runtime-bundle review-manifest validation split into
+  header, label, shared-area, and explicit-policy helper families while
+  preserving existing manifest error text and runtime compiler behavior.
+  Metric: ratchet 18 -> 15 complexity rows; oversized modules unchanged at
+  66. Proof: B1 runtime-bundle contract tests, B1 operator-preview tests,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -799,5 +806,8 @@ logs before choosing the next slice.
 - Runtime Metric Map payload assembly is owned by
   `realworld_runtime_map_contract.py`; reopen only if the realworld contract
   facade starts rebuilding observed-object or static-map payload internals.
+- B1 runtime-bundle review-manifest validation is split into focused helper
+  families; reopen only if `review_manifest_errors` regains ratchet rows or
+  false-green review-gate behavior.
 - Completed report-section extraction is partial evidence, not a reason to
   treat `report.py` as done; the active plan still owns the hard-ceiling split.

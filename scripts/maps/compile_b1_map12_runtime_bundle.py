@@ -180,6 +180,38 @@ def review_manifest_errors(
     review_manifest_path: Path,
 ) -> list[str]:
     errors: list[str] = []
+    errors.extend(
+        _review_manifest_header_errors(
+            payload,
+            map_bundle=map_bundle,
+            scene_root=scene_root,
+            review_manifest_path=review_manifest_path,
+        )
+    )
+    labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
+    if not labels:
+        errors.append("labels must not be empty")
+        return errors
+    label_review = _review_manifest_label_review(labels)
+    errors.extend(label_review["errors"])
+    errors.extend(
+        _shared_accepted_label_errors(
+            labels,
+            accepted_signatures=label_review["accepted_signatures"],
+            accepted_map_areas=label_review["accepted_map_areas"],
+        )
+    )
+    return errors
+
+
+def _review_manifest_header_errors(
+    payload: dict[str, Any],
+    *,
+    map_bundle: Path,
+    scene_root: Path,
+    review_manifest_path: Path,
+) -> list[str]:
+    errors = []
     if payload.get("schema") != B1_MAP12_ALIGNMENT_REVIEW_SCHEMA:
         errors.append(f"schema must be {B1_MAP12_ALIGNMENT_REVIEW_SCHEMA}")
     source_assets = (
@@ -191,48 +223,84 @@ def review_manifest_errors(
         errors.append("source_assets.scene_root must match --scene-root")
     if not Path(review_manifest_path).is_file():
         errors.append(f"review manifest missing: {review_manifest_path}")
-    labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
-    if not labels:
-        errors.append("labels must not be empty")
+    return errors
+
+
+def _review_manifest_label_review(labels: list[Any]) -> dict[str, Any]:
+    errors = []
     seen_label_ids: set[str] = set()
     accepted_signatures: dict[str, list[str]] = defaultdict(list)
     accepted_map_areas: dict[str, list[str]] = defaultdict(list)
     for index, raw_label in enumerate(labels, start=1):
         label = raw_label if isinstance(raw_label, dict) else {}
         label_id = str(label.get("label_id") or "")
-        if not label_id:
-            errors.append(f"labels[{index}] missing label_id")
-            label_id = f"labels[{index}]"
-        if label_id in seen_label_ids:
-            errors.append(f"duplicate label_id: {label_id}")
-        seen_label_ids.add(label_id)
-        status = str(label.get("review_status") or "")
-        if status not in RUNTIME_LABEL_STATUSES | REVIEW_ONLY_STATUSES:
-            errors.append(f"label {label_id} has unsupported review_status {status!r}")
-        geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
-        points = _geometry_points(geometry)
-        if status == ACCEPTED_REVIEW_STATUS:
-            if not str(label.get("scene_partition_id") or ""):
-                errors.append(f"accepted label {label_id} missing scene_partition_id")
-            if not str(label.get("map_area_id") or ""):
-                errors.append(f"accepted label {label_id} missing map_area_id")
-            if geometry.get("type") != "map_polygon":
-                errors.append(f"accepted label {label_id} geometry.type must be map_polygon")
-            if str(geometry.get("frame_id") or "") != "map":
-                errors.append(f"accepted label {label_id} geometry.frame_id must be map")
-            if len(points) < 3:
-                errors.append(f"accepted label {label_id} needs at least three map points")
+        label_id = _review_manifest_label_id(
+            label_id,
+            index=index,
+            seen_label_ids=seen_label_ids,
+            errors=errors,
+        )
+        label_result = _review_manifest_label_errors(label, label_id=label_id)
+        errors.extend(label_result["errors"])
+        if label_result["status"] == ACCEPTED_REVIEW_STATUS:
+            points = label_result["points"]
             accepted_signatures[_polygon_signature(points)].append(label_id)
             accepted_map_areas[str(label.get("map_area_id") or "")].append(label_id)
+    return {
+        "errors": errors,
+        "accepted_signatures": accepted_signatures,
+        "accepted_map_areas": accepted_map_areas,
+    }
+
+
+def _review_manifest_label_id(
+    label_id: str,
+    *,
+    index: int,
+    seen_label_ids: set[str],
+    errors: list[str],
+) -> str:
+    if not label_id:
+        errors.append(f"labels[{index}] missing label_id")
+        label_id = f"labels[{index}]"
+    if label_id in seen_label_ids:
+        errors.append(f"duplicate label_id: {label_id}")
+    seen_label_ids.add(label_id)
+    return label_id
+
+
+def _review_manifest_label_errors(label: dict[str, Any], *, label_id: str) -> dict[str, Any]:
+    errors = []
+    status = str(label.get("review_status") or "")
+    if status not in RUNTIME_LABEL_STATUSES | REVIEW_ONLY_STATUSES:
+        errors.append(f"label {label_id} has unsupported review_status {status!r}")
+    geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
+    points = _geometry_points(geometry)
+    if status == ACCEPTED_REVIEW_STATUS:
+        if not str(label.get("scene_partition_id") or ""):
+            errors.append(f"accepted label {label_id} missing scene_partition_id")
+        if not str(label.get("map_area_id") or ""):
+            errors.append(f"accepted label {label_id} missing map_area_id")
+        if geometry.get("type") != "map_polygon":
+            errors.append(f"accepted label {label_id} geometry.type must be map_polygon")
+        if str(geometry.get("frame_id") or "") != "map":
+            errors.append(f"accepted label {label_id} geometry.frame_id must be map")
+        if len(points) < 3:
+            errors.append(f"accepted label {label_id} needs at least three map points")
+    return {"errors": errors, "status": status, "points": points}
+
+
+def _shared_accepted_label_errors(
+    labels: list[Any],
+    *,
+    accepted_signatures: dict[str, list[str]],
+    accepted_map_areas: dict[str, list[str]],
+) -> list[str]:
+    errors = []
     for signature, label_ids in accepted_signatures.items():
         if not signature or len(label_ids) < 2:
             continue
-        policies = {
-            str(label.get("shared_area_policy") or "")
-            for label in labels
-            if str(label.get("label_id") or "") in label_ids
-        }
-        if not policies <= EXPLICIT_SHARED_AREA_POLICIES or not policies:
+        if not _accepted_labels_have_explicit_shared_policy(labels, label_ids):
             errors.append(
                 "accepted labels share geometry without shared_area_policy=composite_area: "
                 + ", ".join(label_ids)
@@ -240,17 +308,24 @@ def review_manifest_errors(
     for area_id, label_ids in accepted_map_areas.items():
         if not area_id or len(label_ids) < 2:
             continue
-        policies = {
-            str(label.get("shared_area_policy") or "")
-            for label in labels
-            if str(label.get("label_id") or "") in label_ids
-        }
-        if not policies <= EXPLICIT_SHARED_AREA_POLICIES or not policies:
+        if not _accepted_labels_have_explicit_shared_policy(labels, label_ids):
             errors.append(
                 "accepted labels share map_area_id without shared_area_policy=composite_area: "
                 + ", ".join(label_ids)
             )
     return errors
+
+
+def _accepted_labels_have_explicit_shared_policy(
+    labels: list[Any],
+    label_ids: list[str],
+) -> bool:
+    policies = {
+        str(label.get("shared_area_policy") or "")
+        for label in labels
+        if isinstance(label, dict) and str(label.get("label_id") or "") in label_ids
+    }
+    return bool(policies) and policies <= EXPLICIT_SHARED_AREA_POLICIES
 
 
 def runtime_labels_from_review(
@@ -309,8 +384,7 @@ def review_validation_summary(
         for label in payload.get("labels") or []
         if isinstance(label, dict)
         and (
-            str(label.get("review_status") or "") == ACCEPTED_REVIEW_STATUS
-            or include_draft_labels
+            str(label.get("review_status") or "") == ACCEPTED_REVIEW_STATUS or include_draft_labels
         )
     ]
     return {

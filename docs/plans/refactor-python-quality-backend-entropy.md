@@ -21,15 +21,15 @@ Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.p
 --summary --top 40` on 2026-06-17. Treat this as a planning snapshot, not proof
 of a clean checkpoint; refresh before the next execution slice.
 
-- 18 Ruff complexity violations and 66 oversized modules in the current
-  checkout. The new production/shared rows versus the earlier 2026-06-17
-  snapshot are now classified under B1 Map 12 / preview tooling, especially
-  `scripts/maps/compile_b1_map12_runtime_bundle.py` and
-  `scripts/operator_console/render_scene_previews.py`; keep them with
+- 15 Ruff complexity violations and 66 oversized modules in the current
+  checkout. Candidate D's runtime-bundle review gate row is cleared; remaining
+  B1 Map 12 / preview complexity is in
+  `scripts/maps/render_b1_map12_label_tool.py` and
+  `scripts/operator_console/render_scene_previews.py`. Keep those rows with
   candidate D unless they survive as unowned drift. The oversized count
-  increased by one because `scene_sampler_scanner.py` absorbed
-  scanner-admission row assembly and crossed the 800-line target, while
-  staying below the warning band.
+  remains 66 because `scene_sampler_scanner.py` absorbed scanner-admission row
+  assembly and crossed the 800-line target, while staying below the warning
+  band.
 - The prior dirty-worktree scene-sampler drift is now below the hard ceiling:
   `roboclaws/launch/scene_sampler.py` was 3070 lines before the scene-only
   prefilter split, 2607 lines after that split, 2241 lines after the
@@ -316,16 +316,15 @@ branching without changing public launch, report, or grader contracts.
 
 Severity: P2, promoted to P1 if it blocks B1 map alignment proof or hides a
 false-green review gate. Current rows include
-`scripts/maps/compile_b1_map12_runtime_bundle.py::review_manifest_errors`,
 `scripts/maps/render_b1_map12_label_tool.py::semantic_map_layers_from_semantics`,
 `validate_label_draft_manifest`, and
 `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 Owning architecture layers: Worlds / Scenes, Backend Runtimes / Environment
-Primitives, and Artifacts, reports, and eval suites. Treat the runtime-bundle
-row as the highest-priority D item because it carries C901, PLR0912, and
-PLR0915 violations in one review gate. Prefer manifest-review result objects
-or small validation families over splitting one long function into anonymous
-helpers.
+Primitives, and Artifacts, reports, and eval suites. The
+`compile_b1_map12_runtime_bundle.py::review_manifest_errors` row is cleared;
+do not reopen unless the runtime-bundle review gate regains C901 / PLR0912 /
+PLR0915 drift. Prefer manifest/layer review result objects or small validation
+families over splitting one long function into anonymous helpers.
 
 ### E: Behavior-Test Fixture Builders
 
@@ -388,6 +387,9 @@ plus ratchet.
   lives in `RealWorldCleanupContract`; reopen only if the facade starts
   rebuilding Runtime Metric Map payload internals instead of delegating to
   `realworld_runtime_map_contract.py`.
+- B1 Map 12 runtime-bundle review-manifest validation complexity is cleared;
+  reopen only if `compile_b1_map12_runtime_bundle.py::review_manifest_errors`
+  regains ratchet rows or false-green review-gate drift.
 
 ## Ponytail Audit Triage
 
