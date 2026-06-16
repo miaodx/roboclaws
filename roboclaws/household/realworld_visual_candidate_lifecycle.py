@@ -4,7 +4,11 @@ import copy
 from collections.abc import Callable
 from typing import Any
 
-from roboclaws.household import realworld_contract_projection, realworld_visual_candidates
+from roboclaws.household import (
+    realworld_contract_projection,
+    realworld_runtime_map_targets,
+    realworld_visual_candidates,
+)
 from roboclaws.household.visual_scan_guidance import visual_evidence_recovery_hint
 
 MINIMAL_MAP_MODE = "minimal"
@@ -194,7 +198,11 @@ def normalized_visual_candidate(
     target_fixture_id = str(candidate.get("target_fixture_id") or "")
     target_resolution_source = "model_declared_target_fixture"
     if not target_fixture_id:
-        target_fixture_id = contract._resolve_runtime_anchor_target_fixture_id(category)
+        target_fixture_id = realworld_runtime_map_targets.resolve_runtime_anchor_target_fixture_id(
+            contract,
+            category,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+        )
         if target_fixture_id:
             target_resolution_source = "runtime_metric_map_public_semantic_anchor"
     target_fixture = contract._fixtures.get(
@@ -467,9 +475,11 @@ def target_plausibility_for_candidate(
         "name": category,
         "support_estimate": {"fixture_id": ""},
     }
-    public_target = contract.target_fixture_for_detection(
+    public_target = realworld_runtime_map_targets.target_fixture_for_detection(
+        contract,
         pseudo_detection,
         contract.fixture_hints(),
+        minimal_map_mode=MINIMAL_MAP_MODE,
     )
     expected = str((public_target or {}).get("fixture_id") or "")
     return {

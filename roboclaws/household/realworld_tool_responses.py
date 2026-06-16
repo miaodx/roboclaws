@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from roboclaws.household import realworld_runtime_map_targets
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 
 
@@ -11,7 +12,6 @@ class ToolResponseContract(Protocol):
 
     def _ok(self, tool: str, **payload: Any) -> dict[str, Any]: ...
     def _error(self, tool: str, error_reason: str, **payload: Any) -> dict[str, Any]: ...
-    def _public_fixture_reference_id(self, fixture_id: str) -> str: ...
 
 
 def public_fixture_response_id(
@@ -25,7 +25,11 @@ def public_fixture_response_id(
         return internal_fixture_id
     if requested_fixture_id.startswith("anchor_"):
         return requested_fixture_id
-    return contract._public_fixture_reference_id(internal_fixture_id)
+    return realworld_runtime_map_targets.public_fixture_reference_id(
+        contract,
+        internal_fixture_id,
+        minimal_map_mode=minimal_map_mode,
+    )
 
 
 def public_manipulation_response(

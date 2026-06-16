@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from roboclaws.household import realworld_contract_projection, realworld_runtime_map_contract
+from roboclaws.household import (
+    realworld_contract_projection,
+    realworld_runtime_map_contract,
+    realworld_runtime_map_targets,
+)
 from roboclaws.maps.bundle import validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
 
@@ -132,7 +136,7 @@ def init_runtime_state(target: Any, runtime_map_prior: dict[str, Any] | None) ->
     )
     target._public_anchor_ids_by_private_fixture_id = {}
     target._generated_inspection_waypoints = {}
-    target._seed_public_fixture_anchor_ids_from_prior_anchors()
+    realworld_runtime_map_targets.seed_public_fixture_anchor_ids_from_prior_anchors(target)
     target._camera_yaw_offset_deg = 0.0
     target._camera_pitch_offset_deg = 0.0
     target._camera_adjustment_events = []

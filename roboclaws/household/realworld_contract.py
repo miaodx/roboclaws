@@ -12,6 +12,7 @@ from roboclaws.household import (
     realworld_contract_projection,
     realworld_done_readiness,
     realworld_runtime_map_contract,
+    realworld_runtime_map_targets,
     realworld_tool_responses,
     realworld_visual_candidate_declarations,
     realworld_visual_candidate_lifecycle,
@@ -55,7 +56,6 @@ from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 REAL_ROBOT_MAP_BUNDLE_SCHEMA = "real_robot_map_bundle_v1"
 RUNTIME_METRIC_MAP_SCHEMA = "runtime_metric_map_v1"
-TARGET_SEARCH_SUMMARY_SCHEMA = "target_search_summary_v1"
 INSPECTION_OBSERVATION_SCHEMA = "target_inspection_observation_v1"
 CLEANUP_WORKLIST_SCHEMA = "cleanup_worklist_v1"
 CLEANUP_POLICY_TRACE_SCHEMA = "cleanup_policy_trace_v1"
@@ -96,22 +96,6 @@ VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS = (
 )
 VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY = (
     realworld_visual_candidates.VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY
-)
-TARGET_ACTIONABILITY_QUERY_UNMATCHED = "query_unmatched"
-TARGET_ACTIONABILITY_VISIBLE_ONLY = "visible_only"
-TARGET_ACTIONABILITY_ANCHOR_UNBOUND = "anchor_unbound"
-TARGET_ACTIONABILITY_UNREACHABLE = "unreachable"
-TARGET_ACTIONABILITY_NEEDS_OBSERVE = "needs_observe"
-TARGET_ACTIONABILITY_ACTIONABLE = "actionable"
-TARGET_ACTIONABILITY_STATUSES = frozenset(
-    {
-        TARGET_ACTIONABILITY_QUERY_UNMATCHED,
-        TARGET_ACTIONABILITY_VISIBLE_ONLY,
-        TARGET_ACTIONABILITY_ANCHOR_UNBOUND,
-        TARGET_ACTIONABILITY_UNREACHABLE,
-        TARGET_ACTIONABILITY_NEEDS_OBSERVE,
-        TARGET_ACTIONABILITY_ACTIONABLE,
-    }
 )
 CANDIDATE_STATE_SEMANTIC = realworld_visual_candidates.CANDIDATE_STATE_SEMANTIC
 CANDIDATE_STATE_VISUAL_SCAN_REQUIRED = (
@@ -318,15 +302,18 @@ class RealWorldCleanupContract:
         if self.map_mode == MINIMAL_MAP_MODE:
             return {
                 str(item["fixture_id"]): dict(item)
-                for item in self._public_runtime_fixture_candidates()
+                for item in realworld_runtime_map_targets.public_runtime_fixture_candidates(
+                    self,
+                    assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+                )
             }
         return {fixture_id: dict(fixture) for fixture_id, fixture in self._fixtures.items()}
 
     def internal_fixture_id_for_public_reference(self, fixture_id: str | None) -> str | None:
-        if fixture_id is None:
-            return None
-        resolved = self._internal_fixture_id_for_public_anchor(str(fixture_id))
-        return resolved or str(fixture_id)
+        return realworld_runtime_map_targets.internal_fixture_id_for_public_reference(
+            self,
+            fixture_id,
+        )
 
     def _minimal_metric_map(self) -> dict[str, Any]:
         source = (
@@ -820,7 +807,11 @@ class RealWorldCleanupContract:
         if waypoint is None:
             return self._error("observe", "missing_waypoint")
         self._observed_waypoint_ids.add(str(waypoint["waypoint_id"]))
-        self._seed_public_fixture_anchor_ids_for_waypoint(waypoint)
+        realworld_runtime_map_targets.seed_public_fixture_anchor_ids_for_waypoint(
+            self,
+            waypoint,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+        )
         if self.perception_mode in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}:
             raw_observation = self._record_raw_fpv_observation(
                 waypoint,
@@ -1572,512 +1563,6 @@ class RealWorldCleanupContract:
             assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
 
-    def _runtime_target_candidates(
-        self,
-        *,
-        public_semantic_anchors: list[dict[str, Any]],
-        observed_objects: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        candidates: list[dict[str, Any]] = []
-        seen: set[str] = set()
-
-        for waypoint in self._public_navigation_waypoints():
-            candidate = self._target_candidate_from_waypoint(waypoint)
-            candidate_id = str(candidate.get("candidate_id") or "")
-            if candidate_id and candidate_id not in seen:
-                candidates.append(candidate)
-                seen.add(candidate_id)
-
-        for anchor in public_semantic_anchors:
-            candidate = self._target_candidate_from_anchor(anchor)
-            candidate_id = str(candidate.get("candidate_id") or "")
-            if candidate_id and candidate_id not in seen:
-                candidates.append(candidate)
-                seen.add(candidate_id)
-
-        for observed in observed_objects:
-            candidate = self._target_candidate_from_observed_object(observed)
-            candidate_id = str(candidate.get("candidate_id") or "")
-            if candidate_id and candidate_id not in seen:
-                candidates.append(candidate)
-                seen.add(candidate_id)
-
-        for candidate in candidates:
-            _assert_no_forbidden_agent_view_keys(candidate)
-        return candidates
-
-    def _target_candidate_from_waypoint(self, waypoint: dict[str, Any]) -> dict[str, Any]:
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        visited = waypoint_id in self._observed_waypoint_ids
-        actionability = (
-            TARGET_ACTIONABILITY_ACTIONABLE if visited else TARGET_ACTIONABILITY_NEEDS_OBSERVE
-        )
-        candidate = {
-            "candidate_id": f"target_candidate_waypoint_{_safe_anchor_id(waypoint_id)}",
-            "candidate_type": _target_candidate_type_for_waypoint(waypoint),
-            "query": str(waypoint.get("label") or waypoint_id),
-            "label": str(waypoint.get("label") or waypoint_id),
-            "category": "inspection_area",
-            "room_id": str(waypoint.get("room_id") or ""),
-            "room_label": str(waypoint.get("room_label") or ""),
-            "aliases": [str(item) for item in waypoint.get("aliases") or []],
-            "evidence_lane": self._target_candidate_evidence_lane(),
-            "producer_type": str(
-                (waypoint.get("candidate_provenance") or {}).get("source")
-                or waypoint.get("waypoint_source")
-                or "public_metric_map"
-            ),
-            "producer_id": str(waypoint.get("waypoint_source") or "public_metric_map"),
-            "source_observation_id": self._observation_id_for_waypoint(waypoint_id)
-            if visited
-            else "",
-            "waypoint_id": waypoint_id,
-            "pose": self._waypoint_pose(waypoint),
-            "waypoint_source": str(waypoint.get("waypoint_source") or ""),
-            "verified_navigation": True,
-            "actionability": actionability,
-            "target_actionability_status": actionability,
-            "confidence": 1.0 if visited else 0.72,
-            "rank": int((waypoint.get("candidate_provenance") or {}).get("candidate_index") or 0),
-            "visited": visited,
-            "inspection_budget": self._candidate_inspection_budget(waypoint_id),
-            "rejection_reason": "" if visited else "needs_observe_from_public_waypoint",
-            "provenance": dict(waypoint.get("candidate_provenance") or {}),
-        }
-        if waypoint.get("source_target_candidate_id"):
-            candidate["source_target_candidate_id"] = str(waypoint["source_target_candidate_id"])
-        if waypoint.get("source_observation_id"):
-            candidate["source_observation_id"] = str(
-                candidate.get("source_observation_id") or waypoint.get("source_observation_id")
-            )
-        _assert_no_forbidden_agent_view_keys(candidate)
-        return candidate
-
-    def _target_candidate_from_anchor(self, anchor: dict[str, Any]) -> dict[str, Any]:
-        anchor_id = str(anchor.get("anchor_id") or "")
-        waypoint_id = str(anchor.get("waypoint_id") or "")
-        verified_navigation = bool(waypoint_id and self._waypoint_by_id(waypoint_id) is not None)
-        actionability = (
-            TARGET_ACTIONABILITY_ACTIONABLE
-            if verified_navigation
-            else TARGET_ACTIONABILITY_ANCHOR_UNBOUND
-        )
-        candidate = {
-            "candidate_id": f"target_candidate_anchor_{_safe_anchor_id(anchor_id)}",
-            "candidate_type": "public_semantic_anchor",
-            "query": str(anchor.get("label") or anchor.get("category") or anchor_id),
-            "label": str(anchor.get("label") or anchor_id),
-            "category": str(anchor.get("category") or ""),
-            "anchor_id": anchor_id,
-            "anchor_type": str(anchor.get("anchor_type") or ""),
-            "room_id": str(anchor.get("room_id") or ""),
-            "room_label": str(anchor.get("room_label") or ""),
-            "aliases": [str(item) for item in anchor.get("aliases") or []],
-            "evidence_lane": self._target_candidate_evidence_lane(),
-            "producer_type": str(anchor.get("producer_type") or ""),
-            "producer_id": str(anchor.get("producer_id") or ""),
-            "source_observation_id": str(anchor.get("source_observation_id") or ""),
-            "waypoint_id": waypoint_id,
-            "pose": dict(anchor.get("pose") or {}),
-            "verified_navigation": verified_navigation,
-            "affordances": list(anchor.get("affordances") or []),
-            "actionability": actionability,
-            "target_actionability_status": actionability,
-            "confidence": _float_or_zero(anchor.get("confidence")),
-            "rank": 0,
-            "visited": waypoint_id in self._observed_waypoint_ids,
-            "inspection_budget": self._candidate_inspection_budget(waypoint_id),
-            "rejection_reason": "" if verified_navigation else "anchor_missing_verified_waypoint",
-        }
-        _assert_no_forbidden_agent_view_keys(candidate)
-        return candidate
-
-    def _target_candidate_from_observed_object(self, observed: dict[str, Any]) -> dict[str, Any]:
-        object_id = str(observed.get("object_id") or "")
-        source_status = str(
-            observed.get("actionability_status") or observed.get("actionability") or ""
-        )
-        candidate_state = str(observed.get("candidate_state") or "")
-        if source_status == "actionable" or observed.get("actionability") == "actionable":
-            actionability = TARGET_ACTIONABILITY_ACTIONABLE
-            rejection_reason = ""
-        elif candidate_state == CANDIDATE_STATE_VISUAL_SCAN_REQUIRED:
-            actionability = TARGET_ACTIONABILITY_VISIBLE_ONLY
-            rejection_reason = "visual_evidence_not_reviewable"
-        elif source_status in {"needs_clarification", "needs_confirm"}:
-            actionability = TARGET_ACTIONABILITY_VISIBLE_ONLY
-            rejection_reason = source_status
-        elif observed.get("freshness") == "prior":
-            actionability = TARGET_ACTIONABILITY_NEEDS_OBSERVE
-            rejection_reason = "prior_requires_current_observation"
-        else:
-            actionability = TARGET_ACTIONABILITY_NEEDS_OBSERVE
-            rejection_reason = source_status or "needs_fresh_observation"
-        candidate = {
-            "candidate_id": f"target_candidate_object_{_safe_anchor_id(object_id)}",
-            "candidate_type": "observed_object",
-            "query": str(observed.get("category") or object_id),
-            "label": str(observed.get("category") or object_id),
-            "category": str(observed.get("category") or ""),
-            "object_id": object_id,
-            "evidence_lane": self._target_candidate_evidence_lane(),
-            "producer_type": str(observed.get("producer_type") or ""),
-            "producer_id": str(observed.get("producer_id") or ""),
-            "source_observation_id": str(observed.get("source_observation_id") or ""),
-            "waypoint_id": str(observed.get("waypoint_id") or ""),
-            "source_fixture_id": str(observed.get("source_fixture_id") or ""),
-            "candidate_fixture_id": str(observed.get("candidate_fixture_id") or ""),
-            "visual_grounding_evidence": dict(observed.get("visual_grounding_evidence") or {}),
-            "verified_navigation": actionability == TARGET_ACTIONABILITY_ACTIONABLE,
-            "actionability": actionability,
-            "target_actionability_status": actionability,
-            "source_actionability_status": source_status,
-            "candidate_state": candidate_state,
-            "confidence": _float_or_zero(observed.get("confidence")),
-            "rank": 0,
-            "visited": bool(observed.get("source_observation_id")),
-            "inspection_budget": self._candidate_inspection_budget(
-                str(observed.get("waypoint_id") or "")
-            ),
-            "rejection_reason": rejection_reason,
-        }
-        generated = self._generated_inspection_waypoint_for_object(object_id)
-        if generated:
-            candidate["generated_inspection_waypoint_id"] = str(generated.get("waypoint_id") or "")
-            candidate["generated_inspection_candidate"] = {
-                key: generated[key]
-                for key in (
-                    "waypoint_id",
-                    "label",
-                    "waypoint_source",
-                    "source_observation_id",
-                    "verified_navigation",
-                )
-                if key in generated
-            }
-        _assert_no_forbidden_agent_view_keys(candidate)
-        return candidate
-
-    def _target_search_summary(self, target_candidates: list[dict[str, Any]]) -> dict[str, Any]:
-        actionability_counts: dict[str, int] = {}
-        for candidate in target_candidates:
-            actionability = str(candidate.get("target_actionability_status") or "")
-            actionability_counts[actionability] = actionability_counts.get(actionability, 0) + 1
-        visited_waypoints = sorted(self._observed_waypoint_ids)
-        summary = {
-            "schema": TARGET_SEARCH_SUMMARY_SCHEMA,
-            "candidate_count": len(target_candidates),
-            "actionability_counts": actionability_counts,
-            "viewpoint_budget": {
-                "total_public_waypoints": len(self._public_navigation_waypoints()),
-                "visited_waypoint_count": len(visited_waypoints),
-                "unvisited_waypoint_count": max(
-                    len(self._public_navigation_waypoints()) - len(visited_waypoints),
-                    0,
-                ),
-                "observed_waypoint_ids": visited_waypoints,
-                "unvisited_waypoint_ids": [
-                    str(item.get("waypoint_id") or "")
-                    for item in self._public_navigation_waypoints()
-                    if str(item.get("waypoint_id") or "") not in self._observed_waypoint_ids
-                ],
-            },
-            "camera_adjustment_budget": {
-                "max_yaw_delta_deg": 45,
-                "max_pitch_delta_deg": 20,
-                "recommended_attempts_per_waypoint": 1,
-                "attempt_count": len(self._camera_adjustment_events),
-                "attempts": [dict(item) for item in self._camera_adjustment_events],
-            },
-            "inspection_observations": [dict(item) for item in self._inspection_observations],
-            "missing_target_policy": (
-                "A missing target claim must be based on inspected public waypoints, "
-                "recorded camera-adjustment attempts when needed, and exhausted public "
-                "candidate budget rather than private inventory."
-            ),
-            "private_truth_included": False,
-        }
-        _assert_no_forbidden_agent_view_keys(summary)
-        return summary
-
-    def _target_query_recovery_summary(
-        self,
-        target_candidates: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        runtime_map = {
-            "target_candidates": target_candidates,
-            "target_search_summary": self._target_search_summary(target_candidates),
-        }
-        summary = {
-            "schema": "target_query_recovery_summary_v1",
-            "source": "runtime_metric_map_target_candidates",
-            "status": "available",
-            "supported_operations": [
-                "inspect",
-                "map-build",
-                "destination",
-                "place",
-                "navigate",
-                "open-ended",
-            ],
-            "recovery_policy": (
-                "Resolve stale labels, raw fixture ids, and open-ended target names "
-                "through public target_candidates. Navigation may use only returned "
-                "public waypoint ids, anchor ids, observed object handles, or "
-                "candidate_fixture_id fields; not-found claims must include the "
-                "public_search_budget from a resolution."
-            ),
-            "example_queries": [
-                resolve_target_query(runtime_map, query, operation="destination")
-                for query in self._target_query_recovery_examples(target_candidates)
-            ],
-            "private_truth_included": False,
-        }
-        _assert_no_forbidden_agent_view_keys(summary)
-        return summary
-
-    @staticmethod
-    def _target_query_recovery_examples(
-        target_candidates: list[dict[str, Any]],
-    ) -> list[str]:
-        examples: list[str] = []
-        for candidate in target_candidates:
-            for key in ("label", "category", "waypoint_id", "anchor_id", "object_id"):
-                value = str(candidate.get(key) or "").strip()
-                if value and value not in examples:
-                    examples.append(value)
-                if len(examples) >= 3:
-                    return examples
-        return examples
-
-    def _candidate_inspection_budget(self, waypoint_id: str) -> dict[str, Any]:
-        observations = [
-            item
-            for item in self._inspection_observations
-            if str(item.get("waypoint_id") or "") == waypoint_id
-        ]
-        adjustments = [
-            item
-            for item in self._camera_adjustment_events
-            if str(item.get("waypoint_id") or "") == waypoint_id
-        ]
-        return {
-            "schema": "target_candidate_inspection_budget_v1",
-            "observed": bool(observations),
-            "observation_count": len(observations),
-            "camera_adjustment_attempt_count": len(adjustments),
-            "max_camera_adjustment_attempts": 1,
-        }
-
-    def _target_candidate_evidence_lane(self) -> str:
-        if self.sanitize_world_labels:
-            return "world-public-labels"
-        if self.perception_mode == RAW_FPV_ONLY_MODE:
-            return "camera-raw-fpv"
-        if self.perception_mode == CAMERA_MODEL_POLICY_MODE:
-            return "camera-grounded-labels"
-        return "world-public-labels"
-
-    def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]:
-        """Build run-local anchors for fixed places discovered through public evidence."""
-
-        anchors: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        self._append_generated_public_semantic_anchors(anchors=anchors, seen=seen)
-        self._append_fixture_public_semantic_anchors(anchors=anchors, seen=seen)
-        self._append_prior_public_semantic_anchors(anchors=anchors, seen=seen)
-        for anchor in anchors:
-            _assert_no_forbidden_agent_view_keys(anchor)
-        return anchors
-
-    def _append_generated_public_semantic_anchors(
-        self,
-        *,
-        anchors: list[dict[str, Any]],
-        seen: set[str],
-    ) -> None:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return
-        for waypoint in self._public_waypoints:
-            waypoint_id = str(waypoint.get("waypoint_id") or "")
-            if waypoint_id not in self._observed_waypoint_ids:
-                continue
-            for anchor in (
-                self._room_area_public_semantic_anchor(waypoint),
-                self._waypoint_public_semantic_anchor(waypoint),
-            ):
-                anchor_id = str(anchor.get("anchor_id") or "")
-                if anchor_id and anchor_id not in seen:
-                    anchors.append(anchor)
-                    seen.add(anchor_id)
-
-    def _append_fixture_public_semantic_anchors(
-        self,
-        *,
-        anchors: list[dict[str, Any]],
-        seen: set[str],
-    ) -> None:
-        for fixture_id, anchor_id in sorted(
-            self._public_anchor_ids_by_private_fixture_id.items(),
-            key=lambda item: item[1],
-        ):
-            anchor = self._fixture_public_semantic_anchor(fixture_id, anchor_id)
-            if not anchor or anchor_id in seen:
-                continue
-            anchors.append(anchor)
-            seen.add(anchor_id)
-
-    def _append_prior_public_semantic_anchors(
-        self,
-        *,
-        anchors: list[dict[str, Any]],
-        seen: set[str],
-    ) -> None:
-        for prior_anchor in self._runtime_map_anchor_priors:
-            anchor_id = str(prior_anchor.get("anchor_id") or "")
-            if anchor_id and anchor_id in seen:
-                continue
-            anchors.append(dict(prior_anchor))
-            if anchor_id:
-                seen.add(anchor_id)
-
-    def _room_area_public_semantic_anchor(self, waypoint: dict[str, Any]) -> dict[str, Any]:
-        room_id = str(waypoint.get("room_id") or "generated_area")
-        room_label = str(waypoint.get("room_label") or room_id.replace("_", " ").title())
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        observation_id = self._observation_id_for_waypoint(waypoint_id)
-        anchor = {
-            "anchor_id": f"anchor_room_{_safe_anchor_id(room_id)}",
-            "anchor_type": "room_area",
-            "category": _room_category_from_label(room_label, room_id),
-            "label": room_label,
-            "room_id": room_id,
-            "room_label": room_label,
-            "waypoint_id": waypoint_id,
-            "pose": self._waypoint_pose(waypoint),
-            "affordances": ["navigate", "observe"],
-            "aliases": [room_id, room_label],
-            "producer_type": "generated_exploration_candidate",
-            "producer_id": "minimal_map_exploration",
-            "confidence": 0.8 if room_label else 0.6,
-            "freshness": "current_run",
-            "actionability": "actionable",
-            "source_observation_id": observation_id,
-            "promotion_status": "run_local",
-            "evidence": {
-                "type": "visited_generated_area",
-                "visited": True,
-                "candidate_provenance": dict(waypoint.get("candidate_provenance") or {}),
-            },
-        }
-        _assert_no_forbidden_agent_view_keys(anchor)
-        return anchor
-
-    def _waypoint_public_semantic_anchor(self, waypoint: dict[str, Any]) -> dict[str, Any]:
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        observation_id = self._observation_id_for_waypoint(waypoint_id)
-        anchor = {
-            "anchor_id": f"anchor_waypoint_{_safe_anchor_id(waypoint_id)}",
-            "anchor_type": "observation_waypoint",
-            "category": "observation_waypoint",
-            "label": str(waypoint.get("label") or waypoint_id),
-            "room_id": str(waypoint.get("room_id") or ""),
-            "room_label": str(waypoint.get("room_label") or ""),
-            "waypoint_id": waypoint_id,
-            "pose": self._waypoint_pose(waypoint),
-            "affordances": ["observe"],
-            "producer_type": "generated_exploration_candidate",
-            "producer_id": "minimal_map_exploration",
-            "confidence": 1.0,
-            "freshness": "current_run",
-            "actionability": "actionable",
-            "source_observation_id": observation_id,
-            "promotion_status": "run_local",
-            "evidence": {
-                "type": "visited_generated_exploration_candidate",
-                "visited": True,
-                "candidate_provenance": dict(waypoint.get("candidate_provenance") or {}),
-            },
-        }
-        _assert_no_forbidden_agent_view_keys(anchor)
-        return anchor
-
-    def _fixture_public_semantic_anchor(
-        self,
-        fixture_id: str,
-        anchor_id: str,
-    ) -> dict[str, Any]:
-        fixture = self._fixtures.get(fixture_id)
-        if fixture is None:
-            return {}
-        supporting = self._supporting_detections_for_fixture(fixture_id)
-        best_detection = supporting[0] if supporting else {}
-        best_lifecycle = self._object_lifecycle.get(str(best_detection.get("object_id") or ""), {})
-        waypoint_id = str(best_lifecycle.get("waypoint_id") or self._current_waypoint_id)
-        waypoint = self._waypoint_by_id(waypoint_id) or {}
-        source_observation_id = str(
-            best_detection.get("source_observation_id")
-            or best_lifecycle.get("source_observation_id")
-            or self._observation_id_for_waypoint(waypoint_id)
-        )
-        confidence_values = [
-            _float_or_zero(item.get("visibility_confidence"))
-            or _float_or_zero((item.get("support_estimate") or {}).get("confidence"))
-            for item in supporting
-        ]
-        confidence = max(confidence_values) if confidence_values else 0.68
-        anchor = {
-            "anchor_id": anchor_id,
-            "anchor_type": _semantic_anchor_type_for_fixture(fixture),
-            "category": str(fixture.get("category") or fixture.get("name") or "fixture"),
-            "label": str(fixture.get("category") or fixture.get("name") or "Observed fixture"),
-            "room_id": str((waypoint or {}).get("room_id") or best_lifecycle.get("room_id") or ""),
-            "waypoint_id": waypoint_id,
-            "pose": self._waypoint_pose(waypoint),
-            "affordances": _anchor_affordances_for_fixture(fixture),
-            "producer_type": str(
-                best_detection.get("producer_type")
-                or best_detection.get("perception_source")
-                or "visible_detection"
-            ),
-            "producer_id": str(
-                best_detection.get("producer_id")
-                or best_detection.get("model_provenance")
-                or best_detection.get("producer_type")
-                or "visible_detection"
-            ),
-            "confidence": round(float(confidence), 6),
-            "freshness": "current_run",
-            "actionability": "actionable",
-            "source_observation_id": source_observation_id,
-            "promotion_status": "run_local",
-            "evidence": {
-                "type": "support_estimate",
-                "relation": str(
-                    (best_detection.get("support_estimate") or {}).get("relation") or ""
-                ),
-                "supporting_observed_object_ids": [
-                    str(item.get("object_id") or "") for item in supporting
-                ],
-                "image_region": (
-                    best_detection.get("image_region")
-                    or {"type": "bbox", "value": best_detection.get("image_bbox") or []}
-                ),
-            },
-        }
-        _assert_no_forbidden_agent_view_keys(anchor)
-        return anchor
-
-    def _supporting_detections_for_fixture(self, fixture_id: str) -> list[dict[str, Any]]:
-        supporting = []
-        for handle in sorted(self._detections_by_handle):
-            detection = self._detections_by_handle[handle]
-            support = detection.get("support_estimate") or {}
-            if str(support.get("fixture_id") or "") != fixture_id:
-                continue
-            supporting.append(dict(detection))
-        return supporting
-
     def _observation_id_for_waypoint(self, waypoint_id: str) -> str:
         for item in self._raw_fpv_observations:
             if str(item.get("waypoint_id") or "") == waypoint_id:
@@ -2128,227 +1613,6 @@ class RealWorldCleanupContract:
             payload["support_estimate"] = support
         return payload
 
-    def _seed_public_fixture_anchor_ids_from_prior_anchors(self) -> None:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return
-        for anchor in self._runtime_map_anchor_priors:
-            anchor_id = str(anchor.get("anchor_id") or "")
-            if not _is_place_anchor(anchor) or not anchor_id:
-                continue
-            fixture_id = self._best_internal_fixture_for_anchor(anchor)
-            if fixture_id:
-                self._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
-
-    def _seed_public_fixture_anchor_ids_for_waypoint(self, waypoint: dict[str, Any]) -> None:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return
-        private_waypoint = self._private_waypoint_for_public_waypoint(waypoint)
-        for fixture_id in private_waypoint.get("fixture_ids") or []:
-            fixture_id = str(fixture_id or "")
-            if fixture_id and fixture_id in self._fixtures:
-                self._public_anchor_id_for_fixture(fixture_id)
-
-    def _public_runtime_fixture_candidates(self) -> list[dict[str, Any]]:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return []
-        candidates = []
-        for anchor in self._runtime_public_semantic_anchors():
-            if not _is_place_anchor(anchor):
-                continue
-            anchor_id = str(anchor.get("anchor_id") or "")
-            if not anchor_id:
-                continue
-            fixture_id = self._internal_fixture_id_for_public_anchor(anchor_id)
-            fixture = self._fixtures.get(fixture_id) if fixture_id else {}
-            category = str(anchor.get("category") or (fixture or {}).get("category") or "")
-            name = str(anchor.get("label") or (fixture or {}).get("name") or category or anchor_id)
-            waypoint_id = str(
-                anchor.get("waypoint_id")
-                or (
-                    self._public_waypoint_for_private_fixture(fixture_id).get("waypoint_id")
-                    if fixture_id
-                    else ""
-                )
-                or self._current_waypoint_id
-            )
-            waypoint = self._waypoint_by_id(waypoint_id) or {}
-            pose = dict(anchor.get("pose") or self._waypoint_pose(waypoint))
-            item = {
-                "fixture_id": anchor_id,
-                "receptacle_id": anchor_id,
-                "category": category,
-                "name": name,
-                "room_id": str(anchor.get("room_id") or waypoint.get("room_id") or ""),
-                "affordances": list(anchor.get("affordances") or []),
-                "pose": {"frame_id": "map", **pose},
-                "preferred_inspection_waypoint_id": waypoint_id,
-                "preferred_manipulation_waypoint_id": waypoint_id,
-                "public_fixture_source": "runtime_semantic_anchor",
-            }
-            _assert_no_forbidden_agent_view_keys(item)
-            candidates.append(item)
-        return candidates
-
-    def _minimal_target_fixture_for_detection(
-        self,
-        detection: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        public_runtime_fixtures = self._public_runtime_fixture_candidates()
-        public_hints = {
-            "rooms": [
-                {
-                    "room_id": "runtime_semantic_anchors",
-                    "room_label": "Runtime semantic anchors",
-                    "fixtures": public_runtime_fixtures,
-                }
-            ]
-        }
-        inferred = infer_target_fixture_for_detection(detection, public_hints)
-        if inferred is not None:
-            return inferred
-        requested = self.internal_fixture_id_for_public_reference(
-            str((detection.get("support_estimate") or {}).get("fixture_id") or "")
-        )
-        if not requested:
-            return None
-        for fixture in public_runtime_fixtures:
-            if (
-                self.internal_fixture_id_for_public_reference(str(fixture.get("fixture_id") or ""))
-                == requested
-            ):
-                return fixture
-        return None
-
-    def _resolve_runtime_anchor_target_fixture_id(self, category: str) -> str:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return ""
-        pseudo_detection = {
-            "category": category,
-            "name": category,
-            "support_estimate": {"fixture_id": ""},
-        }
-        target = self._minimal_target_fixture_for_detection(pseudo_detection)
-        return str((target or {}).get("fixture_id") or "")
-
-    def _public_fixture_reference_payload(self, value: Any) -> Any:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return value
-        fixture_keys = {
-            "fixture_id",
-            "receptacle_id",
-            "source_fixture_id",
-            "target_fixture_id",
-            "candidate_fixture_id",
-            "expected_fixture_id",
-            "requested_source_fixture_id",
-            "source_receptacle_id",
-            "previous_receptacle_id",
-        }
-        if isinstance(value, dict):
-            result = {}
-            for key, item in value.items():
-                if key in fixture_keys and isinstance(item, str):
-                    result[key] = self._public_fixture_reference_id(item)
-                elif key == "fixture_ids" and isinstance(item, list):
-                    result[key] = [
-                        self._public_fixture_reference_id(str(raw_item)) for raw_item in item
-                    ]
-                else:
-                    result[key] = self._public_fixture_reference_payload(item)
-            return result
-        if isinstance(value, list):
-            return [self._public_fixture_reference_payload(item) for item in value]
-        return value
-
-    def _public_fixture_reference_id(self, fixture_id: str) -> str:
-        if not fixture_id or self.map_mode != MINIMAL_MAP_MODE:
-            return fixture_id
-        if fixture_id.startswith("anchor_"):
-            return fixture_id
-        return self._public_anchor_id_for_fixture(fixture_id)
-
-    def _public_anchor_id_for_fixture(self, fixture_id: str) -> str:
-        fixture_id = str(fixture_id or "")
-        if not fixture_id:
-            return ""
-        anchor_id = self._public_anchor_ids_by_private_fixture_id.get(fixture_id)
-        if anchor_id:
-            return anchor_id
-        anchor_id = f"anchor_fixture_{len(self._public_anchor_ids_by_private_fixture_id) + 1:03d}"
-        self._public_anchor_ids_by_private_fixture_id[fixture_id] = anchor_id
-        return anchor_id
-
-    def _best_internal_fixture_for_anchor(self, anchor: dict[str, Any]) -> str:
-        category = str(anchor.get("category") or "")
-        waypoint_id = str(anchor.get("waypoint_id") or "")
-        public_waypoint = self._waypoint_by_id(waypoint_id) or {}
-        private_waypoint = self._private_waypoint_for_public_waypoint(public_waypoint)
-        fixture_ids = [str(item) for item in private_waypoint.get("fixture_ids") or []]
-        for fixture_id in fixture_ids:
-            fixture = self._fixtures.get(fixture_id, {})
-            if _norm(category) and _norm(category) in _norm(
-                " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
-            ):
-                return fixture_id
-        for fixture_id, public_anchor_id in self._public_anchor_ids_by_private_fixture_id.items():
-            if public_anchor_id == str(anchor.get("anchor_id") or ""):
-                return fixture_id
-        for fixture_id, fixture in self._fixtures.items():
-            if _norm(category) and _norm(category) in _norm(
-                " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
-            ):
-                return fixture_id
-        return ""
-
-    def _internal_fixture_id_for_public_anchor(self, anchor_id: str) -> str:
-        if not anchor_id:
-            return ""
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return anchor_id
-        for fixture_id, public_anchor_id in self._public_anchor_ids_by_private_fixture_id.items():
-            if public_anchor_id == anchor_id:
-                return fixture_id
-        anchor = next(
-            (
-                item
-                for item in self._runtime_public_semantic_anchors()
-                if str(item.get("anchor_id") or "") == anchor_id
-            ),
-            {},
-        )
-        fixture_id = (
-            self._best_internal_fixture_for_anchor(anchor) if _is_place_anchor(anchor) else ""
-        )
-        if fixture_id:
-            self._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
-        return fixture_id
-
-    def _public_waypoint_for_private_fixture(self, fixture_id: str) -> dict[str, Any]:
-        private_waypoint_id = self._preferred_waypoint_for_fixture(fixture_id)
-        private_waypoint = next(
-            (
-                item
-                for item in self._waypoints
-                if str(item.get("waypoint_id") or "") == private_waypoint_id
-            ),
-            {},
-        )
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return private_waypoint
-        for public_id, mapped in self._private_waypoint_by_public_id.items():
-            if str(mapped.get("waypoint_id") or "") == str(
-                private_waypoint.get("waypoint_id") or ""
-            ):
-                return self._waypoint_by_id(public_id) or {}
-        return self._waypoint_by_id(self._current_waypoint_id) or {}
-
-    def _public_waypoint_id_for_private_fixture(self, fixture_id: str) -> str:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return self._preferred_waypoint_for_fixture(fixture_id)
-        waypoint = self._public_waypoint_for_private_fixture(fixture_id)
-        public_waypoint_id = str(waypoint.get("waypoint_id") or "")
-        return public_waypoint_id or self._current_waypoint_id
-
     def _public_fixture_response_id(
         self,
         internal_fixture_id: str,
@@ -2359,6 +1623,21 @@ class RealWorldCleanupContract:
             internal_fixture_id,
             requested_fixture_id,
             minimal_map_mode=MINIMAL_MAP_MODE,
+        )
+
+    def _public_fixture_reference_payload(self, value: Any) -> Any:
+        return realworld_runtime_map_targets.public_fixture_reference_payload(self, value)
+
+    def _public_fixture_reference_id(self, fixture_id: str) -> str:
+        return realworld_runtime_map_targets.public_fixture_reference_id(self, fixture_id)
+
+    def _internal_fixture_id_for_public_anchor(self, anchor_id: str) -> str:
+        return realworld_runtime_map_targets.internal_fixture_id_for_public_anchor(self, anchor_id)
+
+    def _public_waypoint_id_for_private_fixture(self, fixture_id: str) -> str:
+        return realworld_runtime_map_targets.public_waypoint_id_for_private_fixture(
+            self,
+            fixture_id,
         )
 
     def policy_view_payload(self) -> dict[str, Any]:
@@ -2491,9 +1770,12 @@ class RealWorldCleanupContract:
         detection: dict[str, Any],
         fixture_hints: dict[str, Any],
     ) -> dict[str, Any] | None:
-        if self.map_mode == MINIMAL_MAP_MODE:
-            return self._minimal_target_fixture_for_detection(detection)
-        return infer_target_fixture_for_detection(detection, fixture_hints)
+        return realworld_runtime_map_targets.target_fixture_for_detection(
+            self,
+            detection,
+            fixture_hints,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+        )
 
     def attach_raw_fpv_observation_artifact(
         self,
@@ -2847,7 +2129,7 @@ class RealWorldCleanupContract:
             "waypoint_id": str(response.get("waypoint_id") or self._current_waypoint_id),
             "room_id": str(response.get("current_room_id") or ""),
             "perception_mode": self.perception_mode,
-            "evidence_lane": self._target_candidate_evidence_lane(),
+            "evidence_lane": realworld_runtime_map_targets.target_candidate_evidence_lane(self),
             "camera_offset": self._camera_offset(),
             "camera_adjusted": bool(
                 self._camera_offset().get("yaw_delta_deg")

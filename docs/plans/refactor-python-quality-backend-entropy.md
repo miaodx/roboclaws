@@ -18,21 +18,27 @@ the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 80` on 2026-06-17. Treat this as a planning snapshot, not proof
-of a clean checkpoint; refresh before the next execution slice. The latest
-refresh used `git add -N` so the new apple object-parity owner files were
-included in the ratchet script's `git ls-files -- "*.py"` view.
+--summary --top 80` on 2026-06-17 after the local Candidate A runtime-map
+target/public-anchor split. Treat this as a planning snapshot, not proof of a
+landed checkpoint; refresh before the next execution slice. The latest refresh
+includes the intent-to-add `realworld_runtime_map_targets.py` owner in the
+ratchet script's `git ls-files -- "*.py"` view.
 
-- 11 Ruff complexity violations and 66 oversized modules remain.
+- 11 Ruff complexity violations and 67 oversized modules remain. The oversized
+  count increased by one because the new target/public-anchor owner is now
+  counted.
 - Largest P1 production hard-ceiling files are
-  `roboclaws/household/realworld_contract.py` at 3554 lines,
-  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
+  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948 lines,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
+  `roboclaws/household/realworld_contract.py` at 2836,
   `roboclaws/household/scene_camera_comparison.py` at 2830,
   `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` at 2808,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711, and
-  `roboclaws/household/report.py` at 2525. The apple-to-apple runner is still
-  above the hard ceiling at 2394 lines after the object-parity split.
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711,
+  `roboclaws/household/report.py` at 2525, and
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 2394.
+- `roboclaws/household/realworld_runtime_map_targets.py` is 1009 lines. Keep
+  it as a justified cohesive 800-1200-line owner only while it owns the single
+  target/public-anchor concept; do not split it again just to chase line count.
 - Backend workers remain below the hard ceiling:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1994 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1841 lines.
@@ -178,6 +184,45 @@ rebuilding object/receptacle audit rows, compact/skipped audit packets,
 visual-state contracts, selected RGB/focus evidence, semantic-pose index
 fallback, or category summaries directly.
 
+Planning-only intuitive-refactor / ponytail recheck on 2026-06-17 refreshed the
+ratchet at 11 complexity rows and 66 oversized modules, then rechecked the
+known ponytail small cuts and the A/B call-site frontier. No dependency removal,
+stdlib/native replacement, or one-shot stale-surface deletion outranks the P1
+hard-ceiling work. Candidate A now has the clearer next boundary:
+`realworld_contract.py` still directly builds Runtime Metric Map target
+candidates, public semantic anchors, public fixture-reference/anchor-id mapping,
+target-search summaries, and minimal-map target-fixture resolution, while
+`realworld_contract_payloads.py` and done-readiness still call back through
+facade-private methods. The next default implementation slice is the Runtime
+Metric Map target/public-anchor owner split. Candidate B remains active, but
+the apple runner's remaining obvious chunks are camera-contract diagnostics,
+render-domain interpretation, and capture-lane orchestration; those are fallback
+work unless a fresh scan finds new duplication or drift. Revalidated ponytail P2
+items: the camera-labeler maps are still zero-entry identity indirections,
+`_task_prefix_legacy` still has no in-repo call sites, the checker legacy flag is
+still a reachable CLI/docs alias, and duplicated lane / workflow wording remains
+docs-only L0 friction.
+
+Implementation refresh on 2026-06-17 finished Candidate A's Runtime Metric Map
+target/public-anchor owner split in the local worktree. Target candidates,
+public semantic anchors, fixture-reference/anchor-id mapping, target-search
+summaries, minimal-map target-fixture resolution, waypoint anchor seeding, and
+runtime-anchor target resolution now belong to
+`realworld_runtime_map_targets.py`. Payload, done-readiness, visual-candidate,
+tool-response, and init callers use that owner directly where they only need
+target/public-anchor data; `RealWorldCleanupContract` keeps state mutation,
+tool sequencing, and small action-flow wrappers. The old duplicate
+contract-private target/anchor method bodies are gone, `resolve_target_query`
+remains reachable from the public compatibility helper, and
+`_preferred_waypoint_for_fixture()` is part of the runtime-map target protocol
+instead of a `type: ignore` escape. Metric: `realworld_contract.py` 3554 ->
+2836 lines; new owner 1009 lines; ratchet now reports 11 complexity rows and
+67 oversized modules because the new owner is counted. Proof already run in
+the local dirty checkpoint: ruff, format check, py_compile, focused
+realworld-contract, actionable-snapshot, and MCP server tests, plus ratchet.
+Before committing, rerun `git diff --check`; after commit, choose the next
+slice from a fresh scan instead of reopening this boundary.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
@@ -217,29 +262,32 @@ fallback, or category summaries directly.
 
 ## Current Target
 
-Refresh the ratchet, then choose one new P1 owner-boundary slice. Candidate A
-is again the largest production hard-ceiling frontier:
-`realworld_contract.py` is 3554 lines. Candidate B remains active through the
-visual comparison family: `scene_camera_comparison.py`,
+Current checkpoint: Candidate A's Runtime Metric Map target/public-anchor split
+is locally complete and verified, but not yet committed in this worktree. Do
+not start another implementation slice until that dirty checkpoint is either
+committed or explicitly paused. After that, refresh the ratchet and choose one
+new owner-boundary slice. Candidate A remains active because
+`realworld_contract.py` and `report.py` are still above the hard ceiling, but
+the runtime-map target/public-anchor boundary is closed. Candidate B remains
+active through the visual comparison family: `scene_camera_comparison.py`,
 `summarize_robot_camera_visual_parity.py`, and the apple runner are still above
 the ceiling, but the apple object-parity audit, selected RGB evidence, and
-visual-state contract boundaries are now closed. Do not choose by line count
-alone; pick the clearer owner boundary from a fresh call-site scan.
+visual-state contract boundaries are closed. Do not choose by line count alone;
+pick the clearer owner boundary from a fresh call-site scan.
 
 Recommended next slice claim:
 
-- Slice: choose either a fresh `RealWorldCleanupContract` facade-private
-  coupling boundary or a visual-comparison owner boundary confirmed by call-site
-  scan.
-- Owner layer: MCP Capability Contract And Tools for Candidate A, or
-  Artifacts, reports, and eval suites for Candidate B.
-- Current friction: `realworld_contract.py` remains 3554 lines after closing
-  done-readiness, tool-response, visual-candidate declaration/lifecycle, and
-  camera-label producer-input boundaries. The visual comparison family still
-  has multiple above-ceiling report/probe scripts, but apple Object Gate,
-  capture-quality, material/probe primitives, native-render diagnostics,
-  image-metric artifacts, object-parity audit assembly, selected RGB evidence,
-  and visual-state contract evidence are closed.
+- Slice: choose either a fresh `RealWorldCleanupContract` facade/report
+  ownership boundary or a visual-comparison owner boundary confirmed by
+  call-site scan.
+- Owner layer: MCP Capability Contract And Tools for Candidate A, or Artifacts,
+  reports, and eval suites for Candidate B.
+- Current friction: `realworld_contract.py` is still 2836 lines and
+  `report.py` is 2525 lines after the runtime-map target split. The visual
+  comparison family still has multiple above-ceiling report/probe scripts, but
+  apple Object Gate, capture-quality, material/probe primitives, native-render
+  diagnostics, image-metric artifacts, object-parity audit assembly, selected
+  RGB evidence, and visual-state contract evidence are closed.
 - Simplification: move one remaining real responsibility to an existing or
   focused owner and update callers to that owner directly. Delete obsolete
   private wrappers when call-site scan proves they are internal. Do not replace
@@ -249,37 +297,42 @@ Recommended next slice claim:
   explicitly changes report, artifact, launch, MCP, or agent-facing contracts.
 - Proof: focused tests matching the selected boundary, ruff on touched files,
   format check, py_compile, and ratchet summary.
-- Non-goals: lane initialization / manifest setup unless fresh duplication
-  appears; reopening Object Gate / Render Gate classification, capture-quality,
-  native-render diagnostics, material/probe delegates, image-metric artifacts,
-  apple object-parity audit/RGB/visual-state ownership, or any closed
-  `RealWorldCleanupContract` boundary without fresh drift.
+- Non-goals: changing artifact schema, launch axes, `camera_labeler`,
+  visual-grounding contracts, map-prior semantics, target-query behavior,
+  done-readiness policy, visual-candidate declaration/lifecycle ownership,
+  Runtime Metric Map target/public-anchor ownership, apple Object Gate /
+  Render Gate classification, capture-quality, native-render diagnostics,
+  material/probe delegates, image-metric artifacts, apple object-parity
+  audit/RGB/visual-state ownership, or lane initialization / manifest setup
+  without fresh duplication.
 
 Candidate A remains valid only for a new `RealWorldCleanupContract` boundary
-such as agent-view/readiness wrappers, runtime-map/cleanup-worklist caller
-migration, or another named facade-private coupling point; do not reopen
-visual-candidate payload, declaration, lifecycle, camera-label producer input,
-or tool-response work without fresh drift. B1 label-tool rows are cleared;
-candidate D is preview rendering only. Ponytail small cuts are inputs when they
-remove stale surface, duplicate concept, or false confidence, but they must not
-postpone the P1 hard-ceiling checkpoint.
+such as agent-view wrapper cleanup that reduces private method coupling,
+runtime-map/cleanup-worklist caller migration, report-section ownership, or
+another named facade-private coupling point; do not reopen visual-candidate
+payload, declaration, lifecycle, camera-label producer input, tool-response, or
+Runtime Metric Map target/public-anchor work without fresh drift. B1 label-tool
+rows are cleared; candidate D is preview rendering only. Ponytail small cuts are
+inputs when they remove stale surface, duplicate concept, or false confidence,
+but they must not postpone the P1 hard-ceiling checkpoint.
 
 ## Execution Preflight
 
 Preflight status: REVIEWED. Route: `$intuitive-refactor` ratchet mode. Default
-execution: refresh the ratchet, then execute one P1 owner-boundary slice from
-Candidate A or Candidate B based on a fresh call-site scan. Non-goals: broad
-repo cleanup, line-count shaving across many files, preserving obsolete
-internal wrappers, lane initialization unless fresh drift appears, and
-live/provider/simulator proof unless the chosen slice changes that route.
-Re-approve if a slice would change a public launch, artifact, report,
-agent-facing, or private/public eval contract.
+execution: close the current dirty Candidate A checkpoint first, then refresh
+the ratchet and execute one P1 owner-boundary slice from Candidate A or
+Candidate B based on a fresh call-site scan. Non-goals: broad repo cleanup,
+line-count shaving across many files, preserving obsolete internal wrappers,
+lane initialization unless fresh drift appears, and live/provider/simulator
+proof unless the chosen slice changes that route. Re-approve if a slice would
+change a public launch, artifact schema, report shape, agent-facing payload, or
+private/public eval contract.
 
 ## Active Candidates
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 3554 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 2836 lines and
 `roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
 Capability Contract And Tools plus Artifacts, reports, and eval suites.
 Done-readiness pending/held cleanup candidate derivation now belongs to
@@ -290,11 +343,13 @@ to `realworld_tool_responses.py`; reopen them only if the contract facade starts
 rebuilding pick/place/open/close success/error payloads, fixture response ids,
 or semantic-order error envelopes inline. Candidate A remains P1 only for a
 fresh boundary that reduces facade-private coupling or report ownership, for
-example runtime-map/cleanup-worklist caller migration or a remaining report
-section owner. Do not reopen init projection/runtime-prior, Runtime Metric Map payload,
-visual-candidate payload/event/overlay, visual-candidate declaration
-orchestration, visual-candidate registration/resolution lifecycle,
-camera-label producer input construction, or planner-probe report-panel slices.
+example agent-view wrapper cleanup, runtime-map/cleanup-worklist caller
+migration, or a remaining report section owner. Do not reopen init
+projection/runtime-prior, Runtime Metric Map payload, Runtime Metric Map
+target/public-anchor ownership, visual-candidate payload/event/overlay,
+visual-candidate declaration orchestration, visual-candidate
+registration/resolution lifecycle, camera-label producer input construction, or
+planner-probe report-panel slices.
 Visual-candidate lifecycle now belongs to
 `realworld_visual_candidate_lifecycle.py`; reopen it only if the contract facade
 starts rebuilding normalization, match resolution, declaration payloads,
@@ -307,6 +362,16 @@ registration wrapper aliases directly. `RealWorldPayloadContract` and
 `DoneReadinessContract` are ponytail inputs only when a slice removes
 facade-private coupling; replacing an alias pile with a looser parameter bag,
 all-purpose context object, or new wrapper facade is not a win.
+
+Runtime Metric Map target/public-anchor construction now belongs to
+`realworld_runtime_map_targets.py`. Reopen it only if the contract facade starts
+rebuilding target candidates, public semantic anchors, fixture-reference or
+anchor-id mapping, target-search summaries, minimal-map target-fixture
+resolution, waypoint anchor seeding, or runtime-anchor target resolution
+directly. The new owner is 1009 lines; keep it as a cohesive justified module
+unless a later scan finds a second real owner inside it. Same-boundary ponytail
+closeout cut the unused `_recommended_place_tool` alias in that owner and the
+now-unused `TARGET_SEARCH_SUMMARY_SCHEMA` constant in `realworld_contract.py`.
 
 ### B: Visual Comparison Pipeline Split
 
@@ -343,10 +408,14 @@ packets, visual-state contracts, or helper aliases directly.
 
 Other candidate-B slices are valid only around fresh real boundaries such as
 duplicated capture-lane initialization, new render contract diagnostics drift,
-or visual-parity summary reporting. After inspection, capture-lane
-initialization is parked as runner orchestration unless it grows duplicated lane
-setup or a canonical generated-mess owner emerges. The runner-private
-material/probe delegate surface has been removed; do not recreate
+or visual-parity summary reporting. After the Candidate A runtime-map target
+split, B is again a plausible next P1 frontier, but only if a fresh scan finds
+a cleaner boundary than the remaining `RealWorldCleanupContract`/report work.
+The apple runner's remaining camera-contract diagnostics and render-domain
+checks are real but less cleanly bounded than the completed object-parity
+family. Capture-lane initialization is parked as runner orchestration unless it
+grows duplicated lane setup or a canonical generated-mess owner emerges. The
+runner-private material/probe delegate surface has been removed; do not recreate
 `_probe_manifest_summary`,
 `_comparison_probe_comparable`, `_comparison_probe_delta`,
 `_material_response_probe_history`, `_tone_color_probe_history`,
@@ -441,6 +510,9 @@ capture-quality interpretation that already has focused owners.
 
 - Static: `ruff check <touched files>`, `ruff format --check <touched files>`,
   and `python scripts/dev/check_python_quality_ratchet.py`.
+- If a future slice creates a new untracked Python owner, include it in the
+  ratchet input with `git add -N <path>` before using the ratchet summary as
+  size proof; otherwise untracked owners are invisible to `git ls-files`.
 - Docs-only planning refresh: `git diff --check` plus the ratchet summary used
   for selection is enough; do not run behavior tests when no code or contracts
   changed.

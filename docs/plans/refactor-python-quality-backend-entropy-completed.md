@@ -985,6 +985,22 @@ logs before choosing the next slice.
   focused realworld contract and MCP server contract tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: Runtime Metric Map target/public-anchor ownership moved from
+  `RealWorldCleanupContract` into `realworld_runtime_map_targets.py`, covering
+  target candidates, public semantic anchors, fixture-reference/anchor-id
+  mapping, target-search summaries, minimal-map target-fixture resolution,
+  waypoint anchor seeding, and runtime-anchor target resolution. Payload,
+  done-readiness, visual-candidate, tool-response, and init callers now use the
+  owner directly where they only need target/public-anchor data; the contract
+  facade keeps state mutation and tool sequencing. Closeout also removed the
+  now-unused target-owner `_recommended_place_tool` alias and
+  `realworld_contract.py` `TARGET_SEARCH_SUMMARY_SCHEMA` constant. Metric:
+  `realworld_contract.py` 3554 -> 2836 lines; new owner is 1009 lines, a
+  justified cohesive module below the 1200-line warning ceiling; ratchet is 11
+  complexity rows and 67 oversized modules. Proof: focused realworld contract,
+  actionable-snapshot, and MCP server tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1064,6 +1080,12 @@ logs before choosing the next slice.
   `realworld_tool_responses.py`; reopen only if `realworld_contract.py` starts
   rebuilding fixture response ids, pick/place/open/close success/error payloads,
   private backend error projection, or semantic-order error payloads inline.
+- Runtime Metric Map target/public-anchor construction is owned by
+  `realworld_runtime_map_targets.py`; reopen only if `realworld_contract.py` or
+  adjacent callers start rebuilding target candidates, public semantic anchors,
+  fixture-reference or anchor-id mapping, target-search summaries, minimal-map
+  target-fixture resolution, waypoint anchor seeding, or runtime-anchor target
+  resolution directly.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state

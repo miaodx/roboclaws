@@ -3,7 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any, Protocol
 
-from roboclaws.household import realworld_contract_projection, realworld_visual_candidates
+from roboclaws.household import (
+    realworld_contract_projection,
+    realworld_runtime_map_targets,
+    realworld_visual_candidates,
+)
 from roboclaws.household.realworld_agent_view_contract import (
     nonnegative_int,
     positive_int,
@@ -34,7 +38,6 @@ class DoneReadinessContract(Protocol):
     ) -> dict[str, Any]: ...
     def fixture_hints(self) -> dict[str, Any]: ...
     def internal_fixture_id_for_public_reference(self, fixture_id: str | None) -> str | None: ...
-    def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]: ...
 
 
 _is_place_anchor = realworld_contract_projection._is_place_anchor
@@ -133,7 +136,7 @@ def destination_options_for_policy(
     if not preferred:
         return []
     options = []
-    for anchor in contract._runtime_public_semantic_anchors():
+    for anchor in realworld_runtime_map_targets.runtime_public_semantic_anchors(contract):
         if not _is_place_anchor(anchor):
             continue
         category = _normalize_fixture_category_label(anchor.get("category"))

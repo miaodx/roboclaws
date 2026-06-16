@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 from roboclaws.household import (
+    realworld_runtime_map_targets,
     realworld_visual_candidate_lifecycle,
     realworld_visual_candidates,
 )
@@ -46,8 +47,6 @@ class VisualCandidateDeclarationContract(Protocol):
 
     def _waypoint_by_id(self, waypoint_id: str) -> dict[str, Any] | None: ...
 
-    def _public_fixture_reference_payload(self, value: Any) -> Any: ...
-
     def _agent_visible_detection_payload(self, detection: dict[str, Any]) -> dict[str, Any]: ...
 
     def _handle_for_object(self, object_id: str) -> str: ...
@@ -55,12 +54,6 @@ class VisualCandidateDeclarationContract(Protocol):
     def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]: ...
 
     def fixture_hints(self) -> dict[str, Any]: ...
-
-    def target_fixture_for_detection(
-        self,
-        detection: dict[str, Any],
-        fixture_hints: dict[str, Any],
-    ) -> dict[str, Any] | None: ...
 
     def _ok(self, tool: str, **payload: Any) -> dict[str, Any]: ...
 
@@ -347,7 +340,12 @@ def _visual_candidate_declaration_response(
         contract=REALWORLD_CONTRACT,
         model_declared_observation_evidence=evidence,
         model_declared_observations=[
-            contract._public_fixture_reference_payload(item) for item in declared
+            realworld_runtime_map_targets.public_fixture_reference_payload(
+                contract,
+                item,
+                minimal_map_mode=MINIMAL_MAP_MODE,
+            )
+            for item in declared
         ],
         camera_model_candidates=[
             contract._agent_visible_detection_payload(item) for item in resolved_candidates
@@ -382,7 +380,12 @@ def simulated_declaration_inputs_for_waypoint(
             source_observation_id=observation_id,
             assert_no_forbidden_agent_view_keys=assert_no_forbidden,
         )
-        target = contract.target_fixture_for_detection(detection, contract.fixture_hints())
+        target = realworld_runtime_map_targets.target_fixture_for_detection(
+            contract,
+            detection,
+            contract.fixture_hints(),
+            minimal_map_mode=MINIMAL_MAP_MODE,
+        )
         target_fixture_id = str((target or {}).get("fixture_id") or location_id)
         inputs.append(
             {
@@ -513,7 +516,12 @@ def _resolved_destination_fixture_id(
         "name": category,
         "support_estimate": {"fixture_id": source_fixture_id},
     }
-    target = contract.target_fixture_for_detection(pseudo_detection, contract.fixture_hints())
+    target = realworld_runtime_map_targets.target_fixture_for_detection(
+        contract,
+        pseudo_detection,
+        contract.fixture_hints(),
+        minimal_map_mode=MINIMAL_MAP_MODE,
+    )
     return str((target or {}).get("fixture_id") or "")
 
 
