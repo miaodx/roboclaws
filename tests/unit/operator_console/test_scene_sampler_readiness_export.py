@@ -46,6 +46,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
     artifacts = result["artifacts"]
     assert set(artifacts) == {
         "candidate_readiness",
+        "candidate_profile",
         "generated_eval_samples",
         "generated_eval_suite",
         "manifest",
@@ -81,6 +82,9 @@ def _read_export_payloads(output_dir: Path) -> dict[str, Any]:
             (output_dir / "scene_sampler_candidate_readiness.json").read_text()
         ),
         "selection": json.loads((output_dir / "scene_sampler_selection_gaps.json").read_text()),
+        "candidate_profile": json.loads(
+            (output_dir / "scene_sampler_candidate_profile.json").read_text()
+        ),
         "source_prep": json.loads((output_dir / "scene_sampler_source_prep.json").read_text()),
         "scanner_admission": json.loads(
             (output_dir / "scene_sampler_scanner_admission.json").read_text()
@@ -101,6 +105,7 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     readiness = payloads["readiness"]
     availability = payloads["availability"]
     candidates = payloads["candidates"]
+    candidate_profile = payloads["candidate_profile"]
 
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
@@ -140,6 +145,15 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     assert candidates["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
     assert candidates["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert candidates["sources"]["ithor"]["eval_ready_count"] == 0
+    assert candidate_profile["schema"] == "molmospaces_scene_sampler_candidate_profile_v1"
+    assert candidate_profile["summary"]["source_count"] == 4
+    assert candidate_profile["summary"]["metadata_worklist_source_count"] == 2
+    assert candidate_profile["sources"]["ithor"]["profile_status"] == "metadata_worklist_ready"
+    assert candidate_profile["sources"]["ithor"]["next_action"] == ("metadata_first_human_curation")
+    assert (
+        candidate_profile["sources"]["holodeck-objaverse-val"]["metadata_worklist_candidate_count"]
+        == 10
+    )
 
 
 def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
@@ -173,6 +187,7 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
         "expand_candidate_range",
         "inspect_source_prep",
         "do_not_scan_without_new_human_curation",
+        "metadata_first_human_curation",
     }
     assert source_prep["sources"]["ithor"]["molmospaces_get_scenes_call"] == (
         'get_scenes("ithor", "train")'
@@ -186,6 +201,10 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
         == 'get_scenes("holodeck-objaverse", "val")'
     )
     assert source_prep["sources"]["procthor-10k-val"]["recommended_candidate_range"] == "0:9"
+    assert source_prep["sources"]["ithor"]["candidate_profile_status"] == (
+        "metadata_worklist_ready"
+    )
+    assert source_prep["sources"]["ithor"]["metadata_worklist_candidate_count"] == 10
     assert "molmospaces_scene_version" in source_prep["sources"]["procthor-10k-val"]
     assert source_prep["sources"]["procthor-10k-val"]["scene_index_map_status"] in {
         "available",
@@ -229,10 +248,10 @@ def _assert_next_flow(
     assert next_flow["summary"]["source_count"] == 4
     assert next_flow["summary"]["ui_needed_count"] == 6
     assert next_flow["summary"]["eval_needed_count"] == 20
-    assert next_flow["summary"]["next_actions"] == {
-        "do_not_scan_without_new_human_curation": 2,
-    }
+    assert next_flow["summary"]["next_actions"] == {"metadata_first_human_curation": 2}
     assert next_flow["summary"]["rejected_exhausted_source_count"] == 2
+    assert next_flow["summary"]["metadata_worklist_source_count"] == 2
+    assert next_flow["summary"]["metadata_worklist_candidate_count"] == 20
     assert "worklist" in next_flow["summary"]
     assert next_flow["worklist"] == next_flow["summary"]["worklist"]
     assert next_flow["worklist"][0]["scene_source"] in {
@@ -256,16 +275,23 @@ def _assert_next_flow(
     assert next_flow["sources"]["ithor"]["ui_needed_count"] == 3
     assert next_flow["sources"]["ithor"]["eval_needed_count"] == 10
     assert next_flow["sources"]["ithor"]["flow_status"] == "rejected_exhausted"
-    assert next_flow["sources"]["ithor"]["next_action"] == (
-        "do_not_scan_without_new_human_curation"
-    )
-    assert next_flow["sources"]["ithor"]["recommended_candidate_range"] == "0:19"
+    assert next_flow["sources"]["ithor"]["next_action"] == "metadata_first_human_curation"
+    assert next_flow["sources"]["ithor"]["candidate_profile_status"] == ("metadata_worklist_ready")
+    assert next_flow["sources"]["ithor"]["metadata_worklist_candidate_count"] == 10
+    assert next_flow["sources"]["ithor"]["recommended_candidate_range"].startswith("0:")
     ithor_commands = next_flow["sources"]["ithor"]["recommended_commands"]
-    assert ithor_commands == []
+    assert [command["name"] for command in ithor_commands] == [
+        "refresh_metadata_profile",
+        "inspect_source_index_map",
+    ]
     holodeck = next_flow["sources"]["holodeck-objaverse-val"]
     assert holodeck["flow_status"] == "rejected_exhausted"
-    assert holodeck["next_action"] == "do_not_scan_without_new_human_curation"
-    assert holodeck["recommended_commands"] == []
+    assert holodeck["next_action"] == "metadata_first_human_curation"
+    assert holodeck["metadata_worklist_candidate_count"] == 10
+    assert [command["name"] for command in holodeck["recommended_commands"]] == [
+        "refresh_metadata_profile",
+        "inspect_source_index_map",
+    ]
     assert holodeck["blocked_reason_samples"] == ["fewer_than_three_public_navigation_areas"]
     if scanner_execution["sources"]["ithor"]["candidates"]:
         ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]

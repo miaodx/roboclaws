@@ -80,6 +80,15 @@ download step. `ithor` candidate evidence for indices `1..12` and
 `fewer_than_three_public_navigation_areas`, so they should not be scanned again
 without new human curation or an intentional gate change.
 
+The readiness exporter also writes
+`scene_sampler_candidate_profile.json`, a metadata-first worklist for all four
+scene groups. This profile does not admit scenes and does not download assets;
+it separates the current evidence (`ithor` `1..12` and
+`holodeck-objaverse-val` `0..19` rejected) from the next lightweight curation
+step. For rejected-exhausted sources it recommends a small seeded source-scoped
+set of unprofiled candidate world ids to inspect before any manual download or
+scanner product-smoke run.
+
 `procthor-10k-val` means the `val` split of the `procthor-10k` scene family; it
 does not mean that Roboclaws has ten thousand validation scenes ready. Sampler
 admission requires reviewable preview artifacts, at least three public

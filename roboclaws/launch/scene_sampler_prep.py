@@ -311,10 +311,14 @@ def source_prep_worklist(sources: dict[str, dict[str, Any]]) -> list[dict[str, A
         {
             "scene_source": source.get("scene_source", ""),
             "prep_status": source.get("prep_status", ""),
-            "next_action": _source_prep_next_action(str(source.get("prep_status") or "")),
+            "next_action": _source_prep_worklist_next_action(source),
             "missing_resource_count": int(source.get("missing_resource_count") or 0),
             "missing_resource_summary": source.get("missing_resource_summary") or {},
             "next_scan_world_ids": source.get("next_scan_world_ids") or [],
+            "metadata_worklist_candidate_count": int(
+                source.get("metadata_worklist_candidate_count") or 0
+            ),
+            "metadata_worklist_world_ids": source.get("metadata_worklist_world_ids") or [],
             "install_candidate_count": len(source.get("install_candidates") or []),
             "recommended_candidate_range": source.get("recommended_candidate_range", ""),
             "operator_command_names": [
@@ -326,6 +330,13 @@ def source_prep_worklist(sources: dict[str, dict[str, Any]]) -> list[dict[str, A
         for source in sources.values()
         if source.get("prep_status") != "complete"
     ]
+
+
+def _source_prep_worklist_next_action(source: dict[str, Any]) -> str:
+    profile_action = str(source.get("candidate_profile_next_action") or "")
+    if profile_action == "metadata_first_human_curation":
+        return profile_action
+    return _source_prep_next_action(str(source.get("prep_status") or ""))
 
 
 def source_prep_operator_commands(

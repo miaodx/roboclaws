@@ -28,7 +28,7 @@ next_flow_scope:
   - classified ithor as rejected exhausted under current admission gates
   - completed procthor-objaverse-val UI and eval stress projection
   - classified holodeck-objaverse-val as rejected exhausted under current admission gates
-  - leave only new-human-curation follow-up for rejected exhausted sources
+  - added metadata-first curation worklists for rejected-exhausted sources
 next_flow_policy:
   - treat readiness gates, target sources, vertical slices, acceptance criteria, and verification as implementation scope
   - classify every candidate/source as admitted, normalized blocked, or rejected instead of leaving parked notes
@@ -52,13 +52,15 @@ instead of parked source notes:
   console exposes three UI rows (`0`, `1`, `10`) selected by the same policy.
 - `ithor`: rejected exhausted under current admission gates. Candidate evidence
   for indices `1..12` all fails with
-  `fewer_than_three_public_navigation_areas`; next action is
-  `do_not_scan_without_new_human_curation`.
+  `fewer_than_three_public_navigation_areas`. It now has a metadata-first
+  source-scoped worklist for unprofiled candidate ids before any manual
+  download or scanner product-smoke run.
 - `holodeck-objaverse-val`: rejected exhausted under current admission gates.
   Source prep and scanner execution for indices `0..19` completed, but all
   twenty candidates have one public room, two waypoints, coverage `0.1`, and
-  `blocked_reason=fewer_than_three_public_navigation_areas`; next action is
-  `do_not_scan_without_new_human_curation`.
+  `blocked_reason=fewer_than_three_public_navigation_areas`. It now has a
+  metadata-first source-scoped worklist for unprofiled candidate ids before any
+  manual download or scanner product-smoke run.
 
 The top-level readiness summary is now:
 
@@ -75,8 +77,10 @@ product ideas; they are the gate taxonomy required to explain why a source is
 admitted, blocked, or rejected. This implementation converted that taxonomy
 into durable source metadata, readiness artifacts, and next-flow actions. With
 the current evidence, more download permission is not the missing input for
-`ithor` or `holodeck-objaverse-val`; admitting them would require new human
-curation or a deliberate change to the public-room/actionability gate.
+`ithor` or `holodeck-objaverse-val`; admitting them would require either a new
+candidate that passes the current gates or a deliberate change to the
+public-room/actionability gate. The new metadata-first curation artifact narrows
+that search without making any scene ready by itself.
 
 The 2026-06-16 refresh makes the selection layer suitable for all four scene
 groups without pretending that all four groups are ready. `selection_policy`
@@ -87,6 +91,16 @@ artifacts. The policy is scoped per `scene_source`, uses seed
 random order while preferring different public room counts before filling the
 remaining slots. Future `ithor` or `holodeck-objaverse-val` candidates that pass
 the existing gates can enter UI/eval through the same policy.
+
+The 2026-06-16 metadata-first follow-up adds
+`scene_sampler_candidate_profile.json`. This is a no-download/no-backend/no-VLM
+candidate profile for all four scene groups. Complete sources report
+`profile_status=complete`; rejected-exhausted sources keep their rejected
+evidence but receive a small seeded worklist of unprofiled candidate world ids
+with `next_action=metadata_first_human_curation`. The artifact's
+`admission_effect` is explicitly `none_profile_only`: scanner admission and
+eval readiness still require the normal preview, public-room, waypoint,
+provenance, and map-build gates.
 
 Historical implementation notes follow.
 
@@ -299,6 +313,13 @@ Historical implementation notes follow.
   scanner dry-run, and scanner execution for ready candidates. The execution
   policy is explicit on each command: install remains `manual_operator_only`,
   while exporter refreshes remain no-download/no-VLM gates.
+- The 2026-06-16 candidate-profile refresh supersedes the earlier "only stop
+  and wait" next-flow shape for `ithor` and `holodeck-objaverse-val`. Their
+  selection/admission rows still say not to rescan already rejected candidates,
+  but `scene_sampler_next_flow_worklist.json` now reports
+  `next_action=metadata_first_human_curation`, ten metadata worklist candidates
+  per rejected-exhausted source, and read-only profile-refresh commands. This
+  keeps the current gates intact while making the next discovery step explicit.
 
 Verification run on 2026-06-15:
 

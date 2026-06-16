@@ -96,6 +96,12 @@ room-category provenance, selected reason, generator version, and
 blocked/rejected projection metadata. The grader is deterministic and must not
 call live providers.
 
+Sampler readiness exports include a separate
+`scene_sampler_candidate_profile.json` for metadata-first curation across all
+four scene groups. The profile can recommend new source-scoped candidate ids for
+`ithor` and `holodeck-objaverse-val`, but it has no admission effect: a scene
+still enters `scene_sampler_stress` only after the normal scanner gates pass.
+
 Blocked live-agent packets include either `roboclaws_live_eval_preflight_v1`
 runner metadata, or a live product-route failure classified separately from
 agent behavior failures. Provider 5xx/429/model-service failures are

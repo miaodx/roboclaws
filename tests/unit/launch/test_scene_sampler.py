@@ -13,6 +13,7 @@ from roboclaws.launch.scene_sampler import (
     READINESS_REJECTED,
     UI_LANE,
     MolmoSpacesSceneRef,
+    candidate_profile_report,
     candidate_readiness_report,
     eval_projection_metadata,
     eval_sample_id,
@@ -632,6 +633,41 @@ def test_scene_sampler_selection_gap_marks_ithor_rejected_when_assets_are_visibl
     assert prep["sources"]["ithor"]["missing_resources"] == []
 
 
+def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> None:
+    report = candidate_profile_report(candidate_indices=tuple(range(10)))
+
+    assert report["schema"] == "molmospaces_scene_sampler_candidate_profile_v1"
+    assert report["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert report["download_policy"] == "manual_operator_only"
+    assert report["summary"]["source_count"] == 4
+    assert report["summary"]["metadata_worklist_source_count"] == 2
+    assert report["summary"]["metadata_worklist_candidate_count"] == 20
+    assert report["summary"]["next_actions"] == {
+        "metadata_first_human_curation": 2,
+    }
+    assert report["sources"]["procthor-10k-val"]["profile_status"] == "complete"
+    assert report["sources"]["procthor-objaverse-val"]["profile_status"] == "complete"
+
+    ithor = report["sources"]["ithor"]
+    assert ithor["profile_status"] == "metadata_worklist_ready"
+    assert ithor["next_action"] == "metadata_first_human_curation"
+    assert ithor["known_rejected_indices"] == list(range(1, 13))
+    assert ithor["metadata_worklist_candidate_count"] == 10
+    assert all(index not in range(1, 13) for index in ithor["metadata_worklist_indices"])
+    assert ithor["metadata_worklist_world_ids"][0].startswith("molmospaces/ithor/")
+    assert ithor["metadata_worklist_candidates"][0]["admission_effect"] == "none_profile_only"
+
+    holodeck = report["sources"]["holodeck-objaverse-val"]
+    assert holodeck["profile_status"] == "metadata_worklist_ready"
+    assert holodeck["next_action"] == "metadata_first_human_curation"
+    assert holodeck["known_rejected_indices"] == list(range(20))
+    assert holodeck["metadata_worklist_candidate_count"] == 10
+    assert min(holodeck["metadata_worklist_indices"]) >= 20
+    assert holodeck["metadata_worklist_world_ids"][0].startswith(
+        "molmospaces/holodeck-objaverse-val/"
+    )
+
+
 def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -> None:
     import roboclaws.launch.scene_sampler as scene_sampler
 
@@ -654,9 +690,8 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
         "rejected_exhausted": 2,
     }
     assert report["summary"]["worklist"][0]["scene_source"] == "ithor"
-    assert report["summary"]["worklist"][0]["next_action"] == (
-        "do_not_scan_without_new_human_curation"
-    )
+    assert report["summary"]["worklist"][0]["next_action"] == "metadata_first_human_curation"
+    assert report["summary"]["worklist"][0]["metadata_worklist_candidate_count"] == 10
     assert report["summary"]["worklist"][0]["install_candidate_count"] == 0
 
     procthor = report["sources"]["procthor-10k-val"]
@@ -678,6 +713,9 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     ithor = report["sources"]["ithor"]
     assert ithor["molmospaces_get_scenes_call"] == 'get_scenes("ithor", "train")'
     assert ithor["prep_status"] == "rejected_exhausted"
+    assert ithor["candidate_profile_status"] == "metadata_worklist_ready"
+    assert ithor["candidate_profile_next_action"] == "metadata_first_human_curation"
+    assert ithor["metadata_worklist_candidate_count"] == 10
     assert ithor["next_scan_world_ids"] == []
     assert ithor["install_candidates"] == []
     assert any(

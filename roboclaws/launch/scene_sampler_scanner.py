@@ -316,6 +316,7 @@ def next_flow_next_action(
     *,
     readiness_source: dict[str, Any],
     selection_source: dict[str, Any],
+    candidate_profile_source: dict[str, Any] | None = None,
     prep_source: dict[str, Any],
     scanner_source: dict[str, Any],
 ) -> str:
@@ -329,6 +330,9 @@ def next_flow_next_action(
     selection_action = str(selection_source.get("next_action") or "")
     if selection_action == "expand_candidate_range":
         return "expand_candidate_range"
+    profile_action = str((candidate_profile_source or {}).get("next_action") or "")
+    if profile_action == "metadata_first_human_curation":
+        return "metadata_first_human_curation"
     prep_action = source_prep_next_action(str(prep_source.get("prep_status") or ""))
     if prep_action != "inspect_source_prep":
         return prep_action
@@ -424,6 +428,33 @@ def next_flow_recommended_commands(
         return []
     source_arg = shlex.quote(source)
     candidate_range = recommended_candidate_range or "0:19"
+    if next_action == "metadata_first_human_curation":
+        return [
+            {
+                "name": "refresh_metadata_profile",
+                "command": (
+                    ".venv/bin/python scripts/operator_console/"
+                    "export_scene_sampler_readiness.py "
+                    f"--output-dir {_quote_artifact_path(artifact_paths, 'readiness_output_dir')} "
+                    f"--candidate-range {shlex.quote(candidate_range)} --no-generated-eval"
+                ),
+                "execution_policy": "no_download_no_backend_no_vlm_gate",
+            },
+            {
+                "name": "inspect_source_index_map",
+                "command": (
+                    ".venv/bin/python - <<'PY'\n"
+                    "import json\n"
+                    "from pathlib import Path\n"
+                    f"path = Path({artifact_paths['readiness_output_dir']!r})"
+                    " / 'scene_sampler_candidate_profile.json'\n"
+                    "payload = json.loads(path.read_text())\n"
+                    f"print(json.dumps(payload['sources'][{source!r}], indent=2))\n"
+                    "PY"
+                ),
+                "execution_policy": "read_only_profile_inspection",
+            },
+        ]
     prep_base = (
         ".venv/bin/python scripts/operator_console/run_scene_sampler_source_prep.py "
         f"--prep {_quote_artifact_path(artifact_paths, 'source_prep')} "
@@ -550,6 +581,14 @@ def next_flow_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "rejected_exhausted_source_count": sum(
             1 for source in sources.values() if source.get("flow_status") == "rejected_exhausted"
         ),
+        "metadata_worklist_source_count": sum(
+            1
+            for source in sources.values()
+            if int(source.get("metadata_worklist_candidate_count") or 0) > 0
+        ),
+        "metadata_worklist_candidate_count": sum(
+            int(source.get("metadata_worklist_candidate_count") or 0) for source in sources.values()
+        ),
         "next_actions": _next_flow_action_counts(actionable_sources),
         "worklist": [_next_flow_worklist_item(source) for source in actionable_sources],
     }
@@ -571,7 +610,12 @@ def _next_flow_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
         "ui_needed_count": int(source.get("ui_needed_count") or 0),
         "eval_needed_count": int(source.get("eval_needed_count") or 0),
         "selection_capacity_status": source.get("selection_capacity_status", ""),
+        "candidate_profile_status": source.get("candidate_profile_status", ""),
         "prep_status": source.get("prep_status", ""),
+        "metadata_worklist_candidate_count": int(
+            source.get("metadata_worklist_candidate_count") or 0
+        ),
+        "metadata_worklist_world_ids": source.get("metadata_worklist_world_ids") or [],
         "scanner_ready_candidate_count": int(source.get("scanner_ready_candidate_count") or 0),
         "next_scan_world_ids": source.get("next_scan_world_ids") or [],
         "recommended_candidate_range": source.get("recommended_candidate_range", ""),
