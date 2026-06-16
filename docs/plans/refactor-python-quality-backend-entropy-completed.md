@@ -839,6 +839,23 @@ logs before choosing the next slice.
   rows and 66 oversized modules. Proof: apple-to-apple unit tests, ruff, format
   check, py_compile, and ratchet.
 
+- 2026-06-17: Planning-only intuitive-refactor recheck after the apple Object
+  Gate slice refreshed the hard-ceiling candidate order without implementation.
+  Metric: ratchet remains 11 complexity rows and 66 oversized modules.
+  Decision: default next slice is `RealWorldCleanupContract` facade-private
+  coupling reduction; `scene_camera_comparison.py` capture/projection/report
+  diagnostics are the best candidate-B alternate; apple Object Gate / Render
+  Gate and report aliases stay closed. Proof: ratchet summary, function-index
+  scan, docs diff.
+
+- 2026-06-17: Contract init map-projection and runtime-map-prior setup now call
+  `realworld_contract_projection.py` and `realworld_runtime_map_contract.py`
+  directly instead of routing through `realworld_contract.py` private aliases.
+  Metric: `realworld_contract.py` 4707 -> 4656 lines; ratchet remains 11
+  complexity rows and 66 oversized modules. Proof: realworld contract, MCP
+  server, and cleanup-checker contract tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -856,6 +873,9 @@ logs before choosing the next slice.
 - Runtime Metric Map payload assembly is owned by
   `realworld_runtime_map_contract.py`; reopen only if the realworld contract
   facade starts rebuilding observed-object or static-map payload internals.
+- Runtime-map prior setup and init-time projection helpers no longer route
+  through `realworld_contract.py` private aliases; reopen only if contract init
+  or another owner starts using the facade as a compatibility helper bag again.
 - Visual-candidate payload/event/overlay assembly is owned by
   `realworld_visual_candidates.py`; reopen only if the realworld contract
   facade starts rebuilding visual-grounding candidate payloads or overlay

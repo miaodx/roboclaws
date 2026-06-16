@@ -143,7 +143,6 @@ _INSIDE_DESTINATION_CATEGORY_TERMS = (
 _anchor_affordances_for_fixture = realworld_contract_projection._anchor_affordances_for_fixture
 _driveable_ways = realworld_contract_projection._driveable_ways
 _first_fixture_for_waypoint = realworld_contract_projection._first_fixture_for_waypoint
-_first_waypoint_id = realworld_contract_projection._first_waypoint_id
 _first_matching_fixture = realworld_contract_projection._first_matching_fixture
 _fixture_affordances = realworld_contract_projection._fixture_affordances
 _fixture_footprint = realworld_contract_projection._fixture_footprint
@@ -152,31 +151,19 @@ _fixture_hints_with_scene_index_overlay = (
 )
 _fixture_prefers_inside = realworld_contract_projection._fixture_prefers_inside
 _fixture_requires_open = realworld_contract_projection._fixture_requires_open
-_fixtures_from_bundle_fixture_hints = (
-    realworld_contract_projection._fixtures_from_bundle_fixture_hints
-)
 _fixture_is_open_container = realworld_contract_projection._fixture_is_open_container
 _fixture_text = realworld_contract_projection._fixture_text
 _fixture_navigation_obstacles = realworld_contract_projection._fixture_navigation_obstacles
 _inspection_waypoints = realworld_contract_projection._inspection_waypoints
-_inspection_waypoints_from_bundle_projection = (
-    realworld_contract_projection._inspection_waypoints_from_bundle_projection
-)
 _is_place_anchor = realworld_contract_projection._is_place_anchor
 _map_bundle_fields_present = realworld_contract_projection._map_bundle_fields_present
 _merge_public_rooms = realworld_contract_projection._merge_public_rooms
 _metric_map_room_payload = realworld_contract_projection._metric_map_room_payload
-_minimal_generated_exploration_waypoints = (
-    realworld_contract_projection._minimal_generated_exploration_waypoints
-)
 _normalize_fixture_category_label = realworld_contract_projection._normalize_fixture_category_label
 _polygon_center_world = realworld_contract_projection._polygon_center_world
 _polygon_from_room_outline = realworld_contract_projection._polygon_from_room_outline
 _point_overlaps_fixture_obstacle = realworld_contract_projection._point_overlaps_fixture_obstacle
 _pose_stamped_waypoints_present = realworld_contract_projection._pose_stamped_waypoints_present
-_private_waypoint_map_for_generated_candidates = (
-    realworld_contract_projection._private_waypoint_map_for_generated_candidates
-)
 _public_destination_policy_for_category = (
     realworld_contract_projection._public_destination_policy_for_category
 )
@@ -185,9 +172,6 @@ _public_destination_policy_tool_for_fixture_category = (
 )
 _public_driveable_ways = realworld_contract_projection._public_driveable_ways
 _public_room_hint_payload = realworld_contract_projection._public_room_hint_payload
-_public_room_hints_from_metric_map = (
-    realworld_contract_projection._public_room_hints_from_metric_map
-)
 _recommended_place_tool = realworld_contract_projection._recommended_place_tool
 _room_category_from_label = realworld_contract_projection._room_category_from_label
 _room_category_hints_from_public_rooms = (
@@ -200,20 +184,15 @@ _room_outline_by_id_from_fixtures = realworld_contract_projection._room_outline_
 _room_outline_center = realworld_contract_projection._room_outline_center
 _room_outline_metadata = realworld_contract_projection._room_outline_metadata
 _room_polygon_bounds = realworld_contract_projection._room_polygon_bounds
-_rooms_from_bundle_projection = realworld_contract_projection._rooms_from_bundle_projection
 _rooms_from_fixtures = realworld_contract_projection._rooms_from_fixtures
 _scene_index_fixture_hint_row = realworld_contract_projection._scene_index_fixture_hint_row
 _scene_index_fixture_pose = realworld_contract_projection._scene_index_fixture_pose
-_scene_index_public_fixture_overlay = (
-    realworld_contract_projection._scene_index_public_fixture_overlay
-)
 _scene_outline_waypoint_candidates = (
     realworld_contract_projection._scene_outline_waypoint_candidates
 )
 _scene_outline_waypoint_slots_for_room = (
     realworld_contract_projection._scene_outline_waypoint_slots_for_room
 )
-_scene_room_outlines_from_backend = realworld_contract_projection._scene_room_outlines_from_backend
 _semantic_anchor_type_for_fixture = realworld_contract_projection._semantic_anchor_type_for_fixture
 _split_fixture_groups = realworld_contract_projection._split_fixture_groups
 _vec3 = realworld_contract_projection._vec3
@@ -4550,36 +4529,6 @@ def _visual_candidate_validation_error(
 
 def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
     return realworld_runtime_map_contract.synthetic_observation_id(handle, waypoint_id)
-
-
-def _runtime_map_priors_from_snapshot(
-    snapshot: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    return realworld_runtime_map_contract.runtime_map_priors_from_snapshot(
-        snapshot,
-        float_or_zero=_float_or_zero,
-        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
-    )
-
-
-def _runtime_map_anchor_priors_from_snapshot(
-    snapshot: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    return realworld_runtime_map_contract.runtime_map_anchor_priors_from_snapshot(
-        snapshot,
-        float_or_zero=_float_or_zero,
-        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
-    )
-
-
-def _runtime_map_room_priors_from_snapshot(
-    snapshot: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    return realworld_runtime_map_contract.runtime_map_room_priors_from_snapshot(
-        snapshot,
-        public_room_hint_payload=_public_room_hint_payload,
-        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
-    )
 
 
 def infer_target_fixture_for_detection(

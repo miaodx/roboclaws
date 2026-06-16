@@ -37,7 +37,7 @@ of a clean checkpoint; refresh before the next execution slice.
   do not reopen as a P1 unless it crosses 2000 lines again or regains real
   ownership drift.
 - P1 hard-ceiling production files still include
-  `roboclaws/household/realworld_contract.py` at 4707 lines,
+  `roboclaws/household/realworld_contract.py` at 4656 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4573,
   `roboclaws/household/scene_camera_comparison.py` at 4693,
   `roboclaws/household/report.py` at 2525,
@@ -95,6 +95,27 @@ updated report-renderer tests to call `robot_camera_apple2apple_report.py`
 directly. The runner is now 4573 lines and remains a P1 hard-ceiling file, but
 the runner-private `_render_*` report aliases and object/render gate diagnostic
 ownership are no longer active candidate-B slices.
+
+Planning-only intuitive-refactor recheck on 2026-06-17 left the ratchet totals
+unchanged at 11 complexity rows and 66 oversized modules. It checked the
+post-apple candidate set and updated selection guidance only. The next default
+slice should be candidate A's `RealWorldCleanupContract` facade-coupling
+reduction, specifically private alias / lifecycle / state handoff coupling that
+can move callers to existing owner modules without adding a new compatibility
+bag. Candidate B remains the best alternate when visual-comparison work is
+already loaded, with `scene_camera_comparison.py` capture/projection/report
+diagnostics preferred over reopening completed apple Object Gate / Render Gate
+work. Candidate C live-runtime work is still real debt but should not outrank a
+remaining P1 household contract/report/visual-comparison hard-ceiling slice
+unless live-agent execution is the active product focus.
+
+Execution refresh on 2026-06-17 moved contract init's map projection and
+runtime-map-prior setup off the `realworld_contract.py` private helper facade
+and onto `realworld_contract_projection.py` /
+`realworld_runtime_map_contract.py` directly. `realworld_contract.py` is now
+4656 lines and remains a P1 hard-ceiling file, but the init-only projection
+aliases and runtime-prior wrapper functions are no longer active candidate-A
+slices.
 
 ## Two-Document Contract
 
@@ -185,15 +206,23 @@ the next useful work should prioritize hard-ceiling files, test fixture debt,
 and backend/report/evidence boundaries that prevent branching from returning.
 
 Next execution should normally refresh the ratchet and choose one remaining P1
-hard-ceiling architecture slice. Default recommendation: choose a fresh owner
-boundary instead of reopening completed report/contract slices. Candidate A is
-still valid for a remaining `report.py` section boundary or a
-`RealWorldCleanupContract` lifecycle/state/Protocol coupling reduction that
-removes real facade-private coupling; candidate B is a good alternative when
-the apple-to-apple runner or scene-camera comparison work is already in flight.
-Runtime Metric Map payload assembly, visual-candidate payload/event/overlay
-assembly, and planner-probe runtime/non-runtime report panels are complete; do
-not reopen those slices without new drift.
+hard-ceiling architecture slice. Default recommendation: choose candidate A's
+`RealWorldCleanupContract` facade-coupling reduction before returning to report
+or visual-comparison extraction. A valid next slice should remove or narrow a
+real private alias / lifecycle / state handoff boundary by moving callers to
+existing owner modules such as `realworld_contract_projection.py`,
+`realworld_agent_view_contract.py`, `realworld_runtime_map_contract.py`,
+`realworld_visual_candidates.py`, or `realworld_done_readiness.py`; adding a
+new Protocol, parameter bag, or facade wrapper without reducing coupling is not
+a ratchet win. The init-only projection/runtime-prior alias cleanup is done;
+the next contract slice needs a different facade-coupling boundary. Candidate B
+is a good alternative when apple-to-apple or
+scene-camera comparison context is already in flight, with scene-camera
+capture/projection/report-diagnostics ownership preferred over already-cleared
+apple Object Gate / Render Gate diagnostics. Runtime Metric Map payload
+assembly, visual-candidate payload/event/overlay assembly, planner-probe
+runtime/non-runtime report panels, and apple Object Gate / Render Gate
+diagnostics are complete; do not reopen those slices without new drift.
 
 The prior B1 Map 12 label-tool exception is now used and cleared. A future
 candidate D slice should be a separate preview-rendering cleanup only; do not
@@ -328,7 +357,7 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 4707 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 4656 lines and
 `roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
 Capability Contract And Tools for the contract facade, and Artifacts, reports,
 and eval suites for report rendering. Continue only around real ownership
@@ -340,6 +369,14 @@ looser parameter bag or another facade wrapper is not a win.
 
 Valid next sub-slices are:
 
+- Default next sub-slice: reduce `RealWorldCleanupContract` facade-private
+  coupling on a boundary not already completed. The init-only projection and
+  runtime-prior facade aliases are now cleared. Remaining valid targets include
+  visual-candidate state/lifecycle handoff, agent-view/readiness wrappers, or
+  other private alias families where in-repo callers can move to the true owner
+  module. This is only a win if the facade gets thinner and future callers have
+  fewer private names to rediscover; do not replace the alias pile with a new
+  all-purpose context object.
 - Remaining `report.py` section extraction only when it removes a report
   ownership boundary, not just because a section is long. Do not reopen
   planner-probe runtime diagnostics or non-runtime planner-probe panels; those
@@ -363,8 +400,13 @@ Object Gate / Render Gate diagnostic packet owner is now
 `robot_camera_apple2apple_report.py` directly; do not reopen those runner
 facade aliases without fresh drift. Future candidate-B slices should target
 another real boundary such as capture-lane initialization, render contract
-diagnostics, native render diagnostics, object audit item construction, or
-image metric artifact preparation.
+diagnostics, native render diagnostics, object audit item construction, image
+metric artifact preparation, or `scene_camera_comparison.py`
+capture/projection/report-diagnostics ownership. Prefer `scene_camera_comparison.py`
+when the goal is an architecture-simplifying P1 slice; continue the apple runner
+only when the selected boundary is not already owned by
+`robot_camera_apple2apple_object_gate.py` or
+`robot_camera_apple2apple_report.py`.
 
 ### C: Live Runtime And Eval Harness Entropy
 
@@ -472,6 +514,11 @@ grep/docs proof plus ratchet.
   lives in `RealWorldCleanupContract`; reopen only if the facade starts
   rebuilding Runtime Metric Map payload internals instead of delegating to
   `realworld_runtime_map_contract.py`.
+- Runtime-map prior setup and init-time projection helpers no longer route
+  through `realworld_contract.py` private aliases; reopen only if
+  `realworld_contract_init.py` or another owner starts using the facade as a
+  compatibility helper bag again instead of importing
+  `realworld_contract_projection.py` / `realworld_runtime_map_contract.py`.
 - Visual-candidate payload/event/overlay assembly no longer lives in
   `RealWorldCleanupContract`; reopen only if the facade starts rebuilding
   visual-grounding candidate payloads, model-declared observation events,

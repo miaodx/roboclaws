@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household import realworld_contract_projection, realworld_runtime_map_contract
 from roboclaws.maps.bundle import validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
 
@@ -110,12 +111,24 @@ def init_runtime_state(target: Any, runtime_map_prior: dict[str, Any] | None) ->
     target._visible_observation_count = 0
     target._camera_model_policy_events = []
     target._model_declared_observations = []
-    target._runtime_map_priors = helpers._runtime_map_priors_from_snapshot(runtime_map_prior)
-    target._runtime_map_anchor_priors = helpers._runtime_map_anchor_priors_from_snapshot(
-        runtime_map_prior
+    target._runtime_map_priors = realworld_runtime_map_contract.runtime_map_priors_from_snapshot(
+        runtime_map_prior,
+        float_or_zero=helpers._float_or_zero,
+        assert_no_forbidden_agent_view_keys=helpers._assert_no_forbidden_agent_view_keys,
     )
-    target._runtime_map_room_priors = helpers._runtime_map_room_priors_from_snapshot(
-        runtime_map_prior
+    target._runtime_map_anchor_priors = (
+        realworld_runtime_map_contract.runtime_map_anchor_priors_from_snapshot(
+            runtime_map_prior,
+            float_or_zero=helpers._float_or_zero,
+            assert_no_forbidden_agent_view_keys=helpers._assert_no_forbidden_agent_view_keys,
+        )
+    )
+    target._runtime_map_room_priors = (
+        realworld_runtime_map_contract.runtime_map_room_priors_from_snapshot(
+            runtime_map_prior,
+            public_room_hint_payload=realworld_contract_projection._public_room_hint_payload,
+            assert_no_forbidden_agent_view_keys=helpers._assert_no_forbidden_agent_view_keys,
+        )
     )
     target._public_anchor_ids_by_private_fixture_id = {}
     target._generated_inspection_waypoints = {}
@@ -134,7 +147,6 @@ def init_runtime_state(target: Any, runtime_map_prior: dict[str, Any] | None) ->
 
 
 def _init_bundle_map_projection(target: Any) -> None:
-    helpers = _contract_helpers()
     validation = validate_nav2_map_bundle(target.map_bundle_dir)
     validation.raise_for_errors()
     target.map_bundle_validation = validation.as_dict()
@@ -143,59 +155,67 @@ def _init_bundle_map_projection(target: Any) -> None:
         target.map_bundle_dir,
         fixture_hint_mode=target.fixture_hint_mode,
     )
-    target._fixtures = helpers._fixtures_from_bundle_fixture_hints(
+    target._fixtures = realworld_contract_projection._fixtures_from_bundle_fixture_hints(
         target._bundle_fixture_hints_template
     )
-    target._rooms = helpers._rooms_from_bundle_projection(
+    target._rooms = realworld_contract_projection._rooms_from_bundle_projection(
         target._bundle_metric_map_template,
         target._bundle_fixture_hints_template,
     )
-    target._waypoints = helpers._inspection_waypoints_from_bundle_projection(
+    target._waypoints = realworld_contract_projection._inspection_waypoints_from_bundle_projection(
         target._bundle_metric_map_template,
         target._bundle_fixture_hints_template,
     )
-    target._scene_index_fixture_overlay = helpers._scene_index_public_fixture_overlay(
-        backend=target.backend,
-        scenario=target.scenario,
-        existing_fixtures=target._fixtures,
-        fallback_waypoint_id=helpers._first_waypoint_id(target._waypoints),
+    target._scene_index_fixture_overlay = (
+        realworld_contract_projection._scene_index_public_fixture_overlay(
+            backend=target.backend,
+            scenario=target.scenario,
+            existing_fixtures=target._fixtures,
+            fallback_waypoint_id=realworld_contract_projection._first_waypoint_id(
+                target._waypoints
+            ),
+        )
     )
     target._fixtures.update(target._scene_index_fixture_overlay)
 
 
 def _init_scenario_map_projection(target: Any) -> None:
-    helpers = _contract_helpers()
     target._fixtures = {
         item.receptacle_id: item.to_public_dict() for item in target.scenario.receptacles
     }
-    scene_room_outlines = helpers._scene_room_outlines_from_backend(target.backend)
+    scene_room_outlines = realworld_contract_projection._scene_room_outlines_from_backend(
+        target.backend
+    )
     if scene_room_outlines:
         target._apply_scene_room_outlines_to_fixtures(scene_room_outlines)
-    target._rooms = helpers._rooms_from_fixtures(target._fixtures)
-    target._waypoints = helpers._inspection_waypoints(target._rooms)
+    target._rooms = realworld_contract_projection._rooms_from_fixtures(target._fixtures)
+    target._waypoints = realworld_contract_projection._inspection_waypoints(target._rooms)
     target._scene_index_fixture_overlay = {}
 
 
 def _init_minimal_public_map_projection(target: Any) -> None:
-    helpers = _contract_helpers()
     source_metric_map = (
         target._bundle_metric_map_template
         if target._bundle_metric_map_template is not None
         else target._fallback_metric_map_template()
     )
-    target._public_rooms = helpers._public_room_hints_from_metric_map(
+    target._public_rooms = realworld_contract_projection._public_room_hints_from_metric_map(
         source_metric_map,
         fallback_rooms=target._rooms,
     )
     target._public_fixtures = {}
-    target._public_waypoints = helpers._minimal_generated_exploration_waypoints(
-        source_metric_map,
-        fallback_waypoints=target._waypoints,
-        public_rooms=target._public_rooms,
+    target._public_waypoints = (
+        realworld_contract_projection._minimal_generated_exploration_waypoints(
+            source_metric_map,
+            fallback_waypoints=target._waypoints,
+            public_rooms=target._public_rooms,
+        )
     )
-    target._private_waypoint_by_public_id = helpers._private_waypoint_map_for_generated_candidates(
-        target._public_waypoints,
-        target._waypoints,
+    target._private_waypoint_by_public_id = (
+        realworld_contract_projection._private_waypoint_map_for_generated_candidates(
+            target._public_waypoints,
+            target._waypoints,
+        )
     )
 
 
