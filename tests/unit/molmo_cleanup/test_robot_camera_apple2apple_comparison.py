@@ -6,6 +6,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
+from scripts.molmo_cleanup import robot_camera_apple2apple_report as report_renderer
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_CAMERA_COMPARISON_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_robot_camera_apple2apple_comparison.py"
@@ -320,12 +323,7 @@ def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
 
 
 def test_robot_camera_report_renders_canonical_generated_mess_manifest() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_report_canonical_mess",
-    )
-
-    report_html = run_camera._render_report(
+    report_html = report_renderer.render_report(
         {
             "purpose": "unit",
             "summary": {},
@@ -359,12 +357,7 @@ def test_robot_camera_report_renders_canonical_generated_mess_manifest() -> None
 
 
 def test_robot_camera_report_puts_images_before_location_json() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_report_images_first",
-    )
-
-    report_html = run_camera._render_report(
+    report_html = report_renderer.render_report(
         {
             "purpose": "unit",
             "status": "success",
@@ -2052,7 +2045,7 @@ def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Pa
     )
 
     _assert_object_parity_audit(audit)
-    diagnostics = run_camera._object_render_parity_diagnostics(
+    diagnostics = object_gate.object_render_parity_diagnostics(
         object_audit=audit,
         render_domain_checks={
             "status": "render_domain_delta_confirmed",
@@ -2308,7 +2301,8 @@ def _assert_object_render_parity_report(
     diagnostics: dict[str, object],
     audit: dict[str, object],
 ) -> None:
-    report_html = run_camera._render_report(
+    del run_camera
+    report_html = report_renderer.render_report(
         {
             "purpose": "unit test",
             "summary": {},
@@ -2492,11 +2486,6 @@ def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
 
 
 def test_robot_camera_visual_physics_freeze_needs_selected_rgb_evidence() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_visual_physics_gate",
-    )
-
     item = {
         "kind": "object",
         "target_id": "box_1",
@@ -2518,7 +2507,7 @@ def test_robot_camera_visual_physics_freeze_needs_selected_rgb_evidence() -> Non
         "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
     }
 
-    record = run_camera._object_gate_record(item)
+    record = object_gate.object_gate_record(item)
 
     assert record["object_gate_status"] == "not_comparable"
     assert record["classification"] == "visual_state_needs_rgb_evidence"
@@ -2526,11 +2515,6 @@ def test_robot_camera_visual_physics_freeze_needs_selected_rgb_evidence() -> Non
 
 
 def test_robot_camera_visual_physics_freeze_rejects_support_centered_rgb_evidence() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_visual_physics_gate_coverage",
-    )
-
     item = {
         "kind": "object",
         "target_id": "box_1",
@@ -2556,7 +2540,7 @@ def test_robot_camera_visual_physics_freeze_rejects_support_centered_rgb_evidenc
         "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
     }
 
-    record = run_camera._object_gate_record(item)
+    record = object_gate.object_gate_record(item)
 
     assert record["object_gate_status"] == "not_comparable"
     assert record["classification"] == "visual_state_needs_target_coverage"
@@ -2565,11 +2549,6 @@ def test_robot_camera_visual_physics_freeze_rejects_support_centered_rgb_evidenc
 
 
 def test_robot_camera_visual_physics_freeze_rejects_target_region_delta() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_visual_physics_gate_region_delta",
-    )
-
     item = {
         "kind": "object",
         "target_id": "box_1",
@@ -2596,7 +2575,7 @@ def test_robot_camera_visual_physics_freeze_rejects_target_region_delta() -> Non
         "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
     }
 
-    record = run_camera._object_gate_record(item)
+    record = object_gate.object_gate_record(item)
 
     assert record["object_gate_status"] == "not_comparable"
     assert record["classification"] == "visual_state_delta"
@@ -2605,11 +2584,6 @@ def test_robot_camera_visual_physics_freeze_rejects_target_region_delta() -> Non
 
 
 def test_robot_camera_visual_physics_freeze_can_pass_with_object_centered_rgb_evidence() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_visual_physics_gate_pass",
-    )
-
     item = {
         "kind": "object",
         "target_id": "box_1",
@@ -2635,7 +2609,7 @@ def test_robot_camera_visual_physics_freeze_can_pass_with_object_centered_rgb_ev
         "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
     }
 
-    record = run_camera._object_gate_record(item)
+    record = object_gate.object_gate_record(item)
 
     assert record["object_gate_status"] == "comparable"
     assert record["classification"] == "comparable"

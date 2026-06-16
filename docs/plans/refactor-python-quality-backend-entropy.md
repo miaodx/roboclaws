@@ -38,7 +38,7 @@ of a clean checkpoint; refresh before the next execution slice.
   ownership drift.
 - P1 hard-ceiling production files still include
   `roboclaws/household/realworld_contract.py` at 4707 lines,
-  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4573,
   `roboclaws/household/scene_camera_comparison.py` at 4693,
   `roboclaws/household/report.py` at 2525,
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
@@ -88,6 +88,13 @@ report panels to `report_sections_probe.py` and
 `report_sections_probe_failures.py`. `report.py` is now 2525 lines and remains
 a P1 hard-ceiling file, but both planner-probe runtime diagnostics and
 non-runtime planner-probe panels are no longer active candidate-A slices.
+
+Execution refresh on 2026-06-17 moved robot-camera apple-to-apple Object Gate /
+Render Gate diagnostics into `robot_camera_apple2apple_object_gate.py` and
+updated report-renderer tests to call `robot_camera_apple2apple_report.py`
+directly. The runner is now 4573 lines and remains a P1 hard-ceiling file, but
+the runner-private `_render_*` report aliases and object/render gate diagnostic
+ownership are no longer active candidate-B slices.
 
 ## Two-Document Contract
 
@@ -350,11 +357,14 @@ Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
 oversized. Prefer capture-lane stages, diagnostics builders, manifest/artifact
 setup helpers, and report-specific modules. Owning architecture layers:
 Backend Runtimes / Environment Primitives plus Artifacts, reports, and eval
-suites. Real renderer claims still require separate local proof. Ponytail
-constraint: when this slice touches the apple-to-apple runner, remove or avoid
-private `_render_*` facade aliases that only mirror
-`robot_camera_apple2apple_report.py`; update tests to import or call the report
-owner directly instead of preserving runner-private alias compatibility.
+suites. Real renderer claims still require separate local proof. The
+Object Gate / Render Gate diagnostic packet owner is now
+`robot_camera_apple2apple_object_gate.py`, and report-renderer tests call
+`robot_camera_apple2apple_report.py` directly; do not reopen those runner
+facade aliases without fresh drift. Future candidate-B slices should target
+another real boundary such as capture-lane initialization, render contract
+diagnostics, native render diagnostics, object audit item construction, or
+image metric artifact preparation.
 
 ### C: Live Runtime And Eval Harness Entropy
 
@@ -422,8 +432,8 @@ nearby accepted slice already touches the same owner files. Rechecked
 2026-06-17 ponytail inputs still present: legacy checker flag
 `--require-canonical-robot-view-camera-control`, empty camera-labeler to
 visual-grounding mapping dicts, unused prompt helper alias
-`_task_prefix_legacy`, path-loaded apple-to-apple report-renderer aliases, and
-duplicated current-doc lane prose. Owning layers depend on the touched surface:
+`_task_prefix_legacy`, and duplicated current-doc lane prose. Owning layers
+depend on the touched surface:
 Artifacts, reports, and eval suites for checker/report claims; MCP Capability
 Contract And Tools, Agent Skills, or Agent Engines And Provider Profiles for
 labeler/profile/prompt guidance. Behavior-change class is internal/stale docs
@@ -478,6 +488,13 @@ grep/docs proof plus ratchet.
   collision, placement-scene, policy-exception, blocker, artifact, or RBY1M /
   CuRobo gate sections instead of delegating to `report_sections_probe.py` and
   `report_sections_probe_failures.py`.
+- Robot-camera apple-to-apple Object Gate / Render Gate diagnostics no longer
+  live in `run_robot_camera_apple2apple_comparison.py`; reopen only if the
+  runner starts rebuilding object gate records, object/render parity diagnostic
+  packets, compact diagnostic packets, skipped object-gate packets, or
+  runner-private `_render_*` report aliases instead of delegating to
+  `robot_camera_apple2apple_object_gate.py` and
+  `robot_camera_apple2apple_report.py`.
 - B1 Map 12 runtime-bundle review-manifest validation complexity is cleared;
   reopen only if `compile_b1_map12_runtime_bundle.py::review_manifest_errors`
   regains ratchet rows or false-green review-gate drift.
@@ -507,8 +524,8 @@ look stale are still active internal contracts behind current public axes.
     another looser parameter bag.
   - Legacy checker flag
     `--require-canonical-robot-view-camera-control`, empty camera-labeler
-    mapping dicts, unused prompt legacy aliases, and duplicated current-doc
-    lane prose are candidate H, not ad hoc edits to unrelated owners. The empty
+    mapping dicts, unused prompt legacy aliases, and duplicated current-doc lane
+    prose are candidate H, not ad hoc edits to unrelated owners. The empty
     maps are a shrink target only for the camera-labeler identity mapping layer;
     do not remove the internal visual-grounding pipeline contract or artifact
     fields. The checker flag and prompt alias still have explicit parser/test

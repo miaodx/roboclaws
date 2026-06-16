@@ -831,6 +831,14 @@ logs before choosing the next slice.
   cleanup report and planner manipulation checker contract tests, ruff, format
   check, py_compile, and ratchet.
 
+- 2026-06-17: Robot-camera apple-to-apple Object Gate / Render Gate diagnostics
+  moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_object_gate.py`, and report-renderer tests now call
+  `robot_camera_apple2apple_report.py` directly instead of runner-private
+  aliases. Metric: runner 4900 -> 4573 lines; ratchet remains 11 complexity
+  rows and 66 oversized modules. Proof: apple-to-apple unit tests, ruff, format
+  check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -861,6 +869,11 @@ logs before choosing the next slice.
   only if `report.py` starts rebuilding quality, views, cleanup-binding,
   task-sampler, post-placement rejection, grasp collision, placement scene,
   policy exception, blocker, artifact, or RBY1M/CuRobo gate sections directly.
+- Robot-camera apple-to-apple Object Gate / Render Gate diagnostics are owned
+  by `robot_camera_apple2apple_object_gate.py`; reopen only if
+  `run_robot_camera_apple2apple_comparison.py` starts rebuilding object gate
+  records, object/render parity diagnostic packets, compact diagnostic packets,
+  skipped object-gate packets, or runner-private `_render_*` report aliases.
 - B1 runtime-bundle review-manifest validation is split into focused helper
   families; reopen only if `review_manifest_errors` regains ratchet rows or
   false-green review-gate behavior.
