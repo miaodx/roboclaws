@@ -138,6 +138,13 @@ A public Metric Map pose where the Cleanup Agent can observe part of a room
 during a cleanup sweep.
 _Avoid_: Hidden object viewpoint
 
+**Relative Pose Navigation**:
+A bounded navigation action that moves or turns the robot in the robot-local
+frame from its current pose, such as a short forward/backward nudge, lateral
+nudge, or yaw turn. It is distinct from navigating to a public Metric Map
+Inspection Waypoint.
+_Avoid_: hidden waypoint, map mutation, unbounded teleop
+
 **Room-Level Fixture Hint**:
 A public hint that names a large fixed receptacle or fixture and the room where
 it belongs, without giving an exact pose.
@@ -218,6 +225,8 @@ _Avoid_: assuming object assets imply usable cached grasps
   perception data.
 - A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
   fixture semantics before runtime observations begin.
+- **Relative Pose Navigation** starts from the current robot pose and does not
+  create or replace **Inspection Waypoints**.
 - Map overlays use the **Source Map Frame** as spatial truth; a **Display
   Frame** is a labeled derived view, not a replacement for navigation
   coordinates.
