@@ -1,0 +1,1309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>B1 / Map 12 Label Tool</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      color: #17202a;
+      background: #f4f6f8;
+      --line: #cfd7df;
+      --panel: #ffffff;
+      --muted: #566372;
+      --ink: #152232;
+      --blue: #2563eb;
+      --green: #16835f;
+      --amber: #a16207;
+      --red: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(270px, 340px) minmax(0, 1fr);
+    }
+    aside {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      padding: 16px;
+      overflow: auto;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 18px 0 8px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      color: var(--muted);
+    }
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
+    }
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 7px 9px;
+      cursor: pointer;
+    }
+    button.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+    button.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    button.danger {
+      border-color: #f1b7b2;
+      color: var(--red);
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .toolbar.export {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .layer-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 8px 0 12px;
+    }
+    .layer-toggle {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      background: #fff;
+    }
+    .layer-toggle input {
+      width: auto;
+      margin: 0;
+    }
+    .meta {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fafbfc;
+      font-size: 12px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+    .evidence-panel {
+      display: grid;
+      gap: 8px;
+    }
+    .evidence-row {
+      display: grid;
+      gap: 2px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .evidence-row strong {
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .badge {
+      display: inline-block;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 2px 7px;
+      color: #6b4300;
+      background: #fff4cc;
+      border: 1px solid #f0d68a;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .object-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .object-counts span {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 7px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 12px;
+    }
+    .artifact-links {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+    }
+    .artifact-links a {
+      color: var(--blue);
+      overflow-wrap: anywhere;
+    }
+    .shape-list {
+      display: grid;
+      gap: 6px;
+      max-height: 230px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .shape-item {
+      width: 100%;
+      text-align: left;
+      display: grid;
+      gap: 2px;
+      border-radius: 6px;
+    }
+    .shape-item strong {
+      overflow-wrap: anywhere;
+    }
+    .shape-item span {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      margin: 8px 0;
+    }
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 8px;
+      color: var(--ink);
+      background: #fff;
+      min-width: 0;
+    }
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .stage {
+      min-width: 0;
+      padding: 16px;
+      overflow: auto;
+    }
+    .canvas-shell {
+      width: max-content;
+      max-width: 100%;
+      background: #111827;
+      border: 1px solid #263241;
+      border-radius: 8px;
+      overflow: hidden;
+      line-height: 0;
+    }
+    canvas {
+      display: block;
+      width: min(100%, 1180px);
+      height: auto;
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+    .draft {
+      color: var(--amber);
+      font-weight: 650;
+    }
+    .control-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      align-items: end;
+    }
+    .control-row button {
+      min-height: 34px;
+    }
+    @media (max-width: 860px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      aside {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .toolbar.export {
+        grid-template-columns: 1fr;
+      }
+      .control-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <aside>
+    <h1>B1 / Map 12 Label Tool</h1>
+    <p>
+      <span class="draft">Draft only.</span>
+      Exports remain candidate labels in the source map frame.
+    </p>
+    <div class="meta" id="mapMeta"></div>
+
+    <h2>Tools</h2>
+    <div class="toolbar">
+      <button type="button" data-mode="select" class="active">Select</button>
+      <button type="button" data-mode="polygon">Polygon</button>
+      <button type="button" data-mode="circle">Circle</button>
+      <button type="button" data-mode="point">Point</button>
+      <button type="button" id="finishPolygon">Finish Polygon</button>
+      <button type="button" id="deleteShape" class="danger">Delete</button>
+    </div>
+    <div class="control-row">
+      <label>Global angle
+        <input id="globalTiltAngle" type="number" step="1" value="0" />
+      </label>
+      <label>Scope
+        <select id="globalTiltScope">
+          <option value="all">All labels</option>
+          <option value="selected">Selected</option>
+        </select>
+      </label>
+      <label>Pivot
+        <select id="globalTiltPivot">
+          <option value="map">Map center</option>
+          <option value="selection">Selection center</option>
+        </select>
+      </label>
+      <button type="button" id="applyGlobalTilt">Apply Tilt</button>
+    </div>
+
+    <h2>Map Layers</h2>
+    <div class="layer-controls">
+      <label class="layer-toggle">
+        <input type="checkbox" data-layer="rooms" checked />
+        Rooms
+      </label>
+      <label class="layer-toggle">
+        <input type="checkbox" data-layer="fixtures" checked />
+        Fixtures
+      </label>
+      <label class="layer-toggle">
+        <input type="checkbox" data-layer="waypoints" checked />
+        Waypoints
+      </label>
+      <label class="layer-toggle">
+        <input type="checkbox" data-layer="driveableWays" checked />
+        Driveable ways
+      </label>
+    </div>
+
+    <h2>Labels</h2>
+    <div class="shape-list" id="shapeList"></div>
+
+    <h2>Selected</h2>
+    <div id="editor"></div>
+
+    <h2>Scene Evidence</h2>
+    <div id="sceneEvidence"></div>
+
+    <h2>Export</h2>
+    <div class="toolbar export">
+      <button type="button" class="primary" id="copyJson">Copy JSON</button>
+      <button type="button" id="downloadJson">Download</button>
+      <button type="button" id="loadInitial">Reset</button>
+    </div>
+    <label>Import draft
+      <input type="file" id="importJson" accept="application/json" />
+    </label>
+    <textarea id="exportText" spellcheck="false"></textarea>
+  </aside>
+  <section class="stage">
+    <div class="canvas-shell">
+      <canvas id="mapCanvas"></canvas>
+    </div>
+  </section>
+</main>
+<script>
+const PACKET = __PACKET_JSON__;
+const IMAGE_DATA_URL = __IMAGE_DATA_URL__;
+const palette = ["#2563eb", "#16a34a", "#a16207", "#dc2626", "#7c3aed", "#0f766e"];
+const state = {
+  mode: "select",
+  shapes: JSON.parse(JSON.stringify(PACKET.shapes || [])),
+  layers: {
+    rooms: true,
+    fixtures: true,
+    waypoints: true,
+    driveableWays: true
+  },
+  selectedId: null,
+  draftPolygon: [],
+  drag: null,
+  counter: 0
+};
+const image = new Image();
+const canvas = document.getElementById("mapCanvas");
+const ctx = canvas.getContext("2d");
+const exportText = document.getElementById("exportText");
+
+function worldToPixel(point) {
+  const map = PACKET.map;
+  return {
+    x: (Number(point.x) - map.origin.x) / map.resolution_m,
+    y: map.image_height_px - 1 - ((Number(point.y) - map.origin.y) / map.resolution_m)
+  };
+}
+
+function pixelToWorld(point) {
+  const map = PACKET.map;
+  return {
+    x: round(map.origin.x + point.x * map.resolution_m),
+    y: round(map.origin.y + (map.image_height_px - 1 - point.y) * map.resolution_m)
+  };
+}
+
+function round(value) {
+  return Math.round(Number(value) * 1000) / 1000;
+}
+
+function selectedShape() {
+  return state.shapes.find((shape) => shape.shape_id === state.selectedId) || null;
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  state.drag = null;
+  document.querySelectorAll("[data-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.mode === mode);
+  });
+  draw();
+}
+
+function canvasPoint(event) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * (canvas.width / rect.width),
+    y: (event.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function createShape(kind, worldPoint) {
+  state.counter += 1;
+  const id = `draft_${Date.now()}_${state.counter}`;
+  const shape = {
+    shape_id: id,
+    label: id,
+    category: "",
+    navigation_area_id: "",
+    asset_partition_id: "",
+    source_room_id: "",
+    source_map_frame_id: PACKET.source_map_frame_id,
+    geometry: { kind },
+    map_center: worldPoint,
+    polygon_role: PACKET.shape_defaults.polygon_role,
+    geometry_source: PACKET.shape_defaults.geometry_source,
+    alignment_status: "candidate",
+    review_status: "draft",
+    polygon_usage: { navigation: true, semantic_labeling: "candidate", review: true }
+  };
+  if (kind === "circle") {
+    shape.geometry.center = worldPoint;
+    shape.geometry.radius_m = 0.1;
+  } else if (kind === "point") {
+    shape.geometry.center = worldPoint;
+  }
+  state.shapes.push(shape);
+  state.selectedId = id;
+  renderAll();
+  return shape;
+}
+
+function finishDraftPolygon() {
+  if (state.draftPolygon.length < 3) {
+    return;
+  }
+  const center = polygonCenter(state.draftPolygon);
+  const shape = createShape("polygon", center);
+  shape.geometry.polygon = state.draftPolygon.map((point) => ({ ...point }));
+  shape.map_center = center;
+  state.draftPolygon = [];
+  setMode("select");
+  renderAll();
+}
+
+function polygonCenter(points) {
+  if (!points.length) {
+    return { x: 0, y: 0 };
+  }
+  return {
+    x: round(points.reduce((sum, point) => sum + Number(point.x), 0) / points.length),
+    y: round(points.reduce((sum, point) => sum + Number(point.y), 0) / points.length)
+  };
+}
+
+function syncShapeCenter(shape) {
+  if (!shape) {
+    return;
+  }
+  if (shape.geometry.kind === "polygon") {
+    shape.map_center = polygonCenter(shape.geometry.polygon || []);
+  } else if (shape.geometry.center) {
+    shape.map_center = { ...shape.geometry.center };
+  }
+}
+
+function clonePoint(point) {
+  return { x: Number(point?.x || 0), y: Number(point?.y || 0) };
+}
+
+function cloneGeometry(geometry) {
+  if (!geometry || typeof geometry !== "object") {
+    return { kind: "point", center: { x: 0, y: 0 } };
+  }
+  if (geometry.kind === "polygon") {
+    return {
+      kind: "polygon",
+      polygon: (geometry.polygon || []).map(clonePoint)
+    };
+  }
+  if (geometry.kind === "circle") {
+    return {
+      kind: "circle",
+      center: clonePoint(geometry.center),
+      radius_m: Number(geometry.radius_m || 0)
+    };
+  }
+  return {
+    kind: "point",
+    center: clonePoint(geometry.center)
+  };
+}
+
+function translatedPoint(point, delta) {
+  return {
+    x: round(Number(point.x || 0) + delta.x),
+    y: round(Number(point.y || 0) + delta.y)
+  };
+}
+
+function moveShapeByDelta(shape, drag, worldPoint) {
+  const delta = {
+    x: Number(worldPoint.x) - Number(drag.startWorld.x),
+    y: Number(worldPoint.y) - Number(drag.startWorld.y)
+  };
+  const geometry = cloneGeometry(drag.startGeometry);
+  if (geometry.kind === "polygon") {
+    shape.geometry.polygon = geometry.polygon.map((point) => translatedPoint(point, delta));
+  } else if (geometry.kind === "circle" || geometry.kind === "point") {
+    shape.geometry.center = translatedPoint(geometry.center, delta);
+  }
+  shape.map_center = translatedPoint(drag.startMapCenter, delta);
+}
+
+function mapCenterWorld() {
+  return pixelToWorld({
+    x: PACKET.map.image_width_px / 2,
+    y: PACKET.map.image_height_px / 2
+  });
+}
+
+function shapeCenter(shape) {
+  syncShapeCenter(shape);
+  return clonePoint(shape.map_center);
+}
+
+function selectionCenter(shapes) {
+  const centers = shapes.map(shapeCenter);
+  if (!centers.length) {
+    return mapCenterWorld();
+  }
+  return {
+    x: round(centers.reduce((sum, point) => sum + point.x, 0) / centers.length),
+    y: round(centers.reduce((sum, point) => sum + point.y, 0) / centers.length)
+  };
+}
+
+function angleBetween(center, point) {
+  return Math.atan2(Number(point.y) - Number(center.y), Number(point.x) - Number(center.x));
+}
+
+function rotatePointAround(point, center, angleRad) {
+  const dx = Number(point.x) - Number(center.x);
+  const dy = Number(point.y) - Number(center.y);
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  return {
+    x: round(Number(center.x) + dx * cos - dy * sin),
+    y: round(Number(center.y) + dx * sin + dy * cos)
+  };
+}
+
+function rotatePolygonToAngle(shape, angleDeg) {
+  const geometry = shape.geometry || {};
+  if (geometry.kind !== "polygon" || !Array.isArray(geometry.polygon)) {
+    return;
+  }
+  const center = polygonCenter(geometry.polygon);
+  const currentAngle = polygonAngleDeg(geometry.polygon);
+  const deltaRad = ((Number(angleDeg) - currentAngle) * Math.PI) / 180;
+  geometry.polygon = geometry.polygon.map((point) => rotatePointAround(point, center, deltaRad));
+  syncShapeCenter(shape);
+}
+
+function rotateShapeAround(shape, center, angleRad) {
+  const geometry = shape.geometry || {};
+  if (geometry.kind === "polygon" && Array.isArray(geometry.polygon)) {
+    geometry.polygon = geometry.polygon.map((point) => rotatePointAround(point, center, angleRad));
+  } else if ((geometry.kind === "circle" || geometry.kind === "point") && geometry.center) {
+    geometry.center = rotatePointAround(geometry.center, center, angleRad);
+  }
+  syncShapeCenter(shape);
+}
+
+function applyGlobalTilt() {
+  const angleInput = document.getElementById("globalTiltAngle");
+  const scope = document.getElementById("globalTiltScope").value;
+  const pivotMode = document.getElementById("globalTiltPivot").value;
+  const angleDeg = Number(angleInput.value || 0);
+  const targets = scope === "selected" ? [selectedShape()].filter(Boolean) : state.shapes;
+  if (!targets.length) {
+    return;
+  }
+  const pivot = pivotMode === "selection" ? selectionCenter(targets) : mapCenterWorld();
+  const angleRad = (angleDeg * Math.PI) / 180;
+  targets.forEach((shape) => rotateShapeAround(shape, pivot, angleRad));
+  renderAll();
+}
+
+function rotatePolygonDrag(shape, drag, worldPoint, event) {
+  const geometry = shape.geometry || {};
+  if (geometry.kind !== "polygon") {
+    return;
+  }
+  const center = clonePoint(drag.startMapCenter);
+  const startAngle = angleBetween(center, drag.startWorld);
+  const nextAngle = angleBetween(center, worldPoint);
+  let deltaRad = nextAngle - startAngle;
+  if (event.shiftKey) {
+    const targetDeg = snapAngleDeg(polygonAngleDeg(drag.startGeometry.polygon) + radToDeg(deltaRad));
+    const startDeg = polygonAngleDeg(drag.startGeometry.polygon);
+    deltaRad = ((targetDeg - startDeg) * Math.PI) / 180;
+  }
+  geometry.polygon = drag.startGeometry.polygon.map((point) =>
+    rotatePointAround(point, center, deltaRad)
+  );
+  shape.map_center = center;
+}
+
+function polygonAngleDeg(points) {
+  if (!Array.isArray(points) || points.length < 2) {
+    return 0;
+  }
+  const first = points[0];
+  const second = points[1];
+  return normalizeDeg(radToDeg(Math.atan2(second.y - first.y, second.x - first.x)));
+}
+
+function normalizeDeg(value) {
+  let normalized = Number(value) % 360;
+  if (normalized > 180) {
+    normalized -= 360;
+  }
+  if (normalized <= -180) {
+    normalized += 360;
+  }
+  return Math.round(normalized * 10) / 10;
+}
+
+function radToDeg(value) {
+  return (Number(value) * 180) / Math.PI;
+}
+
+function snapAngleDeg(value) {
+  return Math.round(Number(value) / 5) * 5;
+}
+
+function polygonRotateHandle(shape) {
+  const geometry = shape.geometry || {};
+  if (geometry.kind !== "polygon" || !Array.isArray(geometry.polygon) || geometry.polygon.length < 3) {
+    return null;
+  }
+  const centerWorld = polygonCenter(geometry.polygon);
+  const points = geometry.polygon.map(worldToPixel);
+  const center = worldToPixel(centerWorld);
+  const maxRadius = Math.max(...points.map((point) => distance(point, center)), 10);
+  const angle = angleBetween(center, points[0]);
+  return {
+    x: center.x + Math.cos(angle) * (maxRadius + 28),
+    y: center.y + Math.sin(angle) * (maxRadius + 28)
+  };
+}
+
+function draw() {
+  if (!image.complete) {
+    return;
+  }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0);
+  if (state.layers.driveableWays) {
+    drawDriveableWays();
+  }
+  if (state.layers.rooms) {
+    state.shapes.forEach((shape, index) => drawShape(shape, index));
+  }
+  if (state.layers.fixtures) {
+    drawFixtures();
+  }
+  if (state.layers.waypoints) {
+    drawWaypoints();
+  }
+  drawDraftPolygon();
+}
+
+function drawDriveableWays() {
+  const ways = PACKET.semantic_map_layers?.driveable_ways || [];
+  ctx.save();
+  ctx.strokeStyle = "rgba(15, 118, 110, 0.72)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([9, 7]);
+  ways.forEach((way) => {
+    if (!way.from_center || !way.to_center) {
+      return;
+    }
+    const start = worldToPixel(way.from_center);
+    const end = worldToPixel(way.to_center);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function drawFixtures() {
+  const fixtures = PACKET.semantic_map_layers?.fixtures || [];
+  ctx.save();
+  fixtures.forEach((fixture) => {
+    const center = worldToPixel(fixture.pose || { x: 0, y: 0 });
+    ctx.fillStyle = "#0f766e";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.rect(center.x - 5, center.y - 5, 10, 10);
+    ctx.fill();
+    ctx.stroke();
+    drawSmallLabel(fixture.label || fixture.fixture_id, center, "#0f766e", 9, 14);
+  });
+  ctx.restore();
+}
+
+function drawWaypoints() {
+  const waypoints = PACKET.semantic_map_layers?.inspection_waypoints || [];
+  ctx.save();
+  waypoints.forEach((waypoint) => {
+    const center = worldToPixel(waypoint.pose || { x: 0, y: 0 });
+    ctx.fillStyle = "#a16207";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y - 7);
+    ctx.lineTo(center.x + 7, center.y);
+    ctx.lineTo(center.x, center.y + 7);
+    ctx.lineTo(center.x - 7, center.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    drawSmallLabel(waypoint.label || waypoint.waypoint_id, center, "#7c4a03", 9, -10);
+  });
+  ctx.restore();
+}
+
+function drawSmallLabel(label, point, color, dx, dy) {
+  ctx.font = "11px Inter, system-ui, sans-serif";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.strokeText(label, point.x + dx, point.y + dy);
+  ctx.fillStyle = color;
+  ctx.fillText(label, point.x + dx, point.y + dy);
+}
+
+function drawShape(shape, index) {
+  const color = palette[index % palette.length];
+  const selected = shape.shape_id === state.selectedId;
+  ctx.save();
+  ctx.lineWidth = selected ? 3 : 2;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = hexToRgba(color, selected ? 0.22 : 0.12);
+  const geometry = shape.geometry || {};
+  if (geometry.kind === "polygon") {
+    const points = (geometry.polygon || []).map(worldToPixel);
+    if (points.length) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      points.forEach((point) => drawHandle(point, selected));
+      if (selected) {
+        const handle = polygonRotateHandle(shape);
+        if (handle) {
+          const center = worldToPixel(shape.map_center || polygonCenter(geometry.polygon));
+          ctx.beginPath();
+          ctx.moveTo(center.x, center.y);
+          ctx.lineTo(handle.x, handle.y);
+          ctx.stroke();
+          drawRotateHandle(handle);
+        }
+      }
+    }
+  } else if (geometry.kind === "circle") {
+    const center = worldToPixel(geometry.center || { x: 0, y: 0 });
+    const radiusPx = Number(geometry.radius_m || 0) / PACKET.map.resolution_m;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, Math.max(radiusPx, 1), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    drawHandle(center, selected);
+    drawHandle({ x: center.x + radiusPx, y: center.y }, selected);
+  } else if (geometry.kind === "point") {
+    const center = worldToPixel(geometry.center || { x: 0, y: 0 });
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, selected ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  const labelPoint = worldToPixel(shape.map_center || geometry.center || { x: 0, y: 0 });
+  ctx.font = "13px Inter, system-ui, sans-serif";
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.strokeText(shape.label || shape.shape_id, labelPoint.x + 8, labelPoint.y - 8);
+  ctx.fillStyle = "#0f172a";
+  ctx.fillText(shape.label || shape.shape_id, labelPoint.x + 8, labelPoint.y - 8);
+  ctx.restore();
+}
+
+function drawRotateHandle(point) {
+  ctx.save();
+  ctx.fillStyle = "#111827";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDraftPolygon() {
+  if (!state.draftPolygon.length) {
+    return;
+  }
+  const points = state.draftPolygon.map(worldToPixel);
+  ctx.save();
+  ctx.strokeStyle = "#111827";
+  ctx.fillStyle = "rgba(17, 24, 39, 0.12)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
+  ctx.stroke();
+  points.forEach((point) => drawHandle(point, true));
+  ctx.restore();
+}
+
+function drawHandle(point, selected) {
+  ctx.save();
+  ctx.fillStyle = selected ? "#ffffff" : "#f8fafc";
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, selected ? 5 : 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function hitTest(pixelPoint) {
+  if (!state.layers.rooms) {
+    return null;
+  }
+  for (let shapeIndex = state.shapes.length - 1; shapeIndex >= 0; shapeIndex -= 1) {
+    const shape = state.shapes[shapeIndex];
+    const geometry = shape.geometry || {};
+    if (geometry.kind === "polygon") {
+      const points = (geometry.polygon || []).map(worldToPixel);
+      const rotateHandle = polygonRotateHandle(shape);
+      if (rotateHandle && distance(pixelPoint, rotateHandle) <= 12) {
+        return { shape, type: "rotate" };
+      }
+      for (let pointIndex = 0; pointIndex < points.length; pointIndex += 1) {
+        if (distance(pixelPoint, points[pointIndex]) <= 9) {
+          return { shape, type: "vertex", pointIndex };
+        }
+      }
+      if (pointInPolygon(pixelPoint, points)) {
+        return { shape, type: "shape" };
+      }
+    } else if (geometry.kind === "circle") {
+      const center = worldToPixel(geometry.center || { x: 0, y: 0 });
+      const radiusPx = Number(geometry.radius_m || 0) / PACKET.map.resolution_m;
+      if (Math.abs(distance(pixelPoint, center) - radiusPx) <= 9) {
+        return { shape, type: "radius" };
+      }
+      if (distance(pixelPoint, center) <= Math.max(radiusPx, 9)) {
+        return { shape, type: "shape" };
+      }
+    } else if (geometry.kind === "point") {
+      const center = worldToPixel(geometry.center || { x: 0, y: 0 });
+      if (distance(pixelPoint, center) <= 10) {
+        return { shape, type: "shape" };
+      }
+    }
+  }
+  return null;
+}
+
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function pointInPolygon(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersect = yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi || 1e-9) + xi;
+    if (intersect) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function hexToRgba(hex, alpha) {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+canvas.addEventListener("pointerdown", (event) => {
+  const pixel = canvasPoint(event);
+  const world = pixelToWorld(pixel);
+  if (state.mode === "polygon") {
+    state.draftPolygon.push(world);
+    draw();
+    return;
+  }
+  if (state.mode === "circle") {
+    const shape = createShape("circle", world);
+    state.drag = { shapeId: shape.shape_id, type: "radius" };
+    return;
+  }
+  if (state.mode === "point") {
+    createShape("point", world);
+    setMode("select");
+    return;
+  }
+  const hit = hitTest(pixel);
+  if (hit) {
+    state.selectedId = hit.shape.shape_id;
+    state.drag = {
+      shapeId: hit.shape.shape_id,
+      type: hit.type,
+      pointIndex: hit.pointIndex,
+      startWorld: world,
+      startGeometry: cloneGeometry(hit.shape.geometry),
+      startMapCenter: clonePoint(hit.shape.map_center)
+    };
+  } else {
+    state.selectedId = null;
+    state.drag = null;
+  }
+  renderAll();
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (!state.drag) {
+    return;
+  }
+  const pixel = canvasPoint(event);
+  const world = pixelToWorld(pixel);
+  const shape = state.shapes.find((item) => item.shape_id === state.drag.shapeId);
+  if (!shape) {
+    return;
+  }
+  const geometry = shape.geometry || {};
+  if (state.drag.type === "vertex" && geometry.kind === "polygon") {
+    geometry.polygon[state.drag.pointIndex] = world;
+  } else if (state.drag.type === "radius" && geometry.kind === "circle") {
+    const centerPixel = worldToPixel(geometry.center || world);
+    geometry.radius_m = round(distance(pixel, centerPixel) * PACKET.map.resolution_m);
+  } else if (state.drag.type === "shape") {
+    moveShapeByDelta(shape, state.drag, world);
+  } else if (state.drag.type === "rotate") {
+    rotatePolygonDrag(shape, state.drag, world, event);
+  }
+  syncShapeCenter(shape);
+  renderAll();
+});
+
+canvas.addEventListener("pointerup", () => {
+  state.drag = null;
+});
+
+canvas.addEventListener("dblclick", () => {
+  if (state.mode === "polygon") {
+    finishDraftPolygon();
+  }
+});
+
+function renderShapeList() {
+  const list = document.getElementById("shapeList");
+  list.innerHTML = "";
+  state.shapes.forEach((shape) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "shape-item" + (shape.shape_id === state.selectedId ? " active" : "");
+    const area = escapeHtml(shape.navigation_area_id || "unassigned");
+    const category = escapeHtml(shape.category || "uncategorized");
+    button.innerHTML = `<strong>${escapeHtml(shape.label || shape.shape_id)}</strong>
+      <span>${area} / ${category}</span>`;
+    button.addEventListener("click", () => {
+      state.selectedId = shape.shape_id;
+      renderAll();
+    });
+    list.appendChild(button);
+  });
+}
+
+function renderEditor() {
+  const editor = document.getElementById("editor");
+  const shape = selectedShape();
+  if (!shape) {
+    editor.innerHTML = "<p>No label selected.</p>";
+    return;
+  }
+  const roleOptions = options(PACKET.valid_polygon_roles, shape.polygon_role);
+  const sourceOptions = options(PACKET.valid_geometry_sources, shape.geometry_source);
+  const angleControl = shape.geometry.kind === "polygon" ? `
+    <label>
+      Angle deg
+      <input
+        data-angle-field="polygon_angle"
+        type="number"
+        step="1"
+        value="${escapeAttr(polygonAngleDeg(shape.geometry.polygon || []))}"
+      />
+    </label>
+  ` : "";
+  editor.innerHTML = `
+    <label>
+      Label
+      <input data-field="label" value="${escapeAttr(shape.label || "")}" />
+    </label>
+    <label>
+      Category
+      <input data-field="category" value="${escapeAttr(shape.category || "")}" />
+    </label>
+    <label>
+      Navigation area
+      <input
+        data-field="navigation_area_id"
+        value="${escapeAttr(shape.navigation_area_id || "")}"
+      />
+    </label>
+    <label>
+      Asset partition
+      <input
+        data-field="asset_partition_id"
+        value="${escapeAttr(shape.asset_partition_id || "")}"
+      />
+    </label>
+    <label>
+      Polygon role
+      <select data-field="polygon_role">${roleOptions}</select>
+    </label>
+    <label>
+      Geometry source
+      <select data-field="geometry_source">${sourceOptions}</select>
+    </label>
+    ${angleControl}
+    <div class="meta">
+      status: candidate / draft<br />
+      geometry: ${escapeHtml(shape.geometry.kind)}
+    </div>
+  `;
+  editor.querySelectorAll("[data-field]").forEach((input) => {
+    input.addEventListener("input", () => {
+      shape[input.dataset.field] = input.value;
+      renderAll();
+    });
+  });
+  editor.querySelectorAll("[data-angle-field]").forEach((input) => {
+    input.addEventListener("input", () => {
+      rotatePolygonToAngle(shape, input.value || 0);
+      renderAll();
+    });
+  });
+}
+
+function renderSceneEvidence() {
+  const panel = document.getElementById("sceneEvidence");
+  const shape = selectedShape();
+  if (!shape) {
+    panel.innerHTML = "<p>No label selected.</p>";
+    return;
+  }
+  const roomId = shape.source_room_id || shape.shape_id;
+  const evidence = PACKET.scene_evidence?.rooms?.[roomId];
+  if (!evidence) {
+    panel.innerHTML = "<p>No scene evidence for this label.</p>";
+    return;
+  }
+  const objects = Object.entries(evidence.object_name_counts || {})
+    .slice(0, 12)
+    .map(([name, count]) => `<span>${escapeHtml(name)} ${escapeHtml(count)}</span>`)
+    .join("");
+  const artifacts = (evidence.evidence_artifact_links || [])
+    .map((artifact) => {
+      if (artifact.available && artifact.href) {
+        return `<a href="${escapeAttr(artifact.href)}" target="_blank" rel="noreferrer">${escapeHtml(artifact.source_path)}</a>`;
+      }
+      return `<span>${escapeHtml(artifact.source_path)} (not packaged)</span>`;
+    })
+    .join("");
+  const conflicts = (evidence.conflicting_evidence || [])
+    .map((item) => escapeHtml(item))
+    .join("<br />");
+  panel.innerHTML = `
+    <div class="evidence-panel">
+      <span class="badge">${escapeHtml(evidence.alignment_status || "candidate")}</span>
+      <div class="evidence-row">
+        <strong>${escapeHtml(evidence.room_label || evidence.room_id)}</strong>
+        <span>map area: ${escapeHtml(evidence.navigation_area_id || "unassigned")}</span>
+      </div>
+      <div class="evidence-row">
+        <strong>Candidate scene partition</strong>
+        <span>${escapeHtml(evidence.candidate_scene_partition_id || "none")}</span>
+      </div>
+      <div class="evidence-row">
+        <strong>Identity</strong>
+        <span>${escapeHtml(evidence.identity_status || "candidate")}</span>
+      </div>
+      <div class="evidence-row">
+        <strong>Object names</strong>
+        <div class="object-counts">${objects || "<span>none</span>"}</div>
+      </div>
+      <div class="evidence-row">
+        <strong>Evidence artifacts</strong>
+        <div class="artifact-links">${artifacts || "none"}</div>
+      </div>
+      ${conflicts ? `<div class="evidence-row"><strong>Conflicts</strong><span>${conflicts}</span></div>` : ""}
+    </div>
+  `;
+}
+
+function options(values, selected) {
+  return (values || []).map((value) => {
+    const isSelected = value === selected ? " selected" : "";
+    return `<option value="${escapeAttr(value)}"${isSelected}>${escapeHtml(value)}</option>`;
+  }).join("");
+}
+
+function exportManifest() {
+  const labels = state.shapes.map((shape) => {
+    syncShapeCenter(shape);
+    const geometry = exportGeometry(shape.geometry || {});
+    return {
+      label_id: shape.shape_id,
+      label: shape.label || "",
+      category: shape.category || "",
+      navigation_area_id: shape.navigation_area_id || "",
+      asset_partition_id: shape.asset_partition_id || "",
+      source_room_id: shape.source_room_id || "",
+      source_map_frame_id: shape.source_map_frame_id || PACKET.source_map_frame_id,
+      geometry,
+      map_center: shape.map_center || geometry.center || polygonCenter(geometry.polygon || []),
+      polygon_role: shape.polygon_role || PACKET.shape_defaults.polygon_role,
+      geometry_source: shape.geometry_source || PACKET.shape_defaults.geometry_source,
+      alignment_status: "candidate",
+      review_status: "draft",
+      polygon_usage: { navigation: true, semantic_labeling: "candidate", review: true }
+    };
+  });
+  return {
+    schema: PACKET.draft_manifest_schema,
+    source_map_frame_id: PACKET.source_map_frame_id,
+    map_bundle: PACKET.map_bundle,
+    source_semantics: PACKET.source_semantics,
+    source_image: PACKET.source_image,
+    generated_at: new Date().toISOString(),
+    review_status: "draft",
+    alignment_status: "candidate",
+    source_map_mutated: false,
+    verified_status_allowed: false,
+    labels
+  };
+}
+
+function exportGeometry(geometry) {
+  if (geometry.kind === "circle") {
+    return {
+      kind: "circle",
+      center: geometry.center || { x: 0, y: 0 },
+      radius_m: Number(geometry.radius_m || 0)
+    };
+  }
+  if (geometry.kind === "point") {
+    return { kind: "point", center: geometry.center || { x: 0, y: 0 } };
+  }
+  return { kind: "polygon", polygon: geometry.polygon || [] };
+}
+
+function refreshExportText() {
+  exportText.value = JSON.stringify(exportManifest(), null, 2);
+}
+
+function renderMeta() {
+  const layers = PACKET.semantic_map_layers || {};
+  document.getElementById("mapMeta").innerHTML = `
+    frame: ${escapeHtml(PACKET.source_map_frame_id)}<br />
+    image: ${PACKET.map.image_width_px} x ${PACKET.map.image_height_px}px<br />
+    resolution: ${PACKET.map.resolution_m} m/px<br />
+    labels: ${state.shapes.length}<br />
+    fixtures: ${(layers.fixtures || []).length}<br />
+    waypoints: ${(layers.inspection_waypoints || []).length}
+  `;
+}
+
+function renderAll() {
+  renderMeta();
+  renderShapeList();
+  renderEditor();
+  renderSceneEvidence();
+  refreshExportText();
+  draw();
+}
+
+function loadManifest(payload) {
+  const validPayload = payload &&
+    payload.schema === PACKET.draft_manifest_schema &&
+    Array.isArray(payload.labels);
+  if (!validPayload) {
+    return;
+  }
+  state.shapes = payload.labels.map((label) => ({
+    shape_id: label.label_id,
+    label: label.label || "",
+    category: label.category || "",
+    navigation_area_id: label.navigation_area_id || "",
+    asset_partition_id: label.asset_partition_id || "",
+    source_room_id: label.source_room_id || "",
+    source_map_frame_id: label.source_map_frame_id || PACKET.source_map_frame_id,
+    geometry: label.geometry || { kind: "point", center: label.map_center || { x: 0, y: 0 } },
+    map_center: label.map_center || { x: 0, y: 0 },
+    polygon_role: label.polygon_role || PACKET.shape_defaults.polygon_role,
+    geometry_source: label.geometry_source || PACKET.shape_defaults.geometry_source,
+    alignment_status: "candidate",
+    review_status: "draft",
+    polygon_usage: { navigation: true, semantic_labeling: "candidate", review: true }
+  }));
+  state.selectedId = state.shapes[0]?.shape_id || null;
+  renderAll();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value);
+}
+
+document.querySelectorAll("[data-mode]").forEach((button) => {
+  button.addEventListener("click", () => setMode(button.dataset.mode));
+});
+document.querySelectorAll("[data-layer]").forEach((input) => {
+  input.addEventListener("change", () => {
+    state.layers[input.dataset.layer] = input.checked;
+    draw();
+  });
+});
+document.getElementById("finishPolygon").addEventListener("click", finishDraftPolygon);
+document.getElementById("deleteShape").addEventListener("click", () => {
+  state.shapes = state.shapes.filter((shape) => shape.shape_id !== state.selectedId);
+  state.selectedId = state.shapes[0]?.shape_id || null;
+  renderAll();
+});
+document.getElementById("applyGlobalTilt").addEventListener("click", applyGlobalTilt);
+document.getElementById("copyJson").addEventListener("click", async () => {
+  refreshExportText();
+  await navigator.clipboard.writeText(exportText.value);
+});
+document.getElementById("downloadJson").addEventListener("click", () => {
+  refreshExportText();
+  const blob = new Blob([exportText.value], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "b1-map12-label-draft.json";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
+document.getElementById("loadInitial").addEventListener("click", () => {
+  state.shapes = JSON.parse(JSON.stringify(PACKET.shapes || []));
+  state.selectedId = state.shapes[0]?.shape_id || null;
+  state.draftPolygon = [];
+  renderAll();
+});
+document.getElementById("importJson").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) {
+    return;
+  }
+  loadManifest(JSON.parse(await file.text()));
+});
+
+image.onload = () => {
+  canvas.width = PACKET.map.image_width_px;
+  canvas.height = PACKET.map.image_height_px;
+  state.selectedId = state.shapes[0]?.shape_id || null;
+  renderAll();
+};
+image.src = IMAGE_DATA_URL;
+</script>
+</body>
+</html>
