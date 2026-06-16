@@ -696,6 +696,13 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: full
   realworld-contract test file, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Runtime Metric Map candidate typing, producer summary,
+  observed-object confidence/actionability, and synthetic observation-id
+  helpers also moved into `realworld_runtime_map_contract.py`. Metric:
+  `realworld_contract.py` 5126 -> 5095 lines; Ruff complexity stayed at 0 and
+  oversized modules stayed at 62. Proof: full realworld-contract test file,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

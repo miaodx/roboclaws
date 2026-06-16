@@ -25,7 +25,7 @@ runtime-map contract split:
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
-- `roboclaws/household/realworld_contract.py` is down to 5126 lines after the
+- `roboclaws/household/realworld_contract.py` is down to 5095 lines after the
   projection, agent-view boundary, visual-candidate, and runtime-map contract
   helper splits, but remains a P1 hard-ceiling candidate.
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is down
@@ -41,7 +41,7 @@ runtime-map contract split:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
 - Dirty worktree drift: parallel scene-sampler changes currently put
-  `roboclaws/launch/scene_sampler.py` at 2001 lines. Treat it as reopened P1
+  `roboclaws/launch/scene_sampler.py` at 2077 lines. Treat it as reopened P1
   hard-ceiling drift if those changes remain above the ceiling.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
@@ -142,7 +142,7 @@ ruff, ratchet summary.
 
 ### B: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is now 5126 lines
+Severity: P1. `roboclaws/household/realworld_contract.py` is now 5095 lines
 after the projection, agent-view boundary, visual-candidate, and runtime-map
 contract helper splits and remains above the hard ceiling;
 `roboclaws/household/report.py` is now 4880 lines after the Isaac runtime,
@@ -190,7 +190,7 @@ code-size slices. Owner: `intuitive-init`.
 ### G: Scene Sampler Hard-Ceiling Drift
 
 Severity: P1 if current parallel changes remain. `roboclaws/launch/scene_sampler.py`
-is currently 2001 lines in the dirty worktree, after previously clearing the
+is currently 2077 lines in the dirty worktree, after previously clearing the
 hard ceiling. Recheck after the parallel scene-sampler changes settle; if still
 above 2000, move a real sampler ownership boundary or record a narrow
 exception. Owner: `intuitive-refactor`.

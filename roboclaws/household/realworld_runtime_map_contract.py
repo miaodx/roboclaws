@@ -3,6 +3,80 @@ from __future__ import annotations
 from typing import Any
 
 
+def target_candidate_type_for_waypoint(waypoint: dict[str, Any]) -> str:
+    source = str(waypoint.get("waypoint_source") or "")
+    if source == "generated_exploration_candidate":
+        return "generated_exploration_candidate"
+    if source == "generated_target_inspection_candidate":
+        return "generated_target_inspection_candidate"
+    return "public_inspection_waypoint"
+
+
+def runtime_map_producer_summary(
+    observed_objects: list[dict[str, Any]],
+    *,
+    public_semantic_anchors: list[dict[str, Any]] | None = None,
+    map_update_candidates: list[dict[str, Any]] | None = None,
+    target_candidates: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    producers: dict[str, int] = {}
+    for item in observed_objects:
+        producer_type = str(item.get("producer_type") or "unknown")
+        producers[producer_type] = producers.get(producer_type, 0) + 1
+    anchors = public_semantic_anchors or []
+    anchor_producers: dict[str, int] = {}
+    for item in anchors:
+        producer_type = str(item.get("producer_type") or "unknown")
+        anchor_producers[producer_type] = anchor_producers.get(producer_type, 0) + 1
+    return {
+        "observed_object_count": len(observed_objects),
+        "producer_types": producers,
+        "public_semantic_anchor_count": len(anchors),
+        "public_semantic_anchor_producer_types": anchor_producers,
+        "target_candidate_count": len(target_candidates or []),
+        "map_update_candidate_count": len(map_update_candidates or []),
+    }
+
+
+def runtime_observed_confidence(
+    detection: dict[str, Any],
+    declaration: dict[str, Any],
+) -> float:
+    for key in ("visibility_confidence", "grounding_confidence", "confidence"):
+        value = detection.get(key)
+        if value is None:
+            value = declaration.get(key)
+        try:
+            return round(float(value), 6)
+        except (TypeError, ValueError):
+            continue
+    return 0.0
+
+
+def runtime_actionability(
+    *,
+    state: str,
+    grounding_status: str,
+    cleanup_recommended: bool,
+) -> str:
+    if state in {"held", "placed", "placed_closed", "stale", "skipped"}:
+        return state
+    if state in {"prior", "needs_confirm"}:
+        return "needs_confirm"
+    if grounding_status in {"ambiguous", "unresolved"}:
+        return "needs_confirm"
+    if cleanup_recommended and state in {"pending", "navigating_to_object"}:
+        return "actionable"
+    return state or "pending"
+
+
+def synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
+    waypoint = str(waypoint_id or "")
+    if waypoint:
+        return f"visible_detection:{waypoint}:{handle}"
+    return f"visible_detection:{handle}"
+
+
 def runtime_map_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
     *,
