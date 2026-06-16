@@ -467,18 +467,45 @@ def semantic_map_layers_from_semantics(
     frame_id: str,
 ) -> dict[str, Any]:
     room_centers = _room_centers_by_id(semantics)
-    waypoint_centers: dict[str, dict[str, float]] = {}
+    fixtures, fixture_centers = _fixture_layer_rows(
+        semantics,
+        transform=transform,
+        frame_id=frame_id,
+    )
+    waypoints, waypoint_centers = _inspection_waypoint_layer_rows(
+        semantics,
+        transform=transform,
+        frame_id=frame_id,
+    )
+    driveable_ways = _driveable_way_layer_rows(
+        semantics,
+        transform=transform,
+        room_centers=room_centers,
+        waypoint_centers=waypoint_centers,
+        fixture_centers=fixture_centers,
+    )
+    return {
+        "coordinate_policy": "map_native_layers_use_source_map_frame_coordinates_only",
+        "fixtures": fixtures,
+        "inspection_waypoints": waypoints,
+        "driveable_ways": driveable_ways,
+    }
+
+
+def _fixture_layer_rows(
+    semantics: dict[str, Any],
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, float]]]:
     fixture_centers: dict[str, dict[str, float]] = {}
     fixtures = []
     for raw_fixture in semantics.get("fixtures") or []:
         if not isinstance(raw_fixture, dict):
             continue
         pose = raw_fixture.get("pose") if isinstance(raw_fixture.get("pose"), dict) else {}
-        if str(pose.get("frame_id") or frame_id) != frame_id:
-            continue
-        try:
-            center = {"x": float(pose["x"]), "y": float(pose["y"])}
-        except (KeyError, TypeError, ValueError):
+        center = _source_frame_point(pose, frame_id=frame_id)
+        if center is None:
             continue
         fixture_id = str(raw_fixture.get("fixture_id") or "")
         if fixture_id:
@@ -503,16 +530,22 @@ def semantic_map_layers_from_semantics(
                 "coordinate_status": "source_map_frame_coordinate",
             }
         )
+    return fixtures, fixture_centers
 
+
+def _inspection_waypoint_layer_rows(
+    semantics: dict[str, Any],
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, float]]]:
+    waypoint_centers: dict[str, dict[str, float]] = {}
     waypoints = []
     for raw_waypoint in semantics.get("inspection_waypoints") or []:
         if not isinstance(raw_waypoint, dict):
             continue
-        if str(raw_waypoint.get("frame_id") or frame_id) != frame_id:
-            continue
-        try:
-            center = {"x": float(raw_waypoint["x"]), "y": float(raw_waypoint["y"])}
-        except (KeyError, TypeError, ValueError):
+        center = _source_frame_point(raw_waypoint, frame_id=frame_id)
+        if center is None:
             continue
         waypoint_id = str(raw_waypoint.get("waypoint_id") or "")
         if waypoint_id:
@@ -536,7 +569,17 @@ def semantic_map_layers_from_semantics(
                 "coordinate_status": "source_map_frame_coordinate",
             }
         )
+    return waypoints, waypoint_centers
 
+
+def _driveable_way_layer_rows(
+    semantics: dict[str, Any],
+    *,
+    transform: SourceMapTransform,
+    room_centers: dict[str, dict[str, float]],
+    waypoint_centers: dict[str, dict[str, float]],
+    fixture_centers: dict[str, dict[str, float]],
+) -> list[dict[str, Any]]:
     driveable_ways = []
     for raw_way in semantics.get("driveable_ways") or []:
         if not isinstance(raw_way, dict):
@@ -577,13 +620,16 @@ def semantic_map_layers_from_semantics(
                 }
             )
         driveable_ways.append(item)
+    return driveable_ways
 
-    return {
-        "coordinate_policy": "map_native_layers_use_source_map_frame_coordinates_only",
-        "fixtures": fixtures,
-        "inspection_waypoints": waypoints,
-        "driveable_ways": driveable_ways,
-    }
+
+def _source_frame_point(payload: dict[str, Any], *, frame_id: str) -> dict[str, float] | None:
+    if str(payload.get("frame_id") or frame_id) != frame_id:
+        return None
+    try:
+        return {"x": float(payload["x"]), "y": float(payload["y"])}
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def scene_evidence_from_semantics(semantics: dict[str, Any]) -> dict[str, Any]:
@@ -772,43 +818,62 @@ def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_label_draft_manifest(payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
+    errors = _draft_manifest_header_errors(payload)
+    for index, raw_label in enumerate(payload.get("labels") or [], start=1):
+        errors.extend(_draft_manifest_label_errors(raw_label, index=index))
+    return errors
+
+
+def _draft_manifest_header_errors(payload: dict[str, Any]) -> list[str]:
+    errors = []
     if payload.get("schema") != LABEL_DRAFT_MANIFEST_SCHEMA:
         errors.append(f"schema must be {LABEL_DRAFT_MANIFEST_SCHEMA}")
     if payload.get("source_map_mutated") is not False:
         errors.append("label drafts must not mutate the source map")
     if payload.get("verified_status_allowed") is not False:
         errors.append("label drafts must not allow verified status")
-    for index, raw_label in enumerate(payload.get("labels") or [], start=1):
-        label = raw_label if isinstance(raw_label, dict) else {}
-        label_id = str(label.get("label_id") or f"labels[{index}]")
-        if label.get("alignment_status") != ALIGNMENT_STATUS_CANDIDATE:
-            errors.append(f"label {label_id} alignment_status must remain candidate")
-        if label.get("review_status") != "draft":
-            errors.append(f"label {label_id} review_status must remain draft")
-        geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
-        kind = str(geometry.get("kind") or "")
-        if kind == "polygon" and len(geometry.get("polygon") or []) < 3:
-            errors.append(f"label {label_id} polygon needs at least three points")
-        elif kind == "circle":
-            if not isinstance(geometry.get("center"), dict):
-                errors.append(f"label {label_id} circle needs a center")
-            if float(geometry.get("radius_m") or 0.0) <= 0.0:
-                errors.append(f"label {label_id} circle radius_m must be positive")
-        elif kind == "point":
-            if not isinstance(geometry.get("center"), dict):
-                errors.append(f"label {label_id} point needs a center")
-        elif kind not in {"polygon", "circle", "point"}:
-            errors.append(f"label {label_id} has unsupported geometry kind")
+    return errors
+
+
+def _draft_manifest_label_errors(raw_label: Any, *, index: int) -> list[str]:
+    errors = []
+    label = raw_label if isinstance(raw_label, dict) else {}
+    label_id = str(label.get("label_id") or f"labels[{index}]")
+    if label.get("alignment_status") != ALIGNMENT_STATUS_CANDIDATE:
+        errors.append(f"label {label_id} alignment_status must remain candidate")
+    if label.get("review_status") != "draft":
+        errors.append(f"label {label_id} review_status must remain draft")
+    geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
+    errors.extend(_draft_manifest_geometry_errors(label_id, geometry))
+    return errors
+
+
+def _draft_manifest_geometry_errors(label_id: str, geometry: dict[str, Any]) -> list[str]:
+    kind = str(geometry.get("kind") or "")
+    if kind == "polygon" and len(geometry.get("polygon") or []) < 3:
+        return [f"label {label_id} polygon needs at least three points"]
+    if kind == "circle":
+        return _draft_manifest_circle_errors(label_id, geometry)
+    if kind == "point" and not isinstance(geometry.get("center"), dict):
+        return [f"label {label_id} point needs a center"]
+    if kind not in {"polygon", "circle", "point"}:
+        return [f"label {label_id} has unsupported geometry kind"]
+    return []
+
+
+def _draft_manifest_circle_errors(label_id: str, geometry: dict[str, Any]) -> list[str]:
+    errors = []
+    if not isinstance(geometry.get("center"), dict):
+        errors.append(f"label {label_id} circle needs a center")
+    if float(geometry.get("radius_m") or 0.0) <= 0.0:
+        errors.append(f"label {label_id} circle radius_m must be positive")
     return errors
 
 
 def world_to_pixel(x: float, y: float, transform: SourceMapTransform) -> dict[str, float]:
     return {
         "x": (float(x) - transform.origin_x) / transform.resolution_m,
-        "y": transform.height_px
-        - 1.0
-        - ((float(y) - transform.origin_y) / transform.resolution_m),
+        "y": transform.height_px - 1.0 - ((float(y) - transform.origin_y) / transform.resolution_m),
     }
 
 
@@ -831,9 +896,13 @@ def image_data_url(path: Path) -> str:
 def render_label_tool_html(packet: dict[str, Any], *, image_data_url_value: str) -> str:
     packet_json = json.dumps(packet, sort_keys=True)
     image_json = json.dumps(image_data_url_value)
-    return label_tool_template().replace("__PACKET_JSON__", packet_json).replace(
-        "__IMAGE_DATA_URL__",
-        image_json,
+    return (
+        label_tool_template()
+        .replace("__PACKET_JSON__", packet_json)
+        .replace(
+            "__IMAGE_DATA_URL__",
+            image_json,
+        )
     )
 
 
@@ -953,7 +1022,6 @@ def label_tool_template_path() -> Path:
 
 def label_tool_template() -> str:
     return TEMPLATE_PATH.read_text(encoding="utf-8")
-
 
 
 if __name__ == "__main__":

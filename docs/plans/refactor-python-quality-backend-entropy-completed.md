@@ -789,6 +789,13 @@ logs before choosing the next slice.
   66. Proof: B1 runtime-bundle contract tests, B1 operator-preview tests,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: B1 Map 12 label-tool semantic layer construction and draft
+  manifest validation split into fixture/waypoint/driveable-way and
+  header/label/geometry helper families while preserving packet keys and
+  manifest error text. Metric: ratchet 15 -> 11 complexity rows; oversized
+  modules unchanged at 66. Proof: B1 label-tool contract tests, ruff, format
+  check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -809,5 +816,8 @@ logs before choosing the next slice.
 - B1 runtime-bundle review-manifest validation is split into focused helper
   families; reopen only if `review_manifest_errors` regains ratchet rows or
   false-green review-gate behavior.
+- B1 label-tool layer construction and draft-manifest validation are split
+  into focused helper families; reopen only if label-tool packet or error
+  contracts drift.
 - Completed report-section extraction is partial evidence, not a reason to
   treat `report.py` as done; the active plan still owns the hard-ceiling split.

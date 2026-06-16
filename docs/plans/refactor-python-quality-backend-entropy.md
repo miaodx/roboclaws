@@ -21,15 +21,14 @@ Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.p
 --summary --top 40` on 2026-06-17. Treat this as a planning snapshot, not proof
 of a clean checkpoint; refresh before the next execution slice.
 
-- 15 Ruff complexity violations and 66 oversized modules in the current
-  checkout. Candidate D's runtime-bundle review gate row is cleared; remaining
-  B1 Map 12 / preview complexity is in
-  `scripts/maps/render_b1_map12_label_tool.py` and
-  `scripts/operator_console/render_scene_previews.py`. Keep those rows with
-  candidate D unless they survive as unowned drift. The oversized count
-  remains 66 because `scene_sampler_scanner.py` absorbed scanner-admission row
-  assembly and crossed the 800-line target, while staying below the warning
-  band.
+- 11 Ruff complexity violations and 66 oversized modules in the current
+  checkout. Candidate D's runtime-bundle review gate and label-tool rows are
+  cleared; remaining B1 Map 12 / preview complexity is
+  `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
+  Keep that row with candidate D unless it survives as unowned drift. The
+  oversized count remains 66 because `scene_sampler_scanner.py` absorbed
+  scanner-admission row assembly and crossed the 800-line target, while staying
+  below the warning band.
 - The prior dirty-worktree scene-sampler drift is now below the hard ceiling:
   `roboclaws/launch/scene_sampler.py` was 3070 lines before the scene-only
   prefilter split, 2607 lines after that split, 2241 lines after the
@@ -49,12 +48,18 @@ of a clean checkpoint; refresh before the next execution slice.
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1994 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1841 lines.
 - Complexity rows are no longer only test fixture debt. Current rows span
-  operator-console tests, the B1 Map 12 label tool, a cleanup checker helper,
-  scene-preview rendering, live eval polling, MCP semantic tool registration,
-  prompt preview, and eval-harness row blockers.
+  operator-console tests, scene-preview rendering, a cleanup checker helper,
+  live eval polling, MCP semantic tool registration, prompt preview, and
+  eval-harness row blockers.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
+
+Execution refresh on 2026-06-17 cleared the B1 label-tool complexity rows after
+a planning-only ponytail/input recheck. The next executor should return to P1
+hard-ceiling production files by default. Candidate D now means only a separate
+preview-rendering slice, and candidate H remains opportunistic stale-surface
+cleanup rather than a reason to postpone P1 file-size reduction.
 
 ## Two-Document Contract
 
@@ -144,15 +149,20 @@ pressure than the earlier ratchet-only loop. Complexity has fallen quickly;
 the next useful work should prioritize hard-ceiling files, test fixture debt,
 and backend/report/evidence boundaries that prevent branching from returning.
 
-Next execution should choose one remaining P1 hard-ceiling architecture slice.
-Default recommendation: continue candidate A by reducing
+Next execution should normally choose one remaining P1 hard-ceiling
+architecture slice. Default recommendation: continue candidate A by reducing
 `RealWorldCleanupContract` ownership around model-declared visual-candidate
 registration or a remaining report section boundary, because the Runtime
 Metric Map observed/static payload assembly slice is complete and the facade is
-still above the hard ceiling. Do not continue by shaving isolated lines from
-many files. Ponytail audit items are inputs to this queue only when they remove
-a stale surface, duplicate concept, or false-confidence source; they should
-not postpone the P1 hard-ceiling checkpoint.
+still above the hard ceiling.
+
+The prior B1 Map 12 label-tool exception is now used and cleared. A future
+candidate D slice should be a separate preview-rendering cleanup only; do not
+expand it into B1 feature work, runtime proof, or label-tool churn. Do not
+continue by shaving isolated lines from many files. Ponytail audit items are
+inputs to this queue only when they remove a stale surface, duplicate concept,
+or false-confidence source; they should not postpone the P1 hard-ceiling
+checkpoint.
 
 ## Parallel Acceleration Policy
 
@@ -315,16 +325,18 @@ branching without changing public launch, report, or grader contracts.
 ### D: B1 Map 12 Label And Preview Tooling Complexity
 
 Severity: P2, promoted to P1 if it blocks B1 map alignment proof or hides a
-false-green review gate. Current rows include
-`scripts/maps/render_b1_map12_label_tool.py::semantic_map_layers_from_semantics`,
-`validate_label_draft_manifest`, and
+false-green review gate. Current rows include only
 `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 Owning architecture layers: Worlds / Scenes, Backend Runtimes / Environment
 Primitives, and Artifacts, reports, and eval suites. The
 `compile_b1_map12_runtime_bundle.py::review_manifest_errors` row is cleared;
 do not reopen unless the runtime-bundle review gate regains C901 / PLR0912 /
-PLR0915 drift. Prefer manifest/layer review result objects or small validation
-families over splitting one long function into anonymous helpers.
+PLR0915 drift. The label-tool semantic-layer and draft-manifest validation rows
+are cleared; reopen only if those helpers regain ratchet rows or output/error
+schema drift. If candidate D is selected again, keep it to preview rendering
+and preserve rendered preview claims. Prefer manifest/layer review result
+objects or small validation families over splitting one long function into
+anonymous helpers.
 
 ### E: Behavior-Test Fixture Builders
 
@@ -354,19 +366,22 @@ code-size slices. Owning layer: agent operating guidance, not product runtime.
 ### H: Stale Internal Surface Small-Cut Bundle
 
 Severity: P2. Execute only as a scoped stale-surface deletion bundle or when a
-nearby accepted slice already touches the same owner files. Current ponytail
-inputs: legacy checker flag `--require-canonical-robot-view-camera-control`,
-empty visual-grounding labeler maps, the unused prompt helper alias
+nearby accepted slice already touches the same owner files. Rechecked
+2026-06-17 ponytail inputs still present: legacy checker flag
+`--require-canonical-robot-view-camera-control`, empty camera-labeler to
+visual-grounding mapping dicts, unused prompt helper alias
 `_task_prefix_legacy`, and duplicated current-doc lane prose. Owning layers
 depend on the touched surface: Artifacts, reports, and eval suites for
 checker/report claims; MCP Capability Contract And Tools, Agent Skills, or
 Agent Engines And Provider Profiles for labeler/profile/prompt guidance.
 Behavior-change class is internal/stale docs unless a public command, report
 claim, prompt contract, or artifact contract changes; stop for a slice decision
-if that happens. This bundle must not be used as a reason to defer the
-remaining P1 hard-ceiling files. Proof: affected checker, prompt, or
-visual-grounding tests when code changes, otherwise static grep/docs proof
-plus ratchet.
+if that happens. Do not delete internal `visual_grounding` pipeline schemas,
+provenance fields, service env vars, or server plumbing merely because
+`visual_grounding=...` is no longer a public launch axis. This bundle must not
+be used as a reason to defer the remaining P1 hard-ceiling files. Proof:
+affected checker, prompt, or visual-grounding tests when code changes,
+otherwise static grep/docs proof plus ratchet.
 
 ### Cleared Or Parked
 
@@ -390,12 +405,16 @@ plus ratchet.
 - B1 Map 12 runtime-bundle review-manifest validation complexity is cleared;
   reopen only if `compile_b1_map12_runtime_bundle.py::review_manifest_errors`
   regains ratchet rows or false-green review-gate drift.
+- B1 Map 12 label-tool semantic layer and draft-manifest validation complexity
+  is cleared; reopen only if `render_b1_map12_label_tool.py` regains ratchet
+  rows or changes packet/error contracts.
 
 ## Ponytail Audit Triage
 
 The 2026-06-17 repo-wide ponytail audit produced simplification candidates.
 Use these as ratchet inputs, not as approval to change public contracts without
-a slice gate.
+a slice gate. A 2026-06-17 planning-only recheck confirmed that some names that
+look stale are still active internal contracts behind current public axes.
 
 - Accepted P1/P2 cleanup inputs:
   - Scene-sampler legacy MolmoSpaces alias drift is parked after the hard
@@ -406,18 +425,24 @@ a slice gate.
     remaining thin metric wrappers are P2 only if a future skill packaging slice
     can point `SKILL.md` / `skill.json` at root scripts directly.
   - Contract extraction Protocols in `realworld_contract_payloads.py` and
-    `realworld_done_readiness.py`: valid P2 concept-reduction targets inside
-    candidate A, but only if the slice reduces facade/private-member coupling
-    instead of just moving lines.
+    `realworld_done_readiness.py`: still present and valid P2
+    concept-reduction targets inside candidate A, but only if the slice reduces
+    facade/private-member coupling instead of replacing one wrapper with
+    another looser parameter bag.
   - Legacy checker flag
-    `--require-canonical-robot-view-camera-control`, empty visual-grounding
-    labeler maps, unused prompt legacy aliases, and duplicated current-doc lane
-    prose are candidate H, not ad hoc edits to unrelated owners.
+    `--require-canonical-robot-view-camera-control`, empty camera-labeler
+    mapping dicts, unused prompt legacy aliases, and duplicated current-doc
+    lane prose are candidate H, not ad hoc edits to unrelated owners. The empty
+    maps are a shrink target only for the camera-labeler mapping layer; do not
+    remove the internal visual-grounding pipeline contract or artifact fields.
 - Parked unless a nearby accepted slice touches them:
   - `PhysicalObservationProvider` is low-value Protocol cleanup and belongs to
     a physical Nav2 pilot slice, not the main hard-ceiling pass.
   - General large behavior-test files remain candidate E, but ponytail did not
     justify deleting test coverage wholesale.
+  - `AGENTS.md` / `CLAUDE.md` `hybrid-phase-pipeline` wording is candidate G
+    docs-only startup friction; keep it separate from Python hard-ceiling or B1
+    label-tool work.
 
 ## Evidence Ladder
 
