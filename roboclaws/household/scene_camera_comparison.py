@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 from roboclaws.household import (
     scene_camera_image_metrics,
     scene_camera_lighting_diagnostics,
+    scene_camera_render_domain,
     scene_camera_usda_contract,
 )
 from roboclaws.household.artifact_paths import dimensions_from_shape, output_relpath
@@ -37,9 +38,6 @@ from roboclaws.household.scene_camera_render_diagnostics import (
     mujoco_render_contract_from_xml as _mujoco_render_contract_from_xml,
 )
 from roboclaws.household.scene_camera_render_diagnostics import (
-    render_source_snippet as _render_source_snippet,
-)
-from roboclaws.household.scene_camera_render_diagnostics import (
     room_scale_contract_from_capture as _room_scale_contract_from_capture_impl,
 )
 from roboclaws.household.scene_camera_render_diagnostics import (
@@ -52,13 +50,15 @@ from roboclaws.household.scene_camera_report_hydration import (
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 
 SCENE_CAMERA_COMPARISON_SCHEMA = "molmospaces_isaac_scene_camera_comparison_v1"
-MOLMOSPACES_LANE_ID = "molmospaces-mujoco"
-ISAAC_LANE_ID = "isaaclab-prepared-usd"
+MOLMOSPACES_LANE_ID = scene_camera_render_domain.MOLMOSPACES_LANE_ID
+ISAAC_LANE_ID = scene_camera_render_domain.ISAAC_LANE_ID
 DEFAULT_RENDER_WIDTH = 960
 DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
 CANONICAL_CAMERA_POSE_THRESHOLD_M = 0.005
-CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX = 0.5
+CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX = (
+    scene_camera_render_domain.CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX
+)
 CANONICAL_ROOM_OUTLINE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_ELEVATION_DEG = 78.0
 SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
@@ -66,7 +66,7 @@ ROOM_CAMERA_HEIGHT_M = 1.45
 ROOM_CAMERA_INSET_FRACTION = 0.35
 CANDIDATE_VISUAL_MEAN_PIXEL_DELTA_WARN = 45.0
 CANDIDATE_VISUAL_MAX_PIXEL_DELTA_WARN = 60.0
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = scene_camera_render_domain.REPO_ROOT
 USD_PHYSICS_PRIM_TYPE_NAMES = scene_camera_usda_contract.USD_PHYSICS_PRIM_TYPE_NAMES
 USD_PHYSICS_API_SCHEMA_NAMES = scene_camera_usda_contract.USD_PHYSICS_API_SCHEMA_NAMES
 
@@ -115,84 +115,7 @@ _primary_mujoco_key_light_direction = (
     scene_camera_lighting_diagnostics.primary_mujoco_key_light_direction
 )
 _key_light_direction_diagnostics = scene_camera_lighting_diagnostics.key_light_direction_diagnostics
-
-OFFICIAL_RENDER_SOURCE_REFERENCES = (
-    {
-        "evidence_id": "mujoco_housegen_materials",
-        "lane": MOLMOSPACES_LANE_ID,
-        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
-        "line_start": 361,
-        "line_end": 399,
-        "claim": (
-            "MuJoCo scene generation parses source-scene material albedo, specular values, "
-            "and diffuse texture paths into MJCF material metadata."
-        ),
-    },
-    {
-        "evidence_id": "mujoco_housegen_lights",
-        "lane": MOLMOSPACES_LANE_ID,
-        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
-        "line_start": 455,
-        "line_end": 470,
-        "claim": (
-            "MuJoCo housegen optionally exports house lights, otherwise it creates a "
-            "default MJCF light at scene-build time."
-        ),
-    },
-    {
-        "evidence_id": "mujoco_asset_texture_material_collection",
-        "lane": MOLMOSPACES_LANE_ID,
-        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
-        "line_start": 1372,
-        "line_end": 1452,
-        "claim": (
-            "MuJoCo asset import copies texture slots and material RGBA into the scene "
-            "spec before rendering."
-        ),
-    },
-    {
-        "evidence_id": "isaac_preview_surface_material_conversion",
-        "lane": ISAAC_LANE_ID,
-        "path": (
-            "vendors/molmospaces/molmo_spaces_isaac/src/molmo_spaces_isaac/assets/utils/material.py"
-        ),
-        "line_start": 52,
-        "line_end": 112,
-        "claim": (
-            "Isaac USD conversion maps MJCF materials to USD PreviewSurface materials, "
-            "forces opacity to 1.0, maps shininess to roughness, and handles diffuse "
-            "textures through USD texture nodes."
-        ),
-    },
-    {
-        "evidence_id": "isaac_material_binding_texture_warning",
-        "lane": ISAAC_LANE_ID,
-        "path": (
-            "vendors/molmospaces/molmo_spaces_isaac/src/"
-            "molmo_spaces_isaac/assets/house_converter.py"
-        ),
-        "line_start": 288,
-        "line_end": 322,
-        "claim": (
-            "Isaac material binding warns that textured materials bound to non-Mesh prims "
-            "can discard textures at render time."
-        ),
-    },
-    {
-        "evidence_id": "isaac_default_lights_and_shadow_flags",
-        "lane": ISAAC_LANE_ID,
-        "path": (
-            "vendors/molmospaces/molmo_spaces_isaac/src/"
-            "molmo_spaces_isaac/assets/house_converter.py"
-        ),
-        "line_start": 325,
-        "line_end": 380,
-        "claim": (
-            "Isaac scene conversion authors default DistantLight/DomeLight and disables "
-            "shadow casting on selected wall or ceiling visual prims."
-        ),
-    },
-)
+OFFICIAL_RENDER_SOURCE_REFERENCES = scene_camera_render_domain.OFFICIAL_RENDER_SOURCE_REFERENCES
 
 
 @dataclass(frozen=True)
@@ -2535,769 +2458,63 @@ def _color_profile_replay_summary(view_results: list[dict[str, Any]]) -> dict[st
 
 
 def _render_domain_calibration(view_results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Estimate whether one global Isaac luminance gain explains the visual delta."""
-
-    pairs = []
-    for item in view_results:
-        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
-        molmo = (
-            lanes.get(MOLMOSPACES_LANE_ID)
-            if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict)
-            else {}
-        )
-        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
-        molmo_luminance = _optional_float(molmo.get("mean_luminance"))
-        isaac_luminance = _optional_float(isaac.get("mean_luminance"))
-        if molmo_luminance is None or isaac_luminance is None or isaac_luminance <= 0:
-            continue
-        pairs.append(
-            {
-                "view_id": str(item.get("view_id") or ""),
-                "molmospaces_luminance": molmo_luminance,
-                "isaac_luminance": isaac_luminance,
-            }
-        )
-    if not pairs:
-        return {
-            "schema": "scene_camera_render_domain_calibration_v1",
-            "status": "missing_luminance_pairs",
-            "pair_count": 0,
-        }
-
-    numerator = sum(pair["molmospaces_luminance"] * pair["isaac_luminance"] for pair in pairs)
-    denominator = sum(pair["isaac_luminance"] ** 2 for pair in pairs)
-    gain = numerator / denominator if denominator > 0 else 1.0
-    residuals = []
-    original_abs_deltas = []
-    for pair in pairs:
-        calibrated = pair["isaac_luminance"] * gain
-        residual = calibrated - pair["molmospaces_luminance"]
-        original_delta = pair["isaac_luminance"] - pair["molmospaces_luminance"]
-        original_abs_deltas.append(abs(original_delta))
-        residuals.append(
-            {
-                **pair,
-                "calibrated_isaac_luminance": calibrated,
-                "original_luminance_delta": original_delta,
-                "calibrated_luminance_residual": residual,
-                "abs_calibrated_luminance_residual": abs(residual),
-            }
-        )
-    mean_original_delta = sum(original_abs_deltas) / len(original_abs_deltas)
-    abs_residuals = [item["abs_calibrated_luminance_residual"] for item in residuals]
-    mean_residual = sum(abs_residuals) / len(abs_residuals)
-    max_residual = max(abs_residuals)
-    improvement_fraction = (
-        1.0 - mean_residual / mean_original_delta if mean_original_delta > 0 else 1.0
+    return scene_camera_render_domain.render_domain_calibration(
+        view_results,
+        optional_float=_optional_float,
     )
-    if mean_original_delta <= 10.0:
-        status = "already_luminance_matched"
-        next_action = "Do not tune exposure from this artifact; inspect material/texture deltas."
-    elif mean_residual <= 12.0 and max_residual <= 20.0:
-        status = "global_luminance_gain_sufficient"
-        next_action = "A global Isaac exposure/gain adjustment is a plausible next renderer slice."
-    else:
-        status = "view_dependent_render_domain_delta"
-        next_action = (
-            "A single global gain leaves large residuals; inspect per-room lights, material "
-            "albedo, indirect lighting, and tone response before changing camera geometry."
-        )
-    return {
-        "schema": "scene_camera_render_domain_calibration_v1",
-        "status": status,
-        "pair_count": len(pairs),
-        "global_isaac_luminance_gain": gain,
-        "mean_abs_original_luminance_delta": mean_original_delta,
-        "mean_abs_calibrated_luminance_residual": mean_residual,
-        "max_abs_calibrated_luminance_residual": max_residual,
-        "mean_luminance_delta_improvement_fraction": improvement_fraction,
-        "recommended_next_action": next_action,
-        "residuals": residuals,
-    }
 
 
 def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
-    camera = (
-        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    return scene_camera_render_domain.backend_swap_geometry_contract(
+        manifest,
+        optional_float=_optional_float,
     )
-    pose = (
-        manifest.get("camera_pose_contract")
-        if isinstance(manifest.get("camera_pose_contract"), dict)
-        else {}
-    )
-    intrinsics = (
-        manifest.get("camera_intrinsics_contract")
-        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
-        else {}
-    )
-    room_scale = (
-        manifest.get("room_scale_contract")
-        if isinstance(manifest.get("room_scale_contract"), dict)
-        else {}
-    )
-    projection = (
-        manifest.get("projection_diagnostics")
-        if isinstance(manifest.get("projection_diagnostics"), dict)
-        else {}
-    )
-    transform = (
-        manifest.get("scene_frame_transform")
-        if isinstance(manifest.get("scene_frame_transform"), dict)
-        else {}
-    )
-    visual = (
-        manifest.get("visual_diagnostics")
-        if isinstance(manifest.get("visual_diagnostics"), dict)
-        else {}
-    )
-    render_calibration = (
-        visual.get("render_domain_calibration")
-        if isinstance(visual.get("render_domain_calibration"), dict)
-        else {}
-    )
-    required_checks = [
-        {
-            "check": "same_camera_api",
-            "status": "pass" if camera.get("api_name") == CAMERA_CONTROL_API_NAME else "fail",
-            "value": camera.get("api_name"),
-            "expected": CAMERA_CONTROL_API_NAME,
-        },
-        {
-            "check": "same_explicit_eye_target_pose",
-            "status": "pass"
-            if pose.get("status") == "same_backend_pose_within_threshold"
-            else "fail",
-            "value": pose.get("status"),
-            "max_delta_m": pose.get("max_pose_delta_m"),
-            "threshold_m": pose.get("pose_threshold_m"),
-        },
-        {
-            "check": "same_intrinsics",
-            "status": "pass" if intrinsics.get("status") == "intrinsics_consistent" else "fail",
-            "value": intrinsics.get("status"),
-            "vertical_fov_deg": projection.get("vertical_fov_deg"),
-            "resolution": projection.get("resolution") or intrinsics.get("resolution"),
-        },
-        {
-            "check": "same_room_scale",
-            "status": "pass"
-            if room_scale.get("status") == "same_room_outlines_within_threshold"
-            else "fail",
-            "value": room_scale.get("status"),
-            "max_center_delta_m": room_scale.get("max_room_outline_center_delta_m"),
-            "max_size_delta_m": room_scale.get("max_room_outline_size_delta_m"),
-            "threshold_m": room_scale.get("room_outline_threshold_m"),
-        },
-        {
-            "check": "same_projected_geometry",
-            "status": "pass"
-            if projection.get("status") == "same_projected_geometry_within_threshold"
-            else "fail",
-            "value": projection.get("status"),
-            "max_pixel_delta": projection.get("max_pixel_delta"),
-            "threshold_px": projection.get("projection_threshold_px"),
-        },
-    ]
-    geometry_pass = all(item["status"] == "pass" for item in required_checks)
-    mean_pixel_delta = _optional_float(visual.get("mean_absolute_pixel_delta"))
-    mean_luminance_delta = _optional_float(visual.get("mean_abs_mean_luminance_delta"))
-    render_domain_status = str(render_calibration.get("status") or "")
-    visual_residual_status = (
-        "render_domain_residual_high"
-        if render_domain_status == "view_dependent_render_domain_delta"
-        else "render_domain_luminance_matched"
-        if render_domain_status == "already_luminance_matched"
-        else render_domain_status or "missing_visual_diagnostics"
-    )
-    status = (
-        "geometry_swap_ready_render_domain_pending"
-        if geometry_pass and visual_residual_status == "render_domain_residual_high"
-        else "geometry_swap_ready"
-        if geometry_pass
-        else "geometry_swap_not_ready"
-    )
-    return {
-        "schema": "backend_swap_geometry_contract_v1",
-        "status": status,
-        "geometry_contract_status": "pass" if geometry_pass else "fail",
-        "visual_residual_status": visual_residual_status,
-        "required_checks": required_checks,
-        "same_api_agent_swap_claim": geometry_pass,
-        "view_count": pose.get("pair_count") or projection.get("pair_count"),
-        "target_definition_status": transform.get("target_residual_status"),
-        "max_target_center_residual_m": transform.get("max_residual_m"),
-        "max_target_distance_to_usd_bounds_m": transform.get("max_distance_to_usd_bounds_m"),
-        "max_surface_aim_distance_to_usd_bounds_m": transform.get(
-            "max_surface_aim_distance_to_usd_bounds_m"
-        ),
-        "mean_absolute_pixel_delta": mean_pixel_delta,
-        "mean_abs_mean_luminance_delta": mean_luminance_delta,
-        "render_domain_status": render_domain_status,
-        "recommended_next_action": render_calibration.get("recommended_next_action"),
-        "interpretation": (
-            "This is the backend-swap contract for agent-facing camera control: the same "
-            "Roboclaws camera API, explicit eye/target pose, vertical FOV, room scale, and "
-            "pinhole projection must pass before an agent can treat MuJoCo and Isaac as "
-            "geometry-compatible backends. Visual residuals are tracked separately because "
-            "material, texture, light, shadow, and tone-response differences can still make "
-            "the images look different."
-        ),
-    }
 
 
 def _render_domain_source_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
-    visual = (
-        manifest.get("visual_diagnostics")
-        if isinstance(manifest.get("visual_diagnostics"), dict)
-        else {}
-    )
-    calibration = (
-        visual.get("render_domain_calibration")
-        if isinstance(visual.get("render_domain_calibration"), dict)
-        else {}
-    )
-    source_refs = [_render_source_reference(item) for item in OFFICIAL_RENDER_SOURCE_REFERENCES]
-    missing = [item for item in source_refs if item.get("status") != "available"]
-    lane_summary = {
-        MOLMOSPACES_LANE_ID: {
-            "renderer_contract": "MJCF materials/textures/lights rendered by MuJoCo",
-            "evidence_count": sum(
-                1 for item in source_refs if item.get("lane") == MOLMOSPACES_LANE_ID
-            ),
-        },
-        ISAAC_LANE_ID: {
-            "renderer_contract": "USD PreviewSurface materials/lights rendered by Isaac",
-            "evidence_count": sum(1 for item in source_refs if item.get("lane") == ISAAC_LANE_ID),
-        },
-    }
-    status = "official_sources_available" if not missing else "missing_official_source_refs"
-    root_cause_status = (
-        "render_contract_mismatch_evidence"
-        if calibration.get("status") == "view_dependent_render_domain_delta" and not missing
-        else "source_evidence_available"
-        if not missing
-        else "source_evidence_incomplete"
-    )
-    return {
-        "schema": "scene_camera_render_domain_source_diagnostics_v1",
-        "status": status,
-        "root_cause_status": root_cause_status,
-        "official_source": "vendors/molmospaces",
-        "source_reference_count": len(source_refs),
-        "available_source_reference_count": len(source_refs) - len(missing),
-        "missing_source_reference_count": len(missing),
-        "lane_summary": lane_summary,
-        "source_references": source_refs,
-        "recommended_next_action": (
-            "Tune renderer parity at the material/light/texture contract boundary before "
-            "changing camera geometry: compare MJCF material/texture/light inputs against "
-            "the converted USD PreviewSurface, default light, shadow, and texture-binding "
-            "outputs for each high-delta view."
-        ),
-        "interpretation": (
-            "These diagnostics cite the official MolmoSpaces code paths that feed each "
-            "backend's renderer. They explain why equal camera geometry can still produce "
-            "different images: MuJoCo renders MJCF material/light state, while Isaac renders "
-            "converted USD PreviewSurface materials, authored USD lights, shadow flags, and "
-            "texture bindings."
-        ),
-    }
+    return scene_camera_render_domain.render_domain_source_diagnostics(manifest)
 
 
 def _render_domain_view_triage(manifest: dict[str, Any]) -> dict[str, Any]:
-    visual = (
-        manifest.get("visual_diagnostics")
-        if isinstance(manifest.get("visual_diagnostics"), dict)
-        else {}
+    return scene_camera_render_domain.render_domain_view_triage(
+        manifest,
+        optional_float=_optional_float,
+        view_usd_prim_path=_view_usd_prim_path,
     )
-    projection = (
-        manifest.get("projection_diagnostics")
-        if isinstance(manifest.get("projection_diagnostics"), dict)
-        else {}
-    )
-    source = (
-        manifest.get("render_domain_source_diagnostics")
-        if isinstance(manifest.get("render_domain_source_diagnostics"), dict)
-        else _render_domain_source_diagnostics(manifest)
-    )
-    source_ids = [
-        str(item.get("evidence_id"))
-        for item in source.get("source_references") or []
-        if isinstance(item, dict) and item.get("status") == "available"
-    ]
-    projection_by_view = {
-        str(item.get("view_id") or ""): item
-        for item in projection.get("pairs") or []
-        if isinstance(item, dict)
-    }
-    views = [item for item in visual.get("views") or [] if isinstance(item, dict)]
-    rows = []
-    for item in views:
-        view_id = str(item.get("view_id") or "")
-        delta = item.get("delta") if isinstance(item.get("delta"), dict) else {}
-        pixel_delta = _optional_float(delta.get("mean_absolute_pixel_delta"))
-        luminance_delta = _optional_float(delta.get("mean_luminance_delta"))
-        luminance_abs = abs(luminance_delta) if luminance_delta is not None else None
-        projection_pair = projection_by_view.get(view_id, {})
-        projection_delta = _optional_float(projection_pair.get("max_pixel_delta"))
-        anchor_kind = _view_anchor_kind(manifest, view_id)
-        usd_prim_path = _view_usd_prim_path(manifest, view_id)
-        residual_class = _view_render_residual_class(
-            pixel_delta=pixel_delta,
-            luminance_abs=luminance_abs,
-        )
-        suspicion = _view_render_suspicion(
-            residual_class=residual_class,
-            anchor_kind=anchor_kind,
-            usd_prim_path=usd_prim_path,
-        )
-        rows.append(
-            {
-                "view_id": view_id,
-                "label": item.get("label"),
-                "anchor_kind": anchor_kind,
-                "usd_prim_path": usd_prim_path,
-                "mean_absolute_pixel_delta": pixel_delta,
-                "abs_mean_luminance_delta": luminance_abs,
-                "max_projection_delta_px": projection_delta,
-                "geometry_status": "projection_pass"
-                if projection_delta is not None
-                and projection_delta <= CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX
-                else "projection_missing_or_failed",
-                "render_residual_class": residual_class,
-                "suspected_contract": suspicion,
-                "next_probe": _view_render_next_probe(suspicion),
-            }
-        )
-    high = [
-        item
-        for item in rows
-        if item.get("render_residual_class") in {"high_pixel_and_luminance", "high_pixel_delta"}
-    ]
-    rows.sort(
-        key=lambda item: (
-            float(item.get("mean_absolute_pixel_delta") or 0.0),
-            float(item.get("abs_mean_luminance_delta") or 0.0),
-        ),
-        reverse=True,
-    )
-    return {
-        "schema": "scene_camera_render_domain_view_triage_v1",
-        "status": "computed" if rows else "missing_visual_view_metrics",
-        "view_count": len(rows),
-        "high_residual_view_count": len(high),
-        "source_evidence_ids": source_ids,
-        "top_residual_view_id": rows[0].get("view_id") if rows else None,
-        "views": rows,
-        "recommended_next_action": (
-            "Start with the highest-residual object/receptacle views. For object views, "
-            "compare the MuJoCo MJCF material/texture assigned to the anchor against the "
-            "Isaac USD material binding and PreviewSurface inputs for the same prim. For "
-            "room views, compare exported/default lights and wall or ceiling shadow flags."
-        ),
-        "interpretation": (
-            "This view-level triage keeps camera geometry separate from renderer-domain "
-            "work. A view can have projection_pass while still carrying a material, "
-            "texture, lighting, shadow, or tone-response residual."
-        ),
-    }
 
 
-def _view_anchor_kind(manifest: dict[str, Any], view_id: str) -> str:
-    for view in manifest.get("canonical_camera_views") or []:
-        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
-            return str(view.get("anchor_kind") or "")
-    return ""
+_view_anchor_kind = scene_camera_render_domain.view_anchor_kind
 
 
 def _view_usd_prim_path(manifest: dict[str, Any], view_id: str) -> str:
     return _view_usd_prim_path_impl(manifest, view_id, isaac_lane_id=ISAAC_LANE_ID)
 
 
-def _view_render_residual_class(
-    *,
-    pixel_delta: float | None,
-    luminance_abs: float | None,
-) -> str:
-    if pixel_delta is None:
-        return "missing_pixel_delta"
-    pixel_high = pixel_delta >= 50.0
-    luminance_high = luminance_abs is not None and luminance_abs >= 30.0
-    if pixel_high and luminance_high:
-        return "high_pixel_and_luminance"
-    if pixel_high:
-        return "high_pixel_delta"
-    if luminance_high:
-        return "high_luminance_delta"
-    return "moderate_or_low_residual"
-
-
-def _view_render_suspicion(
-    *,
-    residual_class: str,
-    anchor_kind: str,
-    usd_prim_path: str,
-) -> str:
-    if residual_class == "moderate_or_low_residual":
-        return "lower_priority_renderer_delta"
-    if anchor_kind == "room":
-        return "room_light_wall_shadow_contract"
-    if usd_prim_path:
-        return "object_material_texture_binding_contract"
-    return "object_material_texture_contract_missing_usd_prim"
-
-
-def _view_render_next_probe(suspicion: str) -> str:
-    if suspicion == "room_light_wall_shadow_contract":
-        return "Compare MuJoCo default/exported lights with Isaac USD lights and wall shadow flags."
-    if suspicion == "object_material_texture_binding_contract":
-        return "Compare MJCF material/texture inputs with the matched Isaac USD material binding."
-    if suspicion == "object_material_texture_contract_missing_usd_prim":
-        return "Resolve the Isaac USD prim path before comparing material or texture contracts."
-    return "Keep as lower priority until high-residual views are explained."
+_view_render_residual_class = scene_camera_render_domain.view_render_residual_class
+_view_render_suspicion = scene_camera_render_domain.view_render_suspicion
+_view_render_next_probe = scene_camera_render_domain.view_render_next_probe
 
 
 def _render_domain_contract_probe(manifest: dict[str, Any]) -> dict[str, Any]:
-    triage = (
-        manifest.get("render_domain_view_triage")
-        if isinstance(manifest.get("render_domain_view_triage"), dict)
-        else _render_domain_view_triage(manifest)
-    )
-    artifacts = _render_domain_artifact_paths(manifest)
-    mujoco = _mujoco_render_contract_from_xml(artifacts.get("mujoco_scene_xml"))
-    isaac = _isaac_render_contract_from_usda(artifacts.get("isaac_scene_usd"))
-    views = []
-    for item in triage.get("views") or []:
-        if not isinstance(item, dict):
-            continue
-        suspicion = str(item.get("suspected_contract") or "")
-        if suspicion not in {
-            "object_material_texture_binding_contract",
-            "object_material_texture_contract_missing_usd_prim",
-            "room_light_wall_shadow_contract",
-        }:
-            continue
-        view_id = str(item.get("view_id") or "")
-        anchor_id = _view_anchor_id(manifest, view_id)
-        usd_prim_path = str(item.get("usd_prim_path") or _view_usd_prim_path(manifest, view_id))
-        mujoco_contract = _mujoco_view_render_contract(mujoco, anchor_id=anchor_id)
-        isaac_contract = _isaac_view_render_contract(isaac, usd_prim_path=usd_prim_path)
-        view_probe = {
-            "view_id": view_id,
-            "anchor_id": anchor_id,
-            "anchor_kind": item.get("anchor_kind"),
-            "suspected_contract": suspicion,
-            "render_residual_class": item.get("render_residual_class"),
-            "mean_absolute_pixel_delta": item.get("mean_absolute_pixel_delta"),
-            "abs_mean_luminance_delta": item.get("abs_mean_luminance_delta"),
-            "mujoco": mujoco_contract,
-            "isaac": isaac_contract,
-            "contract_delta": _view_render_contract_delta(
-                suspicion=suspicion,
-                mujoco=mujoco_contract,
-                isaac=isaac_contract,
-            ),
-        }
-        views.append(view_probe)
-    status = "computed" if views else "missing_triaged_views"
-    if mujoco.get("status") != "parsed" or isaac.get("status") != "parsed":
-        status = "partial_artifact_parse"
-    high_priority = [
-        item
-        for item in views
-        if (item.get("contract_delta") or {}).get("status")
-        in {
-            "material_or_texture_name_delta",
-            "light_or_shadow_contract_delta",
-            "missing_object_binding_evidence",
-        }
-    ]
-    return {
-        "schema": "scene_camera_render_domain_contract_probe_v1",
-        "status": status,
-        "artifact_paths": artifacts,
-        "mujoco_parse_status": mujoco.get("status"),
-        "isaac_parse_status": isaac.get("status"),
-        "view_count": len(views),
-        "high_priority_delta_count": len(high_priority),
-        "mujoco_light_count": len(mujoco.get("lights") or []),
-        "mujoco_lights": mujoco.get("lights") or [],
-        "isaac_light_count": len(isaac.get("lights") or []),
-        "isaac_lights": isaac.get("lights") or [],
-        "isaac_shadow_disabled_prim_count": len(isaac.get("shadow_disabled_prims") or []),
-        "visual_physics_status": isaac.get("visual_physics_status"),
-        "mujoco_visual_joint_endpoint_pose_status": isaac.get(
-            "mujoco_visual_joint_endpoint_pose_status"
-        ),
-        "mujoco_visual_joint_endpoint_pose_corrected_count": isaac.get(
-            "mujoco_visual_joint_endpoint_pose_corrected_count"
-        ),
-        "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
-            "mujoco_visual_joint_endpoint_pose_missing_count"
-        ),
-        "visual_physics_joint_removed_count": isaac.get("visual_physics_joint_removed_count"),
-        "visual_physics_api_schema_removed_count": isaac.get(
-            "visual_physics_api_schema_removed_count"
-        ),
-        "visual_physics_property_removed_count": isaac.get("visual_physics_property_removed_count"),
-        "views": views,
-        "recommended_next_action": _render_domain_contract_probe_next_action(views),
-        "interpretation": (
-            "This probe reads the actual scene artifacts behind the rendered images. It is "
-            "not a screenshot metric: it checks whether high-residual views have matching "
-            "MJCF material/texture inputs and Isaac USD material bindings, and whether room "
-            "views share compatible light and shadow contracts."
-        ),
-    }
-
-
-def _render_domain_artifact_paths(manifest: dict[str, Any]) -> dict[str, str]:
-    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
-    mujoco_lane = (
-        lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict) else {}
-    )
-    isaac_lane = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
-    scene = manifest.get("scene") if isinstance(manifest.get("scene"), dict) else {}
-    return {
-        "mujoco_scene_xml": str(mujoco_lane.get("scene_xml") or ""),
-        "isaac_scene_usd": str(isaac_lane.get("scene_usd") or scene.get("scene_usd_path") or ""),
-    }
-
-
-def _mujoco_view_render_contract(
-    mujoco: dict[str, Any],
-    *,
-    anchor_id: str,
-) -> dict[str, Any]:
-    if mujoco.get("status") != "parsed":
-        return {"status": mujoco.get("status")}
-    visuals = []
-    body_visuals = (
-        mujoco.get("body_visuals") if isinstance(mujoco.get("body_visuals"), dict) else {}
-    )
-    if anchor_id:
-        visuals = list(body_visuals.get(anchor_id) or [])
-    if not visuals and anchor_id:
-        for body_name, body_entries in body_visuals.items():
-            if str(body_name).startswith(anchor_id):
-                visuals.extend(body_entries)
-    return {
-        "status": "bound" if visuals else "missing_anchor_visuals",
-        "visual_geom_count": len(visuals),
-        "materials": sorted(
-            {str(item.get("material") or "") for item in visuals if item.get("material")}
-        ),
-        "textures": sorted(
-            {str(item.get("texture") or "") for item in visuals if item.get("texture")}
-        ),
-        "texture_files": sorted(
-            {str(item.get("texture_file") or "") for item in visuals if item.get("texture_file")}
-        ),
-        "visuals": visuals[:8],
-        "lights": mujoco.get("lights") or [],
-    }
-
-
-def _isaac_view_render_contract(
-    isaac: dict[str, Any],
-    *,
-    usd_prim_path: str,
-) -> dict[str, Any]:
-    if isaac.get("status") != "parsed":
-        return {"status": isaac.get("status")}
-    bindings_by_prim = (
-        isaac.get("material_bindings") if isinstance(isaac.get("material_bindings"), dict) else {}
-    )
-    bindings = []
-    if usd_prim_path:
-        prefix = usd_prim_path.rstrip("/") + "/"
-        for prim_path, prim_bindings in bindings_by_prim.items():
-            if prim_path == usd_prim_path or str(prim_path).startswith(prefix):
-                for binding in prim_bindings:
-                    bindings.append({"prim_path": prim_path, **binding})
-    shadow_disabled_prims = [
-        prim
-        for prim in isaac.get("shadow_disabled_prims") or []
-        if not usd_prim_path
-        or str(prim) == usd_prim_path
-        or str(prim).startswith(usd_prim_path + "/")
-    ]
-    physics_joint_paths = _usd_paths_under(
-        isaac.get("physics_joint_paths") or [], usd_prim_path=usd_prim_path
-    )
-    physics_api_schema_prim_paths = _usd_paths_under(
-        isaac.get("physics_api_schema_prim_paths") or [], usd_prim_path=usd_prim_path
-    )
-    physics_property_prim_paths = _usd_paths_under(
-        isaac.get("physics_property_prim_paths") or [], usd_prim_path=usd_prim_path
-    )
-    visual_physics_status = (
-        "frozen_static_visual_usd"
-        if not physics_joint_paths
-        and not physics_api_schema_prim_paths
-        and not physics_property_prim_paths
-        else "physics_articulation_preserved"
-    )
-    return {
-        "status": "bound" if bindings else "missing_usd_material_bindings",
-        "bound_prim_count": len({str(item.get("prim_path") or "") for item in bindings}),
-        "material_binding_count": len(bindings),
-        "materials": sorted(
-            {
-                str(item.get("material_name") or Path(str(item.get("material_path") or "")).name)
-                for item in bindings
-                if item.get("material_path")
-            }
-        ),
-        "texture_files": sorted(
-            {
-                str(texture)
-                for item in bindings
-                for texture in item.get("diffuse_texture_files") or []
-            }
-        ),
-        "has_diffuse_texture_count": sum(1 for item in bindings if item.get("has_diffuse_texture")),
-        "shadow_disabled_prim_count": len(shadow_disabled_prims),
-        "bindings": bindings[:8],
-        "lights": isaac.get("lights") or [],
-        "shadow_disabled_prims": shadow_disabled_prims[:8],
-        "visual_physics_status": visual_physics_status,
-        "physics_joint_count": len(physics_joint_paths),
-        "physics_api_schema_prim_count": len(physics_api_schema_prim_paths),
-        "physics_property_prim_count": len(physics_property_prim_paths),
-        "physics_joint_paths": physics_joint_paths[:8],
-        "physics_api_schema_prim_paths": physics_api_schema_prim_paths[:8],
-        "physics_property_prim_paths": physics_property_prim_paths[:8],
-        "prepared_summary_status": isaac.get("prepared_summary_status"),
-        "mujoco_visual_joint_endpoint_pose_status": isaac.get(
-            "mujoco_visual_joint_endpoint_pose_status"
-        ),
-        "mujoco_visual_joint_endpoint_pose_corrected_count": isaac.get(
-            "mujoco_visual_joint_endpoint_pose_corrected_count"
-        ),
-        "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
-            "mujoco_visual_joint_endpoint_pose_missing_count"
-        ),
-        "visual_physics_joint_removed_count": isaac.get("visual_physics_joint_removed_count"),
-        "visual_physics_api_schema_removed_count": isaac.get(
-            "visual_physics_api_schema_removed_count"
-        ),
-        "visual_physics_property_removed_count": isaac.get("visual_physics_property_removed_count"),
-    }
-
-
-def _usd_paths_under(paths: Any, *, usd_prim_path: str) -> list[str]:
-    if not usd_prim_path:
-        return sorted(str(path) for path in paths or [] if str(path))
-    prefix = usd_prim_path.rstrip("/") + "/"
-    return sorted(
-        str(path)
-        for path in paths or []
-        if str(path) == usd_prim_path or str(path).startswith(prefix)
+    return scene_camera_render_domain.render_domain_contract_probe(
+        manifest,
+        render_domain_view_triage_builder=_render_domain_view_triage,
+        mujoco_render_contract_from_xml=_mujoco_render_contract_from_xml,
+        isaac_render_contract_from_usda=_isaac_render_contract_from_usda,
+        view_usd_prim_path=_view_usd_prim_path,
     )
 
 
-def _view_render_contract_delta(
-    *,
-    suspicion: str,
-    mujoco: dict[str, Any],
-    isaac: dict[str, Any],
-) -> dict[str, Any]:
-    if suspicion == "room_light_wall_shadow_contract":
-        mujoco_lights = len(mujoco.get("lights") or [])
-        isaac_lights = len(isaac.get("lights") or [])
-        shadow_disabled = int(isaac.get("shadow_disabled_prim_count") or 0)
-        status = (
-            "light_or_shadow_contract_delta"
-            if mujoco_lights != isaac_lights or shadow_disabled > 0
-            else "light_count_matched"
-        )
-        return {
-            "status": status,
-            "mujoco_light_count": mujoco_lights,
-            "isaac_light_count": isaac_lights,
-            "isaac_shadow_disabled_prim_count": shadow_disabled,
-        }
-    if mujoco.get("status") != "bound" or isaac.get("status") != "bound":
-        return {
-            "status": "missing_object_binding_evidence",
-            "mujoco_status": mujoco.get("status"),
-            "isaac_status": isaac.get("status"),
-        }
-    mujoco_materials = set(mujoco.get("materials") or [])
-    isaac_materials = set(isaac.get("materials") or [])
-    mujoco_textures = {Path(str(item)).name for item in mujoco.get("texture_files") or []}
-    isaac_textures = {Path(str(item)).name for item in isaac.get("texture_files") or []}
-    status = (
-        "material_or_texture_name_delta"
-        if mujoco_materials != isaac_materials or mujoco_textures != isaac_textures
-        else "material_texture_names_match"
-    )
-    return {
-        "status": status,
-        "mujoco_material_count": len(mujoco_materials),
-        "isaac_material_count": len(isaac_materials),
-        "mujoco_texture_count": len(mujoco_textures),
-        "isaac_texture_count": len(isaac_textures),
-        "material_names_only_in_mujoco": sorted(mujoco_materials - isaac_materials),
-        "material_names_only_in_isaac": sorted(isaac_materials - mujoco_materials),
-        "texture_files_only_in_mujoco": sorted(mujoco_textures - isaac_textures),
-        "texture_files_only_in_isaac": sorted(isaac_textures - mujoco_textures),
-    }
-
-
-def _render_domain_contract_probe_next_action(views: list[dict[str, Any]]) -> str:
-    for item in views:
-        delta = item.get("contract_delta") if isinstance(item.get("contract_delta"), dict) else {}
-        if delta.get("status") == "material_or_texture_name_delta":
-            return (
-                "Compare the top object view's MJCF material names and texture file basenames "
-                "against the USD PreviewSurface bindings; fix converter naming or texture "
-                "copy/binding before tuning camera or exposure."
-            )
-        if delta.get("status") == "light_or_shadow_contract_delta":
-            return (
-                "Align room-level light count/intensity and wall or ceiling shadow flags before "
-                "treating room-view residuals as camera differences."
-            )
-    return (
-        "Use this probe to choose the next renderer parity edit; geometry remains a separate pass."
-    )
-
-
-def _view_anchor_id(manifest: dict[str, Any], view_id: str) -> str:
-    for view in manifest.get("canonical_camera_views") or []:
-        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
-            return str(view.get("anchor_id") or "")
-    return ""
-
-
-def _render_source_reference(reference: dict[str, Any]) -> dict[str, Any]:
-    rel_path = Path(str(reference.get("path") or ""))
-    path = REPO_ROOT / rel_path
-    line_start = int(reference.get("line_start") or 1)
-    line_end = int(reference.get("line_end") or line_start)
-    exists = path.is_file()
-    snippet_status = "missing"
-    snippet = ""
-    if exists:
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-            selected = lines[max(line_start - 1, 0) : max(line_end, line_start)]
-            snippet_status = "available" if selected else "empty"
-            snippet = _render_source_snippet(selected)
-        except OSError:
-            snippet_status = "unreadable"
-    return {
-        "evidence_id": reference.get("evidence_id"),
-        "lane": reference.get("lane"),
-        "path": str(rel_path),
-        "line_start": line_start,
-        "line_end": line_end,
-        "status": "available" if exists and snippet_status == "available" else snippet_status,
-        "claim": reference.get("claim"),
-        "snippet_summary": snippet,
-    }
+_render_domain_artifact_paths = scene_camera_render_domain.render_domain_artifact_paths
+_mujoco_view_render_contract = scene_camera_render_domain.mujoco_view_render_contract
+_isaac_view_render_contract = scene_camera_render_domain.isaac_view_render_contract
+_usd_paths_under = scene_camera_render_domain.usd_paths_under
+_view_render_contract_delta = scene_camera_render_domain.view_render_contract_delta
+_render_domain_contract_probe_next_action = (
+    scene_camera_render_domain.render_domain_contract_probe_next_action
+)
+_view_anchor_id = scene_camera_render_domain.view_anchor_id
+_render_source_reference = scene_camera_render_domain.render_source_reference
 
 
 def _views_by_id(lane: dict[str, Any]) -> dict[str, dict[str, Any]]:

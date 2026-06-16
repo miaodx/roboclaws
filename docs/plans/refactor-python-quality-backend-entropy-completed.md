@@ -666,6 +666,15 @@ logs before choosing the next slice.
   Proof: full realworld-contract test file, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-16: Scene-camera render-domain calibration, backend-swap geometry,
+  source-reference, view-triage, and artifact contract probe helpers moved into
+  `scene_camera_render_domain.py`, while `scene_camera_comparison.py` keeps
+  private facade aliases for tests and apple-to-apple consumers. Metric:
+  `scene_camera_comparison.py` 5476 -> 4693 lines; Ruff complexity stayed at 0
+  and oversized modules stayed at 62. Proof: full scene-camera contract tests,
+  focused apple-to-apple render-contract tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
