@@ -205,6 +205,7 @@ _ITHOR_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
     301,
     302,
     303,
+    304,
     305,
     306,
     307,
@@ -224,6 +225,7 @@ _ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = (
     406,
     407,
     408,
+    409,
     410,
     411,
     412,
@@ -264,12 +266,17 @@ _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
     39,
     47,
     52,
+    53,
+    62,
     67,
     71,
+    87,
     95,
     101,
     106,
     111,
+    114,
+    124,
     139,
     143,
     151,
@@ -288,6 +295,7 @@ _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
     258,
     266,
     273,
+    274,
     275,
     280,
     291,
@@ -296,12 +304,15 @@ _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
     314,
     318,
     323,
+    340,
     345,
     349,
     354,
     356,
     360,
+    365,
     371,
+    387,
     391,
     396,
     397,
@@ -322,26 +333,41 @@ _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
 )
 
 _HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES = (107,)
+_HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = (381,)
 
-_HOLODECK_REJECTED_METADATA: dict[int, dict[str, Any]] = {
-    index: {
-        "room_count": 1,
-        "waypoint_count": 2,
-        "quality_score": 1.0,
-        "coverage_score": 0.1,
-        "blocked_reason": "fewer_than_three_public_navigation_areas",
+_HOLODECK_REJECTED_METADATA: dict[int, dict[str, Any]] = (
+    {
+        index: {
+            "room_count": 1,
+            "waypoint_count": 2,
+            "quality_score": 1.0,
+            "coverage_score": 0.1,
+            "blocked_reason": "fewer_than_three_public_navigation_areas",
+        }
+        for index in _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES
     }
-    for index in _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES
-} | {
-    index: {
-        "room_count": 1,
-        "waypoint_count": 2,
-        "quality_score": 0.75,
-        "coverage_score": 0.1,
-        "blocked_reason": "preview_not_reviewable",
+    | {
+        index: {
+            "room_count": 1,
+            "waypoint_count": 2,
+            "quality_score": 0.75,
+            "coverage_score": 0.1,
+            "blocked_reason": "preview_not_reviewable",
+        }
+        for index in _HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
     }
-    for index in _HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
-}
+    | {
+        index: {
+            "room_count": 0,
+            "waypoint_count": 0,
+            "quality_score": 0.0,
+            "coverage_score": 0.0,
+            "blocked_reason": "missing_public_inspection_waypoints",
+            "failure_class": "environment_blocked",
+        }
+        for index in _HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
+    }
+)
 
 SCANNER_REJECTED_METADATA: dict[str, dict[int, dict[str, Any]]] = {
     "ithor": _ITHOR_REJECTED_METADATA,

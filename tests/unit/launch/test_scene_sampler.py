@@ -51,6 +51,7 @@ ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {
     406,
     407,
     408,
+    409,
     410,
     411,
     412,
@@ -61,6 +62,7 @@ ITHOR_REJECTED_INDICES = {
     301,
     302,
     303,
+    304,
     305,
     306,
     307,
@@ -72,6 +74,7 @@ ITHOR_REJECTED_INDICES = {
     *ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES,
 }
 HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES = {107}
+HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {381}
 HOLODECK_REJECTED_INDICES = {
     *range(20),
     22,
@@ -86,12 +89,17 @@ HOLODECK_REJECTED_INDICES = {
     39,
     47,
     52,
+    53,
+    62,
     67,
     71,
+    87,
     95,
     101,
     106,
     111,
+    114,
+    124,
     139,
     143,
     151,
@@ -110,6 +118,7 @@ HOLODECK_REJECTED_INDICES = {
     258,
     266,
     273,
+    274,
     275,
     280,
     291,
@@ -118,12 +127,15 @@ HOLODECK_REJECTED_INDICES = {
     314,
     318,
     323,
+    340,
     345,
     349,
     354,
     356,
     360,
+    365,
     371,
+    387,
     391,
     396,
     397,
@@ -142,6 +154,7 @@ HOLODECK_REJECTED_INDICES = {
     476,
     477,
     *HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES,
+    *HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES,
 }
 PROCTHOR_10K_REJECTED_COUNT = 3
 PROCTHOR_OBJAVERSE_REJECTED_COUNT = 5
@@ -427,9 +440,15 @@ def _assert_rejected_holodeck_projection_source(source_projection: dict[str, obj
     assert all(
         row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
     )
+    assert {
+        row["scene_index"]
+        for row in source_projection["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     assert all(
         row["failure_class"] == "map_actionability_failure"
         for row in source_projection["blocked_rows"]
+        if row["scene_index"] not in HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     )
     assert {
         row["scene_index"]
@@ -545,8 +564,15 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
     assert holodeck["eval_status"] == "partial_or_blocked"
     assert holodeck["eval_ready_count"] == 0
     assert {row["scene_index"] for row in holodeck["blocked_rows"]} == (HOLODECK_REJECTED_INDICES)
+    assert {
+        row["scene_index"]
+        for row in holodeck["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     assert all(
-        row["failure_class"] == "map_actionability_failure" for row in holodeck["blocked_rows"]
+        row["failure_class"] == "map_actionability_failure"
+        for row in holodeck["blocked_rows"]
+        if row["scene_index"] not in HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     )
     assert {
         row["scene_index"]
@@ -778,18 +804,8 @@ def test_scene_sampler_selection_gap_marks_ithor_rejected_when_assets_are_visibl
     assert {404, 406, 408, 411}.issubset(rejected_ithor)
 
     prep = source_prep_report(candidate_indices=tuple(range(13)))
-    assert prep["sources"]["ithor"]["prep_status"] in {
-        "ready_for_scanner",
-        "blocked_missing_resources",
-    }
-    assert len(prep["sources"]["ithor"]["install_candidates"]) == 2
-    assert all(
-        candidate["primary_path"] for candidate in prep["sources"]["ithor"]["install_candidates"]
-    )
-    assert all(
-        candidate["path_status"] == "available"
-        for candidate in prep["sources"]["ithor"]["install_candidates"]
-    )
+    assert prep["sources"]["ithor"]["prep_status"] == "rejected_exhausted"
+    assert prep["sources"]["ithor"]["install_candidates"] == []
 
 
 def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> None:
@@ -799,27 +815,26 @@ def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> Non
     assert report["probe_mode"] == "no_download_no_backend_no_vlm"
     assert report["download_policy"] == "manual_operator_only"
     assert report["summary"]["source_count"] == 4
-    assert report["summary"]["metadata_worklist_source_count"] == 2
-    assert report["summary"]["metadata_worklist_candidate_count"] == 12
+    assert report["summary"]["metadata_worklist_source_count"] == 1
+    assert report["summary"]["metadata_worklist_candidate_count"] == 10
     assert report["summary"]["next_actions"] == {
-        "metadata_first_human_curation": 2,
+        "choose_new_candidate_indices_or_gate_change": 1,
+        "metadata_first_human_curation": 1,
     }
     assert report["sources"]["procthor-10k-val"]["profile_status"] == "complete"
     assert report["sources"]["procthor-objaverse-val"]["profile_status"] == "complete"
 
     ithor = report["sources"]["ithor"]
-    assert ithor["profile_status"] == "metadata_worklist_ready"
-    assert ithor["next_action"] == "metadata_first_human_curation"
+    assert ithor["profile_status"] == "known_rejected_exhausted"
+    assert ithor["next_action"] == "choose_new_candidate_indices_or_gate_change"
     assert set(range(1, 13)).issubset(ithor["known_rejected_indices"])
-    assert {201, 208, 209, 210, 211, 303, 305, 307, 309}.issubset(ithor["known_rejected_indices"])
-    assert {404, 406, 408, 411}.issubset(ithor["known_rejected_indices"])
-    assert ithor["metadata_worklist_candidate_count"] == 2
-    assert all(
-        index not in ithor["known_rejected_indices"] for index in ithor["metadata_worklist_indices"]
+    assert {201, 208, 209, 210, 211, 303, 304, 305, 307, 309}.issubset(
+        ithor["known_rejected_indices"]
     )
-    assert ithor["metadata_worklist_world_ids"][0].startswith("molmospaces/ithor/")
-    assert ithor["metadata_worklist_candidates"][0]["admission_effect"] == "none_profile_only"
-    assert "candidate_file" in ithor["metadata_worklist_candidates"][0]
+    assert {404, 406, 408, 409, 411}.issubset(ithor["known_rejected_indices"])
+    assert ithor["metadata_worklist_candidate_count"] == 0
+    assert ithor["metadata_worklist_world_ids"] == []
+    assert ithor["metadata_worklist_candidates"] == []
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["profile_status"] == "metadata_worklist_ready"
