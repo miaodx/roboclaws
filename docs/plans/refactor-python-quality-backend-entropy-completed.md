@@ -703,6 +703,13 @@ logs before choosing the next slice.
   oversized modules stayed at 62. Proof: full realworld-contract test file,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Nav2 map bundle report rendering moved into
+  `report_sections_nav2_map.py`, and semantic-map overlay/artifact generation
+  moved into `report_semantic_map_artifacts.py`. Metric: `report.py` 4880 ->
+  4051 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: full cleanup report contract test file, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

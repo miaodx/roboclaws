@@ -1,6 +1,6 @@
 ---
 refactor_scope: python-quality-backend-entropy
-status: PAUSED
+status: ACTIVE
 accepted_severities:
   - P0
   - P1
@@ -13,13 +13,14 @@ completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.m
 
 ## Status
 
-PAUSED. Code execution is paused while the repo has many parallel changes.
-This file is the unfinished active plan only. Completed work lives in
+ACTIVE. Continue one verified, non-overlapping slice at a time while unrelated
+scene-sampler/operator-console changes remain dirty in the worktree. This file
+is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest verified realworld
-runtime-map contract split:
+--summary --top 40` on 2026-06-16, after the latest verified report
+map-artifact section split:
 
 - 0 Ruff complexity violations.
 - 62 oversized modules.
@@ -34,9 +35,9 @@ runtime-map contract split:
 - `roboclaws/household/scene_camera_comparison.py` is down to 4693 lines after
   the first USD render-contract, image-metrics, lighting-diagnostics, and
   render-domain diagnostics splits, but remains a P1 hard-ceiling candidate.
-- `roboclaws/household/report.py` is down to 4880 lines after the Isaac
-  runtime, grasp diagnostics, and proof request-selection section splits, but
-  remains a P1 hard-ceiling candidate.
+- `roboclaws/household/report.py` is down to 4051 lines after the Nav2 map
+  bundle renderer and semantic-map artifact writer splits, but remains a P1
+  hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
@@ -145,11 +146,12 @@ ruff, ratchet summary.
 Severity: P1. `roboclaws/household/realworld_contract.py` is now 5095 lines
 after the projection, agent-view boundary, visual-candidate, and runtime-map
 contract helper splits and remains above the hard ceiling;
-`roboclaws/household/report.py` is now 4880 lines after the Isaac runtime,
-grasp diagnostics, and proof request-selection renderer splits, but remains
-above the hard ceiling. Continue only around real ownership boundaries: payload
-builders, policy/event families, section renderers, or artifact envelopes.
-Preserve public schemas and rendered report shape. Owner: `intuitive-refactor`.
+`roboclaws/household/report.py` is now 4051 lines after the Isaac runtime,
+grasp diagnostics, proof request-selection renderer, Nav2 map bundle renderer,
+and semantic-map artifact writer splits, but remains above the hard ceiling.
+Continue only around real ownership boundaries: payload builders, policy/event
+families, section renderers, or artifact envelopes. Preserve public schemas and
+rendered report shape. Owner: `intuitive-refactor`.
 
 ### C: Backend Worker Hard-Ceiling Split
 
