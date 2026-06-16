@@ -804,6 +804,14 @@ logs before choosing the next slice.
   rows and 66 oversized modules. Proof: realworld contract and MCP server
   contract tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Planner manipulation probe runtime diagnostics report panels
+  moved from `report.py` into `report_sections_probe_runtime.py`, covering
+  runtime modules, CUDA memory, CuRobo memory profile/cache, Warp
+  compatibility, and worker-stage timeline sections. Metric: `report.py` 3806
+  -> 3440 lines; ratchet remains 11 complexity rows and 66 oversized modules.
+  Proof: cleanup report and planner manipulation checker contract tests, ruff,
+  format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -825,6 +833,10 @@ logs before choosing the next slice.
   `realworld_visual_candidates.py`; reopen only if the realworld contract
   facade starts rebuilding visual-grounding candidate payloads or overlay
   artifact paths directly.
+- Planner manipulation probe runtime diagnostics report panels are owned by
+  `report_sections_probe_runtime.py`; reopen only if `report.py` starts
+  rebuilding Runtime Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache,
+  Warp Compatibility, or Worker Stage Timeline sections directly.
 - B1 runtime-bundle review-manifest validation is split into focused helper
   families; reopen only if `review_manifest_errors` regains ratchet rows or
   false-green review-gate behavior.

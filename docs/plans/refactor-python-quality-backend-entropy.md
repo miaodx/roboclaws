@@ -40,7 +40,7 @@ of a clean checkpoint; refresh before the next execution slice.
   `roboclaws/household/realworld_contract.py` at 4707 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
   `roboclaws/household/scene_camera_comparison.py` at 4693,
-  `roboclaws/household/report.py` at 3806,
+  `roboclaws/household/report.py` at 3440,
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889, and
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711.
@@ -66,6 +66,11 @@ overlay assembly to `realworld_visual_candidates.py`. Candidate A remains the
 default next family, but the next executor should choose a fresh boundary
 inside the still-hard-ceiling contract or report facade rather than reopening
 that completed payload slice.
+
+Execution refresh on 2026-06-17 moved planner manipulation probe runtime
+diagnostics report panels to `report_sections_probe_runtime.py`. `report.py`
+remains a P1 hard-ceiling file, but that runtime-diagnostics panel family is no
+longer an active candidate.
 
 ## Two-Document Contract
 
@@ -161,7 +166,8 @@ architecture slice. Default recommendation: continue candidate A by reducing
 visual-candidate boundary, a remaining report section boundary, or a small
 Protocol/coupling reduction that removes real facade-private coupling. Runtime
 Metric Map payload assembly and visual-candidate payload/event/overlay assembly
-are complete, but the contract facade is still above the hard ceiling.
+are complete, and planner-probe runtime diagnostics report panels are complete;
+the contract and report facades are still above the hard ceiling.
 
 The prior B1 Map 12 label-tool exception is now used and cleared. A future
 candidate D slice should be a separate preview-rendering cleanup only; do not
@@ -294,7 +300,7 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 ### A: Contract And Report Hard-Ceiling Split
 
 Severity: P1. `roboclaws/household/realworld_contract.py` is 4707 lines and
-`roboclaws/household/report.py` is 3806 lines. Owning architecture layers: MCP
+`roboclaws/household/report.py` is 3440 lines. Owning architecture layers: MCP
 Capability Contract And Tools for the contract facade, and Artifacts, reports,
 and eval suites for report rendering. Continue only around real ownership
 boundaries: payload builders, policy/event families, section renderers, or
@@ -310,7 +316,9 @@ Valid next sub-slices are:
   `navigate_to_visual_candidate` response shapes, handle state, visual-grounding
   evidence, and private-truth assertions.
 - Remaining `report.py` section extraction only when it removes a report
-  ownership boundary, not just because a section is long.
+  ownership boundary, not just because a section is long. Do not reopen
+  planner-probe runtime diagnostics; those now belong to
+  `report_sections_probe_runtime.py`.
 
 ### B: Visual Comparison Pipeline Split
 
@@ -431,6 +439,11 @@ ratchet.
   visual-grounding candidate payloads, model-declared observation events,
   fixture-hint request rows, or overlay artifact paths instead of delegating to
   `realworld_visual_candidates.py`.
+- Planner manipulation probe runtime diagnostics report panels no longer live
+  in `report.py`; reopen only if the report facade starts rebuilding Runtime
+  Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache, Warp Compatibility,
+  or Worker Stage Timeline sections instead of delegating to
+  `report_sections_probe_runtime.py`.
 - B1 Map 12 runtime-bundle review-manifest validation complexity is cleared;
   reopen only if `compile_b1_map12_runtime_bundle.py::review_manifest_errors`
   regains ratchet rows or false-green review-gate drift.
