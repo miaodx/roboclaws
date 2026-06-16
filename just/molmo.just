@@ -874,6 +874,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --agent-sdk-perf-profile "${ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE:-}"
             --prompt-mode "${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-}"
             --continuation-mode "${ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE:-}"
+            --model-thinking-mode "${ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE:-default}"
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"

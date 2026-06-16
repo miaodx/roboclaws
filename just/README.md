@@ -176,9 +176,12 @@ structured lanes can use text-only routes, while `camera-raw-fpv` requires both
 model image input and verified runtime image transport. MiMo inside
 `mimo-1000` is default-enabled for on-demand benchmark and explicit
 OpenAI-Agents-SDK text experiments, not a product cleanup default. Kimi
-`kimi-k2.7-code` is the Kimi OpenAI Chat default; it runs with provider-side
-Thinking On, so keep reasoning-content handling and do not send a
-`thinking=disabled` override. MiniMax highspeed and routes with unknown image
+`kimi-k2.7-code` is the Kimi OpenAI Chat default. OpenAI Agents SDK routes use
+`ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=default|enabled|disabled`: Responses
+routes map this to the OpenAI `reasoning` body, while Chat-compatible routes
+map it to the `thinking` body. `disabled` is intended for A/B comparison
+because it removes `reasoning_content` on probed Chat routes. MiniMax highspeed
+and routes with unknown image
 transport are blocked from raw-FPV launches until a live route verdict proves
 otherwise. Current live verdicts live in `docs/human/model-route-verdicts.yaml`;
 the narrative audit remains in `docs/human/model-matrix.md`.

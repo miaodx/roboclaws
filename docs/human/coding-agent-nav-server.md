@@ -55,10 +55,12 @@ requires model image input plus verified runtime image transport, while
 structured lanes such as `world-oracle-labels` and `camera-grounded-labels`
 can use text-only routes. MiMo inside `mimo-1000` is default-enabled for
 on-demand benchmark and explicit OpenAI-Agents-SDK text experiments, not a
-product cleanup default. Kimi OpenAI Chat defaults to `kimi-k2.7-code`; that
-model runs with provider-side Thinking On, so keep reasoning-content handling
-and do not send a `thinking=disabled` override. Live route verdicts are
-recorded in `docs/human/model-route-verdicts.yaml`.
+product cleanup default. Kimi OpenAI Chat defaults to `kimi-k2.7-code`;
+OpenAI Agents SDK routes use
+`ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=default|enabled|disabled`. Responses
+routes map this to the OpenAI `reasoning` body, while Chat-compatible routes
+map it to the `thinking` body. Live route verdicts are recorded in
+`docs/human/model-route-verdicts.yaml`.
 
 Before long Codex runs, verify the selected endpoint:
 

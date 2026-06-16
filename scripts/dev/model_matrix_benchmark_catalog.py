@@ -412,8 +412,10 @@ def _kimi_cases() -> tuple[MatrixCase, ...]:
             headers=(("User-Agent", "claude-code/1.0.0"),),
             expected_support="native",
             note=(
-                "Kimi K2.7 Code uses provider-side Thinking On. The chat route "
-                "preserves reasoning_content and should not send thinking=disabled."
+                "Kimi K2.7 Code requires Thinking On for the new code-model "
+                "behavior. The chat benchmark sends thinking=enabled and "
+                "preserves reasoning_content; thinking=disabled is only a "
+                "diagnostic contrast."
             ),
         ),
         MatrixCase(

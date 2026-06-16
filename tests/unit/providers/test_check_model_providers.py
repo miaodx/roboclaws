@@ -40,6 +40,7 @@ def test_direct_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> Non
     )
     assert payload["max_tokens"] >= 128
     assert payload["stream"] is False
+    assert payload["thinking"] == {"type": "enabled", "keep": "all"}
     assert "temperature" not in payload
 
 
@@ -88,6 +89,37 @@ def test_agents_sdk_probe_defaults_use_larger_responses_budget() -> None:
     assert probes["agents-sdk:mimo-inside"].max_tokens >= 128
     assert probes["agents-sdk:kimi-openai-chat"].model == "kimi-k2.7-code"
     assert not probes["agents-sdk:kimi-openai-chat"].unsupported_reason
+
+
+def test_direct_chat_probe_sends_thinking_through_extra_body(monkeypatch) -> None:
+    script = _load_script_module()
+    captured: dict[str, object] = {}
+    monkeypatch.setenv("MIMO_TP_KEY", "fake-mimo-key")
+
+    class FakeCompletions:
+        @staticmethod
+        def create(**kwargs):
+            captured["kwargs"] = kwargs
+            message = type("Message", (), {"content": "ok"})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class FakeChat:
+        completions = FakeCompletions()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs) -> None:
+            captured["client"] = kwargs
+            self.chat = FakeChat()
+
+    monkeypatch.setitem(sys.modules, "openai", type("FakeOpenAIModule", (), {"OpenAI": FakeOpenAI}))
+    probe = {probe.probe_id: probe for probe in script.build_direct_probes()}["direct:mimo-chat"]
+
+    result = script.run_probe(probe, prompt="Health check. Reply exactly ok.", timeout_s=1.0)
+
+    assert result.status == "PASS"
+    assert captured["kwargs"]["extra_body"] == {"thinking": {"type": "enabled", "keep": "all"}}
+    assert "thinking" not in captured["kwargs"]
 
 
 def test_kimi_agents_sdk_probe_uses_coding_agent_user_agent_header(
@@ -154,6 +186,9 @@ def test_kimi_agents_sdk_probe_uses_coding_agent_user_agent_header(
     assert result.ok is True
     assert captured["model"] == "kimi-k2.7-code"
     assert captured["model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
+    assert captured["model_settings"]["extra_body"] == {
+        "thinking": {"type": "enabled", "keep": "all"}
+    }
 
 
 def test_select_probe_can_limit_by_route_or_probe_id() -> None:

@@ -20,6 +20,7 @@ from roboclaws.agents.provider_registry import (
     provider_route_spec,
     route_base_url,
 )
+from roboclaws.agents.thinking_policy import apply_model_thinking_policy
 
 try:
     from agents.models.interface import Model as _AgentsModel  # type: ignore[import-not-found]
@@ -416,16 +417,29 @@ def _sdk_model_settings_payload(request: LiveAgentRequest) -> dict[str, Any]:
     configured = profile.get("sdk_model_settings") if isinstance(profile, dict) else None
     if not isinstance(configured, dict):
         configured = metadata.get("sdk_model_settings")
-    if isinstance(configured, dict):
-        return _drop_empty(_to_jsonable(configured))
     settings = _safe_model_settings(request)
     provider_profile = str(settings.get("provider_profile") or request.provider_profile or "")
     wire_api = str(settings.get("wire_api") or "")
+    if isinstance(configured, dict):
+        payload = _drop_empty(_to_jsonable(configured))
+        thinking_mode = str(
+            payload.pop("model_thinking_mode", None)
+            or metadata.get("model_thinking_mode")
+            or "default"
+        )
+        return apply_model_thinking_policy(
+            payload,
+            provider_profile=provider_profile,
+            wire_api=wire_api,
+            mode=thinking_mode,
+        )
     profile_id = str(profile.get("profile_id") if isinstance(profile, dict) else "baseline")
+    thinking_mode = str(metadata.get("model_thinking_mode") or "default")
     return _default_sdk_model_settings_payload(
         provider_profile=provider_profile,
         wire_api=wire_api,
         profile_id=profile_id,
+        thinking_mode=thinking_mode,
     )
 
 
@@ -466,6 +480,7 @@ def _default_sdk_model_settings_payload(
     provider_profile: str,
     wire_api: str,
     profile_id: str,
+    thinking_mode: str = "default",
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "tool_choice": "auto",
@@ -484,7 +499,12 @@ def _default_sdk_model_settings_payload(
         )
         if provider_profile == "codex-env" and profile_id != "baseline":
             payload["prompt_cache_retention"] = "in_memory"
-    return payload
+    return apply_model_thinking_policy(
+        payload,
+        provider_profile=provider_profile,
+        wire_api=wire_api,
+        mode=thinking_mode,
+    )
 
 
 def _default_sdk_run_config_payload() -> dict[str, Any]:

@@ -844,6 +844,8 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
     assert 'policy="openai_agents_agent"' in molmo_text
     assert "--agent-sdk-perf-profile" in molmo_text
     assert "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE" in molmo_text
+    assert "--model-thinking-mode" in molmo_text
+    assert "ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE" in molmo_text
     assert "--context-soft-limit-tokens" in molmo_text
     assert "openai-agents-live" not in trace_household_cleanup_run("codex")
 

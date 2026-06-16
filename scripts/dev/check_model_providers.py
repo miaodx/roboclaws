@@ -24,6 +24,7 @@ from roboclaws.agents.provider_registry import (
     provider_route_spec,
     route_base_url,
 )
+from roboclaws.agents.thinking_policy import thinking_request_body_for_wire
 
 DEFAULT_PROMPT = "Health check. Reply exactly ok."
 DEFAULT_RESPONSES_MAX_OUTPUT_TOKENS = 256
@@ -158,7 +159,8 @@ def build_direct_probes(
             max_tokens=chat_max_tokens,
             provider_note=(
                 "Kimi coding requires a coding-agent User-Agent. Kimi K2.7 Code "
-                "runs with provider-side Thinking On; this probe keeps reasoning "
+                "requires Thinking On for the new code-model behavior; this probe "
+                "sends thinking=enabled and keeps reasoning "
                 "content handling and omits temperature because the provider pins "
                 "model-specific values."
             ),
@@ -301,6 +303,11 @@ def _run_agents_sdk_probe(
     model_settings_payload: dict[str, Any] = {"max_tokens": spec.max_tokens}
     if spec.route_id == "kimi-openai-chat":
         model_settings_payload["extra_headers"] = {"User-Agent": "claude-code/1.0.0"}
+        model_settings_payload["extra_body"] = thinking_request_body_for_wire(
+            provider_profile=spec.route_id,
+            wire_api=spec.wire_api,
+            mode="default",
+        )
     agent = Agent(
         name=f"roboclaws-provider-health-{spec.route_id or spec.model}",
         instructions="Reply with exactly: ok",
@@ -329,6 +336,11 @@ def _run_responses_probe(
         input=prompt,
         max_output_tokens=spec.max_tokens,
         temperature=0,
+        **thinking_request_body_for_wire(
+            provider_profile=spec.route_id,
+            wire_api=spec.wire_api,
+            mode="default",
+        ),
     )
     status = str(getattr(response, "status", "") or "")
     output = str(getattr(response, "output_text", "") or "")
@@ -355,6 +367,12 @@ def _run_chat_probe(
         model=spec.model,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=spec.max_tokens,
+        extra_body=thinking_request_body_for_wire(
+            provider_profile=spec.route_id,
+            wire_api=spec.wire_api,
+            mode="default",
+        )
+        or None,
     )
     output = response.choices[0].message.content or ""
     if not output:
@@ -397,6 +415,11 @@ def kimi_coding_payload(*, prompt: str, model: str, max_tokens: int) -> dict[str
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "stream": False,
+        **thinking_request_body_for_wire(
+            provider_profile="kimi-openai-chat",
+            wire_api=WIRE_CHAT_COMPLETIONS,
+            mode="default",
+        ),
     }
 
 

@@ -145,9 +145,10 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
         default_use=True,
         default_use_note=(
-            "Default Kimi coding model. Kimi K2.7 Code runs with provider-side "
-            "thinking enabled; keep reasoning_content handling and do not send a "
-            "thinking=disabled override."
+            "Default Kimi coding model. Kimi K2.7 Code requires Thinking On for "
+            "the new code-model behavior. OpenAI Agents SDK routes use the "
+            "normalized model_thinking_mode switch and map it to provider-specific "
+            "request fields."
         ),
         direct_provider_adapter="kimi-coding",
         direct_required_env_keys=("KIMI_API_KEY",),
@@ -290,8 +291,7 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_GATEWAY,
         default_use=True,
         default_use_note=(
-            "Default-enabled mify route; uses xiaomi/mimo-v2.5 unless explicitly "
-            "overridden."
+            "Default-enabled mify route; uses xiaomi/mimo-v2.5 unless explicitly overridden."
         ),
         aliases=("codex-mify",),
         per_engine_status={
@@ -395,8 +395,9 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         default_use=True,
         default_use_note=(
-            "Default-enabled Kimi coding route. K2.7 Code requires provider-side "
-            "Thinking On, which is the model default for kimi-k2.7-code."
+            "Default-enabled Kimi coding route. K2.7 Code requires Thinking On "
+            "for the new code-model behavior. Default OpenAI Agents SDK payloads "
+            "enable thinking through the provider-aware model_thinking_mode policy."
         ),
         aliases=("kimi-chat",),
         per_engine_status={"openai-agents-sdk": ROUTE_EXPERIMENTAL},
@@ -763,7 +764,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.command == "json":
         payload = {
-        "models": [
+            "models": [
                 asdict(spec) | {"model_capabilities": sorted(spec.model_capabilities)}
                 for spec in _MODEL_SPECS
             ],

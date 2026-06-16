@@ -1,5 +1,5 @@
 schema: roboclaws_model_route_verdicts_v1
-last_reviewed: 2026-06-12
+last_reviewed: 2026-06-16
 source_of_truth:
   registry: roboclaws/agents/provider_registry.py
   narrative: docs/human/model-matrix.md
@@ -90,8 +90,8 @@ verdicts:
       structured_labels: experimental
       camera_grounded_labels: experimental
       camera_raw_fpv: blocked
-    evidence: route wired; cleanup verdict pending
-    notes: Default model is kimi-k2.7-code. Kimi K2.7 Code requires provider-side Thinking On, which is the model default; preserve reasoning_content and do not send thinking=disabled.
+    evidence: 2026-06-16 Kimi OpenAI Chat thinking probes; cleanup verdict pending
+    notes: Default model is kimi-k2.7-code. Kimi K2.7 Code requires Thinking On for the new code-model behavior. OpenAI Agents SDK uses model_thinking_mode=default|enabled|disabled and maps Chat routes to thinking={type: enabled, keep: all} or thinking={type: disabled}; disabled is diagnostic/A-B only because it disables reasoning_content on probed Chat routes.
   - agent_engine: openai-agents-sdk
     provider_route: minimax
     provider_profile: minimax

@@ -97,7 +97,8 @@ def test_kimi_openai_chat_defaults_to_current_code_model() -> None:
     assert route.default_use is True
     assert model.default_use is True
     assert "Thinking On" in route.default_use_note
-    assert "thinking=disabled" in model.default_use_note
+    assert "model_thinking_mode" in route.default_use_note
+    assert "provider-specific" in model.default_use_note
 
 
 def test_default_enabled_routes_include_requested_api_sources() -> None:
