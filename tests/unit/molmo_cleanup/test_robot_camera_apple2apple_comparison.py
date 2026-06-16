@@ -11,7 +11,10 @@ from scripts.molmo_cleanup import robot_camera_apple2apple_image_metrics as imag
 from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
 from scripts.molmo_cleanup import robot_camera_apple2apple_native_render as native_render
 from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
+from scripts.molmo_cleanup import robot_camera_apple2apple_object_parity as object_parity
 from scripts.molmo_cleanup import robot_camera_apple2apple_report as report_renderer
+from scripts.molmo_cleanup import robot_camera_apple2apple_rgb_evidence as rgb_evidence
+from scripts.molmo_cleanup import robot_camera_apple2apple_visual_state as visual_state
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_CAMERA_COMPARISON_PATH = (
@@ -2048,7 +2051,7 @@ def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Pa
         "run_robot_camera_apple2apple_comparison_object_parity_audit",
     )
     fixtures = _object_parity_audit_fixtures(tmp_path)
-    audit = run_camera._object_parity_audit(
+    audit = object_parity.object_parity_audit(
         mujoco_state=fixtures["mujoco_state"],
         isaac_state=fixtures["isaac_state"],
         mujoco_contract=run_camera._mujoco_render_contract_from_xml(str(fixtures["mujoco_xml"])),
@@ -2335,10 +2338,6 @@ def _assert_object_render_parity_report(
 
 
 def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_path: Path) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_object_parity_semantic_pose",
-    )
     mujoco_state = {
         "objects": {
             "teddy_1": {
@@ -2382,7 +2381,7 @@ def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_
         },
     }
 
-    audit = run_camera._object_parity_audit(
+    audit = object_parity.object_parity_audit(
         mujoco_state=mujoco_state,
         isaac_state=isaac_state,
         mujoco_contract={},
@@ -2400,12 +2399,7 @@ def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_
 
 
 def test_robot_camera_box_visual_state_requires_endpoint_bake_evidence() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_box_visual_state_endpoint_unverified",
-    )
-
-    contract = run_camera._object_visual_state_contract(
+    contract = visual_state.object_visual_state_contract(
         target_id="box_1",
         kind="object",
         mujoco_entry={"category": "Box"},
@@ -2430,7 +2424,6 @@ def test_robot_camera_box_visual_state_requires_endpoint_bake_evidence() -> None
                 ]
             }
         },
-        isaac_state={},
         isaac_contract={
             "status": "parsed",
             "material_bindings": {},
@@ -2445,19 +2438,14 @@ def test_robot_camera_box_visual_state_requires_endpoint_bake_evidence() -> None
     assert contract["mujoco"]["status"] == "mujoco_ref_endpoint_articulation"
     assert contract["mujoco"]["endpoint_joint_count"] == 2
     assert contract["isaac"]["status"] == "isaac_visual_physics_frozen"
-    assert run_camera.OBJECT_VISUAL_STATE_CATEGORIES == {"box"}
+    assert visual_state.OBJECT_VISUAL_STATE_CATEGORIES == {"box"}
     assert contract["protected_by"] == "prepared_usd_visual_physics_freeze"
     assert contract["registry"]["status"] == "active_category_contract"
     assert "does not prove" in contract["reason"]
 
 
 def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
-    )
-
-    contract = run_camera._object_visual_state_contract(
+    contract = visual_state.object_visual_state_contract(
         target_id="box_1",
         kind="object",
         mujoco_entry={"category": "Box"},
@@ -2475,7 +2463,6 @@ def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
                 ]
             }
         },
-        isaac_state={},
         isaac_contract={
             "status": "parsed",
             "material_bindings": {},
@@ -2632,10 +2619,6 @@ def test_robot_camera_visual_physics_freeze_can_pass_with_object_centered_rgb_ev
 def test_robot_camera_rgb_evidence_records_selected_object_pose_coverage(
     tmp_path: Path,
 ) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_rgb_target_coverage",
-    )
     for image_relpath in (
         "mujoco/fpv.png",
         "mujoco/chase.png",
@@ -2646,7 +2629,7 @@ def test_robot_camera_rgb_evidence_records_selected_object_pose_coverage(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (12, 8), (80, 90, 100)).save(image_path)
 
-    evidence = run_camera._object_rgb_view_evidence(
+    evidence = rgb_evidence.object_rgb_view_evidence(
         kind="object",
         target_id="box_1",
         locations=[
@@ -2691,10 +2674,6 @@ def test_robot_camera_rgb_evidence_records_selected_object_pose_coverage(
 def test_robot_camera_rgb_evidence_flags_support_centered_selected_object(
     tmp_path: Path,
 ) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_rgb_support_coverage",
-    )
     for image_relpath in (
         "mujoco/fpv.png",
         "mujoco/chase.png",
@@ -2705,7 +2684,7 @@ def test_robot_camera_rgb_evidence_flags_support_centered_selected_object(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (12, 8), (80, 90, 100)).save(image_path)
 
-    evidence = run_camera._object_rgb_view_evidence(
+    evidence = rgb_evidence.object_rgb_view_evidence(
         kind="object",
         target_id="box_1",
         locations=[
@@ -2741,10 +2720,6 @@ def test_robot_camera_rgb_evidence_flags_support_centered_selected_object(
 def test_robot_camera_rgb_evidence_flags_target_region_visual_delta(
     tmp_path: Path,
 ) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_rgb_region_delta",
-    )
     image_specs = {
         "mujoco/fpv.png": (20, 20, 20),
         "isaac/fpv.png": (100, 100, 100),
@@ -2756,7 +2731,7 @@ def test_robot_camera_rgb_evidence_flags_target_region_visual_delta(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (12, 8), color).save(image_path)
 
-    evidence = run_camera._object_rgb_view_evidence(
+    evidence = rgb_evidence.object_rgb_view_evidence(
         kind="object",
         target_id="box_1",
         locations=[
@@ -2797,10 +2772,6 @@ def test_robot_camera_rgb_evidence_flags_target_region_visual_delta(
 def test_robot_camera_rgb_evidence_allows_moderate_render_residual_for_visual_state(
     tmp_path: Path,
 ) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_rgb_region_render_residual",
-    )
     image_specs = {
         "mujoco/fpv.png": (100, 100, 100),
         "isaac/fpv.png": (62, 62, 62),
@@ -2812,7 +2783,7 @@ def test_robot_camera_rgb_evidence_allows_moderate_render_residual_for_visual_st
         image_path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (12, 8), color).save(image_path)
 
-    evidence = run_camera._object_rgb_view_evidence(
+    evidence = rgb_evidence.object_rgb_view_evidence(
         kind="object",
         target_id="box_1",
         locations=[
@@ -2853,10 +2824,6 @@ def test_robot_camera_rgb_evidence_allows_moderate_render_residual_for_visual_st
 def test_robot_camera_rgb_evidence_rejects_open_box_scale_region_delta(
     tmp_path: Path,
 ) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_rgb_region_open_box_delta",
-    )
     image_specs = {
         "mujoco/fpv.png": (100, 100, 100),
         "isaac/fpv.png": (52, 52, 52),
@@ -2868,7 +2835,7 @@ def test_robot_camera_rgb_evidence_rejects_open_box_scale_region_delta(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGB", (12, 8), color).save(image_path)
 
-    evidence = run_camera._object_rgb_view_evidence(
+    evidence = rgb_evidence.object_rgb_view_evidence(
         kind="object",
         target_id="box_1",
         locations=[
@@ -2907,12 +2874,7 @@ def test_robot_camera_rgb_evidence_rejects_open_box_scale_region_delta(
 
 
 def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_box_visual_state_physics",
-    )
-
-    contract = run_camera._object_visual_state_contract(
+    contract = visual_state.object_visual_state_contract(
         target_id="box_1",
         kind="object",
         mujoco_entry={"category": "Box"},
@@ -2930,7 +2892,6 @@ def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None
                 ]
             }
         },
-        isaac_state={},
         isaac_contract={
             "status": "parsed",
             "material_bindings": {},

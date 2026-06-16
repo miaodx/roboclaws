@@ -1064,6 +1064,17 @@ logs before choosing the next slice.
   `realworld_tool_responses.py`; reopen only if `realworld_contract.py` starts
   rebuilding fixture response ids, pick/place/open/close success/error payloads,
   private backend error projection, or semantic-order error payloads inline.
+- Robot-camera apple-to-apple object parity audit construction is owned by
+  `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
+  owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state
+  contract evidence plus visual-physics-sensitive target selection are owned by
+  `robot_camera_apple2apple_visual_state.py`. Metric: apple runner 3740 ->
+  2394 lines; new owners are 689, 402, and 337 lines; staged/add-N ratchet
+  still reports 11 complexity rows and 66 oversized modules. Proof: focused
+  apple comparison tests, ruff, format check, py_compile, and ratchet. Reopen
+  only if the runner rebuilds object/receptacle audit rows, compact/skipped
+  audit packets, selected RGB/focus evidence, visual-state contracts,
+  semantic-pose index fallback, or category summaries directly.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
