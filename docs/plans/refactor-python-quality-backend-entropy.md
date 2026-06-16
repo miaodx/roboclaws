@@ -18,20 +18,21 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest verified visual-comparison
-lighting-diagnostics slice:
+--summary --top 40` on 2026-06-16, after the latest verified grasp diagnostics
+report-section slice:
 
 - 0 Ruff complexity violations.
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
+- `roboclaws/household/realworld_contract.py` is down to 5637 lines after the
+  first contract projection split and is currently the largest P1 hard-ceiling
+  candidate.
 - `roboclaws/household/scene_camera_comparison.py` is down to 5476 lines after
   the first USD render-contract, image-metrics, and lighting-diagnostics
   splits, but remains a P1 hard-ceiling candidate.
-- `roboclaws/household/realworld_contract.py` is down to 5637 lines after the
-  first contract projection split, but remains a P1 hard-ceiling candidate.
-- `roboclaws/household/report.py` is down to 5816 lines after the Isaac
-  runtime diagnostics section split, and is currently the largest P1
+- `roboclaws/household/report.py` is down to 5307 lines after the Isaac
+  runtime diagnostics and grasp diagnostics section splits, but remains a P1
   hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
@@ -135,10 +136,10 @@ ruff, ratchet summary.
 
 ### B: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is no longer the
-largest module after the first projection helper split, but it remains above
-the hard ceiling; `roboclaws/household/report.py` is now below 6000 lines
-after the first Isaac runtime renderer split, but remains above the hard
+Severity: P1. `roboclaws/household/realworld_contract.py` is currently the
+largest module after the report grasp-section split and remains above the hard
+ceiling; `roboclaws/household/report.py` is now 5307 lines after the Isaac
+runtime and grasp diagnostics renderer splits, but remains above the hard
 ceiling. Continue only around real ownership boundaries: payload builders,
 policy/event families, section renderers, or artifact envelopes. Preserve
 public schemas and rendered report shape. Owner: `intuitive-refactor`.

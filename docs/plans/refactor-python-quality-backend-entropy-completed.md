@@ -635,6 +635,14 @@ logs before choosing the next slice.
   focused scene-camera and apple-to-apple tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-16: Grasp cache generation, pose-policy cache, filter diagnostics,
+  and initial-contact report sections moved from `report.py` into
+  `report_sections_grasp_diagnostics.py`, while public render imports from
+  `roboclaws.household.report` remain stable. Metric: `report.py` 5816 -> 5307
+  lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: focused grasp report tests, ruff, format check, py_compile, and
+  ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
