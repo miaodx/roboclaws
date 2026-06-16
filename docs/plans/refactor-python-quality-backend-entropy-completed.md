@@ -594,6 +594,16 @@ logs before choosing the next slice.
   oversized modules stayed at 62. Proof: focused Isaac backend tests, ruff,
   format check, py_compile, and ratchet.
 
+- 2026-06-16: Real-world contract map-bundle projection, public-room hints,
+  fallback waypoint geometry, and fixture destination-policy helpers moved
+  into `realworld_contract_projection.py` and
+  `realworld_contract_fixture_projection.py`, while `realworld_contract.py`
+  keeps compatibility aliases for existing private helper access. Metric:
+  `realworld_contract.py` 6606 -> 5637 lines; the new helper modules are 613
+  and 561 lines; Ruff complexity stayed at 0 and oversized modules stayed at
+  62. Proof: focused realworld-contract/map tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

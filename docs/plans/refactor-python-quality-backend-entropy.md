@@ -18,13 +18,15 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest committed complexity
-ratchet slices:
+--summary --top 40` on 2026-06-16, after the latest verified contract
+projection slice:
 
 - 0 Ruff complexity violations.
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
+- `roboclaws/household/realworld_contract.py` is down to 5637 lines after the
+  first contract projection split, but remains a P1 hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
@@ -127,11 +129,12 @@ ruff, ratchet summary.
 
 ### B: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` and
-`roboclaws/household/report.py` are still over 6000 lines. Split only around
-real ownership boundaries: payload builders, policy/event families, section
-renderers, or artifact envelopes. Preserve public schemas and rendered report
-shape. Owner: `intuitive-refactor`.
+Severity: P1. `roboclaws/household/realworld_contract.py` is no longer the
+largest module after the first projection helper split, but it remains above
+the hard ceiling; `roboclaws/household/report.py` is still over 6000 lines.
+Continue only around real ownership boundaries: payload builders,
+policy/event families, section renderers, or artifact envelopes. Preserve
+public schemas and rendered report shape. Owner: `intuitive-refactor`.
 
 ### C: Backend Worker Hard-Ceiling Split
 
