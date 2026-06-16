@@ -212,6 +212,41 @@ def scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str]) 
     return "run_scanner_admission_checks"
 
 
+def scanner_admission_row(
+    *,
+    candidate: dict[str, Any],
+    required_views: tuple[str, ...],
+) -> dict[str, Any]:
+    status = str(candidate.get("readiness_status") or "")
+    if status == "ready":
+        return {
+            **_scanner_admission_row_base(candidate),
+            "admission_status": "admitted",
+            "lanes": candidate.get("lanes") or [],
+            "passed_gates": list(scanner_required_gates()),
+            "missing_gates": [],
+            "next_action": "none",
+        }
+    if status == "rejected":
+        return {
+            **_scanner_admission_row_base(candidate),
+            "admission_status": "rejected",
+            "lanes": candidate.get("lanes") or [],
+            "passed_gates": [],
+            "missing_gates": [],
+            "next_action": "do_not_scan_without_new_human_curation",
+        }
+    missing_gates = scanner_missing_gates(candidate, required_views=required_views)
+    return {
+        **_scanner_admission_row_base(candidate),
+        "admission_status": "blocked",
+        "lanes": [],
+        "passed_gates": [gate for gate in scanner_required_gates() if gate not in missing_gates],
+        "missing_gates": missing_gates,
+        "next_action": scanner_next_action(candidate, missing_gates=missing_gates),
+    }
+
+
 def source_prep_next_action(prep_status: str) -> str:
     return _SOURCE_PREP_ACTIONS.get(prep_status, "inspect_source_prep")
 
@@ -304,6 +339,26 @@ def scanner_execution_summary(sources: dict[str, dict[str, Any]]) -> dict[str, A
             for source in sources.values()
             if int(source.get("ready_for_product_smoke_count") or 0) > 0
         ),
+    }
+
+
+def _scanner_admission_row_base(candidate: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_family": candidate.get("scene_family", ""),
+        "scene_split": candidate.get("scene_split", ""),
+        "scene_source": candidate.get("scene_source", ""),
+        "scene_index": candidate.get("scene_index"),
+        "world_id": candidate.get("world_id", ""),
+        "readiness_status": candidate.get("readiness_status", ""),
+        "failure_class": candidate.get("failure_class", ""),
+        "blocked_reason": candidate.get("blocked_reason", ""),
+        "selected_reason": candidate.get("selected_reason", ""),
+        "room_count": candidate.get("room_count", 0),
+        "waypoint_count": candidate.get("waypoint_count", 0),
+        "category_provenance": candidate.get("category_provenance", ""),
+        "preview_statuses": candidate.get("preview_statuses", {}),
+        "candidate_file": candidate.get("candidate_file", {}),
+        "required_gates": list(scanner_required_gates()),
     }
 
 

@@ -15,12 +15,6 @@ from roboclaws.launch.scene_sampler_prefilter import (
     scene_prefilter_expensive_proof_candidates as _scene_prefilter_expensive_proof_candidates,
 )
 from roboclaws.launch.scene_sampler_prep import (
-    candidate_scene_ref_from_availability as _candidate_scene_ref_from_availability,
-)
-from roboclaws.launch.scene_sampler_prep import (
-    missing_source_resources as _missing_source_resources,
-)
-from roboclaws.launch.scene_sampler_prep import (
     molmospaces_get_scenes_args as _molmospaces_get_scenes_args,
 )
 from roboclaws.launch.scene_sampler_prep import (
@@ -33,28 +27,13 @@ from roboclaws.launch.scene_sampler_prep import (
     molmospaces_scene_root_status as _molmospaces_scene_root_status,
 )
 from roboclaws.launch.scene_sampler_prep import (
-    resource_reason_counts as _resource_reason_counts,
-)
-from roboclaws.launch.scene_sampler_prep import (
     source_availability_blocked_reason as _source_availability_blocked_reason,
 )
 from roboclaws.launch.scene_sampler_prep import (
     source_availability_summary as _source_availability_summary,
 )
 from roboclaws.launch.scene_sampler_prep import (
-    source_prep_install_candidates as _source_prep_install_candidates,
-)
-from roboclaws.launch.scene_sampler_prep import (
-    source_prep_operator_commands as _source_prep_operator_commands,
-)
-from roboclaws.launch.scene_sampler_prep import (
-    source_prep_status as _source_prep_status,
-)
-from roboclaws.launch.scene_sampler_prep import (
-    source_prep_status_counts as _source_prep_status_counts,
-)
-from roboclaws.launch.scene_sampler_prep import (
-    source_prep_worklist as _source_prep_worklist,
+    source_prep_report as _source_prep_report,
 )
 from roboclaws.launch.scene_sampler_profile import (
     candidate_profile_expanded_indices as _candidate_profile_expanded_indices,
@@ -77,13 +56,12 @@ from roboclaws.launch.scene_sampler_scanner import (
     next_flow_scan_world_ids,
     next_flow_status,
     next_flow_summary,
+    scanner_admission_row,
     scanner_admission_summary,
     scanner_candidate_packet,
     scanner_execution_candidate,
     scanner_execution_summary,
     scanner_gate_mismatch_count,
-    scanner_missing_gates,
-    scanner_next_action,
     scanner_preview_assets,
     scanner_preview_metadata,
     scanner_product_smoke_artifacts,
@@ -837,180 +815,19 @@ def source_prep_report(
     selection = selection_gap_report(candidate_indices=candidate_indices)
     candidate_profile = candidate_profile_report(candidate_indices=candidate_indices)
     scene_prefilter = scene_only_prefilter_report(candidate_indices=candidate_indices)
-    max_candidate_index = max(candidate_indices) if candidate_indices else -1
-    sources: dict[str, dict[str, Any]] = {}
-    for source in SUPPORTED_SCENE_SOURCES:
-        source_availability = availability["sources"][source]
-        source_selection = selection["sources"][source]
-        source_candidate_profile = candidate_profile["sources"][source]
-        source_prefilter = scene_prefilter["sources"][source]
-        gate_mismatch_rows = _source_gate_mismatch_profile_rows(source_candidate_profile)
-        dataset_name, split = _molmospaces_get_scenes_args(source)
-        candidate_scene_refs = [
-            _candidate_scene_ref_from_availability(item)
-            for item in source_availability.get("candidate_files") or []
-            if isinstance(item, dict)
-        ]
-        source_complete = source_selection.get("status") == "complete"
-        metadata_worklist_candidate_count = int(
-            source_candidate_profile.get("metadata_worklist_candidate_count") or 0
-        )
-        expensive_prefilter_candidates = _scene_prefilter_expensive_proof_candidates(
-            source_prefilter
-        )
-        source_rejected_exhausted = (
-            source_selection.get("selection_capacity_status") == "rejected_exhausted"
-            and metadata_worklist_candidate_count == 0
-        )
-        recommended_end = max_candidate_index
-        next_eval_count = len(source_selection.get("next_eval_scan_world_ids") or [])
-        eval_needed = int(source_selection.get("eval_needed_count") or 0)
-        if next_eval_count < eval_needed:
-            recommended_end = max(recommended_end, 19)
-        profile_indices = [
-            int(index) for index in source_candidate_profile.get("metadata_worklist_indices") or []
-        ]
-        if profile_indices:
-            recommended_end = max(recommended_end, max(profile_indices))
-        next_scan_candidates = (
-            []
-            if source_complete or source_rejected_exhausted
-            else source_selection.get("next_scan_candidates") or []
-        )
-        install_candidates = _unique_candidates(
-            [*next_scan_candidates, *expensive_prefilter_candidates]
-        )
-        no_expensive_prefilter_candidates = (
-            metadata_worklist_candidate_count > 0 and not expensive_prefilter_candidates
-        )
-        prep_source_availability = _source_availability_for_candidates(
-            source_availability=source_availability,
-            candidates=install_candidates,
-        )
-        prep_candidate_scene_refs = [
-            _candidate_scene_ref_from_availability(item)
-            for item in prep_source_availability.get("candidate_files") or []
-            if isinstance(item, dict)
-        ]
-        missing_resources = (
-            []
-            if source_complete or source_rejected_exhausted or no_expensive_prefilter_candidates
-            else _missing_source_resources(
-                source=source,
-                source_availability=prep_source_availability,
-                candidate_scene_refs=prep_candidate_scene_refs,
-            )
-        )
-        prep_status = _source_prep_status(
-            source_availability=source_availability,
-            source_selection=source_selection,
-            missing_resources=missing_resources,
-            metadata_worklist_candidate_count=metadata_worklist_candidate_count,
-        )
-        if gate_mismatch_rows and no_expensive_prefilter_candidates:
-            prep_status = "gate_mismatch"
-        elif no_expensive_prefilter_candidates:
-            prep_status = "blocked_prefilter_inconclusive"
-        sources[source] = {
-            "scene_source": source,
-            "scene_family": _family_split(source)[0],
-            "scene_split": _family_split(source)[1],
-            "prep_status": prep_status,
-            "download_policy": "manual_operator_only",
-            "molmospaces_scene_source": source,
-            "molmospaces_dataset_name": dataset_name,
-            "molmospaces_split": split,
-            "molmospaces_get_scenes_call": f'get_scenes("{dataset_name}", "{split}")',
-            "molmospaces_scene_version": source_availability.get("molmospaces_scene_version", ""),
-            "scene_index_map_status": source_availability.get("scene_index_map_status", ""),
-            "scene_index_map_reason": source_availability.get("scene_index_map_reason", ""),
-            "scene_index_map_stdout": source_availability.get("scene_index_map_stdout", ""),
-            "scene_asset_id": source,
-            "source_dir": source_availability.get("source_dir", ""),
-            "source_dir_available": bool(source_availability.get("source_dir_available")),
-            "candidate_indices": list(candidate_indices),
-            "candidate_profile_status": source_candidate_profile.get("profile_status", ""),
-            "candidate_profile_next_action": source_candidate_profile.get("next_action", ""),
-            "metadata_worklist_indices": profile_indices,
-            "metadata_worklist_world_ids": source_candidate_profile.get(
-                "metadata_worklist_world_ids", []
-            ),
-            "metadata_worklist_candidate_count": int(
-                source_candidate_profile.get("metadata_worklist_candidate_count") or 0
-            ),
-            "scene_prefilter_status": source_prefilter.get("prefilter_status", ""),
-            "scene_prefilter_next_action": source_prefilter.get("next_action", ""),
-            "scene_prefilter_candidate_count": int(source_prefilter.get("candidate_count") or 0),
-            "scene_prefilter_high_confidence_candidate_count": int(
-                source_prefilter.get("high_confidence_candidate_count") or 0
-            ),
-            "scene_prefilter_expensive_proof_candidate_count": int(
-                source_prefilter.get("expensive_proof_candidate_count") or 0
-            ),
-            "scene_prefilter_expensive_proof_world_ids": source_prefilter.get(
-                "expensive_proof_world_ids", []
-            ),
-            "gate_mismatch_candidate_count": len(gate_mismatch_rows),
-            "gate_mismatch_world_ids": [row.get("world_id") for row in gate_mismatch_rows],
-            "candidate_scene_refs": [
-                item
-                for item in candidate_scene_refs
-                if item.get("source") == "molmospaces_get_scenes"
-            ],
-            "missing_resource_count": len(missing_resources),
-            "missing_resource_summary": _resource_reason_counts(missing_resources),
-            "missing_resources": missing_resources,
-            "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
-            "metadata_worklist_scan_world_ids": [
-                item.get("world_id") for item in expensive_prefilter_candidates
-            ],
-            "install_candidates": []
-            if source_complete
-            else _source_prep_install_candidates(
-                dataset_name=dataset_name,
-                split=split,
-                candidates=install_candidates,
-            ),
-            "recommended_candidate_range": f"0:{recommended_end}" if recommended_end >= 0 else "",
-            "operator_commands": _source_prep_operator_commands(
-                source=source,
-                dataset_name=dataset_name,
-                split=split,
-                recommended_end=recommended_end,
-            ),
-        }
-    worklist = _source_prep_worklist(sources)
-    return {
-        "schema": "molmospaces_scene_sampler_source_prep_v1",
-        "generator_version": SAMPLER_GENERATOR_VERSION,
-        "probe_mode": "no_download_no_vlm",
-        "download_policy": "manual_operator_only",
-        "selection_policy": _sampler_selection_policy(),
-        "candidate_indices": list(candidate_indices),
-        "worklist": worklist,
-        "summary": {
-            "source_count": len(SUPPORTED_SCENE_SOURCES),
-            "sources_requiring_operator_prep_count": sum(
-                1
-                for source in sources.values()
-                if str(source.get("prep_status", "")).startswith("blocked_")
-            ),
-            "missing_resource_count": sum(
-                int(source.get("missing_resource_count") or 0) for source in sources.values()
-            ),
-            "missing_resource_summary": _resource_reason_counts(
-                [
-                    resource
-                    for source in sources.values()
-                    for resource in source.get("missing_resources", [])
-                    if isinstance(resource, dict)
-                ]
-            ),
-            "prep_status_counts": _source_prep_status_counts(sources),
-            "worklist": worklist,
-        },
-        "sources": sources,
-    }
+    return _source_prep_report(
+        availability=availability,
+        selection=selection,
+        candidate_profile=candidate_profile,
+        scene_prefilter=scene_prefilter,
+        supported_sources=SUPPORTED_SCENE_SOURCES,
+        candidate_indices=candidate_indices,
+        generator_version=SAMPLER_GENERATOR_VERSION,
+        selection_policy=_sampler_selection_policy(),
+        family_split=_family_split,
+        gate_mismatch_profile_rows=_source_gate_mismatch_profile_rows,
+        expensive_proof_candidates=_scene_prefilter_expensive_proof_candidates,
+    )
 
 
 def scanner_execution_plan(
@@ -1552,62 +1369,7 @@ def _scanner_required_gates() -> tuple[str, ...]:
 
 
 def _scanner_admission_row(candidate: dict[str, Any]) -> dict[str, Any]:
-    status = str(candidate.get("readiness_status") or "")
-    if status == READINESS_READY:
-        return {
-            **_scanner_admission_row_base(candidate),
-            "admission_status": "admitted",
-            "lanes": candidate.get("lanes") or [],
-            "passed_gates": list(_scanner_required_gates()),
-            "missing_gates": [],
-            "next_action": "none",
-        }
-    if status == READINESS_REJECTED:
-        return {
-            **_scanner_admission_row_base(candidate),
-            "admission_status": "rejected",
-            "lanes": candidate.get("lanes") or [],
-            "passed_gates": [],
-            "missing_gates": [],
-            "next_action": "do_not_scan_without_new_human_curation",
-        }
-    missing_gates = _scanner_missing_gates(candidate)
-    return {
-        **_scanner_admission_row_base(candidate),
-        "admission_status": "blocked",
-        "lanes": [],
-        "passed_gates": [gate for gate in _scanner_required_gates() if gate not in missing_gates],
-        "missing_gates": missing_gates,
-        "next_action": _scanner_next_action(candidate, missing_gates=missing_gates),
-    }
-
-
-def _scanner_admission_row_base(candidate: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "scene_family": candidate.get("scene_family", ""),
-        "scene_split": candidate.get("scene_split", ""),
-        "scene_source": candidate.get("scene_source", ""),
-        "scene_index": candidate.get("scene_index"),
-        "world_id": candidate.get("world_id", ""),
-        "readiness_status": candidate.get("readiness_status", ""),
-        "failure_class": candidate.get("failure_class", ""),
-        "blocked_reason": candidate.get("blocked_reason", ""),
-        "selected_reason": candidate.get("selected_reason", ""),
-        "room_count": candidate.get("room_count", 0),
-        "waypoint_count": candidate.get("waypoint_count", 0),
-        "category_provenance": candidate.get("category_provenance", ""),
-        "preview_statuses": candidate.get("preview_statuses", {}),
-        "candidate_file": candidate.get("candidate_file", {}),
-        "required_gates": list(_scanner_required_gates()),
-    }
-
-
-def _scanner_missing_gates(candidate: dict[str, Any]) -> list[str]:
-    return scanner_missing_gates(candidate, required_views=_required_views())
-
-
-def _scanner_next_action(candidate: dict[str, Any], *, missing_gates: list[str]) -> str:
-    return scanner_next_action(candidate, missing_gates=missing_gates)
+    return scanner_admission_row(candidate=candidate, required_views=_required_views())
 
 
 def _world_id_slug(world_id: str) -> str:
@@ -1693,44 +1455,6 @@ def _rank_selection_candidates(
             int(item.get("scene_index") or 0),
         ),
     )
-
-
-def _source_availability_for_candidates(
-    *,
-    source_availability: dict[str, Any],
-    candidates: list[dict[str, Any]],
-) -> dict[str, Any]:
-    if not candidates:
-        return {
-            **source_availability,
-            "candidate_files": [],
-        }
-    candidate_indices = {
-        int(candidate["scene_index"])
-        for candidate in candidates
-        if candidate.get("scene_index") is not None
-    }
-    candidate_files = [
-        item
-        for item in source_availability.get("candidate_files") or []
-        if isinstance(item, dict) and item.get("scene_index") in candidate_indices
-    ]
-    seen_indices = {
-        int(item["scene_index"]) for item in candidate_files if item.get("scene_index") is not None
-    }
-    for candidate in candidates:
-        scene_index = candidate.get("scene_index")
-        if scene_index is None or int(scene_index) in seen_indices:
-            continue
-        candidate_file = candidate.get("candidate_file")
-        if not isinstance(candidate_file, dict):
-            continue
-        candidate_files.append(candidate_file)
-        seen_indices.add(int(scene_index))
-    return {
-        **source_availability,
-        "candidate_files": candidate_files,
-    }
 
 
 def _scanner_execution_candidate_indices(

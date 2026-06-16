@@ -764,6 +764,15 @@ logs before choosing the next slice.
   Map 12 runtime-bundle drift is now counted. Proof: focused scene-sampler and
   readiness-export tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Scene-sampler source-prep report assembly moved into
+  `scene_sampler_prep.py`, and scanner-admission row assembly moved into
+  `scene_sampler_scanner.py`, leaving `scene_sampler.py` as the launch/eval
+  facade. Metric: `scene_sampler.py` 2241 -> 1965 lines, clearing the hard
+  ceiling; ratchet is 18 complexity rows and 66 oversized modules because the
+  scanner owner crossed the 800-line target while staying below the warning
+  band. Proof: focused scene-sampler, readiness-export, scanner-runner tests,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -775,5 +784,8 @@ logs before choosing the next slice.
   metrics extraction slice is done.
 - Report-performance skill calibration now shares the root calibration CLI;
   reopen only if skill/root calibration behavior diverges again.
+- Scene sampler is below the hard ceiling and delegates candidate profile,
+  source-prep, prefilter, and scanner-admission internals to named owner
+  modules; reopen only for fresh hard-ceiling or ownership drift.
 - Completed report-section extraction is partial evidence, not a reason to
   treat `report.py` as done; the active plan still owns the hard-ceiling split.
