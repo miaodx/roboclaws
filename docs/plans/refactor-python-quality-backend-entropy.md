@@ -1,6 +1,6 @@
 ---
 refactor_scope: python-quality-backend-entropy
-status: ACTIVE
+status: CONTINUE
 accepted_severities:
   - P0
   - P1
@@ -13,7 +13,7 @@ completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.m
 
 ## Status
 
-ACTIVE. Continue one verified, non-overlapping slice at a time. This file is
+CONTINUE. Continue one verified, non-overlapping slice at a time. This file is
 the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
@@ -23,7 +23,7 @@ of a clean checkpoint; refresh before the next execution slice.
 
 - 11 Ruff complexity violations and 66 oversized modules remain.
 - Largest P1 production hard-ceiling files are
-  `roboclaws/household/realworld_contract.py` at 4656 lines,
+  `roboclaws/household/realworld_contract.py` at 4410 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4573,
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
@@ -42,24 +42,28 @@ of a clean checkpoint; refresh before the next execution slice.
   They should not hide while a file-size slice improves, but they are not the
   default next P1 unless the active product focus changes.
 
-Execution refresh on 2026-06-17 moved scene-camera HTML report rendering into
-report owner modules. `scene_camera_comparison.py` dropped from 4693 to 2830
-lines but remains a P1 hard-ceiling file. Candidate B's report-rendering slice
-is closed; future scene-camera work should target a different capture,
-projection, or diagnostics ownership boundary. Candidate A is now the default
-next slice when no scene-camera-specific context is already loaded. Completed
-init/runtime-prior, Runtime Metric Map payload, visual-candidate payload,
-planner-probe report-panel, scene-camera report, and apple Object Gate / Render
-Gate slices stay closed without fresh drift. Ponytail small cuts remain
-opportunistic inputs; they must not postpone the P1 hard-ceiling checkpoint.
+Execution refresh on 2026-06-17 moved visual-candidate declaration
+orchestration out of `realworld_contract.py` into
+`realworld_visual_candidate_declarations.py`. `realworld_contract.py` dropped
+from 4656 to 4410 lines, while the new declaration owner is 345 lines and
+`realworld_visual_candidates.py` remains below the 800-line target at 627
+lines. This closes the declaration-orchestration sub-slice, but Candidate A is
+still active because registration, resolution, handle state, and response
+handoff internals remain in the contract facade. Completed init/runtime-prior,
+Runtime Metric Map payload, visual-candidate payload/event/overlay,
+visual-candidate declaration orchestration, planner-probe report-panel,
+scene-camera report, and apple Object Gate / Render Gate slices stay closed
+without fresh drift. Ponytail small cuts remain opportunistic inputs; they must
+not postpone the P1 hard-ceiling checkpoint.
 
 Current checkout note: if the worktree still contains the uncommitted
-scene-camera report split (`scene_camera_report*.py` plus the
-`scene_camera_comparison.py` delegate), close that in-flight candidate-B slice
-first with changed-code review, focused proof, and an explicit commit or owner
-decision before starting candidate A. The report modules' underscore helper
-imports are accepted as repo-local report-section internals; do not add a
-public section API only to hide those imports.
+visual-candidate declaration split (`realworld_visual_candidate_declarations.py`
+plus the `realworld_contract.py` delegate), close that in-flight candidate-A
+slice first with changed-code review, focused proof, and an explicit commit or
+owner decision before starting the next Candidate A sub-slice. Do not dump
+registration/resolution state into `realworld_visual_candidates.py` merely to
+reduce facade line count; the next owner must have a named lifecycle boundary
+and stay below the module target.
 
 ## Operating Rules
 
@@ -97,11 +101,12 @@ public section API only to hide those imports.
 
 ## Current Target
 
-Immediate next action in a dirty checkout: close the in-flight scene-camera
-report slice before opening new work. Once the checkout is clean or the owner
-explicitly parks that slice, refresh the ratchet and choose candidate A's
-`RealWorldCleanupContract` facade-coupling boundary by default. A valid
-candidate-A slice must move callers to an existing owner and make the facade
+Immediate next action in a dirty checkout: close the in-flight
+visual-candidate declaration slice before opening new work. Once the checkout
+is clean or the owner explicitly parks that slice, refresh the ratchet and
+continue Candidate A with the remaining visual-candidate registration,
+resolution, handle-state, and response-handoff lifecycle by default. A valid
+candidate-A slice must move callers to a named owner and make the facade
 thinner; another compatibility bag is not a win. B1 label-tool rows are
 cleared; candidate D is preview rendering only. Ponytail small cuts are inputs
 when they remove stale surface, duplicate concept, or false confidence, but
@@ -121,7 +126,7 @@ public launch, artifact, report, agent-facing, or private/public eval contract.
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 4656 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 4410 lines and
 `roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
 Capability Contract And Tools plus Artifacts, reports, and eval suites.
 Alternate P1 only when a fresh boundary reduces facade-private coupling or
@@ -129,12 +134,18 @@ report ownership, for example visual-candidate state/lifecycle handoff,
 agent-view/readiness wrappers, or a remaining report section owner. Do not
 reopen init projection/runtime-prior, Runtime Metric Map payload,
 visual-candidate payload/event/overlay, or planner-probe report-panel slices.
-The most concrete next contract boundary is stateful visual-candidate
-declaration/resolution lifecycle still owned by `realworld_contract.py`; it is
-valid only if response shapes, handle state, visual-grounding evidence, and
-private-truth assertions remain covered while callers move toward
-`realworld_visual_candidates.py` or another named owner. `RealWorldPayloadContract`
-and `DoneReadinessContract` are ponytail inputs only when a slice removes
+Visual-candidate declaration orchestration now belongs to
+`realworld_visual_candidate_declarations.py`; do not reopen it unless
+`RealWorldCleanupContract.declare_visual_candidates` starts rebuilding
+declaration inputs, invalid-candidate responses, producer failure responses, or
+model-declared observation responses directly. The most concrete next contract
+boundary is the stateful visual-candidate registration/resolution lifecycle
+still owned by `realworld_contract.py`, including handle state, resolved
+detections, navigation handoff, and response assembly. It is valid only if
+response shapes, handle state, visual-grounding evidence, and private-truth
+assertions remain covered while callers move toward a named owner that does not
+become a new oversized bag. `RealWorldPayloadContract` and
+`DoneReadinessContract` are ponytail inputs only when a slice removes
 facade-private coupling; replacing an alias pile with a looser parameter bag,
 all-purpose context object, or new wrapper facade is not a win.
 
@@ -199,13 +210,15 @@ selected boundary is not already owned by
 - The following completed owner splits stay closed unless they regain direct
   owner drift: Runtime Metric Map payloads in `realworld_runtime_map_contract.py`;
   init projection/runtime-prior owner calls; visual-candidate payload/event/
-  overlay assembly in `realworld_visual_candidates.py`; planner-probe report
-  panels in `report_sections_probe_runtime.py`, `report_sections_probe.py`, and
-  `report_sections_probe_failures.py`; apple Object Gate / Render Gate
-  diagnostics in `robot_camera_apple2apple_object_gate.py`; scene-camera USD
-  render-contract, image metric, lighting/tone/shadow, render-domain, and
-  render-source diagnostics in focused scene-camera modules; B1 runtime-bundle
-  and label-tool validation helper families.
+  overlay assembly in `realworld_visual_candidates.py`; visual-candidate
+  declaration orchestration in `realworld_visual_candidate_declarations.py`;
+  planner-probe report panels in `report_sections_probe_runtime.py`,
+  `report_sections_probe.py`, and `report_sections_probe_failures.py`; apple
+  Object Gate / Render Gate diagnostics in
+  `robot_camera_apple2apple_object_gate.py`; scene-camera USD render-contract,
+  image metric, lighting/tone/shadow, render-domain, and render-source
+  diagnostics in focused scene-camera modules; B1 runtime-bundle and label-tool
+  validation helper families.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad

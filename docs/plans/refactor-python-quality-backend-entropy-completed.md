@@ -883,6 +883,16 @@ logs before choosing the next slice.
   the legacy checker flag, and guidance wording stay small-cut inputs behind
   P1 hard-ceiling work. Proof: ratchet summary and call-site grep.
 
+- 2026-06-17: Visual-candidate declaration orchestration moved from
+  `realworld_contract.py` into `realworld_visual_candidate_declarations.py`,
+  keeping the public `declare_visual_candidates` facade method as a thin
+  delegate and leaving stateful registration/resolution internals for the next
+  Candidate A sub-slice. Metric: `realworld_contract.py` 4656 -> 4410 lines,
+  new declaration owner 345 lines, `realworld_visual_candidates.py` 627 lines;
+  ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  realworld contract and MCP server contract tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -907,6 +917,11 @@ logs before choosing the next slice.
   `realworld_visual_candidates.py`; reopen only if the realworld contract
   facade starts rebuilding visual-grounding candidate payloads or overlay
   artifact paths directly.
+- Visual-candidate declaration orchestration is owned by
+  `realworld_visual_candidate_declarations.py`; reopen only if the realworld
+  contract facade starts rebuilding declaration inputs, invalid-candidate
+  responses, camera-label producer failure responses, or model-declared
+  observation response packets directly.
 - Planner manipulation probe runtime diagnostics report panels are owned by
   `report_sections_probe_runtime.py`; reopen only if `report.py` starts
   rebuilding Runtime Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache,
