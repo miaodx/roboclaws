@@ -500,6 +500,84 @@ def test_dino_sidecar_default_matches_documented_service_port(monkeypatch: Monke
     assert calls == [(("127.0.0.1", 18880), 0.35)]
 
 
+def test_dino_sidecar_requirement_autostarts_default_service(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    calls = {"available": 0, "started": 0, "stopped": 0}
+
+    def fake_available() -> bool:
+        calls["available"] += 1
+        return calls["started"] > 0
+
+    def fake_start(manifest: dict) -> bool:
+        calls["started"] += 1
+        manifest["dino_sidecar_autostart"] = {"base_url": runner.DEFAULT_VISUAL_GROUNDING_BASE_URL}
+        return True
+
+    def fake_stop() -> None:
+        calls["stopped"] += 1
+
+    monkeypatch.delenv("ROBOCLAWS_EVAL_HARNESS_AUTOSTART_DINO_SIDECAR", raising=False)
+    monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(runner, "_dino_sidecar_available", fake_available)
+    monkeypatch.setattr(runner, "_start_managed_dino_sidecar", fake_start)
+    monkeypatch.setattr(runner, "_stop_managed_dino_sidecars", fake_stop)
+    monkeypatch.setattr(
+        runner,
+        "_run_row",
+        lambda row, manifest: row.update({"status": "ran", "outcome": "passed", "exit_code": 0}),
+    )
+    manifest = selector.build_eval_harness(
+        mode="execute",
+        budget="focused",
+        changed_files=["roboclaws/household/visual_grounding.py"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_harness(manifest)
+
+    row = _selected_rows(manifest)["direct-camera-grounded-grounding-dino"]
+    assert row["status"] == "ran"
+    assert row["outcome"] == "passed"
+    assert calls["available"] >= 1
+    assert calls["started"] == 1
+    assert calls["stopped"] == 1
+    assert manifest["dino_sidecar_autostart"]["base_url"] == runner.DEFAULT_VISUAL_GROUNDING_BASE_URL
+
+
+def test_dino_sidecar_autostart_can_be_disabled(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_EVAL_HARNESS_AUTOSTART_DINO_SIDECAR", "0")
+    monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(runner, "_dino_sidecar_available", lambda: False)
+    monkeypatch.setattr(
+        runner,
+        "_start_managed_dino_sidecar",
+        lambda manifest: (_ for _ in ()).throw(AssertionError("should not start")),
+    )
+    manifest = selector.build_eval_harness(
+        mode="execute",
+        budget="focused",
+        changed_files=["roboclaws/household/visual_grounding.py"],
+        output_dir=tmp_path,
+    )
+
+    blockers = runner._row_blockers(
+        _selected_rows(manifest)["direct-camera-grounded-grounding-dino"],
+        manifest,
+    )
+
+    assert blockers == [
+        {
+            "category": "environment_blocked",
+            "detail": "Grounding DINO visual-grounding sidecar is not reachable",
+        }
+    ]
+
+
 def test_recommendation_writes_json_markdown_and_html(tmp_path: Path) -> None:
     exit_code = runner.main(
         [
