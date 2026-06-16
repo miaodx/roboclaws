@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from roboclaws.household import realworld_visual_candidates
+from roboclaws.household import (
+    realworld_visual_candidate_lifecycle,
+    realworld_visual_candidates,
+)
 from roboclaws.household.raw_fpv_guidance import (
     raw_fpv_visual_candidate_recovery,
     raw_fpv_visual_candidate_recovery_hint,
@@ -11,6 +14,12 @@ from roboclaws.household.raw_fpv_guidance import (
 from roboclaws.household.visual_grounding import (
     EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    VisualGroundingContractError,
+    image_payload_for_raw_observation,
+    pipeline_summary_from_response,
+    sim_visual_grounding_pipeline,
+    visual_grounding_failure_response,
+    visual_grounding_request,
 )
 
 RAW_FPV_ONLY_MODE = "raw_fpv_only"
@@ -26,6 +35,10 @@ class VisualCandidateDeclarationContract(Protocol):
     perception_mode: str
     map_mode: str
     visual_grounding_pipeline_id: str
+    visual_grounding_client: Any
+    visual_grounding_run_id: str
+    visual_grounding_artifact_base_dir: Any
+    scenario: Any
     _camera_model_policy_events: list[dict[str, Any]]
     _detections_by_handle: dict[str, dict[str, Any]]
 
@@ -33,33 +46,21 @@ class VisualCandidateDeclarationContract(Protocol):
 
     def _waypoint_by_id(self, waypoint_id: str) -> dict[str, Any] | None: ...
 
-    def _camera_label_producer_candidates(
-        self, *, raw_observation: dict[str, Any], waypoint: dict[str, Any]
-    ) -> dict[str, Any]: ...
-
-    def _register_model_declared_candidate(
-        self,
-        *,
-        raw_observation: dict[str, Any],
-        waypoint: dict[str, Any],
-        candidate: dict[str, Any],
-        producer_type: str,
-        producer_id: str,
-    ) -> dict[str, Any]: ...
-
-    def _model_declared_observation_event(
-        self,
-        *,
-        raw_observation: dict[str, Any],
-        producer_type: str,
-        producer_id: str,
-        declared: list[dict[str, Any]],
-        visual_grounding_pipeline: dict[str, Any],
-    ) -> dict[str, Any]: ...
-
     def _public_fixture_reference_payload(self, value: Any) -> Any: ...
 
     def _agent_visible_detection_payload(self, detection: dict[str, Any]) -> dict[str, Any]: ...
+
+    def _handle_for_object(self, object_id: str) -> str: ...
+
+    def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]: ...
+
+    def fixture_hints(self) -> dict[str, Any]: ...
+
+    def target_fixture_for_detection(
+        self,
+        detection: dict[str, Any],
+        fixture_hints: dict[str, Any],
+    ) -> dict[str, Any] | None: ...
 
     def _ok(self, tool: str, **payload: Any) -> dict[str, Any]: ...
 
@@ -103,6 +104,7 @@ def declare_visual_candidates(
         producer_id=producer_id,
         waypoint=waypoint,
         candidates=candidates,
+        assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
     )
     if response := declaration_inputs.get("response"):
         return response
@@ -114,6 +116,7 @@ def declare_visual_candidates(
         candidate_inputs=declaration_inputs["candidate_inputs"],
         producer_type=str(declaration_inputs["producer_type"]),
         producer_id=str(declaration_inputs["producer_id"]),
+        assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
     )
     if response := declarations.get("response"):
         return response
@@ -137,6 +140,7 @@ def _visual_candidate_declaration_inputs(
     candidates: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
     producer_type: str,
     producer_id: str,
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None] | None,
 ) -> dict[str, Any]:
     candidate_inputs = list(candidates or [])
     if candidate_inputs:
@@ -164,9 +168,11 @@ def _visual_candidate_declaration_inputs(
             )
         }
 
-    producer_result = contract._camera_label_producer_candidates(
+    producer_result = camera_label_producer_candidates(
+        contract,
         raw_observation=raw_observation,
         waypoint=waypoint,
+        assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
     )
     return _declaration_inputs_from_camera_label_producer(
         contract,
@@ -220,7 +226,8 @@ def _failed_visual_grounding_declaration_response(
     raw_observation: dict[str, Any],
     visual_grounding_pipeline: dict[str, Any],
 ) -> dict[str, Any]:
-    evidence = contract._model_declared_observation_event(
+    evidence = model_declared_observation_event(
+        contract,
         raw_observation=raw_observation,
         producer_type=EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
         producer_id=contract.visual_grounding_pipeline_id,
@@ -247,7 +254,9 @@ def _registered_visual_candidate_declarations(
     candidate_inputs: list[dict[str, Any]],
     producer_type: str,
     producer_id: str,
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None] | None,
 ) -> dict[str, Any]:
+    assert_no_forbidden = assert_no_forbidden_agent_view_keys or (lambda _payload: None)
     declared = []
     for index, candidate in enumerate(candidate_inputs):
         candidate_error = realworld_visual_candidates._visual_candidate_validation_error(
@@ -267,12 +276,14 @@ def _registered_visual_candidate_declarations(
                 )
             }
         declared.append(
-            contract._register_model_declared_candidate(
+            realworld_visual_candidate_lifecycle.register_model_declared_candidate(
+                contract,
                 raw_observation=raw_observation,
                 waypoint=waypoint,
                 candidate=candidate,
                 producer_type=producer_type,
                 producer_id=producer_id,
+                assert_no_forbidden_agent_view_keys=assert_no_forbidden,
             )
         )
     return {"declared": declared}
@@ -319,7 +330,8 @@ def _visual_candidate_declaration_response(
         if item.get("grounding_status") == "resolved"
         and str(item.get("object_id") or "") in contract._detections_by_handle
     ]
-    evidence = contract._model_declared_observation_event(
+    evidence = model_declared_observation_event(
+        contract,
         raw_observation=raw_observation,
         producer_type=producer_type,
         producer_id=producer_id,
@@ -342,4 +354,183 @@ def _visual_candidate_declaration_response(
         ],
         visible_object_detections=[],
         private_target_truth_included=False,
+    )
+
+
+def simulated_declaration_inputs_for_waypoint(
+    contract: VisualCandidateDeclarationContract,
+    waypoint: dict[str, Any],
+    *,
+    observation_id: str,
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None] | None = None,
+) -> list[dict[str, Any]]:
+    assert_no_forbidden = assert_no_forbidden_agent_view_keys or (lambda _payload: None)
+    inputs = []
+    for obj, location_id in realworld_visual_candidate_lifecycle.objects_visible_from_waypoint(
+        contract,
+        waypoint,
+    ):
+        handle = contract._handle_for_object(obj.object_id)
+        detection = realworld_visual_candidate_lifecycle.detection_for_object_at_location(
+            contract,
+            obj,
+            location_id=location_id,
+            handle=handle,
+            waypoint=waypoint,
+            perception_source=CAMERA_MODEL_POLICY_MODE,
+            producer_type=SIMULATED_CAMERA_MODEL_PROVENANCE,
+            source_observation_id=observation_id,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden,
+        )
+        target = contract.target_fixture_for_detection(detection, contract.fixture_hints())
+        target_fixture_id = str((target or {}).get("fixture_id") or location_id)
+        inputs.append(
+            {
+                "category": obj.category,
+                "source_fixture_id": location_id,
+                "target_fixture_id": target_fixture_id,
+                "evidence_note": (
+                    "simulated camera model declared a public camera-derived "
+                    f"{obj.category} candidate"
+                ),
+                "image_region": {"type": "bbox", "value": detection["image_bbox"]},
+                "confidence": detection.get("visibility_confidence", 0.68),
+            }
+        )
+    return inputs
+
+
+def camera_label_producer_candidates(
+    contract: VisualCandidateDeclarationContract,
+    *,
+    raw_observation: dict[str, Any],
+    waypoint: dict[str, Any],
+    assert_no_forbidden_agent_view_keys: Callable[[Any], None] | None = None,
+) -> dict[str, Any]:
+    if contract.visual_grounding_pipeline_id == SIM_VISUAL_GROUNDING_PIPELINE_ID:
+        candidates = simulated_declaration_inputs_for_waypoint(
+            contract,
+            waypoint,
+            observation_id=str(raw_observation["observation_id"]),
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+        )
+        return {
+            "ok": True,
+            "candidates": candidates,
+            "visual_grounding_pipeline": sim_visual_grounding_pipeline(
+                candidate_count=len(candidates)
+            ),
+        }
+    if contract.visual_grounding_client is None:
+        return {
+            "ok": True,
+            "candidates": [],
+            "visual_grounding_pipeline": pipeline_summary_from_response(
+                visual_grounding_failure_response(
+                    pipeline_id=contract.visual_grounding_pipeline_id,
+                    reason="missing_client",
+                    message=(
+                        "non-sim camera-grounded-labels camera labeler requires an "
+                        "External Visual Grounding Service client"
+                    ),
+                    latency_ms=0,
+                )
+            ),
+        }
+    client_config = getattr(contract.visual_grounding_client, "config", None)
+    request = visual_grounding_request(
+        run_id=contract.visual_grounding_run_id or contract.scenario.scenario_id,
+        raw_observation=raw_observation,
+        category_hints=list(realworld_visual_candidates.VISUAL_GROUNDING_CATEGORY_HINTS),
+        fixture_hints=realworld_visual_candidates._fixture_hints_for_visual_grounding_request(
+            contract.fixture_hints()
+        ),
+        pipeline_id=contract.visual_grounding_pipeline_id,
+        image=image_payload_for_raw_observation(
+            raw_observation,
+            base_dir=contract.visual_grounding_artifact_base_dir,
+        ),
+        proposer={
+            "producer_id": str(getattr(client_config, "proposer_id", "") or ""),
+            "model_id": str(getattr(client_config, "proposer_model_id", "") or ""),
+        },
+    )
+    try:
+        response = contract.visual_grounding_client.request_candidates(request)
+        auth_mode = str(getattr(client_config, "auth_mode", "none"))
+        pipeline = pipeline_summary_from_response(response, auth_mode=auth_mode)
+    except VisualGroundingContractError as exc:
+        return {
+            "ok": False,
+            "error_reason": "visual_grounding_contract_error",
+            "recovery_hint": str(exc),
+            "candidates": [],
+            "visual_grounding_pipeline": {
+                "schema": "visual_grounding_pipeline_v1",
+                "pipeline_id": contract.visual_grounding_pipeline_id,
+                "status": "contract_error",
+                "stages": [],
+                "candidate_count": 0,
+                "unresolved_count": 0,
+                "duplicate_rate": 0.0,
+                "failure_reason": "contract_error",
+                "failure_message": str(exc),
+                "auth_mode": "none",
+            },
+        }
+    if pipeline.get("status") == "failed":
+        return {
+            "ok": True,
+            "candidates": [],
+            "visual_grounding_pipeline": pipeline,
+        }
+    return {
+        "ok": True,
+        "candidates": (
+            realworld_visual_candidates._candidate_inputs_from_visual_grounding_response(
+                response,
+                raw_observation=raw_observation,
+                visual_grounding_pipeline=pipeline,
+                artifact_base_dir=contract.visual_grounding_artifact_base_dir,
+                resolve_destination_fixture_id=lambda **kwargs: _resolved_destination_fixture_id(
+                    contract,
+                    **kwargs,
+                ),
+            )
+        ),
+        "visual_grounding_pipeline": pipeline,
+    }
+
+
+def _resolved_destination_fixture_id(
+    contract: VisualCandidateDeclarationContract,
+    *,
+    category: str,
+    source_fixture_id: str,
+) -> str:
+    pseudo_detection = {
+        "category": category,
+        "name": category,
+        "support_estimate": {"fixture_id": source_fixture_id},
+    }
+    target = contract.target_fixture_for_detection(pseudo_detection, contract.fixture_hints())
+    return str((target or {}).get("fixture_id") or "")
+
+
+def model_declared_observation_event(
+    contract: VisualCandidateDeclarationContract,
+    *,
+    raw_observation: dict[str, Any],
+    producer_type: str,
+    producer_id: str,
+    declared: list[dict[str, Any]],
+    visual_grounding_pipeline: dict[str, Any],
+) -> dict[str, Any]:
+    return realworld_visual_candidates._model_declared_observation_event(
+        raw_observation=raw_observation,
+        perception_mode=contract.perception_mode,
+        producer_type=producer_type,
+        producer_id=producer_id,
+        declared=declared,
+        visual_grounding_pipeline=visual_grounding_pipeline,
     )

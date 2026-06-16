@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household import realworld_visual_candidate_declarations
 from roboclaws.household.backend_contract import (
     SYNTHETIC_BACKEND,
     CleanupBackendSession,
@@ -537,7 +538,8 @@ def _detections_for_policy(
     if perception_mode == RAW_FPV_ONLY_MODE:
         waypoint = contract._waypoint_by_id(str(raw.get("waypoint_id") or ""))
         candidate_inputs = (
-            contract._simulated_declaration_inputs_for_waypoint(
+            realworld_visual_candidate_declarations.simulated_declaration_inputs_for_waypoint(
+                contract,
                 waypoint,
                 observation_id=str(raw.get("observation_id", "")),
             )
@@ -817,9 +819,7 @@ def _maybe_clean_visible_object(
             "from_fixture_id": candidate.support.get("fixture_id"),
             "to_fixture_id": candidate.target_fixture_id,
             "reason": _decision_reason(perception_mode),
-            "perception_source": candidate.detection.get(
-                "perception_source", "visible_detection"
-            ),
+            "perception_source": candidate.detection.get("perception_source", "visible_detection"),
             "model_provenance": candidate.detection.get("model_provenance"),
             "source_observation_id": candidate.detection.get("source_observation_id"),
             "handled": True,

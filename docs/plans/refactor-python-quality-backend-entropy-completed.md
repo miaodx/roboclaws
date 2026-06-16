@@ -973,6 +973,18 @@ logs before choosing the next slice.
   oversized modules. Proof: focused realworld contract and MCP server contract
   tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Camera-label producer declaration inputs moved from
+  `RealWorldCleanupContract` into `realworld_visual_candidate_declarations.py`,
+  covering simulated camera-model candidate rows, external visual-grounding
+  request/failure envelopes, producer destination resolution, model-declared
+  observation events, and direct registration calls into the lifecycle owner.
+  Direct cleanup and MCP contract tests now call the declaration owner instead
+  of contract-private declaration-input helpers. Metric:
+  `realworld_contract.py` 3741 -> 3554 lines, declaration owner 345 -> 533
+  lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  focused realworld contract and MCP server contract tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1002,6 +1014,11 @@ logs before choosing the next slice.
   contract facade starts rebuilding declaration inputs, invalid-candidate
   responses, camera-label producer failure responses, or model-declared
   observation response packets directly.
+- Camera-label producer declaration inputs are owned by
+  `realworld_visual_candidate_declarations.py`; reopen only if the realworld
+  contract facade starts rebuilding simulated declaration input rows,
+  visual-grounding requests, producer failure envelopes, model-declared
+  observation events, or registration wrapper aliases directly.
 - Visual-candidate registration/resolution lifecycle is owned by
   `realworld_visual_candidate_lifecycle.py`; reopen only if the realworld
   contract facade starts rebuilding normalization, match resolution,
