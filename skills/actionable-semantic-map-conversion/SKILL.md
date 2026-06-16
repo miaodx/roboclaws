@@ -136,6 +136,6 @@ For a downstream consumer proof, run a cleanup task with the generated snapshot:
 ```bash
 just run::surface surface=household-world world=agibot-g2/map-12 \
   backend=agibot-gdk intent=cleanup agent_engine=direct-runner \
-  evidence_lane=world-oracle-labels \
+  evidence_lane=world-public-labels \
   seed=7 runtime_map_prior=output/maps/robot_map_12/actionable_semantic_map_snapshot.json
 ```

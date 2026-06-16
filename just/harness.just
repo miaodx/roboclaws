@@ -24,7 +24,7 @@ default:
     @just --list harness
 
 # Live Codex cleanup timing lane. This is the local Docker-backed Codex route
-# with the normal world-oracle evidence lane and per-tool robot-view timeline capture
+# with the normal world-public evidence lane and per-tool robot-view timeline capture
 # disabled explicitly.
 molmo-cleanup-codex-perf *overrides:
     #!/usr/bin/env bash
@@ -60,7 +60,7 @@ molmo-cleanup-codex-perf *overrides:
       fi
       printf -v "$key" '%s' "$value"
     done
-    cmd=(just molmo::household-world-impl codex-live world-oracle-labels \
+    cmd=(just molmo::household-world-impl codex-live world-public-labels \
       "$seed" "$output_dir" "$task" "$generated_mess_count" "$host" "$port" \
       "$map_bundle" "skill" "$robot_views")
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
@@ -376,14 +376,14 @@ molmo-planner-manipulation-probe output_dir="output/molmo-planner-manipulation-p
 
 # ADR-0133 perception-isolated visual-grounding benchmark. This calls the
 # configured HTTP grounding service over fixed public RAW_FPV-style fixtures and
-# checks provenance, overlays, and private-label separation. Start the fake
-# service first for the CI-safe route:
-#   .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http
+# checks provenance, overlays, and private-label separation. The default expects
+# the deployable Grounding-DINO producer; missing sidecar/model readiness should
+# fail or record blocked evidence, not fall back to fake transport.
 molmo-visual-grounding-benchmark *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
     args=("$@")
-    pipeline="${VISUAL_GROUNDING_PIPELINE_ID:-fake-http}"
+    pipeline="${VISUAL_GROUNDING_PIPELINE_ID:-grounding-dino}"
     output_dir="output/visual-grounding-benchmark"
     corpus="harness/visual_grounding/smoke_corpus.json"
     matrix=""

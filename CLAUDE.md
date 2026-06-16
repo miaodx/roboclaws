@@ -58,16 +58,16 @@ preflight harness when testing that backend.
 Run current public demos through the launch catalog:
 
 ```bash
-just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
 just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 ```
 
 Common `just` recipes use the small public facade:
 
 ```bash
-just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
 just run::surface surface=planner-proof agent_engine=direct-runner intent=planner-proof mode=dry-run
 just agent::verify mock                          # maintainer confidence gate
 ```
@@ -86,7 +86,7 @@ Model-only overrides do not bypass the guard.
 
 Coding-agent runtime contract: run Codex / Claude Code demos through the public
 launch catalog, for example
-`just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels`.
+`just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels`.
 The pinned Docker-backed coding-agent runtime is the only supported task
 runtime; it runs with full local-demo permissions and an isolated task-skill
 workspace. New `just` recipes that launch Codex or Claude Code must route

@@ -803,15 +803,10 @@ def _assert_evidence_lane(
     )
     assert profile.evidence_lane in report_text, report_text[:500]
     assert profile.agent_input in report_text, report_text[:500]
-    if profile.evidence_lane in {"world-oracle-labels", "world-public-labels"}:
+    if profile.evidence_lane == "world-public-labels":
         assert "image reasoning" not in report_text.lower(), report_text[:500]
         model_input_note = str(metadata.get("model_input_note") or "")
-        if profile.evidence_lane == "world-oracle-labels":
-            assert "not model input" in model_input_note.lower(), metadata
-            assert "map_mode" in model_input_note, metadata
-            assert "runtime_map_prior" in model_input_note, metadata
-        else:
-            assert "withheld" in model_input_note.lower(), metadata
+        assert "withheld" in model_input_note.lower(), metadata
 
 
 def _assert_clean_agent_run(

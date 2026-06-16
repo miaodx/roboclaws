@@ -452,7 +452,7 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
 
     assert "molmo-cleanup-codex-perf" in agent_text
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
-    assert "just molmo::household-world-impl codex-live world-oracle-labels" in harness_text
+    assert "just molmo::household-world-impl codex-live world-public-labels" in harness_text
     assert '"skill" "$robot_views"' in harness_text
 
 
@@ -480,13 +480,13 @@ def test_agent_harness_allows_molmo_visual_grounding_benchmark_target() -> None:
 
     route = trace_agent_harness(
         "molmo-visual-grounding-benchmark",
-        "pipeline=fake-http",
+        "pipeline=grounding-dino",
         "output_dir=/tmp/roboclaws-vg",
     )
     assert route == [
         "just",
         "harness::molmo-visual-grounding-benchmark",
-        "pipeline=fake-http",
+        "pipeline=grounding-dino",
         "output_dir=/tmp/roboclaws-vg",
     ]
 
@@ -564,9 +564,9 @@ def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-report",
+        "output/household/household-world/cleanup/codex-world-public-labels",
     ]
 
 
@@ -581,9 +581,9 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/open-ended/codex-report",
+        "output/household/household-world/open-ended/codex-world-public-labels",
     ]
     assert "我渴了，帮我找些解渴的东西" in route
     assert route[-2:] == ["household-world", "open-ended"]
@@ -607,7 +607,7 @@ def test_surface_open_ended_supports_mcp_smoke_for_local_gate() -> None:
             "surface=household-world",
             "agent_engine=direct-runner",
             "run_preset=smoke",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
             "prompt=我渴了，帮我找些解渴的东西",
         )
     )
@@ -638,7 +638,7 @@ def test_surface_launch_rejects_smoke_as_public_evidence_lane() -> None:
             )
         )
 
-    assert exc.value.hint == "use run_preset=smoke with evidence_lane=world-oracle-labels"
+    assert exc.value.hint == "use run_preset=smoke with evidence_lane=world-public-labels"
 
 
 def test_surface_launch_rejects_public_profile_alias() -> None:
@@ -651,7 +651,7 @@ def test_surface_launch_rejects_public_profile_alias() -> None:
                 "surface=household-world",
                 "agent_engine=codex-cli",
                 "preset=cleanup",
-                "profile=world-oracle-labels",
+                "profile=world-public-labels",
             )
         )
 
@@ -724,7 +724,7 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
             "surface=household-world",
             "agent_engine=codex-cli",
             "preset=map-build",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         )
     )
 
@@ -757,7 +757,7 @@ def test_surface_launch_exports_goal_contract_to_lower_recipe_environment() -> N
             "agent_engine=direct-runner",
             "preset=cleanup",
             "run_preset=smoke",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         )
     )
     env = export_env_from_overrides(plan.overrides)
@@ -785,17 +785,17 @@ def test_surface_launch_rejects_retired_ai2thor_surface() -> None:
 def test_household_checker_flags_are_generated_from_intent_policy() -> None:
     cleanup_flags = checker_flags_for_household_intent(
         intent_id="cleanup",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         min_generated_mess_count="5",
     )
     open_flags = checker_flags_for_household_intent(
         intent_id="open-ended",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         min_generated_mess_count="5",
     )
     map_flags = checker_flags_for_household_intent(
         intent_id="map-build",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         min_generated_mess_count="5",
     )
 
@@ -817,9 +817,9 @@ def test_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-report",
+        "output/household/household-world/cleanup/codex-world-public-labels",
     ]
 
 
@@ -855,7 +855,7 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
             "agent_engine=openai-agents-sdk",
             "preset=cleanup",
             "run_preset=smoke",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         )
     )
     assert plan.agent_engine == "openai-agents-sdk"
@@ -911,7 +911,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
                 "surface=household-world",
                 "agent_engine=codex-cli",
                 "preset=cleanup",
-                "evidence_lane=world-oracle-labels-perf",
+                "evidence_lane=world-public-labels-perf",
             ),
             "unsupported household-world evidence_lane",
         ),
@@ -948,7 +948,7 @@ def test_surface_router_rejects_removed_compatibility_aliases(surface: str) -> N
                 "surface=household-world",
                 "agent_engine=codex-cli",
                 "preset=cleanup",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
                 "generated_mess_count=5",
             ),
             "generated_mess_count is no longer",
@@ -970,7 +970,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
             "agent_engine=codex-cli",
             "preset=cleanup",
             "run_preset=smoke",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
             "output_dir=output/custom",
         )
     )
@@ -1009,7 +1009,7 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
             "agent_engine=codex-cli",
             "preset=cleanup",
             "run_preset=smoke",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         )
     )
 
@@ -1051,7 +1051,7 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
                 "surface=household-world",
                 "agent_engine=vlm-policy",
                 "preset=cleanup",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
             )
         )
 
@@ -1157,7 +1157,6 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
     assert plan.mode == "world-public-labels"
     assert plan.profile == "world-public-labels"
     assert plan.supported_profiles == (
-        "world-oracle-labels",
         "world-public-labels",
         "camera-grounded-labels",
         "camera-raw-fpv",
@@ -1222,7 +1221,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
         "output/custom",
     ]
@@ -1231,7 +1230,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
 def test_semantic_map_build_rejects_public_map_mode_axis() -> None:
     stderr = assert_household_map_build_run_fails(
         "direct",
-        "world-oracle-labels",
+        "world-public-labels",
         "map_mode=minimal",
         "output_dir=output/custom-map",
     )
@@ -1242,7 +1241,7 @@ def test_semantic_map_build_rejects_public_map_mode_axis() -> None:
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_household_cleanup_run(
         "codex",
-        "world-oracle-labels",
+        "world-public-labels",
         "map_bundle=molmo-cleanup-default-7",
     )
 
@@ -1250,9 +1249,9 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-report",
+        "output/household/household-world/cleanup/codex-world-public-labels",
         "帮我收拾这个房间",
         "5",
         "127.0.0.1",
@@ -1266,7 +1265,7 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
         "household-world.cleanup",
         "mcp-smoke",
         "camera-grounded-labels",
-        "camera_labeler=fake-http",
+        "camera_labeler=grounding-dino",
     )
 
     assert route[:6] == [
@@ -1277,14 +1276,14 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
         "7",
         "output/household/household-world/cleanup/mcp-smoke-camera-grounded-labels",
     ]
-    assert route[13] == "fake-http"
+    assert route[13] == "grounding-dino"
 
 
 def test_molmo_cleanup_rejects_isaac_backend_override() -> None:
     stderr = assert_agent_run_fails(
         "household-world.cleanup",
         "direct",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=isaaclab_subprocess",
     )
 
@@ -1295,7 +1294,7 @@ def test_molmo_cleanup_rejects_isaac_backend_override() -> None:
 def test_household_cleanup_rejects_public_legacy_rich_map_mode() -> None:
     stderr = assert_household_cleanup_run_fails(
         "direct",
-        "world-oracle-labels",
+        "world-public-labels",
         "map_mode=rich",
     )
 
@@ -1306,7 +1305,7 @@ def test_agent_run_rejects_public_map_mode_override() -> None:
     stderr = assert_agent_run_fails(
         "household-world.cleanup",
         "direct-runner",
-        "world-oracle-labels",
+        "world-public-labels",
         "map_mode=minimal",
     )
 
@@ -1315,9 +1314,9 @@ def test_agent_run_rejects_public_map_mode_override() -> None:
 
 @pytest.mark.parametrize("dispatch_target", ("household-cleanup", "semantic-map-build"))
 def test_agent_run_rejects_legacy_household_dispatch_targets(dispatch_target: str) -> None:
-    stderr = assert_agent_run_fails(dispatch_target, "direct-runner", "world-oracle-labels")
+    stderr = assert_agent_run_fails(dispatch_target, "direct-runner", "world-public-labels")
 
-    assert "unsupported report 'world-oracle-labels'" in stderr
+    assert "unsupported report 'world-public-labels'" in stderr
 
 
 def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
@@ -1385,7 +1384,7 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
 def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
     route = trace_household_map_build_run(
         "codex",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=molmospaces_subprocess",
     )
 
@@ -1393,9 +1392,9 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/map-build/codex-report",
+        "output/household/household-world/map-build/codex-world-public-labels",
         "帮我建立这个房间的语义地图",
     ]
     assert route[15] == "on"
@@ -1408,7 +1407,7 @@ def test_semantic_map_build_codex_rejects_molmospaces_isaac_backend_override() -
     stderr = assert_agent_run_fails(
         "household-world.map-build",
         "codex-cli",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=isaaclab_subprocess",
     )
 
@@ -1422,16 +1421,16 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
         "backend=isaaclab",
         "agent_engine=codex-cli",
         "prompt=inspect the digital twin",
-        "evidence_lane=world-oracle-labels",
+        "evidence_lane=world-public-labels",
     )
 
     assert route[:6] == [
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/open-ended/codex-report",
+        "output/household/household-world/open-ended/codex-world-public-labels",
     ]
     assert route[10] == "b1-map12-room-semantics"
     assert route[12] == "on"
@@ -1444,7 +1443,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "world=b1-map12" in plan_trace
     assert "backend=isaaclab" in plan_trace
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
-    assert "household-world.open-ended codex-cli world-oracle-labels" in target_trace
+    assert "household-world.open-ended codex-cli world-public-labels" in target_trace
     assert "map_bundle=b1-map12-room-semantics" in target_trace
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
@@ -1458,7 +1457,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
 def test_household_cleanup_routes_agibot_backend_to_physical_pilot_cli() -> None:
     route = trace_household_cleanup_run(
         "direct",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=agibot_gdk",
     )
 
@@ -1467,14 +1466,14 @@ def test_household_cleanup_routes_agibot_backend_to_physical_pilot_cli() -> None
         ".venv/bin/python",
         "scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py",
         "--output-dir",
-        "output/household/household-world/cleanup/direct-report",
+        "output/household/household-world/cleanup/direct-world-public-labels",
     ]
 
 
 def test_household_cleanup_routes_agibot_backend_override_to_cleanup_pilot_cli() -> None:
     route = trace_household_cleanup_run(
         "direct",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
         "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
@@ -1501,7 +1500,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     route = trace_agent_run(
         "household-world.cleanup",
         "direct-runner",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=agibot_molmospaces_sim",
         "context_json=tests/fixtures/agibot_robot_map_9_context.completed.json",
         "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
@@ -1525,7 +1524,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "--intent" in route
     assert "cleanup" in route
     assert "--profile" in route
-    assert "world-oracle-labels" in route
+    assert "world-public-labels" in route
     assert "--rehearsal-mode" in route
     assert "cleanup-actions" in route
     assert "--context-json" in route
@@ -1576,19 +1575,19 @@ def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",
-        "camera_labeler=sim-projected-labels",
+        "camera_labeler=grounding-dino",
         "generated_mess_count=0",
     )
 
     assert "--camera-labeler" in route
-    assert "sim-projected-labels" in route
+    assert "grounding-dino" in route
 
 
 def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
     stderr = assert_agent_run_fails(
         "household-world.cleanup",
         "direct-runner",
-        "world-oracle-labels",
+        "world-public-labels",
         "backend=agibot_molmospaces_sim",
         "seeds=1 2",
     )
@@ -1671,7 +1670,7 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
 
 def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r"world-oracle-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    match = re.search(r"world-public-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
     assert match is not None
     body = match.group("body")
 
@@ -1699,7 +1698,7 @@ def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
 def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     route = trace_household_cleanup_run(
         "codex",
-        "world-oracle-labels",
+        "world-public-labels",
         "robot_views=off",
     )
 
@@ -1707,9 +1706,9 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "just",
         "molmo::household-world-impl",
         "codex-live",
-        "world-oracle-labels",
+        "world-public-labels",
         "7",
-        "output/household/household-world/cleanup/codex-report",
+        "output/household/household-world/cleanup/codex-world-public-labels",
         "帮我收拾这个房间",
         "5",
         "127.0.0.1",
@@ -1725,7 +1724,7 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     labels_route = trace_household_cleanup_run(
         "direct",
         "camera-grounded-labels",
-        "camera_labeler=sim-projected-labels",
+        "camera_labeler=grounding-dino",
     )
 
     assert raw_route[:7] == [
@@ -1778,7 +1777,7 @@ def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
 def test_household_cleanup_route_passes_operator_messages_path_override() -> None:
     route = trace_household_cleanup_run(
         "codex",
-        "world-oracle-labels",
+        "world-public-labels",
         "operator_messages_path=output/operator-console/runs/run-a/operator_messages.jsonl",
     )
 
@@ -1788,7 +1787,7 @@ def test_household_cleanup_route_passes_operator_messages_path_override() -> Non
 def test_household_open_ended_prompt_uses_first_class_intent_not_custom_mode() -> None:
     route = trace_household_cleanup_run(
         "codex",
-        "world-oracle-labels",
+        "world-public-labels",
         "prompt=我渴了，帮我找些解渴的东西",
         "task_intent=open-ended",
     )
@@ -1811,7 +1810,7 @@ def test_household_cleanup_prompt_override_does_not_imply_direct_open_ended_inte
 def test_household_cleanup_prompt_override_does_not_imply_openclaw_open_ended_intent() -> None:
     route = trace_household_cleanup_run(
         "openclaw",
-        "world-oracle-labels",
+        "world-public-labels",
         "prompt=我渴了，帮我找些解渴的东西",
     )
 
@@ -1974,7 +1973,7 @@ def test_live_runners_cleanup_checker_policy_uses_checker_profile(
             task="帮我收拾这个房间",
             min_generated_mess_count="5",
             profile="smoke",
-            checker_profile="world-oracle-labels",
+            checker_profile="world-public-labels",
             server_arg=[],
             checker_visual_arg=[],
             **extra_args,
@@ -1986,7 +1985,7 @@ def test_live_runners_cleanup_checker_policy_uses_checker_profile(
         assert captured_commands, runner_name
         checker_command = captured_commands[0]
         assert checker_command[checker_command.index("--expect-profile") + 1] == (
-            "world-oracle-labels"
+            "world-public-labels"
         )
         assert "--require-clean-agent-run" in checker_command
         assert "--require-waypoint-honesty" in checker_command
@@ -2065,7 +2064,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
             task="我渴了，帮我找些解渴的东西",
             min_generated_mess_count="5",
             profile="camera-raw-fpv",
-            checker_profile="world-oracle-labels",
+            checker_profile="world-public-labels",
             server_arg=[],
             checker_visual_arg=[
                 "--require-robot-views",
@@ -2093,7 +2092,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
         assert "--allow-partial-cleanup" in checker_command
         assert checker_command.count("--allow-partial-cleanup") == 1
         assert checker_command[checker_command.index("--expect-profile") + 1] == (
-            "world-oracle-labels"
+            "world-public-labels"
         )
         assert "--require-robot-views" in checker_command
         assert "--require-raw-fpv-observations" in checker_command
@@ -2106,7 +2105,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
-    prompt = render_kickoff_prompt("world-oracle-labels")
+    prompt = render_kickoff_prompt("world-public-labels")
 
     assert "This run is surface=household-world intent=cleanup" in prompt
     assert "User task: clean up this room" in prompt
@@ -2130,7 +2129,7 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
 
 def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
     prompt = render_kickoff_prompt(
-        "world-oracle-labels",
+        "world-public-labels",
         task="我渴了，帮我找些解渴的东西",
         intent="open-ended",
     )
@@ -2156,7 +2155,7 @@ def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
 
 def test_molmo_cleanup_live_prompt_uses_cleanup_intent_without_open_ended_intent() -> None:
     prompt = render_kickoff_prompt(
-        "world-oracle-labels",
+        "world-public-labels",
         task="我渴了，帮我找些解渴的东西",
     )
 

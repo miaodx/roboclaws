@@ -557,8 +557,8 @@ def live_surface_env(kwargs: dict[str, Any], *, base_env: Any) -> dict[str, str]
 def live_evidence_lane(kwargs: dict[str, Any]) -> str:
     lane = str(kwargs.get("evidence_lane") or "")
     if lane == "smoke":
-        return "world-oracle-labels"
-    return lane or "world-oracle-labels"
+        return "world-public-labels"
+    return lane or "world-public-labels"
 
 
 def _is_smoke_budget(kwargs: dict[str, Any]) -> bool:

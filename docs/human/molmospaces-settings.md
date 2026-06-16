@@ -145,8 +145,8 @@ as report provenance.
 
 | Camera labeler | Meaning | Implementation Status |
 |----------|---------|-----------------------|
-| `sim-projected-labels` | Deterministic simulator-state labels projected through camera visibility into reviewable camera candidates. | Current control producer. |
-| `fake-http` | Contract-test HTTP service that returns deterministic public candidates. | First implementation phase. |
+| `grounding-dino` | Deterministic simulator-state labels projected through camera visibility into reviewable camera candidates. | Current control producer. |
+| `grounding-dino` | Contract-test HTTP service that returns deterministic public candidates. | First implementation phase. |
 | `grounding-dino` | Bbox-first open-vocabulary proposer over RAW_FPV images. | Conservative first proposer target. |
 | `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
 | `yolo-world` | YOLO-World open-vocabulary proposer over RAW_FPV images. | YOLO-family comparison target. |
@@ -161,8 +161,8 @@ detector-only; old Gemini/MiMo/Qwen results are historical/parked evidence only.
 Recommended command shape for current pipeline comparison:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yoloe
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yolo-world
@@ -177,7 +177,7 @@ For non-sim pipelines, Roboclaws should call an External Visual Grounding
 Service behind `declare_visual_candidates`. The agent should not receive service
 URLs, credentials, image filesystem paths, or model-host details. HTTP failures
 must be recorded as pipeline failures; they must not silently fall back to
-simulator labels unless `camera_labeler=sim-projected-labels` was selected.
+simulator labels unless `camera_labeler=grounding-dino` was selected.
 
 `camera_labeler` is selected when launching the runner/server, not passed as a
 cleanup MCP tool argument. The runner/server records the internal
@@ -220,7 +220,7 @@ perception-isolated visual-grounding benchmark over fixed RAW_FPV observations.
 Benchmark command shape:
 
 ```bash
-just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,omdet-turbo
 just agent::harness molmo-visual-grounding-benchmark \
   matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json \
@@ -313,18 +313,12 @@ only when that fixture provenance is unavailable. Those labels are benchmark
 scoring data only; they are not included in service requests, predictions JSONL,
 MCP responses, or Agent View payloads.
 
-Start the configurable sidecar service for CI-safe fake HTTP runs:
+Start the configurable sidecar service for detector routes. Without real
+sidecar dependencies it returns explicit unavailable evidence instead of fake
+candidates:
 
 ```bash
-.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http
-```
-
-For named contract pipelines without real model weights, run the fake
-dispatcher:
-
-```bash
-.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-  --pipeline contract-fake
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline grounding-dino
 ```
 
 For real proposer probes, install optional sidecar dependencies and weights
@@ -388,15 +382,11 @@ until a real adapter run loads them.
 
 Real proposer pipeline ids such as `grounding-dino` and `yoloe` report visible
 `adapter_unavailable`, `missing_dependency`, or adapter-error failures unless
-the service is started with `--adapter-mode contract-fake` for contract tests or
-`--adapter-mode real` with installed sidecar dependencies and model weights.
-Retired hosted VLM ids such as `grounding-dino+mimo-v2.5`,
-`mimo-v2.5-direct`, and `qwen3-vl-direct` are not active adapter slots. The
-adapter catalog names the optional sidecar extra and current redacted runtime
-readiness for each target adapter. The older `serve_fake_visual_grounding.py`
-script remains a compatibility entry point for deterministic fake-only tests.
-Fake outputs are pipeline-aware for contract tests only and should not claim
-that real Grounding DINO, YOLOE, MiMo, or Qwen weights were loaded.
+the service is started with `--adapter-mode real` with installed sidecar
+dependencies and model weights. Retired hosted VLM ids such as
+`grounding-dino+mimo-v2.5`, `mimo-v2.5-direct`, and `qwen3-vl-direct` are not
+active adapter slots. The adapter catalog names the optional sidecar extra and
+current redacted runtime readiness for each target adapter.
 
 For real-robot deployment, extend the same benchmark with a fixed head-camera
 seed set and edge latency measurements before selecting a proposer. Route
@@ -437,7 +427,7 @@ Use the public launch catalog for operator-facing runs:
 
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=<engine> evidence_lane=<lane>
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
 ```
 
@@ -455,7 +445,7 @@ just agent::run household-world.cleanup <agent-engine-or-private-driver> <eviden
 | Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
 | Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
 | Preset | `smoke` | Synthetic contract sanity; world labels; semantic report. |
-| Evidence lane | `world-oracle-labels` | MolmoSpaces/RBY1M report; agent receives privileged structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
+| Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives privileged structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
 | Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation authorization. |
 | Evidence lane | `camera-raw-fpv` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
 | Evidence lane | `camera-grounded-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates produced by `camera_labeler`. |
@@ -479,11 +469,11 @@ Convenience report recipes:
 | Command | Expands To | Use It For |
 |---------|------------|------------|
 | `just molmo::quick-check` | `mcp-smoke smoke` | Cheap contract check; accepts `driver=` and `profile=` overrides. |
-| `just molmo::review-report` | `direct world-oracle-labels` | Canonical human review/status report. |
-| `just molmo::mcp-smoke-report` | `mcp-smoke world-oracle-labels` | Real visual MCP smoke without a live external agent. |
+| `just molmo::review-report` | `direct world-public-labels` | Canonical human review/status report. |
+| `just molmo::mcp-smoke-report` | `mcp-smoke world-public-labels` | Real visual MCP smoke without a live external agent. |
 | `just molmo::camera-raw-report` | `direct camera-raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
-| `just molmo::codex-report` | `codex-live world-oracle-labels` | Live Codex agent report. |
-| `just molmo::claude-report` | `claude-live world-oracle-labels` | Live Claude Code agent report. |
+| `just molmo::codex-report` | `codex-live world-public-labels` | Live Codex agent report. |
+| `just molmo::claude-report` | `claude-live world-public-labels` | Live Claude Code agent report. |
 
 The `driver=`, `profile=`, `codex-live`, and `claude-live` tokens above are
 private implementation-runner vocabulary. Prefer `agent_engine=...`,
@@ -523,7 +513,7 @@ the validation-required Gateway proof is green. Use the same key set when
 comparing Kimi/MiMo results across machines:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.

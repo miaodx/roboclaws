@@ -127,7 +127,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--profile",
         choices=(
-            "world-oracle-labels",
             "world-public-labels",
             "camera-raw-fpv",
             "camera-grounded-labels",

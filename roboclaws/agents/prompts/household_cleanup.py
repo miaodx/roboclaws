@@ -466,7 +466,7 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         "--evidence-lane",
         dest="profile",
-        default="world-oracle-labels",
+        default="world-public-labels",
     )
     parser.add_argument("--task", default="")
     parser.add_argument("--intent", default="")
