@@ -658,6 +658,14 @@ logs before choosing the next slice.
   oversized modules stayed at 62. Proof: focused realworld-contract/report
   tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Visual-candidate evidence, state, validation, bbox
+  reviewability, and category-alias helpers moved into
+  `realworld_visual_candidates.py`, while `realworld_contract.py` keeps facade
+  aliases and private-key assertion. Metric: `realworld_contract.py` 5556 ->
+  5212 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: full realworld-contract test file, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
