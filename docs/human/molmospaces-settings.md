@@ -56,14 +56,16 @@ for fast contract checks, but it has no robot camera timeline.
 ## Scene Sampler Defaults
 
 The operator console uses the source-aware MolmoSpaces sampler for its default
-household scene rail. The visible first-slice UI set is intentionally small:
-`molmospaces/val_0`, `molmospaces/val_2`, and `molmospaces/val_9`, all from
+household scene rail. The visible first-slice UI set is intentionally small and
+is selected by a deterministic seeded-random policy that prefers distinct public
+room counts within each source. The current UI set is `molmospaces/val_0`,
+`molmospaces/val_2`, and `molmospaces/val_5`, all from
 `scene_source=procthor-10k-val` on the MuJoCo path, plus
 `molmospaces/procthor-objaverse-val/0`,
 `molmospaces/procthor-objaverse-val/1`, and
-`molmospaces/procthor-objaverse-val/4` from
+`molmospaces/procthor-objaverse-val/10` from
 `scene_source=procthor-objaverse-val`. Existing launch aliases such as
-`molmospaces/val_1`, `val_3`, `val_4`, `val_5`, and `val_7` remain explicitly
+`molmospaces/val_1`, `val_3`, `val_4`, `val_7`, and `val_9` remain explicitly
 launchable as `procthor-10k-val` aliases, but they are hidden from the default
 console scene rail unless admitted by the sampler.
 

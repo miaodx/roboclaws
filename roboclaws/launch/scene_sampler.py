@@ -78,6 +78,10 @@ from roboclaws.launch.scene_sampler_scanner import (
 from roboclaws.launch.scene_sampler_sources import (
     CURRENT_ALIAS_INDICES,
     SCANNER_READY_METADATA,
+    SCENE_SAMPLER_SELECTION_SEED,
+    SCENE_SAMPLER_SELECTION_STRATEGY,
+    SOURCE_EVAL_CANDIDATE_INDICES,
+    SOURCE_UI_CANDIDATE_INDICES,
     admitted_sources,
     category_manifest,
     category_provenance,
@@ -86,6 +90,7 @@ from roboclaws.launch.scene_sampler_sources import (
     sampler_world_id,
     scanner_metadata,
     source_eval_indices,
+    source_selection_metadata,
     source_ui_indices,
     uses_legacy_preview_assets,
 )
@@ -219,6 +224,7 @@ def sampler_manifest() -> dict[str, Any]:
         "eval_target_per_scene_source": EVAL_TARGET_PER_SCENE_SOURCE,
         "supported_scene_sources": list(SUPPORTED_SCENE_SOURCES),
         "room_label_manifest": str(_LABEL_MANIFEST_PATH.relative_to(_repo_root())),
+        "selection_policy": _sampler_selection_policy(),
         "rows": rows,
         "projections": {
             "ui_world_ids": [row.world_id for row in ui_sampler_rows()],
@@ -382,6 +388,7 @@ def eval_projection_metadata() -> dict[str, Any]:
         "schema": SAMPLER_PROJECTION_SCHEMA,
         "projection": EVAL_STRESS_LANE,
         "generator_version": SAMPLER_GENERATOR_VERSION,
+        "selection_policy": _sampler_selection_policy(),
         "scene_sources": by_source,
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
@@ -530,6 +537,7 @@ def readiness_report() -> dict[str, Any]:
         "schema": "molmospaces_scene_sampler_readiness_report_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "primary_backend": PRIMARY_MOLMOSPACES_BACKEND,
+        "selection_policy": _sampler_selection_policy(),
         "sources": by_source,
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
@@ -742,6 +750,7 @@ def candidate_readiness_report(
         "schema": "molmospaces_scene_sampler_candidate_readiness_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "summary": _candidate_readiness_summary(sources),
         "sources": sources,
@@ -763,15 +772,19 @@ def selection_gap_report(
         eval_ready_count = int(source_payload["eval_ready_count"])
         ui_needed = max(0, UI_TARGET_PER_SCENE_SOURCE - ui_ready_count)
         eval_needed = max(0, EVAL_TARGET_PER_SCENE_SOURCE - eval_ready_count)
-        scanner_candidates = [
-            item
-            for item in source_candidates
-            if (
-                item["readiness_status"] == READINESS_BLOCKED
-                and not item["eval_ready"]
-                and (item.get("candidate_file") or {}).get("status") != "missing_from_index_map"
-            )
-        ]
+        scanner_candidates = _rank_selection_candidates(
+            source=source,
+            lane="scanner",
+            candidates=[
+                item
+                for item in source_candidates
+                if (
+                    item["readiness_status"] == READINESS_BLOCKED
+                    and not item["eval_ready"]
+                    and (item.get("candidate_file") or {}).get("status") != "missing_from_index_map"
+                )
+            ],
+        )
         rejected_candidate_indices = [
             item["scene_index"]
             for item in source_candidates
@@ -821,6 +834,7 @@ def selection_gap_report(
         "schema": "molmospaces_scene_sampler_selection_gaps_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "summary": _selection_gap_summary(sources),
         "sources": sources,
@@ -921,6 +935,7 @@ def source_prep_report(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
         "download_policy": "manual_operator_only",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "worklist": worklist,
         "summary": {
@@ -994,6 +1009,7 @@ def scanner_execution_plan(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "summary": scanner_execution_summary(sources),
         "sources": sources,
@@ -1098,6 +1114,7 @@ def next_flow_worklist_report(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "artifact_paths": artifact_paths,
         "worklist": summary["worklist"],
@@ -1150,6 +1167,7 @@ def scanner_admission_report(
         "schema": "molmospaces_scene_sampler_scanner_admission_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_backend_no_vlm",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "required_gates": list(_scanner_required_gates()),
         "summary": scanner_admission_summary(sources),
@@ -1528,13 +1546,68 @@ def _scanner_candidate_packet(
     )
 
 
+def _sampler_selection_policy() -> dict[str, Any]:
+    return {
+        "schema": "molmospaces_scene_sampler_selection_policy_v1",
+        "selection_seed": SCENE_SAMPLER_SELECTION_SEED,
+        "selection_strategy": SCENE_SAMPLER_SELECTION_STRATEGY,
+        "ui_target_per_scene_source": UI_TARGET_PER_SCENE_SOURCE,
+        "eval_target_per_scene_source": EVAL_TARGET_PER_SCENE_SOURCE,
+        "sources": {
+            source: {
+                "ui": source_selection_metadata(
+                    source=source,
+                    lane=UI_LANE,
+                    target_count=UI_TARGET_PER_SCENE_SOURCE,
+                    candidates=SOURCE_UI_CANDIDATE_INDICES.get(source, ()),
+                ),
+                "eval_stress": source_selection_metadata(
+                    source=source,
+                    lane=EVAL_STRESS_LANE,
+                    target_count=EVAL_TARGET_PER_SCENE_SOURCE,
+                    candidates=SOURCE_EVAL_CANDIDATE_INDICES.get(source, ()),
+                ),
+            }
+            for source in SUPPORTED_SCENE_SOURCES
+        },
+    }
+
+
+def _rank_selection_candidates(
+    *,
+    source: str,
+    lane: str,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    metadata = source_selection_metadata(
+        source=source,
+        lane=lane,
+        target_count=len(candidates),
+        candidates=tuple(int(candidate.get("scene_index") or 0) for candidate in candidates),
+    )
+    rank = {scene_index: offset for offset, scene_index in enumerate(metadata["selected_indices"])}
+    return sorted(
+        candidates,
+        key=lambda item: (
+            rank.get(int(item.get("scene_index") or 0), len(rank)),
+            int(item.get("scene_index") or 0),
+        ),
+    )
+
+
 def _assign_dynamic_candidate_lanes(
     *,
     source: str,
     candidates: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    if source == "procthor-10k-val":
-        return candidates
+    static_ui_ids = set(source_ui_indices(source))
+    static_eval_ids = set(source_eval_indices(source))
+    if static_ui_ids or static_eval_ids:
+        return _assign_candidate_lanes(
+            candidates=candidates,
+            ui_ids=static_ui_ids,
+            eval_ids=static_eval_ids,
+        )
     eligible = [
         candidate
         for candidate in candidates
@@ -1542,16 +1615,37 @@ def _assign_dynamic_candidate_lanes(
         and candidate.get("eval_ready")
         and candidate.get("scene_index") is not None
     ]
-    eligible.sort(key=lambda item: int(item.get("scene_index") or 0))
+    eligible = _rank_selection_candidates(
+        source=source,
+        lane=EVAL_STRESS_LANE,
+        candidates=eligible,
+    )
     ui_ids = {
         int(candidate.get("scene_index") or 0)
-        for candidate in eligible[:UI_TARGET_PER_SCENE_SOURCE]
+        for candidate in _rank_selection_candidates(
+            source=source,
+            lane=UI_LANE,
+            candidates=eligible,
+        )[:UI_TARGET_PER_SCENE_SOURCE]
         if len(eligible) >= UI_TARGET_PER_SCENE_SOURCE
     }
     eval_ids = {
         int(candidate.get("scene_index") or 0)
         for candidate in eligible[:EVAL_TARGET_PER_SCENE_SOURCE]
     }
+    return _assign_candidate_lanes(
+        candidates=candidates,
+        ui_ids=ui_ids,
+        eval_ids=eval_ids,
+    )
+
+
+def _assign_candidate_lanes(
+    *,
+    candidates: list[dict[str, Any]],
+    ui_ids: set[int],
+    eval_ids: set[int],
+) -> list[dict[str, Any]]:
     updated: list[dict[str, Any]] = []
     for candidate in candidates:
         scene_index = candidate.get("scene_index")

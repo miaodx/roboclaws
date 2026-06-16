@@ -39,15 +39,17 @@ next_flow_policy:
 
 ## Implementation Status
 
-Implemented on 2026-06-15. The sampler readiness work now has explicit source
-outcomes instead of parked source notes:
+Implemented on 2026-06-15 and refreshed on 2026-06-16 for seeded, room-diverse
+source selection. The sampler readiness work now has explicit source outcomes
+instead of parked source notes:
 
 - `procthor-10k-val`: complete. Eval-stress projection admits ten samples
   (`0`, `2`, `3`, `5`, `9`, `10`, `11`, `12`, `13`, `15`) and the operator
-  console keeps exactly three UI rows (`0`, `2`, `9`).
+  console keeps exactly three UI rows (`0`, `2`, `5`) selected by the
+  deterministic source-diverse policy.
 - `procthor-objaverse-val`: complete. Eval-stress projection admits ten samples
   (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`, `13`, `14`) and the operator
-  console exposes three UI rows (`0`, `1`, `4`).
+  console exposes three UI rows (`0`, `1`, `10`) selected by the same policy.
 - `ithor`: rejected exhausted under current admission gates. Candidate evidence
   for indices `1..12` all fails with
   `fewer_than_three_public_navigation_areas`; next action is
@@ -76,6 +78,16 @@ the current evidence, more download permission is not the missing input for
 `ithor` or `holodeck-objaverse-val`; admitting them would require new human
 curation or a deliberate change to the public-room/actionability gate.
 
+The 2026-06-16 refresh makes the selection layer suitable for all four scene
+groups without pretending that all four groups are ready. `selection_policy`
+metadata is emitted in sampler manifest, eval projection, readiness, candidate,
+selection-gap, source-prep, scanner-admission, scanner-execution, and next-flow
+artifacts. The policy is scoped per `scene_source`, uses seed
+`2026-06-16.source-diverse-selection-v1`, and ranks candidates by deterministic
+random order while preferring different public room counts before filling the
+remaining slots. Future `ithor` or `holodeck-objaverse-val` candidates that pass
+the existing gates can enter UI/eval through the same policy.
+
 Historical implementation notes follow.
 
 - Canonical sampler source: `roboclaws/launch/scene_sampler.py`.
@@ -85,7 +97,7 @@ Historical implementation notes follow.
 - Prepared selected-sample room label manifest:
   `data/molmospaces/scene_sampler_room_labels.json`.
 - Operator-console UI projection: `procthor-10k-val` samples `0`, `2`, and
-  `9` are visible by default.
+  `5` are visible by default after seeded room-diverse selection.
 - Preserved launch aliases: existing `molmospaces/val_0`, `val_1`, `val_2`,
   `val_3`, `val_4`, `val_5`, `val_7`, and `val_9` remain launchable as
   explicit `procthor-10k-val` aliases; non-UI aliases are hidden from the
@@ -409,6 +421,10 @@ Current limits after this Flow:
   blocked. They are rejected exhausted under the current public-room /
   actionability gate and should not be scanned again without new human
   curation.
+- Four source groups now share the same deterministic selection policy, but
+  only sources with admitted candidates become UI/eval-ready. This preserves the
+  gate distinction between "supported by the sampler workflow" and "usable as a
+  ready scene row."
 - The static smoke eval verifies runtime-map artifact readiness and sampler
   admission metadata; full scene-specific runtime output remains a product-run
   or later scanner proof.

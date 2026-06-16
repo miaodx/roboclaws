@@ -104,6 +104,12 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
 
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
+    assert manifest["selection_policy"]["selection_seed"] == (
+        "2026-06-16.source-diverse-selection-v1"
+    )
+    assert manifest["selection_policy"]["sources"]["procthor-objaverse-val"]["ui"][
+        "selected_indices"
+    ] == [10, 0, 1]
     assert projection["scene_sources"]["procthor-10k-val"]["ready_count"] == 10
     assert projection["scene_sources"]["procthor-10k-val"]["support_status"] == "complete"
     assert projection["scene_sources"]["ithor"]["support_status"] == "rejected"
@@ -111,6 +117,9 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     assert projection["summary"]["remaining_sample_count"] == 20
     assert readiness["sources"]["procthor-10k-val"]["ui_ready_count"] == 3
     assert readiness["sources"]["procthor-objaverse-val"]["ui_ready_count"] == 3
+    assert readiness["selection_policy"]["sources"]["procthor-10k-val"]["ui"][
+        "selected_room_counts"
+    ] == [10, 4, 7]
     assert readiness["sources"]["procthor-objaverse-val"]["eval_ready_count"] == 10
     assert readiness["sources"]["ithor"]["blocked_rows"][0]["failure_class"] == (
         "map_actionability_failure"
@@ -138,6 +147,9 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
     source_prep = payloads["source_prep"]
 
     assert selection["schema"] == "molmospaces_scene_sampler_selection_gaps_v1"
+    assert selection["selection_policy"]["selection_strategy"] == (
+        "deterministic_seeded_random_order_with_room_count_diversity_first"
+    )
     assert selection["summary"]["source_count"] == 4
     assert "worklist" in selection["summary"]
     assert selection["sources"]["procthor-10k-val"]["eval_needed_count"] == 0

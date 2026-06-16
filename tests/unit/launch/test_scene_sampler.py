@@ -49,10 +49,10 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     assert ui_molmospaces_world_ids() == (
         "molmospaces/val_0",
         "molmospaces/val_2",
-        "molmospaces/val_9",
+        "molmospaces/val_5",
         "molmospaces/procthor-objaverse-val/0",
         "molmospaces/procthor-objaverse-val/1",
-        "molmospaces/procthor-objaverse-val/4",
+        "molmospaces/procthor-objaverse-val/10",
     )
     assert MOLMOSPACES_CONSOLE_WORLD_IDS == ui_molmospaces_world_ids()
     assert MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS == legacy_molmospaces_world_ids()
@@ -72,10 +72,10 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     assert [(row.scene_source, row.scene_index) for row in ui_rows] == [
         ("procthor-10k-val", 0),
         ("procthor-10k-val", 2),
-        ("procthor-10k-val", 9),
+        ("procthor-10k-val", 5),
         ("procthor-objaverse-val", 0),
         ("procthor-objaverse-val", 1),
-        ("procthor-objaverse-val", 4),
+        ("procthor-objaverse-val", 10),
     ]
     assert [(row.scene_source, row.scene_index) for row in eval_rows] == [
         ("procthor-10k-val", 0),
@@ -102,12 +102,31 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     assert all(UI_LANE in row.lanes for row in ui_rows)
     assert all(EVAL_STRESS_LANE in row.lanes for row in eval_rows)
 
-    hidden_alias = WORLD_SPECS["molmospaces/val_5"]
+    hidden_alias = WORLD_SPECS["molmospaces/val_9"]
     assert hidden_alias.availability == "hidden"
     assert hidden_alias.sampler_metadata
     assert hidden_alias.sampler_metadata["lanes"] == [EVAL_STRESS_LANE]
     assert WORLD_SPECS["molmospaces/val_4"].availability == "hidden"
     assert WORLD_SPECS["molmospaces/val_4"].sampler_metadata["lanes"] == []
+
+
+def test_scene_sampler_ui_selection_is_seeded_and_room_diverse() -> None:
+    manifest = sampler_manifest()
+    policy = manifest["selection_policy"]
+
+    assert policy["schema"] == "molmospaces_scene_sampler_selection_policy_v1"
+    assert policy["selection_seed"] == "2026-06-16.source-diverse-selection-v1"
+    assert policy["selection_strategy"] == (
+        "deterministic_seeded_random_order_with_room_count_diversity_first"
+    )
+    assert policy["sources"]["procthor-10k-val"]["ui"]["selected_indices"] == [2, 5, 0]
+    assert policy["sources"]["procthor-10k-val"]["ui"]["selected_room_counts"] == [10, 4, 7]
+    assert policy["sources"]["procthor-objaverse-val"]["ui"]["selected_indices"] == [10, 0, 1]
+    assert policy["sources"]["procthor-objaverse-val"]["ui"]["selected_room_counts"] == [
+        5,
+        4,
+        7,
+    ]
 
 
 def test_legacy_molmospaces_alias_worlds_remain_launchable() -> None:

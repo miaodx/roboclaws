@@ -2,18 +2,33 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 CURRENT_ALIAS_INDICES: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 7, 9)
+SCENE_SAMPLER_SELECTION_SEED = "2026-06-16.source-diverse-selection-v1"
+SCENE_SAMPLER_SELECTION_STRATEGY = (
+    "deterministic_seeded_random_order_with_room_count_diversity_first"
+)
 
-SOURCE_UI_SELECTED_INDICES: dict[str, tuple[int, ...]] = {
-    "procthor-10k-val": (0, 2, 9),
-    "procthor-objaverse-val": (0, 1, 4),
+SOURCE_UI_CANDIDATE_INDICES: dict[str, tuple[int, ...]] = {
+    "procthor-10k-val": (0, 2, 3, 5, 9),
+    "procthor-objaverse-val": (0, 1, 4, 10),
 }
 
-SOURCE_EVAL_READY_INDICES: dict[str, tuple[int, ...]] = {
+SOURCE_EVAL_CANDIDATE_INDICES: dict[str, tuple[int, ...]] = {
     "procthor-10k-val": (0, 2, 3, 5, 9, 10, 11, 12, 13, 15),
     "procthor-objaverse-val": (0, 1, 4, 5, 7, 10, 11, 12, 13, 14),
+}
+
+SOURCE_SELECTION_ROOM_COUNTS: dict[str, dict[int, int]] = {
+    "procthor-10k-val": {
+        0: 7,
+        2: 10,
+        3: 5,
+        5: 4,
+        9: 10,
+    },
 }
 
 SCANNER_READY_METADATA: dict[str, dict[int, dict[str, Any]]] = {
@@ -240,8 +255,8 @@ SCANNER_REJECTED_METADATA: dict[str, dict[int, dict[str, Any]]] = {
 
 def admitted_sources(*, supported_sources: tuple[str, ...]) -> tuple[str, ...]:
     admitted = (
-        set(SOURCE_UI_SELECTED_INDICES)
-        | set(SOURCE_EVAL_READY_INDICES)
+        set(SOURCE_UI_CANDIDATE_INDICES)
+        | set(SOURCE_EVAL_CANDIDATE_INDICES)
         | set(SCANNER_REJECTED_METADATA)
     )
     return tuple(source for source in supported_sources if source in admitted)
@@ -251,8 +266,10 @@ def known_indices_for_source(source: str) -> tuple[int, ...]:
     return tuple(
         sorted(
             {
-                *SOURCE_UI_SELECTED_INDICES.get(source, ()),
-                *SOURCE_EVAL_READY_INDICES.get(source, ()),
+                *source_ui_indices(source),
+                *source_eval_indices(source),
+                *SOURCE_UI_CANDIDATE_INDICES.get(source, ()),
+                *SOURCE_EVAL_CANDIDATE_INDICES.get(source, ()),
                 *SCANNER_REJECTED_METADATA.get(source, ()),
                 *(CURRENT_ALIAS_INDICES if source == "procthor-10k-val" else ()),
             }
@@ -269,11 +286,60 @@ def scanner_metadata(*, source: str, scene_index: int) -> dict[str, Any]:
 
 
 def source_ui_indices(source: str) -> tuple[int, ...]:
-    return SOURCE_UI_SELECTED_INDICES.get(source, ())
+    return _select_diverse_indices(
+        source=source,
+        lane="ui",
+        candidates=SOURCE_UI_CANDIDATE_INDICES.get(source, ()),
+        target_count=3,
+    )
 
 
 def source_eval_indices(source: str) -> tuple[int, ...]:
-    return SOURCE_EVAL_READY_INDICES.get(source, ())
+    return _select_diverse_indices(
+        source=source,
+        lane="eval_stress",
+        candidates=SOURCE_EVAL_CANDIDATE_INDICES.get(source, ()),
+        target_count=10,
+    )
+
+
+def source_selection_metadata(
+    *,
+    source: str,
+    lane: str,
+    target_count: int,
+    candidates: tuple[int, ...],
+) -> dict[str, Any]:
+    selected = _select_diverse_indices(
+        source=source,
+        lane=lane,
+        candidates=candidates,
+        target_count=target_count,
+    )
+    candidate_room_counts = {
+        str(index): _selection_room_count(source=source, scene_index=index) for index in candidates
+    }
+    return {
+        "selection_seed": SCENE_SAMPLER_SELECTION_SEED,
+        "selection_strategy": SCENE_SAMPLER_SELECTION_STRATEGY,
+        "lane": lane,
+        "target_count": target_count,
+        "candidate_indices": list(candidates),
+        "selected_indices": list(selected),
+        "candidate_room_counts": candidate_room_counts,
+        "selected_room_counts": [
+            candidate_room_counts[str(index)]
+            for index in selected
+            if str(index) in candidate_room_counts
+        ],
+        "unique_selected_room_count": len(
+            {
+                candidate_room_counts[str(index)]
+                for index in selected
+                if candidate_room_counts.get(str(index), 0) > 0
+            }
+        ),
+    }
 
 
 def sampler_world_id(*, source: str, scene_index: int) -> str:
@@ -304,3 +370,47 @@ def uses_legacy_preview_assets(*, source: str, scene_index: int) -> bool:
     return source == "procthor-10k-val" and scene_index not in SCANNER_READY_METADATA.get(
         source, {}
     )
+
+
+def _select_diverse_indices(
+    *,
+    source: str,
+    lane: str,
+    candidates: tuple[int, ...],
+    target_count: int,
+) -> tuple[int, ...]:
+    seeded = sorted(
+        candidates,
+        key=lambda index: _selection_sort_key(source=source, lane=lane, scene_index=index),
+    )
+    selected: list[int] = []
+    seen_room_counts: set[int] = set()
+    for index in seeded:
+        room_count = _selection_room_count(source=source, scene_index=index)
+        if room_count <= 0 or room_count in seen_room_counts:
+            continue
+        selected.append(index)
+        seen_room_counts.add(room_count)
+        if len(selected) == target_count:
+            return tuple(selected)
+    for index in seeded:
+        if index in selected:
+            continue
+        selected.append(index)
+        if len(selected) == target_count:
+            break
+    return tuple(selected)
+
+
+def _selection_sort_key(*, source: str, lane: str, scene_index: int) -> tuple[int, int]:
+    digest = hashlib.sha256(
+        f"{SCENE_SAMPLER_SELECTION_SEED}:{source}:{lane}:{scene_index}".encode("utf-8")
+    ).hexdigest()
+    return int(digest[:16], 16), scene_index
+
+
+def _selection_room_count(*, source: str, scene_index: int) -> int:
+    metadata = scanner_metadata(source=source, scene_index=scene_index)
+    if metadata.get("room_count"):
+        return int(metadata["room_count"])
+    return int(SOURCE_SELECTION_ROOM_COUNTS.get(source, {}).get(scene_index) or 0)

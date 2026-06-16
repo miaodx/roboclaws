@@ -1647,6 +1647,237 @@
         }
       },
       "schema": "molmospaces_scene_sampler_projection_v1",
+      "selection_policy": {
+        "eval_target_per_scene_source": 10,
+        "schema": "molmospaces_scene_sampler_selection_policy_v1",
+        "selection_seed": "2026-06-16.source-diverse-selection-v1",
+        "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+        "sources": {
+          "holodeck-objaverse-val": {
+            "eval_stress": {
+              "candidate_indices": [],
+              "candidate_room_counts": {},
+              "lane": "eval_stress",
+              "selected_indices": [],
+              "selected_room_counts": [],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 10,
+              "unique_selected_room_count": 0
+            },
+            "ui": {
+              "candidate_indices": [],
+              "candidate_room_counts": {},
+              "lane": "ui",
+              "selected_indices": [],
+              "selected_room_counts": [],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 3,
+              "unique_selected_room_count": 0
+            }
+          },
+          "ithor": {
+            "eval_stress": {
+              "candidate_indices": [],
+              "candidate_room_counts": {},
+              "lane": "eval_stress",
+              "selected_indices": [],
+              "selected_room_counts": [],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 10,
+              "unique_selected_room_count": 0
+            },
+            "ui": {
+              "candidate_indices": [],
+              "candidate_room_counts": {},
+              "lane": "ui",
+              "selected_indices": [],
+              "selected_room_counts": [],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 3,
+              "unique_selected_room_count": 0
+            }
+          },
+          "procthor-10k-val": {
+            "eval_stress": {
+              "candidate_indices": [
+                0,
+                2,
+                3,
+                5,
+                9,
+                10,
+                11,
+                12,
+                13,
+                15
+              ],
+              "candidate_room_counts": {
+                "0": 7,
+                "10": 4,
+                "11": 4,
+                "12": 10,
+                "13": 4,
+                "15": 10,
+                "2": 10,
+                "3": 5,
+                "5": 4,
+                "9": 10
+              },
+              "lane": "eval_stress",
+              "selected_indices": [
+                12,
+                13,
+                3,
+                0,
+                9,
+                10,
+                2,
+                15,
+                11,
+                5
+              ],
+              "selected_room_counts": [
+                10,
+                4,
+                5,
+                7,
+                10,
+                4,
+                10,
+                10,
+                4,
+                4
+              ],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 10,
+              "unique_selected_room_count": 4
+            },
+            "ui": {
+              "candidate_indices": [
+                0,
+                2,
+                3,
+                5,
+                9
+              ],
+              "candidate_room_counts": {
+                "0": 7,
+                "2": 10,
+                "3": 5,
+                "5": 4,
+                "9": 10
+              },
+              "lane": "ui",
+              "selected_indices": [
+                2,
+                5,
+                0
+              ],
+              "selected_room_counts": [
+                10,
+                4,
+                7
+              ],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 3,
+              "unique_selected_room_count": 3
+            }
+          },
+          "procthor-objaverse-val": {
+            "eval_stress": {
+              "candidate_indices": [
+                0,
+                1,
+                4,
+                5,
+                7,
+                10,
+                11,
+                12,
+                13,
+                14
+              ],
+              "candidate_room_counts": {
+                "0": 4,
+                "1": 7,
+                "10": 5,
+                "11": 8,
+                "12": 6,
+                "13": 6,
+                "14": 6,
+                "4": 4,
+                "5": 7,
+                "7": 6
+              },
+              "lane": "eval_stress",
+              "selected_indices": [
+                10,
+                5,
+                14,
+                0,
+                11,
+                13,
+                12,
+                1,
+                4,
+                7
+              ],
+              "selected_room_counts": [
+                5,
+                7,
+                6,
+                4,
+                8,
+                6,
+                6,
+                7,
+                4,
+                6
+              ],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 10,
+              "unique_selected_room_count": 5
+            },
+            "ui": {
+              "candidate_indices": [
+                0,
+                1,
+                4,
+                10
+              ],
+              "candidate_room_counts": {
+                "0": 4,
+                "1": 7,
+                "10": 5,
+                "4": 4
+              },
+              "lane": "ui",
+              "selected_indices": [
+                10,
+                0,
+                1
+              ],
+              "selected_room_counts": [
+                5,
+                4,
+                7
+              ],
+              "selection_seed": "2026-06-16.source-diverse-selection-v1",
+              "selection_strategy": "deterministic_seeded_random_order_with_room_count_diversity_first",
+              "target_count": 3,
+              "unique_selected_room_count": 3
+            }
+          }
+        },
+        "ui_target_per_scene_source": 3
+      },
       "summary": {
         "blocked_or_rejected_row_count": 40,
         "blocked_row_count": 0,
