@@ -23,8 +23,8 @@ of a clean checkpoint; refresh before the next execution slice.
 
 - 11 Ruff complexity violations and 66 oversized modules remain.
 - Largest P1 production hard-ceiling files are
-  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4357,
   `roboclaws/household/realworld_contract.py` at 3888 lines,
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 3740,
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
   `roboclaws/household/scene_camera_comparison.py` at 2830,
@@ -52,33 +52,42 @@ declaration owner is 345 lines, the lifecycle owner is 737 lines, and
 lines. Candidate A is still active because `realworld_contract.py` remains
 above the hard ceiling, but the visual-candidate payload/event/overlay,
 declaration orchestration, and registration/resolution lifecycle boundaries
-stay closed without fresh drift. The latest Candidate B slice moved
-capture-quality probe configuration/legacy-manifest inference/render-settle
-argument translation into `robot_camera_apple2apple_capture_quality.py`, and
-the apple runner dropped from 4573 to 4357 lines. Completed init/runtime-prior,
-Runtime Metric Map payload, planner-probe report-panel, scene-camera report,
-apple Object Gate / Render Gate, and apple capture-quality slices also stay
-closed. Ponytail small cuts remain opportunistic inputs; they must not postpone
-the P1 hard-ceiling checkpoint.
+stay closed without fresh drift. Recent Candidate B slices moved
+capture-quality probe construction into
+`robot_camera_apple2apple_capture_quality.py`, deleted runner-private
+material/probe wrapper delegates in favor of
+`robot_camera_apple2apple_materials.py`, and moved native Isaac render
+diagnostics into `robot_camera_apple2apple_native_render.py`; the latest slice
+moved saved/metric image artifact preparation, image-diff payload construction,
+residual diagnostics, and residual triage into
+`robot_camera_apple2apple_image_metrics.py` while reusing
+`scene_camera_image_metrics.py` for generic pixel visual metrics. The apple
+runner dropped from 4573 to 3740 lines across those slices. Completed
+init/runtime-prior, Runtime Metric Map payload, planner-probe report-panel,
+scene-camera report, apple Object Gate / Render Gate, apple capture-quality,
+material/probe primitive, native-render diagnostic, and apple image-metric
+slices stay closed. Ponytail small cuts remain opportunistic inputs; they must
+not postpone the P1 hard-ceiling checkpoint.
 
 Ponytail audit recheck on 2026-06-17 did not find a dependency-level removal
 that should jump ahead of the hard-ceiling work. The useful ponytail inputs are
-small stale-surface or duplicate-wrapper cuts: runner-private material/probe
-delegates in the apple comparison runner, the checker legacy flag,
+small stale-surface or duplicate-wrapper cuts: the checker legacy flag,
 camera-labeler identity maps, `_task_prefix_legacy`, and wording duplication.
-Treat these as P2 opportunistic scope inside a matching owner slice, not as a
-reason to defer the next P1 split.
+The apple material/probe delegate cut is complete and should not be recreated.
+Treat remaining small cuts as P2 opportunistic scope inside a matching owner
+slice, not as a reason to defer the next P1 split.
 
-Intuitive-refactor audit refresh on 2026-06-17 re-ran
+Intuitive-refactor implementation refresh on 2026-06-17 re-ran
 `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`; the
-signal is unchanged at 11 complexity rows and 66 oversized modules. Recent
-Candidate B slices removed runner-private material/probe delegates from the
-apple-to-apple runner and moved native Isaac render diagnostics into
-`robot_camera_apple2apple_native_render.py`. The apple runner dropped from 4357
-to 4161 lines across those two slices. Continue Candidate B by selecting a new
-visual-comparison boundary rather than reopening material/probe delegates,
-native render diagnostics, Object Gate / Render Gate, or capture-quality
-interpretation.
+signal is unchanged at 11 complexity rows and 66 oversized modules. The apple
+runner is down to 3740 lines after the material/probe, native-render, and
+image-metric slices, and `realworld_contract.py` is again the largest
+production hard-ceiling file at 3888 lines. Continue the loop by refreshing the
+ratchet and selecting one new P1 owner boundary. Default back to Candidate A
+unless a fresh scan finds a sharper Candidate B visual-comparison boundary.
+Do not reopen material/probe delegates, native render diagnostics, Object Gate
+/ Render Gate, capture-quality interpretation, image-metric artifacts, or
+scene-camera report rendering without fresh drift.
 
 ## Operating Rules
 
@@ -116,30 +125,35 @@ interpretation.
 
 ## Current Target
 
-Refresh the ratchet, then default to Candidate B unless a fresh scan finds a
-more concrete P1 contract boundary. The apple comparison runner is the largest
-production hard-ceiling file, and the visual comparison family now has two
-other above-ceiling files: `scene_camera_comparison.py` and
-`summarize_robot_camera_visual_parity.py`.
+Refresh the ratchet, then default to Candidate A unless a fresh scan finds a
+more concrete P1 visual-comparison boundary. `realworld_contract.py` is now the
+largest production hard-ceiling file again, while the visual comparison family
+still has three above-ceiling files:
+`run_robot_camera_apple2apple_comparison.py`,
+`scene_camera_comparison.py`, and `summarize_robot_camera_visual_parity.py`.
 
 Recommended next slice claim:
 
-- Slice: choose a fresh visual-comparison boundary after refreshing the ratchet.
-- Owner layer: Artifacts, reports, and eval suites.
-- Current friction: the visual comparison family still has three production
-  hard-ceiling files, with the apple runner above 4000 lines after the
-  material/probe and native-render cleanup.
-- Simplification: reduce one real report/artifact/diagnostic concept such as
-  image metric artifact preparation, visual-parity summary reporting, capture
-  lane initialization, or a report/gate summary owner for
-  `summarize_robot_camera_visual_parity.py`.
+- Slice: choose a fresh `RealWorldCleanupContract` facade-private coupling
+  boundary, such as agent-view/readiness wrappers, runtime-map/cleanup-worklist
+  caller migration, or another named owner split confirmed by call-site scan.
+- Owner layer: MCP Capability Contract And Tools plus Artifacts, reports, and
+  eval suites.
+- Current friction: `realworld_contract.py` remains a 3888-line public/private
+  contract facade after the visual-candidate lifecycle split, and
+  `report.py` remains above the hard ceiling.
+- Simplification: move one real contract/report construction responsibility to
+  an existing owner or a focused owner module. Do not replace facade-private
+  coupling with a looser parameter bag, all-purpose context object, or new
+  wrapper facade.
 - Behavior-change class: internal owner cleanup unless the chosen slice
   explicitly changes report or artifact contracts.
-- Proof: focused visual-comparison tests, ruff on touched files, format check,
-  and ratchet summary.
-- Non-goals: reopening material/probe delegates, Object Gate / Render Gate,
-  capture-quality interpretation, native render diagnostics, or scene-camera
-  report rendering without fresh drift.
+- Proof: focused realworld contract/MCP/report tests as appropriate, ruff on
+  touched files, format check, py_compile, and ratchet summary.
+- Non-goals: reopening init projection/runtime-prior, Runtime Metric Map
+  payloads, visual-candidate payload/declaration/lifecycle, planner-probe
+  report panels, or any closed apple visual-comparison owner without fresh
+  drift.
 
 Candidate A
 remains valid only for a new `RealWorldCleanupContract` boundary such as
@@ -196,11 +210,19 @@ belongs to `scene_camera_report*.py`, and the public
 `scene_camera_comparison.py`. Do not reopen report rendering unless the
 comparison facade starts rebuilding report sections directly again.
 
-Default next candidate-B slices remain valid only around real boundaries such
-as capture-lane initialization, render contract diagnostics, object audit item
-construction, image metric artifact preparation, or visual-parity summary
-reporting. The runner-private material/probe delegate surface has been removed;
-do not recreate `_probe_manifest_summary`,
+Apple image-metric artifact preparation and residual diagnostics now belong to
+`robot_camera_apple2apple_image_metrics.py`, with generic pixel visual metrics
+reused from `scene_camera_image_metrics.py`. Do not recreate runner-private
+helpers for saved-report image derivation, metric-image path/downsample
+construction, image diff payload assembly, residual diagnostic math, or
+residual triage summaries. `_location_result` should remain runner
+orchestration that delegates image-artifact/diff subpayloads only.
+
+Remaining candidate-B slices are valid only around real boundaries such as
+capture-lane initialization, render contract diagnostics, object audit item
+construction, or visual-parity summary reporting. The runner-private
+material/probe delegate surface has been removed; do not recreate
+`_probe_manifest_summary`,
 `_comparison_probe_comparable`, `_comparison_probe_delta`,
 `_material_response_probe_history`, `_tone_color_probe_history`,
 `_texture_colorspace_material_response_check`,
@@ -277,6 +299,8 @@ capture-quality interpretation that already has focused owners.
   diagnostics in
   `robot_camera_apple2apple_object_gate.py`; apple capture-quality probe
   configuration in `robot_camera_apple2apple_capture_quality.py`;
+  apple image-metric artifact preparation and residual diagnostics in
+  `robot_camera_apple2apple_image_metrics.py`;
   scene-camera USD render-contract,
   image metric, lighting/tone/shadow, render-domain, and render-source
   diagnostics in focused scene-camera modules; B1 runtime-bundle and label-tool

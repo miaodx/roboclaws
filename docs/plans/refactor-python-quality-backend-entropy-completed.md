@@ -933,6 +933,27 @@ logs before choosing the next slice.
   and 66 oversized modules. Proof: focused apple-to-apple unit tests, ruff,
   format check, py_compile, and ratchet.
 
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck refreshed
+  the cleanup plan after the material/probe and native-render slices. Metric:
+  ratchet remains 11 complexity rows and 66 oversized modules; the apple runner
+  is now 4161 lines and remains the largest production hard-ceiling file.
+  Decision: continue Candidate B with apple image-metric artifact preparation
+  and residual diagnostics as the default next slice, but first reuse existing
+  `scene_camera_image_metrics.py` generic image math where practical so the
+  slice removes duplicate concepts instead of creating another generic metric
+  module. Proof: ratchet summary, function-index scan, image-metric call-site
+  grep, docs diff.
+
+- 2026-06-17: Robot-camera apple-to-apple saved/metric image artifact
+  preparation, image-diff payload assembly, residual diagnostics, and residual
+  triage moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_image_metrics.py`, with generic pixel visual
+  metrics reused from `scene_camera_image_metrics.py`. Tests now call the
+  image-metric owner directly instead of runner-private image helpers. Metric:
+  runner 4161 -> 3740 lines, new owner 484 lines; ratchet remains 11
+  complexity rows and 66 oversized modules. Proof: focused apple-to-apple unit
+  tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -994,6 +1015,11 @@ logs before choosing the next slice.
   `robot_camera_apple2apple_native_render.py`; reopen only if the runner
   rebuilds native-diagnostics source selection, setting-group compaction,
   native-status interpretation, or native summary payloads directly.
+- Robot-camera apple-to-apple image metric artifacts and residual diagnostics
+  are owned by `robot_camera_apple2apple_image_metrics.py`; reopen only if the
+  runner rebuilds saved-report image derivation, metric-image paths,
+  image-diff payloads, residual diagnostic math, or residual triage summaries
+  directly.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from scripts.molmo_cleanup import robot_camera_apple2apple_capture_quality as capture_quality
+from scripts.molmo_cleanup import robot_camera_apple2apple_image_metrics as image_metrics
 from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
 from scripts.molmo_cleanup import robot_camera_apple2apple_native_render as native_render
 from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
@@ -28,16 +29,12 @@ def _load_module(path: Path, name: str):
 
 
 def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_color_residual",
-    )
     left_path = tmp_path / "mujoco.png"
     right_path = tmp_path / "isaac.png"
     Image.new("RGB", (12, 8), (120, 120, 120)).save(left_path)
     Image.new("RGB", (12, 8), (60, 60, 60)).save(right_path)
 
-    diff = run_camera._image_diff(left_path, right_path)
+    diff = image_metrics.image_diff(left_path, right_path)
 
     assert diff["mean_abs_rgb"] == 60.0
     assert diff["diff_gt_40_fraction"] == 1.0
@@ -100,7 +97,7 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
         "view_provenance": {},
     }
 
-    run_camera._prepare_saved_report_images(
+    image_metrics.prepare_saved_report_images(
         mujoco_views,
         isaac_views,
         capture_quality=capture_quality_probe,
@@ -457,7 +454,7 @@ def test_robot_camera_residual_triage_prioritizes_geometry_edges() -> None:
     ImageDraw.Draw(left).rectangle((0, 0, 15, 31), fill=(255, 255, 255))
     right = Image.new("RGB", (32, 32), (0, 0, 0))
 
-    residual = run_camera._render_residual_diagnostics(left, right)
+    residual = image_metrics.render_residual_diagnostics(left, right)
 
     assert residual["residual_class"] == "geometry_or_texture_edge_residual"
     assert residual["edge_abs_diff"] > 8.0
