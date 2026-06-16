@@ -812,6 +812,25 @@ logs before choosing the next slice.
   Proof: cleanup report and planner manipulation checker contract tests, ruff,
   format check, py_compile, and ratchet.
 
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck refreshed
+  the active cleanup plan without implementation. Metric: ratchet remains 11
+  complexity rows and 66 oversized modules. Decision: next default slice is
+  `report.py` non-runtime planner-probe panels; completed visual-candidate
+  payload and planner-probe runtime-diagnostics slices stay closed; current
+  `visual_grounding` schemas/service/artifact fields remain active internal
+  contracts, while identity maps, legacy flags/aliases, and runner-private
+  report aliases stay scoped small-cut inputs. Proof: ratchet summary, grep
+  call-site checks, docs diff.
+
+- 2026-06-17: Planner manipulation probe quality, views, cleanup-binding,
+  task-sampler, post-placement rejection, grasp/placement failure, policy
+  exception, blocker, artifact, and RBY1M/CuRobo gate report panels moved from
+  `report.py` into `report_sections_probe.py` and
+  `report_sections_probe_failures.py`. Metric: `report.py` 3440 -> 2525
+  lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  cleanup report and planner manipulation checker contract tests, ruff, format
+  check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -837,6 +856,11 @@ logs before choosing the next slice.
   `report_sections_probe_runtime.py`; reopen only if `report.py` starts
   rebuilding Runtime Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache,
   Warp Compatibility, or Worker Stage Timeline sections directly.
+- Planner manipulation probe non-runtime report panels are owned by
+  `report_sections_probe.py` and `report_sections_probe_failures.py`; reopen
+  only if `report.py` starts rebuilding quality, views, cleanup-binding,
+  task-sampler, post-placement rejection, grasp collision, placement scene,
+  policy exception, blocker, artifact, or RBY1M/CuRobo gate sections directly.
 - B1 runtime-bundle review-manifest validation is split into focused helper
   families; reopen only if `review_manifest_errors` regains ratchet rows or
   false-green review-gate behavior.

@@ -40,7 +40,7 @@ of a clean checkpoint; refresh before the next execution slice.
   `roboclaws/household/realworld_contract.py` at 4707 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
   `roboclaws/household/scene_camera_comparison.py` at 4693,
-  `roboclaws/household/report.py` at 3440,
+  `roboclaws/household/report.py` at 2525,
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889, and
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711.
@@ -71,6 +71,23 @@ Execution refresh on 2026-06-17 moved planner manipulation probe runtime
 diagnostics report panels to `report_sections_probe_runtime.py`. `report.py`
 remains a P1 hard-ceiling file, but that runtime-diagnostics panel family is no
 longer an active candidate.
+
+Planning-only ponytail / intuitive-refactor recheck on 2026-06-17 left the
+ratchet totals unchanged at 11 complexity rows and 66 oversized modules. It
+updated selection guidance only: do not default back to the completed
+visual-candidate payload slice; prefer a fresh P1 hard-ceiling owner boundary,
+with `report.py` non-runtime planner-probe panels selected as the next
+candidate at that checkpoint and apple-to-apple runner/test facade aliases as a
+candidate-B small cut when that slice is already in flight. Current
+`visual_grounding` schemas, service plumbing, and artifact fields are still
+active internal contracts behind current public axes; do not delete them as
+stale surface.
+
+Execution refresh on 2026-06-17 moved non-runtime planner manipulation probe
+report panels to `report_sections_probe.py` and
+`report_sections_probe_failures.py`. `report.py` is now 2525 lines and remains
+a P1 hard-ceiling file, but both planner-probe runtime diagnostics and
+non-runtime planner-probe panels are no longer active candidate-A slices.
 
 ## Two-Document Contract
 
@@ -160,14 +177,16 @@ pressure than the earlier ratchet-only loop. Complexity has fallen quickly;
 the next useful work should prioritize hard-ceiling files, test fixture debt,
 and backend/report/evidence boundaries that prevent branching from returning.
 
-Next execution should normally choose one remaining P1 hard-ceiling
-architecture slice. Default recommendation: continue candidate A by reducing
-`RealWorldCleanupContract` or `report.py` ownership around a fresh stateful
-visual-candidate boundary, a remaining report section boundary, or a small
-Protocol/coupling reduction that removes real facade-private coupling. Runtime
-Metric Map payload assembly and visual-candidate payload/event/overlay assembly
-are complete, and planner-probe runtime diagnostics report panels are complete;
-the contract and report facades are still above the hard ceiling.
+Next execution should normally refresh the ratchet and choose one remaining P1
+hard-ceiling architecture slice. Default recommendation: choose a fresh owner
+boundary instead of reopening completed report/contract slices. Candidate A is
+still valid for a remaining `report.py` section boundary or a
+`RealWorldCleanupContract` lifecycle/state/Protocol coupling reduction that
+removes real facade-private coupling; candidate B is a good alternative when
+the apple-to-apple runner or scene-camera comparison work is already in flight.
+Runtime Metric Map payload assembly, visual-candidate payload/event/overlay
+assembly, and planner-probe runtime/non-runtime report panels are complete; do
+not reopen those slices without new drift.
 
 The prior B1 Map 12 label-tool exception is now used and cleared. A future
 candidate D slice should be a separate preview-rendering cleanup only; do not
@@ -235,8 +254,9 @@ Task source: plan path.
 Canonical source: `docs/plans/refactor-python-quality-backend-entropy.md`.
 Route: `$intuitive-refactor` ratchet mode.
 Goal: Continue this cleanup with one architecture-simplifying slice. Default
-next slice is candidate A's pure visual-candidate payload/event/overlay split
-inside the existing MCP capability contract boundary.
+next step is to refresh the ratchet and choose a fresh P1 hard-ceiling owner
+boundary; the previous candidate-A planner-probe report-panel slice is now
+complete.
 
 Scope:
 
@@ -248,6 +268,8 @@ Scope:
   complexity become invisible while one file-size slice improves.
 - Choose one P1 hard-ceiling architecture slice from this plan and execute it
   vertically: code, callers, tests, stale internal paths, proof.
+- Do not preserve new private facade aliases solely for path-loaded tests; move
+  tests to the true owner when the slice already establishes one.
 
 Non-goals: broad repo cleanup, line-count shaving across many files,
 preserving obsolete internal wrappers, live/provider/simulator proof unless the
@@ -300,7 +322,7 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 ### A: Contract And Report Hard-Ceiling Split
 
 Severity: P1. `roboclaws/household/realworld_contract.py` is 4707 lines and
-`roboclaws/household/report.py` is 3440 lines. Owning architecture layers: MCP
+`roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
 Capability Contract And Tools for the contract facade, and Artifacts, reports,
 and eval suites for report rendering. Continue only around real ownership
 boundaries: payload builders, policy/event families, section renderers, or
@@ -311,14 +333,15 @@ looser parameter bag or another facade wrapper is not a win.
 
 Valid next sub-slices are:
 
+- Remaining `report.py` section extraction only when it removes a report
+  ownership boundary, not just because a section is long. Do not reopen
+  planner-probe runtime diagnostics or non-runtime planner-probe panels; those
+  now belong to `report_sections_probe_runtime.py`,
+  `report_sections_probe.py`, and `report_sections_probe_failures.py`.
 - A fresh stateful visual-candidate registration/resolution slice only if it
   can name a real lifecycle owner and preserve `declare_visual_candidates` /
   `navigate_to_visual_candidate` response shapes, handle state, visual-grounding
   evidence, and private-truth assertions.
-- Remaining `report.py` section extraction only when it removes a report
-  ownership boundary, not just because a section is long. Do not reopen
-  planner-probe runtime diagnostics; those now belong to
-  `report_sections_probe_runtime.py`.
 
 ### B: Visual Comparison Pipeline Split
 
@@ -327,7 +350,11 @@ Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
 oversized. Prefer capture-lane stages, diagnostics builders, manifest/artifact
 setup helpers, and report-specific modules. Owning architecture layers:
 Backend Runtimes / Environment Primitives plus Artifacts, reports, and eval
-suites. Real renderer claims still require separate local proof.
+suites. Real renderer claims still require separate local proof. Ponytail
+constraint: when this slice touches the apple-to-apple runner, remove or avoid
+private `_render_*` facade aliases that only mirror
+`robot_camera_apple2apple_report.py`; update tests to import or call the report
+owner directly instead of preserving runner-private alias compatibility.
 
 ### C: Live Runtime And Eval Harness Entropy
 
@@ -395,25 +422,26 @@ nearby accepted slice already touches the same owner files. Rechecked
 2026-06-17 ponytail inputs still present: legacy checker flag
 `--require-canonical-robot-view-camera-control`, empty camera-labeler to
 visual-grounding mapping dicts, unused prompt helper alias
-`_task_prefix_legacy`, and duplicated current-doc lane prose. Owning layers
-depend on the touched surface: Artifacts, reports, and eval suites for
-checker/report claims; MCP Capability Contract And Tools, Agent Skills, or
-Agent Engines And Provider Profiles for labeler/profile/prompt guidance.
-Behavior-change class is internal/stale docs unless a public command, report
-claim, prompt contract, or artifact contract changes; stop for a slice decision
-if that happens. The empty camera-labeler mapping dicts are identity-adapter
-shrink targets in `roboclaws/household/profiles.py`, not evidence that the
-camera-labeler or visual-grounding artifact contracts are removable. The
-legacy checker flag still has parser and test surface; remove it only with a
-checker-contract migration that updates callers/tests. The prompt legacy alias
-is a compatibility import shim; delete it only after call-site search proves it
-is in-repo dead or the slice explicitly migrates those imports. Do not delete
-internal `visual_grounding` pipeline schemas, provenance fields, service env
-vars, or server plumbing merely because `visual_grounding=...` is no longer a
-public launch axis. This bundle must not be used as a reason to defer the
-remaining P1 hard-ceiling files. Proof: affected checker, prompt, or
-visual-grounding tests when code changes, otherwise static grep/docs proof plus
-ratchet.
+`_task_prefix_legacy`, path-loaded apple-to-apple report-renderer aliases, and
+duplicated current-doc lane prose. Owning layers depend on the touched surface:
+Artifacts, reports, and eval suites for checker/report claims; MCP Capability
+Contract And Tools, Agent Skills, or Agent Engines And Provider Profiles for
+labeler/profile/prompt guidance. Behavior-change class is internal/stale docs
+unless a public command, report claim, prompt contract, or artifact contract
+changes; stop for a slice decision if that happens. The empty camera-labeler
+mapping dicts are identity-adapter shrink targets in
+`roboclaws/household/profiles.py`, not evidence that the camera-labeler or
+visual-grounding artifact contracts are removable. The legacy checker flag
+still has parser and test surface; remove it only with a checker-contract
+migration that updates callers/tests. The prompt legacy alias is a compatibility
+import shim; delete it only after call-site search proves it is in-repo dead or
+the slice explicitly migrates those imports. Do not delete internal
+`visual_grounding` pipeline schemas, provenance fields, service env vars, or
+server plumbing merely because `visual_grounding=...` is no longer a public
+launch axis. This bundle must not be used as a reason to defer the remaining P1
+hard-ceiling files. Proof: affected checker, prompt, report-renderer,
+visual-grounding, or profile tests when code changes, otherwise static
+grep/docs proof plus ratchet.
 
 ### Cleared Or Parked
 
@@ -444,6 +472,12 @@ ratchet.
   Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache, Warp Compatibility,
   or Worker Stage Timeline sections instead of delegating to
   `report_sections_probe_runtime.py`.
+- Planner manipulation probe non-runtime report panels no longer live in
+  `report.py`; reopen only if the report facade starts rebuilding quality,
+  views, cleanup-binding, task-sampler, post-placement rejection, grasp
+  collision, placement-scene, policy-exception, blocker, artifact, or RBY1M /
+  CuRobo gate sections instead of delegating to `report_sections_probe.py` and
+  `report_sections_probe_failures.py`.
 - B1 Map 12 runtime-bundle review-manifest validation complexity is cleared;
   reopen only if `compile_b1_map12_runtime_bundle.py::review_manifest_errors`
   regains ratchet rows or false-green review-gate drift.
