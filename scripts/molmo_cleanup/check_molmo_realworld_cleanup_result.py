@@ -596,7 +596,7 @@ def _assert_artifacts_and_report_core(
     assert "Score" in report_text, report_text[:500]
     if enforce_success or data.get("semantic_substeps"):
         assert "Semantic Substeps" in report_text, report_text[:500]
-    assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
+    assert "ADR-0003 real-world-style cleanup run" not in report_text, report_text[:500]
     if opts["require_runtime_metric_map"]:
         assert "Runtime Metric Map" in report_text, report_text[:500]
     if opts["require_semantic_sweep"] and not _is_live_semantic_map_build(data):
@@ -809,9 +809,10 @@ def _assert_evidence_lane(
     assert profile.agent_input in report_text, report_text[:500]
     if profile.profile == WORLD_LABELS_PROFILE:
         assert "image reasoning" not in report_text.lower(), report_text[:500]
-        assert "not model input" in report_text.lower(), report_text[:500]
-        assert "map_mode" in report_text, report_text[:500]
-        assert "runtime_map_prior" in report_text, report_text[:500]
+        model_input_note = str(metadata.get("model_input_note") or "")
+        assert "not model input" in model_input_note.lower(), metadata
+        assert "map_mode" in model_input_note, metadata
+        assert "runtime_map_prior" in model_input_note, metadata
 
 
 def _assert_clean_agent_run(

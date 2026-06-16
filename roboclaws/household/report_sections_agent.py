@@ -107,33 +107,6 @@ def evidence_lane_badges(run_result: dict[str, Any], badge_html) -> str:  # noqa
     )
 
 
-def evidence_lane_note(run_result: dict[str, Any]) -> str:
-    metadata = _evidence_lane_metadata(run_result)
-    if not metadata:
-        return ""
-    evidence_lane = metadata.get("evidence_lane", run_result.get("evidence_lane", "unknown"))
-    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
-    verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
-    labeler_note = (
-        f"Camera labeler: {camera_labeler}. "
-        if camera_labeler
-        else "Camera labeler: not applicable. "
-    )
-    note = (
-        f"Cleanup evidence lane {evidence_lane}: {metadata.get('summary', '')} "
-        "evidence_lane selects what the agent receives. camera_labeler applies only "
-        "to camera-grounded-labels and selects how camera labels are produced. "
-        f"{labeler_note}"
-        "Map shape and map priors are controlled separately by map_mode and "
-        "runtime_map_prior. "
-        f"Agent input: {metadata.get('agent_input', 'unknown')}; "
-        f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
-        f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "
-        f"{metadata.get('model_input_note', '')}"
-    )
-    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
-
-
 def raw_fpv_observations_section(
     run_result: dict[str, Any],
     *,

@@ -351,7 +351,7 @@ def test_realworld_cleanup_report_separates_agent_view_and_private_eval(
     assert "Private Evaluation" in report
     assert "Advisory Review" in report
     assert "Generated mess" in report
-    assert "ADR-0003 real-world-style cleanup run" in report
+    assert "ADR-0003 real-world-style cleanup run" not in report
 
 
 def test_realworld_cleanup_demo_persists_facade_rerun_command(
@@ -380,7 +380,18 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert run_result["rerun_command"] == command
-    assert command in report
+    assert "just run::surface \\\n" in report
+    for arg in (
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=codex-cli",
+        "provider_profile=codex-env",
+        "evidence_lane=world-oracle-labels",
+        f"output_dir={tmp_path}",
+    ):
+        assert arg in report
     assert "household-cleanup direct world-oracle-labels" not in report
 
 

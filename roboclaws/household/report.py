@@ -25,7 +25,6 @@ from roboclaws.household.report_sections_agent import (
     camera_model_policy_section,
     cleanup_policy_trace_section,
     evidence_lane_badges,
-    evidence_lane_note,
     model_declared_observations_section,
     private_evaluation_section,
     raw_fpv_observations_section,
@@ -193,8 +192,6 @@ def _cleanup_report_sections(
                 "overview",
                 [
                     _confidence_layer_note(run_result),
-                    _realworld_contract_note(run_result),
-                    evidence_lane_note(run_result),
                     map_evidence_refresh_summary_section(run_result),
                     _before_after_section(
                         before_snapshot=before_snapshot,
@@ -846,17 +843,6 @@ def _generated_mess_summary(run_result: dict[str, Any]) -> str:
     if requested is None or requested == actual:
         return actual
     return f"{actual} actual / {requested} requested"
-
-
-def _realworld_contract_note(run_result: dict[str, Any]) -> str:
-    if run_result.get("contract") != "realworld_cleanup_v1":
-        return ""
-    note = (
-        "ADR-0003 real-world-style cleanup run. The Agent View is limited to "
-        "metric map, room-level fixture hints, and robot-local observed object "
-        "handles. Private Evaluation is shown only after the run."
-    )
-    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
 def _confidence_layer_note(run_result: dict[str, Any]) -> str:
