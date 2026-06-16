@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-16
+last_verified: 2026-06-17
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -13,41 +13,37 @@ completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.m
 
 ## Status
 
-ACTIVE. Continue one verified, non-overlapping slice at a time while unrelated
-scene-sampler/operator-console changes remain dirty in the worktree. This file
-is the unfinished active plan only. Completed work lives in
+ACTIVE. Continue one verified, non-overlapping slice at a time. This file is
+the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16 in the current dirty checkout:
+--summary --top 40` on 2026-06-17. Treat this as a planning snapshot, not proof
+of a clean checkpoint; refresh before the next execution slice.
 
-- 1 Ruff complexity violation:
-  `tests/unit/operator_console/test_scene_sampler_readiness_export.py::_assert_next_flow`
-  at `54>50`.
-- 62 oversized modules.
-- Remaining work is file-size and ownership-boundary debt split between large
-  production modules and large behavior tests.
-- `roboclaws/household/realworld_contract.py` is down to 4930 lines after the
-  projection, agent-view boundary, visual-candidate, runtime-map contract, and
-  done-readiness helper splits, but remains a P1 hard-ceiling candidate.
-- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is down
-  to 4900 lines after the report renderer split, but remains a P1
-  hard-ceiling candidate.
-- `roboclaws/household/scene_camera_comparison.py` is down to 4693 lines after
-  the first USD render-contract, image-metrics, lighting-diagnostics, and
-  render-domain diagnostics splits, but remains a P1 hard-ceiling candidate.
-- `roboclaws/household/report.py` is down to 3820 lines after the Nav2 map,
-  semantic-map artifact, and agent/perception section splits, but remains a P1
-  hard-ceiling candidate.
-- Backend workers are no longer hard-ceiling blockers:
-  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
-  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
-- Scene-sampler drift is active again in the current dirty worktree:
-  `roboclaws/launch/scene_sampler.py` is 2444 lines. Treat this as owned by the
-  current scene-sampler/eval work until it lands; if it remains above 2000 lines
-  at the next clean checkpoint, reopen it as a P1 cleanup slice here.
-- `roboclaws/household/agibot_contract_rehearsal.py` is now 1949 lines after
-  the evidence/readiness payload split, below the hard ceiling.
+- 15 Ruff complexity violations and 65 oversized modules in the current dirty
+  checkout. The additional row/module versus the earlier 2026-06-17 snapshot
+  comes from plan-external `scripts/operator_console/render_scene_previews.py`
+  edits; keep it with the B1 Map 12/preview owner unless it survives as
+  unowned drift.
+- The prior dirty-worktree scene-sampler drift is now real source drift:
+  `roboclaws/launch/scene_sampler.py` is 3070 lines in clean code and is the
+  next P1 checkpoint unless another active plan explicitly owns the repair.
+- P1 hard-ceiling production files still include
+  `roboclaws/household/realworld_contract.py` at 5036 lines,
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
+  `roboclaws/household/scene_camera_comparison.py` at 4693,
+  `roboclaws/household/report.py` at 3806,
+  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
+  `roboclaws/agents/drivers/openai_agents_live.py` at 2889, and
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711.
+- Backend workers remain below the hard ceiling:
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1994 lines and
+  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1841 lines.
+- Complexity rows are no longer only test fixture debt. Current rows span
+  operator-console tests, the B1 Map 12 label tool, a cleanup checker helper,
+  scene-preview rendering, live eval polling, MCP semantic tool registration,
+  prompt preview, and eval-harness row blockers.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
@@ -140,10 +136,13 @@ pressure than the earlier ratchet-only loop. Complexity has fallen quickly;
 the next useful work should prioritize hard-ceiling files, test fixture debt,
 and backend/report/evidence boundaries that prevent branching from returning.
 
-Next execution should start from a clean or explicitly scoped dirty checkpoint:
-first settle the current scene-sampler/eval changes or make them own their
-ratchet fallout, then choose one P1 hard-ceiling architecture slice. Do not
-continue by shaving isolated lines from many files.
+Next execution should start by resolving the current drift classification:
+either execute the scene-sampler hard-ceiling slice, or record which active
+scene-sampler/eval plan owns it. After that, choose one P1 hard-ceiling
+architecture slice. Do not continue by shaving isolated lines from many files.
+Ponytail audit items are inputs to this queue only when they remove a stale
+surface, duplicate concept, or false-confidence source; they should not
+postpone the P1 hard-ceiling checkpoint.
 
 ## Parallel Acceleration Policy
 
@@ -202,17 +201,19 @@ Task source: plan path.
 Canonical source: `docs/plans/refactor-python-quality-backend-entropy.md`.
 Route: `$intuitive-refactor` ratchet mode.
 Goal: Continue this cleanup with one architecture-simplifying slice, starting
-by resolving or explicitly scoping current scene-sampler/eval ratchet fallout.
+by resolving or explicitly assigning current scene-sampler/eval ratchet drift
+and classifying the new complexity rows.
 
 Scope:
 
 - Refresh ratchet signal before edits.
-- Treat current `scene_sampler.py` / operator-console test complexity drift as
-  the first checkpoint.
-- If that dirty work is active and in scope, reduce it below the hard ceiling
-  or record a follow-up exception in this plan.
-- Otherwise choose one P1 hard-ceiling architecture slice from this plan and
-  execute it vertically: code, callers, tests, stale internal paths, proof.
+- Treat `scene_sampler.py` at 3070 lines as the first P1 checkpoint.
+- If another active plan owns that drift, link that plan here before taking an
+  unrelated hard-ceiling slice.
+- Classify new complexity rows before execution; do not let plan-external
+  complexity become invisible while one file-size slice improves.
+- Then choose one P1 hard-ceiling architecture slice from this plan and execute
+  it vertically: code, callers, tests, stale internal paths, proof.
 
 Non-goals: broad repo cleanup, line-count shaving across many files,
 preserving obsolete internal wrappers, live/provider/simulator proof unless the
@@ -262,74 +263,133 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 
 ## Active Candidates
 
-### A: Behavior-Test Fixture Builders
+### A: Scene Sampler Hard-Ceiling Drift
 
-Severity: P2, promoted to P1 when a test file crosses the 2000-line hard
-ceiling or hides a false-green gate. The current lone complexity row is
-operator-console scene-sampler readiness test fallout; keep it with the active
-scene-sampler/eval work unless it survives the next clean checkpoint. Use
-fixture builders and focused assertion helpers only when they make behavior
-ownership easier to scan. Owner: `intuitive-tests`. Proof: focused pytest,
-ruff, ratchet summary.
+Severity: P1. `roboclaws/launch/scene_sampler.py` is now 3070 lines in the
+current checkout, so the previous conditional drift is active debt. Owning
+architecture layers: Runnable Surfaces And Presets plus Eval Suites, because
+sampler changes feed product/eval scene selection and generated eval rows.
+Next slice should split by real sampler ownership or explicitly link the
+separate active plan that owns this drift. Proof: full scene-sampler focused
+tests, launch/eval tests if touched, ruff, format check, and ratchet.
 
 ### B: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is now 4930 lines
-after the projection, agent-view boundary, visual-candidate, runtime-map
-contract, and done-readiness helper splits and remains above the hard ceiling;
-`roboclaws/household/report.py` is now 3820 lines after the Isaac runtime,
-grasp diagnostics, proof request-selection renderer, Nav2 map bundle renderer,
-semantic-map artifact writer, and agent/perception section splits, but remains
-above the hard ceiling. Continue only around real ownership boundaries: payload
-builders, policy/event families, section renderers, or artifact envelopes.
-Preserve current public schemas and report claims, but remove obsolete internal
-compatibility paths when current callers and tests move to the cleaner owner.
-Owner: `intuitive-refactor`.
+Severity: P1. `roboclaws/household/realworld_contract.py` is 5036 lines and
+`roboclaws/household/report.py` is 3806 lines. Owning architecture layers: MCP
+Capability Contract And Tools for the contract facade, and Artifacts, reports,
+and eval suites for report rendering. Continue only around real ownership
+boundaries: payload builders, policy/event families, section renderers, or
+artifact envelopes. Preserve public schemas and report claims.
 
-### C: Backend Worker Hard-Ceiling Split
-
-Status: cleared on 2026-06-16; see the completed ledger. Keep reopened only
-for fresh backend-worker hard-ceiling regressions or wrapper/import drift that
-pushes either worker back above 2000 lines.
-
-### D: Visual Comparison Pipeline Split
+### C: Visual Comparison Pipeline Split
 
 Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
 `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` remain
 oversized. Prefer capture-lane stages, diagnostics builders, manifest/artifact
-setup helpers, and report-specific modules. Real renderer claims still require
-separate local proof. Owner: `intuitive-refactor`.
-Latest metric: `scene_camera_comparison.py` is down to 5476 lines after the
-USD render-contract, image-metrics, and lighting-diagnostics helper splits, but
-remains above the hard ceiling.
-Current metric: `scene_camera_comparison.py` is down to 4693 lines after the
-render-domain diagnostics split; `run_robot_camera_apple2apple_comparison.py`
-is down to 4900 lines after the report renderer split. Both remain P1
-hard-ceiling files.
+setup helpers, and report-specific modules. Owning architecture layers:
+Backend Runtimes / Environment Primitives plus Artifacts, reports, and eval
+suites. Real renderer claims still require separate local proof.
 
-### E: Backend Evidence And Live Runtime Normalization
+### D: Live Runtime And Eval Harness Entropy
 
-Severity: P2. The facade work is useful but backend metadata/evidence still
-appears across live-agent, Agibot, and run-result paths. Normalize evidence
-envelopes and backend identity where this removes repeated branching. Watch
-`openai_agents_live.py`, `run_live_openai_agents_cleanup.py`, and
-`agibot_contract_rehearsal.py`. Owner: `intuitive-refactor`.
+Severity: P1 for hard-ceiling files, otherwise P2. Watch
+`roboclaws/agents/drivers/openai_agents_live.py`,
+`scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
+`roboclaws/evals/live_runtime.py`, and
+`skills/eval-harness/scripts/run_eval_harness.py`. Owning architecture layers:
+Agent Engines And Provider Profiles, Thin Runtime / Server Adapters, and Eval
+Suites. Normalize status/evidence envelopes only where it removes repeated
+branching without changing public launch, report, or grader contracts.
 
-### F: Agent Guidance Skill-Router Drift
+### E: B1 Map 12 Label And Preview Tooling Complexity
+
+Severity: P2, promoted to P1 if it blocks B1 map alignment proof or hides a
+false-green review gate. Current rows include
+`scripts/maps/render_b1_map12_label_tool.py::semantic_map_layers_from_semantics`,
+`validate_label_draft_manifest`, and
+`scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
+Owning architecture layers: Worlds / Scenes, Backend Runtimes / Environment
+Primitives, and Artifacts, reports, and eval suites. The current dirty checkout
+has two render-preview rows in this bucket; keep them with the same owner.
+
+### F: Behavior-Test Fixture Builders
+
+Severity: P2, promoted to P1 when a test file crosses the 2000-line hard
+ceiling or hides a false-green gate. Current rows include operator-console
+scene-preview/control/static-asset tests and a cleanup-checker fixture lookup
+helper. Oversized behavior tests remain a large part of the top-40 list. Use
+fixture builders and focused assertion helpers only when they make behavior
+ownership easier to scan. Owning architecture layers follow the behavior under
+test: operator console, reports/artifacts, eval suites, or launch surfaces.
+
+### G: MCP Semantic Tool And Prompt Preview Complexity
+
+Severity: P2, promoted to P1 only if tool registration or prompt preview drift
+changes an agent-facing contract. Current rows include
+`roboclaws/household/realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools`
+and `roboclaws/operator_console/prompt_preview.py::_goal_contract`. Owning
+architecture layers: MCP Capability Contract And Tools plus Agent Skills.
+
+### H: Agent Guidance Skill-Router Drift
 
 Severity: P2. `AGENTS.md` and `CLAUDE.md` still mention
 `hybrid-phase-pipeline`, while this environment exposes `intuitive-flow`.
-Fix only if startup rediscovery continues to cost time; keep it separate from
-code-size slices. Owner: `intuitive-init`.
+Fix only if startup rediscovery continues to cost time. Keep it separate from
+code-size slices. Owning layer: agent operating guidance, not product runtime.
 
-### G: Scene Sampler Hard-Ceiling Drift
+### I: Stale Internal Surface Small-Cut Bundle
 
-Status: conditionally reopened by the current dirty checkout. The ratchet now
-reports `roboclaws/launch/scene_sampler.py` at 2444 lines plus one related
-operator-console test complexity row. If the active scene-sampler/eval work is
-about to land, that work should either split the facade back below 2000 lines or
-record why the drift belongs to a follow-up. If the dirty work is parked, reopen
-this plan candidate as P1 before taking another unrelated hard-ceiling slice.
+Severity: P2. Execute only as a scoped stale-surface deletion bundle or when a
+nearby accepted slice already touches the same owner files. Current ponytail
+inputs: legacy checker flag `--require-canonical-robot-view-camera-control`,
+empty visual-grounding labeler maps, and duplicated current-doc lane prose.
+Owning layers depend on the touched surface: Artifacts, reports, and eval
+suites for checker/report claims; MCP Capability Contract And Tools or Agent
+Skills for labeler/profile guidance. Behavior-change class is internal/stale
+docs unless a public command, report claim, or artifact contract changes; stop
+for a slice decision if that happens. Proof: affected checker or visual-
+grounding tests when code changes, otherwise static grep/docs proof plus
+ratchet.
+
+### Cleared Or Parked
+
+- Backend worker hard-ceiling split is cleared as of 2026-06-17; reopen only if
+  `isaac_lab_backend_worker.py` or `molmospaces_subprocess_worker.py` crosses
+  2000 lines again.
+- `agibot_contract_rehearsal.py` remains below the hard ceiling; reopen only
+  for fresh file-size, wrapper/import, or evidence-branching drift.
+- Report-performance skill calibration drift is cleared as of 2026-06-17; the
+  skill-local calibration script now delegates to the canonical
+  `scripts/reports/calibrate_model_latency.py`. Reopen only for new
+  skill/root script divergence.
+
+## Ponytail Audit Triage
+
+The 2026-06-17 repo-wide ponytail audit produced simplification candidates.
+Use these as ratchet inputs, not as approval to change public contracts without
+a slice gate.
+
+- Accepted P1/P2 cleanup inputs:
+  - Scene-sampler facade and legacy MolmoSpaces alias drift: already candidate
+    A. Deleting public `molmospaces/val_*` aliases is a public launch-contract
+    change and needs its own slice decision.
+  - Report-performance skill scripts: calibration drift is cleared. The
+    remaining thin metric wrappers are P2 only if a future skill packaging slice
+    can point `SKILL.md` / `skill.json` at root scripts directly.
+  - Contract extraction Protocols in `realworld_contract_payloads.py` and
+    `realworld_done_readiness.py`: valid P2 concept-reduction targets inside
+    candidate B, but only if the slice reduces facade/private-member coupling
+    instead of just moving lines.
+  - Legacy checker flag
+    `--require-canonical-robot-view-camera-control`, empty visual-grounding
+    labeler maps, and duplicated current-doc lane prose are candidate I, not
+    ad hoc edits to unrelated owners.
+- Parked unless a nearby accepted slice touches them:
+  - `PhysicalObservationProvider` is low-value Protocol cleanup and belongs to
+    a physical Nav2 pilot slice, not the main hard-ceiling pass.
+  - General large behavior-test files remain candidate F, but ponytail did not
+    justify deleting test coverage wholesale.
 
 ## Evidence Ladder
 

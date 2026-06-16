@@ -739,6 +739,14 @@ logs before choosing the next slice.
   realworld contract and MCP server contract test files, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: Report-performance skill calibration script now delegates to the
+  canonical `scripts/reports/calibrate_model_latency.py`, removing the stale
+  skill-local simplified implementation. Metric: skill script 112 -> 14 lines;
+  current dirty-checkout ratchet is 15 complexity rows and 65 oversized modules
+  because of plan-external render-preview drift tracked in the active plan.
+  Proof: wrapper CLI help, report-performance unit tests, ruff, format check,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -748,5 +756,7 @@ logs before choosing the next slice.
 - OpenAI live metrics/budget helpers already removed the known production
   complexity rows; file-size hard-ceiling work is still active, but the old
   metrics extraction slice is done.
+- Report-performance skill calibration now shares the root calibration CLI;
+  reopen only if skill/root calibration behavior diverges again.
 - Completed report-section extraction is partial evidence, not a reason to
   treat `report.py` as done; the active plan still owns the hard-ceiling split.
