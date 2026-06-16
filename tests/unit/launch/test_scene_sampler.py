@@ -49,40 +49,71 @@ ITHOR_REJECTED_INDICES = {
     211,
     212,
     301,
+    302,
     303,
     305,
     306,
     310,
     311,
+    401,
     402,
     403,
     404,
     406,
+    407,
     408,
     411,
+    412,
 }
 HOLODECK_REJECTED_INDICES = {
     *range(20),
+    22,
+    25,
+    26,
+    27,
+    29,
+    30,
+    33,
+    36,
+    38,
+    39,
+    67,
     71,
     101,
     106,
     157,
     162,
     173,
+    183,
+    237,
     238,
+    256,
+    266,
     280,
     292,
     323,
     349,
     360,
     371,
+    391,
     396,
+    397,
     443,
     449,
+    450,
     452,
+    459,
     460,
     477,
 }
+PROCTHOR_10K_REJECTED_COUNT = 3
+PROCTHOR_OBJAVERSE_REJECTED_COUNT = 5
+TOTAL_REJECTED_ROW_COUNT = (
+    PROCTHOR_10K_REJECTED_COUNT
+    + PROCTHOR_OBJAVERSE_REJECTED_COUNT
+    + len(ITHOR_REJECTED_INDICES)
+    + len(HOLODECK_REJECTED_INDICES)
+)
 
 
 @pytest.fixture(autouse=True)
@@ -280,8 +311,8 @@ def _assert_scene_sampler_projection_summary(projection: dict[str, object]) -> N
         "blocked_source_count": 0,
         "complete_source_count": 2,
         "blocked_row_count": 0,
-        "rejected_row_count": 75,
-        "blocked_or_rejected_row_count": 75,
+        "rejected_row_count": TOTAL_REJECTED_ROW_COUNT,
+        "blocked_or_rejected_row_count": TOTAL_REJECTED_ROW_COUNT,
         "remaining_sample_count": 20,
     }
 
@@ -332,9 +363,15 @@ def _assert_rejected_ithor_projection_source(source_projection: dict[str, object
     assert all(
         row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
     )
+    assert {
+        row["scene_index"]
+        for row in source_projection["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == {401, 402, 403, 404, 406, 407, 408, 411, 412}
     assert all(
         row["failure_class"] == "map_actionability_failure"
         for row in source_projection["blocked_rows"]
+        if row["scene_index"] not in {401, 402, 403, 404, 406, 407, 408, 411, 412}
     )
 
 
@@ -454,7 +491,11 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
     assert ithor["eval_status"] == "partial_or_blocked"
     assert ithor["eval_ready_count"] == 0
     assert {row["scene_index"] for row in ithor["blocked_rows"]} == ITHOR_REJECTED_INDICES
-    assert all(row["failure_class"] == "map_actionability_failure" for row in ithor["blocked_rows"])
+    assert {
+        row["scene_index"]
+        for row in ithor["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == {401, 402, 403, 404, 406, 407, 408, 411, 412}
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["ui_status"] == "not_visible"
@@ -521,10 +562,10 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     assert report["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert report["summary"] == {
         "source_count": 4,
-        "candidate_count": 96,
+        "candidate_count": 20 + TOTAL_REJECTED_ROW_COUNT + 1,
         "ready_candidate_count": 20,
         "blocked_candidate_count": 1,
-        "rejected_candidate_count": 75,
+        "rejected_candidate_count": TOTAL_REJECTED_ROW_COUNT,
         "ui_ready_count": 6,
         "ui_needed_count": 6,
         "eval_ready_count": 20,
@@ -1210,7 +1251,7 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
     assert report["probe_mode"] == "no_download_no_backend_no_vlm"
     assert report["summary"]["admitted_count"] == 20
     assert report["summary"]["blocked_count"] == 3
-    assert report["summary"]["rejected_count"] == 75
+    assert report["summary"]["rejected_count"] == TOTAL_REJECTED_ROW_COUNT
     assert report["summary"]["missing_gate_counts"]["source_asset_available"] == 3
     assert report["summary"]["missing_gate_counts"]["preview_metadata"] == 3
     procthor = report["sources"]["procthor-10k-val"]

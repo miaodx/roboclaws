@@ -1322,6 +1322,9 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
         if lanes
         else rejected_reason or "alias_preserved_not_selected"
     )
+    failure_class = str((metadata or {}).get("failure_class") or "")
+    if rejected_reason and not failure_class:
+        failure_class = "map_actionability_failure"
     return SceneSamplerRow(
         scene_family=_family_split(source)[0],
         scene_split=_family_split(source)[1],
@@ -1342,7 +1345,7 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
         preview_assets=_ready_row_preview_assets(source=source, scene_index=scene_index),
         selected_reason=selected_reason,
         blocked_reason=rejected_reason,
-        failure_class="map_actionability_failure" if rejected_reason else "",
+        failure_class=failure_class,
         quality_score=float((metadata or {}).get("quality_score") or _quality_score(preview)),
         coverage_score=float(
             (metadata or {}).get("coverage_score")
