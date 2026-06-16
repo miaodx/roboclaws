@@ -710,6 +710,13 @@ logs before choosing the next slice.
   Proof: full cleanup report contract test file, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-16: Raw-FPV, model-declared observation, camera-labeler, advisory,
+  and private-evaluation report sections moved into `report_sections_agent.py`.
+  Metric: `report.py` 4051 -> 3820 lines while `report_sections_agent.py`
+  remains under the 800-line target; Ruff complexity stayed at 0 and oversized
+  modules stayed at 62. Proof: full cleanup report contract test file, ruff,
+  format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
