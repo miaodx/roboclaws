@@ -99,6 +99,9 @@ def render_report(
         ("Manipulation", _yes_no(navigation.get("manipulation_supported"))),
         ("Waypoint evidence", str(navigation.get("navigation_waypoint_count") or 0)),
         ("Robot views", str(navigation.get("robot_view_evidence_status") or "")),
+        ("Map-scene alignment", str(readiness.get("readiness_alignment_status") or "")),
+        ("Map-scene transform", str(readiness.get("map12_to_b1_usd_transform_status") or "")),
+        ("Residual evidence", _residual_summary(readiness)),
     ]
     validation_rows = [
         ("navigation contract", navigation_errors),
@@ -304,7 +307,8 @@ def render_report(
   <div class="notice">
     This report proves local pose-driven robot-view navigation evidence only. It does not
     prove Nav2 planner parity, physical robot execution, semantic USD object binding, or
-    pick/place manipulation readiness.
+    pick/place manipulation readiness. Map-scene alignment is verified only when reviewed
+    correspondence residual evidence is attached; the bbox overlay is a known-poor search seed.
   </div>
   <h2>Waypoint Evidence</h2>
   {"".join(waypoint_cards) if waypoint_cards else "<p>No waypoint evidence was recorded.</p>"}
@@ -383,6 +387,19 @@ def _validation_errors(payload: dict[str, Any]) -> list[str]:
     validation = payload.get("validation") if isinstance(payload.get("validation"), dict) else {}
     errors = validation.get("errors") if isinstance(validation.get("errors"), list) else []
     return [str(item) for item in errors]
+
+
+def _residual_summary(readiness: dict[str, Any]) -> str:
+    residual = readiness.get("residual_evidence")
+    if not isinstance(residual, dict):
+        return ""
+    status = str(residual.get("status") or "not_available")
+    count = int(residual.get("matched_anchor_count") or 0)
+    mean = residual.get("mean_residual_m")
+    max_value = residual.get("max_residual_m")
+    if status != "available":
+        return f"{status}, anchors={count}"
+    return f"{status}, anchors={count}, mean={mean} m, max={max_value} m"
 
 
 def _badge(label: str, value: str) -> str:
