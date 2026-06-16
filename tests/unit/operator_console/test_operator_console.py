@@ -156,12 +156,66 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     assert not any(item.startswith("relocation_count=") for item in open_ended)
     assert not any(item.startswith("generated_mess_count=") for item in open_ended)
 
+    default_open_ended = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1-open-ended-default",
+        intent="open-ended",
+    )
+    assert not any(item.startswith("intent=") for item in default_open_ended)
+    assert not any(item.startswith("preset=") for item in default_open_ended)
+    assert "prompt=在这个场景中完成开放性导航任务，并报告你看到的证据。" in default_open_ended
+
     disabled = get_selection(AGIBOT_CODEX_CLEANUP)
     with pytest.raises(ConsoleLaunchError, match="cannot accept a custom prompt"):
         build_launch_argv(disabled, root=tmp_path, run_id="run-2", prompt="custom")
 
     with pytest.raises(ConsoleLaunchError, match="unsupported route parameter"):
         build_launch_argv(route, root=tmp_path, run_id="run-3", overrides={"shell": "true"})
+
+
+def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
+    tmp_path: Path,
+) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/prompt-preview",
+            method="POST",
+            data=json.dumps(
+                {
+                    "world_id": "molmospaces/val_0",
+                    "backend_id": "mujoco",
+                    "intent_id": "cleanup",
+                    "agent_engine_id": "codex-cli",
+                    "provider_profile": "codex-env",
+                    "evidence_lane": "world-oracle-labels",
+                    "scenario_setup": "relocate-cleanup-related-objects",
+                    "prompt": "只收拾桌面上的杯子",
+                    "overrides": {"relocation_count": "5"},
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["operator_prompt"] == "只收拾桌面上的杯子"
+    assert payload["source"] == "household-cleanup"
+    assert payload["intent"] == "cleanup"
+    assert payload["prompt_mode"] == "full"
+    assert "This run is surface=household-world intent=cleanup" in payload["agent_kickoff_prompt"]
+    assert "只收拾桌面上的杯子" in payload["agent_kickoff_prompt"]
+    assert "metric_map.inspection_waypoints" in payload["agent_kickoff_prompt"]
+    assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
 
 
 def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blocking(

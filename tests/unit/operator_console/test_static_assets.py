@@ -43,6 +43,10 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'class="setup-panel"',
     'class="state-rail"',
     'id="prompt-label"',
+    'id="prompt-preview-panel"',
+    'id="prompt-preview-text"',
+    'id="agent-prompt-state"',
+    "Agent Prompt",
     "Scenario seed for reproducible runs",
     "Baseline does not relocate objects",
     'id="scenario-setup-input"',
@@ -142,6 +146,12 @@ ROUTE_FIELD_APP_REQUIRED = (
     "return leftMolmo ? 1 : -1",
     "payload.runtime",
     "/api/runtime/tasks",
+    "/api/prompt-preview",
+    "refreshPromptPreview",
+    "renderAgentPromptState",
+    "agent_kickoff_prompt",
+    "wrapper_notes",
+    "effectiveLaunchPromptText",
     "renderBackgroundTasks",
     "No blocking background resources detected.",
     "background_blockers",
@@ -353,7 +363,7 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'panels.add("chase")' in app
     assert 'panels.add("blank-chase")' in app
     assert "No chase frame yet" in app
-    assert "header-layout-20260615" in html
+    assert "prompt-preview-20260616" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
     assert '"chase topdown"' in css
@@ -463,8 +473,8 @@ def test_static_app_keeps_long_run_header_within_fixed_top_bar() -> None:
         .split("\n  }", 1)[0]
     )
 
-    assert 'href="/styles.css?v=header-layout-20260615"' in html
-    assert 'src="/app.js?v=header-layout-20260615"' in html
+    assert 'href="/styles.css?v=prompt-preview-20260616"' in html
+    assert 'src="/app.js?v=prompt-preview-20260616"' in html
     assert ".run-meta {\n  display: flex;" in css
     assert "flex-wrap: nowrap;" in css
     assert ".run-meta > *" in css
