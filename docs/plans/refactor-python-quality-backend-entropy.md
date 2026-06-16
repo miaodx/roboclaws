@@ -26,9 +26,9 @@ agent/perception section split:
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
-- `roboclaws/household/realworld_contract.py` is down to 5095 lines after the
-  projection, agent-view boundary, visual-candidate, and runtime-map contract
-  helper splits, but remains a P1 hard-ceiling candidate.
+- `roboclaws/household/realworld_contract.py` is down to 4930 lines after the
+  projection, agent-view boundary, visual-candidate, runtime-map contract, and
+  done-readiness helper splits, but remains a P1 hard-ceiling candidate.
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is down
   to 4900 lines after the report renderer split, but remains a P1
   hard-ceiling candidate.

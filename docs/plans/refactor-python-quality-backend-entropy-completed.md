@@ -732,6 +732,13 @@ logs before choosing the next slice.
   focused Agibot contract rehearsal test file, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-16: Realworld cleanup done-readiness blocker and policy helpers
+  moved into `realworld_done_readiness.py`, keeping `RealWorldCleanupContract`
+  as the public facade. Metric: `realworld_contract.py` 5095 -> 4930 lines;
+  Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
+  realworld contract and MCP server contract test files, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
