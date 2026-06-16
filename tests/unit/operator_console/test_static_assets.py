@@ -197,8 +197,12 @@ def test_static_app_has_route_specific_field_groups() -> None:
 
     setup_html = html.split('<aside class="setup-panel">', 1)[1].split("</aside>", 1)[0]
     state_rail_html = html.split('<aside class="state-rail">', 1)[1].split("</aside>", 1)[0]
+    top_bar_html = html.split('<header class="top-run-bar">', 1)[1].split("</header>", 1)[0]
+    workspace_tabs_html = html.split('<nav class="view-modes"', 1)[1].split("</nav>", 1)[0]
     assert "Operator Input" in setup_html
     assert "Operator Input" not in state_rail_html
+    assert 'data-view="tasks"' in top_bar_html
+    assert 'data-view="tasks"' not in workspace_tabs_html
 
 
 def test_static_app_does_not_short_circuit_context_json_readiness() -> None:
