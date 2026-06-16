@@ -893,6 +893,16 @@ logs before choosing the next slice.
   realworld contract and MCP server contract tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: Visual-candidate registration/resolution lifecycle moved from
+  `realworld_contract.py` into `realworld_visual_candidate_lifecycle.py`,
+  covering normalization, match resolution, declaration payloads,
+  resolved/unresolved detection materialization, visual-evidence error payloads,
+  and handle actionability delegates. Metric: `realworld_contract.py` 4410 ->
+  3888 lines, new lifecycle owner 737 lines, declaration owner 345 lines, and
+  `realworld_visual_candidates.py` 627 lines; ratchet remains 11 complexity
+  rows and 66 oversized modules. Proof: realworld contract and MCP server
+  contract tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -922,6 +932,11 @@ logs before choosing the next slice.
   contract facade starts rebuilding declaration inputs, invalid-candidate
   responses, camera-label producer failure responses, or model-declared
   observation response packets directly.
+- Visual-candidate registration/resolution lifecycle is owned by
+  `realworld_visual_candidate_lifecycle.py`; reopen only if the realworld
+  contract facade starts rebuilding normalization, match resolution,
+  declaration payloads, resolved/unresolved detection materialization,
+  visual-evidence error payloads, or handle actionability directly.
 - Planner manipulation probe runtime diagnostics report panels are owned by
   `report_sections_probe_runtime.py`; reopen only if `report.py` starts
   rebuilding Runtime Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache,
