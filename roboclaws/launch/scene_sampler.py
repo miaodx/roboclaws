@@ -386,7 +386,7 @@ def eval_sample_payload(row: SceneSamplerRow) -> dict[str, Any]:
         "preset": "map-build",
         "world": row.world_id,
         "backend": row.backend,
-        "evidence_lane": "world-oracle-labels",
+        "evidence_lane": "world-public-labels",
         "camera_labeler": "not_applicable",
         "scenario_setup": "baseline",
         "seed": 7,
@@ -1488,7 +1488,7 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
 def _eval_sample_launch_overrides(row: SceneSamplerRow) -> dict[str, Any]:
     overrides: dict[str, Any] = {
         "agent_engine": "direct-runner",
-        "evidence_lane": "world-oracle-labels",
+        "evidence_lane": "world-public-labels",
         "seed": 7,
         "scenario_setup": "baseline",
         "scene_source": row.scene_source,

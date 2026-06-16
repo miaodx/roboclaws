@@ -373,7 +373,7 @@ def test_legacy_molmospaces_alias_worlds_remain_launchable() -> None:
                 "backend=mujoco",
                 "preset=map-build",
                 "agent_engine=direct-runner",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
             ]
         )
 
@@ -392,7 +392,7 @@ def test_source_aware_candidate_worlds_are_launchable_but_not_default_visible() 
             "backend=mujoco",
             "preset=map-build",
             "agent_engine=direct-runner",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
 
