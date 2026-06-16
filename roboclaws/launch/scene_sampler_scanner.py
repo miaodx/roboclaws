@@ -11,6 +11,7 @@ _SOURCE_PREP_ACTIONS = {
     "complete": "none",
     "ready_for_scanner": "run_scanner_admission",
     "rejected_exhausted": "do_not_scan_without_new_human_curation",
+    "blocked_prefilter_inconclusive": "run_scene_only_prefilter_or_stop",
     "blocked_molmospaces_module": "install_repo_dev_runtime",
     "blocked_scene_root": "configure_or_install_molmospaces_scene_root",
     "blocked_missing_resources": "run_manual_source_prep",
@@ -270,6 +271,10 @@ def scanner_execution_candidate(
         "candidate_file": admission.get("candidate_file", {}),
         "primary_path": install_candidate.get("primary_path", ""),
         "path_status": install_candidate.get("path_status", ""),
+        "prefilter_status": install_candidate.get("prefilter_status", ""),
+        "prefilter_reason": install_candidate.get("prefilter_reason", ""),
+        "prefilter_score": int(install_candidate.get("prefilter_score") or 0),
+        "cheap_room_count": int(install_candidate.get("cheap_room_count") or 0),
         "install_command": install_candidate.get("install_command", ""),
         "preview_command": preview_scanner_command(world_id),
         "map_build_product_smoke_command": map_build_product_smoke_command(world_id),
@@ -340,12 +345,14 @@ def next_flow_next_action(
     selection_action = str(selection_source.get("next_action") or "")
     if selection_action == "expand_candidate_range":
         return "expand_candidate_range"
+    prep_action = source_prep_next_action(str(prep_source.get("prep_status") or ""))
+    if prep_action == "run_scene_only_prefilter_or_stop":
+        return prep_action
+    if prep_action != "inspect_source_prep":
+        return prep_action
     profile_action = str((candidate_profile_source or {}).get("next_action") or "")
     if profile_action == "metadata_first_human_curation":
         return "metadata_first_human_curation"
-    prep_action = source_prep_next_action(str(prep_source.get("prep_status") or ""))
-    if prep_action != "inspect_source_prep":
-        return prep_action
     if selection_action:
         return selection_action
     return "inspect_next_flow_worklist"
@@ -419,6 +426,7 @@ def next_flow_artifact_paths(*, output_dir: Path | None) -> dict[str, str]:
     scanner_dir = Path("output/scene-sampler-scanner")
     return {
         "readiness_output_dir": str(base),
+        "scene_prefilter": str(base / "scene_sampler_scene_prefilter.json"),
         "source_prep": str(base / "scene_sampler_source_prep.json"),
         "scanner_execution_plan": str(base / "scene_sampler_scanner_execution_plan.json"),
         "next_flow_worklist": str(base / "scene_sampler_next_flow_worklist.json"),
@@ -441,7 +449,7 @@ def next_flow_recommended_commands(
     if next_action == "metadata_first_human_curation":
         return [
             {
-                "name": "refresh_metadata_profile",
+                "name": "refresh_scene_only_prefilter",
                 "command": (
                     ".venv/bin/python scripts/operator_console/"
                     "export_scene_sampler_readiness.py "
@@ -451,18 +459,43 @@ def next_flow_recommended_commands(
                 "execution_policy": "no_download_no_backend_no_vlm_gate",
             },
             {
-                "name": "inspect_source_index_map",
+                "name": "inspect_scene_prefilter",
                 "command": (
                     ".venv/bin/python - <<'PY'\n"
                     "import json\n"
                     "from pathlib import Path\n"
-                    f"path = Path({artifact_paths['readiness_output_dir']!r})"
-                    " / 'scene_sampler_candidate_profile.json'\n"
+                    f"path = Path({artifact_paths['scene_prefilter']!r})\n"
                     "payload = json.loads(path.read_text())\n"
                     f"print(json.dumps(payload['sources'][{source!r}], indent=2))\n"
                     "PY"
                 ),
-                "execution_policy": "read_only_profile_inspection",
+                "execution_policy": "read_only_prefilter_inspection",
+            },
+        ]
+    if next_action == "run_scene_only_prefilter_or_stop":
+        return [
+            {
+                "name": "refresh_scene_only_prefilter",
+                "command": (
+                    ".venv/bin/python scripts/operator_console/"
+                    "export_scene_sampler_readiness.py "
+                    f"--output-dir {_quote_artifact_path(artifact_paths, 'readiness_output_dir')} "
+                    f"--candidate-range {shlex.quote(candidate_range)} --no-generated-eval"
+                ),
+                "execution_policy": "no_download_no_backend_no_vlm_gate",
+            },
+            {
+                "name": "inspect_prefilter_stop_reason",
+                "command": (
+                    ".venv/bin/python - <<'PY'\n"
+                    "import json\n"
+                    "from pathlib import Path\n"
+                    f"path = Path({artifact_paths['scene_prefilter']!r})\n"
+                    "payload = json.loads(path.read_text())\n"
+                    f"print(json.dumps(payload['sources'][{source!r}], indent=2))\n"
+                    "PY"
+                ),
+                "execution_policy": "read_only_prefilter_inspection",
             },
         ]
     prep_base = (
@@ -626,6 +659,18 @@ def _next_flow_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
             source.get("metadata_worklist_candidate_count") or 0
         ),
         "metadata_worklist_world_ids": source.get("metadata_worklist_world_ids") or [],
+        "scene_prefilter_status": source.get("scene_prefilter_status", ""),
+        "scene_prefilter_candidate_count": int(source.get("scene_prefilter_candidate_count") or 0),
+        "scene_prefilter_high_confidence_candidate_count": int(
+            source.get("scene_prefilter_high_confidence_candidate_count") or 0
+        ),
+        "scene_prefilter_expensive_proof_candidate_count": int(
+            source.get("scene_prefilter_expensive_proof_candidate_count") or 0
+        ),
+        "scene_prefilter_expensive_proof_world_ids": source.get(
+            "scene_prefilter_expensive_proof_world_ids"
+        )
+        or [],
         "scanner_ready_candidate_count": int(source.get("scanner_ready_candidate_count") or 0),
         "next_scan_world_ids": source.get("next_scan_world_ids") or [],
         "recommended_candidate_range": source.get("recommended_candidate_range", ""),
@@ -673,7 +718,7 @@ def map_build_product_smoke_command(world_id: str) -> str:
         "just run::surface surface=household-world "
         f"world={world_id} "
         "backend=mujoco preset=map-build agent_engine=direct-runner "
-        "evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline "
+        "evidence_lane=world-public-labels seed=7 scenario_setup=baseline "
         f"output_dir=output/scene-sampler-scanner/product-smoke/{world_id_slug(world_id)}"
     )
 
