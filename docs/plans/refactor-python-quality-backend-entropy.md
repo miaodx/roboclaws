@@ -18,18 +18,19 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest verified scene-camera
-render-domain diagnostics split:
+--summary --top 40` on 2026-06-16, after the latest verified apple-to-apple
+report renderer split:
 
 - 0 Ruff complexity violations.
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
-- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is 5332
-  lines and is currently the largest P1 hard-ceiling candidate.
 - `roboclaws/household/realworld_contract.py` is down to 5212 lines after the
   projection, agent-view boundary, and visual-candidate helper splits, but
   remains a P1 hard-ceiling candidate.
+- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is down
+  to 4900 lines after the report renderer split, but remains a P1
+  hard-ceiling candidate.
 - `roboclaws/household/scene_camera_comparison.py` is down to 4693 lines after
   the first USD render-contract, image-metrics, lighting-diagnostics, and
   render-domain diagnostics splits, but remains a P1 hard-ceiling candidate.
@@ -165,7 +166,8 @@ USD render-contract, image-metrics, and lighting-diagnostics helper splits, but
 remains above the hard ceiling.
 Current metric: `scene_camera_comparison.py` is down to 4693 lines after the
 render-domain diagnostics split; `run_robot_camera_apple2apple_comparison.py`
-is now the larger visual-comparison hard-ceiling file at 5332 lines.
+is down to 4900 lines after the report renderer split. Both remain P1
+hard-ceiling files.
 
 ### E: Backend Evidence And Live Runtime Normalization
 

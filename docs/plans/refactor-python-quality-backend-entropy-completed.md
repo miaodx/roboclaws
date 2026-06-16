@@ -675,6 +675,20 @@ logs before choosing the next slice.
   focused apple-to-apple render-contract tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-16: Scene-camera render source references moved from
+  `scene_camera_render_domain.py` into `scene_camera_render_sources.py`,
+  keeping the new render-domain helper under the 800-line target. Metric:
+  `scene_camera_render_domain.py` 873 -> 798 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: full scene-camera contract
+  tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-16: Robot-camera apple-to-apple HTML report rendering moved into
+  `robot_camera_apple2apple_report.py`, while the runner keeps private aliases
+  for current path-loaded tests. Metric:
+  `run_robot_camera_apple2apple_comparison.py` 5332 -> 4900 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: full
+  apple-to-apple unit test file, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
