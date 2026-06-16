@@ -285,6 +285,103 @@ def test_live_surface_product_waits_for_detached_codex_status(
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0310/seed-7")
 
 
+def test_live_surface_product_recovers_completed_artifact_after_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    clock = {"now": 0.0}
+    poll_count = {"value": 0}
+    timeout_run_dir: Path | None = None
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    def fake_sleep(seconds: float) -> None:
+        clock["now"] += seconds
+        poll_count["value"] += 1
+        if poll_count["value"] == 2 and timeout_run_dir is not None:
+            _write_product_artifacts(timeout_run_dir, completion_status="success")
+            (timeout_run_dir / "run_result.json").write_text(
+                json.dumps(_run_result(timeout_run_dir, completion_status="success")) + "\n"
+            )
+            (timeout_run_dir / "live_status.json").write_text(
+                '{"phase": "finished", "exit_status": 0}\n'
+            )
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0311" / "seed-7"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "live_status.json").write_text('{"phase": "running"}\n')
+        nonlocal timeout_run_dir
+        timeout_run_dir = run_dir
+        raise live_runtime.subprocess.TimeoutExpired(
+            cmd=command,
+            timeout=5.0,
+            output=f"Artifacts: {run_dir}\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
+
+    result = live_runtime.run_live_surface_product(
+        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=5.0)
+    )
+
+    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0311/seed-7")
+    record = json.loads((tmp_path / "trial-0000" / "live_eval_command.json").read_text())
+    assert record["returncode"] == "timeout_after_completion"
+    assert record["timeout_completion_grace_s"] == 30.0
+
+
+def test_live_surface_product_recovers_after_detached_wait_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    clock = {"now": 0.0}
+    sleep_count = {"value": 0}
+    detached_run_dir: Path | None = None
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0312" / "seed-7"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
+        nonlocal detached_run_dir
+        detached_run_dir = run_dir
+        return _completed_process(returncode=0)
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    def fake_sleep(seconds: float) -> None:
+        clock["now"] += seconds
+        sleep_count["value"] += 1
+        if sleep_count["value"] == 3 and detached_run_dir is not None:
+            _write_product_artifacts(detached_run_dir, completion_status="success")
+            (detached_run_dir / "run_result.json").write_text(
+                json.dumps(_run_result(detached_run_dir, completion_status="success")) + "\n"
+            )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
+
+    result = live_runtime.run_live_surface_product(
+        **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+    )
+
+    assert result["eval_effective_run_dir"].endswith("surface-run/0615_0312/seed-7")
+
+
 def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
     seen_kwargs: list[dict[str, Any]] = []
 
@@ -316,6 +413,46 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
     assert plan.agent_engine == "codex-cli"
     assert plan.backend == "mujoco"
     assert plan.mode == "smoke"
+
+
+def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Path) -> None:
+    seen_kwargs: list[dict[str, Any]] = []
+
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        seen_kwargs.append(kwargs)
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        return _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+        )
+
+    run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="live-open-task-command",
+        agent_engine="codex-cli",
+        provider_profile="codex-env",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    command = live_surface_command(seen_kwargs[0], output_dir=tmp_path / "surface-run")
+    assert "surface=household-world" in command
+    assert "agent_engine=codex-cli" in command
+    assert "provider_profile=codex-env" in command
+    assert "run_preset=smoke" in command
+    assert not any(item.startswith("preset=") for item in command)
+    assert any(item.startswith("prompt=") for item in command)
+    plan = resolve_surface_launch(command[5:])
+    assert plan.intent == "open-ended"
+    assert plan.preset is None
 
 
 def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:

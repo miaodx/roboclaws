@@ -1,9 +1,9 @@
 ---
 plan_scope: non-cleanup-eval-support
-status: PLANNED
+status: IMPLEMENTED
 created: 2026-06-15
-last_reviewed: 2026-06-15
-implementation_allowed: false
+last_reviewed: 2026-06-16
+implementation_allowed: true
 source:
   - user request to support non-cleanup eval coverage
   - intuitive-reduce-entropy plan entropy loop
@@ -359,6 +359,8 @@ Stop condition:
 
 ## Verification
 
+Implemented 2026-06-16.
+
 Deterministic:
 
 ```bash
@@ -387,6 +389,29 @@ Required local live proof:
 ```bash
 just agent::eval suite=open_ended_goals budget=smoke agent_engine=codex-cli provider_profile=codex-env live_execution=run live_timeout_s=120
 ```
+
+Final evidence:
+
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals tests/contract/dev_tools/test_eval_just_recipe.py`
+  passed with 64 tests.
+- `just agent::eval suite=open_ended_goals budget=smoke stamp=flow-final-open-ended-goals`
+  passed: 1/1 sample, no blocked/failed results.
+- `just agent::eval suite=map_build_consumer budget=smoke stamp=flow-final-map-build-consumer`
+  passed: 3/3 samples, no blocked/failed results.
+- `just agent::eval suite=scene_sampler_stress budget=smoke stamp=flow-final-scene-sampler-stress`
+  passed: 20/20 samples, no blocked/failed results.
+- `just agent::eval recommend intent=open-ended budget=focused output_dir=output/eval-harness/flow-final-recommend-open-ended`
+  selected the open-ended contract tests, `open_ended_goals` suite, and open-task live rows.
+- `just agent::eval recommend preset=map-build budget=focused output_dir=output/eval-harness/flow-final-recommend-map-build`
+  selected map-build consumer, direct map-build, and runtime-prior consumer rows.
+- `just agent::eval recommend intent=planner-proof budget=focused output_dir=output/eval-harness/flow-final-recommend-planner-proof`
+  selected `planner-proof-dry-run-product`.
+- `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run output_dir=output/eval-harness/flow-final-planner-proof-dry-run`
+  passed and wrote `proof_bundle/proof_bundle_run_manifest.json`.
+- `just agent::eval suite=open_ended_goals budget=smoke agent_engine=codex-cli provider_profile=codex-env live_execution=run live_timeout_s=180 stamp=flow-open-ended-codex-live-retry3`
+  passed: 1/1 live Codex open-ended result, no blocked/failed results. The 120s
+  proof target was expanded to 180s because the real Codex open-ended search
+  completed after a full public-waypoint sweep.
 
 ## Parked Items
 

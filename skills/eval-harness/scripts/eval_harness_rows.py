@@ -152,8 +152,30 @@ def candidate_rows(
                 stamp="map-build-consumer-eval-suite",
             ),
             axes={"intent": "eval-suite", "suite": "map_build_consumer"},
-            reason="Map-build, actionability, or open-ended changes need the map consumer suite.",
-            rule_ids=("map_build", "open_ended"),
+            reason=(
+                "Map-build and actionability changes need the map consumer suite and "
+                "runtime-map-prior flow."
+            ),
+            rule_ids=("map_build",),
+            requirements=("just", "python_env"),
+            expense="deterministic",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="open-ended-goals-eval-suite",
+            row_kind="eval_suite",
+            command=_eval_suite_command(
+                suite="open_ended_goals",
+                budget="smoke",
+                output_root=eval_output_root,
+                stamp="open-ended-goals-eval-suite",
+            ),
+            axes={"intent": "eval-suite", "suite": "open_ended_goals"},
+            reason=(
+                "Open-ended household goal changes need the dedicated no-preset "
+                "open-task capability suite."
+            ),
+            rule_ids=("open_ended",),
             requirements=("just", "python_env"),
             expense="deterministic",
             row_dir=row_dir,
@@ -197,7 +219,7 @@ def candidate_rows(
             row_id="codex-open-task-live-eval",
             row_kind="live_agent_eval",
             command=_eval_suite_command(
-                suite="map_build_consumer",
+                suite="open_ended_goals",
                 budget="smoke",
                 output_root=eval_output_root,
                 stamp="codex-open-task-live-eval",
@@ -276,7 +298,7 @@ def candidate_rows(
             row_id="openai-agents-sdk-open-task-live-eval",
             row_kind="live_agent_eval",
             command=_eval_suite_command(
-                suite="cleanup_capability",
+                suite="open_ended_goals",
                 budget="smoke",
                 output_root=eval_output_root,
                 stamp="openai-agents-sdk-open-task-live-eval",
@@ -300,6 +322,35 @@ def candidate_rows(
             rule_ids=("agent_sdk", "open_ended"),
             requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
             expense="live-agent",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="planner-proof-dry-run-product",
+            row_kind="product_run",
+            command=[
+                "just",
+                "run::surface",
+                "surface=planner-proof",
+                "world=planner-proof/default",
+                f"backend={DEFAULT_BACKEND}",
+                "intent=planner-proof",
+                "agent_engine=direct-runner",
+                "mode=dry-run",
+                f"output_dir={row_dir / 'planner-proof-dry-run-product' / 'run'}",
+            ],
+            axes={
+                "agent_engine": "direct-runner",
+                "intent": "planner-proof",
+                "backend": DEFAULT_BACKEND,
+                "world": "planner-proof/default",
+            },
+            reason=(
+                "Planner-proof changes need the current public planner-proof dry-run "
+                "proof row; lower-level harness recipes remain private mechanics."
+            ),
+            rule_ids=("planner_proof",),
+            requirements=("just", "python_env"),
+            expense="local-sim",
             row_dir=row_dir,
         ),
         _row(

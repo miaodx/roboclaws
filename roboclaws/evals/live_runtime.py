@@ -29,6 +29,7 @@ from roboclaws.launch.intents import TASK_INTENT_SPECS
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ProductRun = Callable[..., dict[str, Any]]
 DEFAULT_DETACHED_LIVE_TIMEOUT_S = 3600.0
+DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S = 30.0
 
 
 @dataclass(frozen=True)
@@ -138,14 +139,35 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             timeout=kwargs.get("live_timeout_s"),
         )
     except subprocess.TimeoutExpired as exc:
+        sample_run_dir = discover_live_surface_run_dir(
+            kwargs,
+            output_dir=sample_run_root,
+            fallback_run_dir=sample_run_dir,
+            stdout=exc.stdout or "",
+        )
+        sample_run_dir = wait_for_timed_out_live_surface_artifact(
+            kwargs,
+            output_dir=sample_run_root,
+            effective_run_dir=sample_run_dir,
+        )
         record.update(
             {
                 "returncode": "timeout",
                 "stdout": exc.stdout or "",
                 "stderr": exc.stderr or "",
                 "timeout_s": kwargs.get("live_timeout_s"),
+                "timeout_completion_grace_s": live_timeout_completion_grace_s(),
+                "effective_run_dir": str(sample_run_dir),
+                "live_status": _load_json(sample_run_dir / "live_status.json"),
             }
         )
+        run_result_path = sample_run_dir / "run_result.json"
+        run_result = _load_json(run_result_path)
+        if run_result:
+            record["returncode"] = "timeout_after_completion"
+            _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
+            run_result["eval_effective_run_dir"] = str(sample_run_dir)
+            return run_result
         _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
         raise TimeoutError(
             f"live eval trial timed out after {kwargs.get('live_timeout_s')}s"
@@ -309,9 +331,55 @@ def wait_for_live_surface_completion(
         status = _load_json(effective_run_dir / "live_status.json")
         _raise_for_terminal_live_status(effective_run_dir, status)
         time.sleep(max(poll_s, 0.05))
+    effective_run_dir = wait_for_timed_out_live_surface_artifact(
+        kwargs,
+        output_dir=output_dir,
+        effective_run_dir=effective_run_dir,
+        poll_s=poll_s,
+    )
+    if (effective_run_dir / "run_result.json").is_file():
+        return effective_run_dir
     raise TimeoutError(
         f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
     )
+
+
+def wait_for_timed_out_live_surface_artifact(
+    kwargs: dict[str, Any],
+    *,
+    output_dir: Path,
+    effective_run_dir: Path,
+    poll_s: float = 1.0,
+) -> Path:
+    """Give detached routes a short grace window after subprocess timeout."""
+
+    if not _live_surface_route_can_detach(kwargs):
+        return effective_run_dir
+    deadline = time.monotonic() + live_timeout_completion_grace_s()
+    while time.monotonic() <= deadline:
+        effective_run_dir = discover_live_surface_run_dir(
+            kwargs,
+            output_dir=output_dir,
+            fallback_run_dir=effective_run_dir,
+        )
+        if (effective_run_dir / "run_result.json").is_file():
+            return effective_run_dir
+        time.sleep(max(poll_s, 0.05))
+    return discover_live_surface_run_dir(
+        kwargs,
+        output_dir=output_dir,
+        fallback_run_dir=effective_run_dir,
+    )
+
+
+def live_timeout_completion_grace_s() -> float:
+    raw = str(os.environ.get("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S") or "").strip()
+    if not raw:
+        return DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S
+    try:
+        return max(float(raw), 0.0)
+    except ValueError:
+        return DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S
 
 
 def live_product_run_kwargs(

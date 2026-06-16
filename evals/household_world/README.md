@@ -7,7 +7,13 @@ the household-world capability. Run the deterministic smoke suite with:
 just agent::eval suite=smoke_regression budget=smoke
 ```
 
-Run the map-build consumer and open-ended artifact-readiness suite with:
+Run the dedicated open-ended household goal suite with:
+
+```bash
+just agent::eval suite=open_ended_goals budget=smoke
+```
+
+Run the map-build consumer suite with:
 
 ```bash
 just agent::eval suite=map_build_consumer budget=smoke
@@ -30,8 +36,8 @@ Run an opt-in live provider route only when local provider/runtime requirements
 are available:
 
 ```bash
-just agent::eval suite=cleanup_capability budget=smoke \
-  agent_engine=openai-agents-sdk provider_profile=codex-env \
+just agent::eval suite=open_ended_goals budget=smoke \
+  agent_engine=codex-cli provider_profile=codex-env \
   live_execution=run live_timeout_s=120
 ```
 

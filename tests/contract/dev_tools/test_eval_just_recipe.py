@@ -120,6 +120,15 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
     ) in " ".join(plan_trace)
 
 
+def test_surface_live_smoke_uses_world_oracle_server_evidence_lane() -> None:
+    recipe = (REPO_ROOT / "just" / "molmo.just").read_text(encoding="utf-8")
+
+    assert 'implementation_evidence_lane="world-oracle-labels"' in recipe
+    assert '--evidence-lane "$implementation_evidence_lane"' in recipe
+    assert '--evidence-lane "$profile"' not in recipe
+    assert '--expect-profile "$implementation_evidence_lane"' in recipe
+
+
 def _trace_agent_eval(*args: str) -> list[str]:
     binary = _just_bin()
     env = os.environ.copy()

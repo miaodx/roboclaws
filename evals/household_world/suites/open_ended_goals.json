@@ -1,0 +1,33 @@
+{
+  "schema": "roboclaws_eval_suite_v1",
+  "suite_id": "household_world.open_ended_goals",
+  "version": "2026-06-15",
+  "capability": "household_world_open_ended_goals",
+  "sample_ids": [
+    "open_ended.drink_seed7"
+  ],
+  "sample_refs": [
+    "evals/household_world/samples/open_ended/drink_seed7.json"
+  ],
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "open_ended"
+  ],
+  "thresholds": {
+    "pass_at_1": 1.0,
+    "private_truth_leak_count": 0,
+    "trajectory_policy_violation_count": 0,
+    "completion_claim_present": true,
+    "artifact_readiness": "ready",
+    "semantic_satisfaction_authoritative": false
+  },
+  "metadata": {
+    "runner_scope": "public no-preset household open-task route",
+    "public_route_shape": "surface=household-world prompt=<goal>",
+    "identity_intent": "open-ended",
+    "live_provider_required": true,
+    "semantic_satisfaction": "advisory"
+  }
+}

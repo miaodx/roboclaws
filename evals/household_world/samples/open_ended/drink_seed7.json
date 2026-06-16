@@ -14,10 +14,12 @@
   "prompt": "我渴了，帮我找些解渴的东西",
   "goal_contract_hash": "unavailable",
   "allowed_agent_engines": [
-    "direct-runner"
+    "direct-runner",
+    "codex-cli"
   ],
   "provider_profiles": [
-    "not_applicable"
+    "not_applicable",
+    "codex-env"
   ],
   "trial_count": 1,
   "required_graders": [

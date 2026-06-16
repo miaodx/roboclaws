@@ -140,6 +140,17 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "id": "planner_proof",
+        "label": "Planner proof",
+        "patterns": (
+            r"planner[-_]proof",
+            r"planner proof",
+            r"surface=planner-proof",
+            r"intent=planner-proof",
+            r"planner_proof",
+        ),
+    },
+    {
         "id": "launch_catalog",
         "label": "Launch catalog or product route",
         "patterns": (
@@ -159,6 +170,7 @@ EXPLICIT_AXIS_SIGNAL_OVERRIDES: tuple[tuple[str, str, str], ...] = (
     ("agent_engine", "openai-agents-sdk", "agent_sdk"),
     ("agent_engine", "codex-cli", "cleanup_skill"),
     ("intent", "open-ended", "open_ended"),
+    ("intent", "planner-proof", "planner_proof"),
     ("preset", "cleanup", "cleanup_skill"),
     ("preset", "map-build", "map_build"),
     ("evidence_lane", "camera-grounded-labels", "visual_grounding"),
@@ -223,13 +235,6 @@ def build_eval_harness(
     output_dir: Path | None = None,
 ) -> dict[str, Any]:
     plan_text, plan_path = _read_plan(plan)
-    if since:
-        diff_files = _changed_files_from_git(since)
-    elif plan is None and not changed_files:
-        diff_files = _changed_files_from_worktree()
-    else:
-        diff_files = []
-    all_changed_files = _dedupe([*diff_files, *changed_files])
     explicit_axes = {
         "agent_engine": _dedupe(agent_engine),
         "provider_profile": _dedupe(provider_profile),
@@ -238,6 +243,13 @@ def build_eval_harness(
         "evidence_lane": _dedupe(evidence_lane),
         "camera_labeler": _dedupe(camera_labeler),
     }
+    if since:
+        diff_files = _changed_files_from_git(since)
+    elif plan is None and not changed_files and not _has_explicit_axes(explicit_axes):
+        diff_files = _changed_files_from_worktree()
+    else:
+        diff_files = []
+    all_changed_files = _dedupe([*diff_files, *changed_files])
     signals = _detect_signals(
         plan_text=plan_text,
         changed_files=all_changed_files,
@@ -412,6 +424,10 @@ def _explicitly_matches(row: dict[str, Any], explicit_axes: dict[str, list[str]]
         if requested_values and axes.get(key) in requested_values:
             return True
     return False
+
+
+def _has_explicit_axes(explicit_axes: dict[str, list[str]]) -> bool:
+    return any(values for values in explicit_axes.values())
 
 
 def _override_signal(signal_id: str, value: str) -> dict[str, Any]:
