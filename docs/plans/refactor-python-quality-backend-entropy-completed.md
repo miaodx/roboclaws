@@ -650,6 +650,14 @@ logs before choosing the next slice.
   Proof: proof-bundle report/checker tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-16: Agent-view forbidden-key checks, cleanup policy trace wrapping,
+  real-robot readiness assembly, and public acceptance normalization moved from
+  `realworld_contract.py` into `realworld_agent_view_contract.py`, with the
+  existing public imports preserved from the contract facade. Metric:
+  `realworld_contract.py` 5637 -> 5556 lines; Ruff complexity stayed at 0 and
+  oversized modules stayed at 62. Proof: focused realworld-contract/report
+  tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

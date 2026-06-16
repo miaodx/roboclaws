@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.household import (
+    realworld_agent_view_contract,
     realworld_contract_init,
     realworld_contract_payloads,
     realworld_contract_projection,
@@ -5241,16 +5242,17 @@ def _target_fixture_from_detection_anchor(detection: dict[str, Any]) -> dict[str
 
 
 def forbidden_agent_view_keys() -> set[str]:
-    return set(_FORBIDDEN_AGENT_VIEW_KEYS)
+    return realworld_agent_view_contract.forbidden_agent_view_keys(_FORBIDDEN_AGENT_VIEW_KEYS)
 
 
 def cleanup_policy_trace_from_events(
     trace_events: list[dict[str, Any]],
     agent_view: dict[str, Any],
 ) -> dict[str, Any]:
-    return _cleanup_policy_trace_from_events(
+    return realworld_agent_view_contract.cleanup_policy_trace_from_events(
         trace_events,
         agent_view,
+        builder=_cleanup_policy_trace_from_events,
         schema=CLEANUP_POLICY_TRACE_SCHEMA,
         minimal_map_mode=MINIMAL_MAP_MODE,
     )
@@ -5262,67 +5264,17 @@ def real_robot_readiness_from_events(
     trace_events: list[dict[str, Any]],
     robot_view_steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
-    policy_view = agent_view.get("policy_view") or {}
-    navigation_backends: dict[str, int] = {}
-    pose_sources: dict[str, int] = {}
-    for raw in trace_events:
-        if raw.get("event") != "response":
-            continue
-        response = raw.get("response") if isinstance(raw.get("response"), dict) else {}
-        backend = response.get("navigation_backend")
-        if backend:
-            navigation_backends[str(backend)] = navigation_backends.get(str(backend), 0) + 1
-        pose_source = response.get("pose_source")
-        if pose_source:
-            pose_sources[str(pose_source)] = pose_sources.get(str(pose_source), 0) + 1
-    report_only_count = sum(
-        1 for step in robot_view_steps if (step.get("views") or {}).get("chase")
+    return realworld_agent_view_contract.real_robot_readiness_from_events(
+        agent_view=agent_view,
+        trace_events=trace_events,
+        robot_view_steps=robot_view_steps,
+        schema=REAL_ROBOT_READINESS_SCHEMA,
+        api_semantic_provenance=API_SEMANTIC_PROVENANCE,
+        sim_costmap_planner=SIM_COSTMAP_PLANNER,
+        map_bundle_fields_present=_map_bundle_fields_present,
+        pose_stamped_waypoints_present=_pose_stamped_waypoints_present,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
     )
-    evidence = {
-        "schema": REAL_ROBOT_READINESS_SCHEMA,
-        "status": "simulation_semantic_not_real_robot_ready",
-        "real_robot_ready": False,
-        "map_bundle_schema": metric_map.get("schema", ""),
-        "map_bundle_fields_present": _map_bundle_fields_present(metric_map),
-        "pose_stamped_waypoints": _pose_stamped_waypoints_present(metric_map),
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
-            and fixture_hints.get("contains_runtime_observations") is False
-        ),
-        "policy_view_chase_excluded": policy_view.get("chase_camera_policy_input") is False,
-        "report_only_simulation_view_count": report_only_count,
-        "report_only_simulation_view_label": "report_only_simulation_view",
-        "navigation_backend_summary": navigation_backends,
-        "pose_source_summary": pose_sources,
-        "semantic_navigation_only": set(navigation_backends)
-        <= {
-            API_SEMANTIC_PROVENANCE,
-            SIM_COSTMAP_PLANNER,
-        },
-        "sim_costmap_route_validation": navigation_backends.get(SIM_COSTMAP_PLANNER, 0) > 0,
-        "physical_navigation_pilot": False,
-        "physical_cleanup_ready": False,
-        "blocked_capabilities": [
-            "nav2_action_backend",
-            "live_ros_graph",
-            "planner_backed_cleanup_primitives",
-        ],
-        "public_contract_note": (
-            "This artifact aligns data boundaries with a real robot contract, but "
-            "semantic simulator navigation remains labelled api_semantic."
-        ),
-    }
-    evidence["readiness_sections_complete"] = bool(
-        evidence["map_bundle_fields_present"]
-        and evidence["pose_stamped_waypoints"]
-        and evidence["static_fixture_semantic_map"]
-        and evidence["policy_view_chase_excluded"]
-        and navigation_backends
-    )
-    _assert_no_forbidden_agent_view_keys(evidence)
-    return evidence
 
 
 def _location_relation(object_id: str, backend: Any) -> str:
@@ -5571,67 +5523,34 @@ def _norm(value: Any) -> str:
 
 
 def _assert_no_forbidden_agent_view_keys(payload: Any) -> None:
-    if isinstance(payload, dict):
-        forbidden = _FORBIDDEN_AGENT_VIEW_KEYS.intersection(payload)
-        if forbidden:
-            raise AssertionError(f"forbidden agent-view keys present: {sorted(forbidden)}")
-        for value in payload.values():
-            _assert_no_forbidden_agent_view_keys(value)
-    elif isinstance(payload, list):
-        for value in payload:
-            _assert_no_forbidden_agent_view_keys(value)
+    realworld_agent_view_contract.assert_no_forbidden_agent_view_keys(
+        payload,
+        _FORBIDDEN_AGENT_VIEW_KEYS,
+    )
 
 
 def _strip_forbidden_agent_view_keys(payload: Any) -> Any:
-    if isinstance(payload, dict):
-        return {
-            key: _strip_forbidden_agent_view_keys(value)
-            for key, value in payload.items()
-            if key not in _FORBIDDEN_AGENT_VIEW_KEYS
-        }
-    if isinstance(payload, list):
-        return [_strip_forbidden_agent_view_keys(value) for value in payload]
-    return payload
+    return realworld_agent_view_contract.strip_forbidden_agent_view_keys(
+        payload,
+        _FORBIDDEN_AGENT_VIEW_KEYS,
+    )
 
 
 def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
-    source = dict(config or {})
-    accepted: dict[str, Any] = {}
-    for key in (
-        "requested_run_size",
-        "required_grounded_cleanup_chains",
-        "required_model_declared_observations",
-    ):
-        value = _positive_int(source.get(key))
-        if value is not None:
-            accepted[key] = value
-    policy = str(source.get("done_readiness_policy") or "").strip()
-    if policy:
-        accepted["done_readiness_policy"] = policy
-    task_intent = str(source.get("task_intent") or "").strip()
-    if task_intent:
-        accepted["task_intent"] = normalize_household_intent(task_intent)
-    _assert_no_forbidden_agent_view_keys(accepted)
-    return accepted
+    return realworld_agent_view_contract.public_acceptance_config(
+        config,
+        normalize_household_intent=normalize_household_intent,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def _public_success_threshold(count: int | None) -> int:
-    if count is None or count <= 0:
-        return 0
-    return max(1, math.ceil(count * 0.70))
+    return realworld_agent_view_contract.public_success_threshold(count)
 
 
 def _positive_int(value: Any) -> int | None:
-    try:
-        result = int(value)
-    except (TypeError, ValueError):
-        return None
-    return result if result > 0 else None
+    return realworld_agent_view_contract.positive_int(value)
 
 
 def _nonnegative_int(value: Any) -> int:
-    try:
-        result = int(value)
-    except (TypeError, ValueError):
-        return 0
-    return max(0, result)
+    return realworld_agent_view_contract.nonnegative_int(value)
