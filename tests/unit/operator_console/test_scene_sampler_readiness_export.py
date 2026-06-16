@@ -292,7 +292,10 @@ def _assert_next_flow(
         "refresh_metadata_profile",
         "inspect_source_index_map",
     ]
-    assert holodeck["blocked_reason_samples"] == ["fewer_than_three_public_navigation_areas"]
+    assert holodeck["blocked_reason_samples"] == [
+        "fewer_than_three_public_navigation_areas",
+        "preview_not_reviewable",
+    ]
     if scanner_execution["sources"]["ithor"]["candidates"]:
         ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
         assert ithor_scanner["world_id"].startswith("molmospaces/ithor/")

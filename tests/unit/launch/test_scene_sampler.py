@@ -57,21 +57,21 @@ ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {
 }
 ITHOR_REJECTED_INDICES = {
     *range(1, 13),
-    209,
-    210,
-    211,
-    212,
+    *range(201, 213),
     301,
     302,
     303,
     305,
     306,
+    307,
     308,
+    309,
     310,
     311,
     312,
     *ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES,
 }
+HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES = {107}
 HOLODECK_REJECTED_INDICES = {
     *range(20),
     22,
@@ -85,22 +85,31 @@ HOLODECK_REJECTED_INDICES = {
     38,
     39,
     47,
+    52,
     67,
     71,
+    95,
     101,
     106,
+    111,
     139,
+    143,
+    151,
     157,
     162,
     173,
     183,
     198,
+    201,
     207,
+    215,
     237,
     238,
+    247,
     256,
     258,
     266,
+    273,
     275,
     280,
     291,
@@ -132,6 +141,7 @@ HOLODECK_REJECTED_INDICES = {
     460,
     476,
     477,
+    *HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES,
 }
 PROCTHOR_10K_REJECTED_COUNT = 3
 PROCTHOR_OBJAVERSE_REJECTED_COUNT = 5
@@ -421,6 +431,11 @@ def _assert_rejected_holodeck_projection_source(source_projection: dict[str, obj
         row["failure_class"] == "map_actionability_failure"
         for row in source_projection["blocked_rows"]
     )
+    assert {
+        row["scene_index"]
+        for row in source_projection["blocked_rows"]
+        if row["blocked_reason"] == "preview_not_reviewable"
+    } == HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
 
 
 def test_scene_sampler_eval_suite_payload_matches_committed_fixture() -> None:
@@ -533,6 +548,11 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
     assert all(
         row["failure_class"] == "map_actionability_failure" for row in holodeck["blocked_rows"]
     )
+    assert {
+        row["scene_index"]
+        for row in holodeck["blocked_rows"]
+        if row["blocked_reason"] == "preview_not_reviewable"
+    } == HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
 
 
 def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
@@ -762,7 +782,7 @@ def test_scene_sampler_selection_gap_marks_ithor_rejected_when_assets_are_visibl
         "ready_for_scanner",
         "blocked_missing_resources",
     }
-    assert len(prep["sources"]["ithor"]["install_candidates"]) == 10
+    assert len(prep["sources"]["ithor"]["install_candidates"]) == 2
     assert all(
         candidate["primary_path"] for candidate in prep["sources"]["ithor"]["install_candidates"]
     )
@@ -780,7 +800,7 @@ def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> Non
     assert report["download_policy"] == "manual_operator_only"
     assert report["summary"]["source_count"] == 4
     assert report["summary"]["metadata_worklist_source_count"] == 2
-    assert report["summary"]["metadata_worklist_candidate_count"] == 20
+    assert report["summary"]["metadata_worklist_candidate_count"] == 12
     assert report["summary"]["next_actions"] == {
         "metadata_first_human_curation": 2,
     }
@@ -791,9 +811,9 @@ def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> Non
     assert ithor["profile_status"] == "metadata_worklist_ready"
     assert ithor["next_action"] == "metadata_first_human_curation"
     assert set(range(1, 13)).issubset(ithor["known_rejected_indices"])
-    assert {209, 210, 211, 303, 305}.issubset(ithor["known_rejected_indices"])
+    assert {201, 208, 209, 210, 211, 303, 305, 307, 309}.issubset(ithor["known_rejected_indices"])
     assert {404, 406, 408, 411}.issubset(ithor["known_rejected_indices"])
-    assert ithor["metadata_worklist_candidate_count"] == 10
+    assert ithor["metadata_worklist_candidate_count"] == 2
     assert all(
         index not in ithor["known_rejected_indices"] for index in ithor["metadata_worklist_indices"]
     )
