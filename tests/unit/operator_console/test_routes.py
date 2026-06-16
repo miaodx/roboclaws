@@ -158,8 +158,16 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
     assert metadata["views"]["chase"]["view"] == "chase_camera"
     assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+    assert metadata["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
+    assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
     assert metadata["views"]["map"]["view"] == "source_map_preview"
-    assert metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
+    assert metadata["views"]["map"]["provenance"] == "raw_map12_preview_png"
+    assert metadata["views"]["topdown"]["view"] == "review_label_topdown"
+    assert metadata["views"]["topdown"]["provenance"] == (
+        "compiled_b1_map12_review_labels_topdown_png"
+    )
+    assert metadata["views"]["topdown"]["review_label_count"] >= 1
     assert metadata["views"]["topdown"]["room_count"] >= 1
     assert metadata["views"]["topdown"]["inspection_waypoint_count"] >= 1
 
@@ -425,7 +433,8 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert b1["default_intent"] == "open-ended"
     assert b1["field_groups"] == ["common", "isaac"]
     assert "grounding" in b1["view_modes"]
-    assert "map_bundle=b1-map12-room-semantics" in b1["argv_preview"]
+    assert "map_bundle=agibot-robot-map-12" in b1["argv_preview"]
+    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1["argv_preview"]
     assert "robot_views=on" in b1["argv_preview"]
 
 
@@ -490,7 +499,8 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     assert not any(item.startswith("preset=") for item in argv)
     assert "backend=isaaclab" in argv
     assert "scenario_setup=baseline" in argv
-    assert "map_bundle=b1-map12-room-semantics" in argv
+    assert "map_bundle=agibot-robot-map-12" in argv
+    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in argv
     assert "robot_views=on" in argv
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"

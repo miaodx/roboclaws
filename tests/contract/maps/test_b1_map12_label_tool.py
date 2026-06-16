@@ -25,7 +25,7 @@ from scripts.maps.render_b1_map12_label_tool import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-MAP_BUNDLE = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics"
+MAP_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_label_tool.py"
 
 
@@ -51,6 +51,11 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
 
     assert packet["schema"] == LABEL_TOOL_PACKET_SCHEMA
     assert packet["draft_manifest_schema"] == LABEL_DRAFT_MANIFEST_SCHEMA
+    assert packet["map_bundle"].endswith("assets/maps/agibot-robot-map-12")
+    assert packet["review_manifest"].endswith("assets/maps/b1-map12-alignment-review.json")
+    assert packet["scene_root"].endswith(
+        "data/robot-data-lab/scene-engine/data/2rd_floor_seperated"
+    )
     assert packet["source_map_frame_policy"] == "raw_source_map_frame_no_rectified_display_frame"
     assert packet["draft_policy"] == {
         "review_status": "draft",
@@ -62,7 +67,11 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
     assert packet["map"]["image_height_px"] == 716
     assert packet["shapes"]
     assert all(shape["alignment_status"] == "candidate" for shape in packet["shapes"])
-    assert all(shape["review_status"] == "draft" for shape in packet["shapes"])
+    assert {shape["review_status"] for shape in packet["shapes"]} == {
+        "accepted",
+        "blocked_shared_area",
+        "draft",
+    }
     assert all(shape["source_map_frame_id"] == "map" for shape in packet["shapes"])
 
     manifest = packet["initial_draft_manifest"]
@@ -134,8 +143,7 @@ def test_label_tool_packet_marks_shared_room_polygon_conflicts() -> None:
     ]
 
     assert {shape["semantic_source"] for shape in overlapping} == {
-        "operator_authored_room_overlay",
-        "scene_engine_asset_name_heuristic",
+        "human_alignment_review_manifest"
     }
     assert all(shape["geometry_conflict"]["status"] == "shared_polygon" for shape in overlapping)
     assert all(
@@ -144,6 +152,8 @@ def test_label_tool_packet_marks_shared_room_polygon_conflicts() -> None:
         for shape in overlapping
     )
     assert shapes_by_id["short_corridor_a"]["render_review_recommended"] is True
+    assert shapes_by_id["reception_area_a"]["review_status"] == "blocked_shared_area"
+    assert shapes_by_id["storage_room_a"]["review_status"] == "blocked_shared_area"
 
 
 def test_label_tool_packet_exposes_scene_evidence_without_scene_object_coordinates() -> None:
@@ -354,11 +364,10 @@ def test_label_tool_can_prepare_served_artifacts(tmp_path: Path) -> None:
     assert artifacts["html_path"] == tmp_path / "label_tool.html"
     assert artifacts["packet_path"] == tmp_path / "label_tool_packet.json"
     assert (tmp_path / "label_tool.html").is_file()
-    assert (
-        json.loads((tmp_path / "label_tool_packet.json").read_text(encoding="utf-8"))[
-            "scene_evidence"
-        ]["rooms"]["meeting_room_a"]["evidence_artifact_links"]
-    )
+    room_evidence = json.loads((tmp_path / "label_tool_packet.json").read_text(encoding="utf-8"))[
+        "scene_evidence"
+    ]["rooms"]["meeting_room_a"]
+    assert "evidence_artifact_links" in room_evidence
     assert label_tool_url("0.0.0.0", 8765) == "http://127.0.0.1:8765/label_tool.html"
     assert label_tool_url("127.0.0.1", 8765) == "http://127.0.0.1:8765/label_tool.html"
 

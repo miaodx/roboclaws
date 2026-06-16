@@ -54,25 +54,25 @@ def test_static_map_bundle_inventory_is_not_empty() -> None:
     assert STATIC_MAP_BUNDLES
 
 
-def test_b1_room_semantics_uses_explicit_scene_map_correspondence_manifest() -> None:
-    bundle_dir = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics"
-    semantics = _semantics(bundle_dir)
-    overlay = json.loads((bundle_dir / "room_semantic_overlay.json").read_text(encoding="utf-8"))
-    correspondences = overlay["scene_map_correspondence_v1"]
-    by_partition = {item["asset_partition_id"]: item for item in correspondences}
+def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
+    review = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    correspondences = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    raw_map = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
-    assert overlay["scene_map_correspondence_schema"] == "scene_map_correspondence_v1"
-    assert by_partition
-    for room in semantics["rooms"]:
-        partition_id = room["asset_partition_id"]
-        correspondence = by_partition[partition_id]
-        assert room["navigation_area_id"] == correspondence["navigation_area_id"]
-        assert room["alignment_status"] == correspondence["alignment_status"]
-        assert room["scene_map_correspondence"]["asset_partition_id"] == partition_id
-        assert room["scene_map_correspondence"]["navigation_area_id"] == room["navigation_area_id"]
-    assert {item["asset_partition_id"] for item in correspondences} == {
-        item["asset_partition_id"] for item in semantics["rooms"]
-    }
+    assert review["schema"] == "b1_map12_alignment_review_v1"
+    assert review["source_assets"]["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert correspondences["schema"] == "b1_map12_scene_correspondences_v1"
+    assert correspondences["anchors"] == []
+    assert validate_nav2_map_bundle(raw_map).ok
+    assert not (REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics").exists()
 
 
 def test_candidate_navigation_zone_cannot_be_validated_as_room_boundary() -> None:

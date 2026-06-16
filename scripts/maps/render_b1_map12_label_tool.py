@@ -23,6 +23,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.maps.bundle_validation import parse_map_yaml
+from roboclaws.maps.room_semantics import build_scene_room_semantic_overlay
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
@@ -33,7 +34,9 @@ from roboclaws.maps.spatial_contract import (
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
-DEFAULT_MAP_BUNDLE = Path("assets/maps/b1-map12-room-semantics")
+DEFAULT_MAP_BUNDLE = Path("assets/maps/agibot-robot-map-12")
+DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
+DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/label-tool")
 TEMPLATE_PATH = Path(__file__).with_name("b1_map12_label_tool_template.html")
 
@@ -54,6 +57,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--map-bundle", type=Path, default=DEFAULT_MAP_BUNDLE)
     parser.add_argument("--semantics", type=Path)
+    parser.add_argument("--scene-root", type=Path, default=DEFAULT_SCENE_ROOT)
+    parser.add_argument("--output-review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--serve",
@@ -70,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
     artifacts = write_label_tool_artifacts(
         map_bundle=args.map_bundle,
         semantics_path=args.semantics,
+        scene_root=args.scene_root,
+        review_manifest_path=args.output_review_manifest,
         output_dir=args.output_dir,
     )
     payload = {
@@ -91,11 +98,15 @@ def write_label_tool_artifacts(
     *,
     map_bundle: Path,
     semantics_path: Path | None = None,
+    scene_root: Path = DEFAULT_SCENE_ROOT,
+    review_manifest_path: Path | None = DEFAULT_REVIEW_MANIFEST,
     output_dir: Path,
 ) -> dict[str, Any]:
     packet = build_label_tool_packet(
         map_bundle=map_bundle,
         semantics_path=semantics_path,
+        scene_root=scene_root,
+        review_manifest_path=review_manifest_path,
     )
     image_url = image_data_url(Path(packet["source_image"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -135,6 +146,8 @@ def build_label_tool_packet(
     *,
     map_bundle: Path,
     semantics_path: Path | None = None,
+    scene_root: Path = DEFAULT_SCENE_ROOT,
+    review_manifest_path: Path | None = DEFAULT_REVIEW_MANIFEST,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
     semantics_path = semantics_path or map_bundle / "semantics.json"
@@ -153,18 +166,30 @@ def build_label_tool_packet(
     )
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
     frame_id = source_map_frame_id(semantics)
-    shapes = seed_shapes_from_semantics(semantics, transform=transform, frame_id=frame_id)
+    review_manifest = load_review_manifest(review_manifest_path)
+    shapes = seed_shapes_from_review_or_semantics(
+        review_manifest,
+        semantics,
+        transform=transform,
+        frame_id=frame_id,
+    )
     attach_room_geometry_conflicts(shapes)
     semantic_layers = semantic_map_layers_from_semantics(
         semantics,
         transform=transform,
         frame_id=frame_id,
     )
-    scene_evidence = scene_evidence_from_semantics(semantics)
+    scene_evidence = scene_evidence_from_scene_root(
+        scene_root,
+        map_bundle=map_bundle,
+        fallback_semantics=semantics,
+    )
     packet = {
         "schema": LABEL_TOOL_PACKET_SCHEMA,
         "draft_manifest_schema": LABEL_DRAFT_MANIFEST_SCHEMA,
         "map_bundle": str(map_bundle),
+        "scene_root": str(scene_root),
+        "review_manifest": str(review_manifest_path or ""),
         "source_semantics": str(semantics_path),
         "source_image": str(image_path),
         "source_map_frame_id": frame_id,
@@ -205,12 +230,93 @@ def build_label_tool_packet(
             source_packet={
                 "source_map_frame_id": frame_id,
                 "map_bundle": str(map_bundle),
+                "scene_root": str(scene_root),
+                "review_manifest": str(review_manifest_path or ""),
                 "source_semantics": str(semantics_path),
                 "source_image": str(image_path),
             },
         ),
     }
     return packet
+
+
+def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | None:
+    if review_manifest_path is None:
+        return None
+    path = Path(review_manifest_path)
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def seed_shapes_from_review_or_semantics(
+    review_manifest: dict[str, Any] | None,
+    semantics: dict[str, Any],
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> list[dict[str, Any]]:
+    if review_manifest and review_manifest.get("schema") == "b1_map12_alignment_review_v1":
+        return seed_shapes_from_review_manifest(
+            review_manifest,
+            transform=transform,
+            frame_id=frame_id,
+        )
+    return seed_shapes_from_semantics(semantics, transform=transform, frame_id=frame_id)
+
+
+def seed_shapes_from_review_manifest(
+    review_manifest: dict[str, Any],
+    *,
+    transform: SourceMapTransform,
+    frame_id: str,
+) -> list[dict[str, Any]]:
+    shapes: list[dict[str, Any]] = []
+    for index, raw_label in enumerate(review_manifest.get("labels") or [], start=1):
+        if not isinstance(raw_label, dict):
+            continue
+        geometry_payload = (
+            raw_label.get("geometry") if isinstance(raw_label.get("geometry"), dict) else {}
+        )
+        polygon = _polygon_points(geometry_payload.get("points") or geometry_payload.get("polygon"))
+        center = _geometry_center({"polygon": polygon})
+        shape_id = str(raw_label.get("label_id") or f"label_{index:03d}")
+        geometry = {
+            "kind": "polygon",
+            "polygon": polygon,
+            "pixel_polygon": [
+                world_to_pixel(point["x"], point["y"], transform) for point in polygon
+            ],
+        }
+        review_status = str(raw_label.get("review_status") or "draft")
+        shapes.append(
+            {
+                "shape_id": shape_id,
+                "label": str(raw_label.get("room_label") or shape_id),
+                "category": str(raw_label.get("category") or ""),
+                "navigation_area_id": str(raw_label.get("map_area_id") or ""),
+                "asset_partition_id": str(raw_label.get("scene_partition_id") or ""),
+                "source_room_id": shape_id,
+                "semantic_source": "human_alignment_review_manifest",
+                "render_review_recommended": review_status != "accepted",
+                "source_map_frame_id": str(geometry_payload.get("frame_id") or frame_id),
+                "geometry": geometry,
+                "map_center": center,
+                "polygon_role": POLYGON_ROLE_NAVIGATION_AREA,
+                "geometry_source": str(
+                    geometry_payload.get("source") or GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE
+                ),
+                "source_alignment_status": ALIGNMENT_STATUS_CANDIDATE,
+                "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
+                "review_status": review_status,
+                "polygon_usage": {
+                    "navigation": True,
+                    "semantic_labeling": ALIGNMENT_STATUS_CANDIDATE,
+                    "review": True,
+                },
+            }
+        )
+    return shapes
 
 
 def materialize_scene_evidence_artifacts(packet: dict[str, Any], *, output_dir: Path) -> None:
@@ -538,6 +644,75 @@ def scene_evidence_from_semantics(semantics: dict[str, Any]) -> dict[str, Any]:
         }
     return {
         "schema": "b1_map12_scene_evidence_packet_v1",
+        "coordinate_policy": "do_not_project_scene_or_gaussian_objects_without_verified_transform",
+        "rooms": rooms,
+    }
+
+
+def scene_evidence_from_scene_root(
+    scene_root: Path,
+    *,
+    map_bundle: Path,
+    fallback_semantics: dict[str, Any],
+) -> dict[str, Any]:
+    scene_root = Path(scene_root)
+    if not scene_root.is_dir():
+        return scene_evidence_from_semantics(fallback_semantics)
+    overlay = build_scene_room_semantic_overlay(scene_root, source_bundle_dir=map_bundle)
+    rooms: dict[str, dict[str, Any]] = {}
+    correspondences = {
+        str(item.get("asset_partition_id") or ""): item
+        for item in overlay.get("scene_map_correspondence_v1") or []
+        if isinstance(item, dict)
+    }
+    for raw_room in overlay.get("rooms") or []:
+        if not isinstance(raw_room, dict):
+            continue
+        room_id = str(raw_room.get("asset_partition_id") or raw_room.get("room_id") or "")
+        if not room_id:
+            continue
+        evidence = raw_room.get("evidence") if isinstance(raw_room.get("evidence"), dict) else {}
+        correspondence = correspondences.get(room_id, {})
+        object_name_counts = evidence.get("object_name_counts")
+        object_name_counts = object_name_counts if isinstance(object_name_counts, dict) else {}
+        rooms[room_id] = {
+            "room_id": room_id,
+            "room_label": str(raw_room.get("room_label") or room_id),
+            "navigation_area_id": str(correspondence.get("navigation_area_id") or ""),
+            "candidate_scene_partition_id": room_id,
+            "partition_name": str(evidence.get("partition_name") or room_id),
+            "alignment_status": str(
+                correspondence.get("alignment_status")
+                or raw_room.get("alignment_status")
+                or ALIGNMENT_STATUS_CANDIDATE
+            ),
+            "transform_source": str(correspondence.get("transform_source") or ""),
+            "map_polygon_provided": bool(correspondence.get("map_polygon_provided")),
+            "weak_evidence": bool(evidence.get("weak_evidence")),
+            "matched_terms": [str(item) for item in evidence.get("matched_terms") or []],
+            "conflicting_evidence": [
+                str(item) for item in evidence.get("conflicting_evidence") or []
+            ],
+            "object_name_counts": {
+                str(name): int(count)
+                for name, count in sorted(
+                    object_name_counts.items(),
+                    key=lambda item: (-int(item[1]), str(item[0])),
+                )
+            },
+            "evidence_artifacts": [
+                str(item)
+                for item in (
+                    correspondence.get("evidence_artifacts") or evidence.get("artifacts") or []
+                )
+            ],
+            "semantic_source": str(raw_room.get("semantic_source") or ""),
+            "coordinate_status": "scene_evidence_has_no_map_coordinates",
+            "identity_status": "candidate_name_match_not_verified_identity",
+        }
+    return {
+        "schema": "b1_map12_scene_evidence_packet_v1",
+        "scene_root": str(scene_root),
         "coordinate_policy": "do_not_project_scene_or_gaussian_objects_without_verified_transform",
         "rooms": rooms,
     }

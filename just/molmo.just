@@ -40,7 +40,7 @@ default:
 # Private household-world implementation runner. Public callers should
 # enter through `run::surface`; maintainers should enter through `agent::run`.
 [private]
-household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
+household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_review="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -70,6 +70,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     task_surface="{{task_surface}}"
     task_intent="{{task_intent}}"
     operator_messages_path="{{operator_messages_path}}"
+    b1_alignment_review="{{b1_alignment_review}}"
     skill_name="{{skill_name}}"
     goal_contract_json="{{goal_contract_json}}"
     goal_contract_path="{{goal_contract_path}}"
@@ -115,6 +116,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     launch_world_id="${ROBOCLAWS_LAUNCH_WORLD_ID:-}"
     operator_messages_path="${operator_messages_path#operator_messages_path=}"
     operator_messages_path="${operator_messages_path#operator-messages-path=}"
+    b1_alignment_review="${b1_alignment_review#b1_alignment_review=}"
+    b1_alignment_review="${b1_alignment_review#b1-alignment-review=}"
     skill_name="${skill_name#skill_name=}"
     skill_name="${skill_name#skill-name=}"
     skill_name="${skill_name:-${ROBOCLAWS_TASK_SKILL:-}}"
@@ -138,6 +141,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         "$scene_source" "$scene_index" "$isaac_scene_usd_path"
         "$min_generated_mess_count_override" "$generated_mess_object_ids"
         "$task_surface" "$task_intent" "$operator_messages_path"
+        "$b1_alignment_review"
       )
       if [[ -n "$skill_name" || -n "$goal_contract_json" || -n "$goal_contract_path" || -n "$run_dir_override" ]]; then
         trace_args+=("$skill_name" "$goal_contract_json" "$goal_contract_path")
@@ -454,6 +458,23 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     esac
     if [[ -n "$map_bundle_dir" && "$map_bundle_dir" != */* && -d "assets/maps/${map_bundle_dir}" ]]; then
       map_bundle_dir="assets/maps/${map_bundle_dir}"
+    fi
+    if [[ "$backend" == "isaaclab_subprocess" && "$launch_world_id" == "b1-map12" ]]; then
+      if [[ -z "$b1_alignment_review" ]]; then
+        echo "error: world=b1-map12 requires b1_alignment_review=<review-manifest>" >&2
+        exit 1
+      fi
+      if [[ -z "$map_bundle_dir" ]]; then
+        echo "error: world=b1-map12 requires raw map_bundle before runtime compilation" >&2
+        exit 1
+      fi
+      b1_runtime_map_bundle_dir="${output_dir}/b1-map12-runtime-map-bundle"
+      .venv/bin/python scripts/maps/compile_b1_map12_runtime_bundle.py \
+        --map-bundle "$map_bundle_dir" \
+        --scene-root "data/robot-data-lab/scene-engine/data/2rd_floor_seperated" \
+        --review-manifest "$b1_alignment_review" \
+        --output-dir "$b1_runtime_map_bundle_dir" >/dev/null
+      map_bundle_dir="$b1_runtime_map_bundle_dir"
     fi
     map_bundle_args=()
     if [[ -n "$map_bundle_dir" ]]; then

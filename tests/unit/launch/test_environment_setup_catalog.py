@@ -84,7 +84,8 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
     assert b1.world == "b1-map12"
     assert b1.backend == "isaaclab"
     assert b1.implementation_backend == "isaaclab_subprocess"
-    assert "map_bundle=b1-map12-room-semantics" in b1.overrides
+    assert "map_bundle=agibot-robot-map-12" in b1.overrides
+    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1.overrides
     assert "world=b1-map12" in b1.argv
     assert "backend=isaaclab_subprocess" in b1.argv
 

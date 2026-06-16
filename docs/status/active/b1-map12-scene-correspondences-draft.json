@@ -13,7 +13,7 @@
   },
   "review_lifecycle": {
     "draft_location": "docs/status/active/b1-map12-scene-correspondences-draft.json",
-    "accepted_asset_location": "assets/maps/b1-map12-room-semantics/scene_correspondences.json",
+    "accepted_asset_location": "assets/maps/b1-map12-scene-correspondences.json",
     "accepted_anchor_rule": "Only human/operator-reviewed picks may use review_status=accepted.",
     "bbox_seed_rule": "The bbox-fit overlay may seed coarse visual search only; it must not prefill accepted scene coordinates."
   },

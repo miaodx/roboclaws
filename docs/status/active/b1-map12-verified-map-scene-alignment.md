@@ -12,17 +12,17 @@ Blocker fingerprint:
 
 Last proven evidence:
 
-- `python scripts/maps/render_b1_map12_label_tool.py --map-bundle assets/maps/b1-map12-room-semantics --output-dir output/b1-map12/label-tool`
+- `python scripts/maps/render_b1_map12_label_tool.py --map-bundle assets/maps/agibot-robot-map-12 --review-manifest assets/maps/b1-map12-alignment-review.json --output-dir output/b1-map12/label-tool`
   writes `output/b1-map12/label-tool/label_tool.html` and
-  `label_tool_packet.json`. The HTML editor seeds the current candidate room
-  polygons, supports polygon/circle/point draft labels, keeps source-map
-  coordinates, and exports `b1_map12_label_draft_manifest_v1` with
-  `review_status=draft`, `alignment_status=candidate`,
-  `source_map_mutated=false`, and `verified_status_allowed=false`.
-- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences docs/status/active/b1-map12-scene-correspondences-draft.json --map-bundle assets/maps/b1-map12-room-semantics --output-dir output/b1-map12/alignment-draft`
+  `label_tool_packet.json`. The HTML editor loads raw Map12 navigation layers,
+  scene partition evidence, and the review manifest as separate layers; it
+  supports polygon/circle/point draft labels, movable labels, global display
+  tilt, and exports `b1_map12_alignment_review_v1` without mutating either raw
+  source.
+- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences docs/status/active/b1-map12-scene-correspondences-draft.json --map-bundle assets/maps/agibot-robot-map-12 --output-dir output/b1-map12/alignment-draft`
   writes `status=insufficient_reviewed_anchors`,
   `global_alignment_status=candidate`, and zero accepted anchors.
-- `python scripts/maps/render_b1_map12_correspondence_review.py --correspondences docs/status/active/b1-map12-scene-correspondences-draft.json --map-bundle assets/maps/b1-map12-room-semantics --output-dir output/b1-map12/alignment-draft`
+- `python scripts/maps/render_b1_map12_correspondence_review.py --correspondences docs/status/active/b1-map12-scene-correspondences-draft.json --map-bundle assets/maps/agibot-robot-map-12 --output-dir output/b1-map12/alignment-draft`
   writes `output/b1-map12/alignment-draft/correspondence_review.html` and
   `correspondence_review_packet.json` with `review_status=review_pending`,
   `accepted_anchor_count=0`, and the next action to produce at least six
@@ -34,7 +34,7 @@ Last proven evidence:
   passes.
 
 Next hypothesis: once a human/operator-reviewed
-`assets/maps/b1-map12-room-semantics/scene_correspondences.json` exists with at
+`assets/maps/b1-map12-scene-correspondences.json` exists with at
 least six accepted anchors, the fitter can either promote global alignment to
 `verified` under the threshold policy or leave global alignment candidate and
 record verified local areas where enough local anchors pass.
@@ -43,8 +43,8 @@ Next command/artifact:
 
 ```bash
 python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences assets/maps/b1-map12-room-semantics/scene_correspondences.json \
-  --map-bundle assets/maps/b1-map12-room-semantics \
+  --correspondences assets/maps/b1-map12-scene-correspondences.json \
+  --map-bundle assets/maps/agibot-robot-map-12 \
   --output-dir output/b1-map12/alignment
 ```
 
@@ -62,7 +62,8 @@ Parked work:
 - Use `output/b1-map12/alignment-draft/correspondence_review.html` to drive
   anchor review, then replace
   `docs/status/active/b1-map12-scene-correspondences-draft.json` with a
-  reviewed asset manifest after anchor review.
+  reviewed `assets/maps/b1-map12-scene-correspondences.json` asset manifest
+  after anchor review.
 - Use `output/b1-map12/label-tool/label_tool.html` when the current
   axis-aligned candidate room boxes are too crude. Exported label drafts still
   need an explicit review/merge step before replacing committed map semantics
