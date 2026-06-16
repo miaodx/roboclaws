@@ -993,9 +993,10 @@ def _is_live_semantic_map_build(data: dict[str, Any]) -> bool:
 
 
 def _assert_live_semantic_map_build_scan_only(data: dict[str, Any]) -> None:
-    assert data.get("task_name") == "household-world.map-build" or data.get(
-        "task_intent"
-    ) == "map-build", data
+    assert (
+        data.get("task_name") == "household-world.map-build"
+        or data.get("task_intent") == "map-build"
+    ), data
     trace = data.get("cleanup_policy_trace") or {}
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
     assert trace.get("loop_style") == "scan_only", trace
