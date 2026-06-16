@@ -643,6 +643,13 @@ logs before choosing the next slice.
   Proof: focused grasp report tests, ruff, format check, py_compile, and
   ratchet.
 
+- 2026-06-16: Planner proof request-selection tables moved from `report.py`
+  into `report_sections_proof_selection.py`, keeping proof-bundle report
+  output and checker expectations stable. Metric: `report.py` 5307 -> 4880
+  lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: proof-bundle report/checker tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

@@ -18,7 +18,7 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest verified grasp diagnostics
+--summary --top 40` on 2026-06-16, after the latest verified proof request-selection
 report-section slice:
 
 - 0 Ruff complexity violations.
@@ -31,9 +31,9 @@ report-section slice:
 - `roboclaws/household/scene_camera_comparison.py` is down to 5476 lines after
   the first USD render-contract, image-metrics, and lighting-diagnostics
   splits, but remains a P1 hard-ceiling candidate.
-- `roboclaws/household/report.py` is down to 5307 lines after the Isaac
-  runtime diagnostics and grasp diagnostics section splits, but remains a P1
-  hard-ceiling candidate.
+- `roboclaws/household/report.py` is down to 4880 lines after the Isaac
+  runtime, grasp diagnostics, and proof request-selection section splits, but
+  remains a P1 hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
@@ -138,11 +138,12 @@ ruff, ratchet summary.
 
 Severity: P1. `roboclaws/household/realworld_contract.py` is currently the
 largest module after the report grasp-section split and remains above the hard
-ceiling; `roboclaws/household/report.py` is now 5307 lines after the Isaac
-runtime and grasp diagnostics renderer splits, but remains above the hard
-ceiling. Continue only around real ownership boundaries: payload builders,
-policy/event families, section renderers, or artifact envelopes. Preserve
-public schemas and rendered report shape. Owner: `intuitive-refactor`.
+ceiling; `roboclaws/household/report.py` is now 4880 lines after the Isaac
+runtime, grasp diagnostics, and proof request-selection renderer splits, but
+remains above the hard ceiling. Continue only around real ownership
+boundaries: payload builders, policy/event families, section renderers, or
+artifact envelopes. Preserve public schemas and rendered report shape. Owner:
+`intuitive-refactor`.
 
 ### C: Backend Worker Hard-Ceiling Split
 
