@@ -112,6 +112,7 @@ UI_TARGET_PER_SCENE_SOURCE = 3
 EVAL_TARGET_PER_SCENE_SOURCE = 10
 CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE = 10
 CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE = 40
+CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE = 500
 CANDIDATE_PROFILE_LANE = "metadata_profile"
 
 SUPPORTED_SCENE_SOURCES: tuple[str, ...] = (
@@ -816,7 +817,14 @@ def candidate_profile_report(
             if candidate.get("scene_index") in source_profile_indices
         ]
         worklist_rows = [
-            row for row in profile_rows if row.get("metadata_worklist_rank") is not None
+            row
+            for row in profile_rows
+            if row.get("metadata_worklist_rank") is not None
+            and row.get("next_action")
+            not in {
+                "none",
+                "do_not_scan_without_gate_change_or_new_curation",
+            }
         ]
         sources[source] = {
             "scene_source": source,
@@ -885,17 +893,13 @@ def source_prep_report(
             if isinstance(item, dict)
         ]
         source_complete = source_selection.get("status") == "complete"
+        metadata_worklist_candidates = _scanner_candidate_profile_worklist_candidates(
+            source_candidate_profile
+        )
+        metadata_worklist_candidate_count = len(metadata_worklist_candidates)
         source_rejected_exhausted = (
             source_selection.get("selection_capacity_status") == "rejected_exhausted"
-        )
-        missing_resources = (
-            []
-            if source_complete or source_rejected_exhausted
-            else _missing_source_resources(
-                source=source,
-                source_availability=source_availability,
-                candidate_scene_refs=candidate_scene_refs,
-            )
+            and metadata_worklist_candidate_count == 0
         )
         recommended_end = max_candidate_index
         next_eval_count = len(source_selection.get("next_eval_scan_world_ids") or [])
@@ -912,6 +916,27 @@ def source_prep_report(
             if source_complete or source_rejected_exhausted
             else source_selection.get("next_scan_candidates") or []
         )
+        install_candidates = _unique_candidates(
+            [*next_scan_candidates, *metadata_worklist_candidates]
+        )
+        prep_source_availability = _source_availability_for_candidates(
+            source_availability=source_availability,
+            candidates=install_candidates,
+        )
+        prep_candidate_scene_refs = [
+            _candidate_scene_ref_from_availability(item)
+            for item in prep_source_availability.get("candidate_files") or []
+            if isinstance(item, dict)
+        ]
+        missing_resources = (
+            []
+            if source_complete or source_rejected_exhausted
+            else _missing_source_resources(
+                source=source,
+                source_availability=prep_source_availability,
+                candidate_scene_refs=prep_candidate_scene_refs,
+            )
+        )
         sources[source] = {
             "scene_source": source,
             "scene_family": _family_split(source)[0],
@@ -920,6 +945,7 @@ def source_prep_report(
                 source_availability=source_availability,
                 source_selection=source_selection,
                 missing_resources=missing_resources,
+                metadata_worklist_candidate_count=metadata_worklist_candidate_count,
             ),
             "download_policy": "manual_operator_only",
             "molmospaces_scene_source": source,
@@ -952,12 +978,15 @@ def source_prep_report(
             "missing_resource_summary": _resource_reason_counts(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
+            "metadata_worklist_scan_world_ids": [
+                item.get("world_id") for item in metadata_worklist_candidates
+            ],
             "install_candidates": []
             if source_complete
             else _source_prep_install_candidates(
                 dataset_name=dataset_name,
                 split=split,
-                candidates=next_scan_candidates,
+                candidates=install_candidates,
             ),
             "recommended_candidate_range": f"0:{recommended_end}" if recommended_end >= 0 else "",
             "operator_commands": _source_prep_operator_commands(
@@ -1008,7 +1037,11 @@ def scanner_execution_plan(
     """Return a no-download executable plan for the next scanner/product-smoke step."""
 
     source_prep = source_prep_report(candidate_indices=candidate_indices)
-    scanner_admission = scanner_admission_report(candidate_indices=candidate_indices)
+    scanner_candidate_indices = _scanner_execution_candidate_indices(
+        candidate_indices=candidate_indices,
+        source_prep=source_prep,
+    )
+    scanner_admission = scanner_admission_report(candidate_indices=scanner_candidate_indices)
     sources: dict[str, dict[str, Any]] = {}
     for source in SUPPORTED_SCENE_SOURCES:
         prep_source = source_prep["sources"][source]
@@ -1038,7 +1071,10 @@ def scanner_execution_plan(
                 1 for item in candidates if item["scanner_status"] == "ready_for_product_smoke"
             ),
             "blocked_count": sum(
-                1 for item in candidates if item["scanner_status"].startswith("blocked_")
+                1
+                for item in candidates
+                if item["scanner_status"].startswith("blocked_")
+                or item["scanner_status"] == "rejected_by_admission"
             ),
             "candidates": candidates,
         }
@@ -1048,7 +1084,7 @@ def scanner_execution_plan(
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
         "selection_policy": _sampler_selection_policy(),
-        "candidate_indices": list(candidate_indices),
+        "candidate_indices": list(scanner_candidate_indices),
         "summary": scanner_execution_summary(sources),
         "sources": sources,
     }
@@ -1714,11 +1750,7 @@ def _metadata_profile_worklist_indices(
         for index in candidate_indices
         if scanner_metadata(source=source, scene_index=int(index))
     )
-    pool = [
-        index
-        for index in range(CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE)
-        if index not in excluded
-    ]
+    pool = [index for index in _metadata_profile_candidate_pool(source) if index not in excluded]
     ranked = source_selection_metadata(
         source=source,
         lane=CANDIDATE_PROFILE_LANE,
@@ -1728,6 +1760,30 @@ def _metadata_profile_worklist_indices(
     return tuple(
         int(index) for index in ranked[:CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE]
     )
+
+
+def _metadata_profile_candidate_pool(source: str) -> tuple[int, ...]:
+    module_available, _, _ = _molmospaces_module_status()
+    dataset_name, split = _molmospaces_get_scenes_args(source)
+    candidate_indices = tuple(range(CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE))
+    scene_index_map = _molmospaces_scene_index_map(
+        source=source,
+        dataset_name=dataset_name,
+        split=split,
+        candidate_indices=candidate_indices,
+        module_available=module_available,
+    )
+    if scene_index_map.get("status") == "available":
+        concrete_indices = [
+            int(item["scene_index"])
+            for item in scene_index_map.get("candidate_scene_refs") or []
+            if isinstance(item, dict)
+            and item.get("status") == "available"
+            and (item.get("primary_path") or item.get("paths") or item.get("missing_paths"))
+        ]
+        if concrete_indices:
+            return tuple(sorted(concrete_indices))
+    return tuple(range(CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE))
 
 
 def _candidate_profile_row(
@@ -1762,10 +1818,97 @@ def _candidate_profile_row(
         "known_blocked_reason": blocked_reason,
         "candidate_file_status": (candidate.get("candidate_file") or {}).get("status", ""),
         "candidate_file_exists": bool((candidate.get("candidate_file") or {}).get("exists")),
+        "candidate_file": candidate.get("candidate_file") or {},
         "selected_reason": selected_reason,
         "download_policy": "manual_operator_only",
         "admission_effect": "none_profile_only",
     }
+
+
+def _source_availability_for_candidates(
+    *,
+    source_availability: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not candidates:
+        return {
+            **source_availability,
+            "candidate_files": [],
+        }
+    candidate_indices = {
+        int(candidate["scene_index"])
+        for candidate in candidates
+        if candidate.get("scene_index") is not None
+    }
+    candidate_files = [
+        item
+        for item in source_availability.get("candidate_files") or []
+        if isinstance(item, dict) and item.get("scene_index") in candidate_indices
+    ]
+    seen_indices = {
+        int(item["scene_index"]) for item in candidate_files if item.get("scene_index") is not None
+    }
+    for candidate in candidates:
+        scene_index = candidate.get("scene_index")
+        if scene_index is None or int(scene_index) in seen_indices:
+            continue
+        candidate_file = candidate.get("candidate_file")
+        if not isinstance(candidate_file, dict):
+            continue
+        candidate_files.append(candidate_file)
+        seen_indices.add(int(scene_index))
+    return {
+        **source_availability,
+        "candidate_files": candidate_files,
+    }
+
+
+def _scanner_execution_candidate_indices(
+    *,
+    candidate_indices: tuple[int, ...],
+    source_prep: dict[str, Any],
+) -> tuple[int, ...]:
+    indices = {int(index) for index in candidate_indices}
+    for source in source_prep.get("sources", {}).values():
+        if not isinstance(source, dict):
+            continue
+        for candidate in source.get("install_candidates") or []:
+            if not isinstance(candidate, dict) or candidate.get("scene_index") is None:
+                continue
+            indices.add(int(candidate["scene_index"]))
+    return tuple(sorted(indices))
+
+
+def _scanner_candidate_profile_worklist_candidates(
+    source_candidate_profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for row in source_candidate_profile.get("metadata_worklist_candidates") or []:
+        if not isinstance(row, dict):
+            continue
+        candidate_file = row.get("candidate_file")
+        if not isinstance(candidate_file, dict):
+            candidate_file = {}
+        has_concrete_scene_ref = bool(
+            candidate_file.get("path")
+            or candidate_file.get("paths")
+            or candidate_file.get("missing_paths")
+        )
+        if not has_concrete_scene_ref:
+            continue
+        candidates.append(
+            {
+                "scene_source": row.get("scene_source", ""),
+                "scene_index": row.get("scene_index"),
+                "world_id": row.get("world_id", ""),
+                "readiness_status": READINESS_BLOCKED,
+                "failure_class": row.get("known_failure_class", "") or "environment_blocked",
+                "blocked_reason": row.get("known_blocked_reason", ""),
+                "source_availability_status": "",
+                "candidate_file": candidate_file,
+            }
+        )
+    return candidates
 
 
 def _candidate_known_profile_status(candidate: dict[str, Any]) -> str:

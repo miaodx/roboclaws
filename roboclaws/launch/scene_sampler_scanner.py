@@ -224,14 +224,28 @@ def scanner_execution_candidate(
     scene_index = install_candidate.get("scene_index")
     missing_paths = [str(path) for path in install_candidate.get("missing_paths") or [] if path]
     candidate_file_exists = not missing_paths and bool(install_candidate.get("primary_path"))
+    admission_status = str(admission.get("admission_status") or "")
     missing_gates = [str(gate) for gate in admission.get("missing_gates") or [] if gate]
     scanner_status = (
         "ready_for_product_smoke"
-        if candidate_file_exists and "source_asset_available" not in missing_gates
+        if (
+            admission_status != "rejected"
+            and candidate_file_exists
+            and "source_asset_available" not in missing_gates
+        )
         else "blocked_missing_resources"
     )
+    if admission_status == "rejected":
+        scanner_status = "rejected_by_admission"
     if admission.get("next_action") == "choose_valid_source_specific_candidate_index":
         scanner_status = "blocked_invalid_candidate_index"
+    next_action = (
+        "run_preview_then_map_build_product_smoke"
+        if scanner_status == "ready_for_product_smoke"
+        else admission.get("next_action", "run_manual_source_prep_before_scanner")
+    )
+    if scanner_status == "rejected_by_admission":
+        next_action = admission.get("next_action", "do_not_scan_without_new_human_curation")
     return {
         "scene_family": admission.get("scene_family", ""),
         "scene_split": admission.get("scene_split", ""),
@@ -259,11 +273,7 @@ def scanner_execution_candidate(
         "install_command": install_candidate.get("install_command", ""),
         "preview_command": preview_scanner_command(world_id),
         "map_build_product_smoke_command": map_build_product_smoke_command(world_id),
-        "next_action": (
-            "run_preview_then_map_build_product_smoke"
-            if scanner_status == "ready_for_product_smoke"
-            else admission.get("next_action", "run_manual_source_prep_before_scanner")
-        ),
+        "next_action": next_action,
     }
 
 

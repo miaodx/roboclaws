@@ -44,6 +44,20 @@ from roboclaws.launch.worlds import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+@pytest.fixture(autouse=True)
+def _isolate_scene_sampler_scanner_artifacts(monkeypatch, tmp_path) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    scanner_root = tmp_path / "scene-sampler-scanner"
+    monkeypatch.setattr(scene_sampler, "_SCANNER_OUTPUT_ROOT", scanner_root)
+    monkeypatch.setattr(scene_sampler, "_SCANNER_PREVIEW_ROOT", scanner_root / "previews")
+    monkeypatch.setattr(
+        scene_sampler,
+        "_SCANNER_PRODUCT_SMOKE_ROOT",
+        scanner_root / "product-smoke",
+    )
+
+
 def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     validate_sampler_manifest()
 
@@ -628,9 +642,18 @@ def test_scene_sampler_selection_gap_marks_ithor_rejected_when_assets_are_visibl
     assert ithor["rejected_candidate_indices"] == list(range(1, 13))
 
     prep = source_prep_report(candidate_indices=tuple(range(13)))
-    assert prep["sources"]["ithor"]["prep_status"] == "rejected_exhausted"
-    assert prep["sources"]["ithor"]["install_candidates"] == []
-    assert prep["sources"]["ithor"]["missing_resources"] == []
+    assert prep["sources"]["ithor"]["prep_status"] in {
+        "ready_for_scanner",
+        "blocked_missing_resources",
+    }
+    assert len(prep["sources"]["ithor"]["install_candidates"]) == 10
+    assert all(
+        candidate["primary_path"] for candidate in prep["sources"]["ithor"]["install_candidates"]
+    )
+    assert all(
+        candidate["path_status"] == "available"
+        for candidate in prep["sources"]["ithor"]["install_candidates"]
+    )
 
 
 def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> None:
@@ -656,6 +679,7 @@ def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> Non
     assert all(index not in range(1, 13) for index in ithor["metadata_worklist_indices"])
     assert ithor["metadata_worklist_world_ids"][0].startswith("molmospaces/ithor/")
     assert ithor["metadata_worklist_candidates"][0]["admission_effect"] == "none_profile_only"
+    assert "candidate_file" in ithor["metadata_worklist_candidates"][0]
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["profile_status"] == "metadata_worklist_ready"
@@ -726,6 +750,356 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert holodeck["prep_status"] == "rejected_exhausted"
     assert holodeck["install_candidates"] == []
     assert holodeck["missing_resources"] == []
+
+
+def test_scene_sampler_source_prep_promotes_metadata_worklist_when_assets_exist(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    candidate_path = tmp_path / "val_22.xml"
+    candidate_path.write_text("<mujoco />", encoding="utf-8")
+    monkeypatch.setattr(
+        scene_sampler,
+        "source_availability_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "scene_source": source,
+                    "status": "available",
+                    "module_available": True,
+                    "scene_root_available": True,
+                    "scene_index_map_status": "available",
+                    "molmospaces_scene_version": "test",
+                    "scene_index_map_reason": "",
+                    "scene_index_map_stdout": "",
+                    "source_dir": str(tmp_path),
+                    "source_dir_available": True,
+                    "candidate_files": [
+                        {
+                            "scene_source": source,
+                            "scene_index": 22,
+                            "path": str(candidate_path),
+                            "exists": True,
+                            "status": "available",
+                            "source": "molmospaces_get_scenes",
+                            "raw_ref_type": "dict",
+                            "paths": [
+                                {
+                                    "role": "base",
+                                    "path": str(candidate_path),
+                                    "exists": True,
+                                }
+                            ],
+                            "missing_paths": [],
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "selection_gap_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "scene_source": source,
+                    "status": "incomplete",
+                    "selection_capacity_status": (
+                        "rejected_exhausted" if source == "holodeck-objaverse-val" else "complete"
+                    ),
+                    "ui_needed_count": 3 if source == "holodeck-objaverse-val" else 0,
+                    "eval_needed_count": 10 if source == "holodeck-objaverse-val" else 0,
+                    "next_scan_candidates": [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "candidate_profile_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "profile_status": (
+                        "metadata_worklist_ready"
+                        if source == "holodeck-objaverse-val"
+                        else "complete"
+                    ),
+                    "next_action": (
+                        "metadata_first_human_curation"
+                        if source == "holodeck-objaverse-val"
+                        else "none"
+                    ),
+                    "metadata_worklist_indices": [22] if source == "holodeck-objaverse-val" else [],
+                    "metadata_worklist_world_ids": ["molmospaces/holodeck-objaverse-val/22"]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                    "metadata_worklist_candidate_count": 1
+                    if source == "holodeck-objaverse-val"
+                    else 0,
+                    "metadata_worklist_candidates": [
+                        {
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "known_failure_class": "environment_blocked",
+                            "known_blocked_reason": "map build product smoke pending",
+                            "candidate_file": {
+                                "scene_source": "holodeck-objaverse-val",
+                                "scene_index": 22,
+                                "path": str(candidate_path),
+                                "exists": True,
+                                "status": "available",
+                                "source": "molmospaces_get_scenes",
+                                "paths": [
+                                    {
+                                        "role": "base",
+                                        "path": str(candidate_path),
+                                        "exists": True,
+                                    }
+                                ],
+                                "missing_paths": [],
+                            },
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    prep = source_prep_report(candidate_indices=tuple(range(40)))
+    holodeck = prep["sources"]["holodeck-objaverse-val"]
+
+    assert holodeck["prep_status"] == "ready_for_scanner"
+    assert holodeck["metadata_worklist_scan_world_ids"] == ["molmospaces/holodeck-objaverse-val/22"]
+    assert holodeck["install_candidates"][0]["world_id"] == (
+        "molmospaces/holodeck-objaverse-val/22"
+    )
+    assert holodeck["install_candidates"][0]["primary_path"] == str(candidate_path)
+
+
+def test_scene_sampler_scanner_execution_plan_runs_metadata_worklist_candidates(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    candidate_path = tmp_path / "val_22.xml"
+    candidate_path.write_text("<mujoco />", encoding="utf-8")
+    monkeypatch.setattr(
+        scene_sampler,
+        "source_prep_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "prep_status": (
+                        "ready_for_scanner" if source == "holodeck-objaverse-val" else "complete"
+                    ),
+                    "install_candidates": [
+                        {
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "primary_path": str(candidate_path),
+                            "path_status": "available",
+                            "paths": [
+                                {
+                                    "role": "base",
+                                    "path": str(candidate_path),
+                                    "exists": True,
+                                }
+                            ],
+                            "missing_paths": [],
+                            "install_command": "",
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "scanner_admission_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "admission_rows": [
+                        {
+                            "scene_family": "holodeck-objaverse",
+                            "scene_split": "val",
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "readiness_status": READINESS_BLOCKED,
+                            "admission_status": "blocked",
+                            "lanes": [],
+                            "failure_class": "environment_blocked",
+                            "blocked_reason": "map build product smoke pending",
+                            "selected_reason": "scanner_evidence_incomplete_for_source_sampler",
+                            "room_count": 1,
+                            "waypoint_count": 2,
+                            "category_provenance": "unavailable",
+                            "preview_statuses": {
+                                "fpv": "reviewable",
+                                "map": "reviewable",
+                                "chase": "reviewable",
+                                "topdown": "reviewable",
+                            },
+                            "passed_gates": ["source_asset_available", "preview_metadata"],
+                            "required_gates": [
+                                "source_asset_available",
+                                "preview_metadata",
+                                "public_room_count",
+                                "public_waypoints",
+                                "trusted_category_provenance",
+                                "map_build_artifacts",
+                            ],
+                            "missing_gates": [
+                                "public_room_count",
+                                "public_waypoints",
+                                "trusted_category_provenance",
+                                "map_build_artifacts",
+                            ],
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    plan = scanner_execution_plan(candidate_indices=tuple(range(40)))
+    holodeck = plan["sources"]["holodeck-objaverse-val"]
+
+    assert 22 in plan["candidate_indices"]
+    assert plan["summary"]["candidate_count"] == 1
+    assert plan["summary"]["ready_for_product_smoke_count"] == 1
+    assert holodeck["prep_status"] == "ready_for_scanner"
+    assert holodeck["candidates"][0]["scanner_status"] == "ready_for_product_smoke"
+    assert holodeck["candidates"][0]["world_id"] == "molmospaces/holodeck-objaverse-val/22"
+    assert (
+        "render_scene_previews.py --world molmospaces/holodeck-objaverse-val/22"
+        in (holodeck["candidates"][0]["preview_command"])
+    )
+    assert (
+        "world=molmospaces/holodeck-objaverse-val/22"
+        in (holodeck["candidates"][0]["map_build_product_smoke_command"])
+    )
+
+
+def test_scene_sampler_scanner_execution_plan_does_not_rerun_rejected_metadata_candidates(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    candidate_path = tmp_path / "val_22.xml"
+    candidate_path.write_text("<mujoco />", encoding="utf-8")
+    monkeypatch.setattr(
+        scene_sampler,
+        "source_prep_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "prep_status": (
+                        "ready_for_scanner" if source == "holodeck-objaverse-val" else "complete"
+                    ),
+                    "install_candidates": [
+                        {
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "primary_path": str(candidate_path),
+                            "path_status": "available",
+                            "paths": [
+                                {
+                                    "role": "base",
+                                    "path": str(candidate_path),
+                                    "exists": True,
+                                }
+                            ],
+                            "missing_paths": [],
+                            "install_command": "",
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "scanner_admission_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "admission_rows": [
+                        {
+                            "scene_family": "holodeck-objaverse",
+                            "scene_split": "val",
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "readiness_status": READINESS_REJECTED,
+                            "admission_status": "rejected",
+                            "lanes": [],
+                            "failure_class": "map_actionability_failure",
+                            "blocked_reason": "fewer_than_three_public_navigation_areas",
+                            "selected_reason": "fewer_than_three_public_navigation_areas",
+                            "room_count": 1,
+                            "waypoint_count": 2,
+                            "category_provenance": "source_metadata",
+                            "preview_statuses": {
+                                "fpv": "reviewable",
+                                "map": "reviewable",
+                                "chase": "reviewable",
+                                "topdown": "reviewable",
+                            },
+                            "passed_gates": [],
+                            "required_gates": [
+                                "source_asset_available",
+                                "preview_metadata",
+                                "public_room_count",
+                                "public_waypoints",
+                                "trusted_category_provenance",
+                                "map_build_artifacts",
+                            ],
+                            "missing_gates": [],
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    plan = scanner_execution_plan(candidate_indices=tuple(range(40)))
+    holodeck = plan["sources"]["holodeck-objaverse-val"]
+
+    assert plan["summary"]["candidate_count"] == 1
+    assert plan["summary"]["ready_for_product_smoke_count"] == 0
+    assert plan["summary"]["blocked_count"] == 1
+    assert holodeck["candidates"][0]["scanner_status"] == "rejected_by_admission"
+    assert holodeck["candidates"][0]["next_action"] == ("do_not_scan_without_new_human_curation")
 
 
 def test_scene_sampler_source_prep_install_command_resolves_dict_scene_refs() -> None:

@@ -268,10 +268,14 @@ def source_prep_status(
     source_availability: dict[str, Any],
     source_selection: dict[str, Any],
     missing_resources: list[dict[str, Any]],
+    metadata_worklist_candidate_count: int = 0,
 ) -> str:
     if source_selection.get("status") == "complete":
         return "complete"
-    if source_selection.get("selection_capacity_status") == "rejected_exhausted":
+    if (
+        source_selection.get("selection_capacity_status") == "rejected_exhausted"
+        and metadata_worklist_candidate_count <= 0
+    ):
         return "rejected_exhausted"
     if source_availability.get("module_available") is False:
         return "blocked_molmospaces_module"
@@ -334,7 +338,10 @@ def source_prep_worklist(sources: dict[str, dict[str, Any]]) -> list[dict[str, A
 
 def _source_prep_worklist_next_action(source: dict[str, Any]) -> str:
     profile_action = str(source.get("candidate_profile_next_action") or "")
-    if profile_action == "metadata_first_human_curation":
+    if (
+        profile_action == "metadata_first_human_curation"
+        and source.get("prep_status") == "rejected_exhausted"
+    ):
         return profile_action
     return _source_prep_next_action(str(source.get("prep_status") or ""))
 
