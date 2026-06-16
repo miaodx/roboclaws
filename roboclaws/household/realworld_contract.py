@@ -3323,7 +3323,9 @@ class RealWorldCleanupContract:
             run_id=self.visual_grounding_run_id or self.scenario.scenario_id,
             raw_observation=raw_observation,
             category_hints=list(VISUAL_GROUNDING_CATEGORY_HINTS),
-            fixture_hints=self._fixture_hints_for_visual_grounding_request(),
+            fixture_hints=realworld_visual_candidates._fixture_hints_for_visual_grounding_request(
+                self.fixture_hints()
+            ),
             pipeline_id=self.visual_grounding_pipeline_id,
             image=image_payload_for_raw_observation(
                 raw_observation,
@@ -3365,105 +3367,17 @@ class RealWorldCleanupContract:
             }
         return {
             "ok": True,
-            "candidates": self._candidate_inputs_from_visual_grounding_response(
-                response,
-                raw_observation=raw_observation,
-                visual_grounding_pipeline=pipeline,
+            "candidates": (
+                realworld_visual_candidates._candidate_inputs_from_visual_grounding_response(
+                    response,
+                    raw_observation=raw_observation,
+                    visual_grounding_pipeline=pipeline,
+                    artifact_base_dir=self.visual_grounding_artifact_base_dir,
+                    resolve_destination_fixture_id=self._resolved_destination_fixture_id,
+                )
             ),
             "visual_grounding_pipeline": pipeline,
         }
-
-    def _candidate_inputs_from_visual_grounding_response(
-        self,
-        response: dict[str, Any],
-        *,
-        raw_observation: dict[str, Any],
-        visual_grounding_pipeline: dict[str, Any],
-    ) -> list[dict[str, Any]]:
-        image = image_payload_for_raw_observation(
-            raw_observation,
-            base_dir=self.visual_grounding_artifact_base_dir,
-        )
-        candidates = []
-        for index, candidate in enumerate(response.get("candidates") or [], start=1):
-            category = str(candidate.get("category") or "object")
-            source_fixture_id = str(candidate.get("source_fixture_id") or "")
-            target_fixture_id = self._resolved_destination_fixture_id(
-                category=category,
-                source_fixture_id=source_fixture_id,
-            )
-            overlay_path = self._visual_grounding_overlay_for_candidate(
-                raw_observation=raw_observation,
-                candidate=candidate,
-                index=index,
-            )
-            candidates.append(
-                {
-                    "category": category,
-                    "source_fixture_id": source_fixture_id,
-                    "target_fixture_id": target_fixture_id,
-                    "evidence_note": str(candidate.get("evidence_note") or ""),
-                    "image_region": candidate.get("image_region"),
-                    "confidence": candidate.get("confidence"),
-                    "producer_type": EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
-                    "producer_id": visual_grounding_pipeline.get("pipeline_id", ""),
-                    "visual_grounding_pipeline": visual_grounding_pipeline,
-                    "visual_grounding_stage_provenance": list(
-                        visual_grounding_pipeline.get("stages") or []
-                    ),
-                    "visual_grounding_destination_hint": candidate.get("destination_hint") or {},
-                    "tracking": candidate.get("tracking") or {},
-                    "image_dimensions": {
-                        "width": image.get("width", 0),
-                        "height": image.get("height", 0),
-                    },
-                    "visual_grounding_overlay": overlay_path,
-                }
-            )
-        return candidates
-
-    def _visual_grounding_overlay_for_candidate(
-        self,
-        *,
-        raw_observation: dict[str, Any],
-        candidate: dict[str, Any],
-        index: int,
-    ) -> str:
-        if self.visual_grounding_artifact_base_dir is None:
-            return ""
-        region = candidate.get("image_region") or {}
-        if region.get("type") != "bbox":
-            return ""
-        source_path = _raw_fpv_artifact_path(
-            raw_observation,
-            base_dir=self.visual_grounding_artifact_base_dir,
-        )
-        if source_path is None or not source_path.is_file():
-            return ""
-        observation_id = _safe_artifact_id(str(raw_observation.get("observation_id") or "raw_fpv"))
-        rel_path = (
-            Path("visual_grounding") / "overlays" / observation_id / f"candidate_{index:03d}.jpg"
-        )
-        output_path = self.visual_grounding_artifact_base_dir / rel_path
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            from PIL import Image, ImageDraw
-
-            with Image.open(source_path) as source:
-                image = source.convert("RGB")
-            draw = ImageDraw.Draw(image)
-            x, y, w, h = _normalized_bbox_pixels(
-                region.get("value") or [0, 0, 0, 0],
-                width=int(image.width),
-                height=int(image.height),
-            )
-            draw.rectangle((x, y, x + w, y + h), outline=(26, 115, 232), width=3)
-            label = str(candidate.get("category") or "candidate")
-            draw.text((x + 4, max(0, y - 14)), label, fill=(26, 77, 160))
-            image.save(output_path, format="JPEG", quality=80)
-        except Exception:
-            return ""
-        return str(rel_path)
 
     def _resolved_destination_fixture_id(self, *, category: str, source_fixture_id: str) -> str:
         pseudo_detection = {
@@ -3474,23 +3388,6 @@ class RealWorldCleanupContract:
         target = self.target_fixture_for_detection(pseudo_detection, self.fixture_hints())
         return str((target or {}).get("fixture_id") or "")
 
-    def _fixture_hints_for_visual_grounding_request(self) -> list[dict[str, Any]]:
-        hints = self.fixture_hints()
-        rows = []
-        for room in hints.get("rooms") or []:
-            room_id = str(room.get("room_id") or "")
-            for fixture in room.get("fixtures") or []:
-                rows.append(
-                    {
-                        "fixture_id": str(fixture.get("fixture_id") or ""),
-                        "room_id": str(fixture.get("room_id") or room_id),
-                        "category": str(fixture.get("category") or ""),
-                        "name": str(fixture.get("name") or ""),
-                        "affordances": list(fixture.get("affordances") or []),
-                    }
-                )
-        return rows
-
     def _model_declared_observation_event(
         self,
         *,
@@ -3500,23 +3397,14 @@ class RealWorldCleanupContract:
         declared: list[dict[str, Any]],
         visual_grounding_pipeline: dict[str, Any],
     ) -> dict[str, Any]:
-        return {
-            "schema": MODEL_DECLARED_OBSERVATIONS_SCHEMA,
-            "perception_mode": self.perception_mode,
-            "observation_id": str(raw_observation["observation_id"]),
-            "waypoint_id": str(raw_observation["waypoint_id"]),
-            "room_id": str(raw_observation["room_id"]),
-            "producer_type": producer_type,
-            "producer_id": producer_id,
-            "candidate_count": len(declared),
-            "registered_observed_handles": [str(item["object_id"]) for item in declared],
-            "visual_grounding_pipeline": visual_grounding_pipeline,
-            "private_truth_included": False,
-            "policy_note": (
-                "Model-declared observations are derived from public camera evidence "
-                "and public fixture metadata; private scoring truth is not exposed."
-            ),
-        }
+        return realworld_visual_candidates._model_declared_observation_event(
+            raw_observation=raw_observation,
+            perception_mode=self.perception_mode,
+            producer_type=producer_type,
+            producer_id=producer_id,
+            declared=declared,
+            visual_grounding_pipeline=visual_grounding_pipeline,
+        )
 
     def _register_model_declared_candidate(
         self,
@@ -4770,34 +4658,6 @@ def _image_bbox(handle: str) -> list[int]:
 def _safe_anchor_id(value: str) -> str:
     safe = re.sub(r"[^a-zA-Z0-9_]+", "_", value).strip("_")
     return safe or "unknown"
-
-
-def _raw_fpv_artifact_path(
-    raw_observation: dict[str, Any],
-    *,
-    base_dir: Path,
-) -> Path | None:
-    image_artifacts = raw_observation.get("image_artifacts") or {}
-    value = image_artifacts.get("fpv") or raw_observation.get("fpv_image")
-    if not value:
-        return None
-    path = Path(str(value))
-    return path if path.is_absolute() else base_dir / path
-
-
-def _normalized_bbox_pixels(value: Any, *, width: int, height: int) -> tuple[int, int, int, int]:
-    numbers = [float(item) for item in value]
-    return (
-        round(numbers[0] * width),
-        round(numbers[1] * height),
-        round(numbers[2] * width),
-        round(numbers[3] * height),
-    )
-
-
-def _safe_artifact_id(value: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9_.-]+", "_", value.strip())
-    return cleaned or "artifact"
 
 
 def _vec2(value: Any) -> tuple[float, float] | None:

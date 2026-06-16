@@ -37,7 +37,7 @@ of a clean checkpoint; refresh before the next execution slice.
   do not reopen as a P1 unless it crosses 2000 lines again or regains real
   ownership drift.
 - P1 hard-ceiling production files still include
-  `roboclaws/household/realworld_contract.py` at 4847 lines,
+  `roboclaws/household/realworld_contract.py` at 4707 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
   `roboclaws/household/scene_camera_comparison.py` at 4693,
   `roboclaws/household/report.py` at 3806,
@@ -60,6 +60,12 @@ a planning-only ponytail/input recheck. The next executor should return to P1
 hard-ceiling production files by default. Candidate D now means only a separate
 preview-rendering slice, and candidate H remains opportunistic stale-surface
 cleanup rather than a reason to postpone P1 file-size reduction.
+
+Execution refresh on 2026-06-17 moved pure visual-candidate payload, event, and
+overlay assembly to `realworld_visual_candidates.py`. Candidate A remains the
+default next family, but the next executor should choose a fresh boundary
+inside the still-hard-ceiling contract or report facade rather than reopening
+that completed payload slice.
 
 ## Two-Document Contract
 
@@ -151,10 +157,11 @@ and backend/report/evidence boundaries that prevent branching from returning.
 
 Next execution should normally choose one remaining P1 hard-ceiling
 architecture slice. Default recommendation: continue candidate A by reducing
-`RealWorldCleanupContract` ownership around model-declared visual-candidate
-registration or a remaining report section boundary, because the Runtime
-Metric Map observed/static payload assembly slice is complete and the facade is
-still above the hard ceiling.
+`RealWorldCleanupContract` or `report.py` ownership around a fresh stateful
+visual-candidate boundary, a remaining report section boundary, or a small
+Protocol/coupling reduction that removes real facade-private coupling. Runtime
+Metric Map payload assembly and visual-candidate payload/event/overlay assembly
+are complete, but the contract facade is still above the hard ceiling.
 
 The prior B1 Map 12 label-tool exception is now used and cleared. A future
 candidate D slice should be a separate preview-rendering cleanup only; do not
@@ -216,20 +223,22 @@ only unfinished source of truth for the cleanup stream.
 
 ## Execution Preflight
 
-Preflight status: DRAFT.
+Preflight status: REVIEWED; implementation intentionally not started in this
+plan-check pass.
 Task source: plan path.
 Canonical source: `docs/plans/refactor-python-quality-backend-entropy.md`.
 Route: `$intuitive-refactor` ratchet mode.
-Goal: Continue this cleanup with one architecture-simplifying slice, starting
-by resolving or explicitly assigning current scene-sampler/eval ratchet drift
-and classifying the new complexity rows.
+Goal: Continue this cleanup with one architecture-simplifying slice. Default
+next slice is candidate A's pure visual-candidate payload/event/overlay split
+inside the existing MCP capability contract boundary.
 
 Scope:
 
 - Refresh ratchet signal before edits.
 - Treat `scene_sampler.py` as cleared from the P1 hard-ceiling checkpoint unless
   it crosses 2000 lines again.
-- Classify new complexity rows before execution; do not let plan-external
+- Treat the current 11 complexity rows as assigned to candidates C-F unless a
+  refresh shows new production/shared drift; do not let plan-external
   complexity become invisible while one file-size slice improves.
 - Choose one P1 hard-ceiling architecture slice from this plan and execute it
   vertically: code, callers, tests, stale internal paths, proof.
@@ -284,7 +293,7 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 4847 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 4707 lines and
 `roboclaws/household/report.py` is 3806 lines. Owning architecture layers: MCP
 Capability Contract And Tools for the contract facade, and Artifacts, reports,
 and eval suites for report rendering. Continue only around real ownership
@@ -292,13 +301,14 @@ boundaries: payload builders, policy/event families, section renderers, or
 artifact envelopes. Preserve public schemas and report claims. Contract helper
 Protocols are ponytail candidates only when the slice reduces
 `RealWorldCleanupContract` private-member coupling; replacing a Protocol with a
-looser parameter bag or another facade wrapper is not a win. Strong next
-sub-slices are:
+looser parameter bag or another facade wrapper is not a win.
 
-- Model-declared visual-candidate registration, declaration resolution, and
-  camera-labeler candidate assembly into `realworld_visual_candidates.py`,
-  while preserving `declare_visual_candidates` /
-  `navigate_to_visual_candidate` responses and visual-grounding evidence.
+Valid next sub-slices are:
+
+- A fresh stateful visual-candidate registration/resolution slice only if it
+  can name a real lifecycle owner and preserve `declare_visual_candidates` /
+  `navigate_to_visual_candidate` response shapes, handle state, visual-grounding
+  evidence, and private-truth assertions.
 - Remaining `report.py` section extraction only when it removes a report
   ownership boundary, not just because a section is long.
 
@@ -320,7 +330,12 @@ Severity: P1 for hard-ceiling files, otherwise P2. Watch
 `skills/eval-harness/scripts/run_eval_harness.py`. Owning architecture layers:
 Agent Engines And Provider Profiles, Thin Runtime / Server Adapters, and Eval
 Suites. Normalize status/evidence envelopes only where it removes repeated
-branching without changing public launch, report, or grader contracts.
+branching without changing public launch, report, or grader contracts. Current
+production/shared complexity rows are
+`roboclaws/evals/live_runtime.py::wait_for_live_surface_completion` and
+`skills/eval-harness/scripts/run_eval_harness.py::_row_blockers`; treat these
+as focused P2 rows unless a hard-ceiling live runner is selected as the P1
+slice.
 
 ### D: B1 Map 12 Label And Preview Tooling Complexity
 
@@ -346,7 +361,9 @@ scene-preview/control/static-asset tests and a cleanup-checker fixture lookup
 helper. Oversized behavior tests remain a large part of the top-40 list. Use
 fixture builders and focused assertion helpers only when they make behavior
 ownership easier to scan. Owning architecture layers follow the behavior under
-test: operator console, reports/artifacts, eval suites, or launch surfaces.
+test: operator console, reports/artifacts, eval suites, or launch surfaces. Do
+not split a large test merely to reduce line count if the duplicated setup
+vocabulary remains.
 
 ### F: MCP Semantic Tool And Prompt Preview Complexity
 
@@ -376,12 +393,19 @@ checker/report claims; MCP Capability Contract And Tools, Agent Skills, or
 Agent Engines And Provider Profiles for labeler/profile/prompt guidance.
 Behavior-change class is internal/stale docs unless a public command, report
 claim, prompt contract, or artifact contract changes; stop for a slice decision
-if that happens. Do not delete internal `visual_grounding` pipeline schemas,
-provenance fields, service env vars, or server plumbing merely because
-`visual_grounding=...` is no longer a public launch axis. This bundle must not
-be used as a reason to defer the remaining P1 hard-ceiling files. Proof:
-affected checker, prompt, or visual-grounding tests when code changes,
-otherwise static grep/docs proof plus ratchet.
+if that happens. The empty camera-labeler mapping dicts are identity-adapter
+shrink targets in `roboclaws/household/profiles.py`, not evidence that the
+camera-labeler or visual-grounding artifact contracts are removable. The
+legacy checker flag still has parser and test surface; remove it only with a
+checker-contract migration that updates callers/tests. The prompt legacy alias
+is a compatibility import shim; delete it only after call-site search proves it
+is in-repo dead or the slice explicitly migrates those imports. Do not delete
+internal `visual_grounding` pipeline schemas, provenance fields, service env
+vars, or server plumbing merely because `visual_grounding=...` is no longer a
+public launch axis. This bundle must not be used as a reason to defer the
+remaining P1 hard-ceiling files. Proof: affected checker, prompt, or
+visual-grounding tests when code changes, otherwise static grep/docs proof plus
+ratchet.
 
 ### Cleared Or Parked
 
@@ -402,6 +426,11 @@ otherwise static grep/docs proof plus ratchet.
   lives in `RealWorldCleanupContract`; reopen only if the facade starts
   rebuilding Runtime Metric Map payload internals instead of delegating to
   `realworld_runtime_map_contract.py`.
+- Visual-candidate payload/event/overlay assembly no longer lives in
+  `RealWorldCleanupContract`; reopen only if the facade starts rebuilding
+  visual-grounding candidate payloads, model-declared observation events,
+  fixture-hint request rows, or overlay artifact paths instead of delegating to
+  `realworld_visual_candidates.py`.
 - B1 Map 12 runtime-bundle review-manifest validation complexity is cleared;
   reopen only if `compile_b1_map12_runtime_bundle.py::review_manifest_errors`
   regains ratchet rows or false-green review-gate drift.
@@ -433,8 +462,11 @@ look stale are still active internal contracts behind current public axes.
     `--require-canonical-robot-view-camera-control`, empty camera-labeler
     mapping dicts, unused prompt legacy aliases, and duplicated current-doc
     lane prose are candidate H, not ad hoc edits to unrelated owners. The empty
-    maps are a shrink target only for the camera-labeler mapping layer; do not
-    remove the internal visual-grounding pipeline contract or artifact fields.
+    maps are a shrink target only for the camera-labeler identity mapping layer;
+    do not remove the internal visual-grounding pipeline contract or artifact
+    fields. The checker flag and prompt alias still have explicit parser/test
+    or compatibility surfaces, so deletion requires a scoped migration rather
+    than a blind ponytail cut.
 - Parked unless a nearby accepted slice touches them:
   - `PhysicalObservationProvider` is low-value Protocol cleanup and belongs to
     a physical Nav2 pilot slice, not the main hard-ceiling pass.

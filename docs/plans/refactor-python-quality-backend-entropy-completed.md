@@ -796,6 +796,14 @@ logs before choosing the next slice.
   modules unchanged at 66. Proof: B1 label-tool contract tests, ruff, format
   check, py_compile, and ratchet.
 
+- 2026-06-17: Visual-candidate payload, model-declared observation event,
+  fixture-hint request, and overlay artifact assembly moved from
+  `RealWorldCleanupContract` into `realworld_visual_candidates.py`; stateful
+  registration/navigation stayed in the contract facade. Metric:
+  `realworld_contract.py` 4847 -> 4707 lines; ratchet remains 11 complexity
+  rows and 66 oversized modules. Proof: realworld contract and MCP server
+  contract tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -813,6 +821,10 @@ logs before choosing the next slice.
 - Runtime Metric Map payload assembly is owned by
   `realworld_runtime_map_contract.py`; reopen only if the realworld contract
   facade starts rebuilding observed-object or static-map payload internals.
+- Visual-candidate payload/event/overlay assembly is owned by
+  `realworld_visual_candidates.py`; reopen only if the realworld contract
+  facade starts rebuilding visual-grounding candidate payloads or overlay
+  artifact paths directly.
 - B1 runtime-bundle review-manifest validation is split into focused helper
   families; reopen only if `review_manifest_errors` regains ratchet rows or
   false-green review-gate behavior.
