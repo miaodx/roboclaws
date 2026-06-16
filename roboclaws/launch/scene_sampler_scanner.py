@@ -11,6 +11,7 @@ _SOURCE_PREP_ACTIONS = {
     "complete": "none",
     "ready_for_scanner": "run_scanner_admission",
     "rejected_exhausted": "do_not_scan_without_new_human_curation",
+    "gate_mismatch": "do_not_scan_without_gate_change",
     "blocked_prefilter_inconclusive": "run_scene_only_prefilter_or_stop",
     "blocked_molmospaces_module": "install_repo_dev_runtime",
     "blocked_scene_root": "configure_or_install_molmospaces_scene_root",
@@ -319,7 +320,11 @@ def next_flow_status(
         return "complete"
     if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
         return "scanner_ready"
+    if int(scanner_source.get("gate_mismatch_count") or 0) > 0:
+        return "gate_mismatch"
     prep_status = str(prep_source.get("prep_status") or "")
+    if prep_status == "gate_mismatch":
+        return "gate_mismatch"
     if prep_status == "rejected_exhausted":
         return "rejected_exhausted"
     if prep_status.startswith("blocked_"):
@@ -342,6 +347,8 @@ def next_flow_next_action(
         return "none"
     if int(scanner_source.get("ready_for_product_smoke_count") or 0) > 0:
         return "run_scanner_plan_for_ready_candidates"
+    if int(scanner_source.get("gate_mismatch_count") or 0) > 0:
+        return "do_not_scan_without_gate_change"
     selection_action = str(selection_source.get("next_action") or "")
     if selection_action == "expand_candidate_range":
         return "expand_candidate_range"
@@ -442,7 +449,11 @@ def next_flow_recommended_commands(
     recommended_candidate_range: str,
     artifact_paths: dict[str, str],
 ) -> list[dict[str, str]]:
-    if next_action in {"none", "do_not_scan_without_new_human_curation"}:
+    if next_action in {
+        "none",
+        "do_not_scan_without_gate_change",
+        "do_not_scan_without_new_human_curation",
+    }:
         return []
     source_arg = shlex.quote(source)
     candidate_range = recommended_candidate_range or "0:19"
@@ -624,6 +635,9 @@ def next_flow_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "rejected_exhausted_source_count": sum(
             1 for source in sources.values() if source.get("flow_status") == "rejected_exhausted"
         ),
+        "gate_mismatch_source_count": sum(
+            1 for source in sources.values() if source.get("flow_status") == "gate_mismatch"
+        ),
         "metadata_worklist_source_count": sum(
             1
             for source in sources.values()
@@ -672,9 +686,27 @@ def _next_flow_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
         )
         or [],
         "scanner_ready_candidate_count": int(source.get("scanner_ready_candidate_count") or 0),
+        "scanner_gate_mismatch_count": int(source.get("scanner_gate_mismatch_count") or 0),
         "next_scan_world_ids": source.get("next_scan_world_ids") or [],
         "recommended_candidate_range": source.get("recommended_candidate_range", ""),
     }
+
+
+def scanner_gate_mismatch_count(scanner_source: dict[str, Any]) -> int:
+    """Count scanner candidates that ran proof but still fail public admission gates."""
+
+    count = 0
+    for candidate in scanner_source.get("candidates") or []:
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("scanner_status") != "rejected_by_admission":
+            continue
+        evidence = candidate.get("scanner_evidence")
+        if not isinstance(evidence, dict):
+            continue
+        if evidence.get("product_smoke_status") == "available":
+            count += 1
+    return count
 
 
 def scanner_admission_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:

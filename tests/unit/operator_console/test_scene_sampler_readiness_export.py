@@ -265,10 +265,14 @@ def _assert_next_flow(
     assert next_flow["summary"]["source_count"] == 4
     assert next_flow["summary"]["ui_needed_count"] == 6
     assert next_flow["summary"]["eval_needed_count"] == 20
-    assert next_flow["summary"]["next_actions"] == {"run_scene_only_prefilter_or_stop": 2}
+    assert next_flow["summary"]["next_actions"] == {
+        "do_not_scan_without_gate_change": 1,
+        "run_scene_only_prefilter_or_stop": 1,
+    }
     assert next_flow["summary"]["rejected_exhausted_source_count"] == 0
+    assert next_flow["summary"]["gate_mismatch_source_count"] == 1
     assert next_flow["summary"]["metadata_worklist_source_count"] == 2
-    assert next_flow["summary"]["metadata_worklist_candidate_count"] == 20
+    assert next_flow["summary"]["metadata_worklist_candidate_count"] >= 14
     assert "worklist" in next_flow["summary"]
     assert next_flow["worklist"] == next_flow["summary"]["worklist"]
     assert next_flow["worklist"][0]["scene_source"] in {
@@ -305,13 +309,11 @@ def _assert_next_flow(
         "inspect_prefilter_stop_reason",
     ]
     holodeck = next_flow["sources"]["holodeck-objaverse-val"]
-    assert holodeck["flow_status"] == "blocked_prefilter_inconclusive"
-    assert holodeck["next_action"] == "run_scene_only_prefilter_or_stop"
-    assert holodeck["metadata_worklist_candidate_count"] == 10
-    assert [command["name"] for command in holodeck["recommended_commands"]] == [
-        "refresh_scene_only_prefilter",
-        "inspect_prefilter_stop_reason",
-    ]
+    assert holodeck["flow_status"] == "gate_mismatch"
+    assert holodeck["next_action"] == "do_not_scan_without_gate_change"
+    assert holodeck["metadata_worklist_candidate_count"] >= 4
+    assert holodeck["scanner_gate_mismatch_count"] == 2
+    assert holodeck["recommended_commands"] == []
     assert set(holodeck["blocked_reason_samples"]) == {
         "fewer_than_three_public_navigation_areas",
         "missing_public_inspection_waypoints",

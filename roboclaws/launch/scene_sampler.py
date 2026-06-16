@@ -67,6 +67,7 @@ from roboclaws.launch.scene_sampler_scanner import (
     scanner_candidate_packet,
     scanner_execution_candidate,
     scanner_execution_summary,
+    scanner_gate_mismatch_count,
     scanner_missing_gates,
     scanner_next_action,
     scanner_preview_assets,
@@ -981,6 +982,7 @@ def source_prep_report(
         source_selection = selection["sources"][source]
         source_candidate_profile = candidate_profile["sources"][source]
         source_prefilter = scene_prefilter["sources"][source]
+        gate_mismatch_rows = _source_gate_mismatch_profile_rows(source_candidate_profile)
         dataset_name, split = _molmospaces_get_scenes_args(source)
         candidate_scene_refs = [
             _candidate_scene_ref_from_availability(item)
@@ -1043,7 +1045,9 @@ def source_prep_report(
             missing_resources=missing_resources,
             metadata_worklist_candidate_count=metadata_worklist_candidate_count,
         )
-        if no_expensive_prefilter_candidates:
+        if gate_mismatch_rows and no_expensive_prefilter_candidates:
+            prep_status = "gate_mismatch"
+        elif no_expensive_prefilter_candidates:
             prep_status = "blocked_prefilter_inconclusive"
         sources[source] = {
             "scene_source": source,
@@ -1084,6 +1088,8 @@ def source_prep_report(
             "scene_prefilter_expensive_proof_world_ids": source_prefilter.get(
                 "expensive_proof_world_ids", []
             ),
+            "gate_mismatch_candidate_count": len(gate_mismatch_rows),
+            "gate_mismatch_world_ids": [row.get("world_id") for row in gate_mismatch_rows],
             "candidate_scene_refs": [
                 item
                 for item in candidate_scene_refs
@@ -1177,6 +1183,7 @@ def scanner_execution_plan(
                     admission=admission,
                 )
             )
+        gate_mismatch_count = int(prep_source.get("gate_mismatch_candidate_count") or 0)
         sources[source] = {
             "scene_source": source,
             "prep_status": prep_source.get("prep_status", ""),
@@ -1190,6 +1197,9 @@ def scanner_execution_plan(
                 for item in candidates
                 if item["scanner_status"].startswith("blocked_")
                 or item["scanner_status"] == "rejected_by_admission"
+            ),
+            "gate_mismatch_count": gate_mismatch_count + scanner_gate_mismatch_count(
+                {"candidates": candidates}
             ),
             "candidates": candidates,
         }
@@ -1236,6 +1246,7 @@ def next_flow_worklist_report(
             and item.get("scanner_status") == "ready_for_product_smoke"
             and item.get("world_id")
         ]
+        scanner_gate_mismatch_count = int(source_execution.get("gate_mismatch_count") or 0)
         missing_gate_counts = next_flow_missing_gate_counts(source_admission)
         next_action = next_flow_next_action(
             readiness_source=source_readiness,
@@ -1296,6 +1307,7 @@ def next_flow_worklist_report(
             "scanner_ready_candidate_count": int(
                 source_execution.get("ready_for_product_smoke_count") or 0
             ),
+            "scanner_gate_mismatch_count": scanner_gate_mismatch_count,
             "scanner_blocked_candidate_count": int(source_execution.get("blocked_count") or 0),
             "scanner_ready_world_ids": scanner_ready_world_ids,
             "next_scan_world_ids": next_flow_scan_world_ids(source_selection),
@@ -1958,6 +1970,11 @@ def _candidate_profile_row(
         "known_waypoint_count": int(candidate.get("waypoint_count") or 0),
         "known_failure_class": candidate.get("failure_class", ""),
         "known_blocked_reason": blocked_reason,
+        "known_source_outcome": candidate.get("source_outcome", ""),
+        "known_prefilter_status": candidate.get("prefilter_status", ""),
+        "known_prefilter_reason": candidate.get("prefilter_reason", ""),
+        "known_cheap_room_count": int(candidate.get("cheap_room_count") or 0),
+        "known_product_smoke_run_dir": candidate.get("product_smoke_run_dir", ""),
         "candidate_file_status": (candidate.get("candidate_file") or {}).get("status", ""),
         "candidate_file_exists": bool((candidate.get("candidate_file") or {}).get("exists")),
         "candidate_file": candidate.get("candidate_file") or {},
@@ -2003,6 +2020,16 @@ def _source_availability_for_candidates(
         **source_availability,
         "candidate_files": candidate_files,
     }
+
+
+def _source_gate_mismatch_profile_rows(
+    source_candidate_profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in source_candidate_profile.get("candidates") or []
+        if isinstance(row, dict) and row.get("known_source_outcome") == "gate_mismatch"
+    ]
 
 
 def _scanner_execution_candidate_indices(
@@ -2638,6 +2665,11 @@ def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
         preview_statuses = _view_statuses(
             _ready_row_preview_metadata(source=row.scene_source, scene_index=row.scene_index)
         )
+    metadata = (
+        scanner_metadata(source=row.scene_source, scene_index=row.scene_index)
+        if row.scene_index is not None
+        else {}
+    )
     return {
         "scene_family": row.scene_family,
         "scene_split": row.scene_split,
@@ -2660,6 +2692,11 @@ def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
         "failure_class": row.failure_class,
         "quality_score": row.quality_score,
         "coverage_score": row.coverage_score,
+        "source_outcome": str(metadata.get("source_outcome") or ""),
+        "prefilter_status": str(metadata.get("prefilter_status") or ""),
+        "prefilter_reason": str(metadata.get("prefilter_reason") or ""),
+        "cheap_room_count": int(metadata.get("cheap_room_count") or 0),
+        "product_smoke_run_dir": str(metadata.get("product_smoke_run_dir") or ""),
     }
 
 

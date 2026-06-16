@@ -526,6 +526,8 @@ def _source_prep_next_action(prep_status: str) -> str:
         return "none"
     if prep_status == "rejected_exhausted":
         return "do_not_scan_without_new_human_curation"
+    if prep_status == "gate_mismatch":
+        return "do_not_scan_without_gate_change"
     if prep_status == "ready_for_scanner":
         return "run_scanner_admission"
     if prep_status == "blocked_prefilter_inconclusive":

@@ -76,8 +76,10 @@ ITHOR_REJECTED_INDICES = {
 }
 HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES = {107, 171, 268}
 HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {261, 381, 403}
+HOLODECK_PREFILTER_GATE_MISMATCH_INDICES = {231, 344}
 HOLODECK_REJECTED_INDICES = {
     *range(20),
+    *HOLODECK_PREFILTER_GATE_MISMATCH_INDICES,
     22,
     25,
     26,
@@ -553,6 +555,15 @@ def _assert_rejected_holodeck_projection_source(source_projection: dict[str, obj
         for row in source_projection["blocked_rows"]
         if row["blocked_reason"] == "preview_not_reviewable"
     } == HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
+    gate_mismatch_rows = [
+        row
+        for row in source_projection["blocked_rows"]
+        if row["scene_index"] in HOLODECK_PREFILTER_GATE_MISMATCH_INDICES
+    ]
+    assert {row["scene_index"] for row in gate_mismatch_rows} == (
+        HOLODECK_PREFILTER_GATE_MISMATCH_INDICES
+    )
+    assert all(row["room_count"] == 1 and row["waypoint_count"] == 2 for row in gate_mismatch_rows)
 
 
 def test_scene_sampler_eval_suite_payload_matches_committed_fixture() -> None:
@@ -677,6 +688,11 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
         for row in holodeck["blocked_rows"]
         if row["blocked_reason"] == "preview_not_reviewable"
     } == HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
+    assert {
+        row["scene_index"]
+        for row in holodeck["blocked_rows"]
+        if row["scene_index"] in HOLODECK_PREFILTER_GATE_MISMATCH_INDICES
+    } == HOLODECK_PREFILTER_GATE_MISMATCH_INDICES
 
 
 def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
@@ -1179,8 +1195,9 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert report["summary"]["missing_resource_summary"]["by_resource_type"] == {}
     assert report["summary"]["missing_resource_summary"]["by_reason"] == {}
     assert report["summary"]["prep_status_counts"] == {
-        "blocked_prefilter_inconclusive": 2,
+        "blocked_prefilter_inconclusive": 1,
         "complete": 2,
+        "gate_mismatch": 1,
     }
     assert report["summary"]["worklist"][0]["scene_source"] == "ithor"
     assert report["summary"]["worklist"][0]["next_action"] == "run_scene_only_prefilter_or_stop"
@@ -1219,7 +1236,12 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     )
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
-    assert holodeck["prep_status"] == "blocked_prefilter_inconclusive"
+    assert holodeck["prep_status"] == "gate_mismatch"
+    assert holodeck["gate_mismatch_candidate_count"] == 2
+    assert holodeck["gate_mismatch_world_ids"] == [
+        "molmospaces/holodeck-objaverse-val/231",
+        "molmospaces/holodeck-objaverse-val/344",
+    ]
     assert holodeck["install_candidates"] == []
     assert holodeck["missing_resources"] == []
 
