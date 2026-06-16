@@ -30,14 +30,15 @@ def init_profile_and_acceptance(
     public_acceptance_config: dict[str, Any] | None,
 ) -> None:
     helpers = _contract_helpers()
-    target.evidence_lane = (
-        str(evidence_lane or "").strip().lower().replace("_", "-") if evidence_lane else ""
-    )
+    target.evidence_lane = _default_public_evidence_lane(target, evidence_lane)
     target.public_acceptance_config = helpers._public_acceptance_config(public_acceptance_config)
     target.task_intent = helpers.normalize_household_intent(
         target.public_acceptance_config.get("task_intent")
     )
-    target.sanitize_world_labels = target.evidence_lane == helpers.WORLD_LABELS_SANITIZED_PROFILE
+    target.sanitize_world_labels = (
+        target.perception_mode == helpers.VISIBLE_OBJECT_DETECTIONS_MODE
+        and target.evidence_lane == helpers.WORLD_PUBLIC_LABELS_PROFILE
+    )
     target.visible_detection_exposure_policy = (
         helpers.SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
         if target.sanitize_world_labels
@@ -202,3 +203,16 @@ def _contract_helpers() -> Any:
     from roboclaws.household import realworld_contract
 
     return realworld_contract
+
+
+def _default_public_evidence_lane(target: Any, evidence_lane: str | None) -> str:
+    helpers = _contract_helpers()
+    if evidence_lane:
+        return str(evidence_lane).strip().lower().replace("_", "-")
+    if target.perception_mode == helpers.VISIBLE_OBJECT_DETECTIONS_MODE:
+        return helpers.WORLD_PUBLIC_LABELS_PROFILE
+    if target.perception_mode == helpers.RAW_FPV_ONLY_MODE:
+        return "camera-raw-fpv"
+    if target.perception_mode == helpers.CAMERA_MODEL_POLICY_MODE:
+        return "camera-grounded-labels"
+    return ""

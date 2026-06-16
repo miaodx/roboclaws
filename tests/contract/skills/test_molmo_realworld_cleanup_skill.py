@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.household.cleanup_routine import routine_plan
-from roboclaws.household.profiles import WORLD_LABELS_PROFILE
+from roboclaws.household.profiles import WORLD_PUBLIC_LABELS_PROFILE
 from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 from roboclaws.household.scenario import build_cleanup_scenario
@@ -53,6 +53,20 @@ def _first_detection_by_category(server: Any, category: str) -> dict[str, Any]:
     raise AssertionError(f"expected at least one visible {category} detection")
 
 
+def _first_destination_option(server: Any, object_id: str) -> dict[str, Any]:
+    done = server.call_tool("done", reason="probe public destination options")
+    pending = [
+        dict(item)
+        for blocker in (done.get("completion") or {}).get("blockers") or []
+        if blocker.get("type") == "pending_cleanup_candidates"
+        for item in blocker.get("pending_cleanup_candidates") or []
+    ]
+    for item in pending:
+        if item.get("object_id") == object_id and item.get("destination_options"):
+            return dict(item["destination_options"][0])
+    raise AssertionError(f"expected destination option for {object_id}")
+
+
 def test_cleanup_skill_prioritizes_done_over_optional_reclean_loops() -> None:
     text = SKILL_PATH.read_text(encoding="utf-8")
     compact = " ".join(text.split())
@@ -74,28 +88,26 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        evidence_lane=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
         map_mode=MINIMAL_MAP_MODE,
     )
     try:
         detection = _first_detection_by_category(server, "food")
+        destination = _first_destination_option(server, str(detection["object_id"]))
+        fixture_id = str(destination["candidate_fixture_id"])
         fixture_hints = {
             "rooms": [
                 {
                     "room_id": "runtime_semantic_anchors",
-                    "fixtures": [
-                        server.contract.public_receptacles_by_id()[
-                            str(detection["candidate_fixture_id"])
-                        ]
-                    ],
+                    "fixtures": [server.contract.public_receptacles_by_id()[fixture_id]],
                 }
             ]
         }
         cleaned = routine.run_cleanup_routine(
             server.call_tool,
             object_id=detection["object_id"],
-            fixture_id=detection["candidate_fixture_id"],
-            placement_tool=detection.get("recommended_tool") or "auto",
+            fixture_id=fixture_id,
+            placement_tool=destination.get("recommended_tool") or "auto",
             fixture_hints=fixture_hints,
         )
     finally:
@@ -138,24 +150,22 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
     )
     try:
         detection = _first_detection_by_category(server, "food")
+        destination = _first_destination_option(server, str(detection["object_id"]))
+        fixture_id = str(destination["candidate_fixture_id"])
         fixture_hints = {
             "rooms": [
                 {
                     "room_id": "runtime_semantic_anchors",
-                    "fixtures": [
-                        server.contract.public_receptacles_by_id()[
-                            str(detection["candidate_fixture_id"])
-                        ]
-                    ],
+                    "fixtures": [server.contract.public_receptacles_by_id()[fixture_id]],
                 }
             ]
         }
     finally:
         server.close()
 
-    assert str(detection["candidate_fixture_id"]).startswith("anchor_fixture_")
+    assert fixture_id.startswith("anchor_fixture_")
     assert routine_plan(
-        fixture_id=str(detection["candidate_fixture_id"]),
+        fixture_id=fixture_id,
         placement_tool="auto",
         target_fixture=fixture_hints["rooms"][0]["fixtures"][0],
     ) == [
