@@ -923,6 +923,16 @@ logs before choosing the next slice.
   modules. Proof: focused apple-to-apple unit tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: Robot-camera apple-to-apple native Isaac render diagnostics
+  moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_native_render.py`, covering native-diagnostics
+  source selection, setting-group compaction, status interpretation, and summary
+  payload assembly. The runner now attaches the owner output and keeps Object
+  Gate compaction in `robot_camera_apple2apple_object_gate.py`. Metric: runner
+  4275 -> 4161 lines, new owner 130 lines; ratchet remains 11 complexity rows
+  and 66 oversized modules. Proof: focused apple-to-apple unit tests, ruff,
+  format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -980,6 +990,10 @@ logs before choosing the next slice.
   private delegates for material response checks, material/tone probe history
   primitives, preview-surface summaries, texture material summaries, or texture
   basename helpers.
+- Robot-camera apple-to-apple native Isaac render diagnostics are owned by
+  `robot_camera_apple2apple_native_render.py`; reopen only if the runner
+  rebuilds native-diagnostics source selection, setting-group compaction,
+  native-status interpretation, or native summary payloads directly.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

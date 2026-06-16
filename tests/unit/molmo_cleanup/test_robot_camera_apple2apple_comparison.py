@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 
 from scripts.molmo_cleanup import robot_camera_apple2apple_capture_quality as capture_quality
 from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
+from scripts.molmo_cleanup import robot_camera_apple2apple_native_render as native_render
 from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
 from scripts.molmo_cleanup import robot_camera_apple2apple_report as report_renderer
 
@@ -1591,6 +1592,24 @@ def Xform "World"
     assert "Native Isaac Render Diagnostics" in report_html
     assert "not_a_native_renderer_setting" in report_html
     assert "/rtx/post/tonemap/op" in report_html
+
+
+def test_robot_camera_native_render_owner_prefers_schema_matched_state() -> None:
+    native = {
+        "schema": "isaac_native_render_diagnostics_v1",
+        "status": "captured",
+        "settings_api_available": True,
+    }
+    fallback = {"schema": "legacy_native_render_diagnostics", "status": "legacy"}
+
+    result = native_render.native_isaac_render_diagnostics_from_state(
+        {
+            "native_render_diagnostics": fallback,
+            "runtime": {"rendering": {"native_render_diagnostics": native}},
+        }
+    )
+
+    assert result is native
 
 
 def test_robot_camera_comparison_target_selection_filters_unbound_isaac_targets() -> None:

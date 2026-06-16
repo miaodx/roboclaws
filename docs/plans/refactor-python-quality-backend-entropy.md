@@ -71,14 +71,14 @@ reason to defer the next P1 split.
 
 Intuitive-refactor audit refresh on 2026-06-17 re-ran
 `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`; the
-signal is unchanged at 11 complexity rows and 66 oversized modules. The latest
-Candidate B slice removed runner-private material/probe delegates from the
-apple-to-apple runner, moved the direct material-probe test to
-`robot_camera_apple2apple_materials.py`, and kept light/shadow probe history
-runner/render-domain-owned while using shared probe primitives directly. The
-apple runner dropped from 4357 to 4275 lines. Continue Candidate B by selecting
-a new visual-comparison boundary rather than reopening the material/probe
-delegate surface.
+signal is unchanged at 11 complexity rows and 66 oversized modules. Recent
+Candidate B slices removed runner-private material/probe delegates from the
+apple-to-apple runner and moved native Isaac render diagnostics into
+`robot_camera_apple2apple_native_render.py`. The apple runner dropped from 4357
+to 4161 lines across those two slices. Continue Candidate B by selecting a new
+visual-comparison boundary rather than reopening material/probe delegates,
+native render diagnostics, Object Gate / Render Gate, or capture-quality
+interpretation.
 
 ## Operating Rules
 
@@ -128,18 +128,18 @@ Recommended next slice claim:
 - Owner layer: Artifacts, reports, and eval suites.
 - Current friction: the visual comparison family still has three production
   hard-ceiling files, with the apple runner above 4000 lines after the
-  material/probe wrapper cleanup.
+  material/probe and native-render cleanup.
 - Simplification: reduce one real report/artifact/diagnostic concept such as
-  native render diagnostics, image metric artifact preparation,
-  visual-parity summary reporting, or a report/gate summary owner for
+  image metric artifact preparation, visual-parity summary reporting, capture
+  lane initialization, or a report/gate summary owner for
   `summarize_robot_camera_visual_parity.py`.
 - Behavior-change class: internal owner cleanup unless the chosen slice
   explicitly changes report or artifact contracts.
 - Proof: focused visual-comparison tests, ruff on touched files, format check,
   and ratchet summary.
 - Non-goals: reopening material/probe delegates, Object Gate / Render Gate,
-  capture-quality interpretation, or scene-camera report rendering without
-  fresh drift.
+  capture-quality interpretation, native render diagnostics, or scene-camera
+  report rendering without fresh drift.
 
 Candidate A
 remains valid only for a new `RealWorldCleanupContract` boundary such as
@@ -197,10 +197,10 @@ belongs to `scene_camera_report*.py`, and the public
 comparison facade starts rebuilding report sections directly again.
 
 Default next candidate-B slices remain valid only around real boundaries such
-as capture-lane initialization, render contract diagnostics, native render
-diagnostics, object audit item construction, image metric artifact preparation,
-or visual-parity summary reporting. The runner-private material/probe delegate
-surface has been removed; do not recreate `_probe_manifest_summary`,
+as capture-lane initialization, render contract diagnostics, object audit item
+construction, image metric artifact preparation, or visual-parity summary
+reporting. The runner-private material/probe delegate surface has been removed;
+do not recreate `_probe_manifest_summary`,
 `_comparison_probe_comparable`, `_comparison_probe_delta`,
 `_material_response_probe_history`, `_tone_color_probe_history`,
 `_texture_colorspace_material_response_check`,
@@ -210,8 +210,12 @@ surface has been removed; do not recreate `_probe_manifest_summary`,
 `_tone_color_response_check` in the runner for now because it still combines
 residual triage, native color settings, and report-domain interpretation.
 Light/shadow probe history remains runner/render-domain-owned while sharing
-material-owner probe primitives directly. Real renderer claims still require
-separate local proof. The Object Gate / Render Gate diagnostic packet owner is now
+material-owner probe primitives directly. Native Isaac render diagnostics now
+belong to `robot_camera_apple2apple_native_render.py`; do not reopen it unless
+the runner starts rebuilding native diagnostics candidate selection, native
+setting-group compaction, native-status interpretation, or native summary
+payloads directly. Real renderer claims still require separate local proof. The
+Object Gate / Render Gate diagnostic packet owner is now
 `robot_camera_apple2apple_object_gate.py`, and report-renderer tests call
 `robot_camera_apple2apple_report.py` directly; do not reopen those runner
 facade aliases without fresh drift. Continue the apple runner only when the
