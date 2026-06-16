@@ -954,6 +954,16 @@ logs before choosing the next slice.
   complexity rows and 66 oversized modules. Proof: focused apple-to-apple unit
   tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Done-readiness pending/held cleanup candidate derivation moved
+  from `RealWorldCleanupContract` into `realworld_done_readiness.py`, including
+  runtime public destination-option derivation. Contract-private
+  `_pending_cleanup_candidates()`, `_held_cleanup_candidates()`, and
+  `_destination_options_for_policy()` wrappers plus now-unused private aliases
+  were deleted after call-site scan. Metric: `realworld_contract.py` 3888 ->
+  3774 lines, owner module 276 -> 420 lines; ratchet remains 11 complexity rows
+  and 66 oversized modules. Proof: focused realworld contract and MCP server
+  contract tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1020,6 +1030,10 @@ logs before choosing the next slice.
   runner rebuilds saved-report image derivation, metric-image paths,
   image-diff payloads, residual diagnostic math, or residual triage summaries
   directly.
+- Done-readiness pending/held cleanup candidates and runtime public
+  destination options are owned by `realworld_done_readiness.py`; reopen only
+  if `realworld_contract.py` starts rebuilding pending candidates, held
+  candidates, destination options, or wrapper aliases directly.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

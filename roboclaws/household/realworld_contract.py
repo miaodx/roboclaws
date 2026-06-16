@@ -158,16 +158,12 @@ _is_place_anchor = realworld_contract_projection._is_place_anchor
 _map_bundle_fields_present = realworld_contract_projection._map_bundle_fields_present
 _merge_public_rooms = realworld_contract_projection._merge_public_rooms
 _metric_map_room_payload = realworld_contract_projection._metric_map_room_payload
-_normalize_fixture_category_label = realworld_contract_projection._normalize_fixture_category_label
 _polygon_center_world = realworld_contract_projection._polygon_center_world
 _polygon_from_room_outline = realworld_contract_projection._polygon_from_room_outline
 _point_overlaps_fixture_obstacle = realworld_contract_projection._point_overlaps_fixture_obstacle
 _pose_stamped_waypoints_present = realworld_contract_projection._pose_stamped_waypoints_present
 _public_destination_policy_for_category = (
     realworld_contract_projection._public_destination_policy_for_category
-)
-_public_destination_policy_tool_for_fixture_category = (
-    realworld_contract_projection._public_destination_policy_tool_for_fixture_category
 )
 _public_driveable_ways = realworld_contract_projection._public_driveable_ways
 _public_room_hint_payload = realworld_contract_projection._public_room_hint_payload
@@ -2414,115 +2410,6 @@ class RealWorldCleanupContract:
             assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
 
-    def _pending_cleanup_candidates(self) -> list[dict[str, Any]]:
-        worklist = self.cleanup_worklist_payload(fixture_hints=self.fixture_hints())
-        pending = []
-        for item in worklist.get("objects", []):
-            state = str(item.get("state") or "")
-            if state not in {"pending", "held"}:
-                continue
-            if item.get("grounding_status") in {"ambiguous", "unresolved"}:
-                continue
-            if self.sanitize_world_labels:
-                destination_options = self._destination_options_for_policy(
-                    item.get("destination_policy") or {}
-                )
-                candidate_state = str(item.get("candidate_state") or "")
-                if (
-                    state != "held"
-                    and not destination_options
-                    and candidate_state != "visual_scan_required"
-                ):
-                    continue
-                pending.append(
-                    {
-                        "object_id": str(item.get("object_id") or ""),
-                        "category": str(item.get("category") or ""),
-                        "state": state,
-                        "source_fixture_id": str(item.get("source_fixture_id") or ""),
-                        "candidate_fixture_id": "",
-                        "candidate_state": candidate_state,
-                        "destination_policy_status": str(
-                            item.get("destination_policy_status") or "policy_required"
-                        ),
-                        "destination_policy": dict(item.get("destination_policy") or {}),
-                        "destination_options": destination_options,
-                        "required_tool": "navigate_to_receptacle"
-                        if state == "held"
-                        else _required_tool_for_candidate_state(
-                            str(item.get("candidate_state") or "")
-                        ),
-                    }
-                )
-                continue
-            candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
-            source_fixture_id = str(item.get("source_fixture_id") or "")
-            if not candidate_fixture_id or candidate_fixture_id == source_fixture_id:
-                continue
-            internal_candidate_fixture_id = (
-                self.internal_fixture_id_for_public_reference(candidate_fixture_id)
-                or candidate_fixture_id
-            )
-            pending.append(
-                {
-                    "object_id": str(item.get("object_id") or ""),
-                    "category": str(item.get("category") or ""),
-                    "state": state,
-                    "source_fixture_id": source_fixture_id,
-                    "candidate_fixture_id": candidate_fixture_id,
-                    "candidate_state": str(item.get("candidate_state") or ""),
-                    "required_tool": "navigate_to_receptacle"
-                    if state == "held"
-                    else _required_tool_for_candidate_state(str(item.get("candidate_state") or "")),
-                    "recommended_tool": _recommended_place_tool(
-                        internal_candidate_fixture_id,
-                        self._fixtures,
-                    ),
-                }
-            )
-        return pending
-
-    def _held_cleanup_candidates(self) -> list[dict[str, Any]]:
-        return [
-            item
-            for item in self._pending_cleanup_candidates()
-            if str(item.get("state") or "") == "held"
-        ]
-
-    def _destination_options_for_policy(self, policy: dict[str, Any]) -> list[dict[str, Any]]:
-        preferred = [
-            _normalize_fixture_category_label(item)
-            for item in policy.get("preferred_fixture_categories") or []
-        ]
-        if not preferred:
-            return []
-        options = []
-        for anchor in self._runtime_public_semantic_anchors():
-            if not _is_place_anchor(anchor):
-                continue
-            category = _normalize_fixture_category_label(anchor.get("category"))
-            if category not in preferred:
-                continue
-            anchor_id = str(anchor.get("anchor_id") or "")
-            if not anchor_id:
-                continue
-            tool_by_category = dict(policy.get("placement_tool_by_fixture_category") or {})
-            recommended_tool = str(
-                tool_by_category.get(category)
-                or policy.get("placement_tool")
-                or _public_destination_policy_tool_for_fixture_category(category)
-            )
-            options.append(
-                {
-                    "candidate_fixture_id": anchor_id,
-                    "candidate_fixture_category": category,
-                    "recommended_tool": recommended_tool,
-                    "candidate_source": "runtime_public_semantic_anchor",
-                    "waypoint_id": str(anchor.get("waypoint_id") or ""),
-                }
-            )
-        return options
-
     def camera_model_policy_payload(self) -> dict[str, Any]:
         events = [dict(item) for item in self._camera_model_policy_events]
         pipeline_ids = [
@@ -3725,7 +3612,6 @@ _bbox_reviewability = realworld_visual_candidates._bbox_reviewability
 _numeric_bbox = realworld_visual_candidates._numeric_bbox
 _candidate_state = realworld_visual_candidates._candidate_state
 _candidate_state_history = realworld_visual_candidates._candidate_state_history
-_required_tool_for_candidate_state = realworld_visual_candidates._required_tool_for_candidate_state
 _float_or_none = realworld_visual_candidates._float_or_none
 _float_or_zero = realworld_visual_candidates._float_or_zero
 _clamp = realworld_visual_candidates._clamp

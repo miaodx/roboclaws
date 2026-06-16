@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any, Protocol
 
+from roboclaws.household import realworld_contract_projection, realworld_visual_candidates
 from roboclaws.household.realworld_agent_view_contract import (
     nonnegative_int,
     positive_int,
@@ -19,13 +20,144 @@ class DoneReadinessContract(Protocol):
     task_intent: str
     perception_mode: str
     public_acceptance_config: Mapping[str, Any]
+    sanitize_world_labels: bool
+    _fixtures: dict[str, dict[str, Any]]
     _model_declared_observations: Sequence[dict[str, Any]]
     _observed_waypoint_ids: Collection[str]
     _public_waypoints: Sequence[dict[str, Any]]
     _raw_fpv_observations: Sequence[dict[str, Any]]
 
-    def _held_cleanup_candidates(self) -> list[dict[str, Any]]: ...
-    def _pending_cleanup_candidates(self) -> list[dict[str, Any]]: ...
+    def cleanup_worklist_payload(
+        self,
+        *,
+        fixture_hints: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
+    def fixture_hints(self) -> dict[str, Any]: ...
+    def internal_fixture_id_for_public_reference(self, fixture_id: str | None) -> str | None: ...
+    def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]: ...
+
+
+_is_place_anchor = realworld_contract_projection._is_place_anchor
+_normalize_fixture_category_label = realworld_contract_projection._normalize_fixture_category_label
+_public_destination_policy_tool_for_fixture_category = (
+    realworld_contract_projection._public_destination_policy_tool_for_fixture_category
+)
+_recommended_place_tool = realworld_contract_projection._recommended_place_tool
+_required_tool_for_candidate_state = realworld_visual_candidates._required_tool_for_candidate_state
+
+
+def pending_cleanup_candidates(contract: DoneReadinessContract) -> list[dict[str, Any]]:
+    worklist = contract.cleanup_worklist_payload(fixture_hints=contract.fixture_hints())
+    pending = []
+    for item in worklist.get("objects", []):
+        state = str(item.get("state") or "")
+        if state not in {"pending", "held"}:
+            continue
+        if item.get("grounding_status") in {"ambiguous", "unresolved"}:
+            continue
+        if contract.sanitize_world_labels:
+            destination_options = destination_options_for_policy(
+                contract,
+                item.get("destination_policy") or {},
+            )
+            candidate_state = str(item.get("candidate_state") or "")
+            if (
+                state != "held"
+                and not destination_options
+                and candidate_state != "visual_scan_required"
+            ):
+                continue
+            pending.append(
+                {
+                    "object_id": str(item.get("object_id") or ""),
+                    "category": str(item.get("category") or ""),
+                    "state": state,
+                    "source_fixture_id": str(item.get("source_fixture_id") or ""),
+                    "candidate_fixture_id": "",
+                    "candidate_state": candidate_state,
+                    "destination_policy_status": str(
+                        item.get("destination_policy_status") or "policy_required"
+                    ),
+                    "destination_policy": dict(item.get("destination_policy") or {}),
+                    "destination_options": destination_options,
+                    "required_tool": "navigate_to_receptacle"
+                    if state == "held"
+                    else _required_tool_for_candidate_state(str(item.get("candidate_state") or "")),
+                }
+            )
+            continue
+        candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+        source_fixture_id = str(item.get("source_fixture_id") or "")
+        if not candidate_fixture_id or candidate_fixture_id == source_fixture_id:
+            continue
+        internal_candidate_fixture_id = (
+            contract.internal_fixture_id_for_public_reference(candidate_fixture_id)
+            or candidate_fixture_id
+        )
+        pending.append(
+            {
+                "object_id": str(item.get("object_id") or ""),
+                "category": str(item.get("category") or ""),
+                "state": state,
+                "source_fixture_id": source_fixture_id,
+                "candidate_fixture_id": candidate_fixture_id,
+                "candidate_state": str(item.get("candidate_state") or ""),
+                "required_tool": "navigate_to_receptacle"
+                if state == "held"
+                else _required_tool_for_candidate_state(str(item.get("candidate_state") or "")),
+                "recommended_tool": _recommended_place_tool(
+                    internal_candidate_fixture_id,
+                    contract._fixtures,
+                ),
+            }
+        )
+    return pending
+
+
+def held_cleanup_candidates(contract: DoneReadinessContract) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in pending_cleanup_candidates(contract)
+        if str(item.get("state") or "") == "held"
+    ]
+
+
+def destination_options_for_policy(
+    contract: DoneReadinessContract,
+    policy: dict[str, Any],
+) -> list[dict[str, Any]]:
+    preferred = [
+        _normalize_fixture_category_label(item)
+        for item in policy.get("preferred_fixture_categories") or []
+    ]
+    if not preferred:
+        return []
+    options = []
+    for anchor in contract._runtime_public_semantic_anchors():
+        if not _is_place_anchor(anchor):
+            continue
+        category = _normalize_fixture_category_label(anchor.get("category"))
+        if category not in preferred:
+            continue
+        anchor_id = str(anchor.get("anchor_id") or "")
+        if not anchor_id:
+            continue
+        tool_by_category = dict(policy.get("placement_tool_by_fixture_category") or {})
+        recommended_tool = str(
+            tool_by_category.get(category)
+            or policy.get("placement_tool")
+            or _public_destination_policy_tool_for_fixture_category(category)
+        )
+        options.append(
+            {
+                "candidate_fixture_id": anchor_id,
+                "candidate_fixture_category": category,
+                "recommended_tool": recommended_tool,
+                "candidate_source": "runtime_public_semantic_anchor",
+                "waypoint_id": str(anchor.get("waypoint_id") or ""),
+            }
+        )
+    return options
 
 
 def evaluate_done_readiness(
@@ -39,9 +171,9 @@ def evaluate_done_readiness(
     blockers: list[dict[str, Any]] = []
     open_ended_task = open_ended_task_intent(contract)
     pending = (
-        contract._held_cleanup_candidates()
+        held_cleanup_candidates(contract)
         if open_ended_task
-        else contract._pending_cleanup_candidates()
+        else pending_cleanup_candidates(contract)
     )
     if pending:
         required_tool = str(pending[0].get("required_tool") or "navigate_to_object")

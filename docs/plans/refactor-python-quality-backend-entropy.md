@@ -77,17 +77,21 @@ The apple material/probe delegate cut is complete and should not be recreated.
 Treat remaining small cuts as P2 opportunistic scope inside a matching owner
 slice, not as a reason to defer the next P1 split.
 
-Intuitive-refactor implementation refresh on 2026-06-17 re-ran
-`python scripts/dev/check_python_quality_ratchet.py --summary --top 80`; the
-signal is unchanged at 11 complexity rows and 66 oversized modules. The apple
-runner is down to 3740 lines after the material/probe, native-render, and
-image-metric slices, and `realworld_contract.py` is again the largest
-production hard-ceiling file at 3888 lines. Continue the loop by refreshing the
-ratchet and selecting one new P1 owner boundary. Default back to Candidate A
-unless a fresh scan finds a sharper Candidate B visual-comparison boundary.
-Do not reopen material/probe delegates, native render diagnostics, Object Gate
-/ Render Gate, capture-quality interpretation, image-metric artifacts, or
-scene-camera report rendering without fresh drift.
+Intuitive-refactor implementation refresh on 2026-06-17 moved done-readiness
+pending/held cleanup candidate derivation and destination-option derivation from
+`realworld_contract.py` into `realworld_done_readiness.py`, then deleted the
+contract-private `_pending_cleanup_candidates()`, `_held_cleanup_candidates()`,
+and `_destination_options_for_policy()` wrappers after call-site scan confirmed
+no in-repo production callers. Public done-readiness and MCP done-blocker
+payloads were preserved by focused contract tests. The ratchet remains 11
+complexity rows and 66 oversized modules; `realworld_contract.py` is down to
+3774 lines, narrowly ahead of the 3740-line apple runner. Continue with a fresh
+scan before the next slice. Default to Candidate A only if another real
+facade-private coupling point is found; otherwise return to Candidate B's visual
+comparison family. Do not reopen material/probe delegates, native render
+diagnostics, Object Gate / Render Gate, capture-quality interpretation,
+image-metric artifacts, scene-camera report rendering, visual-candidate
+lifecycle, or done-readiness pending-candidate derivation without fresh drift.
 
 ## Operating Rules
 
@@ -125,35 +129,37 @@ scene-camera report rendering without fresh drift.
 
 ## Current Target
 
-Refresh the ratchet, then default to Candidate A unless a fresh scan finds a
-more concrete P1 visual-comparison boundary. `realworld_contract.py` is now the
-largest production hard-ceiling file again, while the visual comparison family
-still has three above-ceiling files:
-`run_robot_camera_apple2apple_comparison.py`,
+Refresh the ratchet, then choose one new P1 owner-boundary slice.
+`realworld_contract.py` remains the largest production hard-ceiling file at
+3774 lines, while the visual comparison family still has three above-ceiling
+files: `run_robot_camera_apple2apple_comparison.py`,
 `scene_camera_comparison.py`, and `summarize_robot_camera_visual_parity.py`.
+Default to Candidate A only if a fresh scan finds a real remaining
+`RealWorldCleanupContract` facade-private coupling point. Otherwise select the
+next concrete Candidate B visual-comparison boundary.
 
 Recommended next slice claim:
 
 - Slice: choose a fresh `RealWorldCleanupContract` facade-private coupling
-  boundary, such as agent-view/readiness wrappers, runtime-map/cleanup-worklist
-  caller migration, or another named owner split confirmed by call-site scan.
+  boundary or a visual-comparison owner boundary confirmed by call-site scan.
 - Owner layer: MCP Capability Contract And Tools plus Artifacts, reports, and
   eval suites.
-- Current friction: `realworld_contract.py` remains a 3888-line public/private
-  contract facade after the visual-candidate lifecycle split, and
-  `report.py` remains above the hard ceiling.
-- Simplification: move one real contract/report construction responsibility to
-  an existing owner or a focused owner module. Do not replace facade-private
-  coupling with a looser parameter bag, all-purpose context object, or new
-  wrapper facade.
-- Behavior-change class: internal owner cleanup unless the chosen slice
+- Current friction: `realworld_contract.py` remains a 3774-line public/private
+  contract facade, and the visual comparison family still has multiple
+  above-ceiling report/probe scripts. The done-readiness pending-candidate
+  boundary is closed.
+- Simplification: move one real responsibility to its existing owner or a
+  focused owner module, and delete obsolete private wrappers when call-site scan
+  proves they are internal. Do not replace private coupling with a loose
+  parameter bag, compatibility alias pile, or new wrapper facade.
+- Behavior-change class: internal owner cleanup unless the selected slice
   explicitly changes report or artifact contracts.
-- Proof: focused realworld contract/MCP/report tests as appropriate, ruff on
-  touched files, format check, py_compile, and ratchet summary.
+- Proof: focused contract/MCP/report/unit tests matching the selected boundary,
+  ruff on touched files, format check, py_compile, and ratchet summary.
 - Non-goals: reopening init projection/runtime-prior, Runtime Metric Map
   payloads, visual-candidate payload/declaration/lifecycle, planner-probe
-  report panels, or any closed apple visual-comparison owner without fresh
-  drift.
+  report panels, done-readiness pending-candidate derivation, or any closed
+  apple visual-comparison owner without fresh drift.
 
 Candidate A
 remains valid only for a new `RealWorldCleanupContract` boundary such as
@@ -168,29 +174,32 @@ confidence, but they must not postpone the P1 hard-ceiling checkpoint.
 
 Preflight status: REVIEWED. Route: `$intuitive-refactor` ratchet mode. Default
 execution: refresh the ratchet, then execute one P1 owner-boundary slice,
-currently candidate B's visual-comparison family unless a fresh context scan
-selects a sharper P1 contract boundary. Non-goals: broad repo cleanup,
-line-count shaving across many files, preserving obsolete internal wrappers,
-and live/provider/simulator proof unless the chosen slice changes that route.
-Re-approve if a slice would change a public launch, artifact, report,
-agent-facing, or private/public eval contract.
+currently Candidate A only if a fresh facade-private coupling boundary remains,
+otherwise Candidate B's next visual-comparison owner split. Non-goals: broad
+repo cleanup, line-count shaving across many files, preserving obsolete
+internal wrappers, and live/provider/simulator proof unless the chosen slice
+changes that route. Re-approve if a slice would change a public launch,
+artifact, report, agent-facing, or private/public eval contract.
 
 ## Active Candidates
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 3888 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 3774 lines and
 `roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
 Capability Contract And Tools plus Artifacts, reports, and eval suites.
-Alternate P1 only when a fresh boundary reduces facade-private coupling or
-report ownership, for example agent-view/readiness wrappers,
-runtime-map/cleanup-worklist caller migration, or a remaining report section
+Done-readiness pending/held cleanup candidate derivation now belongs to
+`realworld_done_readiness.py`; reopen it only if the contract facade starts
+rebuilding pending candidates, held candidates, destination options, or private
+wrapper aliases again. Candidate A remains P1 only for a fresh boundary that
+reduces facade-private coupling or report ownership, for example
+runtime-map/cleanup-worklist caller migration or a remaining report section
 owner. Do not reopen init projection/runtime-prior, Runtime Metric Map payload,
 visual-candidate payload/event/overlay, visual-candidate declaration
 orchestration, visual-candidate registration/resolution lifecycle, or
 planner-probe report-panel slices. Visual-candidate lifecycle now belongs to
-`realworld_visual_candidate_lifecycle.py`; reopen it only if the contract
-facade starts rebuilding normalization, match resolution, declaration payloads,
+`realworld_visual_candidate_lifecycle.py`; reopen it only if the contract facade
+starts rebuilding normalization, match resolution, declaration payloads,
 resolved/unresolved detection materialization, visual-evidence error payloads,
 or handle actionability directly. `RealWorldPayloadContract` and
 `DoneReadinessContract` are ponytail inputs only when a slice removes
