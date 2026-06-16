@@ -717,6 +717,13 @@ logs before choosing the next slice.
   modules stayed at 62. Proof: full cleanup report contract test file, ruff,
   format check, py_compile, and ratchet.
 
+- 2026-06-16: Scene-sampler typed row/ref contracts and readiness lane
+  constants moved into `scene_sampler_types.py`, clearing the hard-ceiling drift
+  introduced by the diverse-selection sampler update. Metric:
+  `scene_sampler.py` 2077 -> 1996 lines; Ruff complexity stayed at 0 and
+  oversized modules stayed at 62. Proof: full scene-sampler unit test file,
+  ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

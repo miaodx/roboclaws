@@ -41,9 +41,9 @@ agent/perception section split:
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
-- Dirty worktree drift: parallel scene-sampler changes currently put
-  `roboclaws/launch/scene_sampler.py` at 2077 lines. Treat it as reopened P1
-  hard-ceiling drift if those changes remain above the ceiling.
+- Scene-sampler drift from the parallel diverse-selection work is cleared:
+  `roboclaws/launch/scene_sampler.py` is now 1996 lines after the typed row
+  contract split, below the hard ceiling.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
@@ -191,11 +191,9 @@ code-size slices. Owner: `intuitive-init`.
 
 ### G: Scene Sampler Hard-Ceiling Drift
 
-Severity: P1 if current parallel changes remain. `roboclaws/launch/scene_sampler.py`
-is currently 2077 lines in the dirty worktree, after previously clearing the
-hard ceiling. Recheck after the parallel scene-sampler changes settle; if still
-above 2000, move a real sampler ownership boundary or record a narrow
-exception. Owner: `intuitive-refactor`.
+Status: cleared on 2026-06-16; see the completed ledger. Reopen only for fresh
+scene-sampler drift above 2000 lines or selection/manifest ownership returning
+to the launch facade.
 
 ## Evidence Ladder
 
