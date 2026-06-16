@@ -44,6 +44,7 @@ _STATE_MUTATING_COMMANDS = {
     "observe",
     "navigate_to_object",
     "navigate_to_waypoint",
+    "navigate_to_relative_pose",
     "navigate_to_receptacle",
     "frame_comparison_object",
     "pick",
@@ -192,6 +193,18 @@ def _navigate_to_waypoint_command(state: dict[str, Any], kwargs: dict[str, Any])
     return navigate_to_waypoint(state, _json_object_from_text(str(kwargs["waypoint_json"])))
 
 
+def _navigate_to_relative_pose_command(
+    state: dict[str, Any],
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    return navigate_to_relative_pose(
+        state,
+        forward_m=_float_or_zero(kwargs.get("forward_m")),
+        lateral_m=_float_or_zero(kwargs.get("lateral_m")),
+        yaw_delta_deg=_float_or_zero(kwargs.get("yaw_delta_deg")),
+    )
+
+
 def _navigate_to_receptacle_command(
     state: dict[str, Any],
     kwargs: dict[str, Any],
@@ -238,6 +251,7 @@ _WORKER_COMMAND_HANDLERS: dict[str, _WorkerCommandHandler] = {
     "camera_views": _camera_views_command,
     "navigate_to_object": _navigate_to_object_command,
     "navigate_to_waypoint": _navigate_to_waypoint_command,
+    "navigate_to_relative_pose": _navigate_to_relative_pose_command,
     "navigate_to_receptacle": _navigate_to_receptacle_command,
     "frame_comparison_object": _frame_comparison_object_command,
     "pick": _pick_command,
@@ -548,6 +562,22 @@ def navigate_to_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
 
 def navigate_to_waypoint(state: dict[str, Any], waypoint: dict[str, Any]) -> dict[str, Any]:
     return molmospaces_actions.navigate_to_waypoint(state, waypoint, hooks=_molmo_action_hooks())
+
+
+def navigate_to_relative_pose(
+    state: dict[str, Any],
+    *,
+    forward_m: float = 0.0,
+    lateral_m: float = 0.0,
+    yaw_delta_deg: float = 0.0,
+) -> dict[str, Any]:
+    return molmospaces_actions.navigate_to_relative_pose(
+        state,
+        forward_m=forward_m,
+        lateral_m=lateral_m,
+        yaw_delta_deg=yaw_delta_deg,
+        hooks=_molmo_action_hooks(),
+    )
 
 
 def frame_comparison_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:

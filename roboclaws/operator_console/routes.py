@@ -11,7 +11,6 @@ from roboclaws.agents.provider_registry import (
 )
 from roboclaws.household.profiles import (
     CAMERA_GROUNDED_LABELS_LANE,
-    SIM_PROJECTED_LABELS_CAMERA_LABELER,
     cleanup_evidence_lane_names,
 )
 from roboclaws.launch.agent_engines import AGENT_ENGINE_SPECS
@@ -31,7 +30,7 @@ DEFAULT_PROMPTS = {
 }
 
 AGIBOT_CAMERA_LABELER = "grounding-dino"
-SIMULATION_CAMERA_LABELER = SIM_PROJECTED_LABELS_CAMERA_LABELER
+SIMULATION_CAMERA_LABELER = "grounding-dino"
 
 REAL_EVIDENCE_LANES = cleanup_evidence_lane_names()
 ISAAC_SUPPORTED_EVIDENCE_LANES = tuple(
@@ -79,6 +78,7 @@ class ConsoleLaunchSelection:
     gates: tuple[RouteGate, ...] = ()
     supports_prompt: bool = True
     supports_operator_steer: bool = False
+    supports_relative_navigation_control: bool = False
     pause_supported: bool = False
     emergency_stop_required: bool = False
 
@@ -190,6 +190,7 @@ class ConsoleLaunchSelection:
             "resource_kind": backend.resource_kind,
             "supports_prompt": self.supports_prompt,
             "supports_operator_steer": self.supports_operator_steer,
+            "supports_relative_navigation_control": self.supports_relative_navigation_control,
             "pause_supported": self.pause_supported,
             "emergency_stop_required": self.emergency_stop_required,
             "required_overrides": list(self.required_overrides),
@@ -378,6 +379,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             gates=common_gates,
             default_overrides=("seed=7",),
             supports_operator_steer=True,
+            supports_relative_navigation_control=True,
         ),
     )
 
@@ -397,6 +399,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     gates=common_gates,
                     default_overrides=("seed=7",),
                     supports_operator_steer=True,
+                    supports_relative_navigation_control=True,
                 )
             )
             rows.extend(
@@ -409,6 +412,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     gates=common_gates,
                     default_overrides=("seed=7",),
                     supports_operator_steer=True,
+                    supports_relative_navigation_control=True,
                 )
             )
             rows.extend(
@@ -421,6 +425,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     gates=common_gates,
                     default_overrides=("seed=7",),
                     supports_operator_steer=True,
+                    supports_relative_navigation_control=True,
                 )
             )
         rows.extend(
@@ -446,6 +451,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 gates=common_gates,
                 default_overrides=("seed=7",),
                 supports_operator_steer=True,
+                supports_relative_navigation_control=True,
             )
         )
         rows.extend(
@@ -459,6 +465,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 gates=common_gates,
                 default_overrides=("seed=7",),
                 supports_operator_steer=True,
+                supports_relative_navigation_control=True,
             )
         )
         rows.extend(
@@ -472,6 +479,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 gates=common_gates,
                 default_overrides=("seed=7",),
                 supports_operator_steer=True,
+                supports_relative_navigation_control=True,
             )
         )
         rows.extend(
@@ -574,7 +582,7 @@ def _selection(
     agent_engine_id: str,
     provider_profile: str | None,
     *,
-    evidence_lane: str = "world-oracle-labels",
+    evidence_lane: str = "world-public-labels",
     scenario_setup: str | None = None,
     enabled: bool = True,
     unsupported_reason: str = "",
@@ -583,6 +591,7 @@ def _selection(
     gates: tuple[RouteGate, ...] = (),
     supports_prompt: bool = True,
     supports_operator_steer: bool = False,
+    supports_relative_navigation_control: bool = False,
     pause_supported: bool = False,
     emergency_stop_required: bool = False,
 ) -> ConsoleLaunchSelection:
@@ -608,6 +617,7 @@ def _selection(
         gates=gates,
         supports_prompt=supports_prompt,
         supports_operator_steer=supports_operator_steer,
+        supports_relative_navigation_control=supports_relative_navigation_control,
         pause_supported=pause_supported,
         emergency_stop_required=emergency_stop_required,
     )
@@ -630,6 +640,7 @@ def _lane_selections(
     gates: tuple[RouteGate, ...] = (),
     supports_prompt: bool = True,
     supports_operator_steer: bool = False,
+    supports_relative_navigation_control: bool = False,
     pause_supported: bool = False,
     emergency_stop_required: bool = False,
 ) -> tuple[ConsoleLaunchSelection, ...]:
@@ -657,6 +668,7 @@ def _lane_selections(
                 gates=gates,
                 supports_prompt=supports_prompt,
                 supports_operator_steer=supports_operator_steer,
+                supports_relative_navigation_control=supports_relative_navigation_control,
                 pause_supported=pause_supported,
                 emergency_stop_required=emergency_stop_required,
             )

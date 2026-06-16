@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -171,6 +172,61 @@ def navigate_to_waypoint(
         state_mutation="isaac_waypoint_pose",
         semantic_pose_event=event,
         backend_pose_mutation_available=True,
+    )
+
+
+def navigate_to_relative_pose(
+    args: argparse.Namespace,
+    state: dict[str, Any],
+    *,
+    hooks: IsaacWorkerCommandHooks,
+) -> dict[str, Any]:
+    hooks.count(state, "navigate_to_relative_pose")
+    requested = _relative_delta(args.forward_m, args.lateral_m, args.yaw_delta_deg)
+    semantic_pose_state = state.get("semantic_pose_state") or {}
+    previous_pose = semantic_pose_state.get("robot_pose") or state.get("robot_pose") or {}
+    if not hooks.has_xy(previous_pose):
+        return hooks.error(
+            "navigate_to_relative_pose",
+            "robot_pose_unavailable",
+            status="blocked_capability",
+            requested_delta=requested,
+            applied_delta=_relative_delta(),
+        )
+    robot_pose = _pose_after_relative_delta(previous_pose, requested)
+    state["robot_pose"] = robot_pose
+    semantic_pose_state = dict(semantic_pose_state) if isinstance(semantic_pose_state, dict) else {}
+    semantic_pose_state["robot_pose"] = robot_pose
+    state["semantic_pose_state"] = semantic_pose_state
+    state.setdefault("robot_trajectory", []).append(robot_pose)
+    event = hooks.record_waypoint_pose_event(
+        state,
+        waypoint={
+            "waypoint_id": str(state.get("current_waypoint_id") or "relative_pose"),
+            "room_id": str(state.get("current_room_id") or ""),
+        },
+        robot_pose=robot_pose,
+        previous_waypoint_id=str(state.get("current_waypoint_id") or ""),
+        previous_room_id=str(state.get("current_room_id") or ""),
+    )
+    hooks.write_state_from_state_arg(state)
+    return hooks.ok(
+        "navigate_to_relative_pose",
+        requested_delta=requested,
+        applied_delta=requested,
+        applied_forward_m=requested["forward_m"],
+        applied_lateral_m=requested["lateral_m"],
+        applied_yaw_delta_deg=requested["yaw_delta_deg"],
+        frame_id="base_link",
+        pose_source="relative_robot_frame",
+        robot_pose=robot_pose,
+        state_mutation="isaac_relative_robot_pose",
+        semantic_pose_event=event,
+        primitive_provenance="isaac_semantic_pose",
+        backend_pose_mutation_available=True,
+        clamped=False,
+        clamp_metadata={"backend_limits_enforced": False},
+        requires_reobserve=True,
     )
 
 
@@ -372,3 +428,37 @@ def done(
         final_containment=dict(state.get("containment") or {}),
         tool_event_counts=dict(state.get("tool_event_counts") or {}),
     )
+
+
+def _relative_delta(
+    forward_m: float = 0.0,
+    lateral_m: float = 0.0,
+    yaw_delta_deg: float = 0.0,
+) -> dict[str, float]:
+    return {
+        "forward_m": round(float(forward_m), 4),
+        "lateral_m": round(float(lateral_m), 4),
+        "yaw_delta_deg": round(float(yaw_delta_deg), 4),
+    }
+
+
+def _pose_after_relative_delta(
+    pose: dict[str, Any],
+    delta: dict[str, float],
+) -> dict[str, Any]:
+    yaw_rad = math.radians(float(pose.get("yaw_deg") or 0.0))
+    forward = delta["forward_m"]
+    lateral = delta["lateral_m"]
+    result = dict(pose)
+    result["x"] = round(
+        float(pose.get("x") or 0.0) + forward * math.cos(yaw_rad) - lateral * math.sin(yaw_rad),
+        4,
+    )
+    result["y"] = round(
+        float(pose.get("y") or 0.0) + forward * math.sin(yaw_rad) + lateral * math.cos(yaw_rad),
+        4,
+    )
+    result["yaw_deg"] = round(float(pose.get("yaw_deg") or 0.0) + delta["yaw_delta_deg"], 4)
+    result["pose_source"] = "relative_robot_frame"
+    result["relative_pose_delta"] = dict(delta)
+    return result

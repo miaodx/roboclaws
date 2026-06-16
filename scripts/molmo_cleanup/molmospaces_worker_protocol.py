@@ -120,6 +120,12 @@ def cli_command_kwargs(args: argparse.Namespace) -> dict[str, Any]:
         return {"object_id": args.object_id}
     if command == "navigate_to_waypoint":
         return {"waypoint_json": args.waypoint_json}
+    if command == "navigate_to_relative_pose":
+        return {
+            "forward_m": args.forward_m,
+            "lateral_m": args.lateral_m,
+            "yaw_delta_deg": args.yaw_delta_deg,
+        }
     if command in {
         "navigate_to_receptacle",
         "open_receptacle",

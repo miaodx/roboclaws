@@ -14,7 +14,7 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
 
 
 def test_state_marks_dead_wrapper_launch_without_live_artifacts_failed(

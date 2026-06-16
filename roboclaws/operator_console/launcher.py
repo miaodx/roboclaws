@@ -80,7 +80,7 @@ class LaunchRequest:
     @property
     def selection_id(self) -> str:
         if self.world_id and self.backend_id and self.intent_id and self.agent_engine_id:
-            lane = self.evidence_lane or "world-oracle-labels"
+            lane = self.evidence_lane or "world-public-labels"
             task_selector = (
                 self.intent_id if self.intent_id in {"cleanup", "map-build"} else "open-task"
             )
@@ -264,6 +264,8 @@ def start_console_run(
         prompt=launch_prompt,
         overrides=overrides,
     )
+    mcp_host, mcp_port = requested_mcp_endpoint(overrides)
+    mcp_url = f"http://{mcp_host}:{mcp_port}/mcp"
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "console-launch.log"
     lock = ResourceLock(root, route.lock_name)
@@ -312,6 +314,9 @@ def start_console_run(
         "started_at": started_at,
         "backend_lock": route.lock_name,
         "lock": lock_state.to_payload(),
+        "mcp_host": mcp_host,
+        "mcp_port": mcp_port,
+        "mcp_url": mcp_url,
         "argv": argv,
         "env_overrides": _public_env_overrides(env_overrides),
         "run_dir": str(run_dir),

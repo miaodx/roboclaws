@@ -118,14 +118,15 @@ def init_state(
     hooks.seed_misplaced_objects(model, data, state, targets)
     hooks.refresh_object_positions(model, data, state)
     state["room_outlines"] = hooks.collect_room_outlines(model, data, state)
-    if include_robot and targets:
-        _initialize_robot_state(model, data, state, targets, hooks=hooks)
-    state["qpos"] = [float(value) for value in data.qpos]
-    state["current_receptacle_id"] = (
+    initial_receptacle_id = (
         hooks.target_start_receptacle_id(state, targets[0])
         if targets
         else hooks.first_receptacle_id(state)
     )
+    state["current_receptacle_id"] = initial_receptacle_id
+    if include_robot and initial_receptacle_id:
+        _initialize_robot_state(model, data, state, initial_receptacle_id, hooks=hooks)
+    state["qpos"] = [float(value) for value in data.qpos]
     state["private_manifest"] = _private_manifest(
         scene_source=scene_source,
         scene_index=scene_index,
@@ -248,11 +249,11 @@ def _initialize_robot_state(
     model: Any,
     data: Any,
     state: dict[str, Any],
-    targets: list[dict[str, Any]],
+    initial_receptacle_id: str,
     *,
     hooks: MolmoInitHooks,
 ) -> None:
-    initial_receptacle = state["receptacles"][hooks.target_start_receptacle_id(state, targets[0])]
+    initial_receptacle = state["receptacles"][initial_receptacle_id]
     robot_pose = hooks.robot_pose_near_receptacle(state, initial_receptacle)
     hooks.set_robot_pose(model, data, robot_pose)
     state["robot_pose"] = robot_pose

@@ -92,7 +92,7 @@ MAIN_CLEANUP_AGENT_PRODUCER = realworld_visual_candidates.MAIN_CLEANUP_AGENT_PRO
 TEST_AGENT_PRODUCER = realworld_visual_candidates.TEST_AGENT_PRODUCER
 SIMULATED_CAMERA_MODEL_PROVENANCE = realworld_visual_candidates.SIMULATED_CAMERA_MODEL_PROVENANCE
 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE = "sanitized_visible_object_detections"
-WORLD_LABELS_SANITIZED_PROFILE = "world-public-labels"
+WORLD_PUBLIC_LABELS_PROFILE = "world-public-labels"
 VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = (
     realworld_visual_candidates.VISUAL_CANDIDATE_ALREADY_HANDLED_REASON
 )
@@ -735,6 +735,93 @@ class RealWorldCleanupContract:
             coverage_estimate=waypoint["coverage_estimate"],
             backend_pose_mutation=navigation,
             navigation_status=(navigation or {}).get("status", "ok"),
+        )
+
+    def navigate_to_relative_pose(
+        self,
+        forward_m: float = 0.0,
+        lateral_m: float = 0.0,
+        yaw_delta_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        requested = _relative_pose_delta(forward_m, lateral_m, yaw_delta_deg)
+        limits = {
+            "forward_m": [-1.0, 1.0],
+            "lateral_m": [-1.0, 1.0],
+            "yaw_delta_deg": [-90.0, 90.0],
+        }
+        if not any(requested.values()):
+            return self._error(
+                "navigate_to_relative_pose",
+                "noop_relative_pose_request",
+                frame_id="base_link",
+                requested_delta=requested,
+                applied_delta=_relative_pose_delta(),
+                limits=limits,
+                requires_reobserve=True,
+            )
+        if (
+            abs(requested["forward_m"]) > limits["forward_m"][1]
+            or abs(requested["lateral_m"]) > limits["lateral_m"][1]
+            or abs(requested["yaw_delta_deg"]) > limits["yaw_delta_deg"][1]
+        ):
+            return self._error(
+                "navigate_to_relative_pose",
+                "relative_pose_delta_out_of_bounds",
+                frame_id="base_link",
+                requested_delta=requested,
+                applied_delta=_relative_pose_delta(),
+                limits=limits,
+                requires_reobserve=True,
+            )
+        self._reset_camera_adjustment()
+        backend_response = self.contract.navigate_to_relative_pose(
+            forward_m=requested["forward_m"],
+            lateral_m=requested["lateral_m"],
+            yaw_delta_deg=requested["yaw_delta_deg"],
+        )
+        public_backend_response = _strip_forbidden_agent_view_keys(backend_response or {})
+        backend_ok = bool((backend_response or {}).get("ok"))
+        backend_status = str((backend_response or {}).get("status") or "")
+        if not backend_ok or backend_status == "blocked_capability":
+            return self._error(
+                "navigate_to_relative_pose",
+                "blocked_capability",
+                frame_id="base_link",
+                requested_delta=requested,
+                applied_delta=_relative_pose_delta(),
+                clamped=False,
+                clamp_metadata={"console_limits_enforced": True},
+                requires_reobserve=True,
+                backend_provenance=(
+                    (backend_response or {}).get("primitive_provenance")
+                    or (backend_response or {}).get("backend_provenance")
+                    or "blocked_capability"
+                ),
+                backend_pose_mutation=public_backend_response,
+                backend_status=backend_status or "blocked_capability",
+            )
+        applied = _relative_pose_delta(
+            (backend_response or {}).get("applied_forward_m", requested["forward_m"]),
+            (backend_response or {}).get("applied_lateral_m", requested["lateral_m"]),
+            (backend_response or {}).get("applied_yaw_delta_deg", requested["yaw_delta_deg"]),
+        )
+        return self._ok(
+            "navigate_to_relative_pose",
+            frame_id="base_link",
+            requested_delta=requested,
+            applied_delta=applied,
+            clamped=bool((backend_response or {}).get("clamped", False)),
+            clamp_metadata=(backend_response or {}).get("clamp_metadata")
+            or {"console_limits_enforced": True},
+            requires_reobserve=True,
+            pose_source="relative_robot_frame",
+            backend_provenance=(
+                (backend_response or {}).get("primitive_provenance")
+                or (backend_response or {}).get("backend_provenance")
+                or API_SEMANTIC_PROVENANCE
+            ),
+            backend_pose_mutation=public_backend_response,
+            backend_status=backend_status or "ok",
         )
 
     def resolve_target_query(
@@ -2057,7 +2144,7 @@ class RealWorldCleanupContract:
             return "camera-raw-fpv"
         if self.perception_mode == CAMERA_MODEL_POLICY_MODE:
             return "camera-grounded-labels"
-        return "world-oracle-labels"
+        return "world-public-labels"
 
     def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]:
         """Build run-local anchors for fixed places discovered through public evidence."""
@@ -2796,6 +2883,13 @@ class RealWorldCleanupContract:
                 destination_options = self._destination_options_for_policy(
                     item.get("destination_policy") or {}
                 )
+                candidate_state = str(item.get("candidate_state") or "")
+                if (
+                    state != "held"
+                    and not destination_options
+                    and candidate_state != "visual_scan_required"
+                ):
+                    continue
                 pending.append(
                     {
                         "object_id": str(item.get("object_id") or ""),
@@ -2803,7 +2897,7 @@ class RealWorldCleanupContract:
                         "state": state,
                         "source_fixture_id": str(item.get("source_fixture_id") or ""),
                         "candidate_fixture_id": "",
-                        "candidate_state": str(item.get("candidate_state") or ""),
+                        "candidate_state": candidate_state,
                         "destination_policy_status": str(
                             item.get("destination_policy_status") or "policy_required"
                         ),
@@ -4646,6 +4740,18 @@ class RealWorldCleanupContract:
             payload["fixture_id"] = fixture_id
             payload["receptacle_id"] = fixture_id
         return self._error(tool, "semantic_order", **payload)
+
+
+def _relative_pose_delta(
+    forward_m: Any = 0.0,
+    lateral_m: Any = 0.0,
+    yaw_delta_deg: Any = 0.0,
+) -> dict[str, float]:
+    return {
+        "forward_m": round(_float_or_zero(forward_m), 4),
+        "lateral_m": round(_float_or_zero(lateral_m), 4),
+        "yaw_delta_deg": round(_float_or_zero(yaw_delta_deg), 4),
+    }
 
 
 def _target_candidate_type_for_waypoint(waypoint: dict[str, Any]) -> str:

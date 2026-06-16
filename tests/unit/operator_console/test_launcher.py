@@ -30,11 +30,11 @@ CODEX_ENV = {
 AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-public-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
 MUJOCO_OPENAI_AGENTS_CLEANUP = (
-    "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels"
+    "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
 )
 
 
@@ -44,7 +44,7 @@ def test_new_console_run_id_is_filesystem_and_docker_mount_safe() -> None:
     assert "/" not in run_id
     assert ":" not in run_id
     assert "::" not in run_id
-    assert run_id.endswith("-molmospaces-val_0-mujoco-cleanup-codex-cli-world-oracle-labels")
+    assert run_id.endswith("-molmospaces-val_0-mujoco-cleanup-codex-cli-world-public-labels")
 
 
 def _free_port() -> str:
@@ -783,6 +783,6 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
         "agent_engine=claude-code",
     ]
     assert "preset=cleanup" in argv
-    assert "evidence_lane=world-oracle-labels" in argv
+    assert "evidence_lane=world-public-labels" in argv
     assert "provider_profile=mimo-anthropic" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv

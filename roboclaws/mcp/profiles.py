@@ -295,6 +295,19 @@ _HOUSEHOLD_WORLD_TOOLS = (
         "Navigate to a public inspection waypoint.",
     ),
     _tool(
+        "navigate_to_relative_pose",
+        "navigation.navigate_to_relative_pose",
+        FAMILY_NAVIGATION,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Move or turn by a bounded robot-local pose delta.",
+    ),
+    _tool(
         "observe",
         "perception.observe",
         FAMILY_PERCEPTION,

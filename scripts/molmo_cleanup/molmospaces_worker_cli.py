@@ -90,6 +90,11 @@ def _add_action_parsers(subparsers: argparse._SubParsersAction[argparse.Argument
     navigate_waypoint = subparsers.add_parser("navigate_to_waypoint")
     navigate_waypoint.add_argument("--waypoint-json", required=True)
 
+    navigate_relative = subparsers.add_parser("navigate_to_relative_pose")
+    navigate_relative.add_argument("--forward-m", type=float, default=0.0)
+    navigate_relative.add_argument("--lateral-m", type=float, default=0.0)
+    navigate_relative.add_argument("--yaw-delta-deg", type=float, default=0.0)
+
     navigate_receptacle = subparsers.add_parser("navigate_to_receptacle")
     navigate_receptacle.add_argument("--receptacle-id", required=True)
 

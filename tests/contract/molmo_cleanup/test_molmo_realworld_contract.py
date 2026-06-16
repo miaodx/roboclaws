@@ -25,7 +25,6 @@ from roboclaws.household.realworld_contract import (
     _declared_category_matches_object,
     cleanup_policy_trace_from_events,
     forbidden_agent_view_keys,
-    infer_target_fixture_for_detection,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.target_query import resolve_target_query
@@ -111,6 +110,42 @@ class _PoseRecordingBackend:
         }
 
 
+class _RelativePoseBackend(_PoseRecordingBackend):
+    def __init__(self, scenario: CleanupScenario) -> None:
+        super().__init__(scenario)
+        self.relative_pose_calls: list[dict[str, float]] = []
+
+    def navigate_to_relative_pose(
+        self,
+        *,
+        forward_m: float = 0.0,
+        lateral_m: float = 0.0,
+        yaw_delta_deg: float = 0.0,
+    ) -> dict[str, object]:
+        delta = {
+            "forward_m": forward_m,
+            "lateral_m": lateral_m,
+            "yaw_delta_deg": yaw_delta_deg,
+        }
+        self.relative_pose_calls.append(delta)
+        return {
+            "ok": True,
+            "tool": "navigate_to_relative_pose",
+            "status": "ok",
+            "primitive_provenance": "api_semantic",
+            "robot_pose": {
+                "x": 1.25,
+                "y": 2.0,
+                "pose_source": "relative_robot_frame",
+                "target_receptacle_id": "sink_private_001",
+            },
+            "applied_forward_m": forward_m,
+            "applied_lateral_m": lateral_m,
+            "applied_yaw_delta_deg": yaw_delta_deg,
+            "clamped": False,
+        }
+
+
 def test_realworld_contract_defaults_to_minimal_map_mode() -> None:
     contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
@@ -139,8 +174,8 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
     for detection in observation["visible_object_detections"]:
         assert detection["object_id"].startswith("observed_")
         assert "support_estimate" in detection
-        assert "candidate_fixture_id" in detection
-        assert "cleanup_recommended" in detection
+        assert detection["destination_policy_status"] == "policy_required"
+        assert "destination_policy" in detection
         assert "target_receptacle_id" not in detection
         assert "is_misplaced" not in detection
     _assert_no_forbidden_keys(metric_map)
@@ -169,7 +204,7 @@ def test_world_label_candidate_without_reviewable_fpv_bbox_is_not_actionable() -
     assert navigation["visual_grounding_evidence"]["reviewability_status"] == "not_reviewable"
     assert picked["ok"] is False
     assert picked["error_reason"] == "visual_evidence_not_reviewable"
-    assert worklist_item["cleanup_recommended"] is False
+    assert "cleanup_recommended" not in worklist_item
     assert worklist_item["candidate_state"] == "visual_scan_required"
     assert worklist_item["actionability_status"] == "needs_visual_evidence"
     _assert_no_forbidden_keys(navigation)
@@ -244,9 +279,8 @@ def test_world_labels_sanitized_observations_omit_destination_oracle_fields() ->
     sanitized_observation = _first_non_empty_observation(sanitized_contract)
     detection = sanitized_observation["visible_object_detections"][0]
 
-    assert "candidate_fixture_id" in public_anchor_detection
-    assert str(public_anchor_detection["candidate_fixture_id"]).startswith("anchor_fixture_")
-    assert "recommended_tool" in public_anchor_detection
+    assert "candidate_fixture_id" not in public_anchor_detection
+    assert "recommended_tool" not in public_anchor_detection
     assert sanitized_observation["perception_source"] == (
         SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
     )
@@ -314,8 +348,7 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
         contract,
         metric_map,
     )
-    fixture = infer_target_fixture_for_detection(detection, fixture_hints)
-    assert fixture is not None
+    fixture = _public_destination_fixture_for_detection(contract, detection)
     blocked_nav = contract.navigate_to_object(detection["object_id"])
     object_nav, receptacle_nav = _confirm_pick_and_navigate_to_fixture(
         contract,
@@ -360,6 +393,9 @@ def _confirm_pick_and_navigate_to_fixture(
     detection: dict,
     fixture: dict,
 ) -> tuple[dict, dict]:
+    waypoint_id = str(detection.get("waypoint_id") or detection.get("last_waypoint_id") or "")
+    if waypoint_id:
+        contract.navigate_to_waypoint(waypoint_id)
     contract.adjust_camera(yaw_delta_deg=15)
     confirmed_observation = contract.observe()
     confirmed = next(
@@ -404,7 +440,10 @@ def _assert_nav2_navigation_provenance(
     assert waypoint_nav["navigation_backend"] == "sim_costmap_planner"
     assert waypoint_nav["route_validation"]["ok"] is True
     assert waypoint_nav["pose_source"] == "inspection_waypoint"
-    assert blocked_nav["error_reason"] == "visual_evidence_not_reviewable"
+    if not blocked_nav["ok"]:
+        assert blocked_nav["error_reason"] == "visual_evidence_not_reviewable"
+    else:
+        assert blocked_nav["candidate_state"] == "navigation_authorized"
     assert object_nav["navigation_backend"] == "api_semantic"
     assert object_nav["candidate_state"] == "navigation_authorized"
     assert object_nav["pose_source"] == "latest_observation"
@@ -481,8 +520,7 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
             break
 
     assert detection is not None
-    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
-    assert target_fixture is not None
+    target_fixture = _public_destination_fixture_for_detection(contract, detection)
     assert str(target_fixture["fixture_id"]).startswith("anchor_fixture_")
     assert str(target_fixture["category"]).lower() in {"countertop", "sink"}
     assert target_fixture["public_fixture_source"] == "runtime_semantic_anchor"
@@ -954,6 +992,68 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
     _assert_no_forbidden_keys(runtime_map)
 
 
+def test_relative_pose_navigation_rejects_noop_and_out_of_bounds_requests() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+
+    noop = contract.navigate_to_relative_pose()
+    too_far = contract.navigate_to_relative_pose(forward_m=1.25)
+    too_much_turn = contract.navigate_to_relative_pose(yaw_delta_deg=120)
+
+    assert noop["ok"] is False
+    assert noop["tool"] == "navigate_to_relative_pose"
+    assert noop["error_reason"] == "noop_relative_pose_request"
+    assert noop["frame_id"] == "base_link"
+    assert noop["requires_reobserve"] is True
+    assert too_far["error_reason"] == "relative_pose_delta_out_of_bounds"
+    assert too_far["applied_delta"] == {"forward_m": 0.0, "lateral_m": 0.0, "yaw_delta_deg": 0.0}
+    assert too_much_turn["error_reason"] == "relative_pose_delta_out_of_bounds"
+
+
+def test_relative_pose_navigation_reports_public_delta_and_reobserve_requirement() -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _RelativePoseBackend(scenario)
+    contract = _contract(CleanupBackendSession(backend=backend))
+
+    response = contract.navigate_to_relative_pose(
+        forward_m=0.25,
+        lateral_m=-0.125,
+        yaw_delta_deg=15,
+    )
+
+    assert response["ok"] is True
+    assert response["tool"] == "navigate_to_relative_pose"
+    assert response["frame_id"] == "base_link"
+    assert response["requested_delta"] == {
+        "forward_m": 0.25,
+        "lateral_m": -0.125,
+        "yaw_delta_deg": 15.0,
+    }
+    assert response["applied_delta"] == response["requested_delta"]
+    assert response["pose_source"] == "relative_robot_frame"
+    assert response["backend_provenance"] == "api_semantic"
+    assert response["requires_reobserve"] is True
+    assert response["clamped"] is False
+    assert backend.relative_pose_calls == [
+        {"forward_m": 0.25, "lateral_m": -0.125, "yaw_delta_deg": 15.0}
+    ]
+
+
+def test_relative_pose_navigation_strips_private_backend_pose_fields() -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _RelativePoseBackend(scenario)
+    contract = _contract(CleanupBackendSession(backend=backend))
+
+    response = contract.navigate_to_relative_pose(forward_m=0.25)
+
+    assert response["ok"] is True
+    assert response["backend_pose_mutation"]["robot_pose"] == {
+        "x": 1.25,
+        "y": 2.0,
+        "pose_source": "relative_robot_frame",
+    }
+    assert "target_receptacle_id" not in str(response)
+
+
 def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -1274,7 +1374,8 @@ def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() ->
         contract,
         observation["visible_object_detections"][0],
     )
-    fixture_id = str(detection["candidate_fixture_id"])
+    fixture = _public_destination_fixture_for_detection(contract, detection)
+    fixture_id = str(fixture["fixture_id"])
 
     assert contract.navigate_to_object(detection["object_id"])["ok"] is True
     assert contract.pick(detection["object_id"])["ok"] is True
@@ -1301,7 +1402,8 @@ def test_minimal_map_mode_observe_marks_placed_object_non_actionable() -> None:
         contract,
         observation["visible_object_detections"][0],
     )
-    fixture_id = str(detection["candidate_fixture_id"])
+    fixture = _public_destination_fixture_for_detection(contract, detection)
+    fixture_id = str(fixture["fixture_id"])
 
     assert contract.navigate_to_object(detection["object_id"])["ok"] is True
     assert contract.pick(detection["object_id"])["ok"] is True
@@ -1336,9 +1438,9 @@ def test_minimal_map_mode_observe_marks_placed_object_non_actionable() -> None:
     duplicate_nav = contract.navigate_to_object(detection["object_id"])
     duplicate_pick = contract.pick(detection["object_id"])
 
-    assert later_detection["cleanup_recommended"] is False
+    assert later_detection["actionability_status"] in {"already_handled", "needs_visual_evidence"}
     assert worklist_item["state"] == expected_state
-    assert worklist_item["cleanup_recommended"] is False
+    assert "cleanup_recommended" not in worklist_item
     assert duplicate_nav["ok"] is False
     assert duplicate_nav["error_reason"] == "already_handled"
     assert duplicate_pick["ok"] is False
@@ -1394,9 +1496,7 @@ def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> 
         contract,
         _first_detection_by_category(contract, "dish"),
     )
-    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
-
-    assert target_fixture is not None
+    target_fixture = _public_destination_fixture_for_detection(contract, detection)
     navigated_object = contract.navigate_to_object(detection["object_id"])
     picked = contract.pick(detection["object_id"])
     navigated_target = contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))
@@ -1414,9 +1514,8 @@ def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> 
 def test_realworld_contract_rejects_skipped_semantic_phases_without_private_truth() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     detection = _first_detection_by_category(contract, "dish")
-    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
-    assert target_fixture is not None
     detection = _confirm_world_label_detection(contract, detection)
+    target_fixture = _public_destination_fixture_for_detection(contract, detection)
 
     skipped_pick = contract.pick(detection["object_id"])
     assert skipped_pick["ok"] is False
@@ -1516,7 +1615,8 @@ def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() 
     )
     assert pending["state"] == "held"
     assert pending["required_tool"] == "navigate_to_receptacle"
-    assert pending["candidate_fixture_id"] == detection["candidate_fixture_id"]
+    assert pending["candidate_fixture_id"] == ""
+    assert pending["destination_options"]
     blocker = done["completion"]["blockers"][0]
     assert blocker["required_tool"] == "navigate_to_receptacle"
     _assert_no_forbidden_keys(done)
@@ -1622,8 +1722,7 @@ def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None
         contract,
         _first_detection_by_category(contract, "food"),
     )
-    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
-    assert target_fixture is not None
+    target_fixture = _public_destination_fixture_for_detection(contract, detection)
     fixture_id = str(target_fixture["fixture_id"])
 
     assert fixture_id.startswith("anchor_fixture_")
@@ -1657,8 +1756,7 @@ def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
         contract,
         _first_detection_by_category(contract, "book"),
     )
-    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
-    assert target_fixture is not None
+    target_fixture = _public_destination_fixture_for_detection(contract, detection)
     fixture_id = str(target_fixture["fixture_id"])
 
     assert fixture_id.startswith("anchor_fixture_")
@@ -2051,7 +2149,7 @@ def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
 
 def test_world_labels_requested_run_size_does_not_enable_raw_fpv_grounded_chain_gate() -> None:
     contract = _contract(
-        CleanupBackendSession(_empty_cleanup_scenario("world-oracle-labels-readiness-policy-test")),
+        CleanupBackendSession(_empty_cleanup_scenario("world-public-labels-readiness-policy-test")),
         public_acceptance_config={"requested_run_size": 5},
     )
 
@@ -2059,7 +2157,7 @@ def test_world_labels_requested_run_size_does_not_enable_raw_fpv_grounded_chain_
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         contract.observe()
 
-    done = contract.done("world-oracle-labels run completed after public sweep")
+    done = contract.done("world-public-labels run completed after public sweep")
 
     assert done["ok"] is True
     assert done["tool"] == "done"
@@ -2108,7 +2206,7 @@ def test_camera_raw_requested_run_size_enables_grounded_chain_gate_after_sweep()
 def test_world_labels_explicit_grounded_chain_gate_uses_world_label_tooling() -> None:
     contract = _contract(
         CleanupBackendSession(
-            _empty_cleanup_scenario("world-oracle-labels-explicit-readiness-test")
+            _empty_cleanup_scenario("world-public-labels-explicit-readiness-test")
         ),
         public_acceptance_config={"required_grounded_cleanup_chains": 2},
     )
@@ -2117,7 +2215,7 @@ def test_world_labels_explicit_grounded_chain_gate_uses_world_label_tooling() ->
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         contract.observe()
 
-    done = contract.done("world-oracle-labels run explicitly requires public chains")
+    done = contract.done("world-public-labels run explicitly requires public chains")
 
     assert done["ok"] is False
     assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
@@ -2744,11 +2842,11 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() 
             "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
             "status": "failed",
             "pipeline": {
-                "pipeline_id": "fake-http",
+                "pipeline_id": "grounding-dino",
                 "stages": [
                     {
                         "stage": "proposer",
-                        "producer_id": "fake-http",
+                        "producer_id": "grounding-dino",
                         "model_id": "fake",
                         "status": "timeout",
                         "latency_ms": 20,
@@ -2756,14 +2854,14 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() 
                 ],
             },
             "candidates": [],
-            "error": {"reason": "timeout", "message": "fake timeout"},
+            "error": {"reason": "timeout", "message": "sidecar timeout"},
         }
     )
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         visual_grounding_client=client,
-        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_pipeline_id="grounding-dino",
     )
     waypoint = next(
         item
@@ -2799,11 +2897,11 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
             "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
             "status": "ok",
             "pipeline": {
-                "pipeline_id": "fake-http",
+                "pipeline_id": "grounding-dino",
                 "stages": [
                     {
                         "stage": "proposer",
-                        "producer_id": "fake-http",
+                        "producer_id": "grounding-dino",
                         "model_id": "fake",
                         "status": "ok",
                         "latency_ms": 4,
@@ -2815,7 +2913,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
                     "category": "mug",
                     "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
                     "confidence": 0.8,
-                    "evidence_note": "fake mug on sofa from public camera frame",
+                    "evidence_note": "static mug on sofa from public camera frame",
                     "source_fixture_id": "sofa_01",
                     "destination_hint": {
                         "candidate_fixture_id": "bookshelf_01",
@@ -2829,7 +2927,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         visual_grounding_client=client,
-        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_pipeline_id="grounding-dino",
         visual_grounding_artifact_base_dir=tmp_path,
     )
     waypoint = next(
@@ -2857,9 +2955,9 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     assert client.last_request["image"]["width"] == 20
     assert client.last_request["image"]["height"] == 10
     assert declaration["producer_type"] == "external_visual_grounding_service"
-    assert declaration["visual_grounding_pipeline"]["pipeline_id"] == "fake-http"
+    assert declaration["visual_grounding_pipeline"]["pipeline_id"] == "grounding-dino"
     assert declaration["visual_grounding_evidence"]["schema"] == "visual_grounding_evidence_v1"
-    assert declaration["visual_grounding_evidence"]["producer_id"] == "fake-http"
+    assert declaration["visual_grounding_evidence"]["producer_id"] == "grounding-dino"
     assert declaration["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
     assert declaration["visual_grounding_evidence"]["bbox_coordinate_space"] == "normalized_xywh"
     assert declaration["actionability_status"] == "actionable"
@@ -2879,7 +2977,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     )
     runtime_observed = contract.agent_view_payload()["runtime_metric_map"]["observed_objects"][0]
     assert runtime_observed["producer_type"] == "external_visual_grounding_service"
-    assert runtime_observed["producer_id"] == "fake-http"
+    assert runtime_observed["producer_id"] == "grounding-dino"
     assert runtime_observed["source_observation_id"] == declaration["source_observation_id"]
     assert runtime_observed["image_region"]["type"] == "bbox"
     assert runtime_observed["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
@@ -2893,11 +2991,11 @@ def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> Non
             "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
             "status": "ok",
             "pipeline": {
-                "pipeline_id": "fake-http",
+                "pipeline_id": "grounding-dino",
                 "stages": [
                     {
                         "stage": "proposer",
-                        "producer_id": "fake-http",
+                        "producer_id": "grounding-dino",
                         "model_id": "fake",
                         "status": "ok",
                         "latency_ms": 4,
@@ -2909,7 +3007,7 @@ def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> Non
                     "category": "unknown_movable",
                     "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
                     "confidence": 0.7,
-                    "evidence_note": "fake unknown item with service-suggested destination",
+                    "evidence_note": "static unknown item with service-suggested destination",
                     "source_fixture_id": "",
                     "destination_hint": {
                         "candidate_fixture_id": "bookshelf_01",
@@ -2923,7 +3021,7 @@ def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> Non
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         visual_grounding_client=client,
-        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_pipeline_id="grounding-dino",
     )
 
     observation = contract.observe()
@@ -2953,14 +3051,14 @@ def _assert_no_forbidden_keys(payload: object) -> None:
 
 
 class _StaticVisualGroundingClient:
-    pipeline_id = "fake-http"
+    pipeline_id = "grounding-dino"
     config = type(
         "Config",
         (),
         {
             "auth_mode": "none",
-            "proposer_id": "fake-http",
-            "proposer_model_id": "fake",
+            "proposer_id": "grounding-dino",
+            "proposer_model_id": "fixture:grounding-dino",
         },
     )()
 
@@ -3026,6 +3124,40 @@ def _confirm_world_label_detection(
         for item in confirmed_observation["visible_object_detections"]
         if item["object_id"] == detection["object_id"]
     )
+
+
+def _public_destination_fixture_for_detection(
+    contract: RealWorldCleanupContract,
+    detection: dict,
+) -> dict:
+    _observe_all_public_waypoints(contract)
+    done = contract.done("probe public destination options")
+    pending = list(_pending_cleanup_candidates(done))
+    matching = [
+        item
+        for blocker in done.get("completion", {}).get("blockers", [])
+        if blocker.get("type") == "pending_cleanup_candidates"
+        for item in blocker.get("pending_cleanup_candidates", [])
+        if item.get("object_id") == detection["object_id"]
+    ]
+    if not matching:
+        matching = [item for item in pending if item.get("object_id") == detection["object_id"]]
+    assert matching, done
+    options = matching[0].get("destination_options") or []
+    assert options, matching[0]
+    fixture_id = str(options[0]["candidate_fixture_id"])
+    target = contract.public_receptacles_by_id().get(fixture_id)
+    assert target is not None
+    return dict(target)
+
+
+def _pending_cleanup_candidates(done_response: dict) -> list[dict]:
+    return [
+        item
+        for blocker in done_response.get("completion", {}).get("blockers", [])
+        if blocker.get("type") == "pending_cleanup_candidates"
+        for item in blocker.get("pending_cleanup_candidates", [])
+    ]
 
 
 def _empty_cleanup_scenario(scenario_id: str) -> CleanupScenario:

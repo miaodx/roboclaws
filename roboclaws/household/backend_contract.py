@@ -139,6 +139,29 @@ class CleanupBackendSession:
         navigation["backend_pose_mutation_available"] = True
         return navigation
 
+    def navigate_to_relative_pose(
+        self,
+        *,
+        forward_m: float = 0.0,
+        lateral_m: float = 0.0,
+        yaw_delta_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        navigator = getattr(self.backend, "navigate_to_relative_pose", None)
+        if callable(navigator):
+            return navigator(
+                forward_m=forward_m,
+                lateral_m=lateral_m,
+                yaw_delta_deg=yaw_delta_deg,
+            )
+        return {
+            "ok": False,
+            "tool": "navigate_to_relative_pose",
+            "status": "blocked_capability",
+            "error_reason": "relative_navigation_unavailable",
+            "backend": self.backend_name(),
+            "backend_pose_mutation_available": False,
+        }
+
     def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, Any]:
         return self.backend.navigate_to_receptacle(receptacle_id=receptacle_id)
 
