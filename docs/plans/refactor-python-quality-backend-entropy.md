@@ -23,11 +23,12 @@ of a clean checkpoint; refresh before the next execution slice.
 
 - 11 Ruff complexity violations and 66 oversized modules remain.
 - Largest P1 production hard-ceiling files are
-  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4573,
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4357,
   `roboclaws/household/realworld_contract.py` at 3888 lines,
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
   `roboclaws/household/scene_camera_comparison.py` at 2830,
+  `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` at 2808,
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711, and
   `roboclaws/household/report.py` at 2525.
 - Backend workers remain below the hard ceiling:
@@ -36,7 +37,7 @@ of a clean checkpoint; refresh before the next execution slice.
 - `roboclaws/launch/scene_sampler.py` is 1965 lines and stays cleared from P1
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
-- Current complexity rows are assigned to candidates C-F/E: operator-console
+- Current complexity rows are assigned to candidates C-H: operator-console
   tests, B1 preview rendering, a cleanup checker helper, live eval polling,
   MCP semantic tool registration, prompt preview, and eval-harness blockers.
   They should not hide while a file-size slice improves, but they are not the
@@ -51,18 +52,22 @@ declaration owner is 345 lines, the lifecycle owner is 737 lines, and
 lines. Candidate A is still active because `realworld_contract.py` remains
 above the hard ceiling, but the visual-candidate payload/event/overlay,
 declaration orchestration, and registration/resolution lifecycle boundaries
-stay closed without fresh drift. Completed init/runtime-prior, Runtime Metric
-Map payload, planner-probe report-panel, scene-camera report, and apple Object
-Gate / Render Gate slices also stay closed. Ponytail small cuts remain
-opportunistic inputs; they must not postpone the P1 hard-ceiling checkpoint.
+stay closed without fresh drift. The latest Candidate B slice moved
+capture-quality probe configuration/legacy-manifest inference/render-settle
+argument translation into `robot_camera_apple2apple_capture_quality.py`, and
+the apple runner dropped from 4573 to 4357 lines. Completed init/runtime-prior,
+Runtime Metric Map payload, planner-probe report-panel, scene-camera report,
+apple Object Gate / Render Gate, and apple capture-quality slices also stay
+closed. Ponytail small cuts remain opportunistic inputs; they must not postpone
+the P1 hard-ceiling checkpoint.
 
-Current checkout note: if the worktree still contains the uncommitted
-visual-candidate lifecycle split (`realworld_visual_candidate_lifecycle.py`
-plus the `realworld_contract.py` delegates), close that in-flight candidate-A
-slice first with changed-code review, focused proof, and an explicit commit or
-owner decision before starting the next slice. Do not keep adding lifecycle
-work to `realworld_visual_candidate_lifecycle.py` once it would cross the
-800-line target; the next contract slice needs a different named boundary.
+Ponytail audit recheck on 2026-06-17 did not find a dependency-level removal
+that should jump ahead of the hard-ceiling work. The useful ponytail inputs are
+small stale-surface or duplicate-wrapper cuts: runner-private material/probe
+delegates in the apple comparison runner, the checker legacy flag,
+camera-labeler identity maps, `_task_prefix_legacy`, and wording duplication.
+Treat these as P2 opportunistic scope inside a matching owner slice, not as a
+reason to defer the next P1 split.
 
 ## Operating Rules
 
@@ -100,29 +105,32 @@ work to `realworld_visual_candidate_lifecycle.py` once it would cross the
 
 ## Current Target
 
-Immediate next action in a dirty checkout: close the in-flight
-visual-candidate lifecycle slice before opening new work. Once the checkout is
-clean or the owner explicitly parks that slice, refresh the ratchet and choose
-the next P1 owner boundary from the remaining hard-ceiling files. Candidate A
+Refresh the ratchet, then default to Candidate B unless a fresh scan finds a
+more concrete P1 contract boundary. The apple comparison runner is the largest
+production hard-ceiling file, and the visual comparison family now has two
+other above-ceiling files: `scene_camera_comparison.py` and
+`summarize_robot_camera_visual_parity.py`. The best next slice should reduce a
+real visual-comparison concept such as native render diagnostics, image metric
+artifact preparation, visual-parity summary reporting, or runner-private
+material/probe wrapper aliases. Candidate A
 remains valid only for a new `RealWorldCleanupContract` boundary such as
 agent-view/readiness wrappers, runtime-map/cleanup-worklist caller migration,
 or another named facade-private coupling point; do not reopen visual-candidate
-payload, declaration, or lifecycle work without fresh drift. Candidate B's
-apple runner is now the largest P1 file and is a valid alternate when the next
-boundary is concrete. B1 label-tool rows are cleared; candidate D is preview
-rendering only. Ponytail small cuts are inputs when they remove stale surface,
-duplicate concept, or false confidence, but they must not postpone the P1
-hard-ceiling checkpoint.
+payload, declaration, or lifecycle work without fresh drift. B1 label-tool
+rows are cleared; candidate D is preview rendering only. Ponytail small cuts
+are inputs when they remove stale surface, duplicate concept, or false
+confidence, but they must not postpone the P1 hard-ceiling checkpoint.
 
 ## Execution Preflight
 
 Preflight status: REVIEWED. Route: `$intuitive-refactor` ratchet mode. Default
 execution: refresh the ratchet, then execute one P1 owner-boundary slice,
-currently candidate A unless a fresh context scan selects a more concrete P1
-boundary. Non-goals: broad repo cleanup, line-count shaving across many files,
-preserving obsolete internal wrappers, and live/provider/simulator proof unless
-the chosen slice changes that route. Re-approve if a slice would change a
-public launch, artifact, report, agent-facing, or private/public eval contract.
+currently candidate B's visual-comparison family unless a fresh context scan
+selects a sharper P1 contract boundary. Non-goals: broad repo cleanup,
+line-count shaving across many files, preserving obsolete internal wrappers,
+and live/provider/simulator proof unless the chosen slice changes that route.
+Re-approve if a slice would change a public launch, artifact, report,
+agent-facing, or private/public eval contract.
 
 ## Active Candidates
 
@@ -148,25 +156,37 @@ all-purpose context object, or new wrapper facade is not a win.
 
 ### B: Visual Comparison Pipeline Split
 
-Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
-`scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` remain
-oversized. Scene-camera HTML report rendering now belongs to
-`scene_camera_report*.py`, and the public
+Severity: P1. `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`,
+`roboclaws/household/scene_camera_comparison.py`, and
+`scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` remain
+oversized. Owning architecture layer: Artifacts, reports, and eval suites,
+with Backend Runtime / Environment Primitive details staying behind the
+existing MuJoCo/Isaac capture workers. Scene-camera HTML report rendering now
+belongs to `scene_camera_report*.py`, and the public
 `render_scene_camera_comparison_report` entry point is preserved in
 `scene_camera_comparison.py`. Do not reopen report rendering unless the
 comparison facade starts rebuilding report sections directly again.
 
-Other candidate-B slices remain valid only around real boundaries such as
-capture-lane initialization, render contract diagnostics, native render
-diagnostics, object audit item construction, or image metric artifact
-preparation. Real renderer claims still require separate local proof. The
-Object Gate / Render Gate diagnostic packet owner is now
+Default next candidate-B slices remain valid only around real boundaries such
+as capture-lane initialization, render contract diagnostics, native render
+diagnostics, object audit item construction, image metric artifact preparation,
+or visual-parity summary reporting. The apple runner still exposes runner-private
+delegating helpers for
+material/probe checks that already belong to
+`robot_camera_apple2apple_materials.py`; those are ponytail shrink targets when
+the selected slice can migrate tests/callers to the material owner and delete
+the wrapper surface instead of adding another facade. Real renderer claims
+still require separate local proof. The Object Gate / Render Gate diagnostic
+packet owner is now
 `robot_camera_apple2apple_object_gate.py`, and report-renderer tests call
 `robot_camera_apple2apple_report.py` directly; do not reopen those runner
 facade aliases without fresh drift. Continue the apple runner only when the
 selected boundary is not already owned by
 `robot_camera_apple2apple_object_gate.py` or
-`robot_camera_apple2apple_report.py`.
+`robot_camera_apple2apple_report.py`. For
+`summarize_robot_camera_visual_parity.py`, prefer a report/gate summary owner
+over splitting by helper count; do not duplicate Object Gate, Render Gate, or
+capture-quality interpretation that already has focused owners.
 
 ### C-H: P2 Rows And Small Cuts
 
@@ -189,11 +209,13 @@ selected boundary is not already owned by
   guidance wording. These do not justify deleting `camera_labeler`,
   visual-grounding artifact contracts, service plumbing, or public launch
   aliases. Current triage: the camera-labeler maps in
-  `roboclaws/household/profiles.py` are identity-map shrink targets only; the
-  prompt helper alias has no in-repo call sites but still needs a scoped prompt
-  test/static proof before deletion; the checker flag has parser/test surface
-  and needs a checker-contract migration; the guidance wording is docs-only
-  startup friction.
+  `roboclaws/household/profiles.py` are identity-map shrink targets only while
+  validation stays in place; `_task_prefix_legacy` has no in-repo call sites
+  and can be deleted with prompt static proof plus focused prompt tests; the
+  checker flag has parser/test/docs surface and needs a checker-contract
+  migration; the guidance wording is docs-only startup friction. Runner-private
+  material/probe aliases in the apple comparison runner are candidate-B
+  ponytail shrink targets, not standalone cleanup.
 
 ### Cleared Or Parked
 
@@ -214,7 +236,9 @@ selected boundary is not already owned by
   `report_sections_probe_runtime.py`, `report_sections_probe.py`, and
   `report_sections_probe_failures.py`; apple Object Gate / Render Gate
   diagnostics in
-  `robot_camera_apple2apple_object_gate.py`; scene-camera USD render-contract,
+  `robot_camera_apple2apple_object_gate.py`; apple capture-quality probe
+  configuration in `robot_camera_apple2apple_capture_quality.py`;
+  scene-camera USD render-contract,
   image metric, lighting/tone/shadow, render-domain, and render-source
   diagnostics in focused scene-camera modules; B1 runtime-bundle and label-tool
   validation helper families.

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from scripts.molmo_cleanup import robot_camera_apple2apple_capture_quality as capture_quality
 from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
 from scripts.molmo_cleanup import robot_camera_apple2apple_report as report_renderer
 
@@ -83,7 +84,7 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
             "isaac_colorcorr_gain": (0.9, 0.8, 0.7),
         },
     )()
-    capture_quality = run_camera._capture_quality_probe_config(args)
+    capture_quality_probe = capture_quality.capture_quality_probe_config(args)
     mujoco_views = {
         "views": {"fpv": str(mujoco_fpv), "chase": str(mujoco_chase)},
         "camera_control_contract": {},
@@ -100,7 +101,7 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
     run_camera._prepare_saved_report_images(
         mujoco_views,
         isaac_views,
-        capture_quality=capture_quality,
+        capture_quality=capture_quality_probe,
     )
     location = run_camera._location_result(
         label="0001_target",
@@ -109,22 +110,22 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
         mujoco_views=mujoco_views,
         isaac_views=isaac_views,
         output_dir=output_dir,
-        capture_quality=capture_quality,
+        capture_quality=capture_quality_probe,
     )
 
-    assert capture_quality["render_resolution_requested"] == {"width": 12, "height": 8}
-    assert capture_quality["render_resolution_saved"] == {"width": 6, "height": 4}
-    assert capture_quality["metric_resolution"] == {"width": 3, "height": 2}
-    assert capture_quality["render_settle_frames"] == 16
-    assert capture_quality["anti_aliasing"]["status"] == "requested"
-    assert capture_quality["anti_aliasing"]["requested_value"] == 2
-    assert capture_quality["tonemap_operator"]["status"] == "requested"
-    assert capture_quality["tonemap_operator"]["requested_value"] == 5
-    assert capture_quality["exposure_bias"]["status"] == "requested"
-    assert capture_quality["exposure_bias"]["requested_value"] == -1.0
-    assert capture_quality["colorcorr_gain"]["status"] == "requested"
-    assert capture_quality["colorcorr_gain"]["requested_value"] == (0.9, 0.8, 0.7)
-    assert run_camera._render_settle_args(capture_quality) == [
+    assert capture_quality_probe["render_resolution_requested"] == {"width": 12, "height": 8}
+    assert capture_quality_probe["render_resolution_saved"] == {"width": 6, "height": 4}
+    assert capture_quality_probe["metric_resolution"] == {"width": 3, "height": 2}
+    assert capture_quality_probe["render_settle_frames"] == 16
+    assert capture_quality_probe["anti_aliasing"]["status"] == "requested"
+    assert capture_quality_probe["anti_aliasing"]["requested_value"] == 2
+    assert capture_quality_probe["tonemap_operator"]["status"] == "requested"
+    assert capture_quality_probe["tonemap_operator"]["requested_value"] == 5
+    assert capture_quality_probe["exposure_bias"]["status"] == "requested"
+    assert capture_quality_probe["exposure_bias"]["requested_value"] == -1.0
+    assert capture_quality_probe["colorcorr_gain"]["status"] == "requested"
+    assert capture_quality_probe["colorcorr_gain"]["requested_value"] == (0.9, 0.8, 0.7)
+    assert capture_quality.render_settle_args(capture_quality_probe) == [
         "--isaac-aa-op",
         "2",
         "--isaac-tonemap-op",

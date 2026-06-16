@@ -903,6 +903,15 @@ logs before choosing the next slice.
   rows and 66 oversized modules. Proof: realworld contract and MCP server
   contract tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Robot-camera apple-to-apple capture-quality probe ownership
+  moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_capture_quality.py`, covering probe config,
+  legacy-manifest inference, RGB-gain parsing, quality-setting rows, and Isaac
+  render-settle argument translation. Tests now call the owner directly instead
+  of runner-private helpers. Metric: runner 4573 -> 4357 lines, new owner 225
+  lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  apple-to-apple unit tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -951,6 +960,10 @@ logs before choosing the next slice.
   `run_robot_camera_apple2apple_comparison.py` starts rebuilding object gate
   records, object/render parity diagnostic packets, compact diagnostic packets,
   skipped object-gate packets, or runner-private `_render_*` report aliases.
+- Robot-camera apple-to-apple capture-quality probe construction is owned by
+  `robot_camera_apple2apple_capture_quality.py`; reopen only if the runner
+  starts rebuilding probe config, inferred legacy manifests, RGB-gain parsing,
+  quality-setting rows, or Isaac render-settle argument translation directly.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
