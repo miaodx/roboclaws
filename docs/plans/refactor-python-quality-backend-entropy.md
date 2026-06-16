@@ -44,6 +44,8 @@ agent/perception section split:
 - Scene-sampler drift from the parallel diverse-selection work is cleared:
   `roboclaws/launch/scene_sampler.py` is now 1996 lines after the typed row
   contract split, below the hard ceiling.
+- `roboclaws/household/agibot_contract_rehearsal.py` is now 1949 lines after
+  the evidence/readiness payload split, below the hard ceiling.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
