@@ -13,6 +13,7 @@ from scripts.operator_console.render_scene_previews import (
     _first_public_waypoint,
     _molmospaces_scene_ref,
     _preview_metadata,
+    _promote_b1_camera_previews,
     _render_semantic_map_preview,
     _scene_alignment,
     _scene_center_and_span,
@@ -188,6 +189,231 @@ def test_molmospaces_preview_scene_ref_rejects_unknown_source_or_index() -> None
 def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypatch) -> None:
     import scripts.operator_console.render_scene_previews as render_scene_previews
 
+    bundle = _write_b1_map_bundle(tmp_path)
+    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+
+    result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
+
+    assert result["world_id"] == B1_MAP12_WORLD_ID
+    assert result["status"] == "rendered"
+    for view_name in ("map", "topdown"):
+        path = tmp_path / f"b1-map12-{view_name}.png"
+        assert path.is_file()
+        assert Image.open(path).size == (320, 200)
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
+    metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
+    assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
+    assert metadata["backend"] == "isaaclab"
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
+    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 1
+
+
+def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle = _write_b1_map_bundle(tmp_path)
+    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    run_dir = tmp_path / "run"
+    views_dir = run_dir / "robot_views"
+    views_dir.mkdir(parents=True)
+    _write_pattern_image(views_dir / "0001_observe.fpv.png", accent=(220, 220, 220))
+    _write_pattern_image(views_dir / "0001_observe.chase.png", accent=(120, 90, 60))
+    artifact = run_dir / "run_result.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "contract": "realworld_cleanup_v1",
+                "robot_view_steps": [
+                    {
+                        "action": "observe",
+                        "label": "0001_observe",
+                        "waypoint_id": "generated_exploration_002",
+                        "camera_control_contract": {
+                            "agent_facing_fpv": {
+                                "camera_prim_path": "/World/robot_0/head_camera",
+                                "robot_mounted": True,
+                                "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
+                            },
+                            "report_chase_view": {
+                                "source": "isaac_lab_camera_rgb_scene_camera:chase",
+                            },
+                        },
+                        "views": {
+                            "fpv": "robot_views/0001_observe.fpv.png",
+                            "chase": "robot_views/0001_observe.chase.png",
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = render_b1_map12_preview(
+        output_dir=tmp_path,
+        width=320,
+        height=200,
+        camera_artifact=artifact,
+    )
+
+    assert result["status"] == "rendered"
+    for view_name in ("fpv", "chase", "map", "topdown"):
+        assert (tmp_path / f"b1-map12-{view_name}.png").is_file()
+    metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
+    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["camera_preview_artifact"]["path"] == str(artifact)
+    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["fpv"]["camera"] == "/World/robot_0/head_camera"
+    assert metadata["views"]["fpv"]["waypoint_id"] == "generated_exploration_002"
+    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+    assert metadata["views"]["chase"]["source"] == "isaac_lab_camera_rgb_scene_camera:chase"
+
+
+def test_b1_camera_promotion_rejects_low_detail_pairs(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    views_dir = run_dir / "robot_views"
+    views_dir.mkdir(parents=True)
+    Image.new("RGB", (64, 48), (120, 120, 120)).save(views_dir / "flat.fpv.png")
+    _write_pattern_image(views_dir / "flat.chase.png", accent=(120, 90, 60))
+    artifact = run_dir / "run_result.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "robot_view_steps": [
+                    {
+                        "label": "flat",
+                        "views": {
+                            "fpv": "robot_views/flat.fpv.png",
+                            "chase": "robot_views/flat.chase.png",
+                        },
+                    }
+                ]
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = _promote_b1_camera_previews(
+        camera_artifact=artifact,
+        fpv_path=tmp_path / "b1-map12-fpv.png",
+        chase_path=tmp_path / "b1-map12-chase.png",
+        width=320,
+        height=200,
+    )
+
+    assert result["status"] == "no_usable_camera_pair"
+    assert result["evaluated_candidates"][0]["status"] == "quality_rejected"
+    assert any(
+        error.startswith("fpv:") for error in result["evaluated_candidates"][0]["quality_errors"]
+    )
+
+
+def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle = _write_b1_map_bundle(tmp_path)
+    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    Image.new("RGB", (16, 16), (1, 2, 3)).save(tmp_path / "b1-map12-fpv.png")
+    Image.new("RGB", (16, 16), (4, 5, 6)).save(tmp_path / "b1-map12-chase.png")
+    metadata_path = tmp_path / "b1-map12-preview.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "schema": PREVIEW_METADATA_SCHEMA,
+                "views": {
+                    "fpv": {"path": "b1-map12-fpv.png"},
+                    "chase": {"path": "b1-map12-chase.png"},
+                    "map": {"path": "b1-map12-map.png"},
+                    "topdown": {"path": "b1-map12-topdown.png"},
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = render_b1_map12_preview(
+        output_dir=tmp_path,
+        width=320,
+        height=200,
+        skip_existing=True,
+    )
+
+    assert result["status"] == "rendered"
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
+
+
+def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle = _write_b1_map_bundle(tmp_path)
+    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
+    Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
+    metadata_path = tmp_path / "b1-map12-preview.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "schema": PREVIEW_METADATA_SCHEMA,
+                "views": {
+                    "fpv": {
+                        "path": "b1-map12-fpv.png",
+                        "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
+                    },
+                    "chase": {
+                        "path": "b1-map12-chase.png",
+                        "provenance": "isaac_runtime_report_chase_camera",
+                    },
+                    "map": {"path": "b1-map12-map.png"},
+                    "topdown": {"path": "b1-map12-topdown.png"},
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = render_b1_map12_preview(
+        output_dir=tmp_path,
+        width=320,
+        height=200,
+        skip_existing=True,
+    )
+
+    assert result["status"] == "rendered"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
+
+
+def _write_b1_map_bundle(tmp_path: Path) -> Path:
     bundle = tmp_path / "b1-map12-room-semantics"
     bundle.mkdir()
     Image.new("RGB", (120, 90), (230, 230, 230)).save(bundle / "preview.png")
@@ -235,23 +461,19 @@ def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypa
         json.dumps(overlay, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    return bundle
 
-    result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
 
-    assert result["world_id"] == B1_MAP12_WORLD_ID
-    assert result["status"] == "rendered"
-    for view_name in ("fpv", "map", "chase", "topdown"):
-        path = tmp_path / f"b1-map12-{view_name}.png"
-        assert path.is_file()
-        assert Image.open(path).size == (320, 200)
-    metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
-    assert metadata["schema"] == PREVIEW_METADATA_SCHEMA
-    assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
-    assert metadata["views"]["chase"]["correspondence_count"] == 1
-    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 1
+def _write_pattern_image(path: Path, *, accent: tuple[int, int, int]) -> None:
+    image = Image.new("RGB", (96, 64), (48, 56, 64))
+    pixels = image.load()
+    for y in range(image.height):
+        for x in range(image.width):
+            if (x // 6 + y // 4) % 2 == 0:
+                pixels[x, y] = accent
+            elif x == y or x + y == image.width - 1:
+                pixels[x, y] = (20, 24, 28)
+    image.save(path)
 
 
 def test_preview_helpers_use_first_public_waypoint_and_scene_bounds() -> None:

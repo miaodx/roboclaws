@@ -491,7 +491,9 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
     registered_previews = _registered_preview_asset_names()
     assert "molmospaces-val_5-map.png" in registered_previews
     assert "molmospaces-val_5-preview.json" in registered_previews
+    assert "b1-map12-map.png" in registered_previews
     assert "b1-map12-fpv.png" in registered_previews
+    assert "b1-map12-chase.png" in registered_previews
     assert "b1-map12-preview.json" in registered_previews
     assert "molmospaces-val_6-map.png" not in registered_previews
     assert "molmospaces-val_8-map.png" not in registered_previews
@@ -522,7 +524,15 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
         ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
+        with urllib.request.urlopen(f"http://{host}:{port}/previews/b1-map12-map.png") as response:
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(f"http://{host}:{port}/previews/b1-map12-fpv.png") as response:
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
+        with urllib.request.urlopen(
+            f"http://{host}:{port}/previews/b1-map12-chase.png"
+        ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(
@@ -535,10 +545,11 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             f"http://{host}:{port}/previews/b1-map12-preview.json"
         ) as response:
             preview = json.loads(response.read().decode("utf-8"))
-            assert preview["renderer"] == "static_b1_map12_digital_twin_overview"
-            assert preview["views"]["fpv"]["camera_semantics"] == (
-                "overview_slot_not_live_robot_camera"
+            assert preview["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+            assert preview["views"]["fpv"]["provenance"] == (
+                "isaac_runtime_robot_mounted_head_camera_fpv"
             )
+            assert preview["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
         assert exc_info.value.code == 404

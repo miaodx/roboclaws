@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageStat
+from PIL import Image, ImageFilter, ImageStat
 
 if __package__ in {None, ""}:
     REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -63,9 +63,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "MuJoCo renders: Raw FPV is captured from the first public waypoint, "
             "Chase is the robot follower camera, and Top-down is a separate scene "
             "camera render rather than a semantic-map fallback. B1 / Map 12 "
-            "previews are static digital-twin overview assets generated from the "
-            "committed map bundle and scene semantic overlay so the console can "
-            "show the experimental digital twin before Isaac starts."
+            "previews are static map assets generated from the committed map bundle "
+            "and scene semantic overlay so the console can show the experimental "
+            "digital twin before Isaac starts without presenting fake FPV or chase "
+            "camera frames."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -88,6 +89,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "files already exist."
         ),
     )
+    parser.add_argument(
+        "--b1-camera-artifact",
+        type=Path,
+        help=(
+            "Optional real B1 Isaac runtime artifact to promote into FPV/chase previews. "
+            "Supported inputs are navigation_smoke.json and run_result.json with "
+            "robot_view_steps. Without this, B1 preview generation only writes static "
+            "map/top-down assets and will not fabricate camera views."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -105,6 +116,7 @@ def render_previews(args: argparse.Namespace) -> dict[str, Any]:
                 width=max(1, int(args.width)),
                 height=max(1, int(args.height)),
                 skip_existing=bool(args.skip_existing),
+                camera_artifact=args.b1_camera_artifact,
             )
         else:
             result = render_molmospaces_preview(
@@ -336,6 +348,7 @@ def render_b1_map12_preview(
     width: int,
     height: int,
     skip_existing: bool = False,
+    camera_artifact: Path | None = None,
 ) -> dict[str, Any]:
     slug = _world_slug(B1_MAP12_WORLD_ID)
     fpv_path = output_dir / f"{slug}-fpv.png"
@@ -343,23 +356,51 @@ def render_b1_map12_preview(
     chase_path = output_dir / f"{slug}-chase.png"
     topdown_path = output_dir / f"{slug}-topdown.png"
     metadata_path = output_dir / f"{slug}-preview.json"
+    removed_stale: list[str] = []
+    preserved_camera = (
+        _b1_existing_real_camera_preview_metadata(metadata_path, fpv_path, chase_path)
+        if camera_artifact is None
+        else None
+    )
+    if camera_artifact is None and preserved_camera is None:
+        for stale_path in (fpv_path, chase_path):
+            if stale_path.exists():
+                stale_path.unlink()
+                removed_stale.append(str(stale_path))
     if (
         skip_existing
-        and fpv_path.exists()
         and map_path.exists()
-        and chase_path.exists()
         and topdown_path.exists()
         and metadata_path.exists()
+        and (
+            (
+                camera_artifact is None
+                and (
+                    preserved_camera is not None
+                    or _b1_metadata_has_no_camera_previews(metadata_path)
+                )
+            )
+            or (
+                camera_artifact is not None
+                and fpv_path.exists()
+                and chase_path.exists()
+                and _b1_metadata_has_real_camera_previews(metadata_path)
+            )
+        )
     ):
         return {
             "world_id": B1_MAP12_WORLD_ID,
             "scene_source": "b1-gaussian-digital-twin",
             "status": "skipped",
-            "fpv": str(fpv_path),
+            **(
+                {"fpv": str(fpv_path), "chase": str(chase_path)}
+                if camera_artifact is not None
+                else {}
+            ),
             "map": str(map_path),
-            "chase": str(chase_path),
             "topdown": str(topdown_path),
             "metadata": str(metadata_path),
+            "removed_stale": removed_stale,
         }
 
     map_bundle = B1_MAP_BUNDLE_DIR
@@ -397,47 +438,354 @@ def render_b1_map12_preview(
     )
     map_image.save(map_path)
     topdown_image.save(topdown_path)
-    _render_b1_room_overview(
-        semantics=semantics,
-        overlay=overlay,
-        base_image=topdown_image,
-        output_path=fpv_path,
-        width=width,
-        height=height,
-        variant="room_overview",
-    )
-    _render_b1_scene_evidence_overview(
-        semantics=semantics,
-        overlay=overlay,
-        base_image=map_image,
-        output_path=chase_path,
-        width=width,
-        height=height,
-    )
     metadata = _b1_map12_preview_metadata(
         width=width,
         height=height,
-        fpv_path=fpv_path,
         map_path=map_path,
-        chase_path=chase_path,
         topdown_path=topdown_path,
         semantics=semantics,
         overlay=overlay,
     )
+    camera_result: dict[str, Any] | None = None
+    if camera_artifact is not None:
+        camera_result = _promote_b1_camera_previews(
+            camera_artifact=Path(camera_artifact),
+            fpv_path=fpv_path,
+            chase_path=chase_path,
+            width=width,
+            height=height,
+        )
+        if camera_result.get("status") != "promoted":
+            return {
+                "world_id": B1_MAP12_WORLD_ID,
+                "scene_source": "b1-gaussian-digital-twin",
+                "status": "camera_preview_unavailable",
+                "map": str(map_path),
+                "topdown": str(topdown_path),
+                "metadata": str(metadata_path),
+                "camera_artifact": str(camera_artifact),
+                "camera_result": camera_result,
+                "removed_stale": removed_stale,
+            }
+        metadata["renderer"] = "static_b1_map12_with_isaac_runtime_camera_previews"
+        metadata["views"]["fpv"] = camera_result["views"]["fpv"]
+        metadata["views"]["chase"] = camera_result["views"]["chase"]
+        metadata["camera_preview_artifact"] = camera_result["artifact"]
+    elif preserved_camera is not None:
+        metadata["renderer"] = "static_b1_map12_with_isaac_runtime_camera_previews"
+        metadata["views"]["fpv"] = preserved_camera["views"]["fpv"]
+        metadata["views"]["chase"] = preserved_camera["views"]["chase"]
+        if preserved_camera.get("artifact"):
+            metadata["camera_preview_artifact"] = preserved_camera["artifact"]
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    return {
+    result = {
         "world_id": B1_MAP12_WORLD_ID,
         "scene_source": "b1-gaussian-digital-twin",
         "status": "rendered",
-        "fpv": str(fpv_path),
         "map": str(map_path),
-        "chase": str(chase_path),
         "topdown": str(topdown_path),
         "metadata": str(metadata_path),
+        "removed_stale": removed_stale,
     }
+    if camera_result is not None:
+        result.update(
+            {
+                "fpv": str(fpv_path),
+                "chase": str(chase_path),
+                "camera_artifact": str(camera_artifact),
+                "camera_selection_status": camera_result.get("selection_status"),
+            }
+        )
+    return result
+
+
+def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    views = payload.get("views")
+    if not isinstance(views, dict):
+        return False
+    return "fpv" not in views and "chase" not in views
+
+
+def _b1_metadata_has_real_camera_previews(path: Path) -> bool:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return _b1_metadata_payload_has_real_camera_previews(payload)
+
+
+def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bool:
+    views = payload.get("views")
+    if not isinstance(views, dict):
+        return False
+    fpv = views.get("fpv")
+    chase = views.get("chase")
+    if not isinstance(fpv, dict) or not isinstance(chase, dict):
+        return False
+    return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
+        chase.get("provenance") or ""
+    ).startswith("isaac_runtime_")
+
+
+def _b1_existing_real_camera_preview_metadata(
+    metadata_path: Path,
+    fpv_path: Path,
+    chase_path: Path,
+) -> dict[str, Any] | None:
+    if not fpv_path.is_file() or not chase_path.is_file() or not metadata_path.is_file():
+        return None
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not _b1_metadata_payload_has_real_camera_previews(payload):
+        return None
+    views = payload.get("views") or {}
+    return {
+        "views": {"fpv": dict(views["fpv"]), "chase": dict(views["chase"])},
+        "artifact": dict(payload.get("camera_preview_artifact") or {}),
+    }
+
+
+def _promote_b1_camera_previews(
+    *,
+    camera_artifact: Path,
+    fpv_path: Path,
+    chase_path: Path,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    if not camera_artifact.is_file():
+        return {
+            "status": "artifact_missing",
+            "artifact_path": str(camera_artifact),
+        }
+    try:
+        payload = json.loads(camera_artifact.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {
+            "status": "artifact_unreadable",
+            "artifact_path": str(camera_artifact),
+            "reason": str(exc),
+        }
+    candidates = _b1_camera_preview_candidates(payload, artifact_path=camera_artifact)
+    evaluated: list[dict[str, Any]] = []
+    for candidate in candidates:
+        fpv_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("fpv"))
+        chase_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("chase"))
+        candidate_result = {
+            "label": candidate.get("label"),
+            "action": candidate.get("action"),
+            "waypoint_id": candidate.get("waypoint_id"),
+            "source_kind": candidate.get("source_kind"),
+            "fpv_source": str(fpv_source) if fpv_source is not None else "",
+            "chase_source": str(chase_source) if chase_source is not None else "",
+        }
+        if fpv_source is None or chase_source is None:
+            candidate_result["status"] = "missing_view_path"
+            evaluated.append(candidate_result)
+            continue
+        if not fpv_source.is_file() or not chase_source.is_file():
+            candidate_result["status"] = "missing_view_file"
+            evaluated.append(candidate_result)
+            continue
+        fpv_diagnostics = _image_diagnostics(fpv_source)
+        chase_diagnostics = _image_diagnostics(chase_source)
+        errors = [
+            *(f"fpv: {error}" for error in _b1_camera_preview_quality_errors(fpv_diagnostics)),
+            *(f"chase: {error}" for error in _b1_camera_preview_quality_errors(chase_diagnostics)),
+        ]
+        candidate_result["fpv_diagnostics"] = fpv_diagnostics
+        candidate_result["chase_diagnostics"] = chase_diagnostics
+        candidate_result["quality_errors"] = errors
+        if errors:
+            candidate_result["status"] = "quality_rejected"
+            evaluated.append(candidate_result)
+            continue
+        candidate_result["status"] = "accepted"
+        candidate_result["score"] = _b1_camera_preview_score(fpv_diagnostics) + (
+            _b1_camera_preview_score(chase_diagnostics) * 0.75
+        )
+        candidate_result["camera_control_contract"] = candidate.get("camera_control_contract")
+        evaluated.append(candidate_result)
+
+    accepted = [item for item in evaluated if item.get("status") == "accepted"]
+    if not accepted:
+        return {
+            "status": "no_usable_camera_pair",
+            "artifact_path": str(camera_artifact),
+            "candidate_count": len(candidates),
+            "evaluated_candidates": evaluated,
+        }
+    selected = max(accepted, key=lambda item: float(item.get("score") or 0.0))
+    fpv_source = Path(str(selected["fpv_source"]))
+    chase_source = Path(str(selected["chase_source"]))
+    _fit_preview_image(Image.open(fpv_source), width=width, height=height).save(fpv_path)
+    _fit_preview_image(Image.open(chase_source), width=width, height=height).save(chase_path)
+    selected_label = str(selected.get("label") or "")
+    selected_action = str(selected.get("action") or "")
+    selected_waypoint = str(selected.get("waypoint_id") or "")
+    camera_control_contract = selected.get("camera_control_contract")
+    if not isinstance(camera_control_contract, dict):
+        camera_control_contract = {}
+    agent_facing_fpv = (
+        camera_control_contract.get("agent_facing_fpv")
+        if isinstance(camera_control_contract.get("agent_facing_fpv"), dict)
+        else {}
+    )
+    report_chase = (
+        camera_control_contract.get("report_chase_view")
+        if isinstance(camera_control_contract.get("report_chase_view"), dict)
+        else {}
+    )
+    return {
+        "status": "promoted",
+        "selection_status": "selected_highest_scoring_real_isaac_camera_pair",
+        "artifact": {
+            "path": str(camera_artifact),
+            "schema": payload.get("schema") or payload.get("contract") or "",
+            "source_kind": selected.get("source_kind"),
+            "selected_label": selected_label,
+            "selected_action": selected_action,
+            "selected_waypoint_id": selected_waypoint,
+            "candidate_count": len(candidates),
+            "accepted_candidate_count": len(accepted),
+        },
+        "evaluated_candidates": evaluated,
+        "views": {
+            "fpv": {
+                "path": fpv_path.name,
+                "view": "raw_fpv",
+                "waypoint_id": selected_waypoint,
+                "action": selected_action,
+                "label": selected_label,
+                "camera": agent_facing_fpv.get("camera_prim_path") or "/World/robot_0/head_camera",
+                "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
+                "source_path": str(fpv_source),
+                "source": agent_facing_fpv.get("source")
+                or "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
+                "robot_mounted": agent_facing_fpv.get("robot_mounted", True),
+                "head_camera_equivalent": agent_facing_fpv.get("head_camera_equivalent", False),
+                "image_diagnostics": _image_diagnostics(fpv_path),
+            },
+            "chase": {
+                "path": chase_path.name,
+                "view": "chase_camera",
+                "waypoint_id": selected_waypoint,
+                "action": selected_action,
+                "label": selected_label,
+                "camera": report_chase.get("camera_prim_path") or "robot_relative_chase_camera",
+                "provenance": "isaac_runtime_report_chase_camera",
+                "source_path": str(chase_source),
+                "source": report_chase.get("source") or "backend_local_report_chase_camera",
+                "policy_note": "Chase is report evidence, not agent-facing policy input.",
+                "image_diagnostics": _image_diagnostics(chase_path),
+            },
+        },
+    }
+
+
+def _b1_camera_preview_candidates(
+    payload: dict[str, Any],
+    *,
+    artifact_path: Path,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for index, step in enumerate(payload.get("robot_view_steps") or []):
+        if not isinstance(step, dict):
+            continue
+        views = step.get("views")
+        if not isinstance(views, dict):
+            continue
+        candidates.append(
+            {
+                "source_kind": "run_result_robot_view_step",
+                "label": step.get("label")
+                or _b1_camera_label_from_view_path(views.get("fpv"))
+                or f"robot_view_step_{index:03d}",
+                "action": step.get("action"),
+                "waypoint_id": step.get("waypoint_id")
+                or step.get("current_waypoint_id")
+                or step.get("room_id"),
+                "fpv": views.get("fpv"),
+                "chase": views.get("chase"),
+                "camera_control_contract": step.get("camera_control_contract"),
+            }
+        )
+    if candidates:
+        return candidates
+    for index, item in enumerate(payload.get("waypoint_evidence") or []):
+        if not isinstance(item, dict):
+            continue
+        views = item.get("views")
+        if not isinstance(views, dict):
+            continue
+        candidates.append(
+            {
+                "source_kind": "navigation_smoke_waypoint_evidence",
+                "label": item.get("waypoint_id") or f"waypoint_evidence_{index:03d}",
+                "action": "navigation_smoke",
+                "waypoint_id": item.get("waypoint_id"),
+                "fpv": views.get("fpv"),
+                "chase": views.get("chase"),
+                "camera_control_contract": {},
+            }
+        )
+    del artifact_path
+    return candidates
+
+
+def _b1_camera_label_from_view_path(raw_path: Any) -> str:
+    if not raw_path:
+        return ""
+    name = Path(str(raw_path)).name
+    for suffix in (".fpv.png", ".fpv.jpg", ".png", ".jpg"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path | None:
+    if not raw_path:
+        return None
+    path = Path(str(raw_path))
+    if path.is_absolute():
+        return path
+    candidate = artifact_path.parent / path
+    if candidate.exists():
+        return candidate
+    return path
+
+
+def _b1_camera_preview_quality_errors(diagnostics: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if diagnostics.get("visual_status") != "reviewable":
+        errors.append(str(diagnostics.get("visual_status") or "not_reviewable"))
+    if float(diagnostics.get("max_channel_range") or 0.0) <= 8.0:
+        errors.append("too_little_channel_range")
+    if float(diagnostics.get("max_stddev") or 0.0) <= 2.0:
+        errors.append("too_little_variance")
+    if int(diagnostics.get("thumbnail_color_count") or 0) < 128:
+        errors.append("too_few_distinct_colors")
+    if float(diagnostics.get("edge_fraction_over_8") or 0.0) < 0.02:
+        errors.append("too_few_scene_edges")
+    return errors
+
+
+def _b1_camera_preview_score(diagnostics: dict[str, Any]) -> float:
+    return (
+        float(diagnostics.get("max_stddev") or 0.0)
+        + (float(diagnostics.get("max_channel_range") or 0.0) / 100.0)
+        + (float(diagnostics.get("thumbnail_color_count") or 0.0) / 1000.0)
+        + (float(diagnostics.get("edge_fraction_over_8") or 0.0) * 10.0)
+    )
 
 
 def _preview_metadata(
@@ -609,9 +957,7 @@ def _b1_map12_preview_metadata(
     *,
     width: int,
     height: int,
-    fpv_path: Path,
     map_path: Path,
-    chase_path: Path,
     topdown_path: Path,
     semantics: dict[str, Any],
     overlay: dict[str, Any],
@@ -620,11 +966,6 @@ def _b1_map12_preview_metadata(
     waypoints = (
         semantics.get("inspection_waypoints")
         if isinstance(semantics.get("inspection_waypoints"), list)
-        else []
-    )
-    correspondence = (
-        overlay.get("scene_map_correspondence_v1")
-        if isinstance(overlay.get("scene_map_correspondence_v1"), list)
         else []
     )
     return {
@@ -638,14 +979,6 @@ def _b1_map12_preview_metadata(
         "map_bundle": str(B1_MAP_BUNDLE_DIR),
         "render_resolution": {"width": width, "height": height},
         "views": {
-            "fpv": {
-                "path": fpv_path.name,
-                "view": "digital_twin_room_overview",
-                "provenance": "b1_map12_room_semantic_overlay_static_overview",
-                "camera_semantics": "overview_slot_not_live_robot_camera",
-                "semantic_map_fallback": False,
-                "image_diagnostics": _image_diagnostics(fpv_path),
-            },
             "map": {
                 "path": map_path.name,
                 "view": "source_map_preview",
@@ -656,16 +989,6 @@ def _b1_map12_preview_metadata(
                 "display_frame": semantics.get("display_frame"),
                 "semantic_map_fallback": False,
                 "image_diagnostics": _image_diagnostics(map_path),
-            },
-            "chase": {
-                "path": chase_path.name,
-                "view": "digital_twin_scene_evidence_overview",
-                "provenance": "b1_map12_scene_map_correspondence_static_overview",
-                "camera_semantics": "overview_slot_not_live_robot_camera",
-                "correspondence_schema": overlay.get("scene_map_correspondence_schema"),
-                "correspondence_count": len(correspondence),
-                "semantic_map_fallback": False,
-                "image_diagnostics": _image_diagnostics(chase_path),
             },
             "topdown": {
                 "path": topdown_path.name,
@@ -691,306 +1014,6 @@ def _fit_preview_image(image: Image.Image, *, width: int, height: int) -> Image.
     y = (height - source.height) // 2
     canvas.paste(source, (x, y))
     return canvas
-
-
-def _render_b1_room_overview(
-    *,
-    semantics: dict[str, Any],
-    overlay: dict[str, Any],
-    base_image: Image.Image,
-    output_path: Path,
-    width: int,
-    height: int,
-    variant: str,
-) -> None:
-    image = _map_canvas(base_image, width=width, height=height)
-    draw = ImageDraw.Draw(image, "RGBA")
-    transform = _map_transform(semantics, width=width, height=height)
-    room_colors = {
-        "meeting_room": (99, 102, 241, 58),
-        "kitchen": (16, 185, 129, 62),
-        "living_room": (245, 158, 11, 58),
-        "corridor": (14, 165, 233, 54),
-        "storage_room": (168, 85, 247, 54),
-    }
-    outline_colors = {
-        "meeting_room": (79, 70, 229, 180),
-        "kitchen": (5, 150, 105, 180),
-        "living_room": (217, 119, 6, 180),
-        "corridor": (2, 132, 199, 180),
-        "storage_room": (126, 34, 206, 180),
-    }
-    rooms = [item for item in semantics.get("rooms") or [] if isinstance(item, dict)]
-    for room in rooms:
-        polygon = _room_polygon(room)
-        if len(polygon) < 3:
-            continue
-        category = str(room.get("category") or "")
-        points = [transform(x, y) for x, y in polygon]
-        draw.polygon(points, fill=room_colors.get(category, (100, 116, 139, 46)))
-        draw.line(
-            [*points, points[0]],
-            fill=outline_colors.get(category, (71, 85, 105, 170)),
-            width=2,
-        )
-        label = str(room.get("room_label") or room.get("room_id") or "")
-        cx, cy = _polygon_center(polygon)
-        _draw_label(draw, transform(cx, cy), label, fill=(17, 24, 39, 230))
-
-    for waypoint in semantics.get("inspection_waypoints") or []:
-        if not isinstance(waypoint, dict):
-            continue
-        point = _xy(waypoint)
-        if point is None:
-            continue
-        px, py = transform(*point)
-        draw.ellipse((px - 6, py - 6, px + 6, py + 6), fill=(5, 150, 105, 230))
-
-    _draw_b1_overview_header(
-        draw,
-        width=width,
-        title="B1 / Map 12 Digital Twin",
-        subtitle=f"{len(rooms)} semantic rooms, static overview",
-    )
-    _draw_b1_overview_footer(
-        draw,
-        width=width,
-        height=height,
-        text=f"{variant}: generated from room_semantic_overlay.json and semantics.json",
-    )
-    image.save(output_path)
-
-
-def _render_b1_scene_evidence_overview(
-    *,
-    semantics: dict[str, Any],
-    overlay: dict[str, Any],
-    base_image: Image.Image,
-    output_path: Path,
-    width: int,
-    height: int,
-) -> None:
-    image = _map_canvas(base_image, width=width, height=height)
-    draw = ImageDraw.Draw(image, "RGBA")
-    transform = _map_transform(semantics, width=width, height=height)
-    correspondences = [
-        item for item in overlay.get("scene_map_correspondence_v1") or [] if isinstance(item, dict)
-    ]
-    by_partition = {
-        str(item.get("asset_partition_id") or ""): item
-        for item in correspondences
-        if isinstance(item, dict)
-    }
-    for index, room in enumerate(
-        item for item in semantics.get("rooms") or [] if isinstance(item, dict)
-    ):
-        polygon = _room_polygon(room)
-        if len(polygon) < 3:
-            continue
-        points = [transform(x, y) for x, y in polygon]
-        alpha = 36 + (index % 3) * 18
-        draw.polygon(points, fill=(15, 23, 42, alpha))
-        draw.line([*points, points[0]], fill=(15, 23, 42, 160), width=2)
-        cx, cy = _polygon_center(polygon)
-        match = by_partition.get(str(room.get("asset_partition_id") or ""))
-        status = str((match or {}).get("alignment_status") or room.get("alignment_status") or "")
-        label = str(room.get("asset_partition_id") or room.get("room_id") or "")
-        _draw_label(
-            draw,
-            transform(cx, cy),
-            f"{label} / {status}",
-            fill=(15, 23, 42, 235),
-            background=(255, 255, 255, 210),
-        )
-
-    fixtures = [item for item in semantics.get("fixtures") or [] if isinstance(item, dict)]
-    for fixture in fixtures:
-        pose = fixture.get("pose")
-        if not isinstance(pose, dict):
-            continue
-        point = _xy(pose)
-        if point is None:
-            continue
-        px, py = transform(*point)
-        draw.rounded_rectangle(
-            (px - 5, py - 5, px + 5, py + 5),
-            radius=2,
-            fill=(180, 83, 9, 230),
-        )
-
-    _draw_b1_overview_header(
-        draw,
-        width=width,
-        title="Scene Correspondence",
-        subtitle=f"{len(correspondences)} partitions, {len(fixtures)} public fixtures",
-    )
-    _draw_b1_overview_footer(
-        draw,
-        width=width,
-        height=height,
-        text="Static digital-twin evidence view, not a live chase camera frame",
-    )
-    image.save(output_path)
-
-
-def _map_canvas(base_image: Image.Image, *, width: int, height: int) -> Image.Image:
-    image = _fit_preview_image(base_image, width=width, height=height)
-    image = ImageEnhance.Color(image).enhance(1.08)
-    image = ImageEnhance.Contrast(image).enhance(1.07)
-    return image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=80, threshold=4))
-
-
-def _map_transform_points(semantics: dict[str, Any]) -> list[tuple[float, float]]:
-    points: list[tuple[float, float]] = []
-    for room in semantics.get("rooms") or []:
-        if isinstance(room, dict):
-            points.extend(_room_polygon(room))
-    for waypoint in semantics.get("inspection_waypoints") or []:
-        if isinstance(waypoint, dict):
-            point = _xy(waypoint)
-            if point is not None:
-                points.append(point)
-    for fixture in semantics.get("fixtures") or []:
-        if isinstance(fixture, dict) and isinstance(fixture.get("pose"), dict):
-            point = _xy(fixture["pose"])
-            if point is not None:
-                points.append(point)
-    return points or [(-1.0, -1.0), (1.0, 1.0)]
-
-
-def _padded_map_bounds(points: list[tuple[float, float]]) -> tuple[float, float, float, float]:
-    min_x = min(x for x, _ in points)
-    max_x = max(x for x, _ in points)
-    min_y = min(y for _, y in points)
-    max_y = max(y for _, y in points)
-    pad_x = max((max_x - min_x) * 0.12, 0.5)
-    pad_y = max((max_y - min_y) * 0.12, 0.5)
-    return min_x - pad_x, max_x + pad_x, min_y - pad_y, max_y + pad_y
-
-
-def _map_plot_geometry(
-    *,
-    min_x: float,
-    max_x: float,
-    min_y: float,
-    max_y: float,
-    width: int,
-    height: int,
-) -> tuple[float, float, float, float, float]:
-    span_x = max(max_x - min_x, 1.0)
-    span_y = max(max_y - min_y, 1.0)
-    plot_left = width * 0.08
-    plot_right = width * 0.92
-    plot_top = height * 0.16
-    plot_bottom = height * 0.88
-    scale = min((plot_right - plot_left) / span_x, (plot_bottom - plot_top) / span_y)
-    offset_x = (width - span_x * scale) / 2.0
-    offset_y = plot_top + ((plot_bottom - plot_top) - span_y * scale) / 2.0
-    return scale, offset_x, offset_y, min_x, max_y
-
-
-def _map_transform(semantics: dict[str, Any], *, width: int, height: int):
-    min_x, max_x, min_y, max_y = _padded_map_bounds(_map_transform_points(semantics))
-    scale, offset_x, offset_y, min_x, max_y = _map_plot_geometry(
-        min_x=min_x,
-        max_x=max_x,
-        min_y=min_y,
-        max_y=max_y,
-        width=width,
-        height=height,
-    )
-
-    def transform(x: float, y: float) -> tuple[float, float]:
-        return (
-            offset_x + (x - min_x) * scale,
-            offset_y + (max_y - y) * scale,
-        )
-
-    return transform
-
-
-def _room_polygon(room: dict[str, Any]) -> list[tuple[float, float]]:
-    polygon = room.get("polygon")
-    if not isinstance(polygon, list):
-        return []
-    points = []
-    for item in polygon:
-        if not isinstance(item, dict):
-            continue
-        point = _xy(item)
-        if point is not None:
-            points.append(point)
-    return points
-
-
-def _xy(item: dict[str, Any]) -> tuple[float, float] | None:
-    try:
-        return float(item["x"]), float(item["y"])
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
-def _polygon_center(points: list[tuple[float, float]]) -> tuple[float, float]:
-    if not points:
-        return (0.0, 0.0)
-    return (
-        sum(x for x, _ in points) / len(points),
-        sum(y for _, y in points) / len(points),
-    )
-
-
-def _draw_label(
-    draw: ImageDraw.ImageDraw,
-    point: tuple[float, float],
-    text: str,
-    *,
-    fill: tuple[int, int, int, int],
-    background: tuple[int, int, int, int] = (255, 255, 255, 185),
-) -> None:
-    if not text:
-        return
-    x, y = point
-    text = text[:42]
-    bbox = draw.textbbox((x, y), text)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-    rect = (
-        x - text_width / 2 - 5,
-        y - text_height / 2 - 4,
-        x + text_width / 2 + 5,
-        y + text_height / 2 + 4,
-    )
-    draw.rounded_rectangle(rect, radius=4, fill=background)
-    draw.text((x - text_width / 2, y - text_height / 2 - 1), text, fill=fill)
-
-
-def _draw_b1_overview_header(
-    draw: ImageDraw.ImageDraw,
-    *,
-    width: int,
-    title: str,
-    subtitle: str,
-) -> None:
-    draw.rounded_rectangle((18, 18, min(width - 18, 472), 74), radius=8, fill=(255, 255, 255, 230))
-    draw.text((34, 30), title, fill=(15, 23, 42, 245))
-    draw.text((34, 52), subtitle, fill=(71, 85, 105, 235))
-
-
-def _draw_b1_overview_footer(
-    draw: ImageDraw.ImageDraw,
-    *,
-    width: int,
-    height: int,
-    text: str,
-) -> None:
-    margin = 18
-    y = height - 44
-    draw.rounded_rectangle(
-        (margin, y, min(width - margin, 640), height - 16),
-        radius=8,
-        fill=(255, 255, 255, 218),
-    )
-    draw.text((margin + 16, y + 10), text[:92], fill=(51, 65, 85, 238))
 
 
 def _topdown_camera_request(
@@ -1163,10 +1186,24 @@ def _image_diagnostics(path: Path) -> dict[str, Any]:
         rgb = image.convert("RGB")
         stat = ImageStat.Stat(rgb)
         extrema = rgb.getextrema()
+        thumbnail = rgb.resize((160, 100))
+        thumbnail_colors = thumbnail.getcolors(maxcolors=16_000)
+        edges = rgb.convert("L").filter(ImageFilter.FIND_EDGES).resize((160, 100))
+        edge_values = list(edges.getdata())
     channel_ranges = [float(high) - float(low) for low, high in extrema]
     max_channel_range = max(channel_ranges)
     max_stddev = max(float(value) for value in stat.stddev)
     visual_status = "low_detail" if max_channel_range <= 8.0 and max_stddev <= 2.0 else "reviewable"
+    edge_fraction_over_8 = (
+        sum(1 for value in edge_values if int(value) > 8) / float(len(edge_values))
+        if edge_values
+        else 0.0
+    )
+    edge_fraction_over_16 = (
+        sum(1 for value in edge_values if int(value) > 16) / float(len(edge_values))
+        if edge_values
+        else 0.0
+    )
     return {
         "schema": "operator_console_preview_image_diagnostics_v1",
         "width": int(rgb.width),
@@ -1175,6 +1212,9 @@ def _image_diagnostics(path: Path) -> dict[str, Any]:
         "channel_extrema_rgb": [[int(low), int(high)] for low, high in extrema],
         "max_channel_range": round(max_channel_range, 3),
         "max_stddev": round(max_stddev, 3),
+        "thumbnail_color_count": len(thumbnail_colors) if thumbnail_colors is not None else 16000,
+        "edge_fraction_over_8": round(edge_fraction_over_8, 6),
+        "edge_fraction_over_16": round(edge_fraction_over_16, 6),
         "visual_status": visual_status,
     }
 

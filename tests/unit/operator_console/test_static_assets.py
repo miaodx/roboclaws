@@ -303,11 +303,15 @@ def test_static_app_renders_scene_preview_assets() -> None:
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
-    assert b1_metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
+    assert b1_metadata["views"]["fpv"]["provenance"] == (
+        "isaac_runtime_robot_mounted_head_camera_fpv"
+    )
+    assert b1_metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
     assert b1_metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
     assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
-    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["chase"]["path"]
+    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["map"]["path"]
+    assert b1_metadata["views"]["chase"]["path"] != b1_metadata["views"]["fpv"]["path"]
+    assert b1_metadata["camera_preview_artifact"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 

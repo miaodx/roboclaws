@@ -153,12 +153,12 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
-    assert metadata["views"]["fpv"]["camera_semantics"] == "overview_slot_not_live_robot_camera"
+    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["views"]["fpv"]["view"] == "raw_fpv"
+    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["chase"]["view"] == "chase_camera"
+    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
     assert metadata["views"]["map"]["view"] == "source_map_preview"
-    assert metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
-    assert metadata["views"]["chase"]["correspondence_count"] >= 1
     assert metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
     assert metadata["views"]["topdown"]["room_count"] >= 1
     assert metadata["views"]["topdown"]["inspection_waypoint_count"] >= 1
