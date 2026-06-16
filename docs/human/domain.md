@@ -91,6 +91,13 @@ but it is not map-frame geometry without an explicit correspondence manifest or
 verified transform.
 _Avoid_: map polygon, physical room truth
 
+**Correspondence Anchor**:
+A human/operator-reviewed physical or semantic landmark that exists in both a
+Source Map Frame and a Scene Partition or scene frame, with explicit coordinates
+or evidence in both frames. It can verify map-scene alignment after residuals
+are computed, but it is not object-level USD truth by itself.
+_Avoid_: bbox seed, model guess, unreviewed visual match, object/receptacle binding
+
 **Polygon Geometry Source**:
 The provenance for a map polygon, such as
 `operator_authored_navigation_zone`, `traced_occupancy_room_boundary`,
@@ -219,6 +226,9 @@ _Avoid_: assuming object assets imply usable cached grasps
   support that stronger claim.
 - A **Scene Partition** binds to map geometry through explicit correspondence,
   not list order.
+- A **Correspondence Anchor** can promote map-scene alignment only after
+  residuals are recorded and accepted; unreviewed suggestions and bbox seeds do
+  not count as accepted anchors.
 - A **Runtime Metric Map** may be wrapped as an **Actionable Semantic Map
   Snapshot** for downstream cleanup or open household tasks.
 - Offline Agibot `navigation_memory.json` conversion produces an
