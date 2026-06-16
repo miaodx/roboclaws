@@ -2034,10 +2034,10 @@ def _object_parity_item(
             "isaac_material_binding_count": isaac_render.get("material_binding_count"),
             "mujoco_materials": mujoco_render.get("materials"),
             "isaac_materials": isaac_render.get("materials"),
-            "mujoco_texture_basenames": _path_basenames(
+            "mujoco_texture_basenames": material_checks.path_basenames(
                 [str(value) for value in mujoco_render.get("texture_files") or []]
             ),
-            "isaac_texture_basenames": _path_basenames(
+            "isaac_texture_basenames": material_checks.path_basenames(
                 [str(value) for value in isaac_render.get("texture_files") or []]
             ),
         },
@@ -3154,8 +3154,8 @@ def _render_domain_checks(
             room_delta=room_delta,
             probe_manifest_paths=light_shadow_probe_manifest_paths,
         ),
-        _texture_colorspace_material_response_check(per_location),
-        _usd_preview_surface_material_model_check(
+        material_checks.texture_colorspace_material_response_check(per_location),
+        material_checks.usd_preview_surface_material_model_check(
             manifest=manifest,
             output_dir=output_dir,
             per_location=per_location,
@@ -3269,7 +3269,7 @@ def _light_shadow_probe_history(
             "probe_count": 0,
             "probes": [],
         }
-    baseline = _probe_manifest_summary(
+    baseline = material_checks.probe_manifest_summary(
         manifest, manifest_path=output_dir / "comparison_manifest.json"
     )
     probes = []
@@ -3279,11 +3279,11 @@ def _light_shadow_probe_history(
     for path in paths:
         probe = _load_light_shadow_probe_manifest(path, output_dir=output_dir)
         if probe.get("status") == "loaded":
-            comparable = _comparison_probe_comparable(baseline, probe)
+            comparable = material_checks.comparison_probe_comparable(baseline, probe)
             probe["comparable_to_current"] = comparable
             if comparable:
                 comparable_count += 1
-            delta = _comparison_probe_delta(baseline, probe)
+            delta = material_checks.comparison_probe_delta(baseline, probe)
             probe["delta_vs_current"] = delta
             if delta.get("fpv_improvement") is True:
                 improved_count += 1
@@ -3328,93 +3328,11 @@ def _load_light_shadow_probe_manifest(path: Path, *, output_dir: Path) -> dict[s
             "path": output_relpath(path, output_dir),
             "error": f"{type(exc).__name__}: {exc}",
         }
-    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
-
-
-def _probe_manifest_summary(
-    payload: dict[str, Any],
-    *,
-    manifest_path: Path,
-    output_dir: Path | None = None,
-) -> dict[str, Any]:
     return material_checks.probe_manifest_summary(
         payload,
-        manifest_path=manifest_path,
+        manifest_path=path,
         output_dir=output_dir,
     )
-
-
-def _comparison_probe_comparable(
-    baseline: dict[str, Any],
-    probe: dict[str, Any],
-) -> bool:
-    return material_checks.comparison_probe_comparable(baseline, probe)
-
-
-def _comparison_probe_delta(
-    baseline: dict[str, Any],
-    probe: dict[str, Any],
-) -> dict[str, Any]:
-    return material_checks.comparison_probe_delta(baseline, probe)
-
-
-def _material_response_probe_history(
-    manifest: dict[str, Any],
-    *,
-    output_dir: Path,
-    probe_manifest_paths: list[Path] | None,
-) -> dict[str, Any]:
-    return material_checks.material_response_probe_history(
-        manifest,
-        output_dir=output_dir,
-        probe_manifest_paths=probe_manifest_paths,
-    )
-
-
-def _tone_color_probe_history(
-    manifest: dict[str, Any],
-    *,
-    output_dir: Path,
-    probe_manifest_paths: list[Path] | None,
-) -> dict[str, Any]:
-    return material_checks.tone_color_probe_history(
-        manifest,
-        output_dir=output_dir,
-        probe_manifest_paths=probe_manifest_paths,
-    )
-
-
-def _texture_colorspace_material_response_check(
-    per_location: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return material_checks.texture_colorspace_material_response_check(per_location)
-
-
-def _texture_material_target_summary(item: dict[str, Any]) -> dict[str, Any]:
-    return material_checks.texture_material_target_summary(item)
-
-
-def _path_basenames(values: list[str]) -> list[str]:
-    return material_checks.path_basenames(values)
-
-
-def _usd_preview_surface_material_model_check(
-    *,
-    manifest: dict[str, Any],
-    output_dir: Path,
-    per_location: list[dict[str, Any]],
-    probe_manifest_paths: list[Path] | None,
-) -> dict[str, Any]:
-    return material_checks.usd_preview_surface_material_model_check(
-        manifest=manifest,
-        output_dir=output_dir,
-        per_location=per_location,
-        probe_manifest_paths=probe_manifest_paths,
-    )
-
-
-def _preview_surface_target_summary(item: dict[str, Any]) -> dict[str, Any]:
-    return material_checks.preview_surface_target_summary(item)
 
 
 def _tone_color_response_check(
@@ -3438,7 +3356,7 @@ def _tone_color_response_check(
         color_profile.get("backend_rgb_gain")
     )
     comparison_gain_applied = bool(rgb_gain)
-    probe_history = _tone_color_probe_history(
+    probe_history = material_checks.tone_color_probe_history(
         manifest,
         output_dir=output_dir,
         probe_manifest_paths=probe_manifest_paths,

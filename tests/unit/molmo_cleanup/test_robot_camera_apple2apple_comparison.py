@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from scripts.molmo_cleanup import robot_camera_apple2apple_capture_quality as capture_quality
+from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
 from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
 from scripts.molmo_cleanup import robot_camera_apple2apple_report as report_renderer
 
@@ -1165,10 +1166,6 @@ def test_robot_camera_light_shadow_check_summarizes_worse_prior_probe(tmp_path: 
 def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
     tmp_path: Path,
 ) -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_material_probe_history",
-    )
     baseline = {
         "scene": {
             "scene_source": "procthor-10k-val",
@@ -1226,7 +1223,7 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
     improved_probe_path = tmp_path / "improved_material_probe_manifest.json"
     improved_probe_path.write_text(json.dumps(improved_probe), encoding="utf-8")
 
-    check = run_camera._usd_preview_surface_material_model_check(
+    check = material_checks.usd_preview_surface_material_model_check(
         manifest=baseline,
         output_dir=tmp_path,
         per_location=[

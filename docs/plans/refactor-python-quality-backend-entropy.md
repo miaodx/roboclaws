@@ -69,6 +69,17 @@ camera-labeler identity maps, `_task_prefix_legacy`, and wording duplication.
 Treat these as P2 opportunistic scope inside a matching owner slice, not as a
 reason to defer the next P1 split.
 
+Intuitive-refactor audit refresh on 2026-06-17 re-ran
+`python scripts/dev/check_python_quality_ratchet.py --summary --top 80`; the
+signal is unchanged at 11 complexity rows and 66 oversized modules. The latest
+Candidate B slice removed runner-private material/probe delegates from the
+apple-to-apple runner, moved the direct material-probe test to
+`robot_camera_apple2apple_materials.py`, and kept light/shadow probe history
+runner/render-domain-owned while using shared probe primitives directly. The
+apple runner dropped from 4357 to 4275 lines. Continue Candidate B by selecting
+a new visual-comparison boundary rather than reopening the material/probe
+delegate surface.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
@@ -109,10 +120,28 @@ Refresh the ratchet, then default to Candidate B unless a fresh scan finds a
 more concrete P1 contract boundary. The apple comparison runner is the largest
 production hard-ceiling file, and the visual comparison family now has two
 other above-ceiling files: `scene_camera_comparison.py` and
-`summarize_robot_camera_visual_parity.py`. The best next slice should reduce a
-real visual-comparison concept such as native render diagnostics, image metric
-artifact preparation, visual-parity summary reporting, or runner-private
-material/probe wrapper aliases. Candidate A
+`summarize_robot_camera_visual_parity.py`.
+
+Recommended next slice claim:
+
+- Slice: choose a fresh visual-comparison boundary after refreshing the ratchet.
+- Owner layer: Artifacts, reports, and eval suites.
+- Current friction: the visual comparison family still has three production
+  hard-ceiling files, with the apple runner above 4000 lines after the
+  material/probe wrapper cleanup.
+- Simplification: reduce one real report/artifact/diagnostic concept such as
+  native render diagnostics, image metric artifact preparation,
+  visual-parity summary reporting, or a report/gate summary owner for
+  `summarize_robot_camera_visual_parity.py`.
+- Behavior-change class: internal owner cleanup unless the chosen slice
+  explicitly changes report or artifact contracts.
+- Proof: focused visual-comparison tests, ruff on touched files, format check,
+  and ratchet summary.
+- Non-goals: reopening material/probe delegates, Object Gate / Render Gate,
+  capture-quality interpretation, or scene-camera report rendering without
+  fresh drift.
+
+Candidate A
 remains valid only for a new `RealWorldCleanupContract` boundary such as
 agent-view/readiness wrappers, runtime-map/cleanup-worklist caller migration,
 or another named facade-private coupling point; do not reopen visual-candidate
@@ -170,14 +199,19 @@ comparison facade starts rebuilding report sections directly again.
 Default next candidate-B slices remain valid only around real boundaries such
 as capture-lane initialization, render contract diagnostics, native render
 diagnostics, object audit item construction, image metric artifact preparation,
-or visual-parity summary reporting. The apple runner still exposes runner-private
-delegating helpers for
-material/probe checks that already belong to
-`robot_camera_apple2apple_materials.py`; those are ponytail shrink targets when
-the selected slice can migrate tests/callers to the material owner and delete
-the wrapper surface instead of adding another facade. Real renderer claims
-still require separate local proof. The Object Gate / Render Gate diagnostic
-packet owner is now
+or visual-parity summary reporting. The runner-private material/probe delegate
+surface has been removed; do not recreate `_probe_manifest_summary`,
+`_comparison_probe_comparable`, `_comparison_probe_delta`,
+`_material_response_probe_history`, `_tone_color_probe_history`,
+`_texture_colorspace_material_response_check`,
+`_texture_material_target_summary`, `_path_basenames`,
+`_usd_preview_surface_material_model_check`, or
+`_preview_surface_target_summary` as compatibility aliases. Keep
+`_tone_color_response_check` in the runner for now because it still combines
+residual triage, native color settings, and report-domain interpretation.
+Light/shadow probe history remains runner/render-domain-owned while sharing
+material-owner probe primitives directly. Real renderer claims still require
+separate local proof. The Object Gate / Render Gate diagnostic packet owner is now
 `robot_camera_apple2apple_object_gate.py`, and report-renderer tests call
 `robot_camera_apple2apple_report.py` directly; do not reopen those runner
 facade aliases without fresh drift. Continue the apple runner only when the
@@ -209,13 +243,14 @@ capture-quality interpretation that already has focused owners.
   guidance wording. These do not justify deleting `camera_labeler`,
   visual-grounding artifact contracts, service plumbing, or public launch
   aliases. Current triage: the camera-labeler maps in
-  `roboclaws/household/profiles.py` are identity-map shrink targets only while
-  validation stays in place; `_task_prefix_legacy` has no in-repo call sites
-  and can be deleted with prompt static proof plus focused prompt tests; the
-  checker flag has parser/test/docs surface and needs a checker-contract
-  migration; the guidance wording is docs-only startup friction. Runner-private
-  material/probe aliases in the apple comparison runner are candidate-B
-  ponytail shrink targets, not standalone cleanup.
+  `roboclaws/household/profiles.py` are confirmed zero-entry identity maps; a
+  future cut should remove only the maps/get-indirection while keeping
+  normalization, validation, and public `camera_labeler` semantics. The
+  `_task_prefix_legacy` shim has no in-repo call sites and can be deleted with
+  prompt static proof plus focused prompt tests. The checker flag is still a
+  reachable parser/test/docs alias for `--require-robot-head-camera-fpv`, so it
+  needs a checker-contract migration rather than an opportunistic delete. The
+  guidance wording is docs-only startup friction.
 
 ### Cleared Or Parked
 

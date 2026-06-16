@@ -912,6 +912,17 @@ logs before choosing the next slice.
   lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
   apple-to-apple unit tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Robot-camera apple-to-apple material/probe wrapper surface was
+  deleted from `run_robot_camera_apple2apple_comparison.py`; runner logic now
+  calls `robot_camera_apple2apple_materials.py` directly for material response,
+  probe-summary primitives, and texture basename helpers, while the
+  material-probe test calls the owner instead of the runner facade.
+  Light/shadow and tone/color interpretation stayed in the runner because they
+  still combine render-domain context. Metric: runner 4357 -> 4275 lines and
+  no new owner module; ratchet remains 11 complexity rows and 66 oversized
+  modules. Proof: focused apple-to-apple unit tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -964,6 +975,11 @@ logs before choosing the next slice.
   `robot_camera_apple2apple_capture_quality.py`; reopen only if the runner
   starts rebuilding probe config, inferred legacy manifests, RGB-gain parsing,
   quality-setting rows, or Isaac render-settle argument translation directly.
+- Robot-camera apple-to-apple material/probe helper primitives are owned by
+  `robot_camera_apple2apple_materials.py`; reopen only if the runner recreates
+  private delegates for material response checks, material/tone probe history
+  primitives, preview-surface summaries, texture material summaries, or texture
+  basename helpers.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
