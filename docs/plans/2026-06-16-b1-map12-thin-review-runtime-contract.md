@@ -8,6 +8,7 @@ source:
   - user request to remove the thick B1 / Map 12 merged intermediate bundle
   - user concern that raw Map12 and Gaussian/scene inputs are likely acceptable while the merge artifact is not
   - user decision that human review should produce a usable digital-twin result without making the merge artifact a new source of truth
+  - user decision on 2026-06-17 that no backward compatibility is required for this slice
 related_context:
   - ARCHITECTURE.md
   - STATUS.md
@@ -41,6 +42,10 @@ The generated runtime bundle may be used by B1 digital-twin runs, reports, and
 operator previews, but it must be rebuildable and must not become the human-edited
 source.
 
+There is no backward-compatibility requirement for the old B1 / Map 12 merged
+bundle path. Current product routes, scripts, docs, and tests should move to the
+thin review contract directly instead of preserving compatibility shims.
+
 ## Problem
 
 The current B1 / Map 12 intermediate bundle is too thick. It copies the Map12
@@ -73,7 +78,8 @@ The raw inputs may be fine, but the merged artifact hides the uncertainty.
   or manipulation readiness.
 - Do not solve global map-scene transform verification in this plan. That remains
   owned by the verified map-scene alignment plan.
-- Do not preserve `b1-map12-room-semantics` as a default launch input.
+- Do not preserve `b1-map12-room-semantics` as a launch input, fixture contract,
+  or compatibility path.
 
 ## Architecture Layers
 
@@ -240,10 +246,11 @@ between runs. A checked-in generated runtime snapshot is not part of the first
 slice. If later startup or packaging needs a committed snapshot, create a
 separate decision that names it as generated and adds a stale-output gate.
 
-Existing lower-level consumers that require a map bundle can keep that interface
-by receiving the generated runtime bundle path.
+Existing lower-level consumers that require a map bundle should receive the
+generated runtime bundle path. They should not keep a fallback to the old merged
+bundle.
 
-## Migration Plan
+## Replacement Plan
 
 1. Add the review manifest schema and validator.
 2. Change the label tool default input from `b1-map12-room-semantics` to raw
@@ -253,21 +260,26 @@ by receiving the generated runtime bundle path.
    `b1-map12-room-semantics`.
 5. Update operator-console preview generation so it can render from raw inputs
    plus a compiled runtime artifact.
-6. Retire or de-emphasize `apply_room_semantic_overlay_to_bundle` and the
-   `--apply-to-bundle` skill path. Keep only a clearly legacy/debug path if
-   tests still need it during migration.
+6. Remove `apply_room_semantic_overlay_to_bundle` and the `--apply-to-bundle`
+   skill path from current code/docs/tests unless another non-B1 consumer is
+   discovered during implementation. If a non-B1 consumer exists, split it out
+   under a different, explicitly current contract instead of preserving the B1
+   compatibility behavior.
 7. Remove default-route and report assumptions that `room_semantic_overlay.json`
    is present in the consumed map bundle.
-8. After consumers migrate, either delete `assets/maps/b1-map12-room-semantics`
-   or park it as a historical fixture with a name that cannot be selected by
-   current launch defaults.
+8. Delete `assets/maps/b1-map12-room-semantics` after replacement consumers and
+   tests are updated. If a small historical fixture is still needed for a
+   regression test, keep only the minimal fixture under `tests/fixtures/` with a
+   name that cannot be selected by product routes.
 
 ## Acceptance Criteria
 
-- `rg "map_bundle=b1-map12-room-semantics" roboclaws scripts just` returns no
-  current default route or product-consumer references. Historical fixtures or
-  legacy tests may mention it only when explicitly marked as historical or
-  migration coverage.
+- `rg "b1-map12-room-semantics" roboclaws scripts just docs/human docs/plans`
+  returns no current route, script, or human-facing guidance references other
+  than this replacement plan and explicitly superseded plans.
+- `rg "b1-map12-room-semantics" tests` returns no active test references. If
+  regression coverage needs old data, it uses a minimal `tests/fixtures/`
+  fixture with a non-product name.
 - Label tool packet provenance lists raw Map12, raw scene root, and review
   manifest separately.
 - Runtime compiler fails on duplicate `map_area_id` / shared polygon unless an
@@ -277,8 +289,8 @@ by receiving the generated runtime bundle path.
   labels are present.
 - B1 launch route can prepare or locate a generated runtime bundle before Isaac
   consumes map context.
-- Existing tests no longer assert that `assets/maps/b1-map12-room-semantics` is
-  the canonical B1 semantic source.
+- Existing tests no longer assert or imply that
+  `assets/maps/b1-map12-room-semantics` is the canonical B1 semantic source.
 
 ## Verification
 
@@ -322,7 +334,7 @@ Proof: search for `b1-map12-room-semantics` default-route references and remove
 or demote them.
 
 Risk: medium. Digital-twin consumers still need a bundle-shaped runtime input,
-so runtime compilation must land in the same migration.
+so runtime compilation must land in the same replacement slice.
 
 ### Round 2: Runtime Compatibility Without A New Source
 
@@ -345,9 +357,9 @@ generated map bundle path passed to lower-level map consumers.
 Risk: medium. The compiler must fit current map-bundle validators without
 reintroducing hidden merge behavior.
 
-### Round 3: Validation And Legacy Surface
+### Round 3: Validation And Stale Surface
 
-Candidate 3: Add manifest invariants before migration.
+Candidate 3: Add manifest invariants before replacement.
 
 Severity: P1
 
@@ -370,7 +382,7 @@ Proof: focused manifest validator tests and compiler failure tests.
 Risk: low to medium. Some legitimate shared spaces may need an explicit
 `composite_area` status instead of silent success.
 
-Candidate 4: Retire the old overlay skill path from the default docs/tests.
+Candidate 4: Remove the old overlay application path from current docs/tests.
 
 Severity: P1
 
@@ -380,8 +392,9 @@ Demand gate: pass. The skill currently advertises generating
 `scene_room_semantic_overlay_v1` and applying it to a Nav2 bundle, which is the
 behavior this plan is removing from the default workflow.
 
-Proof: skill docs should point to the thin review manifest workflow, and legacy
-`--apply-to-bundle` tests should be renamed, isolated, or removed.
+Proof: skill docs should point to the thin review manifest workflow, and
+`--apply-to-bundle` tests should be removed unless a separate current non-B1
+contract is discovered.
 
 Risk: medium. Existing tests around cross-environment semantic parity mention
 the old bundle and need replacement assertions.
@@ -410,6 +423,6 @@ Run a preflight on this plan before implementation. The preflight should lock:
   draft or starts with an empty reviewed asset;
 - exact run-directory path and artifact naming for compiled runtime bundles;
 - how B1 launch prep passes the generated bundle to current consumers;
-- which legacy tests are removed versus rewritten.
+- which old tests are deleted versus rewritten around the new contract.
 
 Shortcut: `preflight thin runtime`.

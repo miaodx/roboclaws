@@ -412,6 +412,22 @@ Final evidence:
   passed: 1/1 live Codex open-ended result, no blocked/failed results. The 120s
   proof target was expanded to 180s because the real Codex open-ended search
   completed after a full public-waypoint sweep.
+- `just agent::eval suite=open_ended_goals budget=smoke agent_engine=openai-agents-sdk provider_profile=codex-env live_execution=run live_timeout_s=240 stamp=flow-open-ended-agent-sdk-live-20260616-rerun1`
+  reached the real OpenAI Agents SDK runtime but blocked after an upstream 502
+  provider response; it is recorded as provider availability evidence, not a
+  behavioral pass.
+- `just agent::eval suite=open_ended_goals budget=smoke agent_engine=openai-agents-sdk provider_profile=minimax live_execution=run live_timeout_s=300 stamp=flow-open-ended-agent-sdk-minimax-live-20260616-rerun2`
+  passed: 1/1 live SDK open-ended result, no blocked/failed results, with the
+  product route returning `exit_status=0`. The run used MiniMax M3 through the
+  OpenAI Agents SDK, searched all 14 public inspection waypoints, produced an
+  open-ended completion claim, and ended with advisory verdict `no_targets`.
+  Timing: 99.594s runner wall time, 87.635s MCP trace time, 32 MCP tool calls,
+  64 tool events, 31 model-service attempts, and 31 model-service successes.
+- Follow-up fix from live proof: live-agent checker plumbing now passes a
+  separate `checker_profile`/evidence lane to the checker, and the eval live
+  adapter can grade open-ended `run_result.json` artifacts even when a legacy
+  cleanup checker exits non-zero. The final SDK proof above exercises both
+  fixes and writes `checker.log` with `molmo-realworld-cleanup ok`.
 
 ## Parked Items
 
