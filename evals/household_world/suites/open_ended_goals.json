@@ -4,10 +4,14 @@
   "version": "2026-06-15",
   "capability": "household_world_open_ended_goals",
   "sample_ids": [
-    "open_ended.drink_seed7"
+    "open_ended.drink_seed7",
+    "open_ended.room4_anchor_seed7",
+    "open_ended.living_waypoint_seed7"
   ],
   "sample_refs": [
-    "evals/household_world/samples/open_ended/drink_seed7.json"
+    "evals/household_world/samples/open_ended/drink_seed7.json",
+    "evals/household_world/samples/open_ended/room4_anchor_seed7.json",
+    "evals/household_world/samples/open_ended/living_waypoint_seed7.json"
   ],
   "required_graders": [
     "artifacts",
@@ -28,6 +32,15 @@
     "public_route_shape": "surface=household-world prompt=<goal>",
     "identity_intent": "open-ended",
     "live_provider_required": true,
-    "semantic_satisfaction": "advisory"
+    "semantic_satisfaction": "advisory",
+    "open_ended_categories": [
+      "negative_search",
+      "area_inspection",
+      "positive_observable"
+    ],
+    "positive_predicates": [
+      "public_anchor_observed",
+      "waypoint_or_area_visited"
+    ]
   }
 }

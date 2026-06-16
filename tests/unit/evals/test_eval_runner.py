@@ -382,6 +382,316 @@ def test_live_surface_product_recovers_after_detached_wait_deadline(
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0312/seed-7")
 
 
+def test_live_open_ended_eval_grades_artifacts_after_checker_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "seed-7"
+        _write_product_artifacts(
+            run_dir,
+            completion_status="failed",
+            include_goal_contract=True,
+        )
+        (run_dir / "run_result.json").write_text(
+            json.dumps(
+                _run_result(
+                    run_dir,
+                    completion_status="failed",
+                    task_intent="open-ended",
+                    include_completion_claim=True,
+                )
+            )
+            + "\n"
+        )
+        (run_dir / "live_status.json").write_text(
+            '{"phase": "failed", "exit_status": 1, '
+            '"reason": "cleanup checker exited with status 1"}\n'
+        )
+        return _completed_process(
+            returncode=1,
+            stderr="cleanup checker exited with status 1",
+        )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="live-open-ended-checker-nonzero",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-env",
+        live_execution="run",
+        live_timeout_s=12.5,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["passed"] == 3
+    assert payload["aggregate"]["failed"] == 0
+    result = payload["results"][0]
+    assert result["status"] == "passed"
+    assert result["identity"]["agent_engine"] == "openai-agents-sdk"
+    assert result["grader_outputs"]["open_ended"]["completion_claim_present"] is True
+    assert result["artifacts"]["run_result"].endswith(
+        "runs/open_ended_drink_seed7/trial-0000/surface-run/seed-7/run_result.json"
+    )
+    command_record = json.loads(
+        (
+            tmp_path
+            / "household_world_open_ended_goals"
+            / "live-open-ended-checker-nonzero"
+            / "runs"
+            / "open_ended_drink_seed7"
+            / "trial-0000"
+            / "live_eval_command.json"
+        ).read_text()
+    )
+    assert command_record["returncode"] == 1
+
+
+def test_live_open_ended_eval_waits_for_detached_checker_status_after_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+    from roboclaws.evals.models import load_eval_sample
+
+    sleeps: list[float] = []
+    current_run_dir: Path | None = None
+    clock = {"now": 0.0}
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0616_1405" / "seed-7"
+        nonlocal current_run_dir
+        current_run_dir = run_dir
+        _write_product_artifacts(
+            run_dir,
+            completion_status="failed",
+            include_goal_contract=True,
+        )
+        (run_dir / "run_result.json").write_text(
+            json.dumps(
+                _run_result(
+                    run_dir,
+                    completion_status="failed",
+                    task_intent="open-ended",
+                    include_completion_claim=True,
+                )
+            )
+            + "\n"
+        )
+        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
+        return _completed_process(returncode=1, stderr="cleanup checker exited with status 1")
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock["now"] += seconds
+        assert current_run_dir is not None
+        run_dir = current_run_dir
+        (run_dir / "live_status.json").write_text(
+            '{"phase": "failed", "exit_status": 1, '
+            '"reason": "cleanup checker exited with status 1"}\n'
+        )
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
+    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
+    sample = load_eval_sample(
+        Path(__file__).resolve().parents[3]
+        / "evals"
+        / "household_world"
+        / "samples"
+        / "open_ended"
+        / "drink_seed7.json"
+    )
+    kwargs = _live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=12.5)
+    kwargs["eval_sample"] = sample
+
+    result = live_runtime.run_live_surface_product(**kwargs)
+
+    assert sleeps
+    assert result["eval_effective_run_dir"].endswith("surface-run/0616_1405/seed-7")
+    command_record = json.loads((tmp_path / "trial-0000" / "live_eval_command.json").read_text())
+    assert command_record["returncode"] == 1
+
+
+def test_open_ended_positive_predicates_pass_with_public_runtime_evidence(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        return _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+            wall_time_s=1.25,
+        )
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="open-ended-positive-predicate",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["passed"] == 3
+    assert payload["aggregate"]["failed"] == 0
+    assert payload["aggregate"]["open_ended"]["by_category"]["negative_search"]["passed"] == 1
+    assert payload["aggregate"]["open_ended"]["by_category"]["area_inspection"]["passed"] == 1
+    assert (
+        payload["aggregate"]["open_ended"]["by_category"]["positive_observable"]["passed"] == 1
+    )
+    assert payload["aggregate"]["open_ended"]["telemetry"]["tool_call_count"] == 3
+    results = {result["identity"]["sample_id"]: result for result in payload["results"]}
+    room_predicate = results["open_ended.room4_anchor_seed7"]["grader_outputs"][
+        "open_ended"
+    ]["success_predicate"]
+    living_predicate = results["open_ended.living_waypoint_seed7"]["grader_outputs"][
+        "open_ended"
+    ]["success_predicate"]
+    assert room_predicate["passed"] is True
+    assert room_predicate["evidence"]["anchor_id"] == "anchor_waypoint_generated_exploration_005"
+    assert living_predicate["passed"] is True
+    assert "generated_exploration_005" in living_predicate["evidence"]["visited_waypoint_ids"]
+
+
+def test_open_ended_authoritative_predicate_failure_is_behavior_failure(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+            include_open_ended_public_evidence=False,
+        )
+        (run_dir / "trace.jsonl").write_text(
+            "\n".join(
+                [
+                    '{"event": "request", "tool": "metric_map"}',
+                    '{"event": "response", "tool": "metric_map"}',
+                    '{"event": "request", "tool": "done"}',
+                    '{"event": "response", "tool": "done"}',
+                ]
+            )
+            + "\n"
+        )
+        return _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+        )
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="open-ended-positive-predicate-fail",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["passed"] == 1
+    assert payload["aggregate"]["failed"] == 2
+    assert payload["aggregate"]["failure_classes"] == {"private_goal_not_satisfied": 2}
+    results = {result["identity"]["sample_id"]: result for result in payload["results"]}
+    assert results["open_ended.drink_seed7"]["status"] == "passed"
+    assert results["open_ended.room4_anchor_seed7"]["status"] == "failed"
+    assert results["open_ended.room4_anchor_seed7"]["failure_class"] == (
+        "private_goal_not_satisfied"
+    )
+
+
+def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_anchor(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+            include_open_ended_public_evidence=sample_id != "open_ended.living_waypoint_seed7",
+        )
+        if sample_id == "open_ended.room4_anchor_seed7":
+            (run_dir / "trace.jsonl").write_text(
+                "\n".join(
+                    [
+                        '{"event": "request", "tool": "resolve_target_query"}',
+                        '{"event": "response", "tool": "resolve_target_query"}',
+                        (
+                            '{"event": "request", "tool": "navigate_to_waypoint", '
+                            '"request": {"waypoint_id": "generated_exploration_005"}}'
+                        ),
+                        '{"event": "response", "tool": "navigate_to_waypoint"}',
+                        '{"event": "request", "tool": "observe"}',
+                        '{"event": "response", "tool": "observe"}',
+                        '{"event": "request", "tool": "done"}',
+                        '{"event": "response", "tool": "done"}',
+                    ]
+                )
+                + "\n"
+            )
+        if sample_id == "open_ended.living_waypoint_seed7":
+            (run_dir / "trace.jsonl").write_text(
+                "\n".join(
+                    [
+                        '{"event": "request", "tool": "metric_map"}',
+                        '{"event": "response", "tool": "metric_map"}',
+                        (
+                            '{"event": "request", "tool": "navigate_to_waypoint", '
+                            '"request": {"waypoint_id": "generated_exploration_005"}}'
+                        ),
+                        '{"event": "response", "tool": "navigate_to_waypoint"}',
+                        '{"event": "request", "tool": "done"}',
+                        '{"event": "response", "tool": "done"}',
+                    ]
+                )
+                + "\n"
+            )
+        return _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+        )
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="open-ended-trace-visit",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["passed"] == 3
+    results = {result["identity"]["sample_id"]: result for result in payload["results"]}
+    assert results["open_ended.room4_anchor_seed7"]["grader_outputs"]["trajectory"]["status"] == (
+        "passed"
+    )
+    assert results["open_ended.living_waypoint_seed7"]["grader_outputs"]["open_ended"][
+        "success_predicate"
+    ]["passed"] is True
+
+
 def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
     seen_kwargs: list[dict[str, Any]] = []
 
@@ -521,7 +831,7 @@ def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
     assert map_result["grader_outputs"]["outcome"]["runtime_metric_map_schema"] == (
         "runtime_metric_map_v1"
     )
-    assert map_result["grader_outputs"]["outcome"]["public_semantic_anchor_count"] == 1
+    assert map_result["grader_outputs"]["outcome"]["public_semantic_anchor_count"] >= 1
     open_result = results["open_ended.drink_seed7"]
     assert open_result["status"] == "passed"
     assert open_result["grader_outputs"]["outcome"]["completion_claim_present"] is True
@@ -874,20 +1184,77 @@ def _write_product_artifacts(
     completion_status: str,
     include_goal_contract: bool = False,
     generated_exploration_candidate_count: int = 1,
+    include_open_ended_public_evidence: bool = True,
 ) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "run_result.json").write_text("{}\n")
     (run_dir / "report.html").write_text("<html>report</html>\n")
     (run_dir / "agent_view.json").write_text("{}\n")
+    public_anchors = [{"anchor_id": "anchor_fridge"}]
+    generated_candidates = [
+        {"waypoint_id": f"generated_exploration_{index:03d}"}
+        for index in range(1, generated_exploration_candidate_count + 1)
+    ]
+    target_search_summary: dict[str, Any] = {}
+    if include_open_ended_public_evidence:
+        public_anchors.extend(
+            [
+                {
+                    "anchor_id": "anchor_room_kitchen",
+                    "anchor_type": "room_area",
+                    "room_id": "kitchen",
+                    "waypoint_id": "generated_exploration_003",
+                    "evidence": {"visited": True},
+                },
+                {
+                    "anchor_id": "anchor_room_living_area",
+                    "anchor_type": "room_area",
+                    "room_id": "living_area",
+                    "waypoint_id": "generated_exploration_005",
+                    "evidence": {"visited": True},
+                },
+                {
+                    "anchor_id": "anchor_waypoint_generated_exploration_005",
+                    "anchor_type": "observation_waypoint",
+                    "room_id": "room_4",
+                    "waypoint_id": "generated_exploration_005",
+                    "evidence": {"visited": True},
+                },
+            ]
+        )
+        generated_candidates.extend(
+            [
+                {
+                    "waypoint_id": "generated_exploration_003",
+                    "room_id": "kitchen",
+                    "visited": True,
+                },
+                {
+                    "waypoint_id": "generated_exploration_005",
+                    "room_id": "room_4",
+                    "visited": True,
+                },
+            ]
+        )
+        target_search_summary = {
+            "viewpoint_budget": {
+                "observed_waypoint_ids": [
+                    "generated_exploration_003",
+                    "generated_exploration_005",
+                ],
+            },
+            "inspection_observations": [
+                {"room_id": "kitchen", "waypoint_id": "generated_exploration_003"},
+                {"room_id": "room_4", "waypoint_id": "generated_exploration_005"},
+            ],
+        }
     (run_dir / "runtime_metric_map.json").write_text(
         json.dumps(
             {
                 "schema": "runtime_metric_map_v1",
-                "public_semantic_anchors": [{"anchor_id": "anchor_fridge"}],
-                "generated_exploration_candidates": [
-                    {"waypoint_id": f"generated_exploration_{index:03d}"}
-                    for index in range(1, generated_exploration_candidate_count + 1)
-                ],
+                "public_semantic_anchors": public_anchors,
+                "generated_exploration_candidates": generated_candidates,
+                "target_search_summary": target_search_summary,
                 "private_truth_included": False,
                 "source_map_mutated": False,
             }
@@ -901,7 +1268,12 @@ def _write_product_artifacts(
     (run_dir / "trace.jsonl").write_text(
         "\n".join(
             [
+                '{"event": "request", "tool": "metric_map"}',
                 '{"event": "response", "tool": "metric_map"}',
+                (
+                    '{"event": "request", "tool": "navigate_to_waypoint", '
+                    '"request": {"waypoint_id": "generated_exploration_005"}}'
+                ),
                 '{"event": "response", "tool": "done"}',
             ]
         )
@@ -918,6 +1290,7 @@ def _run_result(
     final_status: str | None = None,
     include_completion_claim: bool = False,
     include_runtime_map: bool = True,
+    wall_time_s: float | None = None,
 ) -> dict[str, Any]:
     completion_claim = (
         {
@@ -927,7 +1300,7 @@ def _run_result(
         if include_completion_claim
         else {}
     )
-    return {
+    result = {
         "score": {
             "completion_status": completion_status,
             "mess_restoration_rate": 1.0,
@@ -940,7 +1313,11 @@ def _run_result(
         "final_status": final_status or completion_status,
         "semantic_sweep_mode": semantic_sweep,
         "agent_completion_claim": completion_claim,
-        "tool_event_counts": {"metric_map:response": 1, "done:response": 1},
+        "tool_event_counts": {
+            "metric_map:request": 1,
+            "metric_map:response": 1,
+            "done:response": 1,
+        },
         "artifacts": {
             "run_result": str(run_dir / "run_result.json"),
             "report": str(run_dir / "report.html"),
@@ -955,3 +1332,6 @@ def _run_result(
         "planner_uses_private_manifest": False,
         "agent_view": {},
     }
+    if wall_time_s is not None:
+        result["wall_time_s"] = wall_time_s
+    return result

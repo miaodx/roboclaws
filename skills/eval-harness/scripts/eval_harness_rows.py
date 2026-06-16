@@ -9,6 +9,7 @@ DEFAULT_WORLD = "molmospaces/val_0"
 DEFAULT_BACKEND = "mujoco"
 DEFAULT_SEED = "7"
 DEFAULT_PROVIDER_PROFILE = "codex-env"
+DEFAULT_AGENT_SDK_PROVIDER_PROFILE = "minimax"
 
 
 def candidate_rows(
@@ -16,6 +17,10 @@ def candidate_rows(
 ) -> list[dict[str, Any]]:
     provider_profiles = explicit_axes.get("provider_profile") or [DEFAULT_PROVIDER_PROFILE]
     codex_provider = provider_profiles[0]
+    agent_sdk_provider = next(
+        (profile for profile in provider_profiles if profile != DEFAULT_PROVIDER_PROFILE),
+        DEFAULT_AGENT_SDK_PROVIDER_PROFILE,
+    )
     row_dir = output_dir / "rows"
     eval_output_root = output_dir / "evals"
     return [
@@ -303,12 +308,12 @@ def candidate_rows(
                 output_root=eval_output_root,
                 stamp="openai-agents-sdk-open-task-live-eval",
                 agent_engine="openai-agents-sdk",
-                provider_profile=codex_provider,
+                provider_profile=agent_sdk_provider,
                 live_execution="run",
             ),
             axes={
                 "agent_engine": "openai-agents-sdk",
-                "provider_profile": codex_provider,
+                "provider_profile": agent_sdk_provider,
                 "intent": "open-ended",
                 "preset": "",
                 "evidence_lane": "world-oracle-labels",
@@ -323,6 +328,37 @@ def candidate_rows(
             requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
             expense="live-agent",
             row_dir=row_dir,
+        ),
+        _row(
+            row_id="openai-agents-sdk-codex-env-availability",
+            row_kind="live_agent_eval",
+            command=_eval_suite_command(
+                suite="open_ended_goals",
+                budget="smoke",
+                output_root=eval_output_root,
+                stamp="openai-agents-sdk-codex-env-availability",
+                agent_engine="openai-agents-sdk",
+                provider_profile=DEFAULT_PROVIDER_PROFILE,
+                live_execution="run",
+            ),
+            axes={
+                "agent_engine": "openai-agents-sdk",
+                "provider_profile": DEFAULT_PROVIDER_PROFILE,
+                "intent": "open-ended",
+                "preset": "",
+                "evidence_lane": "world-oracle-labels",
+                "backend": DEFAULT_BACKEND,
+                "world": DEFAULT_WORLD,
+            },
+            reason=(
+                "Agent SDK codex-env remains provider availability evidence while "
+                "provider-side 502/upstream-unavailable responses persist."
+            ),
+            rule_ids=("agent_sdk_codex_env_availability",),
+            requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
+            expense="live-agent",
+            row_dir=row_dir,
+            requirement="optional",
         ),
         _row(
             row_id="planner-proof-dry-run-product",
@@ -553,6 +589,7 @@ def _row(
     requirements: tuple[str, ...],
     expense: str,
     row_dir: Path,
+    requirement: str = "required",
 ) -> dict[str, Any]:
     return {
         "schema": ROW_SCHEMA,
@@ -565,7 +602,7 @@ def _row(
         "selection_rule_ids": list(rule_ids),
         "source_signals": [],
         "selected": False,
-        "requirement": "required",
+        "requirement": requirement,
         "expense": expense,
         "requires": list(requirements),
         "status": "skipped_irrelevant",

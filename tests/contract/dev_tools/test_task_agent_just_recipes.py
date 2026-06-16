@@ -1971,6 +1971,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
             task="我渴了，帮我找些解渴的东西",
             min_generated_mess_count="5",
             profile="camera-raw-fpv",
+            checker_profile="world-oracle-labels",
             server_arg=[],
             checker_visual_arg=[
                 "--require-robot-views",
@@ -1997,6 +1998,9 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
         checker_command = captured_commands[0]
         assert "--allow-partial-cleanup" in checker_command
         assert checker_command.count("--allow-partial-cleanup") == 1
+        assert checker_command[checker_command.index("--expect-profile") + 1] == (
+            "world-oracle-labels"
+        )
         assert "--require-robot-views" in checker_command
         assert "--require-raw-fpv-observations" in checker_command
         assert "--require-clean-agent-run" not in checker_command

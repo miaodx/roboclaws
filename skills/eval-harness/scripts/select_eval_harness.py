@@ -273,6 +273,7 @@ def build_eval_harness(
             "row_count": len(rows),
             "selected_row_count": len(selected),
             "required_row_count": sum(1 for row in selected if row["requirement"] == "required"),
+            "optional_row_count": sum(1 for row in selected if row["requirement"] != "required"),
             "budget_skipped_count": sum(1 for row in rows if row["status"] == "skipped_by_budget"),
             "eval_suite_row_count": sum(1 for row in selected if row["row_kind"] == "eval_suite"),
             "live_agent_eval_row_count": sum(
@@ -388,6 +389,11 @@ def _apply_selection_rules(
     signal_ids = {signal["id"] for signal in signals}
     signal_by_id = {signal["id"]: signal for signal in signals}
     for row in rows:
+        if row.get("requirement") == "optional" and not _explicitly_matches_optional(
+            row,
+            explicit_axes,
+        ):
+            continue
         matching = [rule_id for rule_id in row["selection_rule_ids"] if rule_id in signal_ids]
         if _explicitly_matches(row, explicit_axes):
             matching.append("explicit_override")
@@ -424,6 +430,12 @@ def _explicitly_matches(row: dict[str, Any], explicit_axes: dict[str, list[str]]
         if requested_values and axes.get(key) in requested_values:
             return True
     return False
+
+
+def _explicitly_matches_optional(row: dict[str, Any], explicit_axes: dict[str, list[str]]) -> bool:
+    axes = row["axes"]
+    provider_profiles = explicit_axes.get("provider_profile") or []
+    return bool(provider_profiles and axes.get("provider_profile") in provider_profiles)
 
 
 def _has_explicit_axes(explicit_axes: dict[str, list[str]]) -> bool:

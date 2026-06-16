@@ -126,6 +126,7 @@ def test_surface_live_smoke_uses_world_oracle_server_evidence_lane() -> None:
     assert 'implementation_evidence_lane="world-oracle-labels"' in recipe
     assert '--evidence-lane "$implementation_evidence_lane"' in recipe
     assert '--evidence-lane "$profile"' not in recipe
+    assert '--checker-profile "$implementation_evidence_lane"' in recipe
     assert '--expect-profile "$implementation_evidence_lane"' in recipe
 
 

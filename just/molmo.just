@@ -734,6 +734,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
+            --checker-profile "$implementation_evidence_lane"
           )
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
@@ -827,6 +828,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
+            --checker-profile "$implementation_evidence_lane"
           )
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
@@ -882,6 +884,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
+            --checker-profile "$implementation_evidence_lane"
           )
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-}" ]]; then
             runner_args+=(--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS}")

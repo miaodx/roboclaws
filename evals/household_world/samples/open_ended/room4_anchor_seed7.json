@@ -1,7 +1,7 @@
 {
   "schema": "roboclaws_eval_sample_v1",
-  "sample_id": "open_ended.drink_seed7",
-  "version": "2026-06-15",
+  "sample_id": "open_ended.room4_anchor_seed7",
+  "version": "2026-06-16",
   "surface": "household-world",
   "intent": "open-ended",
   "preset": "not_applicable",
@@ -11,7 +11,7 @@
   "camera_labeler": "not_applicable",
   "scenario_setup": "baseline",
   "seed": 7,
-  "prompt": "我渴了，帮我找些解渴的东西",
+  "prompt": "请去 Generated exploration candidate 5 所在区域看一下，并报告你确认到的公开区域位置。",
   "goal_contract_hash": "unavailable",
   "allowed_agent_engines": [
     "direct-runner",
@@ -33,21 +33,28 @@
   "private_goal_reference": {
     "schema": "household_eval_private_goal_reference_v1",
     "private_truth_scope": "grader_only",
-    "open_ended_category": "negative_search",
-    "expected_goal_outcome": "not_found_clean_finish",
-    "semantic_satisfaction": "advisory"
+    "open_ended_category": "area_inspection",
+    "expected_goal_outcome": "area_inspected",
+    "public_evidence_basis": {
+      "anchor_id": "anchor_waypoint_generated_exploration_005",
+      "waypoint_id": "generated_exploration_005",
+      "source": "runtime_metric_map.public_semantic_anchors"
+    }
   },
   "grader_config": {
-    "open_ended_category": "negative_search",
-    "expected_goal_outcome": "not_found_clean_finish",
+    "open_ended_category": "area_inspection",
+    "expected_goal_outcome": "area_inspected",
     "semantic_satisfaction_authoritative": false,
     "success_predicate": {
-      "predicate_id": "completion_claim",
-      "authoritative": false
+      "predicate_id": "waypoint_or_area_visited",
+      "authoritative": true,
+      "anchor_id": "anchor_waypoint_generated_exploration_005",
+      "waypoint_id": "generated_exploration_005"
     },
     "tags": [
       "open-ended",
-      "negative-search",
+      "area-inspection",
+      "positive",
       "coding-agent",
       "agent-sdk"
     ]

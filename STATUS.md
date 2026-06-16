@@ -27,8 +27,11 @@ non-direct eval requests still record blocked identity/preflight packets so
 provider-backed work is not launched by accident. Codex CLI live eval runs pass
 a fixed product `run_dir` through the public launch route and poll detached live
 artifacts before grading, including a short completion grace window for
-late-written `run_result.json` files. Failed, blocked, or inconclusive eval
-results can be promoted into regression samples with
+late-written `run_result.json` files. OpenAI Agents SDK live eval runs now use
+the same open-ended sample contract and a separate live-checker evidence-lane
+profile, so smoke budget runs can still grade the actual `world-oracle-labels`
+artifacts. Failed, blocked, or inconclusive eval results can be promoted into
+regression samples with
 `just agent::eval promote-regression ...` while keeping private scorer truth
 inside grader-only sample metadata.
 
@@ -51,7 +54,9 @@ geometry source, and alignment status. B1 scene partition labels bind through
 raw/source-map aligned previews.
 
 The implemented non-cleanup eval support plan is
-`docs/plans/2026-06-15-non-cleanup-eval-support.md`. The active eval
+`docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
+open-ended eval matrix expansion is
+`docs/plans/2026-06-16-open-ended-eval-matrix-expansion.md`. The active eval
 architecture source of truth is
 `docs/plans/2026-06-14-eval-driven-architecture.md`, backed by ADR-0140. The
 implemented household launch contract is
@@ -70,16 +75,20 @@ not active implementation blockers.
 
 ## Current Blocker
 
-No current implementation blocker for deterministic or open-ended Codex smoke
-eval work. Opt-in live eval execution reaches the live product route on this
-host, and `open_ended_goals` passed with `agent_engine=codex-cli`,
-`provider_profile=codex-env`, and `live_execution=run` on 2026-06-16. Default
-non-direct eval requests remain blocked identity/preflight packets unless live
-execution is explicitly requested. Remaining validation blockers are external
-or product-route-specific: broader live-agent `pass^k` proof needs healthy
-provider/runtime capacity and agent behavior that reaches `done`, RAW-FPV live
-cleanup needs live-session capacity, and OpenClaw Gateway proof must run
-separately off the work network before OpenClaw can be called healthy.
+No current implementation blocker for deterministic or open-ended coding-agent
+smoke eval work. Opt-in live eval execution reaches the live product route on
+this host, and `open_ended_goals` passed with `agent_engine=codex-cli`,
+`provider_profile=codex-env`, and `live_execution=run` on 2026-06-16. The same
+suite also passed with `agent_engine=openai-agents-sdk`,
+`provider_profile=minimax`, and `live_execution=run` on 2026-06-16. The
+`openai-agents-sdk` / `codex-env` route was exercised live but blocked on an
+upstream 502 provider response, so it is not counted as a behavioral pass.
+Default non-direct eval requests remain blocked identity/preflight packets
+unless live execution is explicitly requested. Remaining validation blockers are
+external or product-route-specific: broader live-agent `pass^k` proof needs
+healthy provider/runtime capacity and agent behavior that reaches `done`,
+RAW-FPV live cleanup needs live-session capacity, and OpenClaw Gateway proof
+must run separately off the work network before OpenClaw can be called healthy.
 
 ## Human Review Surface
 
@@ -90,6 +99,8 @@ separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-14-eval-driven-architecture.md`
 - Implemented non-cleanup eval support plan:
   `docs/plans/2026-06-15-non-cleanup-eval-support.md`
+- Implemented open-ended eval matrix expansion:
+  `docs/plans/2026-06-16-open-ended-eval-matrix-expansion.md`
 - Active eval-suite ADR:
   `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`
 - Implemented household map/launch/open-ended plan:

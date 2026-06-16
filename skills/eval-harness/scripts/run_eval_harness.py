@@ -116,7 +116,7 @@ def _row_blockers(row: dict[str, Any], manifest: dict[str, Any]) -> list[dict[st
                     "category": "model_or_provider_unavailable",
                     "detail": (
                         "codex-env requires CODEX_BASE_URL and CODEX_API_KEY; "
-                        "mify requires XM_LLM_API_KEY"
+                        "mify requires XM_LLM_API_KEY; minimax requires MM_API_KEY"
                     ),
                 }
             )
@@ -424,6 +424,8 @@ def _has_codex_provider(axes: dict[str, Any]) -> bool:
     profile = str(axes.get("provider_profile") or "codex-env")
     if profile == "mify":
         return bool(os.environ.get("XM_LLM_API_KEY"))
+    if profile == "minimax":
+        return bool(os.environ.get("MM_API_KEY"))
     return bool(os.environ.get("CODEX_BASE_URL") and os.environ.get("CODEX_API_KEY"))
 
 
@@ -574,11 +576,13 @@ def _exit_status(manifest: dict[str, Any]) -> int:
         row
         for row in manifest["rows"]
         if row.get("selected") and row.get("status") == "blocked"
+        and row.get("requirement", "required") == "required"
     ]
     failed = [
         row
         for row in manifest["rows"]
         if row.get("selected")
+        and row.get("requirement", "required") == "required"
         and row.get("status") == "ran"
         and (row.get("exit_code") or row.get("outcome") == "failed")
     ]

@@ -13,6 +13,11 @@ Run the dedicated open-ended household goal suite with:
 just agent::eval suite=open_ended_goals budget=smoke
 ```
 
+The open-ended suite currently contains a negative drink-search sample, an
+area-inspection sample, and a positive public-waypoint sample. Positive samples
+grade against public runtime-map or trace evidence rather than private scorer
+truth.
+
 Run the map-build consumer suite with:
 
 ```bash
