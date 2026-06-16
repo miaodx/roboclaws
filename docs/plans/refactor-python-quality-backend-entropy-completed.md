@@ -689,6 +689,13 @@ logs before choosing the next slice.
   complexity stayed at 0 and oversized modules stayed at 62. Proof: full
   apple-to-apple unit test file, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Runtime Metric Map prior normalization and target-fixture
+  inference moved from `realworld_contract.py` into
+  `realworld_runtime_map_contract.py`, while facade wrappers remain for init
+  and tests. Metric: `realworld_contract.py` 5212 -> 5126 lines; Ruff
+  complexity stayed at 0 and oversized modules stayed at 62. Proof: full
+  realworld-contract test file, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

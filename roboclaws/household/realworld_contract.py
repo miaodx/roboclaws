@@ -10,6 +10,7 @@ from roboclaws.household import (
     realworld_contract_init,
     realworld_contract_payloads,
     realworld_contract_projection,
+    realworld_runtime_map_contract,
     realworld_visual_candidates,
 )
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
@@ -4945,139 +4946,52 @@ def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
 def _runtime_map_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    if not snapshot:
-        return []
-    priors = []
-    for index, item in enumerate(snapshot.get("observed_objects") or [], start=1):
-        if not isinstance(item, dict):
-            continue
-        prior_object_id = str(item.get("object_id") or f"prior_{index:03d}")
-        prior = {
-            "object_id": prior_object_id,
-            "prior_row_id": f"prior_{index:03d}",
-            "prior_object_id": prior_object_id,
-            "snapshot_object_id": prior_object_id,
-            "category": str(item.get("category") or ""),
-            "room_id": str(item.get("room_id") or ""),
-            "waypoint_id": str(item.get("waypoint_id") or ""),
-            "source_fixture_id": str(item.get("source_fixture_id") or ""),
-            "source_observation_id": str(item.get("source_observation_id") or ""),
-            "image_region": item.get("image_region") or {},
-            "producer_type": str(item.get("producer_type") or ""),
-            "producer_id": str(item.get("producer_id") or ""),
-            "confidence": _float_or_zero(item.get("confidence")),
-            "freshness": "prior",
-            "actionability": "needs_confirm",
-            "state": "prior",
-            "grounding_status": str(item.get("grounding_status") or "prior"),
-            "candidate_fixture_id": str(item.get("candidate_fixture_id") or ""),
-            "candidate_source": str(item.get("candidate_source") or "runtime_metric_map_snapshot"),
-        }
-        _assert_no_forbidden_agent_view_keys(prior)
-        priors.append(prior)
-    return priors
+    return realworld_runtime_map_contract.runtime_map_priors_from_snapshot(
+        snapshot,
+        float_or_zero=_float_or_zero,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def _runtime_map_anchor_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    if not snapshot:
-        return []
-    anchors = []
-    for index, item in enumerate(snapshot.get("public_semantic_anchors") or [], start=1):
-        if not isinstance(item, dict):
-            continue
-        anchor = {
-            "anchor_id": str(item.get("anchor_id") or f"prior_anchor_{index:03d}"),
-            "prior_anchor_id": str(item.get("anchor_id") or f"prior_anchor_{index:03d}"),
-            "anchor_type": str(item.get("anchor_type") or ""),
-            "category": str(item.get("category") or ""),
-            "label": str(item.get("label") or ""),
-            "room_id": str(item.get("room_id") or ""),
-            "waypoint_id": str(item.get("waypoint_id") or ""),
-            "pose": dict(item.get("pose") or {}),
-            "affordances": list(item.get("affordances") or []),
-            "producer_type": str(item.get("producer_type") or ""),
-            "producer_id": str(item.get("producer_id") or ""),
-            "confidence": _float_or_zero(item.get("confidence")),
-            "freshness": "prior",
-            "actionability": str(item.get("actionability") or ""),
-            "reachability_status": str(item.get("reachability_status") or ""),
-            "classification_status": str(item.get("classification_status") or ""),
-            "source_observation_id": str(item.get("source_observation_id") or ""),
-            "promotion_status": "prior_runtime_snapshot",
-            "evidence": dict(item.get("evidence") or {}),
-        }
-        _assert_no_forbidden_agent_view_keys(anchor)
-        anchors.append(anchor)
-    return anchors
+    return realworld_runtime_map_contract.runtime_map_anchor_priors_from_snapshot(
+        snapshot,
+        float_or_zero=_float_or_zero,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def _runtime_map_room_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    if not snapshot:
-        return []
-    rooms = []
-    for item in snapshot.get("rooms") or []:
-        if not isinstance(item, dict):
-            continue
-        room = _public_room_hint_payload(item)
-        _assert_no_forbidden_agent_view_keys(room)
-        rooms.append(room)
-    return rooms
+    return realworld_runtime_map_contract.runtime_map_room_priors_from_snapshot(
+        snapshot,
+        public_room_hint_payload=_public_room_hint_payload,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def infer_target_fixture_for_detection(
     detection: dict[str, Any],
     fixture_hints: dict[str, Any],
 ) -> dict[str, Any] | None:
-    direct_candidate = _target_fixture_from_detection_anchor(detection)
-    if direct_candidate is not None:
-        return direct_candidate
-    fixture_candidates = [
-        fixture
-        for room in fixture_hints.get("rooms", [])
-        for fixture in room.get("fixtures", [])
-        if isinstance(fixture, dict)
-    ]
-    object_terms = {
-        _norm(detection.get("category")),
-        _norm(detection.get("name")),
-    }
-    for object_aliases, fixture_aliases in _OBJECT_CATEGORY_TARGETS:
-        if not any(alias in term for alias in object_aliases for term in object_terms):
-            continue
-        for fixture_alias in fixture_aliases:
-            match = _first_matching_fixture(fixture_candidates, fixture_alias)
-            if match is not None:
-                return match
-    return None
+    return realworld_runtime_map_contract.infer_target_fixture_for_detection(
+        detection,
+        fixture_hints,
+        norm=_norm,
+        object_category_targets=_OBJECT_CATEGORY_TARGETS,
+        first_matching_fixture=_first_matching_fixture,
+        fixture_requires_open=_fixture_requires_open,
+    )
 
 
 def _target_fixture_from_detection_anchor(detection: dict[str, Any]) -> dict[str, Any] | None:
-    fixture_id = str(detection.get("candidate_fixture_id") or "")
-    if not fixture_id.startswith("anchor_fixture_"):
-        return None
-    category = str(detection.get("candidate_fixture_category") or "")
-    tool = str(detection.get("recommended_tool") or "")
-    affordances = ["observe", "place"]
-    if tool == "place_inside" or _fixture_requires_open({"category": category}):
-        affordances.append("place_inside")
-    if _fixture_requires_open({"category": category}):
-        affordances.extend(["open", "close"])
-    waypoint_id = str(detection.get("waypoint_id") or "")
-    return {
-        "fixture_id": fixture_id,
-        "receptacle_id": fixture_id,
-        "category": category,
-        "name": category or fixture_id,
-        "room_id": str(detection.get("current_room_id") or ""),
-        "affordances": affordances,
-        "preferred_inspection_waypoint_id": waypoint_id,
-        "preferred_manipulation_waypoint_id": waypoint_id,
-        "public_fixture_source": "runtime_semantic_anchor",
-    }
+    return realworld_runtime_map_contract.target_fixture_from_detection_anchor(
+        detection,
+        fixture_requires_open=_fixture_requires_open,
+    )
 
 
 def forbidden_agent_view_keys() -> set[str]:
