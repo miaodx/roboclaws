@@ -18,13 +18,16 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest verified contract
-projection slice:
+--summary --top 40` on 2026-06-16, after the latest verified visual-comparison
+USD-contract slice:
 
 - 0 Ruff complexity violations.
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
+- `roboclaws/household/scene_camera_comparison.py` is down to 6200 lines after
+  the first USD render-contract split, but remains the largest P1 hard-ceiling
+  candidate.
 - `roboclaws/household/realworld_contract.py` is down to 5637 lines after the
   first contract projection split, but remains a P1 hard-ceiling candidate.
 - `roboclaws/household/report.py` is down to 5816 lines after the Isaac
@@ -152,6 +155,8 @@ Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
 oversized. Prefer capture-lane stages, diagnostics builders, manifest/artifact
 setup helpers, and report-specific modules. Real renderer claims still require
 separate local proof. Owner: `intuitive-refactor`.
+Latest metric: `scene_camera_comparison.py` is down to 6200 lines after the
+USD render-contract helper split, but remains above the hard ceiling.
 
 ### E: Backend Evidence And Live Runtime Normalization
 

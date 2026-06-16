@@ -612,6 +612,14 @@ logs before choosing the next slice.
   modules stayed at 62. Proof: focused cleanup report/checker tests, ruff,
   format check, py_compile, and ratchet.
 
+- 2026-06-16: Scene-camera Isaac USD render-contract parsing, material/light
+  extraction, and visual-physics summary helpers moved into
+  `scene_camera_usda_contract.py`, while `scene_camera_comparison.py` keeps
+  private aliases for existing report and apple-to-apple consumers. Metric:
+  `scene_camera_comparison.py` 6480 -> 6200 lines; Ruff complexity stayed at
+  0 and oversized modules stayed at 62. Proof: focused scene-camera and
+  apple-to-apple tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
