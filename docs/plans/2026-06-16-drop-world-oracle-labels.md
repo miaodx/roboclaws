@@ -321,6 +321,9 @@ projection.
 
 ## Non-Goals
 
+- No operator-console cleanup setup readiness, mess-up capacity/count gating,
+  baseline/no-mess-up acknowledgement, or start-blocking cleanup-readiness UX.
+  That is a separate follow-up plan.
 - No compatibility alias from `world-oracle-labels` to `world-public-labels`.
 - No maintainer-only Oracle lane.
 - No new replacement `sim-oracle-upper-bound` lane in this slice.
@@ -537,6 +540,11 @@ non-deployable camera labelers from active routes, and make deployment-like
 simulator map-build defaults use
 `camera-grounded-labels` + `camera_labeler=grounding-dino`.
 
+Standalone boundary: this preflight is only for the Oracle/Public evidence-lane
+and non-deployable camera-labeler migration. It explicitly does not implement
+operator-console cleanup setup readiness, mess-up capacity checks, baseline
+acknowledgement, or cleanup start-blocking readiness logic.
+
 Scope:
 
 - Registry and contract: remove Oracle lane constants/metadata, make Public the
@@ -560,6 +568,7 @@ Scope:
 - Operator console: remove Oracle from dropdowns, route ids, defaults, launch
   args, UI fallbacks, and route/history fixtures. Change simulator
   camera-grounded defaults from `sim-projected-labels` to `grounding-dino`.
+  This is evidence-lane/catalog migration only, not cleanup setup readiness.
 - Eval and samples: migrate eval-harness rows, eval sample JSON, row ids,
   runtime-map-prior references, scene-sampler templates, and related tests to
   Public where they are structured-world baselines; add/promote
@@ -578,6 +587,8 @@ Scope:
 
 Non-goals:
 
+- No operator-console cleanup setup readiness, mess-up count/capacity handling,
+  baseline/no-mess-up acknowledgement, or cleanup start-blocking readiness UX.
 - No compatibility alias from `world-oracle-labels` to `world-public-labels`.
 - No maintainer-only Oracle lane and no replacement `sim-oracle-upper-bound`.
 - No fake camera-labeler fallback and no product/operator `fake-http` or
