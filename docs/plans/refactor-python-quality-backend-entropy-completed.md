@@ -620,6 +620,13 @@ logs before choosing the next slice.
   0 and oversized modules stayed at 62. Proof: focused scene-camera and
   apple-to-apple tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Scene-camera image tone, region, pixel-summary, and pair-delta
+  metrics moved into `scene_camera_image_metrics.py`, while
+  `scene_camera_comparison.py` keeps private aliases for report diagnostics and
+  contract tests. Metric: `scene_camera_comparison.py` 6200 -> 6120 lines;
+  Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
+  focused scene-camera tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
