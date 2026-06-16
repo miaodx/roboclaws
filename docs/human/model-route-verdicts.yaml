@@ -71,16 +71,27 @@ verdicts:
     evidence: local non-raw-FPV Agent SDK cleanup evidence
     notes: Chat transport is suitable for structured lanes; raw FPV is blocked by route image transport.
   - agent_engine: openai-agents-sdk
+    provider_route: mimo-inside
+    provider_profile: mimo-inside
+    model_id: mimo-1000
+    route_status: provisional
+    lane_verdicts:
+      structured_labels: experimental
+      camera_grounded_labels: experimental
+      camera_raw_fpv: blocked
+    evidence: dev model-matrix throughput probes; product cleanup verdict pending
+    notes: Default-enabled on-demand UltraSpeed route for benchmarks and explicit text-agent experiments, not a product cleanup default until a separate route decision promotes it.
+  - agent_engine: openai-agents-sdk
     provider_route: kimi-openai-chat
     provider_profile: kimi-openai-chat
-    model_id: kimi-k2.6
+    model_id: kimi-k2.7-code
     route_status: experimental
     lane_verdicts:
       structured_labels: experimental
       camera_grounded_labels: experimental
       camera_raw_fpv: blocked
     evidence: route wired; cleanup verdict pending
-    notes: Chat transport is treated as structured-lane only until image transport is verified.
+    notes: Default model is kimi-k2.7-code. Kimi K2.7 Code requires provider-side Thinking On, which is the model default; preserve reasoning_content and do not send thinking=disabled.
   - agent_engine: openai-agents-sdk
     provider_route: minimax
     provider_profile: minimax
@@ -91,7 +102,7 @@ verdicts:
       camera_grounded_labels: experimental
       camera_raw_fpv: blocked
     evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
-    notes: Structured cleanup works through the SDK Responses path; raw FPV remains blocked until runtime image transport is verified.
+    notes: Default MiniMax model. M3 is multimodal and image-capable, but raw FPV remains blocked until runtime image transport is verified for this route.
   - agent_engine: openai-agents-sdk
     provider_route: minimax
     provider_profile: minimax
@@ -102,7 +113,7 @@ verdicts:
       camera_grounded_labels: experimental
       camera_raw_fpv: blocked
     evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
-    notes: Text-only fast-agent route works for structured cleanup, but the single paired run did not show a speed advantage over MiniMax-M3.
+    notes: Explicit non-default text-only variant. The single paired cleanup run did not show a speed advantage over MiniMax-M3.
   - agent_engine: claude-code
     provider_route: mimo-anthropic
     provider_profile: mimo-anthropic

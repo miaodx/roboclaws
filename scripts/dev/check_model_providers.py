@@ -98,6 +98,7 @@ def build_agent_sdk_probes(
         "mify",
         "minimax",
         "mimo-openai-chat",
+        "mimo-inside",
         "kimi-openai-chat",
     ):
         route = provider_route_spec(route_id)
@@ -127,6 +128,7 @@ def build_direct_probes(
     mify = provider_route_spec("mify")
     minimax = provider_route_spec("minimax")
     mimo = provider_route_spec("mimo-openai-chat")
+    mimo_inside = provider_route_spec("mimo-inside")
 
     return [
         _direct_from_route("codex-env", codex, max_tokens=responses_max_tokens),
@@ -144,6 +146,7 @@ def build_direct_probes(
             provider_note="MiniMax highspeed can spend early tokens on reasoning.",
         ),
         _direct_from_route("mimo-chat", mimo, max_tokens=chat_max_tokens),
+        _direct_from_route("mimo-inside", mimo_inside, max_tokens=chat_max_tokens),
         ProbeSpec(
             probe_id="direct:kimi-coding-chat",
             mode="direct",
@@ -154,8 +157,10 @@ def build_direct_probes(
             base_url=os.environ.get("KIMI_OPENAI_BASE_URL", "https://api.kimi.com/coding/v1"),
             max_tokens=chat_max_tokens,
             provider_note=(
-                "Kimi coding requires a coding-agent User-Agent; this probe omits "
-                "temperature because the provider pins model-specific values."
+                "Kimi coding requires a coding-agent User-Agent. Kimi K2.7 Code "
+                "runs with provider-side Thinking On; this probe keeps reasoning "
+                "content handling and omits temperature because the provider pins "
+                "model-specific values."
             ),
         ),
         ProbeSpec(

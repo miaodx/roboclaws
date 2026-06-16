@@ -48,6 +48,18 @@ def test_nvidia_cases_read_adjacent_base_url_env(monkeypatch) -> None:
     assert cases["nvidia:nemotron-nano-vl:responses"].base_url == "https://nvidia.example/v1"
 
 
+def test_mimo_inside_cases_read_registry_env(monkeypatch) -> None:
+    monkeypatch.setenv("MIMO_BASE_URL", "https://inside.example/v1")
+    script = _load_script_module()
+
+    cases = {case.case_id: case for case in script.default_cases()}
+
+    case = cases["mimo-inside:mimo-1000:openai-chat"]
+    assert case.base_url == "https://inside.example/v1"
+    assert case.api_key_env == "MIMO_API_KEY"
+    assert "Default-enabled" in case.note
+
+
 def test_endpoint_urls_normalize_wire_api_suffixes() -> None:
     script = _load_script_module()
 

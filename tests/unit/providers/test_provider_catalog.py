@@ -8,6 +8,9 @@ from roboclaws.agents.provider_registry import (
     ROUTE_DEGRADED,
     ROUTE_EXPERIMENTAL,
     ROUTE_HEALTHY,
+    ROUTE_PROVISIONAL,
+    default_enabled_models,
+    default_enabled_provider_routes,
     model_aliases,
     model_supports_images,
     openclaw_model_id,
@@ -39,6 +42,7 @@ def test_provider_registry_exposes_aliases_without_duplicate_source() -> None:
     assert aliases["nvidia"] == "meta/llama-4-maverick-17b-128e-instruct"
     assert aliases["mimo"] == "mimo-v2.5"
     assert aliases["mimo-v2.5"] == "mimo-v2.5"
+    assert aliases["mimo-ultraspeed"] == "mimo-1000"
     assert aliases["kimi-code"] == "kimi-k2.7-code"
     assert "mimo-v2.5-" + "pro" not in aliases
     assert "mimo-" + "omni" not in aliases
@@ -86,9 +90,48 @@ def test_registry_marks_mify_codex_degraded_but_supported() -> None:
 
 def test_kimi_openai_chat_defaults_to_current_code_model() -> None:
     route = provider_route_spec("kimi-openai-chat")
+    model = resolve_model(route.default_model_id)
 
     assert route.default_model_id == "kimi-k2.7-code"
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_EXPERIMENTAL
+    assert route.default_use is True
+    assert model.default_use is True
+    assert "Thinking On" in route.default_use_note
+    assert "thinking=disabled" in model.default_use_note
+
+
+def test_default_enabled_routes_include_requested_api_sources() -> None:
+    route_ids = {route.route_id for route in default_enabled_provider_routes()}
+    model_ids = {model.model_id for model in default_enabled_models()}
+
+    assert {
+        "codex-env",
+        "mify",
+        "mimo-openai-chat",
+        "mimo-inside",
+        "minimax",
+        "kimi-openai-chat",
+    } <= route_ids
+    assert {
+        "gpt-5.5",
+        "xiaomi/mimo-v2.5",
+        "mimo-v2.5",
+        "mimo-1000",
+        "MiniMax-M3",
+        "kimi-k2.7-code",
+    } <= model_ids
+    assert "MiniMax-M2.7-highspeed" not in model_ids
+
+
+def test_mimo_inside_is_default_enabled_openai_chat_route() -> None:
+    route = provider_route_spec("mimo-inside")
+
+    assert route.default_model_id == "mimo-1000"
+    assert route.default_use is True
+    assert route.supported_engines == ("openai-agents-sdk",)
+    assert route.base_url_env == "MIMO_BASE_URL"
+    assert route.api_key_env == "MIMO_API_KEY"
+    assert route.status_for_engine("openai-agents-sdk") == ROUTE_PROVISIONAL
 
 
 def test_provider_routes_accept_adjacent_base_url_env_overrides() -> None:
@@ -115,6 +158,8 @@ def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None
     model = resolve_model("MiniMax-M3")
 
     assert model.supports_image_input is True
+    assert route.default_model_id == "MiniMax-M3"
+    assert route.default_use is True
     assert route.status_for_engine("codex-cli") == ROUTE_BLOCKED
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_HEALTHY
     assert route_capabilities_for_engine(route, "codex-cli")["image_transport"] == (

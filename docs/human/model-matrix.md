@@ -62,7 +62,9 @@ table for coding-agent routes. The current MiniMax state is:
 - **OpenAI Agents SDK + MiniMax Responses**: works for structured cleanup.
   Local paired runs on 2026-06-12 completed cleanup successfully for both
   `MiniMax-M3` and `MiniMax-M2.7-highspeed` with `score.status=success` and
-  `mess_restoration_rate=1.0`.
+  `mess_restoration_rate=1.0`. MiniMax M3 is the default MiniMax model now:
+  it is the multimodal row with image support, and the single paired cleanup
+  comparison did not show a speed win for `MiniMax-M2.7-highspeed`.
 - **Codex CLI + MiniMax Responses**: blocked for MCP-driven cleanup today.
   The provider Responses route connects, but MiniMax emits MCP tool calls in
   a flattened name shape such as `mcp__cleanup__metric_map`,
@@ -79,6 +81,21 @@ table for coding-agent routes. The current MiniMax state is:
   `MiniMax-M2.7-highspeed`: M3 finished in about 262.9 s wall time, while
   M2.7-highspeed finished in about 269.1 s. That is only one run, so use it as
   cautionary evidence, not a benchmark conclusion.
+
+Current default-enabled API sources:
+
+- `codex-env`: default model `gpt-5.5`, the strongest current Codex route.
+- `mify`: default model `xiaomi/mimo-v2.5`.
+- `mimo-openai-chat` / token plan: default model `mimo-v2.5`.
+- `mimo-inside`: default-enabled on-demand route, default model `mimo-1000`.
+  It is allowed for benchmark and explicit text-agent experiments, but it is
+  not promoted as a product cleanup default until a separate route decision
+  proves tool/runtime behavior.
+- `minimax`: default model `MiniMax-M3`; `MiniMax-M2.7-highspeed` remains an
+  explicit non-default variant.
+- `kimi-openai-chat`: default model `kimi-k2.7-code`. Kimi K2.7 Code runs with
+  provider-side Thinking On; keep `reasoning_content` handling and do not send
+  a `thinking=disabled` override.
 
 ## Periodic Model Benchmarks
 
@@ -153,11 +170,12 @@ That MiMo-focused benchmark includes:
 - MiMo mify: `xiaomi/mimo-v2.5`, `xiaomi/mimo-v2.5-pro`
 - MiMo inside: `mimo-v2.5`, `mimo-v2.5-pro`, `mimo-1000`
 
-`mimo-1000` is the current benchmark-only label for the MiMo inside
-MiMo V2.5 Pro UltraSpeed route. Xiaomi's 2026-06-08 UltraSpeed note describes
-the route as a 1T MiMo V2.5 Pro variant focused on 1000+ TPS generation:
-<https://mimo.xiaomi.com/blog/mimo-tilert-1000tps>. Keep it out of active
-product cleanup routes until a separate provider-route decision promotes it.
+`mimo-1000` is the current default-enabled MiMo inside label for on-demand
+benchmark and explicit text-agent use. Xiaomi's 2026-06-08 UltraSpeed note
+describes the route as a 1T MiMo V2.5 Pro variant focused on 1000+ TPS
+generation: <https://mimo.xiaomi.com/blog/mimo-tilert-1000tps>. Keep it out of
+active product cleanup defaults until a separate provider-route decision
+promotes it.
 Use `--layer stream-throughput` on OpenAI Chat cases when you need a decode-rate
 style measurement that excludes first-content latency from the TPS denominator.
 

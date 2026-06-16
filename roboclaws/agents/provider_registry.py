@@ -36,6 +36,8 @@ class ModelSpec:
     aliases: tuple[str, ...]
     family: str
     model_capabilities: frozenset[str]
+    default_use: bool = False
+    default_use_note: str = ""
     direct_provider_adapter: str | None = None
     direct_required_env_keys: tuple[str, ...] = ()
     cost_per_m: dict[str, float] = field(default_factory=dict)
@@ -59,6 +61,8 @@ class ProviderRouteSpec:
     base_url_default: str
     wire_api: str
     wire_source: str
+    default_use: bool = False
+    default_use_note: str = ""
     aliases: tuple[str, ...] = ()
     per_engine_status: dict[str, str] = field(default_factory=dict)
     route_capabilities: dict[str, str] = field(default_factory=dict)
@@ -93,6 +97,8 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         aliases=("gpt-5.5",),
         family="gpt",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
+        default_use=True,
+        default_use_note="Best current codex-env model and default Codex route model.",
     ),
     ModelSpec(
         model_id="gpt-4o",
@@ -137,6 +143,12 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         aliases=("kimi-k2.7-code", "k2.7-code", "kimi-code"),
         family="kimi",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
+        default_use=True,
+        default_use_note=(
+            "Default Kimi coding model. Kimi K2.7 Code runs with provider-side "
+            "thinking enabled; keep reasoning_content handling and do not send a "
+            "thinking=disabled override."
+        ),
         direct_provider_adapter="kimi-coding",
         direct_required_env_keys=("KIMI_API_KEY",),
         cost_per_m={"input": 1.00, "output": 3.00},
@@ -192,6 +204,8 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         aliases=("mimo", "mimo-v2.5"),
         family="mimo",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
+        default_use=True,
+        default_use_note="Default MiMo token-plan model.",
         direct_provider_adapter="mimo",
         direct_required_env_keys=("MIMO_TP_KEY",),
         cost_per_m={"input": 0.0, "output": 0.0},
@@ -202,18 +216,39 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         aliases=("xiaomi/mimo-v2.5", "mimo-mify-v2.5"),
         family="mimo",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
+        default_use=True,
+        default_use_note="Default MiMo model through the mify gateway.",
+    ),
+    ModelSpec(
+        model_id="mimo-1000",
+        aliases=("mimo-1000", "mimo-inside-1000", "mimo-ultraspeed"),
+        family="mimo",
+        model_capabilities=_caps(MODEL_CAP_TEXT),
+        default_use=True,
+        default_use_note=(
+            "Default-enabled MiMo inside UltraSpeed route for explicit on-demand "
+            "benchmark and text-agent use; product cleanup promotion still requires "
+            "a route decision."
+        ),
     ),
     ModelSpec(
         model_id="MiniMax-M3",
         aliases=("minimax", "minimax-m3", "MiniMax-M3"),
         family="minimax",
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
+        default_use=True,
+        default_use_note=(
+            "Default MiniMax model; multimodal and faster than the M2.7 row in "
+            "local cleanup evidence."
+        ),
     ),
     ModelSpec(
         model_id="MiniMax-M2.7-highspeed",
         aliases=("minimax-highspeed", "minimax-m2.7-highspeed", "MiniMax-M2.7-highspeed"),
         family="minimax",
         model_capabilities=_caps(MODEL_CAP_TEXT),
+        default_use=False,
+        default_use_note="Available explicit variant only; not the default MiniMax route.",
     ),
 )
 
@@ -230,6 +265,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="",
         wire_api=WIRE_RESPONSES,
         wire_source=WIRE_SOURCE_NATIVE,
+        default_use=True,
+        default_use_note="Default Codex route; uses gpt-5.5.",
         per_engine_status={
             "codex-cli": ROUTE_HEALTHY,
             "openai-agents-sdk": ROUTE_EXPERIMENTAL,
@@ -251,6 +288,11 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://api.llm.mioffice.cn/v1",
         wire_api=WIRE_RESPONSES,
         wire_source=WIRE_SOURCE_GATEWAY,
+        default_use=True,
+        default_use_note=(
+            "Default-enabled mify route; uses xiaomi/mimo-v2.5 unless explicitly "
+            "overridden."
+        ),
         aliases=("codex-mify",),
         per_engine_status={
             "codex-cli": ROUTE_DEGRADED,
@@ -277,6 +319,8 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://api.minimaxi.com/v1",
         wire_api=WIRE_RESPONSES,
         wire_source=WIRE_SOURCE_NATIVE,
+        default_use=True,
+        default_use_note="Default-enabled MiniMax route; uses MiniMax-M3, not M2.7-highspeed.",
         aliases=("mm",),
         per_engine_status={
             "codex-cli": ROUTE_BLOCKED,
@@ -304,10 +348,36 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://token-plan-cn.xiaomimimo.com/v1",
         wire_api=WIRE_CHAT_COMPLETIONS,
         wire_source=WIRE_SOURCE_NATIVE,
+        default_use=True,
+        default_use_note="Default-enabled MiMo token-plan chat route; uses mimo-v2.5.",
         aliases=("mimo-chat",),
         per_engine_status={"openai-agents-sdk": ROUTE_HEALTHY},
         route_capabilities={
             "image_transport": ROUTE_CAP_UNSUPPORTED,
+            "tool_call_transport": ROUTE_CAP_SUPPORTED,
+        },
+    ),
+    ProviderRouteSpec(
+        route_id="mimo-inside",
+        public_profile="mimo-inside",
+        label="MiMo inside OpenAI Chat",
+        supported_engines=("openai-agents-sdk",),
+        default_model_id="mimo-1000",
+        required_env_keys=("MIMO_API_KEY",),
+        api_key_env="MIMO_API_KEY",
+        base_url_env="MIMO_BASE_URL",
+        base_url_default="",
+        wire_api=WIRE_CHAT_COMPLETIONS,
+        wire_source=WIRE_SOURCE_NATIVE,
+        default_use=True,
+        default_use_note=(
+            "Default-enabled on-demand MiMo inside route for speed benchmarks and "
+            "explicit text-agent experiments. Not a product cleanup default until "
+            "a separate route decision promotes it."
+        ),
+        per_engine_status={"openai-agents-sdk": ROUTE_PROVISIONAL},
+        route_capabilities={
+            "image_transport": ROUTE_CAP_UNKNOWN,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
     ),
@@ -323,6 +393,11 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         base_url_default="https://api.kimi.com/coding/v1",
         wire_api=WIRE_CHAT_COMPLETIONS,
         wire_source=WIRE_SOURCE_NATIVE,
+        default_use=True,
+        default_use_note=(
+            "Default-enabled Kimi coding route. K2.7 Code requires provider-side "
+            "Thinking On, which is the model default for kimi-k2.7-code."
+        ),
         aliases=("kimi-chat",),
         per_engine_status={"openai-agents-sdk": ROUTE_EXPERIMENTAL},
         route_capabilities={
@@ -428,6 +503,14 @@ def model_specs() -> tuple[ModelSpec, ...]:
 
 def provider_route_specs() -> tuple[ProviderRouteSpec, ...]:
     return _PROVIDER_ROUTE_SPECS
+
+
+def default_enabled_models() -> tuple[ModelSpec, ...]:
+    return tuple(spec for spec in _MODEL_SPECS if spec.default_use)
+
+
+def default_enabled_provider_routes() -> tuple[ProviderRouteSpec, ...]:
+    return tuple(spec for spec in _PROVIDER_ROUTE_SPECS if spec.default_use)
 
 
 def model_aliases() -> dict[str, str]:
@@ -587,8 +670,12 @@ def provider_readiness(
         "model": selected_model,
         "model_family": model_spec.family if model_spec else "unknown",
         "model_capabilities": sorted(model_spec.model_capabilities) if model_spec else [],
+        "model_default_use": bool(model_spec.default_use) if model_spec else False,
+        "model_default_use_note": model_spec.default_use_note if model_spec else "",
         "wire_api": route.wire_api,
         "wire_source": route.wire_source,
+        "default_use": route.default_use,
+        "default_use_note": route.default_use_note,
         "route_status": route.status_for_engine(agent_engine),
         "route_status_note": route.status_note,
         "route_capabilities": route_capabilities_for_engine(route, agent_engine),
@@ -610,9 +697,13 @@ def route_payload(route: ProviderRouteSpec, *, agent_engine: str) -> dict[str, A
         "default_model_id": route.default_model_id,
         "model_family": model.family,
         "model_capabilities": sorted(model.model_capabilities),
+        "model_default_use": model.default_use,
+        "model_default_use_note": model.default_use_note,
         "required_env": list(route.required_env_keys),
         "wire_api": route.wire_api,
         "wire_source": route.wire_source,
+        "default_use": route.default_use,
+        "default_use_note": route.default_use_note,
         "route_status": route.status_for_engine(agent_engine),
         "route_status_note": route.status_note,
         "route_capabilities": route_capabilities_for_engine(route, agent_engine),
@@ -672,7 +763,7 @@ def _main(argv: list[str] | None = None) -> int:
 
     if args.command == "json":
         payload = {
-            "models": [
+        "models": [
                 asdict(spec) | {"model_capabilities": sorted(spec.model_capabilities)}
                 for spec in _MODEL_SPECS
             ],

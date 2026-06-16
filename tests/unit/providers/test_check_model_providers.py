@@ -30,6 +30,8 @@ def test_direct_probe_defaults_cover_minimax_highspeed_and_kimi_payload() -> Non
 
     assert probes["direct:minimax-m27"].max_tokens >= 256
     assert probes["direct:mimo-chat"].max_tokens >= 128
+    assert probes["direct:mimo-inside"].model == "mimo-1000"
+    assert probes["direct:mimo-inside"].max_tokens >= 128
     kimi = probes["direct:kimi-coding-chat"]
     payload = script.kimi_coding_payload(
         prompt="Health check. Reply exactly ok.",
@@ -82,6 +84,8 @@ def test_agents_sdk_probe_defaults_use_larger_responses_budget() -> None:
     assert probes["agents-sdk:minimax"].max_tokens >= 256
     assert probes["agents-sdk:codex-env"].max_tokens >= 256
     assert probes["agents-sdk:mimo-openai-chat"].max_tokens >= 128
+    assert probes["agents-sdk:mimo-inside"].model == "mimo-1000"
+    assert probes["agents-sdk:mimo-inside"].max_tokens >= 128
     assert probes["agents-sdk:kimi-openai-chat"].model == "kimi-k2.7-code"
     assert not probes["agents-sdk:kimi-openai-chat"].unsupported_reason
 
