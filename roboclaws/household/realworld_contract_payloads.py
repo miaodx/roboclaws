@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Iterable, Mapping
 from typing import Any, Protocol
 
+from roboclaws.household import realworld_runtime_map_contract
+
 
 class RealWorldPayloadContract(Protocol):
     map_mode: str
+    perception_mode: str
     sanitize_world_labels: bool
     _detections_by_handle: Mapping[str, dict[str, Any]]
     _fixtures: dict[str, dict[str, Any]]
@@ -25,12 +28,6 @@ class RealWorldPayloadContract(Protocol):
         *,
         fixture_hints: dict[str, Any] | None = None,
     ) -> dict[str, Any]: ...
-    def _runtime_observed_object_payload(
-        self,
-        handle: str,
-        detection: dict[str, Any],
-        worklist_item: dict[str, Any],
-    ) -> dict[str, Any]: ...
     def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]: ...
     def _runtime_target_candidates(
         self,
@@ -38,12 +35,6 @@ class RealWorldPayloadContract(Protocol):
         public_semantic_anchors: list[dict[str, Any]],
         observed_objects: list[dict[str, Any]],
     ) -> list[dict[str, Any]]: ...
-    def _runtime_static_map_payload(
-        self,
-        *,
-        metric_map: dict[str, Any],
-        fixture_hints: dict[str, Any],
-    ) -> dict[str, Any]: ...
     def _target_search_summary(
         self,
         target_candidates: list[dict[str, Any]],
@@ -73,9 +64,15 @@ def runtime_metric_map_payload(
     runtime_metric_map_schema: str,
     cleanup_worklist_schema: str,
     minimal_map_mode: str,
+    visible_object_detections_mode: str,
+    sanitized_visible_object_detections_provenance: str,
     runtime_map_producer_summary: Callable[..., dict[str, Any]],
     merge_public_rooms: Callable[[Any, Any], list[dict[str, Any]]],
     room_category_hints_from_public_rooms: Callable[[Any, Any], list[dict[str, Any]]],
+    candidate_actionability_status: Callable[[dict[str, Any]], str],
+    candidate_state: Callable[[dict[str, Any]], str],
+    public_destination_policy_for_category: Callable[[Any], dict[str, Any]],
+    norm: Callable[[Any], str],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
     """Build the current-run map view from public map and observation evidence."""
@@ -91,11 +88,27 @@ def runtime_metric_map_payload(
         str(item.get("object_id") or ""): dict(item)
         for item in public_worklist.get("objects") or []
     }
+    runtime_map_priors = [dict(item) for item in contract._runtime_map_priors]
     observed_objects = [
-        contract._runtime_observed_object_payload(
-            handle,
-            dict(contract._detections_by_handle[handle]),
-            worklist_by_handle.get(handle, {}),
+        realworld_runtime_map_contract.runtime_observed_object_payload(
+            handle=handle,
+            detection=dict(contract._detections_by_handle[handle]),
+            worklist_item=worklist_by_handle.get(handle, {}),
+            object_lifecycle=dict(contract._object_lifecycle.get(handle, {})),
+            sanitize_world_labels=contract.sanitize_world_labels,
+            perception_mode=contract.perception_mode,
+            visible_object_detections_mode=visible_object_detections_mode,
+            sanitized_visible_object_detections_provenance=(
+                sanitized_visible_object_detections_provenance
+            ),
+            runtime_map_priors=runtime_map_priors,
+            public_fixture_reference_id=contract._public_fixture_reference_id,
+            visual_evidence_for_handle=contract._visual_evidence_for_handle,
+            candidate_actionability_status=candidate_actionability_status,
+            candidate_state=candidate_state,
+            public_destination_policy_for_category=public_destination_policy_for_category,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+            norm=norm,
         )
         for handle in sorted(contract._detections_by_handle)
     ]
@@ -117,9 +130,12 @@ def runtime_metric_map_payload(
         "minimal_map_mode": contract.map_mode == minimal_map_mode,
         "source_map_mutated": False,
         "private_truth_included": False,
-        "static_map": contract._runtime_static_map_payload(
+        "static_map": realworld_runtime_map_contract.runtime_static_map_payload(
             metric_map=public_metric_map,
             fixture_hints=public_fixture_hints,
+            map_mode=contract.map_mode,
+            minimal_map_mode=minimal_map_mode,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
         ),
         "rooms": [dict(item) for item in public_metric_map.get("rooms") or []],
         "room_category_hints": [

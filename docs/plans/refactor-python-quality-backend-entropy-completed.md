@@ -773,6 +773,15 @@ logs before choosing the next slice.
   band. Proof: focused scene-sampler, readiness-export, scanner-runner tests,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Runtime Metric Map static-map and observed-object payload
+  assembly moved from `RealWorldCleanupContract` into
+  `realworld_runtime_map_contract.py`, and `realworld_contract_payloads.py`
+  now passes explicit public inputs instead of requiring facade-private payload
+  methods. Metric: `realworld_contract.py` 5036 -> 4847 lines; ratchet remains
+  18 complexity rows and 66 oversized modules. Proof: realworld contract, MCP
+  server, and cleanup-checker contract tests, ruff, format check, py_compile,
+  and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -787,5 +796,8 @@ logs before choosing the next slice.
 - Scene sampler is below the hard ceiling and delegates candidate profile,
   source-prep, prefilter, and scanner-admission internals to named owner
   modules; reopen only for fresh hard-ceiling or ownership drift.
+- Runtime Metric Map payload assembly is owned by
+  `realworld_runtime_map_contract.py`; reopen only if the realworld contract
+  facade starts rebuilding observed-object or static-map payload internals.
 - Completed report-section extraction is partial evidence, not a reason to
   treat `report.py` as done; the active plan still owns the hard-ceiling split.

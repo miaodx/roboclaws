@@ -21,14 +21,15 @@ Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.p
 --summary --top 40` on 2026-06-17. Treat this as a planning snapshot, not proof
 of a clean checkpoint; refresh before the next execution slice.
 
-- 18 Ruff complexity violations and 66 oversized modules in the current dirty
-  checkout. The additional rows versus the earlier 2026-06-17 snapshot come
-  from plan-external B1 Map 12 / preview edits, including
-  `scripts/operator_console/render_scene_previews.py` and the untracked
-  `scripts/maps/compile_b1_map12_runtime_bundle.py`; keep them with that owner
-  unless they survive as unowned drift. The oversized count increased by one
-  because `scene_sampler_scanner.py` absorbed scanner-admission row assembly
-  and crossed the 800-line target, while staying below the warning band.
+- 18 Ruff complexity violations and 66 oversized modules in the current
+  checkout. The new production/shared rows versus the earlier 2026-06-17
+  snapshot are now classified under B1 Map 12 / preview tooling, especially
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and
+  `scripts/operator_console/render_scene_previews.py`; keep them with
+  candidate D unless they survive as unowned drift. The oversized count
+  increased by one because `scene_sampler_scanner.py` absorbed
+  scanner-admission row assembly and crossed the 800-line target, while
+  staying below the warning band.
 - The prior dirty-worktree scene-sampler drift is now below the hard ceiling:
   `roboclaws/launch/scene_sampler.py` was 3070 lines before the scene-only
   prefilter split, 2607 lines after that split, 2241 lines after the
@@ -37,7 +38,7 @@ of a clean checkpoint; refresh before the next execution slice.
   do not reopen as a P1 unless it crosses 2000 lines again or regains real
   ownership drift.
 - P1 hard-ceiling production files still include
-  `roboclaws/household/realworld_contract.py` at 5036 lines,
+  `roboclaws/household/realworld_contract.py` at 4847 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
   `roboclaws/household/scene_camera_comparison.py` at 4693,
   `roboclaws/household/report.py` at 3806,
@@ -144,10 +145,14 @@ the next useful work should prioritize hard-ceiling files, test fixture debt,
 and backend/report/evidence boundaries that prevent branching from returning.
 
 Next execution should choose one remaining P1 hard-ceiling architecture slice.
-Do not continue by shaving isolated lines from many files. Ponytail audit items
-are inputs to this queue only when they remove a stale surface, duplicate
-concept, or false-confidence source; they should not postpone the P1
-hard-ceiling checkpoint.
+Default recommendation: continue candidate A by reducing
+`RealWorldCleanupContract` ownership around model-declared visual-candidate
+registration or a remaining report section boundary, because the Runtime
+Metric Map observed/static payload assembly slice is complete and the facade is
+still above the hard ceiling. Do not continue by shaving isolated lines from
+many files. Ponytail audit items are inputs to this queue only when they remove
+a stale surface, duplicate concept, or false-confidence source; they should
+not postpone the P1 hard-ceiling checkpoint.
 
 ## Parallel Acceleration Policy
 
@@ -269,7 +274,7 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 5036 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 4847 lines and
 `roboclaws/household/report.py` is 3806 lines. Owning architecture layers: MCP
 Capability Contract And Tools for the contract facade, and Artifacts, reports,
 and eval suites for report rendering. Continue only around real ownership
@@ -277,7 +282,15 @@ boundaries: payload builders, policy/event families, section renderers, or
 artifact envelopes. Preserve public schemas and report claims. Contract helper
 Protocols are ponytail candidates only when the slice reduces
 `RealWorldCleanupContract` private-member coupling; replacing a Protocol with a
-looser parameter bag or another facade wrapper is not a win.
+looser parameter bag or another facade wrapper is not a win. Strong next
+sub-slices are:
+
+- Model-declared visual-candidate registration, declaration resolution, and
+  camera-labeler candidate assembly into `realworld_visual_candidates.py`,
+  while preserving `declare_visual_candidates` /
+  `navigate_to_visual_candidate` responses and visual-grounding evidence.
+- Remaining `report.py` section extraction only when it removes a report
+  ownership boundary, not just because a section is long.
 
 ### B: Visual Comparison Pipeline Split
 
@@ -303,12 +316,16 @@ branching without changing public launch, report, or grader contracts.
 
 Severity: P2, promoted to P1 if it blocks B1 map alignment proof or hides a
 false-green review gate. Current rows include
+`scripts/maps/compile_b1_map12_runtime_bundle.py::review_manifest_errors`,
 `scripts/maps/render_b1_map12_label_tool.py::semantic_map_layers_from_semantics`,
 `validate_label_draft_manifest`, and
 `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 Owning architecture layers: Worlds / Scenes, Backend Runtimes / Environment
-Primitives, and Artifacts, reports, and eval suites. The current dirty checkout
-has two render-preview rows in this bucket; keep them with the same owner.
+Primitives, and Artifacts, reports, and eval suites. Treat the runtime-bundle
+row as the highest-priority D item because it carries C901, PLR0912, and
+PLR0915 violations in one review gate. Prefer manifest-review result objects
+or small validation families over splitting one long function into anonymous
+helpers.
 
 ### E: Behavior-Test Fixture Builders
 
@@ -347,8 +364,10 @@ checker/report claims; MCP Capability Contract And Tools, Agent Skills, or
 Agent Engines And Provider Profiles for labeler/profile/prompt guidance.
 Behavior-change class is internal/stale docs unless a public command, report
 claim, prompt contract, or artifact contract changes; stop for a slice decision
-if that happens. Proof: affected checker, prompt, or visual-grounding tests
-when code changes, otherwise static grep/docs proof plus ratchet.
+if that happens. This bundle must not be used as a reason to defer the
+remaining P1 hard-ceiling files. Proof: affected checker, prompt, or
+visual-grounding tests when code changes, otherwise static grep/docs proof
+plus ratchet.
 
 ### Cleared Or Parked
 
@@ -365,6 +384,10 @@ when code changes, otherwise static grep/docs proof plus ratchet.
   only if `scene_sampler.py` crosses 2000 lines again or if its facade starts
   re-owning source-prep, candidate-profile, prefilter, or scanner-admission
   internals instead of delegating to named owner modules.
+- Runtime Metric Map observed-object/static-map payload assembly no longer
+  lives in `RealWorldCleanupContract`; reopen only if the facade starts
+  rebuilding Runtime Metric Map payload internals instead of delegating to
+  `realworld_runtime_map_contract.py`.
 
 ## Ponytail Audit Triage
 
@@ -387,7 +410,7 @@ a slice gate.
   - Legacy checker flag
     `--require-canonical-robot-view-camera-control`, empty visual-grounding
     labeler maps, unused prompt legacy aliases, and duplicated current-doc lane
-    prose are candidate I, not ad hoc edits to unrelated owners.
+    prose are candidate H, not ad hoc edits to unrelated owners.
 - Parked unless a nearby accepted slice touches them:
   - `PhysicalObservationProvider` is low-value Protocol cleanup and belongs to
     a physical Nav2 pilot slice, not the main hard-ceiling pass.
