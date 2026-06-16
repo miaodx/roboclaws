@@ -491,12 +491,9 @@ def _default_sdk_model_settings_payload(
         if provider_profile == "kimi-openai-chat":
             payload["extra_headers"] = {"User-Agent": "claude-code/1.0.0"}
     else:
-        payload.update(
-            {
-                "truncation": "auto",
-                "store": False,
-            }
-        )
+        payload["store"] = False
+        if provider_profile != "codex-env":
+            payload["truncation"] = "auto"
         if provider_profile == "codex-env" and profile_id != "baseline":
             payload["prompt_cache_retention"] = "in_memory"
     return apply_model_thinking_policy(

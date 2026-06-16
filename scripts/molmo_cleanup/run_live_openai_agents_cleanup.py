@@ -1526,12 +1526,9 @@ def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
         "model_thinking_mode": str(profile.get("model_thinking_mode") or "default"),
     }
     if wire_api == "responses":
-        settings.update(
-            {
-                "truncation": "auto",
-                "store": False,
-            }
-        )
+        settings["store"] = False
+        if provider_profile != "codex-env":
+            settings["truncation"] = "auto"
         if provider_profile == "codex-env" and profile_id != "baseline":
             settings["prompt_cache_retention"] = "in_memory"
     elif wire_api == "chat-completions":

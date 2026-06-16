@@ -99,6 +99,7 @@ def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -
     )
 
     assert responses["reasoning"] == {"effort": "medium"}
+    assert "truncation" not in responses
     assert kimi_chat["extra_body"]["thinking"] == {"type": "enabled", "keep": "all"}
     assert disabled_chat["extra_body"]["thinking"] == {"type": "disabled"}
 
@@ -865,7 +866,7 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert wrapped_model.base_model is captured["responses_model"]
     assert captured["agent_kwargs"]["model_settings"].tool_choice == "auto"
     assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
-    assert captured["agent_kwargs"]["model_settings"].truncation == "auto"
+    assert not hasattr(captured["agent_kwargs"]["model_settings"], "truncation")
     assert captured["runner_kwargs"]["run_config"].trace_include_sensitive_data is False
     assert captured["runner_kwargs"]["run_config"].workflow_name == "roboclaws-openai-agents-live"
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
@@ -2011,7 +2012,6 @@ def _assert_baseline_openai_agents_timing(timing: dict[str, object]) -> None:
         "parallel_tool_calls": False,
         "store": False,
         "tool_choice": "auto",
-        "truncation": "auto",
     }
     assert timing["agent_sdk_perf_profile"]["sdk_run_config"] == {
         "trace_include_sensitive_data": False,
@@ -3584,7 +3584,6 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
         "tool_choice": "auto",
         "parallel_tool_calls": False,
         "model_thinking_mode": "default",
-        "truncation": "auto",
         "store": False,
     }
     assert baseline["sdk_run_config"] == {
@@ -3607,6 +3606,7 @@ def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeyp
     assert gpt["context_soft_limit_tokens"] == 96_000
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
+    assert "truncation" not in gpt["sdk_model_settings"]
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
     assert gpt["model_input_compaction"]["candidate_ids"] == []
     assert gpt["model_input_compaction"]["repeated_metric_map_delta"] is False
@@ -3655,6 +3655,7 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     assert mimo["max_continuations"] == 1
     assert mimo["context_soft_limit_tokens"] == 64_000
     assert mimo["context_hard_limit_tokens"] == 96_000
+    assert mimo["sdk_model_settings"]["truncation"] == "auto"
 
     chat = _resolve_agent_sdk_perf_profile(
         _openai_agents_perf_profile_base_args(provider_profile="mimo-chat", model="mimo-v2.5")
