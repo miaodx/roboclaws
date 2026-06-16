@@ -42,6 +42,19 @@ from roboclaws.launch.worlds import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {
+    401,
+    402,
+    403,
+    404,
+    405,
+    406,
+    407,
+    408,
+    410,
+    411,
+    412,
+}
 ITHOR_REJECTED_INDICES = {
     *range(1, 13),
     209,
@@ -57,15 +70,7 @@ ITHOR_REJECTED_INDICES = {
     310,
     311,
     312,
-    401,
-    402,
-    403,
-    404,
-    406,
-    407,
-    408,
-    411,
-    412,
+    *ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES,
 }
 HOLODECK_REJECTED_INDICES = {
     *range(20),
@@ -79,6 +84,7 @@ HOLODECK_REJECTED_INDICES = {
     36,
     38,
     39,
+    47,
     67,
     71,
     101,
@@ -89,6 +95,7 @@ HOLODECK_REJECTED_INDICES = {
     173,
     183,
     198,
+    207,
     237,
     238,
     256,
@@ -96,17 +103,25 @@ HOLODECK_REJECTED_INDICES = {
     266,
     275,
     280,
+    291,
     292,
+    302,
+    314,
+    318,
     323,
+    345,
     349,
     354,
+    356,
     360,
     371,
     391,
     396,
     397,
     398,
+    401,
     406,
+    421,
     424,
     438,
     443,
@@ -379,11 +394,11 @@ def _assert_rejected_ithor_projection_source(source_projection: dict[str, object
         row["scene_index"]
         for row in source_projection["blocked_rows"]
         if row["failure_class"] == "environment_blocked"
-    } == {401, 402, 403, 404, 406, 407, 408, 411, 412}
+    } == ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     assert all(
         row["failure_class"] == "map_actionability_failure"
         for row in source_projection["blocked_rows"]
-        if row["scene_index"] not in {401, 402, 403, 404, 406, 407, 408, 411, 412}
+        if row["scene_index"] not in ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     )
 
 
@@ -507,7 +522,7 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
         row["scene_index"]
         for row in ithor["blocked_rows"]
         if row["failure_class"] == "environment_blocked"
-    } == {401, 402, 403, 404, 406, 407, 408, 411, 412}
+    } == ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["ui_status"] == "not_visible"
