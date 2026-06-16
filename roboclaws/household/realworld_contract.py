@@ -12,6 +12,7 @@ from roboclaws.household import (
     realworld_contract_projection,
     realworld_done_readiness,
     realworld_runtime_map_contract,
+    realworld_tool_responses,
     realworld_visual_candidate_declarations,
     realworld_visual_candidate_lifecycle,
     realworld_visual_candidates,
@@ -2359,11 +2360,12 @@ class RealWorldCleanupContract:
         internal_fixture_id: str,
         requested_fixture_id: str,
     ) -> str:
-        if self.map_mode != MINIMAL_MAP_MODE:
-            return internal_fixture_id
-        if requested_fixture_id.startswith("anchor_"):
-            return requested_fixture_id
-        return self._public_fixture_reference_id(internal_fixture_id)
+        return realworld_tool_responses.public_fixture_response_id(
+            self,
+            internal_fixture_id,
+            requested_fixture_id,
+            minimal_map_mode=MINIMAL_MAP_MODE,
+        )
 
     def policy_view_payload(self) -> dict[str, Any]:
         payload = {
@@ -3153,35 +3155,13 @@ class RealWorldCleanupContract:
         fixture_id: str | None = None,
         navigate: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        payload = {
-            "object_id": handle,
-            "primitive_provenance": response.get("primitive_provenance", API_SEMANTIC_PROVENANCE),
-            "state_mutation": response.get("state_mutation"),
-        }
-        if fixture_id is not None:
-            payload["fixture_id"] = fixture_id
-            payload["receptacle_id"] = fixture_id
-        if navigate is not None:
-            payload["navigation_status"] = navigate.get("status")
-        if response.get("location_relation") is not None:
-            payload["location_relation"] = response.get("location_relation")
-        if response.get("previous_location_id") is not None:
-            payload["previous_location_id"] = response.get("previous_location_id")
-            payload["source_receptacle_id"] = response.get("previous_location_id")
-        if response.get("location_id") is not None:
-            payload["location_id"] = response.get("location_id")
-        if response.get("contained_in") is not None:
-            payload["contained_in"] = response.get("contained_in")
-        if response.get("placement_diagnostic") is not None:
-            payload["placement_diagnostic"] = response.get("placement_diagnostic")
-        return (
-            self._ok(tool, **payload)
-            if response.get("ok")
-            else self._error(
-                tool,
-                str(response.get("error_reason", "error")),
-                object_id=handle,
-            )
+        return realworld_tool_responses.public_manipulation_response(
+            self,
+            tool,
+            handle,
+            response,
+            fixture_id=fixture_id,
+            navigate=navigate,
         )
 
     def _public_fixture_response(
@@ -3192,19 +3172,12 @@ class RealWorldCleanupContract:
         *,
         object_id: str | None = None,
     ) -> dict[str, Any]:
-        if not response.get("ok"):
-            return self._error(
-                tool, str(response.get("error_reason", "error")), fixture_id=fixture_id
-            )
-        return self._ok(
+        return realworld_tool_responses.public_fixture_response(
+            self,
             tool,
-            fixture_id=fixture_id,
-            receptacle_id=fixture_id,
-            object_id=object_id if object_id is not None else self._held_handle,
-            primitive_provenance=response.get("primitive_provenance", API_SEMANTIC_PROVENANCE),
-            opened=response.get("opened"),
-            closed=response.get("closed"),
-            state_mutation=response.get("state_mutation"),
+            fixture_id,
+            response,
+            object_id=object_id,
         )
 
     def _public_error_from_private(
@@ -3213,11 +3186,7 @@ class RealWorldCleanupContract:
         handle: str,
         response: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._error(
-            tool,
-            str(response.get("error_reason", "error")),
-            object_id=handle,
-        )
+        return realworld_tool_responses.public_error_from_private(self, tool, handle, response)
 
     def _current_room_id(self) -> str:
         waypoint = self._waypoint_by_id(self._current_waypoint_id)
@@ -3530,17 +3499,15 @@ class RealWorldCleanupContract:
         object_id: str | None = None,
         fixture_id: str | None = None,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "required_tool": required_tool,
-            "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
-            "recovery_hint": recovery_hint,
-        }
-        if object_id is not None:
-            payload["object_id"] = object_id
-        if fixture_id is not None:
-            payload["fixture_id"] = fixture_id
-            payload["receptacle_id"] = fixture_id
-        return self._error(tool, "semantic_order", **payload)
+        return realworld_tool_responses.semantic_order_error(
+            self,
+            tool,
+            required_tool=required_tool,
+            semantic_loop_variant=SEMANTIC_LOOP_VARIANT,
+            object_id=object_id,
+            fixture_id=fixture_id,
+            recovery_hint=recovery_hint,
+        )
 
 
 def _relative_pose_delta(

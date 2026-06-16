@@ -93,6 +93,18 @@ diagnostics, Object Gate / Render Gate, capture-quality interpretation,
 image-metric artifacts, scene-camera report rendering, visual-candidate
 lifecycle, or done-readiness pending-candidate derivation without fresh drift.
 
+Follow-up implementation refresh on 2026-06-17 moved public manipulation/tool
+response envelope construction from `realworld_contract.py` into
+`realworld_tool_responses.py`. The contract facade still owns tool sequencing
+and state mutation, but no longer builds the public pick/place/open/close
+success/error envelopes, fixture response ids, or semantic-order error payloads
+inline. Focused contract and MCP server tests preserved direct and agent-facing
+tool response shapes. The ratchet remains 11 complexity rows and 66 oversized
+modules; `realworld_contract.py` is down to 3741 lines, one line above the
+3740-line apple runner. Continue with a fresh scan before the next slice; the
+default should now be whichever of Candidate A or Candidate B has the clearer
+remaining owner boundary, not file size alone.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
@@ -131,7 +143,7 @@ lifecycle, or done-readiness pending-candidate derivation without fresh drift.
 
 Refresh the ratchet, then choose one new P1 owner-boundary slice.
 `realworld_contract.py` remains the largest production hard-ceiling file at
-3774 lines, while the visual comparison family still has three above-ceiling
+3741 lines, while the visual comparison family still has three above-ceiling
 files: `run_robot_camera_apple2apple_comparison.py`,
 `scene_camera_comparison.py`, and `summarize_robot_camera_visual_parity.py`.
 Default to Candidate A only if a fresh scan finds a real remaining
@@ -144,10 +156,10 @@ Recommended next slice claim:
   boundary or a visual-comparison owner boundary confirmed by call-site scan.
 - Owner layer: MCP Capability Contract And Tools plus Artifacts, reports, and
   eval suites.
-- Current friction: `realworld_contract.py` remains a 3774-line public/private
+- Current friction: `realworld_contract.py` remains a 3741-line public/private
   contract facade, and the visual comparison family still has multiple
-  above-ceiling report/probe scripts. The done-readiness pending-candidate
-  boundary is closed.
+  above-ceiling report/probe scripts. The done-readiness pending-candidate and
+  public manipulation-response boundaries are closed.
 - Simplification: move one real responsibility to its existing owner or a
   focused owner module, and delete obsolete private wrappers when call-site scan
   proves they are internal. Do not replace private coupling with a loose
@@ -185,16 +197,19 @@ artifact, report, agent-facing, or private/public eval contract.
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 3774 lines and
+Severity: P1. `roboclaws/household/realworld_contract.py` is 3741 lines and
 `roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
 Capability Contract And Tools plus Artifacts, reports, and eval suites.
 Done-readiness pending/held cleanup candidate derivation now belongs to
 `realworld_done_readiness.py`; reopen it only if the contract facade starts
 rebuilding pending candidates, held candidates, destination options, or private
-wrapper aliases again. Candidate A remains P1 only for a fresh boundary that
-reduces facade-private coupling or report ownership, for example
-runtime-map/cleanup-worklist caller migration or a remaining report section
-owner. Do not reopen init projection/runtime-prior, Runtime Metric Map payload,
+wrapper aliases again. Public manipulation/tool response envelopes now belong
+to `realworld_tool_responses.py`; reopen them only if the contract facade starts
+rebuilding pick/place/open/close success/error payloads, fixture response ids,
+or semantic-order error envelopes inline. Candidate A remains P1 only for a
+fresh boundary that reduces facade-private coupling or report ownership, for
+example runtime-map/cleanup-worklist caller migration or a remaining report
+section owner. Do not reopen init projection/runtime-prior, Runtime Metric Map payload,
 visual-candidate payload/event/overlay, visual-candidate declaration
 orchestration, visual-candidate registration/resolution lifecycle, or
 planner-probe report-panel slices. Visual-candidate lifecycle now belongs to

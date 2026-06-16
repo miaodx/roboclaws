@@ -964,6 +964,15 @@ logs before choosing the next slice.
   and 66 oversized modules. Proof: focused realworld contract and MCP server
   contract tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: Public manipulation/tool response envelope construction moved
+  from `RealWorldCleanupContract` into `realworld_tool_responses.py`, covering
+  fixture response ids, pick/place/open/close success/error envelopes, private
+  backend error projection, and semantic-order error payloads. Contract methods
+  keep sequencing and state mutation. Metric: `realworld_contract.py` 3774 ->
+  3741 lines, new owner 129 lines; ratchet remains 11 complexity rows and 66
+  oversized modules. Proof: focused realworld contract and MCP server contract
+  tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1034,6 +1043,10 @@ logs before choosing the next slice.
   destination options are owned by `realworld_done_readiness.py`; reopen only
   if `realworld_contract.py` starts rebuilding pending candidates, held
   candidates, destination options, or wrapper aliases directly.
+- Public manipulation/tool response envelopes are owned by
+  `realworld_tool_responses.py`; reopen only if `realworld_contract.py` starts
+  rebuilding fixture response ids, pick/place/open/close success/error payloads,
+  private backend error projection, or semantic-order error payloads inline.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
