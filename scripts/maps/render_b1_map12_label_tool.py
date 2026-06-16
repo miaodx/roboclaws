@@ -154,6 +154,7 @@ def build_label_tool_packet(
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
     frame_id = source_map_frame_id(semantics)
     shapes = seed_shapes_from_semantics(semantics, transform=transform, frame_id=frame_id)
+    attach_room_geometry_conflicts(shapes)
     semantic_layers = semantic_map_layers_from_semantics(
         semantics,
         transform=transform,
@@ -303,6 +304,8 @@ def seed_shapes_from_semantics(
                 "navigation_area_id": str(room.get("navigation_area_id") or ""),
                 "asset_partition_id": str(room.get("asset_partition_id") or ""),
                 "source_room_id": str(room.get("room_id") or ""),
+                "semantic_source": str(room.get("semantic_source") or ""),
+                "render_review_recommended": bool(room.get("render_review_recommended")),
                 "source_map_frame_id": str(room.get("source_map_frame_id") or frame_id),
                 "geometry": geometry,
                 "map_center": center,
@@ -321,6 +324,34 @@ def seed_shapes_from_semantics(
             }
         )
     return shapes
+
+
+def attach_room_geometry_conflicts(shapes: list[dict[str, Any]]) -> None:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for shape in shapes:
+        geometry = shape.get("geometry") if isinstance(shape.get("geometry"), dict) else {}
+        if geometry.get("kind") != "polygon":
+            continue
+        key = _polygon_signature(_polygon_points(geometry.get("polygon")))
+        if key:
+            groups.setdefault(key, []).append(shape)
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        room_ids = [
+            str(shape.get("source_room_id") or shape.get("shape_id") or "") for shape in group
+        ]
+        labels = [str(shape.get("label") or shape.get("shape_id") or "") for shape in group]
+        sources = sorted({str(shape.get("semantic_source") or "") for shape in group if shape})
+        conflict = {
+            "status": "shared_polygon",
+            "room_ids": room_ids,
+            "labels": labels,
+            "semantic_sources": sources,
+            "message": "multiple semantic room labels currently share the same map polygon",
+        }
+        for shape in group:
+            shape["geometry_conflict"] = copy.deepcopy(conflict)
 
 
 def semantic_map_layers_from_semantics(
@@ -649,6 +680,12 @@ def _polygon_points(value: Any) -> list[dict[str, float]]:
         except (KeyError, TypeError, ValueError):
             continue
     return points
+
+
+def _polygon_signature(points: list[dict[str, float]]) -> str:
+    if len(points) < 3:
+        return ""
+    return "|".join(f"{point['x']:.3f},{point['y']:.3f}" for point in points)
 
 
 def _center_from_room(room: dict[str, Any], polygon: list[dict[str, float]]) -> dict[str, float]:

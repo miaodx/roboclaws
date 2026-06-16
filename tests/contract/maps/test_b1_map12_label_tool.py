@@ -124,6 +124,28 @@ def test_label_tool_packet_exposes_map_native_semantic_layers() -> None:
     )
 
 
+def test_label_tool_packet_marks_shared_room_polygon_conflicts() -> None:
+    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+    shapes_by_id = {shape["shape_id"]: shape for shape in packet["shapes"]}
+    overlapping = [
+        shapes_by_id["reception_area_a"],
+        shapes_by_id["short_corridor_a"],
+        shapes_by_id["storage_room_a"],
+    ]
+
+    assert {shape["semantic_source"] for shape in overlapping} == {
+        "operator_authored_room_overlay",
+        "scene_engine_asset_name_heuristic",
+    }
+    assert all(shape["geometry_conflict"]["status"] == "shared_polygon" for shape in overlapping)
+    assert all(
+        shape["geometry_conflict"]["room_ids"]
+        == ["reception_area_a", "short_corridor_a", "storage_room_a"]
+        for shape in overlapping
+    )
+    assert shapes_by_id["short_corridor_a"]["render_review_recommended"] is True
+
+
 def test_label_tool_packet_exposes_scene_evidence_without_scene_object_coordinates() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
     scene_evidence = packet["scene_evidence"]
@@ -241,6 +263,8 @@ def test_label_tool_html_exposes_layer_toggles_and_candidate_scene_panel() -> No
     assert "function drawWaypoints" in html
     assert "function drawDriveableWays" in html
     assert "function renderSceneEvidence" in html
+    assert "geometry conflict" in html
+    assert "review geometry/source" in html
     assert "evidence_artifact_links" in html
     assert "candidate_name_match_not_verified_identity" in html
     assert "do_not_project_scene_or_gaussian_objects_without_verified_transform" in html

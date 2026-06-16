@@ -187,6 +187,10 @@
       font-size: 12px;
       overflow-wrap: anywhere;
     }
+    .shape-item .warning {
+      color: var(--amber);
+      font-weight: 650;
+    }
     label {
       display: grid;
       gap: 4px;
@@ -429,6 +433,8 @@ function createShape(kind, worldPoint) {
     navigation_area_id: "",
     asset_partition_id: "",
     source_room_id: "",
+    semantic_source: "operator_label_tool",
+    render_review_recommended: false,
     source_map_frame_id: PACKET.source_map_frame_id,
     geometry: { kind },
     map_center: worldPoint,
@@ -1033,8 +1039,10 @@ function renderShapeList() {
     button.className = "shape-item" + (shape.shape_id === state.selectedId ? " active" : "");
     const area = escapeHtml(shape.navigation_area_id || "unassigned");
     const category = escapeHtml(shape.category || "uncategorized");
+    const warning = shape.geometry_conflict || shape.render_review_recommended ?
+      '<span class="warning">review geometry/source</span>' : "";
     button.innerHTML = `<strong>${escapeHtml(shape.label || shape.shape_id)}</strong>
-      <span>${area} / ${category}</span>`;
+      <span>${area} / ${category}</span>${warning}`;
     button.addEventListener("click", () => {
       state.selectedId = shape.shape_id;
       renderAll();
@@ -1052,6 +1060,13 @@ function renderEditor() {
   }
   const roleOptions = options(PACKET.valid_polygon_roles, shape.polygon_role);
   const sourceOptions = options(PACKET.valid_geometry_sources, shape.geometry_source);
+  const conflict = shape.geometry_conflict ? `
+    <div class="meta">
+      geometry conflict: ${escapeHtml(shape.geometry_conflict.status)}<br />
+      shared with: ${escapeHtml((shape.geometry_conflict.room_ids || []).join(", "))}<br />
+      sources: ${escapeHtml((shape.geometry_conflict.semantic_sources || []).join(", ") || "unknown")}
+    </div>
+  ` : "";
   const angleControl = shape.geometry.kind === "polygon" ? `
     <label>
       Angle deg
@@ -1097,8 +1112,10 @@ function renderEditor() {
     ${angleControl}
     <div class="meta">
       status: candidate / draft<br />
-      geometry: ${escapeHtml(shape.geometry.kind)}
+      geometry: ${escapeHtml(shape.geometry.kind)}<br />
+      source: ${escapeHtml(shape.semantic_source || "unknown")}
     </div>
+    ${conflict}
   `;
   editor.querySelectorAll("[data-field]").forEach((input) => {
     input.addEventListener("input", () => {
@@ -1265,6 +1282,8 @@ function loadManifest(payload) {
     navigation_area_id: label.navigation_area_id || "",
     asset_partition_id: label.asset_partition_id || "",
     source_room_id: label.source_room_id || "",
+    semantic_source: "",
+    render_review_recommended: false,
     source_map_frame_id: label.source_map_frame_id || PACKET.source_map_frame_id,
     geometry: label.geometry || { kind: "point", center: label.map_center || { x: 0, y: 0 } },
     map_center: label.map_center || { x: 0, y: 0 },
