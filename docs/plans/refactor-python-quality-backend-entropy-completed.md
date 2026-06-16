@@ -2,7 +2,7 @@
 refactor_scope: python-quality-backend-entropy
 status: COMPLETED_LEDGER
 active_plan: docs/plans/refactor-python-quality-backend-entropy.md
-last_compacted: 2026-06-15
+last_compacted: 2026-06-17
 ---
 
 # Completed Ledger: Python Quality And Backend Entropy
@@ -856,6 +856,33 @@ logs before choosing the next slice.
   server, and cleanup-checker contract tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck compacted
+  the active cleanup plan and changed the default next slice to
+  `scene_camera_comparison.py` HTML report-rendering ownership. Metric:
+  ratchet remains 11 complexity rows and 66 oversized modules. Decision:
+  preserve `render_scene_camera_comparison_report` and report HTML claims while
+  moving report-only helpers to a report owner; keep contract facade, live
+  runtime, B1 preview, behavior-test, MCP/prompt, guidance, and stale-surface
+  items as alternates. Proof: ratchet summary, function-index scan,
+  ponytail call-site grep, docs diff.
+
+- 2026-06-17: Scene-camera HTML report rendering moved from
+  `scene_camera_comparison.py` into report owner modules
+  `scene_camera_report*.py`, while preserving the public
+  `render_scene_camera_comparison_report` write entry point and report HTML
+  contract. Metric: `scene_camera_comparison.py` 4693 -> 2830 lines; ratchet
+  remains 11 complexity rows and 66 oversized modules. Proof: scene-camera
+  contract tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck after the
+  scene-camera report split found no new ratchet drift and updated only the
+  cleanup plan. Decision: close the dirty scene-camera slice before starting
+  candidate A; repo-local underscore imports inside `scene_camera_report*.py`
+  are acceptable report-section internals; `visual_grounding` remains an
+  active internal artifact/service contract; identity maps, `_task_prefix_legacy`,
+  the legacy checker flag, and guidance wording stay small-cut inputs behind
+  P1 hard-ceiling work. Proof: ratchet summary and call-site grep.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -894,6 +921,12 @@ logs before choosing the next slice.
   `run_robot_camera_apple2apple_comparison.py` starts rebuilding object gate
   records, object/render parity diagnostic packets, compact diagnostic packets,
   skipped object-gate packets, or runner-private `_render_*` report aliases.
+- Scene-camera USD render-contract parsing, image metrics, native render
+  diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
+  and render source references are owned by their focused scene-camera modules;
+  report rendering is owned by `scene_camera_report*.py`. Reopen scene-camera
+  report rendering only if `scene_camera_comparison.py` starts rebuilding
+  report sections directly again.
 - B1 runtime-bundle review-manifest validation is split into focused helper
   families; reopen only if `review_manifest_errors` regains ratchet rows or
   false-green review-gate behavior.
