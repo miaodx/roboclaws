@@ -627,6 +627,14 @@ logs before choosing the next slice.
   Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
   focused scene-camera tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Scene-camera native Isaac render diagnostics, lighting/tone
+  provenance, shadow-parity, and key-light direction helpers moved into
+  `scene_camera_lighting_diagnostics.py`, with private aliases preserved in the
+  comparison facade. Metric: `scene_camera_comparison.py` 6120 -> 5476 lines;
+  Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
+  focused scene-camera and apple-to-apple tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

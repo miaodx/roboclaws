@@ -19,19 +19,20 @@ This file is the unfinished active plan only. Completed work lives in
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
 --summary --top 40` on 2026-06-16, after the latest verified visual-comparison
-image-metrics slice:
+lighting-diagnostics slice:
 
 - 0 Ruff complexity violations.
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
-- `roboclaws/household/scene_camera_comparison.py` is down to 6120 lines after
-  the first USD render-contract and image-metrics splits, but remains the
-  largest P1 hard-ceiling candidate.
+- `roboclaws/household/scene_camera_comparison.py` is down to 5476 lines after
+  the first USD render-contract, image-metrics, and lighting-diagnostics
+  splits, but remains a P1 hard-ceiling candidate.
 - `roboclaws/household/realworld_contract.py` is down to 5637 lines after the
   first contract projection split, but remains a P1 hard-ceiling candidate.
 - `roboclaws/household/report.py` is down to 5816 lines after the Isaac
-  runtime diagnostics section split, but remains a P1 hard-ceiling candidate.
+  runtime diagnostics section split, and is currently the largest P1
+  hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
@@ -155,9 +156,9 @@ Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
 oversized. Prefer capture-lane stages, diagnostics builders, manifest/artifact
 setup helpers, and report-specific modules. Real renderer claims still require
 separate local proof. Owner: `intuitive-refactor`.
-Latest metric: `scene_camera_comparison.py` is down to 6120 lines after the
-USD render-contract and image-metrics helper splits, but remains above the
-hard ceiling.
+Latest metric: `scene_camera_comparison.py` is down to 5476 lines after the
+USD render-contract, image-metrics, and lighting-diagnostics helper splits, but
+remains above the hard ceiling.
 
 ### E: Backend Evidence And Live Runtime Normalization
 
