@@ -353,6 +353,7 @@ const palette = ["#2563eb", "#16a34a", "#a16207", "#dc2626", "#7c3aed", "#0f766e
 const state = {
   mode: "select",
   shapes: JSON.parse(JSON.stringify(PACKET.shapes || [])),
+  semanticLayers: cloneSemanticLayers(PACKET.semantic_map_layers || {}),
   layers: {
     rooms: true,
     fixtures: true,
@@ -368,6 +369,14 @@ const image = new Image();
 const canvas = document.getElementById("mapCanvas");
 const ctx = canvas.getContext("2d");
 const exportText = document.getElementById("exportText");
+
+function cloneSemanticLayers(layers) {
+  return JSON.parse(JSON.stringify({
+    fixtures: layers.fixtures || [],
+    inspection_waypoints: layers.inspection_waypoints || [],
+    driveable_ways: layers.driveable_ways || []
+  }));
+}
 
 function worldToPixel(point) {
   const map = PACKET.map;
@@ -583,6 +592,32 @@ function rotateShapeAround(shape, center, angleRad) {
   syncShapeCenter(shape);
 }
 
+function rotatePoseAround(pose, center, angleRad) {
+  const rotated = rotatePointAround(pose || { x: 0, y: 0 }, center, angleRad);
+  return {
+    ...(pose || {}),
+    x: rotated.x,
+    y: rotated.y
+  };
+}
+
+function rotateSemanticLayersAround(center, angleRad) {
+  (state.semanticLayers.fixtures || []).forEach((fixture) => {
+    fixture.pose = rotatePoseAround(fixture.pose, center, angleRad);
+  });
+  (state.semanticLayers.inspection_waypoints || []).forEach((waypoint) => {
+    waypoint.pose = rotatePoseAround(waypoint.pose, center, angleRad);
+  });
+  (state.semanticLayers.driveable_ways || []).forEach((way) => {
+    if (way.from_center) {
+      way.from_center = rotatePointAround(way.from_center, center, angleRad);
+    }
+    if (way.to_center) {
+      way.to_center = rotatePointAround(way.to_center, center, angleRad);
+    }
+  });
+}
+
 function applyGlobalTilt() {
   const angleInput = document.getElementById("globalTiltAngle");
   const scope = document.getElementById("globalTiltScope").value;
@@ -595,6 +630,9 @@ function applyGlobalTilt() {
   const pivot = pivotMode === "selection" ? selectionCenter(targets) : mapCenterWorld();
   const angleRad = (angleDeg * Math.PI) / 180;
   targets.forEach((shape) => rotateShapeAround(shape, pivot, angleRad));
+  if (scope === "all") {
+    rotateSemanticLayersAround(pivot, angleRad);
+  }
   renderAll();
 }
 
@@ -684,7 +722,7 @@ function draw() {
 }
 
 function drawDriveableWays() {
-  const ways = PACKET.semantic_map_layers?.driveable_ways || [];
+  const ways = state.semanticLayers.driveable_ways || [];
   ctx.save();
   ctx.strokeStyle = "rgba(15, 118, 110, 0.72)";
   ctx.lineWidth = 3;
@@ -704,7 +742,7 @@ function drawDriveableWays() {
 }
 
 function drawFixtures() {
-  const fixtures = PACKET.semantic_map_layers?.fixtures || [];
+  const fixtures = state.semanticLayers.fixtures || [];
   ctx.save();
   fixtures.forEach((fixture) => {
     const center = worldToPixel(fixture.pose || { x: 0, y: 0 });
@@ -721,7 +759,7 @@ function drawFixtures() {
 }
 
 function drawWaypoints() {
-  const waypoints = PACKET.semantic_map_layers?.inspection_waypoints || [];
+  const waypoints = state.semanticLayers.inspection_waypoints || [];
   ctx.save();
   waypoints.forEach((waypoint) => {
     const center = worldToPixel(waypoint.pose || { x: 0, y: 0 });
@@ -1194,14 +1232,13 @@ function refreshExportText() {
 }
 
 function renderMeta() {
-  const layers = PACKET.semantic_map_layers || {};
   document.getElementById("mapMeta").innerHTML = `
     frame: ${escapeHtml(PACKET.source_map_frame_id)}<br />
     image: ${PACKET.map.image_width_px} x ${PACKET.map.image_height_px}px<br />
     resolution: ${PACKET.map.resolution_m} m/px<br />
     labels: ${state.shapes.length}<br />
-    fixtures: ${(layers.fixtures || []).length}<br />
-    waypoints: ${(layers.inspection_waypoints || []).length}
+    fixtures: ${(state.semanticLayers.fixtures || []).length}<br />
+    waypoints: ${(state.semanticLayers.inspection_waypoints || []).length}
   `;
 }
 
@@ -1285,6 +1322,7 @@ document.getElementById("downloadJson").addEventListener("click", () => {
 });
 document.getElementById("loadInitial").addEventListener("click", () => {
   state.shapes = JSON.parse(JSON.stringify(PACKET.shapes || []));
+  state.semanticLayers = cloneSemanticLayers(PACKET.semantic_map_layers || {});
   state.selectedId = state.shapes[0]?.shape_id || null;
   state.draftPolygon = [];
   renderAll();
