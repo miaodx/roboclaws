@@ -50,7 +50,7 @@ def test_agibot_molmospaces_sim_route_passes_open_evidence_refresh_prompt() -> N
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",
-        "camera_labeler=sim-projected-labels",
+        "camera_labeler=grounding-dino",
         f"prompt={prompt}",
     )
 

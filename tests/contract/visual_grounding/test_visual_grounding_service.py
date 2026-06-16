@@ -49,22 +49,25 @@ def test_configurable_service_reports_real_adapter_unavailable_by_default() -> N
     assert "sidecar adapter" in required["setup_hint"]
 
 
-def test_configurable_service_contract_fake_mode_serves_named_pipeline() -> None:
-    server = _start_service(pipeline_id="grounding-dino", adapter_mode="contract-fake")
-    try:
-        response = _client("grounding-dino", server).request_candidates(_request("grounding-dino"))
-    finally:
-        server.shutdown()
-        server.server_close()
+def test_configurable_service_rejects_contract_fake_adapter_mode_from_cli() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SERVICE_SCRIPT),
+            "--adapter-mode",
+            "contract-fake",
+            "--list-adapters",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
 
-    assert response["status"] == "ok"
-    assert response["pipeline"]["pipeline_id"] == "grounding-dino"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "grounding-dino"
-    assert response["candidates"][0]["category"] == "dish"
-    assert response["diagnostics"]["diagnostic_mode"] == "deterministic_contract_fake"
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
 
 
-def test_configurable_service_contract_fake_dispatcher_allows_request_pipeline() -> None:
+def test_configurable_service_contract_fake_pipeline_does_not_dispatch_fake_success() -> None:
     server = _start_service(pipeline_id="contract-fake", adapter_mode="auto")
     try:
         response = _client("yoloe", server).request_candidates(_request("yoloe"))
@@ -72,10 +75,9 @@ def test_configurable_service_contract_fake_dispatcher_allows_request_pipeline()
         server.shutdown()
         server.server_close()
 
-    assert response["status"] == "ok"
-    assert response["pipeline"]["pipeline_id"] == "yoloe"
-    assert [stage["stage"] for stage in response["pipeline"]["stages"]] == ["proposer"]
-    assert response["diagnostics"]["rejected_proposals"] == []
+    assert response["status"] == "failed"
+    assert response["error"]["reason"] == "pipeline_mismatch"
+    assert response["candidates"] == []
 
 
 def test_real_mode_dispatches_grounding_dino_adapter(monkeypatch) -> None:
@@ -399,7 +401,7 @@ def test_real_adapter_bbox_normalization_and_destination_hint() -> None:
 
 
 def test_configurable_service_rejects_pipeline_mismatch() -> None:
-    server = _start_service(pipeline_id="grounding-dino", adapter_mode="contract-fake")
+    server = _start_service(pipeline_id="grounding-dino", adapter_mode="auto")
     try:
         response = _client("yoloe", server).request_candidates(_request("yoloe"))
     finally:
@@ -419,8 +421,8 @@ def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> Non
     assert catalog["private_truth_included"] is False
     by_id = {item["producer_id"]: item for item in catalog["adapters"]}
     assert "yolo-custom" not in by_id
-    assert by_id["fake-http"]["status"] == "available"
-    assert by_id["fake-http"]["runtime"]["status"] == "available"
+    assert "fake-http" not in by_id
+    assert "contract-fake" not in by_id
     assert by_id["grounding-dino"]["optional_extra"] == "visual-grounding-dino"
     assert by_id["grounding-dino"]["runtime"]["status"] in {
         "missing_dependency",
@@ -476,8 +478,7 @@ def test_configurable_service_lists_adapter_catalog_cli() -> None:
 
     catalog = json.loads(result.stdout)
     assert catalog["schema"] == "visual_grounding_adapter_catalog_v1"
-    assert {item["producer_id"] for item in catalog["adapters"]} >= {
-        "fake-http",
+    assert {item["producer_id"] for item in catalog["adapters"]} == {
         "grounding-dino",
         "yoloe",
         "yolo-world",

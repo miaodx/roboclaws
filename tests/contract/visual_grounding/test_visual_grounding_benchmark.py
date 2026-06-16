@@ -8,22 +8,17 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from scripts.visual_grounding.adapters import (
-    ADAPTER_MODE_REAL,
-    CONTRACT_FAKE_PIPELINE_ID,
-    FAKE_HTTP_PIPELINE_ID,
     REAL_ROUTER_PIPELINE_ID,
     _set_yolo_classes_if_needed,
     _yolo_prompt_labels,
     effective_pipeline_id,
     pipeline_request_is_allowed,
-    should_use_contract_fake,
     visual_grounding_adapter_catalog,
 )
 from scripts.visual_grounding.run_visual_grounding_benchmark import (
     _family_sweep_summary,
     _score_predictions,
 )
-from scripts.visual_grounding.serve_fake_visual_grounding import make_handler
 from scripts.visual_grounding.serve_visual_grounding_service import (
     make_handler as make_configurable_handler,
 )
@@ -84,149 +79,65 @@ def test_visual_grounding_real_router_allows_requested_real_pipeline() -> None:
         requested_pipeline_id="yoloe",
         effective_pipeline_id="yoloe",
     )
-    assert not should_use_contract_fake(
-        configured_pipeline_id=REAL_ROUTER_PIPELINE_ID,
-        effective_pipeline_id="grounding-dino",
-        adapter_mode=ADAPTER_MODE_REAL,
-    )
-    assert should_use_contract_fake(
-        configured_pipeline_id=REAL_ROUTER_PIPELINE_ID,
-        effective_pipeline_id=FAKE_HTTP_PIPELINE_ID,
-        adapter_mode=ADAPTER_MODE_REAL,
-    )
-    assert should_use_contract_fake(
-        configured_pipeline_id=CONTRACT_FAKE_PIPELINE_ID,
-        effective_pipeline_id="grounding-dino",
-        adapter_mode=ADAPTER_MODE_REAL,
-    )
     catalog = visual_grounding_adapter_catalog()
     assert catalog["real_router_pipeline_id"] == REAL_ROUTER_PIPELINE_ID
+    assert catalog["default_pipeline_id"] == "grounding-dino"
+    assert "contract_fake_pipeline_id" not in catalog
 
 
-def test_visual_grounding_benchmark_runs_against_fake_http_service(tmp_path: Path) -> None:
-    server = _start_fake_server(mode="success")
-    try:
-        base_url = f"http://127.0.0.1:{server.server_port}"
-        subprocess.run(
-            [
-                sys.executable,
-                str(RUNNER),
-                "--corpus",
-                str(CORPUS),
-                "--output-dir",
-                str(tmp_path),
-                "--pipeline",
-                "fake-http",
-                "--base-url",
-                base_url,
-                "--timeout-s",
-                "2",
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    subprocess.run(
+def test_visual_grounding_benchmark_rejects_fake_http_pipeline(tmp_path: Path) -> None:
+    result = subprocess.run(
         [
             sys.executable,
-            str(CHECKER),
+            str(RUNNER),
+            "--corpus",
+            str(CORPUS),
+            "--output-dir",
             str(tmp_path),
-            "--expect-pipeline",
-            "fake-http",
-            "--require-success",
-            "--require-candidates",
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
-    result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
-    pipeline = result["pipelines"][0]
-    assert pipeline["pipeline_id"] == "fake-http"
-    assert pipeline["candidate_count"] == 3
-    assert pipeline["failure_count"] == 0
-    assert pipeline["timeout_rate"] == 0.0
-    assert pipeline["evidence_level"] == "contract_fake"
-    assert pipeline["metrics"]["recall"] == 1.0
-    assert pipeline["metrics"]["precision"] < 1.0
-    assert pipeline["metrics"]["destination_hint_rate"] == 1.0
-    assert pipeline["metrics"]["destination_hint_known_fixture_rate"] == 1.0
-    assert pipeline["metrics"]["actionability_proxy_rate"] > 0.0
-    assert pipeline["stage_summary"][0]["producer_id"] == "fake-http"
-    assert result["corpus"]["private_labels_in_requests"] is False
-    detector_probe = result["detector_probe_recommendation"]
-    assert detector_probe["selected_end_to_end_pipelines"] == [
-        "sim",
-        "fake-http",
-    ]
-    assert detector_probe["selected_real_stage_provenance_complete"] is False
-    assert detector_probe["requires_real_stage_provenance_before_probe"] is True
-
-    predictions = (tmp_path / "visual_grounding_predictions.jsonl").read_text(encoding="utf-8")
-    assert "private_labels" not in predictions
-    assert "bytes_base64" not in predictions
-    assert "Bearer " not in predictions
-    assert (tmp_path / "overlays" / "raw_fpv_kitchen_dish_001" / "fake-http.jpg").is_file()
-    report = (tmp_path / "visual_grounding_benchmark_report.html").read_text(encoding="utf-8")
-    assert "Visual Grounding Quality" in report
-    assert "Destination Hint Quality" in report
-    assert "Real stage provenance present: False" in report
-    assert "Requires real detector-sidecar provenance before full cleanup probe: True" in report
-
-
-def test_visual_grounding_benchmark_records_fake_http_failure(tmp_path: Path) -> None:
-    server = _start_fake_server(mode="failure")
-    try:
-        base_url = f"http://127.0.0.1:{server.server_port}"
-        subprocess.run(
-            [
-                sys.executable,
-                str(RUNNER),
-                "--corpus",
-                str(CORPUS),
-                "--output-dir",
-                str(tmp_path),
-                "--pipeline",
-                "fake-http",
-                "--base-url",
-                base_url,
-                "--timeout-s",
-                "2",
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(CHECKER),
-            str(tmp_path),
-            "--expect-pipeline",
+            "--pipeline",
             "fake-http",
         ],
         cwd=REPO_ROOT,
-        check=True,
+        capture_output=True,
+        text=True,
     )
 
-    result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
-    pipeline = result["pipelines"][0]
-    assert pipeline["candidate_count"] == 0
-    assert pipeline["failure_count"] == 3
-    assert pipeline["timeout_count"] == 0
-    assert pipeline["timeout_rate"] == 0.0
-    predictions = [
-        json.loads(line)
-        for line in (tmp_path / "visual_grounding_predictions.jsonl").read_text().splitlines()
-    ]
-    assert {item["pipeline"]["status"] for item in predictions} == {"failed"}
-    assert {item["error"]["reason"] for item in predictions} == {"fake_failure"}
+    assert result.returncode == 1
+    assert "retired fake visual-grounding pipeline 'fake-http'" in result.stderr
+
+
+def test_visual_grounding_benchmark_rejects_contract_fake_matrix_row(
+    tmp_path: Path,
+) -> None:
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "visual_grounding_benchmark_matrix_v1",
+                "rows": [{"row_id": "fake", "pipeline_id": "contract-fake"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RUNNER),
+            "--corpus",
+            str(CORPUS),
+            "--output-dir",
+            str(tmp_path / "benchmark"),
+            "--matrix",
+            str(matrix),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "retired fake visual-grounding pipeline 'contract-fake'" in result.stderr
 
 
 def test_visual_grounding_checker_allows_zero_candidate_success_without_candidate_gate(
@@ -261,7 +172,7 @@ def test_visual_grounding_checker_allows_zero_candidate_success_without_candidat
         ),
         encoding="utf-8",
     )
-    server = _start_fake_server(mode="success")
+    server = _start_configurable_service(pipeline_id="grounding-dino", adapter_mode="real")
     try:
         base_url = f"http://127.0.0.1:{server.server_port}"
         subprocess.run(
@@ -286,7 +197,7 @@ def test_visual_grounding_checker_allows_zero_candidate_success_without_candidat
         server.shutdown()
         server.server_close()
 
-    subprocess.run(
+    candidate_gate = subprocess.run(
         [
             sys.executable,
             str(CHECKER),
@@ -296,8 +207,11 @@ def test_visual_grounding_checker_allows_zero_candidate_success_without_candidat
             "--require-success",
         ],
         cwd=REPO_ROOT,
-        check=True,
+        capture_output=True,
+        text=True,
     )
+    assert candidate_gate.returncode == 1
+    assert "pipeline failures present" in candidate_gate.stderr
     candidate_gate = subprocess.run(
         [
             sys.executable,
@@ -315,14 +229,12 @@ def test_visual_grounding_checker_allows_zero_candidate_success_without_candidat
 
     result_path = tmp_path / "benchmark" / "visual_grounding_benchmark_result.json"
     result = json.loads(result_path.read_text())
-    assert result["pipelines"][0]["failure_count"] == 0
+    assert result["pipelines"][0]["failure_count"] > 0
     assert result["pipelines"][0]["candidate_count"] == 0
-    assert candidate_gate.returncode == 1
-    assert "pipeline has no candidates" in candidate_gate.stderr
 
 
 def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: Path) -> None:
-    server = _start_fake_server(mode="success")
+    server = _start_configurable_service(pipeline_id="real-router", adapter_mode="unavailable")
     try:
         base_url = f"http://127.0.0.1:{server.server_port}"
         subprocess.run(
@@ -347,18 +259,6 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
         server.shutdown()
         server.server_close()
 
-    subprocess.run(
-        [
-            sys.executable,
-            str(CHECKER),
-            str(tmp_path),
-            "--require-success",
-            "--require-candidates",
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
     result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
     by_pipeline = {item["pipeline_id"]: item for item in result["pipelines"]}
     assert set(by_pipeline) == {
@@ -367,13 +267,12 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
         "omdet-turbo",
     }
     assert by_pipeline["grounding-dino"]["stage_summary"][0]["producer_id"] == "grounding-dino"
-    assert by_pipeline["grounding-dino"]["metrics"]["precision"] == 1.0
+    assert by_pipeline["grounding-dino"]["failure_count"] > 0
+    assert by_pipeline["grounding-dino"]["evidence_level"] == "failure_only"
     assert by_pipeline["yoloe"]["stage_summary"][0]["producer_id"] == "yoloe"
-    assert by_pipeline["yoloe"]["metrics"]["precision"] < 1.0
-    assert by_pipeline["yoloe"]["metrics"]["duplicate_count"] >= 1
+    assert by_pipeline["yoloe"]["failure_count"] > 0
     assert by_pipeline["omdet-turbo"]["stage_summary"][0]["producer_id"] == "omdet-turbo"
-    assert by_pipeline["grounding-dino"]["metrics"]["actionability_proxy_rate"] > 0.0
-    assert by_pipeline["yoloe"]["metrics"]["destination_hint_rate"] == 1.0
+    assert by_pipeline["omdet-turbo"]["failure_count"] > 0
     assert result["ranking"][0]["pipeline_id"] in {
         "grounding-dino",
         "yoloe",
@@ -382,7 +281,12 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
     assert "actionability_proxy_rate" in result["ranking"][0]
     detector_probe = result["detector_probe_recommendation"]
     assert detector_probe["selected_end_to_end_pipelines"][0] == "sim"
-    assert detector_probe["best_proposer_only_pipeline_id"] == "grounding-dino"
+    assert detector_probe["best_proposer_only_pipeline_id"] in {
+        "grounding-dino",
+        "yoloe",
+        "omdet-turbo",
+    }
+    assert set(detector_probe["evidence_levels"].values()) == {"failure_only"}
     retired_slot_tokens = ("direct_vlm", "proposer_plus_refiner")
     for key in detector_probe:
         assert not any(token in key for token in retired_slot_tokens)
@@ -402,10 +306,10 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
     assert "bytes_base64" not in json.dumps(predictions)
 
 
-def test_visual_grounding_benchmark_runs_against_configurable_contract_fake_service(
+def test_visual_grounding_benchmark_records_missing_sidecar_for_detector_routes(
     tmp_path: Path,
 ) -> None:
-    server = _start_configurable_service(pipeline_id="contract-fake", adapter_mode="auto")
+    server = _start_configurable_service(pipeline_id="real-router", adapter_mode="unavailable")
     try:
         base_url = f"http://127.0.0.1:{server.server_port}"
         subprocess.run(
@@ -430,24 +334,13 @@ def test_visual_grounding_benchmark_runs_against_configurable_contract_fake_serv
         server.shutdown()
         server.server_close()
 
-    subprocess.run(
-        [
-            sys.executable,
-            str(CHECKER),
-            str(tmp_path),
-            "--require-success",
-            "--require-candidates",
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
     result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
     assert {item["pipeline_id"] for item in result["pipelines"]} == {
         "grounding-dino",
         "yoloe",
     }
-    assert all(item["failure_count"] == 0 for item in result["pipelines"])
+    assert all(item["failure_count"] > 0 for item in result["pipelines"])
+    assert all(item["evidence_level"] == "failure_only" for item in result["pipelines"])
 
 
 def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -> None:
@@ -500,7 +393,7 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
         ),
         encoding="utf-8",
     )
-    server = _start_configurable_service(pipeline_id="contract-fake", adapter_mode="auto")
+    server = _start_configurable_service(pipeline_id="real-router", adapter_mode="unavailable")
     try:
         base_url = f"http://127.0.0.1:{server.server_port}"
         subprocess.run(
@@ -525,31 +418,6 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
         server.shutdown()
         server.server_close()
 
-    subprocess.run(
-        [
-            sys.executable,
-            str(CHECKER),
-            str(tmp_path / "benchmark"),
-            "--require-success",
-            "--require-candidates",
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-    subprocess.run(
-        [
-            sys.executable,
-            str(CHECKER),
-            str(tmp_path / "benchmark"),
-            "--expect-pipeline",
-            "dino-tiny-default",
-            "--require-success",
-            "--require-candidates",
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-    )
-
     result = json.loads(
         (tmp_path / "benchmark" / "visual_grounding_benchmark_result.json").read_text()
     )
@@ -561,8 +429,13 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
     by_row = {item["benchmark_row_id"]: item for item in result["pipelines"]}
     assert by_row["dino-base-recall"]["model_id"] == "IDEA-Research/grounding-dino-base"
     assert by_row["dino-base-recall"]["runtime_parameters"]["box_threshold"] == 0.25
+    assert all(item["failure_count"] > 0 for item in result["pipelines"])
     family = {item["model_family"]: item for item in result["family_sweep"]}
-    assert family["grounding-dino"]["under_sampled"] is False
+    assert family["grounding-dino"]["under_sampled"] is True
+    assert family["grounding-dino"]["successful_config_count"] == 0
+    assert family["grounding-dino"]["under_sampled_reason"] == (
+        "fewer than two successful configs (0); failure statuses: adapter_unavailable"
+    )
     assert family["grounding-dino"]["size_tiers"] == ["base", "tiny"]
     assert family["yolo-world"]["under_sampled"] is True
     assert family["yolo-world"]["under_sampled_reason"] == (
@@ -804,16 +677,6 @@ def test_visual_grounding_benchmark_rejects_retired_direct_pipeline_through_conf
         for line in (tmp_path / "visual_grounding_predictions.jsonl").read_text().splitlines()
     ]
     assert {item["error"]["reason"] for item in predictions} == {"adapter_unavailable"}
-
-
-def _start_fake_server(*, mode: str) -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0),
-        make_handler(mode=mode, latency_ms=1),
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server
 
 
 def _start_configurable_service(
