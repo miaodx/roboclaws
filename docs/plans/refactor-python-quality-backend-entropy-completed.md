@@ -604,6 +604,14 @@ logs before choosing the next slice.
   62. Proof: focused realworld-contract/map tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-16: Isaac runtime diagnostics, scene-index artifact rows, and
+  semantic-pose state tables moved from `report.py` into
+  `report_sections_isaac.py`, with `report.py` passing existing metric,
+  artifact-link, and boolean renderers to preserve report markup. Metric:
+  `report.py` 6165 -> 5816 lines; Ruff complexity stayed at 0 and oversized
+  modules stayed at 62. Proof: focused cleanup report/checker tests, ruff,
+  format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

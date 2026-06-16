@@ -27,6 +27,8 @@ projection slice:
   production modules and large behavior tests.
 - `roboclaws/household/realworld_contract.py` is down to 5637 lines after the
   first contract projection split, but remains a P1 hard-ceiling candidate.
+- `roboclaws/household/report.py` is down to 5816 lines after the Isaac
+  runtime diagnostics section split, but remains a P1 hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
@@ -131,8 +133,9 @@ ruff, ratchet summary.
 
 Severity: P1. `roboclaws/household/realworld_contract.py` is no longer the
 largest module after the first projection helper split, but it remains above
-the hard ceiling; `roboclaws/household/report.py` is still over 6000 lines.
-Continue only around real ownership boundaries: payload builders,
+the hard ceiling; `roboclaws/household/report.py` is now below 6000 lines
+after the first Isaac runtime renderer split, but remains above the hard
+ceiling. Continue only around real ownership boundaries: payload builders,
 policy/event families, section renderers, or artifact envelopes. Preserve
 public schemas and rendered report shape. Owner: `intuitive-refactor`.
 
