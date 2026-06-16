@@ -755,6 +755,15 @@ logs before choosing the next slice.
   focused scene-sampler and readiness-export tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: Candidate-profile policy, index expansion, row/status assembly,
+  and gate-mismatch profile helpers moved from `scene_sampler.py` into
+  `scene_sampler_profile.py`, keeping `candidate_profile_report` as the public
+  facade and preserving the existing MolmoSpaces dependency hook surface.
+  Metric: `scene_sampler.py` 2607 -> 2241 lines; current dirty-checkout
+  ratchet is 18 complexity rows and 65 oversized modules because unrelated B1
+  Map 12 runtime-bundle drift is now counted. Proof: focused scene-sampler and
+  readiness-export tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

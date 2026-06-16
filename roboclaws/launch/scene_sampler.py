@@ -56,6 +56,15 @@ from roboclaws.launch.scene_sampler_prep import (
 from roboclaws.launch.scene_sampler_prep import (
     source_prep_worklist as _source_prep_worklist,
 )
+from roboclaws.launch.scene_sampler_profile import (
+    candidate_profile_expanded_indices as _candidate_profile_expanded_indices,
+)
+from roboclaws.launch.scene_sampler_profile import (
+    candidate_profile_report as _candidate_profile_report,
+)
+from roboclaws.launch.scene_sampler_profile import (
+    source_gate_mismatch_profile_rows as _source_gate_mismatch_profile_rows,
+)
 from roboclaws.launch.scene_sampler_scanner import (
     coverage_score as _scanner_coverage_score,
 )
@@ -117,11 +126,6 @@ SAMPLER_PROJECTION_SCHEMA = "molmospaces_scene_sampler_projection_v1"
 PRIMARY_MOLMOSPACES_BACKEND = "mujoco"
 UI_TARGET_PER_SCENE_SOURCE = 3
 EVAL_TARGET_PER_SCENE_SOURCE = 10
-CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE = 10
-CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE = 40
-CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE = 500
-CANDIDATE_PROFILE_LANE = "metadata_profile"
-
 SUPPORTED_SCENE_SOURCES: tuple[str, ...] = (
     "procthor-10k-val",
     "ithor",
@@ -783,99 +787,25 @@ def candidate_profile_report(
     """
 
     selection = selection_gap_report(candidate_indices=candidate_indices)
-    profile_indices_by_source = {
-        source: _candidate_profile_indices_for_source(
-            source=source,
-            candidate_indices=candidate_indices,
-            selection_source=selection["sources"][source],
-        )
-        for source in SUPPORTED_SCENE_SOURCES
-    }
-    expanded_candidate_indices = tuple(
-        sorted(
-            {
-                index
-                for profile_indices in profile_indices_by_source.values()
-                for index in profile_indices
-            }
-        )
+    expanded_candidate_indices = _candidate_profile_expanded_indices(
+        selection=selection,
+        supported_sources=SUPPORTED_SCENE_SOURCES,
+        candidate_indices=candidate_indices,
+        module_status=_molmospaces_module_status,
+        get_scenes_args=_molmospaces_get_scenes_args,
+        scene_index_map=_molmospaces_scene_index_map,
     )
     candidates = candidate_readiness_report(candidate_indices=expanded_candidate_indices)
-    sources: dict[str, dict[str, Any]] = {}
-    for source in SUPPORTED_SCENE_SOURCES:
-        source_selection = selection["sources"][source]
-        source_profile_indices = set(profile_indices_by_source[source])
-        worklist_indices = _metadata_profile_worklist_indices(
-            source=source,
-            candidate_indices=candidate_indices,
-            selection_source=source_selection,
-        )
-        worklist_index_set = set(worklist_indices)
-        profile_rows = [
-            _candidate_profile_row(
-                candidate,
-                worklist_rank=(
-                    worklist_indices.index(int(candidate.get("scene_index")))
-                    if candidate.get("scene_index") in worklist_index_set
-                    else None
-                ),
-            )
-            for candidate in candidates["sources"][source].get("candidates") or []
-            if candidate.get("scene_index") in source_profile_indices
-        ]
-        worklist_rows = [
-            row
-            for row in profile_rows
-            if row.get("metadata_worklist_rank") is not None
-            and row.get("next_action")
-            not in {
-                "none",
-                "do_not_scan_without_gate_change_or_new_curation",
-            }
-        ]
-        sources[source] = {
-            "scene_source": source,
-            "scene_family": _family_split(source)[0],
-            "scene_split": _family_split(source)[1],
-            "profile_status": _candidate_profile_status(
-                selection_source=source_selection,
-                worklist_rows=worklist_rows,
-            ),
-            "next_action": _candidate_profile_next_action(
-                selection_source=source_selection,
-                worklist_rows=worklist_rows,
-            ),
-            "selection_capacity_status": source_selection.get("selection_capacity_status", ""),
-            "ui_needed_count": int(source_selection.get("ui_needed_count") or 0),
-            "eval_needed_count": int(source_selection.get("eval_needed_count") or 0),
-            "known_ready_indices": [
-                row["scene_index"] for row in profile_rows if row["profile_status"] == "known_ready"
-            ],
-            "known_rejected_indices": [
-                row["scene_index"]
-                for row in profile_rows
-                if row["profile_status"] == "known_rejected"
-            ],
-            "requested_candidate_indices": list(candidate_indices),
-            "profile_candidate_indices": list(profile_indices_by_source[source]),
-            "metadata_worklist_indices": list(worklist_indices),
-            "metadata_worklist_world_ids": [row["world_id"] for row in worklist_rows],
-            "metadata_worklist_candidate_count": len(worklist_rows),
-            "candidates": profile_rows,
-            "metadata_worklist_candidates": worklist_rows,
-        }
-    return {
-        "schema": "molmospaces_scene_sampler_candidate_profile_v1",
-        "generator_version": SAMPLER_GENERATOR_VERSION,
-        "probe_mode": "no_download_no_backend_no_vlm",
-        "download_policy": "manual_operator_only",
-        "candidate_profile_policy": _candidate_profile_policy(),
-        "candidate_indices": list(candidate_indices),
-        "expanded_candidate_indices": list(expanded_candidate_indices),
-        "selection_policy": _sampler_selection_policy(),
-        "summary": _candidate_profile_summary(sources),
-        "sources": sources,
-    }
+    return _candidate_profile_report(
+        selection=selection,
+        candidates=candidates,
+        supported_sources=SUPPORTED_SCENE_SOURCES,
+        candidate_indices=candidate_indices,
+        selection_policy=_sampler_selection_policy(),
+        module_status=_molmospaces_module_status,
+        get_scenes_args=_molmospaces_get_scenes_args,
+        scene_index_map=_molmospaces_scene_index_map,
+    )
 
 
 def scene_only_prefilter_report(
@@ -1743,26 +1673,6 @@ def _sampler_selection_policy() -> dict[str, Any]:
     }
 
 
-def _candidate_profile_policy() -> dict[str, Any]:
-    return {
-        "schema": "molmospaces_scene_sampler_candidate_profile_policy_v1",
-        "selection_seed": SCENE_SAMPLER_SELECTION_SEED,
-        "selection_strategy": SCENE_SAMPLER_SELECTION_STRATEGY,
-        "lane": CANDIDATE_PROFILE_LANE,
-        "worklist_target_per_scene_source": CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE,
-        "pool_size_per_scene_source": CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE,
-        "admission_effect": "none_profile_only",
-        "download_policy": "manual_operator_only",
-        "sources": {
-            source: {
-                "dataset_name": _molmospaces_get_scenes_args(source)[0],
-                "split": _molmospaces_get_scenes_args(source)[1],
-            }
-            for source in SUPPORTED_SCENE_SOURCES
-        },
-    }
-
-
 def _rank_selection_candidates(
     *,
     source: str,
@@ -1783,136 +1693,6 @@ def _rank_selection_candidates(
             int(item.get("scene_index") or 0),
         ),
     )
-
-
-def _candidate_profile_indices_for_source(
-    *,
-    source: str,
-    candidate_indices: tuple[int, ...],
-    selection_source: dict[str, Any],
-) -> tuple[int, ...]:
-    return tuple(
-        sorted(
-            {
-                *candidate_indices,
-                *_known_profile_indices(source),
-                *_metadata_profile_worklist_indices(
-                    source=source,
-                    candidate_indices=candidate_indices,
-                    selection_source=selection_source,
-                ),
-            }
-        )
-    )
-
-
-def _known_profile_indices(source: str) -> tuple[int, ...]:
-    known: set[int] = set()
-    for index in known_indices_for_source(source):
-        if scanner_metadata(source=source, scene_index=index):
-            known.add(index)
-    known.update(source_ui_indices(source))
-    known.update(source_eval_indices(source))
-    if source == "procthor-10k-val":
-        known.update(CURRENT_ALIAS_INDICES)
-    return tuple(sorted(known))
-
-
-def _metadata_profile_worklist_indices(
-    *,
-    source: str,
-    candidate_indices: tuple[int, ...],
-    selection_source: dict[str, Any],
-) -> tuple[int, ...]:
-    if (
-        int(selection_source.get("ui_needed_count") or 0) <= 0
-        and int(selection_source.get("eval_needed_count") or 0) <= 0
-    ):
-        return ()
-    excluded = set(_known_profile_indices(source))
-    excluded.update(
-        int(index)
-        for index in candidate_indices
-        if scanner_metadata(source=source, scene_index=int(index))
-    )
-    pool = [index for index in _metadata_profile_candidate_pool(source) if index not in excluded]
-    ranked = source_selection_metadata(
-        source=source,
-        lane=CANDIDATE_PROFILE_LANE,
-        target_count=len(pool),
-        candidates=tuple(pool),
-    )["selected_indices"]
-    return tuple(
-        int(index) for index in ranked[:CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE]
-    )
-
-
-def _metadata_profile_candidate_pool(source: str) -> tuple[int, ...]:
-    module_available, _, _ = _molmospaces_module_status()
-    dataset_name, split = _molmospaces_get_scenes_args(source)
-    candidate_indices = tuple(range(CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE))
-    scene_index_map = _molmospaces_scene_index_map(
-        source=source,
-        dataset_name=dataset_name,
-        split=split,
-        candidate_indices=candidate_indices,
-        module_available=module_available,
-    )
-    if scene_index_map.get("status") == "available":
-        concrete_indices = [
-            int(item["scene_index"])
-            for item in scene_index_map.get("candidate_scene_refs") or []
-            if isinstance(item, dict)
-            and item.get("status") == "available"
-            and (item.get("primary_path") or item.get("paths") or item.get("missing_paths"))
-        ]
-        if concrete_indices:
-            return tuple(sorted(concrete_indices))
-    return tuple(range(CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE))
-
-
-def _candidate_profile_row(
-    candidate: dict[str, Any],
-    *,
-    worklist_rank: int | None,
-) -> dict[str, Any]:
-    scene_index = int(candidate.get("scene_index") or 0)
-    known_status = _candidate_known_profile_status(candidate)
-    blocked_reason = str(candidate.get("blocked_reason") or "")
-    if worklist_rank is not None and known_status == "unprofiled":
-        profile_status = "metadata_worklist"
-        next_action = "metadata_first_human_curation"
-        selected_reason = "selected_for_metadata_first_source_curation"
-    else:
-        profile_status = known_status
-        next_action = _candidate_profile_row_next_action(candidate, known_status=known_status)
-        selected_reason = str(candidate.get("selected_reason") or "")
-    return {
-        "scene_source": candidate.get("scene_source", ""),
-        "scene_family": candidate.get("scene_family", ""),
-        "scene_split": candidate.get("scene_split", ""),
-        "scene_index": scene_index,
-        "world_id": candidate.get("world_id", ""),
-        "profile_status": profile_status,
-        "readiness_status": candidate.get("readiness_status", ""),
-        "next_action": next_action,
-        "metadata_worklist_rank": worklist_rank,
-        "known_room_count": int(candidate.get("room_count") or 0),
-        "known_waypoint_count": int(candidate.get("waypoint_count") or 0),
-        "known_failure_class": candidate.get("failure_class", ""),
-        "known_blocked_reason": blocked_reason,
-        "known_source_outcome": candidate.get("source_outcome", ""),
-        "known_prefilter_status": candidate.get("prefilter_status", ""),
-        "known_prefilter_reason": candidate.get("prefilter_reason", ""),
-        "known_cheap_room_count": int(candidate.get("cheap_room_count") or 0),
-        "known_product_smoke_run_dir": candidate.get("product_smoke_run_dir", ""),
-        "candidate_file_status": (candidate.get("candidate_file") or {}).get("status", ""),
-        "candidate_file_exists": bool((candidate.get("candidate_file") or {}).get("exists")),
-        "candidate_file": candidate.get("candidate_file") or {},
-        "selected_reason": selected_reason,
-        "download_policy": "manual_operator_only",
-        "admission_effect": "none_profile_only",
-    }
 
 
 def _source_availability_for_candidates(
@@ -1953,16 +1733,6 @@ def _source_availability_for_candidates(
     }
 
 
-def _source_gate_mismatch_profile_rows(
-    source_candidate_profile: dict[str, Any],
-) -> list[dict[str, Any]]:
-    return [
-        row
-        for row in source_candidate_profile.get("candidates") or []
-        if isinstance(row, dict) and row.get("known_source_outcome") == "gate_mismatch"
-    ]
-
-
 def _scanner_execution_candidate_indices(
     *,
     candidate_indices: tuple[int, ...],
@@ -1977,142 +1747,6 @@ def _scanner_execution_candidate_indices(
                 continue
             indices.add(int(candidate["scene_index"]))
     return tuple(sorted(indices))
-
-
-def _scanner_candidate_profile_worklist_candidates(
-    source_candidate_profile: dict[str, Any],
-) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    for row in source_candidate_profile.get("metadata_worklist_candidates") or []:
-        if not isinstance(row, dict):
-            continue
-        candidate_file = row.get("candidate_file")
-        if not isinstance(candidate_file, dict):
-            candidate_file = {}
-        has_concrete_scene_ref = bool(
-            candidate_file.get("path")
-            or candidate_file.get("paths")
-            or candidate_file.get("missing_paths")
-        )
-        if not has_concrete_scene_ref:
-            continue
-        candidates.append(
-            {
-                "scene_source": row.get("scene_source", ""),
-                "scene_index": row.get("scene_index"),
-                "world_id": row.get("world_id", ""),
-                "readiness_status": READINESS_BLOCKED,
-                "failure_class": row.get("known_failure_class", "") or "environment_blocked",
-                "blocked_reason": row.get("known_blocked_reason", ""),
-                "source_availability_status": "",
-                "candidate_file": candidate_file,
-            }
-        )
-    return candidates
-
-
-def _candidate_known_profile_status(candidate: dict[str, Any]) -> str:
-    readiness_status = str(candidate.get("readiness_status") or "")
-    if readiness_status == READINESS_READY:
-        return "known_ready"
-    if readiness_status == READINESS_REJECTED:
-        return "known_rejected"
-    if int(candidate.get("room_count") or 0) > 0 or int(candidate.get("waypoint_count") or 0) > 0:
-        return "known_blocked"
-    return "unprofiled"
-
-
-def _candidate_profile_row_next_action(
-    candidate: dict[str, Any],
-    *,
-    known_status: str,
-) -> str:
-    if known_status == "known_ready":
-        return "none"
-    if known_status == "known_rejected":
-        return "do_not_scan_without_gate_change_or_new_curation"
-    candidate_file = candidate.get("candidate_file")
-    if (
-        isinstance(candidate_file, dict)
-        and candidate_file.get("status") == "missing_from_index_map"
-    ):
-        return "choose_valid_source_specific_candidate_index"
-    if not isinstance(candidate_file, dict) or not candidate_file.get("exists"):
-        return "inspect_source_index_before_download"
-    return "render_preview_then_map_build_product_smoke"
-
-
-def _candidate_profile_status(
-    *,
-    selection_source: dict[str, Any],
-    worklist_rows: list[dict[str, Any]],
-) -> str:
-    if selection_source.get("selection_capacity_status") == "complete":
-        return "complete"
-    if worklist_rows:
-        return "metadata_worklist_ready"
-    if selection_source.get("selection_capacity_status") == "rejected_exhausted":
-        return "known_rejected_exhausted"
-    return "needs_candidate_range"
-
-
-def _candidate_profile_next_action(
-    *,
-    selection_source: dict[str, Any],
-    worklist_rows: list[dict[str, Any]],
-) -> str:
-    if selection_source.get("selection_capacity_status") == "complete":
-        return "none"
-    if worklist_rows:
-        return "metadata_first_human_curation"
-    if selection_source.get("selection_capacity_status") == "rejected_exhausted":
-        return "choose_new_candidate_indices_or_gate_change"
-    return "expand_candidate_range"
-
-
-def _candidate_profile_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    worklist = [
-        _candidate_profile_worklist_item(source)
-        for source in sources.values()
-        if source.get("next_action") != "none"
-    ]
-    return {
-        "source_count": len(sources),
-        "complete_source_count": sum(
-            1 for source in sources.values() if source.get("profile_status") == "complete"
-        ),
-        "metadata_worklist_source_count": sum(
-            1
-            for source in sources.values()
-            if source.get("profile_status") == "metadata_worklist_ready"
-        ),
-        "metadata_worklist_candidate_count": sum(
-            int(source.get("metadata_worklist_candidate_count") or 0) for source in sources.values()
-        ),
-        "known_ready_candidate_count": sum(
-            len(source.get("known_ready_indices") or []) for source in sources.values()
-        ),
-        "known_rejected_candidate_count": sum(
-            len(source.get("known_rejected_indices") or []) for source in sources.values()
-        ),
-        "next_actions": _selection_action_counts(worklist),
-        "worklist": worklist,
-    }
-
-
-def _candidate_profile_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "scene_source": source.get("scene_source", ""),
-        "profile_status": source.get("profile_status", ""),
-        "next_action": source.get("next_action", ""),
-        "selection_capacity_status": source.get("selection_capacity_status", ""),
-        "ui_needed_count": int(source.get("ui_needed_count") or 0),
-        "eval_needed_count": int(source.get("eval_needed_count") or 0),
-        "metadata_worklist_candidate_count": int(
-            source.get("metadata_worklist_candidate_count") or 0
-        ),
-        "metadata_worklist_world_ids": source.get("metadata_worklist_world_ids") or [],
-    }
 
 
 def _assign_dynamic_candidate_lanes(
