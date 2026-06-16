@@ -140,6 +140,34 @@ Each entry should answer:
   - Try now: Yes for benchmark design; recurring live execution needs provider
     budget and local-network constraints.
 
+- **Cloud-backed eval harness execution scale-out**
+  - Created: 2026-06-16.
+  - Updated: 2026-06-16.
+  - Status: Parked evaluation infrastructure design, awaiting cloud-machine
+    access details.
+  - Why: Local runs and one or two workstation-driven AI automation loops are
+    too slow and narrow to give high confidence in agent-framework behavior.
+    The Evaluation layer should be able to fan out eval harness jobs across
+    cloud machines so local or physical validation can stay focused while the
+    overall sample count, trial count, route coverage, and failure discovery
+    scale become much larger.
+  - Next action: After the cloud-machine usage contract is available, write a
+    design packet for a remote eval-harness executor: worker lifecycle, queue or
+    dispatch model, artifact upload/download, provider key and log redaction,
+    quota/cost controls, deterministic seeds, simulator/runtime prerequisites,
+    retry semantics, and aggregate `pass@k` / `pass^k` reporting.
+  - Evidence:
+    `docs/plans/2026-06-14-eval-driven-architecture.md`;
+    `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`;
+    `docs/adr/0141-use-eval-harness-as-maintainer-orchestration-facade.md`;
+    `skills/eval-harness/SKILL.md`;
+    `roboclaws/evals/runner.py`;
+    `roboclaws/evals/live_runtime.py`;
+    `just/README.md`.
+  - Try now: No for implementation. Yes for design once the cloud-machine
+    access model, credentials boundary, and expected worker environment are
+    provided.
+
 - **Real-task thinking / reasoning-effort comparison**
   - Created: 2026-06-16.
   - Updated: 2026-06-16.
