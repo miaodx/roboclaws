@@ -193,11 +193,16 @@ _ITHOR_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
     209,
     210,
     211,
+    212,
+    301,
     303,
     305,
+    306,
+    310,
+    311,
 )
 
-_ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = (404, 406, 408, 411)
+_ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = (402, 403, 404, 406, 408, 411)
 
 _ITHOR_REJECTED_METADATA: dict[int, dict[str, Any]] = {
     index: {
@@ -222,15 +227,24 @@ _ITHOR_REJECTED_METADATA: dict[int, dict[str, Any]] = {
 _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
     *range(20),
     71,
+    101,
     106,
     157,
+    162,
     173,
+    238,
     280,
     292,
     323,
     349,
     360,
+    371,
     396,
+    443,
+    449,
+    452,
+    460,
+    477,
 )
 
 _HOLODECK_REJECTED_METADATA: dict[int, dict[str, Any]] = {
