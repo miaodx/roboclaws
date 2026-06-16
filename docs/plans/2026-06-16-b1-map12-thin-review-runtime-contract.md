@@ -1,8 +1,8 @@
 ---
 plan_scope: b1-map12-thin-review-runtime-contract
-status: Draft
+status: Reviewed
 created: 2026-06-16
-last_reviewed: 2026-06-16
+last_reviewed: 2026-06-17
 implementation_allowed: false
 source:
   - user request to remove the thick B1 / Map 12 merged intermediate bundle
@@ -15,7 +15,8 @@ related_context:
   - docs/plans/2026-06-15-cross-environment-semantic-map-parity.md
   - docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md
   - assets/maps/agibot-robot-map-12/
-  - assets/maps/b1-map12-room-semantics/
+  - assets/maps/b1-map12-alignment-review.json
+  - assets/maps/b1-map12-scene-correspondences.json
   - data/robot-data-lab/scene-engine/data/2rd_floor_seperated/
   - roboclaws/maps/room_semantics.py
   - scripts/maps/render_b1_map12_label_tool.py
@@ -26,7 +27,9 @@ related_context:
 
 ## Status
 
-Draft plan. Implementation is not approved yet.
+Reviewed with grill-batch on 2026-06-17. The no-backward-compatibility
+direction and first contract decisions are accepted. Implementation is still
+gated on a concrete preflight contract.
 
 This plan supersedes using `assets/maps/b1-map12-room-semantics` as a maintained
 source of truth for B1 / Map 12 room labels. The replacement direction is:
@@ -128,6 +131,11 @@ The backend or launch-prep layer may compile a runtime bundle into the run
 directory or `output/`, then pass that generated bundle to existing lower-level
 map consumers.
 
+Product launches must fail early when the accepted review manifest is missing
+or invalid. Tool/debug flows may expose an explicit `--allow-unreviewed-map`
+escape hatch, but product routes must not silently fall back to raw Map12-only
+context.
+
 ### Human Review Manifest
 
 Add a first-class reviewed manifest:
@@ -191,6 +199,25 @@ Draft downloads and autosaves may live under `output/`, but accepted review
 state used by product routes should be a normal repo asset so digital-twin runs
 are reproducible.
 
+First accepted content should be seeded only from current known manual/operator
+review rows. Labels currently sharing the `south_fixture_area` geometry
+(`reception_area_a`, `short_corridor_a`, and `storage_room_a`) must be imported
+as `draft` or `blocked_shared_area`, not `accepted`, until a reviewer supplies
+distinct accepted geometry or an explicit composite-area policy.
+
+### Scene Correspondence Manifest
+
+Keep residual-backed map-scene transform anchors in a separate manifest:
+
+```text
+assets/maps/b1-map12-scene-correspondences.json
+```
+
+This file owns `b1_map12_scene_correspondences_v1` anchors used by the verified
+map-scene alignment plan. It is intentionally separate from
+`b1-map12-alignment-review.json` because label geometry can be useful for
+runtime semantics before global or per-area transform residuals are verified.
+
 ### Label Tool
 
 The label tool should load:
@@ -237,6 +264,11 @@ provenance file. It must include:
 
 The compiler output is a product/runtime artifact. It is never manually edited.
 
+Runtime `semantics.json` should preserve raw Map12 navigation areas, waypoints,
+fixtures, and driveable ways as the navigation layer. Human review labels compile
+as a semantic label layer. Scene labels must not automatically retarget
+inspection waypoints or rebuild driveable ways.
+
 ### Digital-Twin Runtime Consumption
 
 First implementation should compile into the product run directory. A separate
@@ -252,7 +284,7 @@ bundle.
 
 ## Replacement Plan
 
-1. Add the review manifest schema and validator.
+1. Add the review manifest and scene-correspondence manifest schemas and validators.
 2. Change the label tool default input from `b1-map12-room-semantics` to raw
    Map12 bundle plus scene root.
 3. Add runtime compiler and validation tests.
@@ -282,9 +314,12 @@ bundle.
   fixture with a non-product name.
 - Label tool packet provenance lists raw Map12, raw scene root, and review
   manifest separately.
+- Product B1 launch fails early when the review manifest is missing or invalid.
 - Runtime compiler fails on duplicate `map_area_id` / shared polygon unless an
   explicit shared-area policy is present.
 - Runtime compiler excludes draft labels by default.
+- Runtime compiler preserves raw Map12 navigation layers and does not retarget
+  waypoints or driveable ways from scene labels.
 - Generated runtime bundle validates as a Nav2-shaped map bundle when accepted
   labels are present.
 - B1 launch route can prepare or locate a generated runtime bundle before Isaac
@@ -304,6 +339,27 @@ just agent::eval recommend plan=docs/plans/2026-06-16-b1-map12-thin-review-runti
 
 If the eval harness recommends a live Isaac or provider-backed route, record it
 as local-validation follow-up unless the current session has the needed runtime.
+
+## Grill Batch 1: No-Compatibility Contract
+
+Accepted on 2026-06-17.
+
+Resolved decisions:
+
+- Keep label review and scene correspondence as two separate manifests:
+  `assets/maps/b1-map12-alignment-review.json` for human label geometry, and
+  `assets/maps/b1-map12-scene-correspondences.json` for residual-backed
+  transform anchors.
+- Product B1 launches fail early if the review manifest is missing or invalid.
+  Unreviewed raw-map-only use is allowed only through explicit tool/debug flags.
+- Seed the first accepted review manifest from current known manual/operator
+  rows only. The three shared `south_fixture_area` labels are not accepted until
+  manually fixed or explicitly marked as a composite area.
+- Runtime compilation preserves Map12-native navigation areas, waypoints,
+  fixtures, and driveable ways. Human review labels compile as semantic labels;
+  scene labels do not retarget navigation structure.
+- Adjacent plans must stop writing accepted B1 correspondence artifacts under
+  `assets/maps/b1-map12-room-semantics`.
 
 ## Reduce-Entropy Audit
 
@@ -419,8 +475,6 @@ preflight, not by another discovery loop.
 
 Run a preflight on this plan before implementation. The preflight should lock:
 
-- whether the first slice creates the accepted review manifest from the current
-  draft or starts with an empty reviewed asset;
 - exact run-directory path and artifact naming for compiled runtime bundles;
 - how B1 launch prep passes the generated bundle to current consumers;
 - which old tests are deleted versus rewritten around the new contract.
