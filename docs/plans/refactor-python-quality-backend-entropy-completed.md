@@ -747,6 +747,14 @@ logs before choosing the next slice.
   Proof: wrapper CLI help, report-performance unit tests, ruff, format check,
   and ratchet.
 
+- 2026-06-17: Scene-only prefilter report/policy/evidence helpers moved from
+  `scene_sampler.py` into `scene_sampler_prefilter.py`, keeping
+  `scene_only_prefilter_report` as the public facade. Metric:
+  `scene_sampler.py` 3070 -> 2607 lines; ratchet remains 15 complexity rows
+  and 65 oversized modules, so scene sampler stays active P1 debt. Proof:
+  focused scene-sampler and readiness-export tests, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

@@ -27,8 +27,9 @@ of a clean checkpoint; refresh before the next execution slice.
   edits; keep it with the B1 Map 12/preview owner unless it survives as
   unowned drift.
 - The prior dirty-worktree scene-sampler drift is now real source drift:
-  `roboclaws/launch/scene_sampler.py` is 3070 lines in clean code and is the
-  next P1 checkpoint unless another active plan explicitly owns the repair.
+  `roboclaws/launch/scene_sampler.py` was 3070 lines before the scene-only
+  prefilter split and is 2607 lines afterward. It remains the next P1
+  checkpoint unless another active plan explicitly owns the repair.
 - P1 hard-ceiling production files still include
   `roboclaws/household/realworld_contract.py` at 5036 lines,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 4900,
@@ -207,7 +208,7 @@ and classifying the new complexity rows.
 Scope:
 
 - Refresh ratchet signal before edits.
-- Treat `scene_sampler.py` at 3070 lines as the first P1 checkpoint.
+- Treat `scene_sampler.py` at 2607 lines as the first P1 checkpoint.
 - If another active plan owns that drift, link that plan here before taking an
   unrelated hard-ceiling slice.
 - Classify new complexity rows before execution; do not let plan-external
@@ -265,13 +266,15 @@ Approval: LGTM/approve/go ahead approves; edits request revision.
 
 ### A: Scene Sampler Hard-Ceiling Drift
 
-Severity: P1. `roboclaws/launch/scene_sampler.py` is now 3070 lines in the
-current checkout, so the previous conditional drift is active debt. Owning
-architecture layers: Runnable Surfaces And Presets plus Eval Suites, because
-sampler changes feed product/eval scene selection and generated eval rows.
-Next slice should split by real sampler ownership or explicitly link the
-separate active plan that owns this drift. Proof: full scene-sampler focused
-tests, launch/eval tests if touched, ruff, format check, and ratchet.
+Severity: P1. `roboclaws/launch/scene_sampler.py` is now 2607 lines after the
+scene-only prefilter owner split, so it improved but remains above the hard
+ceiling. Owning architecture layers: Runnable Surfaces And Presets plus Eval
+Suites, because sampler changes feed product/eval scene selection and
+generated eval rows. Next slice should split another real sampler ownership
+boundary, likely candidate profile, source prep, scanner execution planning,
+or selection-gap assembly; alternatively link the separate active plan that
+owns this drift. Proof: full scene-sampler focused tests, launch/eval tests if
+touched, ruff, format check, and ratchet.
 
 ### B: Contract And Report Hard-Ceiling Split
 
