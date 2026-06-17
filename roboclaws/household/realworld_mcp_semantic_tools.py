@@ -20,6 +20,7 @@ SEMANTIC_CLEANUP_TOOL_NAMES = (
     "metric_map",
     "navigate_to_room",
     "navigate_to_waypoint",
+    "navigate_to_relative_pose",
     "observe",
     "adjust_camera",
     "declare_visual_candidates",
@@ -47,6 +48,20 @@ def register_semantic_cleanup_tools(server: Any) -> None:
     def navigate_to_waypoint(waypoint_id: str) -> dict:
         """Navigate to a public inspection waypoint before observing."""
         return server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
+
+    @server._mcp.tool()
+    def navigate_to_relative_pose(
+        forward_m: float = 0.0,
+        lateral_m: float = 0.0,
+        yaw_delta_deg: float = 0.0,
+    ) -> dict:
+        """Move or turn by a bounded robot-local pose delta before observing."""
+        return server.call_tool(
+            "navigate_to_relative_pose",
+            forward_m=forward_m,
+            lateral_m=lateral_m,
+            yaw_delta_deg=yaw_delta_deg,
+        )
 
     @server._mcp.tool()
     def observe() -> Any:
@@ -140,6 +155,11 @@ def semantic_cleanup_handlers(
         ),
         "navigate_to_waypoint": lambda: server.contract.navigate_to_waypoint(
             str(kwargs.get("waypoint_id", ""))
+        ),
+        "navigate_to_relative_pose": lambda: server.contract.navigate_to_relative_pose(
+            kwargs.get("forward_m") or 0.0,
+            kwargs.get("lateral_m") or 0.0,
+            kwargs.get("yaw_delta_deg") or 0.0,
         ),
         "observe": server.contract.observe,
         "adjust_camera": lambda: server.contract.adjust_camera(

@@ -715,7 +715,7 @@ def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) ->
     assert "backend=mujoco" in command
     assert "agent_engine=codex-cli" in command
     assert "provider_profile=codex-env" in command
-    assert "evidence_lane=world-oracle-labels" in command
+    assert "evidence_lane=world-public-labels" in command
     assert "run_preset=smoke" in command
     assert "preset=cleanup" in command
     assert not any(item.startswith("generated_mess_count=") for item in command)

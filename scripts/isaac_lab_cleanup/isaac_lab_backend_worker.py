@@ -1557,6 +1557,9 @@ navigate_to_receptacle = _with_isaac_worker_command_hooks(
     isaac_worker_commands.navigate_to_receptacle
 )
 navigate_to_waypoint = _with_isaac_worker_command_hooks(isaac_worker_commands.navigate_to_waypoint)
+navigate_to_relative_pose = _with_isaac_worker_command_hooks(
+    isaac_worker_commands.navigate_to_relative_pose
+)
 pick = _with_isaac_worker_command_hooks(isaac_worker_commands.pick)
 open_receptacle = _with_isaac_worker_command_hooks(isaac_worker_commands.open_receptacle)
 close_receptacle = _with_isaac_worker_command_hooks(isaac_worker_commands.close_receptacle)
@@ -1626,6 +1629,7 @@ _STATE_COMMANDS: dict[str, _IsaacWorkerCommand] = {
     "observe": observe,
     "navigate_to_object": navigate_to_object,
     "navigate_to_waypoint": navigate_to_waypoint,
+    "navigate_to_relative_pose": navigate_to_relative_pose,
     "navigate_to_receptacle": navigate_to_receptacle,
     "pick": pick,
     "open_receptacle": open_receptacle,

@@ -435,6 +435,51 @@ def test_isaac_lab_backend_can_navigate_to_waypoint(
     assert payload["x"] == pytest.approx(-2.0)
 
 
+def test_isaac_lab_backend_can_navigate_to_relative_pose(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        include_robot=True,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {
+            "ok": True,
+            "tool": "navigate_to_relative_pose",
+            "applied_delta": {
+                "forward_m": 0.25,
+                "lateral_m": -0.125,
+                "yaw_delta_deg": 15.0,
+            },
+        }
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+
+    result = backend.navigate_to_relative_pose(
+        forward_m=0.25,
+        lateral_m=-0.125,
+        yaw_delta_deg=15,
+    )
+
+    assert result["ok"] is True
+    assert captured["command"] == "navigate_to_relative_pose"
+    assert captured["args"] == (
+        "--forward-m",
+        "0.25",
+        "--lateral-m",
+        "-0.125",
+        "--yaw-delta-deg",
+        "15.0",
+    )
+
+
 def test_isaac_fake_worker_waypoint_navigation_updates_robot_view_pose(
     tmp_path: Path,
 ) -> None:
@@ -1026,6 +1071,82 @@ def test_isaac_worker_waypoint_navigation_prefers_b1_pose(tmp_path: Path) -> Non
         "b1_overlay_anchor_001"
     )
     assert updated["semantic_pose_state"]["rendered_to_usd"] is False
+
+
+def test_isaac_worker_relative_pose_navigation_updates_semantic_robot_pose(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "state.json"
+    state = {
+        "schema": "isaac_lab_backend_state_v1",
+        "backend": ISAACLAB_SUBPROCESS_BACKEND,
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "runtime": {"runtime_mode": "fake"},
+        "scenario": {"objects": [], "receptacles": []},
+        "locations": {},
+        "held_object_id": None,
+        "current_receptacle_id": "",
+        "current_waypoint_id": "b1_overlay_anchor_001",
+        "current_room_id": "meeting_room_b",
+        "open_receptacle_ids": [],
+        "containment": {},
+        "object_pose_overrides": {},
+        "tool_event_counts": {},
+        "object_index": {},
+        "receptacle_index": {},
+        "semantic_pose_state": {
+            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+            "robot_pose": {
+                "frame": "world",
+                "x": 1.0,
+                "y": 2.0,
+                "z": 0.0,
+                "yaw_deg": 90.0,
+                "pose_source": "unit_test_start",
+            },
+            "object_poses": {},
+            "articulations": {},
+            "transform_events": [],
+        },
+    }
+    isaac_lab_backend_worker.write_state(state_path, state)
+
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "navigate_to_relative_pose",
+            "--forward-m",
+            "0.5",
+            "--lateral-m",
+            "-0.25",
+            "--yaw-delta-deg",
+            "15",
+        ]
+    )
+
+    result = isaac_lab_backend_worker.navigate_to_relative_pose(
+        args,
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+    updated = isaac_lab_backend_worker.read_state(state_path)
+
+    assert result["ok"] is True
+    assert result["tool"] == "navigate_to_relative_pose"
+    assert result["pose_source"] == "relative_robot_frame"
+    assert result["applied_delta"] == {
+        "forward_m": 0.5,
+        "lateral_m": -0.25,
+        "yaw_delta_deg": 15.0,
+    }
+    assert result["robot_pose"]["x"] == pytest.approx(1.25)
+    assert result["robot_pose"]["y"] == pytest.approx(2.5)
+    assert result["robot_pose"]["yaw_deg"] == pytest.approx(105.0)
+    assert updated["semantic_pose_state"]["robot_pose"] == result["robot_pose"]
+    assert updated["semantic_pose_state"]["transform_events"][-1]["waypoint_id"] == (
+        "b1_overlay_anchor_001"
+    )
+    assert updated["robot_trajectory"][-1] == result["robot_pose"]
 
 
 def test_isaac_write_camera_views_returns_color_contract(

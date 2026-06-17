@@ -8,14 +8,14 @@ from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
 
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
 
 
 def test_latest_run_payload_uses_history_index_and_nested_attempt_artifacts(
     tmp_path: Path,
 ) -> None:
     route = get_selection(MUJOCO_CODEX_CLEANUP)
-    run_id = "20260609-102534-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+    run_id = "20260609-102534-molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     attempt_dir = run_dir / "0609_1025" / "seed-7"
     attempt_dir.mkdir(parents=True)

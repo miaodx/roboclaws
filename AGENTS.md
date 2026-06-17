@@ -107,8 +107,8 @@ Codex / Claude Code household demos. Launch those demos through the public
 catalog:
 
 ```bash
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=claude-code preset=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=claude-code preset=cleanup evidence_lane=world-public-labels
 ```
 
 The recipes carry the required bypass-approval / bypass-sandbox flags and
@@ -218,8 +218,8 @@ pytest -q
 Use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
-just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
 just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 just agent::verify mock                          # maintainer confidence gate
 ```
@@ -421,7 +421,7 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 ```
 
 Use `report=visual` by default for non-Molmo surfaces. For household cleanup,
-use `evidence_lane=world-oracle-labels` by default. `smoke` is a verification
+use `evidence_lane=world-public-labels` by default. `smoke` is a verification
 preset or private runner mode, not a public evidence lane.
 For household, omit `preset=` for open-ended prompt-driven work; use
 `preset=cleanup prompt=...` only when the prompt explicitly narrows cleanup
@@ -429,8 +429,8 @@ scope.
 
 Examples:
 
-- "run the semantic map build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels`
-- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels`
+- "run the semantic map build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino`
+- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels`
 - "run an open-ended household goal with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"`
 - "run the planner proof dry run" -> `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run`
 

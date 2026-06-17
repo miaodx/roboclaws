@@ -23,7 +23,7 @@ def test_http_visual_grounding_client_posts_json_with_optional_bearer_auth() -> 
     try:
         client = HttpVisualGroundingClient(
             VisualGroundingClientConfig(
-                pipeline_id="fake-http",
+                pipeline_id="grounding-dino",
                 base_url=f"http://127.0.0.1:{server.server_port}",
                 timeout_s=2,
                 api_key="secret-token",
@@ -47,7 +47,7 @@ def test_http_visual_grounding_client_accepts_valid_failure_response() -> None:
     try:
         client = HttpVisualGroundingClient(
             VisualGroundingClientConfig(
-                pipeline_id="fake-http",
+                pipeline_id="grounding-dino",
                 base_url=f"http://127.0.0.1:{server.server_port}",
                 timeout_s=2,
             )
@@ -59,7 +59,7 @@ def test_http_visual_grounding_client_accepts_valid_failure_response() -> None:
 
     assert response["status"] == "failed"
     assert response["candidates"] == []
-    assert response["error"]["reason"] == "fake_failure"
+    assert response["error"]["reason"] == "adapter_unavailable"
 
 
 def test_http_visual_grounding_client_accepts_http_error_failure_response() -> None:
@@ -67,7 +67,7 @@ def test_http_visual_grounding_client_accepts_http_error_failure_response() -> N
     try:
         client = HttpVisualGroundingClient(
             VisualGroundingClientConfig(
-                pipeline_id="fake-http",
+                pipeline_id="grounding-dino",
                 base_url=f"http://127.0.0.1:{server.server_port}",
                 timeout_s=2,
             )
@@ -79,13 +79,13 @@ def test_http_visual_grounding_client_accepts_http_error_failure_response() -> N
 
     assert response["status"] == "failed"
     assert response["candidates"] == []
-    assert response["error"]["reason"] == "fake_failure"
+    assert response["error"]["reason"] == "adapter_unavailable"
 
 
 def test_http_visual_grounding_client_retries_connection_setup_errors() -> None:
     client = HttpVisualGroundingClient(
         VisualGroundingClientConfig(
-            pipeline_id="fake-http",
+            pipeline_id="grounding-dino",
             base_url="http://127.0.0.1:9",
             timeout_s=0.05,
         )
@@ -130,7 +130,7 @@ def test_visual_grounding_request_rejects_invalid_base64_as_contract_error() -> 
             },
             category_hints=["dish"],
             fixture_hints=[],
-            pipeline_id="fake-http",
+            pipeline_id="grounding-dino",
             image={
                 "mime_type": "image/jpeg",
                 "bytes_base64": "not base64!",
@@ -151,7 +151,7 @@ def _request() -> dict[str, Any]:
         },
         category_hints=["dish"],
         fixture_hints=[{"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}],
-        pipeline_id="fake-http",
+        pipeline_id="grounding-dino",
         image={
             "mime_type": "image/jpeg",
             "bytes_base64": "ZmFrZQ==",
@@ -179,12 +179,12 @@ def _success_handler(seen: dict[str, Any]) -> type[BaseHTTPRequestHandler]:
                     "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
                     "status": "ok",
                     "pipeline": {
-                        "pipeline_id": "fake-http",
+                        "pipeline_id": "grounding-dino",
                         "stages": [
                             {
                                 "stage": "proposer",
-                                "producer_id": "fake-http",
-                                "model_id": "fake",
+                                "producer_id": "grounding-dino",
+                                "model_id": "fixture:grounding-dino",
                                 "status": "ok",
                                 "latency_ms": 1,
                             }
@@ -225,19 +225,19 @@ def _failure_handler(*, status_code: int = 200) -> type[BaseHTTPRequestHandler]:
                     "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
                     "status": "failed",
                     "pipeline": {
-                        "pipeline_id": "fake-http",
+                        "pipeline_id": "grounding-dino",
                         "stages": [
                             {
                                 "stage": "proposer",
-                                "producer_id": "fake-http",
-                                "model_id": "fake",
-                                "status": "fake_failure",
+                                "producer_id": "grounding-dino",
+                                "model_id": "fixture:grounding-dino",
+                                "status": "adapter_unavailable",
                                 "latency_ms": 1,
                             }
                         ],
                     },
                     "candidates": [],
-                    "error": {"reason": "fake_failure", "message": "failure requested"},
+                    "error": {"reason": "adapter_unavailable", "message": "failure requested"},
                 }
             )
 

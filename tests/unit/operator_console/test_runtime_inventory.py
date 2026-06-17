@@ -16,7 +16,7 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
 
 
 def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) -> None:
@@ -135,7 +135,7 @@ def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None
                             "intent": "cleanup",
                             "preset": "cleanup",
                             "agent_engine": "codex-cli",
-                            "evidence_lane": "world-oracle-labels",
+                            "evidence_lane": "world-public-labels",
                         },
                     },
                     {
@@ -150,7 +150,7 @@ def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None
                             "intent": "cleanup",
                             "preset": "cleanup",
                             "agent_engine": "codex-cli",
-                            "evidence_lane": "world-oracle-labels",
+                            "evidence_lane": "world-public-labels",
                         },
                     },
                 ]
@@ -200,7 +200,7 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(tmp_path: Path
                             "intent": "cleanup",
                             "preset": "cleanup",
                             "agent_engine": "codex-cli",
-                            "evidence_lane": "world-oracle-labels",
+                            "evidence_lane": "world-public-labels",
                         },
                     }
                 ]
@@ -278,7 +278,7 @@ def test_readiness_names_background_eval_owner_before_start(tmp_path: Path) -> N
                             "intent": "cleanup",
                             "preset": "cleanup",
                             "agent_engine": "codex-cli",
-                            "evidence_lane": "world-oracle-labels",
+                            "evidence_lane": "world-public-labels",
                         },
                     }
                 ]

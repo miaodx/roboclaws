@@ -13,8 +13,7 @@
 # - openclaw-live   live OpenClaw Gateway connected to the cleanup MCP server
 #
 # Cleanup evidence lanes:
-# - smoke                  cheap verification preset; uses world-oracle labels
-# - world-oracle-labels    privileged world labels; cleanup upper bound
+# - smoke                  cheap verification preset; uses world-public labels
 # - world-public-labels    public/sanitized world labels without oracle hints
 # - camera-raw-fpv         raw camera artifacts to the agent
 # - camera-grounded-labels camera-derived labels; requires camera_labeler
@@ -189,10 +188,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         exit 1
       fi
       case "$camera_labeler" in
-        sim-projected-labels)
-          visual_grounding="sim"
-          ;;
-        grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake)
+        grounding-dino|yoloe|omdet-turbo|yolo-world)
           visual_grounding="$camera_labeler"
           ;;
         *)
@@ -281,23 +277,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       smoke)
         backend="api_semantic_synthetic"
         min_generated_mess_count="$generated_mess_count"
-        implementation_evidence_lane="world-oracle-labels"
-        ;;
-      world-oracle-labels)
-        backend="molmospaces_subprocess"
-        min_generated_mess_count="$generated_mess_count"
-        implementation_evidence_lane="$profile"
-        visual_args=(--include-robot --robot-name rby1m)
-        checker_visual_args=(
-          --require-waypoint-honesty
-          --require-real-robot-alignment
-          --min-semantic-accepted-count 5
-          --min-sweep-coverage 1.0
-        )
-        if [[ "$robot_views" != "off" && "$robot_views" != "false" && "$robot_views" != "0" ]]; then
-          visual_args+=(--record-robot-views)
-          checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
-        fi
+        implementation_evidence_lane="world-public-labels"
         ;;
       world-public-labels)
         backend="molmospaces_subprocess"
@@ -348,7 +328,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         fi
         ;;
       *)
-        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
+        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
         exit 1
         ;;
     esac
@@ -363,7 +343,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       echo "error: backend=isaaclab_subprocess is scoped to world=b1-map12; MolmoSpaces household routes use backend=molmospaces_subprocess" >&2
       exit 1
     fi
-    if [[ "$profile" == "world-oracle-labels" && "$backend" == "isaaclab_subprocess" ]]; then
+    if [[ "$profile" == "world-public-labels" && "$backend" == "isaaclab_subprocess" ]]; then
       isaac_min_semantic_accepted_count="$generated_mess_count"
       if [[ "$min_generated_mess_count_override" != "auto" && -n "$min_generated_mess_count_override" ]]; then
         isaac_min_semantic_accepted_count="$min_generated_mess_count_override"
@@ -1156,23 +1136,23 @@ quick-check driver="mcp-smoke" profile="smoke" seed="7" output_dir="output/molmo
 
 # Canonical human review report: direct cleanup, real MolmoSpaces/RBY1M visuals.
 review-report seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-world-impl direct world-oracle-labels "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl direct world-public-labels "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Deterministic ADR-0003 MCP tool smoke with real MolmoSpaces/RBY1M visuals.
 mcp-smoke-report seed="7" output_dir="output/molmo/mcp-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-world-impl mcp-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl mcp-smoke world-public-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # OpenClaw-shaped/policy-labeled smoke with real MolmoSpaces/RBY1M visuals.
 [private]
 openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::household-world-impl openclaw-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-world-impl openclaw-smoke world-public-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Raw camera-input evidence report. This proves camera artifact plumbing, not cleanup success.
 camera-raw-fpv-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
     just molmo::household-world-impl direct camera-raw-fpv "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
-codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
+codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-public-labels" host="127.0.0.1" port="18788":
     just molmo::household-world-impl codex-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
@@ -1185,7 +1165,7 @@ status path="":
     exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py
 
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
-claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
+claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-public-labels" host="127.0.0.1" port="18788":
     just molmo::household-world-impl claude-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Local rehearsal for the opt-in hosted Molmo live CI job.
@@ -1293,7 +1273,7 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 [private]
-openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" port="18788":
+openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-public-labels" port="18788":
     just molmo::household-world-impl openclaw-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" 0.0.0.0 "{{port}}"
 
 # Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.

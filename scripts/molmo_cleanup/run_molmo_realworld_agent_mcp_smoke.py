@@ -241,12 +241,10 @@ def _drive_open_ended_probe(server: Any) -> None:
 
 def _clean_pending_worklist(server: Any, handled_handles: set[str]) -> None:
     while True:
-        agent_view = server._agent_view_payload()
-        pending = [
-            dict(item)
-            for item in agent_view.get("cleanup_worklist", {}).get("objects", [])
-            if item.get("cleanup_recommended") and str(item.get("state") or "") == "pending"
-        ]
+        readiness = server.call_tool("done", reason="probe public cleanup readiness")
+        if readiness.get("ok"):
+            return
+        pending = _pending_cleanup_candidates_from_done(readiness)
         next_item = next(
             (item for item in pending if str(item.get("object_id") or "") not in handled_handles),
             None,
@@ -264,8 +262,39 @@ def _clean_pending_worklist(server: Any, handled_handles: set[str]) -> None:
         handled_handles.add(handle)
 
 
+def _pending_cleanup_candidates_from_done(done_response: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates = []
+    for blocker in (done_response.get("completion") or {}).get("blockers") or []:
+        if blocker.get("type") != "pending_cleanup_candidates":
+            continue
+        candidates.extend(
+            dict(item)
+            for item in blocker.get("pending_cleanup_candidates") or []
+            if isinstance(item, dict)
+        )
+    if not candidates:
+        candidates.extend(
+            dict(item)
+            for item in done_response.get("pending_cleanup_candidates") or []
+            if isinstance(item, dict)
+        )
+    return candidates
+
+
 def _target_fixture_for_detection(server: Any, detection: dict[str, Any]) -> dict[str, Any] | None:
     fixture_id = str(detection.get("candidate_fixture_id") or "")
+    if not fixture_id:
+        options = detection.get("destination_options") or []
+        first_option = next(
+            (
+                item
+                for item in options
+                if isinstance(item, dict) and str(item.get("candidate_fixture_id") or "")
+            ),
+            None,
+        )
+        if first_option is not None:
+            fixture_id = str(first_option["candidate_fixture_id"])
     if not fixture_id:
         return None
     fixtures = server.contract.public_receptacles_by_id()
@@ -294,7 +323,7 @@ def _confirm_visual_scan_if_needed(server: Any, detection: dict[str, Any]) -> di
     server.call_tool("adjust_camera", yaw_delta_deg=15.0, pitch_delta_deg=0.0)
     observation = server.call_tool("observe")
     handle = str(detection.get("object_id") or "")
-    return next(
+    confirmed = next(
         (
             dict(item)
             for item in observation.get("visible_object_detections", [])
@@ -302,6 +331,9 @@ def _confirm_visual_scan_if_needed(server: Any, detection: dict[str, Any]) -> di
         ),
         detection,
     )
+    if detection.get("destination_options") and not confirmed.get("destination_options"):
+        confirmed["destination_options"] = list(detection["destination_options"])
+    return confirmed
 
 
 def _clean_handle(

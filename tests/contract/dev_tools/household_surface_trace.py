@@ -40,7 +40,7 @@ def household_surface_args(
     ]
     if evidence_lane:
         if evidence_lane == "smoke":
-            args.extend(("run_preset=smoke", "evidence_lane=world-oracle-labels"))
+            args.extend(("run_preset=smoke", "evidence_lane=world-public-labels"))
         else:
             args.append(f"evidence_lane={evidence_lane}")
     args.extend(_surface_overrides(overrides))

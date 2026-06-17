@@ -45,6 +45,7 @@ from scripts.visual_grounding.benchmark_scoring import (
 CORPUS_SCHEMA = "visual_grounding_benchmark_corpus_v1"
 RESULT_SCHEMA = "visual_grounding_benchmark_result_v1"
 PREDICTION_SCHEMA = "visual_grounding_prediction_v1"
+RETIRED_FAKE_PIPELINE_IDS = frozenset({"fake-http", "contract-fake"})
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -228,6 +229,7 @@ def _benchmark_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 
 def _default_benchmark_row(pipeline_id: str) -> dict[str, Any]:
+    _reject_retired_fake_pipeline(pipeline_id)
     family = _pipeline_family(pipeline_id)
     return {
         "row_id": pipeline_id,
@@ -244,6 +246,7 @@ def _normalize_benchmark_row(row: dict[str, Any]) -> dict[str, Any]:
     pipeline_id = str(row.get("pipeline_id") or "").strip()
     if not pipeline_id:
         raise SystemExit(f"benchmark matrix row missing pipeline_id: {row}")
+    _reject_retired_fake_pipeline(pipeline_id)
     runtime_parameters = _safe_runtime_parameters(
         row.get("runtime_parameters") or row.get("knobs") or {}
     )
@@ -292,13 +295,25 @@ def _safe_runtime_parameters(value: Any) -> dict[str, Any]:
 
 
 def _pipeline_ids(raw_values: list[str]) -> list[str]:
-    values = raw_values or [os.environ.get("VISUAL_GROUNDING_PIPELINE_ID", "fake-http")]
+    values = raw_values or [os.environ.get("VISUAL_GROUNDING_PIPELINE_ID", "grounding-dino")]
     pipeline_ids: list[str] = []
     for value in values:
         pipeline_ids.extend(part.strip() for part in str(value).split(",") if part.strip())
     seen: set[str] = set()
     unique = [item for item in pipeline_ids if not (item in seen or seen.add(item))]
-    return unique or ["fake-http"]
+    selected = unique or ["grounding-dino"]
+    for pipeline_id in selected:
+        _reject_retired_fake_pipeline(pipeline_id)
+    return selected
+
+
+def _reject_retired_fake_pipeline(pipeline_id: str) -> None:
+    if pipeline_id in RETIRED_FAKE_PIPELINE_IDS:
+        expected = "grounding-dino, yoloe, yolo-world, or omdet-turbo"
+        raise SystemExit(
+            f"retired fake visual-grounding pipeline {pipeline_id!r} is not valid "
+            f"benchmark evidence; use {expected}, or record missing-sidecar evidence."
+        )
 
 
 def _run_pipeline(
@@ -1160,17 +1175,10 @@ def _pipeline_evidence_level(predictions: list[dict[str, Any]]) -> str:
         for stage in _prediction_stages(predictions)
         if str(stage.get("version") or "")
     }
-    producer_ids = {
-        str(stage.get("producer_id") or "")
-        for stage in _prediction_stages(predictions)
-        if str(stage.get("producer_id") or "")
-    }
     if "real-sidecar-adapter-v1" in stage_versions:
         return "real_detector_sidecar"
     if any(mode.startswith("real_") for mode in diagnostics_modes):
         return "real_detector_sidecar"
-    if "deterministic_contract_fake" in diagnostics_modes or "fake-http" in producer_ids:
-        return "contract_fake"
     if all(
         (prediction.get("pipeline") or {}).get("status") == "failed" for prediction in predictions
     ):

@@ -50,12 +50,12 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
         entry.name: (entry.provider_profile, entry.model, entry.secret_env, entry.profile)
         for entry in MODEL_ENTRIES
     } == {
-        "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-oracle-labels"),
+        "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-public-labels"),
         "mimo-v2.5": (
             "mimo-anthropic",
             "mimo-v2.5",
             "MIMO_TP_KEY",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         "kimi-k2.6-camera-raw-fpv": (
             "kimi-anthropic",
@@ -99,7 +99,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
         "ROBOCLAWS_PROVIDER_TIMING_PROXY": "1",
     }
-    assert payload["profile"] == "world-oracle-labels"
+    assert payload["profile"] == "world-public-labels"
     assert payload["generated_mess_count"] == 5
     assert payload["command"][:9] == [
         "just",
@@ -110,7 +110,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "intent=cleanup",
         "agent_engine=claude-code",
         "provider_profile=kimi-anthropic",
-        "evidence_lane=world-oracle-labels",
+        "evidence_lane=world-public-labels",
     ]
     assert payload["rerun_command"].startswith(
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
@@ -118,7 +118,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "ROBOCLAWS_PROVIDER_TIMING_PROXY=1 "
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=claude-code "
-        "provider_profile=kimi-anthropic evidence_lane=world-oracle-labels"
+        "provider_profile=kimi-anthropic evidence_lane=world-public-labels"
     )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
@@ -243,7 +243,7 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
         output_dir=output_dir,
         seed=7,
         generated_mess_count=5,
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         task="帮我收拾这个房间",
         host="127.0.0.1",
         port=18788,
@@ -299,7 +299,7 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
         policy="claude_agent",
         task="帮我收拾这个房间",
         min_generated_mess_count="5",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         server_arg=[],
         claude_model_arg=["--model", "kimi-k2.6"],
         claude_env=[],
@@ -363,7 +363,7 @@ def test_live_claude_writes_live_timing_and_model_call_metrics(tmp_path: Path) -
         policy="claude_agent",
         task="帮我收拾这个房间",
         min_generated_mess_count="5",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         server_arg=[],
         claude_model_arg=[],
         claude_env=[],
@@ -449,7 +449,7 @@ def test_live_claude_provider_timing_proxy_rewrites_anthropic_base_url(
         policy="claude_agent",
         task="帮我收拾这个房间",
         min_generated_mess_count="5",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         server_arg=[],
         claude_model_arg=["--model", "mimo-v2.5"],
         claude_env=["ANTHROPIC_BASE_URL=https://provider.example.test/anthropic"],
@@ -570,7 +570,7 @@ def test_live_agent_runners_default_to_longer_server_startup_timeout(tmp_path: P
             "--min-generated-mess-count",
             "5",
             "--profile",
-            "world-oracle-labels",
+            "world-public-labels",
         ]
     )
     claude_args = run_claude.parse_args(
@@ -602,7 +602,7 @@ def test_live_agent_runners_default_to_longer_server_startup_timeout(tmp_path: P
             "--min-generated-mess-count",
             "5",
             "--profile",
-            "world-oracle-labels",
+            "world-public-labels",
         ]
     )
 
@@ -829,7 +829,7 @@ def test_live_codex_provider_timing_proxy_rewrites_provider_base_url(
         ],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     env = {"ROBOCLAWS_PROVIDER_TIMING_PROXY": "1"}
@@ -878,7 +878,7 @@ def test_live_codex_tool_binding_failure_is_non_retryable(tmp_path: Path, monkey
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -1008,7 +1008,7 @@ def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(
         task="帮我收拾这个房间",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         min_generated_mess_count="5",
         checker_visual_arg=[],
     )
@@ -1045,7 +1045,7 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
         task="帮我收拾这个房间",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         min_generated_mess_count="5",
         checker_visual_arg=[
             "--require-waypoint-honesty",
@@ -1126,7 +1126,7 @@ def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
         task="帮我建立这个房间的语义地图",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         min_generated_mess_count="5",
         checker_visual_arg=["--require-runtime-metric-map"],
     )
@@ -1262,7 +1262,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         entry_by_name("kimi-k2.6"),
         seed=7,
         generated_mess_count=5,
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         task="帮我收拾这个房间",
     )
     success.update(
@@ -1275,7 +1275,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         entry_by_name("mimo-v2.5"),
         seed=7,
         generated_mess_count=5,
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         task="帮我收拾这个房间",
     )
     skipped.update({"status": "skipped", "reason": "missing required secret/env MIMO_TP_KEY"})
@@ -1338,7 +1338,7 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
         entry_by_name("kimi-k2.6"),
         seed=7,
         generated_mess_count=5,
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         task="帮我收拾这个房间",
     )
     failed.update(
@@ -1379,7 +1379,7 @@ def test_assemble_ci_live_pages_runs_without_site_packages(tmp_path: Path) -> No
         entry_by_name("kimi-k2.6"),
         seed=7,
         generated_mess_count=5,
-        profile="world-oracle-labels",
+        profile="world-public-labels",
         task="帮我收拾这个房间",
     )
     status.update({"status": "skipped", "reason": "fixture"})

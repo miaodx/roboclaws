@@ -16,7 +16,7 @@ Next hypothesis: the OpenAI Agents SDK no-preset route should pass without code
 changes once the `codex-env` provider route stops returning upstream 502.
 
 Next command/artifact: re-run
-`just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-env evidence_lane=world-oracle-labels prompt="我渴了，帮我找些解渴的东西"`
+`just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=openai-agents-sdk provider_profile=codex-env evidence_lane=world-public-labels prompt="我渴了，帮我找些解渴的东西"`
 with `.env` sourced and provider route healthy; inspect
 `output/agent-validation-matrix/20260612T182533Z/gates/openai-agents-sdk-open-task/run/0613_0239/seed-7/live_status.json`
 for the blocked attempt.

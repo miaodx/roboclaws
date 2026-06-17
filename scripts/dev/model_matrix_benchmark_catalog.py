@@ -88,7 +88,7 @@ AGENT_BENCHMARK_CASES: tuple[AgentBenchmarkCase, ...] = (
             "a cleanup run. Do not invent private destinations. Include: coverage gaps, likely "
             "next waypoint, and what evidence should be requested before picking anything.\n\n"
             "Map state: schema=runtime_metric_map_v1, world=molmospaces/val_0, "
-            "evidence_lane=world-oracle-labels, generated exploration candidates "
+            "evidence_lane=world-public-labels, generated exploration candidates "
             "generated_exploration_001 through generated_exploration_014. Visited waypoints: "
             "001, 002, 003, 004, 005, 006, 007, 008, 009, 010, 011. Observed categories: "
             "Potato, Plate, RemoteControl, Book, Pillow. Public semantic anchors include "

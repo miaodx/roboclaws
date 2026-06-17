@@ -28,8 +28,7 @@ provider-backed work is not launched by accident. Codex CLI live eval runs pass
 a fixed product `run_dir` through the public launch route and poll detached live
 artifacts before grading, including a short completion grace window for
 late-written `run_result.json` files. OpenAI Agents SDK live eval runs now use
-the same open-ended sample contract and a separate live-checker evidence-lane
-profile, so smoke budget runs can still grade the actual `world-oracle-labels`
+the same open-ended sample contract and grade current `world-public-labels`
 artifacts. Failed, blocked, or inconclusive eval results can be promoted into
 regression samples with
 `just agent::eval promote-regression ...` while keeping private scorer truth

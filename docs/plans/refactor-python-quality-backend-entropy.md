@@ -145,6 +145,56 @@ first settle the current scene-sampler/eval changes or make them own their
 ratchet fallout, then choose one P1 hard-ceiling architecture slice. Do not
 continue by shaving isolated lines from many files.
 
+## Parallel Acceleration Policy
+
+Use parallel execution when it reduces wall-clock time without multiplying
+concepts or creating merge risk. The main session remains the coordinator,
+scope judge, and final verifier; worker sessions may execute independent
+vertical slices only after the coordinator names the slice, owning layer,
+likely touched files, focused tests, and merge order.
+
+Parallelize only when all of these are true:
+
+- Slices touch disjoint production modules, tests, docs, generated artifacts,
+  and launch/eval/catalog surfaces.
+- Each slice has a clear architecture owner from `ARCHITECTURE.md` and can be
+  proven with its own focused gate before integration.
+- No slice changes a public launch contract, artifact schema, report claim,
+  agent-facing MCP/tool contract, or private/public evaluation boundary unless
+  it is the only slice in flight.
+- The dirty worktree is either clean enough for ownership to be obvious, or the
+  coordinator explicitly records which existing dirty files are off limits.
+- The batch size is small: prefer two concurrent slices; use three only for
+  obviously disjoint test-fixture or docs/static cleanup.
+
+Do not parallelize:
+
+- Competing edits to the same hard-ceiling module, its immediate callers, or
+  its primary behavior tests.
+- `scene_sampler.py` / eval-sample drift while another active branch is already
+  changing launch catalog, eval harness, generated samples, or operator-console
+  readiness flows.
+- Report, checker, and artifact-schema changes that need one coherent rendered
+  claim.
+- Any slice whose first step is deciding whether public behavior may change.
+
+Merge protocol:
+
+1. Refresh `python scripts/dev/check_python_quality_ratchet.py --summary --top
+   40` once before selecting the batch.
+2. Assign non-overlapping slice claims. Each worker returns a concise changed
+   file list, simplification claim, and proof commands/results.
+3. Integrate one slice at a time in the main session, rerunning that slice's
+   focused gates and checking `git diff` before taking the next patch.
+4. Rerun the ratchet summary after each integrated slice when it touches Python
+   source, or after the whole batch only for docs-only/static batches.
+5. If overlap, unexpected public-contract impact, or ratchet regression appears,
+   stop the batch and serialize the remaining work.
+
+This policy does not loosen the two-document contract: completed durable
+outcomes still go into the completed ledger, and this active plan remains the
+only unfinished source of truth for the cleanup stream.
+
 ## Execution Preflight
 
 Preflight status: DRAFT.
@@ -202,8 +252,10 @@ or `just agent::eval execute ...` for gate selection. Product-run and
 local-live-manual gates are required only when the selected slice changes a
 public route or real simulator/provider claim.
 
-Execution: main session supervises and verifies one slice; no delegated worker
-by default.
+Execution: main session supervises, integrates, and verifies. Prefer one
+vertical slice when ownership overlaps; otherwise use the Parallel Acceleration
+Policy above to run a small batch of independent slices and merge them one at a
+time.
 To execute:
 `/goal execute docs/plans/refactor-python-quality-backend-entropy.md with intuitive-flow`.
 Approval: LGTM/approve/go ahead approves; edits request revision.

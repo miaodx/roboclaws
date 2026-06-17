@@ -12,6 +12,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 
+from roboclaws.operator_console.control import OperatorControlError, run_operator_control
 from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.interactions import (
     InteractionError,
@@ -87,7 +88,7 @@ def _readiness_selection_id(query: dict[str, list[str]]) -> str:
     backend_id = str(query.get("backend_id", [""])[0])
     intent_id = str(query.get("intent_id", [""])[0])
     agent_engine_id = str(query.get("agent_engine_id", [""])[0])
-    evidence_lane = str(query.get("evidence_lane", ["world-oracle-labels"])[0])
+    evidence_lane = str(query.get("evidence_lane", ["world-public-labels"])[0])
     return "::".join(
         (
             world_id,
@@ -284,6 +285,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         handlers = {
             "messages": self._serve_steer_message,
             "next-goal": self._serve_next_goal,
+            "control": self._serve_control_post,
             "pause": self._serve_pause_post,
             "stop": self._serve_stop_post,
             "emergency-stop": self._serve_emergency_stop_post,
@@ -498,6 +500,15 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         del payload
         self._serve_pause_get(run_id)
 
+    def _serve_control_post(self, run_id: str, payload: dict[str, object]) -> None:
+        try:
+            route = _route_for_run(self.repo_root, run_id)
+            self._json(run_operator_control(self.repo_root, run_id, route, payload))
+        except OperatorControlError as exc:
+            self._json({"ok": False, "error": str(exc)}, status=exc.status)
+        except (KeyError, ValueError) as exc:
+            self._json({"ok": False, "error": str(exc)}, status=400)
+
     def _serve_stop_post(self, run_id: str, payload: dict[str, object]) -> None:
         del payload
         self._json(stop_console_run(self.repo_root, run_id))
@@ -601,8 +612,20 @@ def _parse_run_action_path(path: str) -> tuple[str, str] | None:
     if not path.startswith(prefix):
         return None
     remainder = path.removeprefix(prefix)
-    for action in ("emergency-stop", "next-goal", "messages", "pause", "stop"):
+    for action in ("emergency-stop", "next-goal", "messages", "control", "pause", "stop"):
         suffix = f"/{action}"
         if remainder.endswith(suffix):
             return unquote(remainder[: -len(suffix)]), action
     return None
+
+
+def _route_for_run(root: Path, run_id: str):
+    state_path = console_output_root(root) / "runs" / run_id / "operator_state.json"
+    if not state_path.is_file():
+        raise OperatorControlError("unknown run", status=404)
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    route_payload = payload.get("route") if isinstance(payload, dict) else {}
+    selection_id = str(route_payload.get("id") or "") if isinstance(route_payload, dict) else ""
+    if not selection_id:
+        raise ValueError("operator state does not include route id")
+    return get_selection(selection_id)

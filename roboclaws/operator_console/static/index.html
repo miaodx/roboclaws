@@ -178,6 +178,21 @@
               <textarea id="prompt-input" maxlength="2000" rows="5"></textarea>
             </label>
           </section>
+          <section id="manual-control-panel" class="manual-control-panel" hidden>
+            <h2>Manual Control</h2>
+            <div class="manual-control-grid" aria-label="Manual robot movement controls">
+              <button type="button" data-control-action="turn-left" title="Turn left 15 degrees">Turn left</button>
+              <button type="button" data-control-action="forward" title="Move forward 0.25 meters">Forward</button>
+              <button type="button" data-control-action="turn-right" title="Turn right 15 degrees">Turn right</button>
+              <button type="button" data-control-action="left" title="Strafe left 0.25 meters">Left</button>
+              <button type="button" data-control-action="observe" title="Observe from the current pose">Observe</button>
+              <button type="button" data-control-action="right" title="Strafe right 0.25 meters">Right</button>
+              <span></span>
+              <button type="button" data-control-action="back" title="Move backward 0.25 meters">Back</button>
+              <span></span>
+            </div>
+            <div id="manual-control-status" class="field-help">Manual control is unavailable.</div>
+          </section>
           <div class="prompt-copy" id="prompt-copy">Empty goal uses the route default.</div>
           <div class="char-count" id="char-count">0 / 2000</div>
           <details id="prompt-preview-panel" class="prompt-preview-panel">

@@ -1,9 +1,10 @@
 ---
 plan_scope: drop-world-oracle-labels
-status: PROPOSED
+status: IMPLEMENTED
 created: 2026-06-16
 last_reviewed: 2026-06-16
-implementation_allowed: false
+implemented: 2026-06-16
+implementation_allowed: true
 source:
   - user request to aggressively simplify evidence lanes by dropping world-oracle-labels
   - 2026-06-16 follow-up: simulator defaults should stay as close to real-robot deployment as possible
@@ -909,7 +910,55 @@ runbook commands.
 
 ## Recommended Next Action
 
-Approve the preflight contract above, then execute it through
-`$intuitive-flow`.
+Implemented. Use the closeout block below as the current execution status; the
+preflight contract above is retained as historical scope and verification
+context.
 
-Shortcut: `LGTM`
+## Implementation Closeout
+
+Status: implemented on 2026-06-16.
+
+Owned layers updated:
+
+- Runnable surfaces and presets now use `world-public-labels` for structured
+  world-label baselines and `camera-grounded-labels camera_labeler=grounding-dino`
+  for deployment-like map-build examples.
+- Capability profile, launch, operator-console, eval, report/checker, helper,
+  docs, and visual-grounding sidecar surfaces no longer expose
+  `world-oracle-labels`, `sim-projected-labels`, `fake-http`, or
+  `contract-fake` as active product or validation routes.
+- Visual-grounding fake service support was removed from runnable code; parser
+  and rejection coverage now uses negative tests and private static fixture
+  helpers only.
+
+Verification evidence:
+
+- Registry probe: `cleanup_evidence_lane_names()` returns exactly
+  `("world-public-labels", "camera-grounded-labels", "camera-raw-fpv")`; active
+  camera labelers are exactly `("grounding-dino", "yoloe", "omdet-turbo",
+  "yolo-world")`; retired lane/labeler ids are rejected.
+- Product runs:
+  - `output/verification/drop-world-oracle/map-build-public/0616_1923/seed-7/run_result.json`
+  - `output/verification/drop-world-oracle/map-build-grounding-dino/0616_1924/seed-7/run_result.json`
+  - `output/verification/drop-world-oracle/cleanup-public/0616_1926/seed-7/run_result.json`
+- Eval-harness recommendation:
+  `output/eval-harness/20260616T112215Z/eval_harness.json`.
+- Operator-console browser/API check:
+  `just console::run 127.0.0.1 8766` loaded successfully in headless Chromium;
+  the visible Evidence lane dropdown contained exactly `world-public-labels`,
+  `camera-grounded-labels`, and `camera-raw-fpv`; the route API returned zero
+  matches for retired tokens; the selected launch command used
+  `evidence_lane=world-public-labels`; browser console reported no errors and
+  page/API/static requests returned 200.
+- Focused tests and checks passed:
+  visual-grounding contract tests, the plan's broader deterministic focused
+  suite, changed-file Ruff checks, `git diff --check`, focused console/just
+  static tests after closeout edits, and static scans classifying remaining
+  retired-id text as historical evidence, old output provenance, explicit
+  negative tests, or private static fixture coverage.
+
+Remaining notes:
+
+- Historical docs, old output paths, and diagnostic status capsules may still
+  contain retired ids as old evidence. They are not active launch, operator,
+  eval, benchmark, or runbook surfaces.

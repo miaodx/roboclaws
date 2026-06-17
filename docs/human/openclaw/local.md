@@ -38,7 +38,7 @@ network.
 The validation-required route shape is:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openclaw-gateway evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openclaw-gateway evidence_lane=world-public-labels
 ```
 
 For lower-level Gateway debugging, start the household MCP server and then the

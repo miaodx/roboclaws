@@ -48,10 +48,10 @@ AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera
 AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-public-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-public-labels"
 
 
 def _free_port() -> str:
@@ -135,7 +135,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         "agent_engine=codex-cli",
     ]
     assert "preset=cleanup" in argv
-    assert "evidence_lane=world-oracle-labels" in argv
+    assert "evidence_lane=world-public-labels" in argv
     assert "provider_profile=codex-env" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
     assert "scenario_setup=relocate-loose-objects" in argv
@@ -193,7 +193,7 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
                     "intent_id": "cleanup",
                     "agent_engine_id": "codex-cli",
                     "provider_profile": "codex-env",
-                    "evidence_lane": "world-oracle-labels",
+                    "evidence_lane": "world-public-labels",
                     "scenario_setup": "relocate-cleanup-related-objects",
                     "prompt": "只收拾桌面上的杯子",
                     "overrides": {"relocation_count": "5"},
@@ -380,7 +380,7 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
         thread.join(timeout=2)
 
     assert [lane["id"] for lane in payload["evidence_lanes"]] == [
-        "world-oracle-labels",
+        "world-public-labels",
         "world-public-labels",
         "camera-grounded-labels",
         "camera-raw-fpv",
@@ -408,19 +408,19 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
         != (worlds["molmospaces/val_5"]["preview_assets"]["map"]["href"])
     )
     assert (
-        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-oracle-labels"][
+        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels"][
             "preview_assets"
         ]["fpv"]["href"]
         == "/previews/molmospaces-val_5-fpv.png"
     )
     assert (
-        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-oracle-labels"][
+        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels"][
             "preview_assets"
         ]["chase"]["href"]
         == "/previews/molmospaces-val_5-chase.png"
     )
     assert (
-        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-oracle-labels"][
+        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels"][
             "preview_assets"
         ]["topdown"]["href"]
         == "/previews/molmospaces-val_5-topdown.png"
@@ -612,7 +612,7 @@ def test_operator_console_run_reload_ignores_legacy_route_query(tmp_path: Path) 
     try:
         host, port = server.server_address
         with urllib.request.urlopen(
-            f"http://{host}:{port}/api/runs/{run_id}?route=molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+            f"http://{host}:{port}/api/runs/{run_id}?route=molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
         ) as response:
             payload = json.loads(response.read().decode("utf-8"))
     finally:
@@ -734,9 +734,206 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert launch_request.parent_run_id == run_id
 
 
+def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    run_id = "control-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "running",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:19999/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def fake_call_mcp_tool(mcp_url, action, arguments):  # noqa: ANN001, ANN202
+        assert mcp_url == "http://127.0.0.1:19999/mcp"
+        assert action == "navigate_to_relative_pose"
+        assert arguments == {"forward_m": 0.25, "lateral_m": 0.0, "yaw_delta_deg": 0.0}
+        return {
+            "ok": True,
+            "tool": action,
+            "status": "ok",
+            "frame_id": "base_link",
+            "applied_delta": dict(arguments),
+            "requires_reobserve": True,
+        }
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps(
+                {
+                    "action": "navigate_to_relative_pose",
+                    "forward_m": 0.25,
+                    "lateral_m": 0.0,
+                    "yaw_delta_deg": 0.0,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+        blocked_request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps({"action": "shell", "command": "whoami"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(blocked_request)
+        blocked_payload = json.loads(exc_info.value.read().decode("utf-8"))
+
+        large_request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps(
+                {
+                    "action": "navigate_to_relative_pose",
+                    "forward_m": 2.0,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as large_exc_info:
+            urllib.request.urlopen(large_request)
+        large_payload = json.loads(large_exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["ok"] is True
+    assert payload["actor"] == "operator"
+    assert payload["action"] == "navigate_to_relative_pose"
+    assert payload["operator_interventions"]["count"] == 1
+    assert payload["response"]["requires_reobserve"] is True
+    assert blocked_payload["error"] == "unsupported control action: shell"
+    assert large_payload["error"] == "relative movement request exceeds console limits"
+
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "operator_control.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["event"] for row in rows] == ["request", "response"]
+    assert {row["actor"] for row in rows} == {"operator"}
+    persisted = json.loads((run_dir / "operator_state.json").read_text(encoding="utf-8"))
+    assert persisted["operator_interventions"]["assisted"] is True
+    assert persisted["operator_interventions"]["autonomous_behavior_proof"] is False
+    interventions = json.loads(
+        (run_dir / "operator_interventions.json").read_text(encoding="utf-8")
+    )
+    assert interventions["count"] == 1
+    assert interventions["events"][0]["action"] == "navigate_to_relative_pose"
+    state = derive_operator_state(tmp_path, run_dir, route)
+    assert state["operator_interventions"]["count"] == 1
+    assert any(item["label"] == "Operator Control" for item in state["artifact_paths"])
+    assert any(item["label"] == "Operator Interventions" for item in state["artifact_paths"])
+
+
+def test_operator_console_control_endpoint_rejects_unsupported_route(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_MAP_BUILD)
+    run_id = "map-build-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "running",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:19999/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps({"action": "observe"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 409
+    assert payload["error"] == "route does not support relative navigation control"
+
+
+def test_operator_console_control_endpoint_rejects_terminal_run(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    run_id = "finished-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "finished",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:19999/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps({"action": "observe"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 409
+    assert payload["error"] == "terminal run cannot be controlled"
+
+
 def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_CODEX_CLEANUP)
-    run_id = "20260610-224107-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+    run_id = "20260610-224107-molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     attempt_dir = run_dir / "0610_2241" / "seed-7"
     attempt_dir.mkdir(parents=True)

@@ -42,6 +42,15 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
     readiness["schema"] = READINESS_SCHEMA
     readiness["semantic_source"] = SEMANTIC_SOURCE
     readiness["semantic_usd_binding_status"] = SEMANTIC_USD_BLOCKED
+    readiness["readiness_alignment_status"] = "global_verified"
+    readiness["map12_to_b1_usd_transform_status"] = "verified"
+    readiness["residual_evidence"] = {
+        "status": "available",
+        "matched_anchor_count": 6,
+        "mean_residual_m": 0.23,
+        "max_residual_m": 0.71,
+        "transform_source": "reviewed_correspondence_fit",
+    }
     readiness["validation"] = {"status": "passed", "errors": []}
     (run_dir / "navigation_smoke.json").write_text(
         json.dumps(navigation, indent=2),
@@ -61,6 +70,9 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
     assert "kinematic_pose_driven" in report
     assert "blocked_until_segmentation_or_manifest" in report
     assert "manipulation: unsupported" in report
+    assert "global_verified" in report
+    assert "available, anchors=6, mean=0.23 m, max=0.71 m" in report
+    assert "known-poor search seed" in report
     assert "planner-backed" not in report
     assert "first.fpv.png" in report
     assert "wp_1.chase.png" in report

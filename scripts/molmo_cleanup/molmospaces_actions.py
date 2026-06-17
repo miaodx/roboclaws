@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -194,6 +195,69 @@ def navigate_to_waypoint(
         robot_pose=robot_pose,
         robot_control_provenance=state.get("robot_control_provenance"),
         qpos_changed=qpos_changed,
+        backend=hooks.backend,
+    )
+
+
+def navigate_to_relative_pose(
+    state: dict[str, Any],
+    *,
+    forward_m: float = 0.0,
+    lateral_m: float = 0.0,
+    yaw_delta_deg: float = 0.0,
+    hooks: MolmoActionHooks,
+) -> dict[str, Any]:
+    hooks.count(state, "navigate_to_relative_pose")
+    requested = _relative_delta(forward_m, lateral_m, yaw_delta_deg)
+    if not state.get("robot_included"):
+        return hooks.error(
+            "navigate_to_relative_pose",
+            "relative_navigation_requires_robot",
+            status="blocked_capability",
+            requested_delta=requested,
+            applied_delta=_relative_delta(),
+            backend=hooks.backend,
+        )
+    previous_pose = dict(state.get("robot_pose") or {})
+    if not previous_pose:
+        return hooks.error(
+            "navigate_to_relative_pose",
+            "robot_pose_unavailable",
+            status="blocked_capability",
+            requested_delta=requested,
+            applied_delta=_relative_delta(),
+            backend=hooks.backend,
+        )
+    robot_pose = _pose_after_relative_delta(previous_pose, requested)
+    model, data = hooks.load_model_data_for_state(state)
+    hooks.apply_qpos(data, state["qpos"])
+    mujoco.mj_forward(model, data)
+    hooks.set_robot_pose(model, data, robot_pose)
+    state["robot_pose"] = robot_pose
+    state.setdefault("robot_trajectory", []).append(robot_pose)
+    held_object_pose = hooks.sync_held_object_to_robot_pose(model, data, state)
+    mujoco.mj_forward(model, data)
+    hooks.refresh_object_positions(model, data, state)
+    state["qpos"] = [float(value) for value in data.qpos]
+    return hooks.ok(
+        "navigate_to_relative_pose",
+        primitive_provenance=hooks.api_semantic_provenance,
+        requested_delta=requested,
+        applied_delta=requested,
+        applied_forward_m=requested["forward_m"],
+        applied_lateral_m=requested["lateral_m"],
+        applied_yaw_delta_deg=requested["yaw_delta_deg"],
+        frame_id="base_link",
+        pose_source="relative_robot_frame",
+        state_mutation=hooks.robot_pose_state_mutation(held_object_pose is not None),
+        held_object_pose=held_object_pose,
+        robot_name=state.get("robot_name"),
+        robot_pose=robot_pose,
+        robot_control_provenance=state.get("robot_control_provenance"),
+        qpos_changed=True,
+        clamped=False,
+        clamp_metadata={"backend_limits_enforced": False},
+        requires_reobserve=True,
         backend=hooks.backend,
     )
 
@@ -503,6 +567,58 @@ def close_receptacle_state_mutation(
     if held_object_changed:
         parts.append("held_object_freejoint_qpos")
     return "+".join(parts) if parts else "no_openable_joint"
+
+
+def _relative_delta(
+    forward_m: float = 0.0,
+    lateral_m: float = 0.0,
+    yaw_delta_deg: float = 0.0,
+) -> dict[str, float]:
+    return {
+        "forward_m": round(float(forward_m), 4),
+        "lateral_m": round(float(lateral_m), 4),
+        "yaw_delta_deg": round(float(yaw_delta_deg), 4),
+    }
+
+
+def _pose_after_relative_delta(
+    pose: dict[str, Any],
+    delta: dict[str, float],
+) -> dict[str, Any]:
+    yaw_rad = _pose_yaw_rad(pose)
+    forward = delta["forward_m"]
+    lateral = delta["lateral_m"]
+    result = dict(pose)
+    result["x"] = round(
+        float(pose.get("x") or 0.0) + forward * math.cos(yaw_rad) - lateral * math.sin(yaw_rad),
+        4,
+    )
+    result["y"] = round(
+        float(pose.get("y") or 0.0) + forward * math.sin(yaw_rad) + lateral * math.cos(yaw_rad),
+        4,
+    )
+    if "theta" in result:
+        result["theta"] = round(
+            float(result.get("theta") or 0.0) + math.radians(delta["yaw_delta_deg"]),
+            6,
+        )
+    else:
+        result["yaw_deg"] = round(_pose_yaw_deg(pose) + delta["yaw_delta_deg"], 4)
+    result["pose_source"] = "relative_robot_frame"
+    result["relative_pose_delta"] = dict(delta)
+    return result
+
+
+def _pose_yaw_rad(pose: dict[str, Any]) -> float:
+    if pose.get("theta") is not None:
+        return float(pose.get("theta") or 0.0)
+    return math.radians(_pose_yaw_deg(pose))
+
+
+def _pose_yaw_deg(pose: dict[str, Any]) -> float:
+    if pose.get("yaw_deg") is not None:
+        return float(pose.get("yaw_deg") or 0.0)
+    return math.degrees(float(pose.get("theta") or 0.0))
 
 
 def done_cleanup(

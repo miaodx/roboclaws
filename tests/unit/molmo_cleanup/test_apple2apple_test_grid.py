@@ -57,7 +57,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
         "backend=mujoco",
         "intent=map-build",
         "agent_engine=direct-runner",
-        "evidence_lane=world-oracle-labels",
+        "evidence_lane=world-public-labels",
     ]
     assert "scenario_setup=baseline" in setup_command
     assert "map_bundle=assets/maps/molmospaces-procthor-val-0-7" in setup_command

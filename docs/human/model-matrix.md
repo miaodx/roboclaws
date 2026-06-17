@@ -142,12 +142,12 @@ Open-ended thinking A/B:
 ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=enabled \
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco \
   agent_engine=openai-agents-sdk provider_profile=kimi-openai-chat \
-  evidence_lane=world-oracle-labels prompt="find something useful to drink"
+  evidence_lane=world-public-labels prompt="find something useful to drink"
 
 ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=disabled \
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco \
   agent_engine=openai-agents-sdk provider_profile=kimi-openai-chat \
-  evidence_lane=world-oracle-labels prompt="find something useful to drink"
+  evidence_lane=world-public-labels prompt="find something useful to drink"
 ```
 
 Compare `run_result.json`, `openai-agents-trace.json`, model-call usage,

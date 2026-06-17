@@ -52,7 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "Generated mess count override. Defaults to 5 for world-oracle-labels entries "
+            "Generated mess count override. Defaults to 5 for world-public-labels entries "
             "and 10 for camera-raw-fpv entries so the RAW_FPV success gate can require "
             "7 accepted placements."
         ),

@@ -98,7 +98,7 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
         "preset=cleanup",
         "agent_engine=codex-cli",
         "provider_profile=codex-env",
-        "evidence_lane=world-oracle-labels",
+        "evidence_lane=world-public-labels",
         "seed=7",
         "output_dir=/tmp/roboclaws-eval-surface-test",
         "run_dir=/tmp/roboclaws-eval-surface-test/seed-7",
@@ -120,10 +120,10 @@ def test_surface_cleanup_live_run_dir_reaches_molmo_impl() -> None:
     ) in " ".join(plan_trace)
 
 
-def test_surface_live_smoke_uses_world_oracle_server_evidence_lane() -> None:
+def test_surface_live_smoke_uses_world_public_server_evidence_lane() -> None:
     recipe = (REPO_ROOT / "just" / "molmo.just").read_text(encoding="utf-8")
 
-    assert 'implementation_evidence_lane="world-oracle-labels"' in recipe
+    assert 'implementation_evidence_lane="world-public-labels"' in recipe
     assert '--evidence-lane "$implementation_evidence_lane"' in recipe
     assert '--evidence-lane "$profile"' not in recipe
     assert '--checker-profile "$implementation_evidence_lane"' in recipe

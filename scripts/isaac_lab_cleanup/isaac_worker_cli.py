@@ -214,6 +214,11 @@ def _add_action_parsers(
         help="Public waypoint payload from the cleanup map contract.",
     )
 
+    relative = subparsers.add_parser("navigate_to_relative_pose")
+    relative.add_argument("--forward-m", type=float, default=0.0)
+    relative.add_argument("--lateral-m", type=float, default=0.0)
+    relative.add_argument("--yaw-delta-deg", type=float, default=0.0)
+
     done = subparsers.add_parser("done")
     done.add_argument("--reason", default="")
 

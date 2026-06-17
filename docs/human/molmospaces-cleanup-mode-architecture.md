@@ -11,7 +11,7 @@ camera_labeler only applies to evidence_lane=camera-grounded-labels and decides
 how camera labels are produced.
 ```
 
-Current evidence lanes are `world-oracle-labels`, `world-public-labels`,
+Current evidence lanes are `world-public-labels`, `world-public-labels`,
 `camera-grounded-labels`, and `camera-raw-fpv`. `smoke` remains a cheap
 synthetic verification preset, not a real evidence lane. The old names below
 are retained as historical rationale and should not be copied into new command
@@ -60,9 +60,9 @@ just run::surface surface=household-world world=<world> backend=<backend> preset
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-public-labels
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=camera-raw-fpv
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 ```
 
 No backward compatibility is required for this refactor. The new names can
@@ -283,7 +283,7 @@ future implementation can change `input_provenance` to `vlm_detector` or
 
 The profile should remain stable when that happens. Model choice belongs to
 pipeline provenance, not to the profile name. Current pipeline values include
-`sim`, `fake-http`, and detector-only routes such as `grounding-dino`, `yoloe`,
+`sim`, `grounding-dino`, and detector-only routes such as `grounding-dino`, `yoloe`,
 `yolo-world`, and `omdet-turbo`. They should all feed the same
 `declare_visual_candidates` contract and produce the same normalized candidate
 shape.

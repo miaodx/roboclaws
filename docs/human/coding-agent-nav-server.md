@@ -16,15 +16,15 @@ uv sync --extra dev
 Use `just run::surface` for normal runs:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-public-labels
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
 ```
 
 For map-only work:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 ```
 
 The launch catalog resolves world, backend, intent, provider profile, goal
@@ -52,7 +52,7 @@ OpenAI Agents SDK runner, and shell helpers use that registry for default
 models, required env keys, wire API, route health, and route capabilities.
 Evidence-lane gating stays separate from provider metadata: `camera-raw-fpv`
 requires model image input plus verified runtime image transport, while
-structured lanes such as `world-oracle-labels` and `camera-grounded-labels`
+structured lanes such as `world-public-labels` and `camera-grounded-labels`
 can use text-only routes. MiMo inside `mimo-1000` is default-enabled for
 on-demand benchmark and explicit OpenAI-Agents-SDK text experiments, not a
 product cleanup default. Kimi OpenAI Chat defaults to `kimi-k2.7-code`;

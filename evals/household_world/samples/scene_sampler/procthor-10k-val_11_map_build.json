@@ -7,7 +7,7 @@
   "preset": "map-build",
   "world": "molmospaces/procthor-10k-val/11",
   "backend": "mujoco",
-  "evidence_lane": "world-oracle-labels",
+  "evidence_lane": "world-public-labels",
   "camera_labeler": "not_applicable",
   "scenario_setup": "baseline",
   "seed": 7,
@@ -53,7 +53,7 @@
   },
   "launch_overrides": {
     "agent_engine": "direct-runner",
-    "evidence_lane": "world-oracle-labels",
+    "evidence_lane": "world-public-labels",
     "seed": 7,
     "scenario_setup": "baseline",
     "scene_source": "procthor-10k-val",

@@ -279,10 +279,11 @@ VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
     --pipeline real-router --adapter-mode real
 ```
 
-如果只是验证 HTTP contract，不要把 fake service 当作硬件验收证据：
+如果只是验证 HTTP contract，使用同一个 detector sidecar；缺少真实依赖时它应留下
+missing-sidecar / adapter-unavailable 证据，而不是伪造候选：
 
 ```bash
-.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline grounding-dino
 ```
 
 ## 命令行运行
@@ -444,5 +445,5 @@ arbitrary coordinate navigation 或额外 local nudge。
 - `camera-raw-fpv` / RAW_FPV-only cleanup lane：当前 Agibot 硬件验收使用
   `camera-grounded-labels`。但 `head_color` RAW_FPV preflight 是现场前置检查，用来证明
   policy camera 本身可读。
-- fake visual-grounding service：只能做 HTTP contract 验证，不能作为 hardware evidence。
+- fake visual-grounding service：不是当前验收路径，不能作为 hardware evidence。
 - synthetic cleanup 消费 Agibot snapshot：这是后续合约清理项，不是现场前置条件。
