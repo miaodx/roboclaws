@@ -144,7 +144,30 @@ def test_mimo_inside_is_default_enabled_openai_chat_route() -> None:
     assert route.supported_engines == ("openai-agents-sdk",)
     assert route.base_url_env == "MIMO_BASE_URL"
     assert route.api_key_env == "MIMO_API_KEY"
+    assert route.required_env_keys == ("MIMO_BASE_URL", "MIMO_API_KEY")
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_PROVISIONAL
+
+
+def test_mimo_inside_readiness_requires_base_url_and_api_key() -> None:
+    missing_base_url = provider_readiness(
+        agent_engine="openai-agents-sdk",
+        provider_profile="mimo-inside-openai-chat",
+        env={"MIMO_API_KEY": "key"},
+    )
+
+    assert missing_base_url["ok"] is False
+    assert missing_base_url["missing_env"] == ["MIMO_BASE_URL"]
+    assert "MIMO_BASE_URL and MIMO_API_KEY" in missing_base_url["message"]
+
+    ready = provider_readiness(
+        agent_engine="openai-agents-sdk",
+        provider_profile="mimo-inside-openai-chat",
+        env={"MIMO_BASE_URL": "https://inside.example/v1", "MIMO_API_KEY": "key"},
+    )
+
+    assert ready["ok"] is True
+    assert ready["missing_env"] == []
+    assert ready["model"] == "mimo-1000"
 
 
 def test_provider_route_aliases_normalize_to_public_profiles() -> None:

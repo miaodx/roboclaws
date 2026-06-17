@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: MiMo inside provider readiness now requires the base URL as well
+  as the API key. `mimo-inside-openai-chat` declares both `MIMO_BASE_URL` and
+  `MIMO_API_KEY` as required env keys, matching its no-default-base-url
+  provider contract. Provider readiness and operator-console readiness now
+  block when only `MIMO_API_KEY` is present instead of reporting the on-demand
+  route startable with an empty base URL. Behavior-change class: fail-aloud
+  provider readiness; provider profile ids, route default model, public launch
+  axes, and documented operator setup are unchanged. Metric: ratchet remains at
+  0 complexity rows and 79 oversized modules. Proof: focused provider catalog
+  and operator-console provider/readiness tests, touched-file ruff and format
+  check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Coding-agent shell helpers now fail aloud for explicit unknown
   model overrides before launch config generation. `provider_registry.py`
   exposes a `model-id` lookup command, and `scripts/dev/coding_agent_env.sh`

@@ -738,6 +738,33 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
     assert kimi["provider"]["model"] == "kimi-k2.7-code"
 
 
+def test_provider_gate_requires_mimo_inside_base_url(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
+
+    missing_base_url = route_readiness(
+        tmp_path,
+        route,
+        env={"MIMO_API_KEY": "key"},
+        overrides={"port": _free_port(), "provider_profile": "mimo-inside-openai-chat"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-inside-openai-chat"},
+    )
+
+    assert missing_base_url["can_start"] is False
+    assert missing_base_url["blocker_kind"] == "needs_provider"
+    assert "MIMO_BASE_URL and MIMO_API_KEY" in missing_base_url["blocker"]
+
+    ready = route_readiness(
+        tmp_path,
+        route,
+        env={"MIMO_BASE_URL": "https://inside.example/v1", "MIMO_API_KEY": "key"},
+        overrides={"port": _free_port(), "provider_profile": "mimo-inside-openai-chat"},
+        env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-inside-openai-chat"},
+    )
+
+    assert ready["can_start"] is True
+    assert ready["provider"]["provider"] == "mimo-inside-openai-chat"
+
+
 def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_CLAUDE_OPEN_TASK)
 

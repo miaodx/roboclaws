@@ -733,6 +733,17 @@ unchanged. Proof passed with focused provider catalog and dev-tool shell
 helper tests, ruff, format check, `bash -n`, py_compile, `git diff --check`,
 and ratchet.
 
+Implementation refresh on 2026-06-18 closed a MiMo inside readiness false-green.
+`mimo-inside-openai-chat` now declares both `MIMO_BASE_URL` and `MIMO_API_KEY`
+as required env keys, matching its no-default-base-url provider contract.
+Provider readiness and operator-console readiness now block when only
+`MIMO_API_KEY` is present instead of reporting the on-demand route startable
+with an empty base URL. Behavior-change class: fail-aloud provider readiness;
+provider profile ids, route default model, public launch axes, and documented
+operator setup remain unchanged. Proof passed with focused provider catalog and
+operator-console provider/readiness tests, ruff, format check, py_compile,
+`git diff --check`, and ratchet.
+
 Implementation refresh on 2026-06-18 closed the parked operator-console
 route-fixture drift that followed the provider-env slice. The operator-console
 route registry now tracks the current source-aware MolmoSpaces catalog:
