@@ -1,0 +1,206 @@
+{
+  "display_adjustment": {
+    "global_tilt_deg": 0.0,
+    "status": "review_display_only"
+  },
+  "labels": [
+    {
+      "category": "meeting_room",
+      "geometry": {
+        "frame_id": "map",
+        "points": [
+          {
+            "x": -8.7,
+            "y": 0.5
+          },
+          {
+            "x": -5.5,
+            "y": 0.5
+          },
+          {
+            "x": -5.5,
+            "y": 4.8
+          },
+          {
+            "x": -8.7,
+            "y": 4.8
+          }
+        ],
+        "source": "manual_review",
+        "type": "map_polygon"
+      },
+      "label_id": "meeting_room_a",
+      "map_area_id": "west_corridor",
+      "operator_note": "Seeded from prior operator row; geometry is raw Map12 source frame.",
+      "review_status": "accepted",
+      "room_label": "Meeting room A",
+      "scene_partition_id": "meeting_room_a"
+    },
+    {
+      "category": "kitchen",
+      "geometry": {
+        "frame_id": "map",
+        "points": [
+          {
+            "x": -4.0,
+            "y": -1.0
+          },
+          {
+            "x": 1.8,
+            "y": -1.0
+          },
+          {
+            "x": 1.8,
+            "y": 5.8
+          },
+          {
+            "x": -4.0,
+            "y": 5.8
+          }
+        ],
+        "source": "manual_review",
+        "type": "map_polygon"
+      },
+      "label_id": "meeting_room_b",
+      "map_area_id": "central_floor",
+      "operator_note": "Seeded from prior operator row; scene partition name is not trusted as final room identity.",
+      "review_status": "accepted",
+      "room_label": "Open kitchen",
+      "scene_partition_id": "meeting_room_b"
+    },
+    {
+      "category": "meeting_room",
+      "geometry": {
+        "frame_id": "map",
+        "points": [
+          {
+            "x": -5.8,
+            "y": 3.0
+          },
+          {
+            "x": 1.8,
+            "y": 3.0
+          },
+          {
+            "x": 1.8,
+            "y": 7.8
+          },
+          {
+            "x": -5.8,
+            "y": 7.8
+          }
+        ],
+        "source": "manual_review",
+        "type": "map_polygon"
+      },
+      "label_id": "meeting_room_c",
+      "map_area_id": "north_fixture_area",
+      "operator_note": "Seeded from prior operator row; geometry is raw Map12 source frame.",
+      "review_status": "accepted",
+      "room_label": "Meeting room B",
+      "scene_partition_id": "meeting_room_c"
+    },
+    {
+      "category": "living_room",
+      "geometry": {
+        "frame_id": "map",
+        "points": [
+          {
+            "x": -1.0,
+            "y": -4.8
+          },
+          {
+            "x": 2.4,
+            "y": -4.8
+          },
+          {
+            "x": 2.4,
+            "y": -2.8
+          },
+          {
+            "x": -1.0,
+            "y": -2.8
+          }
+        ],
+        "source": "manual_review",
+        "type": "map_polygon"
+      },
+      "label_id": "reception_area_a",
+      "map_area_id": "south_fixture_area",
+      "operator_note": "Blocked from runtime because south_fixture_area is shared by multiple scene labels.",
+      "review_status": "blocked_shared_area",
+      "room_label": "Main hall / living area",
+      "scene_partition_id": "reception_area_a"
+    },
+    {
+      "category": "corridor",
+      "geometry": {
+        "frame_id": "map",
+        "points": [
+          {
+            "x": -1.0,
+            "y": -4.8
+          },
+          {
+            "x": 2.4,
+            "y": -4.8
+          },
+          {
+            "x": 2.4,
+            "y": -2.8
+          },
+          {
+            "x": -1.0,
+            "y": -2.8
+          }
+        ],
+        "source": "manual_review",
+        "type": "map_polygon"
+      },
+      "label_id": "short_corridor_a",
+      "map_area_id": "south_fixture_area",
+      "operator_note": "Draft only; prior merge reused the same south_fixture_area polygon.",
+      "review_status": "draft",
+      "room_label": "Corridor",
+      "scene_partition_id": "short_corridor_a"
+    },
+    {
+      "category": "storage_room",
+      "geometry": {
+        "frame_id": "map",
+        "points": [
+          {
+            "x": -1.0,
+            "y": -4.8
+          },
+          {
+            "x": 2.4,
+            "y": -4.8
+          },
+          {
+            "x": 2.4,
+            "y": -2.8
+          },
+          {
+            "x": -1.0,
+            "y": -2.8
+          }
+        ],
+        "source": "manual_review",
+        "type": "map_polygon"
+      },
+      "label_id": "storage_room_a",
+      "map_area_id": "south_fixture_area",
+      "operator_note": "Blocked from runtime because south_fixture_area is shared by multiple scene labels.",
+      "review_status": "blocked_shared_area",
+      "room_label": "Storage room",
+      "scene_partition_id": "storage_room_a"
+    }
+  ],
+  "schema": "b1_map12_alignment_review_v1",
+  "source_assets": {
+    "map_bundle": "assets/maps/agibot-robot-map-12",
+    "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated",
+    "scene_usd_path": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+  }
+}

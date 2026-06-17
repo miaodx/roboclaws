@@ -6,6 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from scripts.molmo_cleanup import planner_probe_runtime_diagnostics as runtime
+from scripts.molmo_cleanup import planner_probe_task_sampler_diagnostics as sampler
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROBE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_planner_manipulation_probe.py"
 
@@ -22,24 +25,22 @@ def _load_probe_module():
 
 
 def test_renderer_device_id_only_applies_to_execute_mode() -> None:
-    probe = _load_probe_module()
-
     assert (
-        probe._renderer_device_id_for_probe(
+        runtime.renderer_device_id_for_probe(
             probe_mode="execute",
             renderer_device_id=0,
         )
         == 0
     )
     assert (
-        probe._renderer_device_id_for_probe(
+        runtime.renderer_device_id_for_probe(
             probe_mode="config_import",
             renderer_device_id=0,
         )
         is None
     )
     assert (
-        probe._renderer_device_id_for_probe(
+        runtime.renderer_device_id_for_probe(
             probe_mode="execute",
             renderer_device_id=-1,
         )
@@ -48,20 +49,18 @@ def test_renderer_device_id_only_applies_to_execute_mode() -> None:
 
 
 def test_configure_headless_renderer_env_sets_egl(monkeypatch) -> None:
-    probe = _load_probe_module()
     monkeypatch.delenv("MUJOCO_GL", raising=False)
     monkeypatch.delenv("PYOPENGL_PLATFORM", raising=False)
     monkeypatch.delenv("ROBOCLAWS_MOLMOSPACES_RENDERER_DEVICE_ID", raising=False)
 
-    probe._configure_headless_renderer_env(Namespace(probe_mode="execute", renderer_device_id=0))
+    runtime.configure_headless_renderer_env(Namespace(probe_mode="execute", renderer_device_id=0))
 
-    assert "egl" == probe.os.environ["MUJOCO_GL"]
-    assert "egl" == probe.os.environ["PYOPENGL_PLATFORM"]
-    assert "0" == probe.os.environ["ROBOCLAWS_MOLMOSPACES_RENDERER_DEVICE_ID"]
+    assert "egl" == runtime.os.environ["MUJOCO_GL"]
+    assert "egl" == runtime.os.environ["PYOPENGL_PLATFORM"]
+    assert "0" == runtime.os.environ["ROBOCLAWS_MOLMOSPACES_RENDERER_DEVICE_ID"]
 
 
 def test_patch_renderer_constructor_injects_missing_device_id() -> None:
-    probe = _load_probe_module()
     calls: list[dict[str, Any]] = []
 
     class FakeRenderer:
@@ -70,7 +69,7 @@ def test_patch_renderer_constructor_injects_missing_device_id() -> None:
 
     env_module = SimpleNamespace(MjOpenGLRenderer=FakeRenderer)
 
-    probe._patch_renderer_constructor(env_module, renderer_device_id=0)
+    runtime.patch_renderer_constructor(env_module, renderer_device_id=0)
 
     env_module.MjOpenGLRenderer()
     env_module.MjOpenGLRenderer(device_id=None)
@@ -88,12 +87,24 @@ def test_runtime_diagnostics_records_renderer_override(monkeypatch) -> None:
     monkeypatch.setenv("MUJOCO_GL", "egl")
     monkeypatch.setenv("PYOPENGL_PLATFORM", "egl")
 
-    diagnostics = probe._runtime_diagnostics(
+    diagnostics = runtime.runtime_diagnostics(
         Namespace(
             embodiment="franka",
             probe_mode="execute",
             renderer_device_id=0,
-        )
+        ),
+        curobo_memory_profile_request=probe._curobo_memory_profile_request(
+            Namespace(
+                rby1m_curobo_memory_profile="none",
+                curobo_policy_batch_size=None,
+                curobo_max_batch_plan_attempts=None,
+                curobo_num_trajopt_seeds=None,
+                curobo_num_ik_seeds=None,
+                curobo_max_attempts=None,
+                curobo_trajopt_tsteps=None,
+                curobo_disable_finetune_trajopt=False,
+            )
+        ),
     )
 
     assert diagnostics["renderer_adapter_enabled"] is True
@@ -103,7 +114,6 @@ def test_runtime_diagnostics_records_renderer_override(monkeypatch) -> None:
 
 
 def test_cuda_memory_diagnostics_from_torch_records_headroom(monkeypatch) -> None:
-    probe = _load_probe_module()
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
     monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
@@ -160,8 +170,11 @@ def test_cuda_memory_diagnostics_from_torch_records_headroom(monkeypatch) -> Non
         version=SimpleNamespace(cuda="12.8"),
     )
 
-    diagnostics = probe._cuda_memory_diagnostics_from_torch(fake_torch)
-    snapshot = probe._cuda_memory_snapshot_from_torch(fake_torch, "execute_policy_run_start")
+    diagnostics = runtime.cuda_memory_diagnostics_from_torch(fake_torch)
+    snapshot = runtime.cuda_memory_snapshot_from_torch(
+        fake_torch,
+        "execute_policy_run_start",
+    )
 
     assert diagnostics["available"] is True
     assert diagnostics["device_count"] == 1
@@ -245,8 +258,7 @@ def test_worker_payload_from_stdout_preserves_timeout_diagnostics() -> None:
 
 
 def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="pickup/body",
             cleanup_target_receptacle_id="target/body",
@@ -261,7 +273,7 @@ def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None
         "place_target_name": "target/body",
     }
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+    result = sampler.cleanup_primitive_binding_from_sampled_task(requested, sampled)
 
     assert result["promoted"] is True
     binding = result["cleanup_primitive_binding"]
@@ -278,8 +290,7 @@ def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None
 
 
 def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="observed_001",
             cleanup_target_receptacle_id="sink_01",
@@ -296,7 +307,7 @@ def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases
         "place_target_name": "sink/body",
     }
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+    result = sampler.cleanup_primitive_binding_from_sampled_task(requested, sampled)
 
     assert result["promoted"] is True
     binding = result["cleanup_primitive_binding"]
@@ -307,8 +318,7 @@ def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases
 
 
 def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="observed_001",
             cleanup_target_receptacle_id="sink_01",
@@ -323,7 +333,7 @@ def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
         "place_target_name": "different_target",
     }
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+    result = sampler.cleanup_primitive_binding_from_sampled_task(requested, sampled)
 
     assert result["promoted"] is False
     assert result["cleanup_primitive_binding"] is None
@@ -334,8 +344,7 @@ def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
 
 
 def test_cleanup_primitive_binding_blocks_planner_alias_mismatch() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="observed_001",
             cleanup_target_receptacle_id="sink_01",
@@ -346,7 +355,7 @@ def test_cleanup_primitive_binding_blocks_planner_alias_mismatch() -> None:
         )
     )
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(
+    result = sampler.cleanup_primitive_binding_from_sampled_task(
         requested,
         {
             "schema": "planner_probe_sampled_task_binding_v1",
@@ -450,8 +459,7 @@ def test_policy_exception_context_classifies_no_planned_trajectory() -> None:
 
 
 def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="",
             cleanup_target_receptacle_id="",
@@ -460,7 +468,7 @@ def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
         )
     )
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(
+    result = sampler.cleanup_primitive_binding_from_sampled_task(
         requested,
         {"pickup_obj_name": "pickup/body", "place_receptacle_name": "target/body"},
     )
@@ -472,14 +480,13 @@ def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
 
 
 def test_curobo_extension_cache_entry_records_lock_and_binary(tmp_path: Path) -> None:
-    probe = _load_probe_module()
     build_dir = tmp_path / "lbfgs_step_cu"
     build_dir.mkdir()
     (build_dir / "lbfgs_step_cu.so").write_bytes(b"binary")
     (build_dir / "lock").write_text("", encoding="utf-8")
     (build_dir / "build.ninja").write_text("rule build\n", encoding="utf-8")
 
-    entry = probe._curobo_extension_cache_entry("lbfgs_step_cu", build_dir)
+    entry = runtime.curobo_extension_cache_entry("lbfgs_step_cu", build_dir)
 
     assert entry["exists"] is True
     assert entry["so_exists"] is True
@@ -492,8 +499,6 @@ def test_curobo_extension_cache_entry_records_lock_and_binary(tmp_path: Path) ->
 
 
 def test_warp_torch_adapter_adds_minimal_namespace() -> None:
-    probe = _load_probe_module()
-
     def device_from_torch(value: object) -> object:
         return value
 
@@ -504,8 +509,8 @@ def test_warp_torch_adapter_adds_minimal_namespace() -> None:
         stream_from_torch=lambda value: value,
     )
 
-    adapter = probe._apply_warp_torch_adapter_to_module(fake_warp)
-    diagnostics = probe._warp_compatibility_from_module(fake_warp, adapter)
+    adapter = runtime.apply_warp_torch_adapter_to_module(fake_warp)
+    diagnostics = runtime.warp_compatibility_from_module(fake_warp, adapter)
 
     assert adapter["applied"] is True
     assert fake_warp.torch.device_from_torch("cuda:0") == "cuda:0"

@@ -1,0 +1,19 @@
+{
+  "anchors": [],
+  "bbox_seed_policy": "known_poor_seed_only",
+  "notes": [
+    "Residual-backed transform anchors are intentionally separate from the human label review manifest.",
+    "No accepted anchors are checked in yet; run the correspondence review/fitter workflow after operator picks are available."
+  ],
+  "scene_projection_policy": {
+    "horizontal_axes": [
+      "x",
+      "z"
+    ],
+    "source": "usd_stage_up_axis_and_robot_pose_convention",
+    "up_axis": "y"
+  },
+  "schema": "b1_map12_scene_correspondences_v1",
+  "source_map_frame": "robot_map_12_map",
+  "target_scene_frame": "b1_rebuilt_scene_usd_world"
+}

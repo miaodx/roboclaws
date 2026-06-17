@@ -21,12 +21,12 @@ This skill works at the map-artifact boundary:
   `agibot/occupancy.pgm`, `agibot/source.json`, and optional raw map provenance.
 - Input: public scene-engine asset partitions such as
   `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/*/scene_gs.usda`.
-- Output: `actionable_semantic_map_snapshot_v1`, a
-  `scene_room_semantic_overlay_v1`, or a Nav2 map bundle copy with public room
-  semantics applied.
+- Output: `actionable_semantic_map_snapshot_v1` or a
+  `scene_room_semantic_overlay_v1` review-evidence artifact.
 - Consumer path: pass the snapshot to cleanup or open household tasks through
-  `runtime_map_prior=...`; pass a generated room-semantic bundle through
-  `map_bundle=...`.
+  `runtime_map_prior=...`. For B1 / Map 12, compile raw Map12 plus
+  `assets/maps/b1-map12-alignment-review.json` into a generated runtime bundle
+  with `scripts/maps/compile_b1_map12_runtime_bundle.py`.
 
 Do not add an Agibot-specific cleanup loading path. Do not mutate the source
 map folder. Do not read or write private cleanup truth such as generated mess
@@ -76,8 +76,7 @@ Generate a public room semantic overlay from the rebuilt B1 scene-engine asset:
 python skills/actionable-semantic-map-conversion/scripts/generate_scene_room_overlay.py \
   data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --source-bundle-dir assets/maps/agibot-robot-map-12 \
-  --output output/maps/b1-map12-room-semantics/room_semantic_overlay.json \
-  --apply-to-bundle output/maps/b1-map12-room-semantics/map_bundle
+  --output output/maps/b1-map12/scene_room_semantic_overlay.json
 ```
 
 When the automatically proposed category is not reliable enough, provide an
@@ -112,6 +111,7 @@ Review the summary before handing the snapshot to a task:
   are explicit;
 - movable objects appear only as non-actionable observed-object priors;
 - room overlays keep asset partition ids separate from public semantic labels;
+- room overlays are review evidence, not product map bundles;
 - low-confidence or generic rooms appear in `review_queue` and should be
   checked with a rendered room overview or operator review;
 - no private truth keys are present.
@@ -128,7 +128,7 @@ snapshot contract:
 For scene room semantic overlays, run:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_scene_room_semantic_overlay.py -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_scene_room_semantic_overlay.py tests/contract/maps/test_b1_map12_runtime_bundle.py -q
 ```
 
 For a downstream consumer proof, run a cleanup task with the generated snapshot:

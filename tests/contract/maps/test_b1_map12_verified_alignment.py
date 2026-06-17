@@ -24,6 +24,7 @@ from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_read
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "fit_b1_map12_scene_alignment.py"
+RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
 
 def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, object]:
@@ -126,7 +127,7 @@ def test_fitter_keeps_alignment_candidate_without_six_reviewed_anchors(tmp_path:
 
     payload = build_alignment_residuals(
         manifest,
-        map_bundle=REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics",
+        map_bundle=RAW_MAP12_BUNDLE,
         output_dir=tmp_path,
     )
 
@@ -142,7 +143,7 @@ def test_fitter_selects_simple_verified_similarity_transform(tmp_path: Path) -> 
 
     payload = build_alignment_residuals(
         manifest,
-        map_bundle=REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics",
+        map_bundle=RAW_MAP12_BUNDLE,
         output_dir=tmp_path,
     )
 
@@ -162,7 +163,7 @@ def test_readiness_promotes_verified_only_from_residual_artifact(tmp_path: Path)
     }
     alignment = build_alignment_residuals(
         correspondence_manifest(anchors=passing_anchors()),
-        map_bundle=REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics",
+        map_bundle=RAW_MAP12_BUNDLE,
         output_dir=tmp_path,
     )
 
@@ -225,7 +226,7 @@ def test_readiness_records_area_verified_only_when_global_fit_fails(tmp_path: Pa
     ]
     alignment = build_alignment_residuals(
         correspondence_manifest(anchors=anchors),
-        map_bundle=REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics",
+        map_bundle=RAW_MAP12_BUNDLE,
         output_dir=tmp_path,
     )
 
@@ -341,7 +342,7 @@ def test_alignment_fitter_cli_writes_residual_artifact(tmp_path: Path) -> None:
             "--correspondences",
             str(manifest_path),
             "--map-bundle",
-            str(REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics"),
+            str(RAW_MAP12_BUNDLE),
             "--output-dir",
             str(output_dir),
         ],
@@ -371,7 +372,7 @@ def test_review_packet_keeps_proposed_anchor_pending() -> None:
 
     packet = build_review_packet(
         manifest,
-        map_bundle=REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics",
+        map_bundle=RAW_MAP12_BUNDLE,
     )
 
     assert packet["schema"] == "b1_map12_correspondence_review_packet_v1"
@@ -396,7 +397,7 @@ def test_review_packet_flags_seed_derived_accepted_anchor_not_fit_ready() -> Non
 
     packet = build_review_packet(
         manifest,
-        map_bundle=REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics",
+        map_bundle=RAW_MAP12_BUNDLE,
     )
 
     assert packet["review_status"] == "manifest_needs_fix"

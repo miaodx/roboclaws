@@ -151,7 +151,7 @@ run dispatch_target agent_engine mode="" *overrides:
         cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|max_wall_seconds|min_generated_mess_count|\
-        map_bundle|mode|output_dir|policy|port|prompt|provider|\
+        b1_alignment_review|map_bundle|mode|output_dir|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
@@ -360,6 +360,7 @@ run dispatch_target agent_engine mode="" *overrides:
         host="$(get host 127.0.0.1)"
         port="$(get port 18788)"
         map_bundle="$(get map_bundle auto)"
+        b1_alignment_review="$(get b1_alignment_review "")"
         cleanup_routine="$(get cleanup_routine skill)"
         case "$cleanup_routine" in
           auto|skill)
@@ -754,7 +755,7 @@ run dispatch_target agent_engine mode="" *overrides:
           "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend"
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path"
           "$min_generated_mess_count" "$generated_mess_object_ids" "$dispatch_surface"
-          "$resolved_task_intent" "$operator_messages_path"
+          "$resolved_task_intent" "$operator_messages_path" "$b1_alignment_review"
         )
         run_dir_override="$(get run_dir "")"
         if [[ -n "$run_dir_override" ]]; then

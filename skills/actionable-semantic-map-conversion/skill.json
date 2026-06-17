@@ -26,14 +26,13 @@
     {
       "path": "scripts/generate_scene_room_overlay.py",
       "kind": "room_semantic_overlay",
-      "summary": "Generates scene_room_semantic_overlay_v1 from scene-engine/Gaussian asset partitions and can apply it to a public Nav2 map bundle for Base Navigation Map room labels."
+      "summary": "Generates scene_room_semantic_overlay_v1 review evidence from scene-engine/Gaussian asset partitions. B1 runtime bundle compilation is handled by scripts/maps/compile_b1_map12_runtime_bundle.py."
     }
   ],
   "evidence_outputs": [
     "actionable_semantic_map_snapshot.json",
     "materialized_targets.json",
-    "room_semantic_overlay.json",
-    "map_bundle/semantics.json"
+    "room_semantic_overlay.json"
   ],
   "lifecycle": {
     "refactor_signals": [

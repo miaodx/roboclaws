@@ -29,6 +29,7 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
+from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle  # noqa: E402
 from scripts.operator_console.semantic_map_preview import (  # noqa: E402
     render_semantic_map_preview as _render_semantic_map_preview,
 )
@@ -42,7 +43,12 @@ DEFAULT_WORK_DIR = Path("output/operator-console-scene-previews")
 DEFAULT_WIDTH = 900
 DEFAULT_HEIGHT = 560
 B1_MAP12_WORLD_ID = "b1-map12"
-B1_MAP_BUNDLE_DIR = Path("assets/maps/b1-map12-room-semantics")
+B1_MAP_BUNDLE_DIR = Path("assets/maps/agibot-robot-map-12")
+B1_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
+B1_ALIGNMENT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
+B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
+    "output/operator-console-scene-previews/b1-map12-runtime-map-bundle"
+)
 B1_SCENE_USD_PATH = Path(
     "data/robot-data-lab/scene-engine/data/"
     "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
@@ -63,8 +69,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "MuJoCo renders: Raw FPV is captured from the first public waypoint, "
             "Chase is the robot follower camera, and Top-down is a separate scene "
             "camera render rather than a semantic-map fallback. B1 / Map 12 "
-            "previews are static map assets generated from the committed map bundle "
-            "and scene semantic overlay so the console can show the experimental "
+            "previews are static map assets generated from the raw map bundle plus "
+            "the human review manifest so the console can show the experimental "
             "digital twin before Isaac starts without presenting fake FPV or chase "
             "camera frames."
         ),
@@ -403,19 +409,41 @@ def render_b1_map12_preview(
             "removed_stale": removed_stale,
         }
 
-    map_bundle = B1_MAP_BUNDLE_DIR
-    if not map_bundle.is_dir():
+    raw_map_bundle = B1_MAP_BUNDLE_DIR
+    if not raw_map_bundle.is_dir():
         return {
             "world_id": B1_MAP12_WORLD_ID,
             "scene_source": "b1-gaussian-digital-twin",
             "status": "map_bundle_missing",
-            "map_bundle": str(map_bundle),
+            "map_bundle": str(raw_map_bundle),
         }
+    if not B1_ALIGNMENT_REVIEW_MANIFEST.is_file():
+        return {
+            "world_id": B1_MAP12_WORLD_ID,
+            "scene_source": "b1-gaussian-digital-twin",
+            "status": "review_manifest_missing",
+            "review_manifest": str(B1_ALIGNMENT_REVIEW_MANIFEST),
+        }
+    try:
+        compile_runtime_bundle(
+            map_bundle=raw_map_bundle,
+            scene_root=B1_SCENE_ROOT,
+            review_manifest_path=B1_ALIGNMENT_REVIEW_MANIFEST,
+            output_dir=B1_RUNTIME_PREVIEW_BUNDLE_DIR,
+        )
+    except Exception as exc:
+        return {
+            "world_id": B1_MAP12_WORLD_ID,
+            "scene_source": "b1-gaussian-digital-twin",
+            "status": "runtime_bundle_compile_failed",
+            "error": str(exc),
+        }
+    map_bundle = B1_RUNTIME_PREVIEW_BUNDLE_DIR
     required_assets = (
         map_bundle / "preview.png",
-        map_bundle / "room_semantic_topdown.png",
+        map_bundle / "review_labels_topdown.png",
         map_bundle / "semantics.json",
-        map_bundle / "room_semantic_overlay.json",
+        map_bundle / "b1_runtime_provenance.json",
     )
     missing = [str(path) for path in required_assets if not path.is_file()]
     if missing:
@@ -427,12 +455,14 @@ def render_b1_map12_preview(
         }
 
     semantics = json.loads((map_bundle / "semantics.json").read_text(encoding="utf-8"))
-    overlay = json.loads((map_bundle / "room_semantic_overlay.json").read_text(encoding="utf-8"))
+    provenance = json.loads(
+        (map_bundle / "b1_runtime_provenance.json").read_text(encoding="utf-8")
+    )
     map_image = _fit_preview_image(
         Image.open(map_bundle / "preview.png"), width=width, height=height
     )
     topdown_image = _fit_preview_image(
-        Image.open(map_bundle / "room_semantic_topdown.png"),
+        Image.open(map_bundle / "review_labels_topdown.png"),
         width=width,
         height=height,
     )
@@ -444,7 +474,7 @@ def render_b1_map12_preview(
         map_path=map_path,
         topdown_path=topdown_path,
         semantics=semantics,
-        overlay=overlay,
+        provenance=provenance,
     )
     camera_result: dict[str, Any] | None = None
     if camera_artifact is not None:
@@ -960,9 +990,12 @@ def _b1_map12_preview_metadata(
     map_path: Path,
     topdown_path: Path,
     semantics: dict[str, Any],
-    overlay: dict[str, Any],
+    provenance: dict[str, Any],
 ) -> dict[str, Any]:
     rooms = semantics.get("rooms") if isinstance(semantics.get("rooms"), list) else []
+    review_labels = (
+        semantics.get("review_labels") if isinstance(semantics.get("review_labels"), list) else []
+    )
     waypoints = (
         semantics.get("inspection_waypoints")
         if isinstance(semantics.get("inspection_waypoints"), list)
@@ -977,12 +1010,15 @@ def _b1_map12_preview_metadata(
         "scene_source": "b1-gaussian-digital-twin",
         "scene_usd_path": str(B1_SCENE_USD_PATH),
         "map_bundle": str(B1_MAP_BUNDLE_DIR),
+        "runtime_map_bundle": str(B1_RUNTIME_PREVIEW_BUNDLE_DIR),
+        "review_manifest": str(B1_ALIGNMENT_REVIEW_MANIFEST),
         "render_resolution": {"width": width, "height": height},
+        "runtime_provenance": provenance,
         "views": {
             "map": {
                 "path": map_path.name,
                 "view": "source_map_preview",
-                "provenance": "b1_map12_room_semantics_preview_png",
+                "provenance": "raw_map12_preview_png",
                 "alignment_status": str(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),
@@ -992,13 +1028,14 @@ def _b1_map12_preview_metadata(
             },
             "topdown": {
                 "path": topdown_path.name,
-                "view": "semantic_room_topdown",
-                "provenance": "b1_map12_room_semantic_topdown_png",
+                "view": "review_label_topdown",
+                "provenance": "compiled_b1_map12_review_labels_topdown_png",
                 "alignment_status": str(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),
                 "semantic_map_fallback": False,
                 "room_count": len(rooms),
+                "review_label_count": len(review_labels),
                 "inspection_waypoint_count": len(waypoints),
                 "image_diagnostics": _image_diagnostics(topdown_path),
             },

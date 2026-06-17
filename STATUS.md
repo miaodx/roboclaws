@@ -52,6 +52,14 @@ geometry source, and alignment status. B1 scene partition labels bind through
 `scene_map_correspondence_v1` instead of list order, and reports label
 raw/source-map aligned previews.
 
+The B1 / Map 12 digital-twin map input contract now uses raw Map12 plus a
+human review manifest instead of the old thick merged map bundle. Product and
+operator-preview routes compile a generated runtime bundle from
+`assets/maps/agibot-robot-map-12/`,
+`assets/maps/b1-map12-alignment-review.json`, and the raw scene root before
+passing map context to lower-level consumers. Draft/shared south labels stay out
+of runtime semantics until reviewed.
+
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
 open-ended eval matrix expansion is
@@ -63,7 +71,9 @@ implemented household launch contract is
 ADR-0136. The implemented visual-grounding cleanup is
 `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`,
 backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
-`docs/plans/refactor-retire-ai2thor-vlm-direct.md`.
+`docs/plans/refactor-retire-ai2thor-vlm-direct.md`. The implemented B1 / Map 12
+thin review/runtime contract is
+`docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`.
 
 ## Next Action
 
@@ -110,6 +120,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/adr/0138-use-detector-only-visual-grounding-sidecar.md`
 - Implemented cross-environment semantic map parity plan:
   `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`
+- Implemented B1 / Map 12 thin review/runtime contract:
+  `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`
 - Implemented VLM-sidecar/OpenClaw status cleanup:
   `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Implemented AI2-THOR/direct-VLM retirement record:
