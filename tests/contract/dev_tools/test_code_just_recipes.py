@@ -203,7 +203,8 @@ def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
 
     assert "scripts/dev/coding_agent_docker.sh ensure" in text
     assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup" in text
+    assert 'skill_name="molmo-realworld-cleanup"' in text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}" in text
     assert "wait_for_mcp_ready" in text
     assert 'tmux new-session -d -s "$session_name"' in text
     assert '"exec"' in runner_text

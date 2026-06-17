@@ -65,7 +65,7 @@ The profile is public-agent metadata only. It must not expose generated mess
 sets, acceptable destinations, private manifests, hidden target lists,
 `is_misplaced`, private scoring truth, or full simulator inventory oracles.
 Demo recipes such as
-`just run::surface surface=household-world intent=cleanup ...` choose a run
+`just run::surface surface=household-world preset=cleanup ...` choose a run
 shape; they are not whole-task MCP tools.
 
 ## Model-Declared Camera Bridge
@@ -118,12 +118,12 @@ detector-only; old Gemini/MiMo/Qwen results are historical/parked evidence only.
 Recommended command shape for current pipeline comparison:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yoloe
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yolo-world
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=omdet-turbo
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yoloe
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yolo-world
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=omdet-turbo
 ```
 
 `yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
@@ -201,7 +201,7 @@ always include the `sim` control, then at most one detector-only proposer
 pipeline. Treat fake-contract recommendations as artifact-shape evidence only
 until real detector sidecar provenance is present for every selected non-sim
 pipeline; a mixed fake/real recommendation still requires real reruns before
-promotion.
+being used as a full cleanup probe.
 The benchmark checker treats zero candidates as a valid poor-recall result when
 `--require-success` is used; add `--require-candidates` only for deterministic
 fake smoke tests that are expected to emit at least one candidate.
@@ -390,31 +390,40 @@ the current source of truth before claiming a run supports a setting.
 
 ## Command Taxonomy
 
-Use `molmo::*` for daily operator commands. It names the run by driver and
-profile:
+Use the public launch catalog for operator-facing runs:
 
 ```bash
-just molmo::cleanup <driver> <profile>
+just run::surface surface=household-world preset=cleanup agent_engine=<engine> evidence_lane=<lane>
+```
+
+Use `agent::run` for maintainer-only axis/debug routes:
+
+```bash
+just agent::run household-world.cleanup <agent-engine-or-private-driver> <evidence-lane>
 ```
 
 | Axis | Values | Meaning |
 |------|--------|---------|
 | Driver | `direct` | Deterministic Python cleanup loop; no MCP server and no live LLM agent. |
 | Driver | `mcp-smoke` | Deterministic script through ADR-0003 MCP tools; drives the same tool-call path but does not launch Codex or Claude. |
-| Driver | `openclaw-smoke` | OpenClaw policy-labeled MCP smoke; proves OpenClaw-shaped artifact/checker wiring but does not launch Gateway. |
 | Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
 | Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
-| Driver | `openclaw-live` | Live OpenClaw Gateway connected to the cleanup MCP server. |
 | Preset | `smoke` | Synthetic contract sanity; world labels; semantic report. |
 | Evidence lane | `world-oracle-labels` | MolmoSpaces/RBY1M report; agent receives privileged structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
 | Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation authorization. |
 | Evidence lane | `camera-raw-fpv` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
 | Evidence lane | `camera-grounded-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates produced by `camera_labeler`. |
 
+OpenClaw smoke/live drivers are validation-required maintainer routes. Keep
+them out of normal operator runbooks until the off-work-network Gateway proof is
+green; see `docs/human/openclaw/demo.md` and `docs/human/openclaw/local.md`.
+
 `verify::*` remains the confidence-gate namespace: it runs focused tests and then
 delegates scenario execution to `harness::*`. `harness::*` remains the
 lower-level implementation-rig namespace, useful when debugging a specific
-script or checker. Prefer `molmo::*` when deciding what report to produce.
+script or checker. The `molmo::*` report recipes below are convenience wrappers
+over the private household cleanup implementation runner; they are not a
+separate public cleanup dispatcher.
 Non-smoke cleanup profiles require a selected prebuilt Nav2 map bundle; the
 facade defaults to `assets/maps/molmospaces-procthor-val-0-7`, and `map_bundle=...`
 accepts either a path or an environment id under `assets/maps`.
@@ -426,11 +435,9 @@ Convenience report recipes:
 | `just molmo::quick-check` | `mcp-smoke smoke` | Cheap contract check; accepts `driver=` and `profile=` overrides. |
 | `just molmo::review-report` | `direct world-oracle-labels` | Canonical human review/status report. |
 | `just molmo::mcp-smoke-report` | `mcp-smoke world-oracle-labels` | Real visual MCP smoke without a live external agent. |
-| `just molmo::openclaw-smoke-report` | `openclaw-smoke world-oracle-labels` | OpenClaw-labeled visual artifact without live Gateway. |
 | `just molmo::camera-raw-report` | `direct camera-raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
 | `just molmo::codex-report` | `codex-live world-oracle-labels` | Live Codex agent report. |
 | `just molmo::claude-report` | `claude-live world-oracle-labels` | Live Claude Code agent report. |
-| `just molmo::openclaw-report` | `openclaw-live world-oracle-labels` | Live OpenClaw Gateway report. |
 
 For live Codex / Claude reports, repo-local `.env` keys are honored the same
 way as the direct navigation demos. Normal users configure keys only; command
@@ -460,11 +467,12 @@ just code::codex-provider-smoke
 
 Local public live-agent recipes support Codex and Claude Code only through the
 pinned coding-agent Docker toolchain and repo-local `.env`. Hosted CI does not
-support Codex, but may run supported Claude Code and OpenClaw routes. Use the
-same key set when comparing Kimi/MiMo results across machines:
+support Codex. OpenClaw stays outside normal hosted/current run guidance until
+the validation-required Gateway proof is green. Use the same key set when
+comparing Kimi/MiMo results across machines:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
@@ -502,7 +510,7 @@ is active, later live Codex rows are blocked rather than moved to a hidden port
 or silently replaced by a cheaper substitute.
 
 For quick axis overrides, use positional values or `driver=` / `profile=`
-prefixes:
+prefixes on the smoke convenience recipe:
 
 ```bash
 just molmo::quick-check openclaw-smoke smoke
@@ -544,34 +552,17 @@ Real visual status/review report:
 just molmo::review-report
 ```
 
-Renderer-only standard-vs-Filament comparison:
-
-```bash
-just molmo::renderer-comparison
-just molmo::renderer-comparison 7 10 output/molmo/renderer-comparison-1280x720 procthor-10k-val 0 rby1m 8 1280 720
-```
-
-The comparison recipe is positional. When overriding render width or height,
-also pass the intermediate scene, robot, and focus-count arguments so values do
-not shift into earlier slots. The high-resolution path changes only comparison
-artifacts; it does not change cleanup, RAW_FPV, or visual-grounding defaults.
-
 Render-only MuJoCo/Isaac scene camera comparison:
 
 ```bash
 just molmo::scene-camera-comparison
 ```
 
-Add the opt-in Genesis candidate lane when reviewing Genesis visual parity:
+The retired Genesis candidate lane is no longer runnable from this recipe. The
+old Genesis reports remain historical renderer-parity evidence only.
 
-```bash
-ROBOCLAWS_GENESIS_PYTHON=.venv-genesis/bin/python \
-  just molmo::scene-camera-comparison genesis=on \
-  scene_usd_path=output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda
-```
-
-This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo, a
-prepared Isaac USD, and optionally Genesis with one external camera request. It
+This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo and a
+prepared Isaac USD with one external camera request. It
 is for scene/camera review only: it does not run cleanup, pick/place, private
 scoring, or pickup box annotation. The main lane now uses explicit canonical
 `eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
@@ -583,12 +574,7 @@ and USD-bounds residuals separately. MuJoCo canonical views convert the explicit
 before rendering; the manifest records the backend pose used for the parity
 check. The camera request also carries MuJoCo runtime render state separately
 from legacy object-center positions, including articulated child joint names
-and `qpos` values when MolmoSpaces exposes them. Genesis movable-object
-diagnostics treat translation-only object overlays as insufficient for
-articulated objects such as box flaps and report unsupported articulation
-instead of a false `runtime_pose_match`; when the prepared USD summary proves
-MuJoCo visual joint endpoint-pose baking and frozen visual physics, the report
-classifies those objects as `articulated_static_baked_match`. Isaac uses the
+and `qpos` values when MolmoSpaces exposes them. Isaac uses the
 prepared USD's scene lights plus the configured soft fill profile and reports
 both existing and added light counts. Target-vs-USD
 diagnostics are bounds-aware: large receptacles may aim the camera above a
@@ -597,20 +583,11 @@ the configured surface-aim height allowance separately from a true target/scene
 frame mismatch. A passing camera-pose contract means the two backends accepted
 the same render-camera API pose; material differences, renderer lighting, or
 display color-management differences can still prevent full visual identity.
-The Genesis lane is render-only evidence: when native USD stage import fails on
-the prepared mixed physics graph, it uses a material-preserving OBJ/MTL visual
-package fallback and reports that import mode in the manifest.
 
 Real visual MCP smoke:
 
 ```bash
 just molmo::mcp-smoke-report
-```
-
-Real visual OpenClaw-shaped smoke:
-
-```bash
-just molmo::openclaw-smoke-report
 ```
 
 Raw camera evidence:
@@ -624,15 +601,16 @@ Live external-agent reports:
 ```bash
 just molmo::codex-report
 just molmo::claude-report
-just molmo::openclaw-report
 ```
 
-`openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
-on the work network unless the repo-local `.env` contains a supported MiMo,
-Kimi, or mify Anthropic key route. `codex-report` may run on the work network
-with the repo-local `codex-env` route configured in `.env`, or with explicit
-`ROBOCLAWS_CODEX_PROVIDER=mify` plus `XM_LLM_API_KEY`. Run
-`just dev::network-status` first if you are unsure which network you are on.
+OpenClaw report recipes are maintainer-only validation routes documented under
+`docs/human/openclaw/`; they are not part of the normal current entrypoint set.
+`claude-report` is blocked on the work network unless the repo-local `.env`
+contains a supported MiMo, Kimi, or mify Anthropic key route. `codex-report`
+may run on the work network with the repo-local `codex-env` route configured in
+`.env`, or with explicit `ROBOCLAWS_CODEX_PROVIDER=mify` plus
+`XM_LLM_API_KEY`. Run `just dev::network-status` first if you are unsure which
+network you are on.
 
 Planner proof-bundle dry run:
 

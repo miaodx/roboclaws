@@ -21,18 +21,27 @@ from roboclaws.operator_console.launcher import (
 )
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
-from roboclaws.operator_console.routes import get_route, get_selection
+from roboclaws.operator_console.routes import get_selection
 
 CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
+AGIBOT_CODEX_MAP_BUILD = (
+    "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+)
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
+ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
+ISAAC_CODEX_MAP_BUILD = "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_OPENAI_AGENTS_CLEANUP = (
+    "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels"
+)
 
 
 def test_new_console_run_id_is_filesystem_and_docker_mount_safe() -> None:
-    run_id = _new_run_id(
-        get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels")
-    )
+    run_id = _new_run_id(get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert "/" not in run_id
     assert ":" not in run_id
@@ -49,7 +58,7 @@ def _free_port() -> str:
 def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> None:
     isaac = route_readiness(
         tmp_path,
-        get_route("codex-isaac-cleanup"),
+        get_selection(ISAAC_CODEX_CLEANUP),
         overrides={"port": _free_port()},
         env=CODEX_ENV,
     )
@@ -61,7 +70,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
 
     isaac_map = route_readiness(
         tmp_path,
-        get_route("codex-isaac-map-build"),
+        get_selection(ISAAC_CODEX_MAP_BUILD),
         overrides={"port": _free_port()},
         env=CODEX_ENV,
     )
@@ -72,7 +81,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
 
     b1_map12 = route_readiness(
         tmp_path,
-        get_route("codex-b1-map12-open-ended"),
+        get_selection(B1_CODEX_OPEN_TASK),
         overrides={"port": _free_port()},
         env=CODEX_ENV,
     )
@@ -83,7 +92,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
 
     agibot = route_readiness(
         tmp_path,
-        get_route("codex-agibot-g2-map-build"),
+        get_selection(AGIBOT_CODEX_MAP_BUILD),
         overrides={"context_json": str(tmp_path / "context.json"), "port": _free_port()},
         gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
         env=CODEX_ENV,
@@ -96,7 +105,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
 
     movement = route_readiness(
         tmp_path,
-        get_route("codex-agibot-g2-map-build"),
+        get_selection(AGIBOT_CODEX_MAP_BUILD),
         overrides={
             "context_json": str(tmp_path / "context.json"),
             "port": _free_port(),
@@ -111,7 +120,7 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
 
 
 def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:
-    route = get_route("codex-agibot-g2-map-build")
+    route = get_selection(AGIBOT_CODEX_MAP_BUILD)
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -127,7 +136,7 @@ def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:
 
 
 def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -149,7 +158,7 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
 
 
 def test_launcher_rejects_old_public_generated_mess_override(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
 
     with pytest.raises(ConsoleLaunchError, match="generated_mess_count is no longer"):
         build_launch_argv(
@@ -161,7 +170,7 @@ def test_launcher_rejects_old_public_generated_mess_override(tmp_path: Path) -> 
 
 
 def test_launcher_drops_relocation_count_for_baseline_setup(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -178,7 +187,7 @@ def test_launcher_drops_relocation_count_for_baseline_setup(tmp_path: Path) -> N
 
 
 def test_launcher_passes_operator_message_path_for_steer_routes(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     path = tmp_path / "operator_messages.jsonl"
 
     argv = build_launch_argv(
@@ -192,7 +201,7 @@ def test_launcher_passes_operator_message_path_for_steer_routes(tmp_path: Path) 
 
 
 def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     seen_lock_owner = ""
     seen_env: dict[str, str] = {}
 
@@ -211,7 +220,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
         state = start_console_run(
             tmp_path,
             LaunchRequest(
-                selection_id_override=route.selection.id,
+                selection_id_override=route.id,
                 intent_id="open-ended",
                 prompt="收拾桌面上的杯子",
                 next_goal_packet={"schema": "operator_console_next_goal_packet_v1"},
@@ -231,7 +240,8 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["selected_intent"] == "open-ended"
     assert state["next_goal_packet"] == {"schema": "operator_console_next_goal_packet_v1"}
     assert "continuation_packet" not in state
-    assert "intent=open-ended" in state["argv"]
+    assert not any(item.startswith("intent=") for item in state["argv"])
+    assert not any(item.startswith("preset=") for item in state["argv"])
     assert "prompt=收拾桌面上的杯子" in state["argv"]
     assert state["operator_session_id"].startswith("session-")
     assert any(item.startswith("operator_messages_path=") for item in state["argv"])
@@ -242,7 +252,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
         if line.strip()
     ]
     assert history_rows[-1]["run_id"] == state["run_id"]
-    assert history_rows[-1]["selection_id"] == route.selection.id
+    assert history_rows[-1]["selection_id"] == route.id
     assert history_rows[-1]["run_dir"] == str(
         console_output_root(tmp_path) / "runs" / state["run_id"]
     )
@@ -253,17 +263,17 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert persisted["lock"]["owner_run_id"] == state["run_id"]
 
 
-def test_launcher_rejects_legacy_route_id_as_launch_identity(tmp_path: Path) -> None:
-    with pytest.raises(ConsoleLaunchError, match="display-only"):
+def test_launcher_rejects_missing_canonical_selection_identity(tmp_path: Path) -> None:
+    with pytest.raises(ConsoleLaunchError, match="launch requires"):
         start_console_run(
             tmp_path,
-            LaunchRequest(route_id="codex-mujoco-cleanup", overrides={"port": _free_port()}),
+            LaunchRequest(overrides={"port": _free_port()}),
             env=CODEX_ENV,
         )
 
 
 def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "existing-run"
     pid = os.getpid()
     run_dir = console_output_root(tmp_path) / "runs" / run_id
@@ -290,8 +300,7 @@ def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) 
     assert "Attach to the existing run" in readiness["blocker"]
     assert readiness["attachable_run"] == {
         "run_id": run_id,
-        "selection_id": route.selection.id,
-        "route_id": route.id,
+        "selection_id": route.id,
         "route_label": route.label,
         "phase": "running",
         "run_dir": str(run_dir),
@@ -305,7 +314,7 @@ def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) 
 def test_readiness_keeps_stale_wrapper_lock_attachable_when_child_live_run_is_active(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "wrapper-run"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     attempt_dir = run_dir / "0608_1807" / "seed-7"
@@ -344,7 +353,7 @@ def test_readiness_keeps_stale_wrapper_lock_attachable_when_child_live_run_is_ac
 def test_readiness_releases_terminal_failed_lock_instead_of_attaching_dead_run(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "failed-wrapper-run"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     attempt_dir = run_dir / "0609_1025" / "seed-7"
@@ -383,7 +392,7 @@ def test_readiness_releases_terminal_failed_lock_instead_of_attaching_dead_run(
 
 
 def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "wrapper-run"
     wrapper_pid = 123450
     server_pid = 123451
@@ -449,7 +458,7 @@ def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
 def test_stop_console_run_releases_failed_terminal_lock_without_relabeling_failure(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "failed-wrapper-run"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     attempt_dir = run_dir / "0609_1025" / "seed-7"
@@ -499,7 +508,7 @@ def test_stop_console_run_releases_failed_terminal_lock_without_relabeling_failu
 def test_stop_console_run_stops_docker_container_bound_to_attempt_workspace(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "wrapper-run"
     wrapper_pid = 123450
     server_pid = 123451
@@ -588,7 +597,7 @@ def test_provider_gate_requires_agent_key_route(tmp_path: Path, monkeypatch) -> 
         monkeypatch.delenv(key, raising=False)
     readiness = route_readiness(
         tmp_path,
-        get_route("codex-mujoco-cleanup"),
+        get_selection(MUJOCO_CODEX_CLEANUP),
         overrides={"port": _free_port()},
     )
     assert not readiness["can_start"]
@@ -607,7 +616,7 @@ def test_provider_gate_auto_loads_codex_env_from_repo_dotenv(tmp_path: Path, mon
 
     readiness = route_readiness(
         tmp_path,
-        get_route("codex-mujoco-cleanup"),
+        get_selection(MUJOCO_CODEX_CLEANUP),
         overrides={"port": _free_port()},
     )
 
@@ -619,7 +628,7 @@ def test_provider_gate_auto_loads_codex_env_from_repo_dotenv(tmp_path: Path, mon
 def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path) -> None:
     readiness = route_readiness(
         tmp_path,
-        get_route("codex-mujoco-cleanup"),
+        get_selection(MUJOCO_CODEX_CLEANUP),
         env={"XM_LLM_API_KEY": "key"},
         overrides={"port": _free_port()},
         env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "mify"},
@@ -632,7 +641,7 @@ def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path)
 def test_provider_gate_allows_explicit_minimax_override_with_mm_key(tmp_path: Path) -> None:
     readiness = route_readiness(
         tmp_path,
-        get_route("codex-mujoco-cleanup"),
+        get_selection(MUJOCO_CODEX_CLEANUP),
         env={"MM_API_KEY": "key"},
         overrides={"port": _free_port()},
         env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
@@ -660,7 +669,7 @@ def test_provider_gate_blocks_raw_fpv_when_route_image_transport_unknown(tmp_pat
 
 
 def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> None:
-    route = get_route("molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels")
+    route = get_selection(MUJOCO_OPENAI_AGENTS_CLEANUP)
 
     minimax = route_readiness(
         tmp_path,
@@ -695,11 +704,11 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
     )
     assert kimi["can_start"] is True
     assert kimi["provider"]["provider"] == "kimi-openai-chat"
-    assert kimi["provider"]["model"] == "kimi-k2.6"
+    assert kimi["provider"]["model"] == "kimi-k2.7-code"
 
 
 def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
-    route = get_route("claude-mujoco-cleanup")
+    route = get_selection(MUJOCO_CLAUDE_CLEANUP)
 
     missing_default = route_readiness(tmp_path, route, env={})
     assert missing_default["can_start"] is False
@@ -732,7 +741,7 @@ def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
         try:
             route_readiness(
                 tmp_path,
-                get_route("codex-mujoco-cleanup"),
+                get_selection(MUJOCO_CODEX_CLEANUP),
                 env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "system"},
             )
         except ValueError as exc:
@@ -744,7 +753,7 @@ def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
         try:
             route_readiness(
                 tmp_path,
-                get_route("claude-mujoco-cleanup"),
+                get_selection(MUJOCO_CLAUDE_CLEANUP),
                 env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "system"},
             )
         except ValueError as exc:
@@ -756,7 +765,7 @@ def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
 def test_mcp_port_gate_rejects_port_that_is_already_accepting_connections(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen()
@@ -779,7 +788,7 @@ def test_mcp_port_gate_rejects_port_that_is_already_accepting_connections(
 
 
 def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
-    route = get_route("claude-mujoco-cleanup")
+    route = get_selection(MUJOCO_CLAUDE_CLEANUP)
     argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
 
     assert argv[:7] == [
@@ -788,10 +797,10 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
         "surface=household-world",
         "world=molmospaces/val_0",
         "backend=mujoco",
-        "intent=cleanup",
+        "preset=cleanup",
         "agent_engine=claude-code",
     ]
-    assert "intent=cleanup" in argv
+    assert "preset=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
     assert "provider_profile=mimo-anthropic" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv

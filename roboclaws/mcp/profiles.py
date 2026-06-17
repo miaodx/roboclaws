@@ -120,6 +120,10 @@ def contract_profile_names() -> tuple[str, ...]:
     return tuple(_PROFILES)
 
 
+def legacy_contract_profile_names() -> tuple[str, ...]:
+    return tuple(_LEGACY_PROFILES)
+
+
 def contract_profile(profile_id: str) -> ContractProfile:
     normalized = normalize_profile_id(profile_id)
     try:
@@ -133,6 +137,17 @@ def contract_profile(profile_id: str) -> ContractProfile:
 
 def contract_profile_metadata(profile_id: str) -> dict[str, Any]:
     return contract_profile(profile_id).metadata()
+
+
+def legacy_contract_profile_metadata(profile_id: str) -> dict[str, Any]:
+    normalized = normalize_profile_id(profile_id)
+    try:
+        return _LEGACY_PROFILES[normalized].metadata()
+    except KeyError as exc:
+        expected = ", ".join(legacy_contract_profile_names())
+        raise ValueError(
+            f"unsupported legacy MCP contract profile {profile_id!r} (expected one of: {expected})"
+        ) from exc
 
 
 def normalize_profile_id(profile_id: str) -> str:
@@ -165,6 +180,8 @@ def validate_contract_profile(profile: ContractProfile) -> None:
 
 def validate_all_contract_profiles() -> None:
     for profile in _PROFILES.values():
+        validate_contract_profile(profile)
+    for profile in _LEGACY_PROFILES.values():
         validate_contract_profile(profile)
 
 
@@ -753,6 +770,9 @@ _PROFILES = {
     HOUSEHOLD_WORLD_PROFILE: _HOUSEHOLD_WORLD_PROFILE,
     HOUSEHOLD_MANIPULATION_PROFILE: _HOUSEHOLD_MANIPULATION_PROFILE,
     HOUSEHOLD_EPISODE_PROFILE: _HOUSEHOLD_EPISODE_PROFILE,
+}
+
+_LEGACY_PROFILES = {
     MOLMOSPACES_CLEANUP_PROFILE: _MOLMO_PROFILE,
     REAL_ROBOT_CLEANUP_PROFILE: _REAL_ROBOT_PROFILE,
 }

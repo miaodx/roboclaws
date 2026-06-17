@@ -1,7 +1,7 @@
 # Just Command Surface
 
 Roboclaws uses a small composable Just grammar instead of exposing every
-world/backend/intent/agent-engine combination as a separate recipe.
+world/backend/preset/agent-engine combination as a separate recipe.
 
 ## Public Namespaces
 
@@ -17,7 +17,7 @@ hidden from `just --summary` and shell completion.
 ## Main Grammar
 
 ```bash
-just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [provider_profile=<profile>] [key=value ...]
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [preset=<preset>] [prompt=<goal>] [provider_profile=<profile>] [key=value ...]
 ```
 
 Surfaces:
@@ -25,11 +25,13 @@ Surfaces:
 - `household-world`
 - `planner-proof`
 
-Intents:
+Household presets:
 
 - `map-build`
 - `cleanup`
-- `open-ended`
+
+Planner-proof still uses `intent=planner-proof`:
+
 - `planner-proof`
 
 Worlds and scenes:
@@ -51,12 +53,14 @@ Agent engines:
 - `claude-code`
 - `openai-agents-sdk`
 - `direct-runner`
-- `openclaw-gateway` (validation-required maintainer route)
 
 Provider profiles are selected only for agent engines that need a model/key
 route. Examples include `codex-env`, `mify`, `kimi-anthropic`,
 `mimo-anthropic`, and `mify-anthropic`. Deterministic engines such as
 `direct-runner` do not accept `provider_profile`.
+
+Validation-required maintainer engines, such as `openclaw-gateway`, stay out of
+the normal public engine list. Use the OpenClaw docs before running them.
 
 Reports for non-Molmo tasks:
 
@@ -98,14 +102,14 @@ For timing work that should skip per-tool robot-view capture, keep the normal
 `world-oracle-labels` lane and pass an explicit capture option such as
 `robot_views=off`.
 
-If `intent=` is omitted, the surface default is used. For
-`surface=household-world`, a supplied `prompt=` without `intent=` infers
-`intent=open-ended`; an explicit `intent=cleanup prompt=...` narrows cleanup
-scope while keeping cleanup evaluation.
+For `surface=household-world`, omit `preset=` for no-preset open household
+goals and pass the operator goal through `prompt=...`. Use
+`preset=cleanup prompt=...` only when the prompt narrows cleanup scope while
+keeping cleanup evaluation.
 
 ## Live Agent Launch Behavior
 
-`just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels` launches a detached tmux session.
+`just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels` launches a detached tmux session.
 The session owns the cleanup MCP server, the `codex exec` process, raw Codex
 logs, the MCP trace, and the final checker. The invoking terminal returns after
 printing the tmux session name and artifact directory, so monitor sessions do
@@ -173,7 +177,7 @@ until a live route verdict proves otherwise. Current live verdicts live in
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just run::surface surface=household-world agent_engine=claude-code provider_profile=mimo-anthropic intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=claude-code provider_profile=mimo-anthropic preset=cleanup evidence_lane=world-oracle-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
@@ -186,7 +190,7 @@ Codex runs use repo-local `.env` credentials in the pinned container. Host
 `~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-just run::surface surface=household-world agent_engine=codex-cli provider_profile=codex-env intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli provider_profile=codex-env preset=cleanup evidence_lane=world-oracle-labels
 ```
 
 Docker-backed coding-agent tasks use an isolated generated workspace owned by
@@ -196,9 +200,9 @@ task skill directories under `/workspace/skills/<name>`. Repo-root
 MCP implementation stays on the host and is reached over HTTP.
 Current task mappings:
 
-- `surface=household-world intent=map-build`: `molmo-realworld-cleanup` with cleanup actions disabled for simulator backends; dedicated Agibot map-build runner for public `backend=agibot-gdk`, lowered internally to implementation backend `agibot_gdk`
-- `surface=household-world intent=cleanup`: `molmo-realworld-cleanup`
-- `surface=household-world intent=open-ended`: `molmo-realworld-cleanup` with an open-ended goal contract
+- `surface=household-world preset=map-build`: `household-open-task` with cleanup actions disabled for simulator backends; dedicated Agibot map-build runner for public `backend=agibot-gdk`, lowered internally to implementation backend `agibot_gdk`
+- `surface=household-world preset=cleanup`: `molmo-realworld-cleanup`
+- `surface=household-world prompt=...`: `household-open-task` with an open-ended goal contract
 - `surface=planner-proof intent=planner-proof`: planner-proof bundle runner
 
 Python owns route metadata and reusable launch pieces:
@@ -223,13 +227,13 @@ namespaces such as `mcp__<server>__`.
 ## Examples
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,omdet-turbo
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
@@ -300,9 +304,9 @@ populated only when the configured sidecar reports stage usage/cost or memory
 metadata; otherwise the result records `not_reported_by_service`.
 The benchmark result also emits the capped end-to-end probe set: `sim` plus the
 best detector-only proposer pipeline.
-Promotion stays blocked until every selected non-sim pipeline has real detector
-sidecar provenance; mixed fake/real rows are still benchmark-shape evidence,
-not rollout evidence.
+Full cleanup probes stay blocked until every selected non-sim pipeline has real
+detector sidecar provenance; mixed fake/real rows are still benchmark-shape
+evidence, not rollout evidence.
 `--require-success` on the benchmark checker means no pipeline failures; zero
 candidates remain a valid poor-recall result. Use `--require-candidates` only
 for fake smoke tests that should always emit candidates.
@@ -330,11 +334,11 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the semantic map build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels` |
-| "run the semantic map build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels` |
-| "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels` |
+| "run the semantic map build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels` |
+| "run the semantic map build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels` |
+| "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels` |
 | "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"` |
-| "run the household cleanup camera raw lane" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv` |
+| "run the household cleanup camera raw lane" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv` |
 | "run the planner proof dry run" | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` |
 
 ## Maintainer Dispatch

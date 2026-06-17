@@ -1,1 +1,0 @@
-molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py

@@ -26,8 +26,8 @@ _Avoid_: task API, recipe, benchmark name
 **Runnable Surface And Intent**:
 A public run-catalog selection such as `surface=household-world
 intent=map-build`, `surface=household-world intent=cleanup`, or
-`surface=ai2thor-world intent=navigate`. It owns command parameters, report
-shape, and acceptance gates.
+`surface=planner-proof intent=planner-proof`. It owns command parameters,
+report shape, and acceptance gates.
 _Avoid_: Agent Skill, Capability Profile, backend script, hidden evaluator
 
 **Launch World / Scene**:
@@ -473,8 +473,9 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 
 - Architecture/current focus: `ARCHITECTURE.md`, `STATUS.md`
 - Skill/profile design: `docs/human/mcp-skills-and-semantic-profiles.md`
-- Map/perception plans: `docs/plans/auto-semantic-map-build.md`,
-  `docs/plans/molmospaces-http-visual-grounding-service.md`
+- Map/perception plans:
+  `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`,
+  `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Agibot/physical details: `docs/plans/agibot-g2-cleanup-support-pilot.md`,
   `docs/plans/molmospaces-agibot-contract-rehearsal.md`,
   `docs/status/active/real-robot-nav2-cleanup-pilot.md`

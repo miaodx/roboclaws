@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     _assert(predictions, "predictions JSONL is empty")
     for pipeline in pipelines:
         _assert_pipeline(base_dir, pipeline, args=args)
-    _assert_promotion_recommendation(result)
+    _assert_detector_probe_recommendation(result)
     for prediction in predictions:
         _assert_prediction(base_dir, prediction, result=result)
 
@@ -92,8 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         "report missing real-stage provenance gate",
     )
     _assert(
-        "Requires real stage provenance before promotion" in report_text,
-        "report missing promotion provenance requirement",
+        "Requires real detector-sidecar provenance before full cleanup probe" in report_text,
+        "report missing detector-probe provenance requirement",
     )
     print(f"ok: visual grounding benchmark artifacts passed ({base_dir})")
     return 0
@@ -263,54 +263,48 @@ def _assert_diagnostic_evidence(prediction: dict[str, Any]) -> None:
         _assert(forbidden not in text, f"diagnostics contain forbidden token {forbidden}")
 
 
-def _assert_promotion_recommendation(result: dict[str, Any]) -> None:
-    promotion = result.get("promotion_recommendation")
-    _assert(isinstance(promotion, dict), "promotion recommendation missing")
+def _assert_detector_probe_recommendation(result: dict[str, Any]) -> None:
+    detector_probe = result.get("detector_probe_recommendation")
+    _assert(isinstance(detector_probe, dict), "detector probe recommendation missing")
     _assert(
-        promotion.get("schema") == "visual_grounding_promotion_recommendation_v1",
-        "bad promotion recommendation schema",
+        detector_probe.get("schema") == "visual_grounding_detector_probe_recommendation_v1",
+        "bad detector probe recommendation schema",
     )
-    policy = promotion.get("policy") or {}
-    _assert(policy.get("control_pipeline_id") == "sim", "promotion control must be sim")
-    selected = list(promotion.get("selected_end_to_end_pipelines") or [])
-    _assert(selected and selected[0] == "sim", "promotion set must include sim control first")
+    policy = detector_probe.get("policy") or {}
+    _assert(policy.get("control_pipeline_id") == "sim", "detector probe control must be sim")
+    selected = list(detector_probe.get("selected_end_to_end_pipelines") or [])
+    _assert(selected and selected[0] == "sim", "detector probe set must include sim control first")
     _assert(
         len(selected) <= int(policy.get("max_total_pipelines") or 0),
-        "promotion set exceeds cap",
+        "detector probe set exceeds cap",
     )
-    _assert(
-        "best_direct_vlm_pipeline_id" not in promotion,
-        "promotion includes retired direct VLM slot",
-    )
-    _assert(
-        "best_proposer_plus_refiner_pipeline_id" not in promotion,
-        "promotion includes retired proposer-plus-refiner slot",
-    )
-    _assert(
-        "max_direct_vlm_pipelines" not in policy,
-        "promotion policy includes retired direct VLM cap",
-    )
-    _assert(
-        "max_proposer_plus_refiner_pipelines" not in policy,
-        "promotion policy includes retired proposer-plus-refiner cap",
-    )
-    selected_rows = list(promotion.get("selected") or [])
-    _assert(len(selected_rows) == len(selected), "promotion selected rows do not match ids")
+    for key in detector_probe:
+        _assert(
+            "direct_vlm" not in key and "proposer_plus_refiner" not in key,
+            f"detector probe includes retired slot key: {key}",
+        )
+    for key in policy:
+        _assert(
+            "direct_vlm" not in key and "proposer_plus_refiner" not in key,
+            f"detector probe policy includes retired slot key: {key}",
+        )
+    selected_rows = list(detector_probe.get("selected") or [])
+    _assert(len(selected_rows) == len(selected), "detector probe selected rows do not match ids")
     for row in selected_rows:
-        _assert(row.get("slot"), f"promotion slot missing: {row}")
-        _assert(row.get("pipeline_id"), f"promotion pipeline missing: {row}")
-        _assert(row.get("reason"), f"promotion reason missing: {row}")
+        _assert(row.get("slot"), f"detector probe slot missing: {row}")
+        _assert(row.get("pipeline_id"), f"detector probe pipeline missing: {row}")
+        _assert(row.get("reason"), f"detector probe reason missing: {row}")
     _assert(
-        isinstance(promotion.get("real_stage_provenance_present"), bool),
-        "promotion real-stage flag must be boolean",
+        isinstance(detector_probe.get("real_stage_provenance_present"), bool),
+        "detector probe real-stage flag must be boolean",
     )
     _assert(
-        isinstance(promotion.get("selected_real_stage_provenance_complete"), bool),
-        "promotion selected real-stage completion flag must be boolean",
+        isinstance(detector_probe.get("selected_real_stage_provenance_complete"), bool),
+        "detector probe selected real-stage completion flag must be boolean",
     )
     _assert(
-        isinstance(promotion.get("requires_real_stage_provenance_before_promotion"), bool),
-        "promotion real-stage requirement flag must be boolean",
+        isinstance(detector_probe.get("requires_real_stage_provenance_before_probe"), bool),
+        "detector probe real-stage requirement flag must be boolean",
     )
 
 

@@ -19,11 +19,11 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.household.artifact_paths import output_relpath
 from roboclaws.household.generated_mess import (
     build_generated_mess_manifest,
     generated_mess_manifest_object_ids,
 )
-from roboclaws.household.renderer_comparison import _relpath
 from roboclaws.household.scene_camera_comparison import (
     _isaac_render_contract_from_usda,
     _isaac_view_render_contract,
@@ -970,7 +970,7 @@ def _mess_generation_summary(
         "manifest_schema": canonical_manifest.get("schema"),
         "provenance": canonical_manifest.get("provenance"),
         "object_id_source": "backend_neutral_generated_mess_manifest",
-        "artifact": _relpath(manifest_path, output_dir),
+        "artifact": output_relpath(manifest_path, output_dir),
         "seed": _dict(canonical_manifest.get("selection")).get("seed"),
         "requested_generated_mess_count": canonical_manifest.get("requested_generated_mess_count"),
         "generated_mess_count": canonical_manifest.get("generated_mess_count"),
@@ -1383,8 +1383,8 @@ def _location_result(
             capture_quality=capture_quality,
         )
         metric_artifacts[view_key] = {
-            "mujoco": _relpath(metric_paths["mujoco"], output_dir),
-            "isaac": _relpath(metric_paths["isaac"], output_dir),
+            "mujoco": output_relpath(metric_paths["mujoco"], output_dir),
+            "isaac": output_relpath(metric_paths["isaac"], output_dir),
             "mode": capture_quality.get("metric_image_mode"),
             "resolution": capture_quality.get("metric_resolution"),
             "downsample_filter": capture_quality.get("downsample_filter"),
@@ -1402,24 +1402,24 @@ def _location_result(
         "capture_quality_probe": capture_quality,
         "views": {
             "mujoco": {
-                key: _relpath(Path(str(path)), output_dir)
+                key: output_relpath(Path(str(path)), output_dir)
                 for key, path in dict(mujoco_views.get("views") or {}).items()
                 if key in {"fpv", "chase", "map", "verify"}
             },
             "isaac": {
-                key: _relpath(Path(str(path)), output_dir)
+                key: output_relpath(Path(str(path)), output_dir)
                 for key, path in dict(isaac_views.get("views") or {}).items()
                 if key in {"fpv", "chase", "map", "verify"}
             },
         },
         "raw_render_views": {
             "mujoco": {
-                key: _relpath(Path(str(path)), output_dir)
+                key: output_relpath(Path(str(path)), output_dir)
                 for key, path in _dict(mujoco_views.get("raw_render_views")).items()
                 if key in ROBOT_VIEW_KEYS
             },
             "isaac": {
-                key: _relpath(Path(str(path)), output_dir)
+                key: output_relpath(Path(str(path)), output_dir)
                 for key, path in _dict(isaac_views.get("raw_render_views")).items()
                 if key in ROBOT_VIEW_KEYS
             },
@@ -1609,8 +1609,8 @@ def _attach_state_artifact_summaries(
             )
     artifacts = manifest.setdefault("artifacts", {})
     if isinstance(artifacts, dict):
-        artifacts["mujoco_state"] = _relpath(output_dir / "mujoco_state.json", output_dir)
-        artifacts["isaac_state"] = _relpath(output_dir / "isaac_state.json", output_dir)
+        artifacts["mujoco_state"] = output_relpath(output_dir / "mujoco_state.json", output_dir)
+        artifacts["isaac_state"] = output_relpath(output_dir / "isaac_state.json", output_dir)
 
 
 def _attach_render_contract_diagnostics(
@@ -3850,14 +3850,14 @@ def _load_light_shadow_probe_manifest(path: Path, *, output_dir: Path) -> dict[s
     if not path.is_file():
         return {
             "status": "missing_manifest",
-            "path": _relpath(path, output_dir),
+            "path": output_relpath(path, output_dir),
         }
     try:
         payload = _read_json(path)
     except (OSError, json.JSONDecodeError) as exc:
         return {
             "status": "read_failed",
-            "path": _relpath(path, output_dir),
+            "path": output_relpath(path, output_dir),
             "error": f"{type(exc).__name__}: {exc}",
         }
     return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
@@ -3883,7 +3883,7 @@ def _probe_manifest_summary(
     tone_color = _dict(check_by_id.get("tone_color_response"))
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
-    rel_path = _relpath(manifest_path, output_dir or manifest_path.parent)
+    rel_path = output_relpath(manifest_path, output_dir or manifest_path.parent)
     return {
         "status": "loaded",
         "path": rel_path,
@@ -4036,14 +4036,14 @@ def _load_material_response_probe_manifest(path: Path, *, output_dir: Path) -> d
     if not path.is_file():
         return {
             "status": "missing_manifest",
-            "path": _relpath(path, output_dir),
+            "path": output_relpath(path, output_dir),
         }
     try:
         payload = _read_json(path)
     except (OSError, json.JSONDecodeError) as exc:
         return {
             "status": "read_failed",
-            "path": _relpath(path, output_dir),
+            "path": output_relpath(path, output_dir),
             "error": f"{type(exc).__name__}: {exc}",
         }
     return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
@@ -4121,14 +4121,14 @@ def _load_tone_color_probe_manifest(path: Path, *, output_dir: Path) -> dict[str
     if not path.is_file():
         return {
             "status": "missing_manifest",
-            "path": _relpath(path, output_dir),
+            "path": output_relpath(path, output_dir),
         }
     try:
         payload = _read_json(path)
     except (OSError, json.JSONDecodeError) as exc:
         return {
             "status": "read_failed",
-            "path": _relpath(path, output_dir),
+            "path": output_relpath(path, output_dir),
             "error": f"{type(exc).__name__}: {exc}",
         }
     return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)

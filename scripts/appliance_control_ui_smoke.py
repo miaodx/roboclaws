@@ -1,1 +1,0 @@
-appliance/appliance_control_ui_smoke.py

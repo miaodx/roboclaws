@@ -1,1 +1,0 @@
-molmo_cleanup/check_molmo_realworld_cleanup_result.py

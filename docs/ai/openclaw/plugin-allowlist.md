@@ -30,9 +30,8 @@ auto-enables a new plugin (Slack, webhook, voice-call, whatever) is filtered
 silently — no surprise install delay, no surprise outbound traffic.
 
 Source of truth: [`scripts/openclaw/openclaw_plugin_allowlist.py`](../../../scripts/openclaw/openclaw_plugin_allowlist.py).
-Both seeders (`openclaw-bootstrap.sh` for `just chat::run`,
-`appliance_seed_openclaw.py` for `just appliance::run`) read it, and a
-regression test in each test file pins the rendered config against it.
+The supported seeder is `scripts/openclaw/openclaw-bootstrap.sh`; its
+regression test pins the rendered config against this list.
 
 ## Live-probe before/after (image `2026.4.25-beta.11`)
 
@@ -63,16 +62,14 @@ regression test in each test file pins the rendered config against it.
    which contract). Removing an entry later requires a probe; adding one
    should be cheap to justify.
 
-3. Run the test suite — both regression tests will pick up the change
-   automatically:
+3. Run the regression test:
 
    ```bash
-   ./scripts/run_pytest_standalone.sh \
-     tests/contract/openclaw/test_openclaw_bootstrap.py \
-     tests/contract/appliance/test_appliance_seed_openclaw.py -x -q
+   ./scripts/dev/run_pytest_standalone.sh \
+     tests/contract/openclaw/test_openclaw_bootstrap.py -x -q
    ```
 
-4. Live-probe by running `just appliance::run` (or `just chat::run`) and
+4. Live-probe by running `just chat::run` off the work network and
    watching for `plugin not found:` warnings near the top of the gateway
    log. The "ready (N plugins: …; …s)" line confirms what actually loaded.
 
@@ -111,8 +108,8 @@ re-probe. The list is meant to converge to a minimum, not grow.
 
 When bumping `OPENCLAW_IMAGE_DEFAULT`:
 
-1. `just appliance::build && just appliance::run` and skim the first 60s
-   of the gateway log for:
+1. Run `just chat::run` off the work network and skim the first 60s of the
+   gateway log for:
    - `plugin not found: <id>` — a manifest id renamed; update the list.
    - `plugins-disabled` / `disabled-in-config` — a new gateway-internal
      code path now consults a plugin we filter; investigate, then either

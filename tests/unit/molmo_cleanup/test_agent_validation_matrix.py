@@ -55,9 +55,13 @@ def test_agent_sdk_change_selects_openai_agents_sdk_gate(tmp_path: Path) -> None
     )
 
     gates = _selected_gates(matrix)
-    sdk_gate = gates["openai-agents-sdk-cleanup"]
+    sdk_gate = gates["openai-agents-sdk-open-task"]
     assert sdk_gate["axes"]["agent_engine"] == "openai-agents-sdk"
     assert sdk_gate["axes"]["provider_profile"] == "codex-env"
+    assert sdk_gate["axes"]["intent"] == "open-ended"
+    assert sdk_gate["axes"]["preset"] == ""
+    assert "prompt=我渴了，帮我找些解渴的东西" in sdk_gate["command"]
+    assert not any(item.startswith("preset=") for item in sdk_gate["command"])
 
 
 def test_visual_grounding_change_selects_real_dino_gate(tmp_path: Path) -> None:
@@ -187,7 +191,7 @@ def test_explicit_axes_select_first_class_engine_and_provider_profile(
 
     gates = _selected_gates(matrix)
     assert gates["codex-cleanup-world-oracle"]["axes"]["provider_profile"] == "mify"
-    assert gates["openai-agents-sdk-cleanup"]["axes"]["provider_profile"] == "mify"
+    assert gates["openai-agents-sdk-open-task"]["axes"]["provider_profile"] == "mify"
     assert gates["direct-camera-grounded-grounding-dino"]["axes"]["camera_labeler"] == (
         "grounding-dino"
     )
@@ -348,6 +352,6 @@ def test_recommendation_writes_json_markdown_and_html(tmp_path: Path) -> None:
     assert manifest["schema"] == "agent_validation_matrix_v1"
     assert (tmp_path / "validation_matrix.md").exists()
     assert (tmp_path / "validation_matrix.html").exists()
-    assert "openai-agents-sdk-cleanup" in (tmp_path / "validation_matrix.md").read_text(
+    assert "openai-agents-sdk-open-task" in (tmp_path / "validation_matrix.md").read_text(
         encoding="utf-8"
     )

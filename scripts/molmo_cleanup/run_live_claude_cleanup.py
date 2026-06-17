@@ -76,6 +76,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
+    parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
     parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
@@ -267,13 +269,14 @@ class LiveClaudeCleanupRunner:
                 raise RuntimeError(f"invalid --claude-env value: {item!r}")
             env[key] = value
         self._configure_provider_timing_proxy(env)
+        task_name = getattr(self.args, "task_name", "household-cleanup")
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
-            task_name="household-cleanup",
-            skill_name="molmo-realworld-cleanup",
+            task_name=task_name,
+            skill_name=self.args.skill_name,
         )
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "household-cleanup")
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", task_name)
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", self.args.skill_name)
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
 

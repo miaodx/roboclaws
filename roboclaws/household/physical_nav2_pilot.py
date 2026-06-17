@@ -16,7 +16,7 @@ from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
 from roboclaws.maps.bundle import copy_nav2_map_bundle_snapshot, validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
-from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE
+from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, legacy_contract_profile_metadata
 
 PHYSICAL_NAV2_PILOT_SCHEMA = "physical_nav2_cleanup_pilot_v1"
 PHYSICAL_NAV2_PILOT_POLICY = "physical_nav2_navigation_perception_pilot"
@@ -232,15 +232,7 @@ def run_physical_nav2_cleanup_pilot(
         "schema": PHYSICAL_NAV2_PILOT_SCHEMA,
         "contract": REALWORLD_CONTRACT,
         "cleanup_profile": REAL_ROBOT_CLEANUP_PROFILE,
-        "cleanup_profile_metadata": {
-            "profile": REAL_ROBOT_CLEANUP_PROFILE,
-            "summary": "Physical navigation plus camera-label perception pilot.",
-            "agent_input": "metric_map, fixture_hints, Nav2 waypoint tools, observe",
-            "input_provenance": "prebuilt_nav2_map_bundle",
-            "report": "physical_navigation_perception_pilot",
-            "verifiers": ["map_bundle_contract", "physical_nav2_pilot_contract"],
-            "model_input_note": "Manipulation tools are present only as blocked capabilities.",
-        },
+        "cleanup_profile_metadata": legacy_contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE),
         "backend": backend_name,
         "policy": PHYSICAL_NAV2_PILOT_POLICY,
         "agent_driven": False,

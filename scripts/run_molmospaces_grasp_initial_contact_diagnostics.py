@@ -1,1 +1,0 @@
-molmo_cleanup/run_molmospaces_grasp_initial_contact_diagnostics.py

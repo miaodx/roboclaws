@@ -24,8 +24,8 @@ from roboclaws.operator_console.launcher import (
 from roboclaws.operator_console.locks import ResourceLock, ResourceLockError
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import (
-    get_route,
-    list_console_routes,
+    get_selection,
+    list_console_combinations,
     validate_supported_routes_against_catalog,
 )
 from roboclaws.operator_console.server import ConsoleRequestHandler
@@ -38,6 +38,17 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
+AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
+AGIBOT_CODEX_MAP_BUILD = (
+    "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+)
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
+ISAAC_CLAUDE_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
+ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
+ISAAC_CODEX_MAP_BUILD = "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
+MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
 
 
 def _free_port() -> str:
@@ -57,37 +68,36 @@ def _just_bin() -> str:
 
 
 def test_console_route_registry_exposes_agent_routes_and_explains_disabled_routes() -> None:
-    routes = list_console_routes()
+    routes = list_console_combinations()
     supported = [route for route in routes if route.enabled]
     disabled = {route.id: route.disabled_reason for route in routes if not route.enabled}
 
-    assert {route.id for route in supported} == {
-        "codex-mujoco-cleanup",
-        "claude-mujoco-cleanup",
-        "codex-isaac-cleanup",
-        "claude-isaac-cleanup",
-        "codex-agibot-g2-map-build",
-        "codex-mujoco-map-build",
-        "codex-isaac-map-build",
-        "codex-b1-map12-open-ended",
+    assert {route.id for route in supported} >= {
+        MUJOCO_CODEX_CLEANUP,
+        MUJOCO_CLAUDE_CLEANUP,
+        ISAAC_CODEX_CLEANUP,
+        ISAAC_CLAUDE_CLEANUP,
+        AGIBOT_CODEX_MAP_BUILD,
+        MUJOCO_CODEX_MAP_BUILD,
+        ISAAC_CODEX_MAP_BUILD,
+        B1_CODEX_OPEN_TASK,
     }
-    assert {route.driver for route in supported} == {"codex", "claude"}
+    assert {route.agent_engine_id for route in supported} >= {"codex-cli", "claude-code"}
     assert {route.lock_name for route in supported} == {
         "molmospaces_mujoco",
         "isaac_gpu",
         "agibot_g2",
     }
-    assert disabled["agibot-g2-cleanup"] == (
+    assert disabled[AGIBOT_CODEX_CLEANUP] == (
         "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
-    assert set(disabled) == {"agibot-g2-cleanup"}
     validate_supported_routes_against_catalog()
 
 
 def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
-    mujoco = get_route("codex-mujoco-cleanup").to_payload()
-    isaac = get_route("codex-isaac-cleanup").to_payload()
-    agibot = get_route("codex-agibot-g2-map-build").to_payload()
+    mujoco = get_selection(MUJOCO_CODEX_CLEANUP).to_payload()
+    isaac = get_selection(ISAAC_CODEX_CLEANUP).to_payload()
+    agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
 
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
@@ -102,7 +112,7 @@ def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
 
 
 def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -121,10 +131,10 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         "surface=household-world",
         "world=molmospaces/val_0",
         "backend=mujoco",
-        "intent=cleanup",
+        "preset=cleanup",
         "agent_engine=codex-cli",
     ]
-    assert "intent=cleanup" in argv
+    assert "preset=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
     assert "provider_profile=codex-env" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
@@ -140,13 +150,13 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         intent="open-ended",
         prompt="pick up the mug; rm -rf /",
     )
-    assert "intent=open-ended" in open_ended
-    assert "intent=cleanup" not in open_ended
+    assert not any(item.startswith("intent=") for item in open_ended)
+    assert not any(item.startswith("preset=") for item in open_ended)
     assert "scenario_setup=baseline" in open_ended
     assert not any(item.startswith("relocation_count=") for item in open_ended)
     assert not any(item.startswith("generated_mess_count=") for item in open_ended)
 
-    disabled = get_route("agibot-g2-cleanup")
+    disabled = get_selection(AGIBOT_CODEX_CLEANUP)
     with pytest.raises(ConsoleLaunchError, match="cannot accept a custom prompt"):
         build_launch_argv(disabled, root=tmp_path, run_id="run-2", prompt="custom")
 
@@ -157,7 +167,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
 def test_console_readiness_keeps_isaac_preflight_advisory_but_locks_blocking(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-isaac-cleanup")
+    route = get_selection(ISAAC_CODEX_CLEANUP)
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is True
     isaac_gate = next(gate for gate in readiness["gates"] if gate["id"] == "isaac_preflight")
@@ -232,7 +242,7 @@ def test_operator_state_derives_public_fields_and_artifact_links(tmp_path: Path)
     )
     (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert state["run_id"] == "run-a"
     assert state["latest_tool_call"]["name"] == "navigate_to_object"
@@ -460,7 +470,7 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     tmp_path: Path,
 ) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "latest-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -484,7 +494,7 @@ def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
         thread.join(timeout=2)
 
     assert payload["run_id"] == run_id
-    assert payload["route_id"] == route.id
+    assert payload["selection_id"] == route.id
     assert payload["run_dir"] == str(run_dir.resolve())
 
 
@@ -504,7 +514,7 @@ def test_operator_console_run_reload_ignores_legacy_route_query(tmp_path: Path) 
     try:
         host, port = server.server_address
         with urllib.request.urlopen(
-            f"http://{host}:{port}/api/runs/{run_id}?route=codex-mujoco-cleanup"
+            f"http://{host}:{port}/api/runs/{run_id}?route=molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
         ) as response:
             payload = json.loads(response.read().decode("utf-8"))
     finally:
@@ -517,7 +527,7 @@ def test_operator_console_run_reload_ignores_legacy_route_query(tmp_path: Path) 
     assert payload["selected_intent"] == ""
 
 
-def test_operator_console_run_endpoint_rejects_legacy_route_id_launch(
+def test_operator_console_run_endpoint_rejects_legacy_route_id_field(
     tmp_path: Path,
 ) -> None:
     handler = partial(ConsoleRequestHandler, root=tmp_path)
@@ -531,7 +541,7 @@ def test_operator_console_run_endpoint_rejects_legacy_route_id_launch(
             method="POST",
             data=json.dumps(
                 {
-                    "route_id": "codex-mujoco-cleanup",
+                    "route_id": MUJOCO_CODEX_CLEANUP,
                     "intent": "open-ended",
                     "prompt": "收拾桌面上的杯子",
                 }
@@ -547,11 +557,11 @@ def test_operator_console_run_endpoint_rejects_legacy_route_id_launch(
         thread.join(timeout=2)
 
     assert exc_info.value.code == 400
-    assert "codex-mujoco-cleanup" in payload["error"]
+    assert "launch requires" in payload["error"]
 
 
 def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "parent-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -620,15 +630,14 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert payload["status"] == "started"
     assert payload["started_run"]["run_id"] == "child-run"
     launch_request = launched["request"]
-    assert launch_request.route_id == ""
-    assert launch_request.selection_id_override == route.selection.id
+    assert launch_request.selection_id_override == route.id
     assert launch_request.intent_id == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id
 
 
 def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path: Path) -> None:
-    route = get_route("codex-mujoco-cleanup")
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
     run_id = "20260610-224107-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     attempt_dir = run_dir / "0610_2241" / "seed-7"

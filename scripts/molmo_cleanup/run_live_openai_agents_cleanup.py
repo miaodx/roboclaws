@@ -87,7 +87,6 @@ MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
-MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH = Path("skills/molmo-realworld-cleanup/SKILL.md")
 MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
 
 
@@ -267,6 +266,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
     parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
     parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", default="openai_agents_agent")
     parser.add_argument("--task", required=True)
@@ -291,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
 class LiveOpenAIAgentsCleanupRunner:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
+        self.skill_name = str(getattr(args, "skill_name", "") or "molmo-realworld-cleanup")
         self.run_dir = args.run_dir
         self.status_path = args.status_path
         self.timing_path = self.run_dir / "live_timing.json"
@@ -304,7 +305,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self.agent_sdk_perf_profile = _resolve_agent_sdk_perf_profile(args)
         self.skill_context = _load_agent_sdk_skill_context(
             args.repo_root,
-            skill_name="molmo-realworld-cleanup",
+            skill_name=self.skill_name,
         )
         self.initial_kickoff_prompt = _profiled_kickoff_prompt(
             args,
@@ -507,7 +508,8 @@ class LiveOpenAIAgentsCleanupRunner:
         self._write_status("running-openai-agents")
         self._mark_timing("openai_agents_start")
         recovery_policy = IncompleteTurnRecoveryPolicy(
-            max_attempts=int(self.agent_sdk_perf_profile["max_continuations"])
+            max_attempts=int(self.agent_sdk_perf_profile["max_continuations"]),
+            continuation_suffix=_task_aware_continuation_suffix(self.args),
         )
         runtime = OpenAIAgentsLiveRuntime()
         prompt = self.initial_kickoff_prompt
@@ -622,7 +624,7 @@ class LiveOpenAIAgentsCleanupRunner:
             )
         return LiveAgentRequest(
             task_name=self.args.task_name,
-            skill_name="molmo-realworld-cleanup",
+            skill_name=self.skill_name,
             kickoff_prompt=prompt,
             mcp_server=LiveAgentMCPServer(name="cleanup", url=self.args.client_url),
             run_dir=self.run_dir,
@@ -1019,12 +1021,13 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _load_agent_sdk_skill_context(repo_root: Path, *, skill_name: str) -> dict[str, Any]:
-    source_path = Path(repo_root) / MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH
+    relative_path = Path("skills") / skill_name / "SKILL.md"
+    source_path = Path(repo_root) / relative_path
     base_payload: dict[str, Any] = {
         "schema": "agent_sdk_skill_context_v1",
         "skill_name": skill_name,
         "source_path": str(source_path),
-        "relative_path": str(MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH),
+        "relative_path": str(relative_path),
         "policy": "canonical_skill_markdown",
     }
     try:
@@ -2353,6 +2356,9 @@ def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict
 
 
 def _intent_for_task_name(task_name: str) -> str:
+    task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+    if task_intent:
+        return task_intent
     if task_name == "semantic-map-build":
         return "map-build"
     return "cleanup"
@@ -2361,6 +2367,43 @@ def _intent_for_task_name(task_name: str) -> str:
 def _task_intent_mode_for_timing(args: Any) -> str:
     return normalize_task_intent_mode(
         getattr(args, "task_intent_mode", "") or TASK_INTENT_MODE_DEFAULT
+    )
+
+
+def _task_aware_continuation_suffix(args: Any) -> str:
+    task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+    intent = household_intent_id_for_checker(
+        task_name=str(getattr(args, "task_name", "") or "household-cleanup"),
+        task_intent=task_intent,
+        open_ended_task=task_intent == "open-ended",
+    )
+    task = " ".join(str(getattr(args, "task", "") or "").split())
+    preset = os.environ.get("ROBOCLAWS_TASK_PRESET", "")
+    selected = "surface=household-world"
+    if preset:
+        selected += f" preset={preset}"
+    elif intent != "open-ended":
+        selected += f" preset={intent}"
+    if intent == "open-ended":
+        return (
+            f"Continuation recovery for the same live household open-task run ({selected}):\n\n"
+            "The previous OpenAI Agents SDK invocation ended without calling `done`, so no "
+            "`run_result.json` was produced. Continue from the current household MCP server "
+            "state. Preserve the operator goal"
+            + (f": {task}" if task else ".")
+            + " Do not switch into a room-cleanup routine unless the operator goal itself "
+            "requires cleanup. First inspect public MCP state as needed, then continue only "
+            "the missing search, inspection, manipulation, or completion steps needed for "
+            "that goal. Call `done` when the public evidence supports task completion."
+        )
+    return (
+        f"Continuation recovery for the same live household preset run ({selected}):\n\n"
+        "The previous OpenAI Agents SDK invocation ended without calling `done`, so no "
+        "`run_result.json` was produced. Continue from the current household MCP server "
+        "state. Do not summarize progress as a final answer. First inspect the current "
+        "runtime state through public tools, then continue only missing preset-specific "
+        "steps. Call `done` only after MCP-visible task state satisfies the selected "
+        "preset instructions."
     )
 
 

@@ -401,6 +401,8 @@ def _default_sdk_model_settings_payload(
     }
     if wire_api == "chat-completions":
         payload["include_usage"] = True
+        if provider_profile == "kimi-openai-chat":
+            payload["extra_headers"] = {"User-Agent": "claude-code/1.0.0"}
     else:
         payload.update(
             {

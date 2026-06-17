@@ -63,8 +63,9 @@ molmo-cleanup-codex-perf *overrides:
       fi
       printf -v "$key" '%s' "$value"
     done
-    cmd=(just molmo::cleanup "codex-live" "world-oracle-labels" "$seed" \
-      "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle" "skill" "$robot_views")
+    cmd=(just molmo::household-cleanup-impl codex-live world-oracle-labels \
+      "$seed" "$output_dir" "$task" "$generated_mess_count" "$host" "$port" \
+      "$map_bundle" "skill" "$robot_views")
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
       printf 'just'
       for arg in "${cmd[@]:1}"; do

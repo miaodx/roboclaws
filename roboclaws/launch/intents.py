@@ -21,6 +21,7 @@ class TaskIntentSpec:
     required_artifacts: tuple[str, ...]
     completion_claim_schema: str
     evaluation_policy: str
+    skill_name: str
     required_capabilities: tuple[str, ...] = ()
 
 
@@ -49,6 +50,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
         required_artifacts=("run_result.json", "report.html", "trace.jsonl", "goal_contract.json"),
         completion_claim_schema="roboclaws_agent_completion_claim_v1",
         evaluation_policy="cleanup",
+        skill_name="molmo-realworld-cleanup",
         required_capabilities=(
             "household_world",
             "household_manipulation",
@@ -74,12 +76,13 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
         ),
         completion_claim_schema="roboclaws_agent_completion_claim_v1",
         evaluation_policy="map_build",
+        skill_name="household-open-task",
         required_capabilities=("household_world", "household_episode"),
     ),
     "open-ended": TaskIntentSpec(
         intent_id="open-ended",
         surface_ids=("household-world",),
-        supported_dispatch_runners=("mcp-smoke", "codex", "claude"),
+        supported_dispatch_runners=("mcp-smoke", "codex", "claude", "openai-agents-live"),
         dispatch_target="household-world.open-ended",
         prompt_id="household_open_ended",
         checker_id="open_ended_report",
@@ -89,6 +92,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
         required_artifacts=("run_result.json", "report.html", "trace.jsonl", "goal_contract.json"),
         completion_claim_schema="roboclaws_agent_completion_claim_v1",
         evaluation_policy="open_ended",
+        skill_name="household-open-task",
         required_capabilities=("household_world", "household_episode"),
     ),
     "planner-proof": TaskIntentSpec(
@@ -104,6 +108,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
         required_artifacts=("report.html",),
         completion_claim_schema="roboclaws_agent_completion_claim_v1",
         evaluation_policy="planner_proof",
+        skill_name="molmo-planner-proof",
         required_capabilities=("planner_proof",),
     ),
 }

@@ -20,7 +20,7 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
-from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, contract_profile_metadata
+from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, legacy_contract_profile_metadata
 
 
 class AgibotCleanupBackendSession:
@@ -460,7 +460,9 @@ class AgibotCleanupMCPContract:
     def run_result_overrides(self) -> dict[str, Any]:
         return {
             "cleanup_profile": REAL_ROBOT_CLEANUP_PROFILE,
-            "cleanup_profile_metadata": contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE),
+            "cleanup_profile_metadata": legacy_contract_profile_metadata(
+                REAL_ROBOT_CLEANUP_PROFILE
+            ),
             "backend": AGIBOT_SDK_RUNNER_BACKEND,
             "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
             "primitive_provenance": AGIBOT_GDK_NORMAL_NAVI_PROVENANCE

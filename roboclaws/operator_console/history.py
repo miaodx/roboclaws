@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.operator_console.paths import console_output_root
-from roboclaws.operator_console.routes import ConsoleLaunchSelection, ConsoleRoute
+from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.state import LIVE_RUN_MARKERS, resolve_display_run_dir
 
 HISTORY_FILENAME = "runs.jsonl"
@@ -17,7 +17,7 @@ def append_run_history(
     root: Path,
     *,
     run_id: str,
-    selection: ConsoleLaunchSelection | ConsoleRoute,
+    selection: ConsoleLaunchSelection,
     run_dir: Path,
     started_at_epoch: float,
     started_at: str,
@@ -26,20 +26,19 @@ def append_run_history(
 
     history_path = _history_path(root)
     history_path.parent.mkdir(parents=True, exist_ok=True)
-    launch = selection.selection if isinstance(selection, ConsoleRoute) else selection
     payload = {
         "schema": "operator_console_run_history_v1",
         "run_id": run_id,
-        "selection_id": launch.id,
-        "launch_label": launch.label,
-        "world_id": launch.world_id,
-        "backend_id": launch.backend_id,
-        "intent_id": launch.intent_id,
-        "agent_engine_id": launch.agent_engine_id,
-        "provider_profile": launch.provider_profile or "",
-        "evidence_lane": launch.evidence_lane,
-        "scenario_setup": launch.scenario_setup,
-        "lock_name": launch.lock_name,
+        "selection_id": selection.id,
+        "launch_label": selection.label,
+        "world_id": selection.world_id,
+        "backend_id": selection.backend_id,
+        "intent_id": selection.intent_id,
+        "agent_engine_id": selection.agent_engine_id,
+        "provider_profile": selection.provider_profile or "",
+        "evidence_lane": selection.evidence_lane,
+        "scenario_setup": selection.scenario_setup,
+        "lock_name": selection.lock_name,
         "run_dir": str(run_dir),
         "started_at_epoch": started_at_epoch,
         "started_at": started_at,
@@ -114,8 +113,6 @@ def _candidate_payload(root: Path, run_id: str, row: dict[str, Any]) -> dict[str
         "run_id": run_id,
         "selection_id": selection_id,
         "launch_label": launch_label,
-        "route_id": str(row.get("route_id") or route_payload.get("legacy_route_id") or ""),
-        "route_label": str(row.get("route_label") or ""),
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
         "display_run_id": _display_run_id(run_dir, display_run_dir),

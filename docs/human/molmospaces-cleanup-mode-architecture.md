@@ -54,15 +54,15 @@ metadata and report metadata.
 Current canonical command shape:
 
 ```bash
-just run::surface surface=household-world world=<world> backend=<backend> intent=cleanup agent_engine=<engine> [provider_profile=<profile>] evidence_lane=<lane> [camera_labeler=<labeler>]
+just run::surface surface=household-world world=<world> backend=<backend> preset=cleanup agent_engine=<engine> [provider_profile=<profile>] evidence_lane=<lane> [camera_labeler=<labeler>]
 ```
 
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=camera-raw-fpv
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=camera-raw-fpv
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
 ```
 
 No backward compatibility is required for this refactor. The new names can
@@ -384,12 +384,12 @@ No compatibility layer is required. Replace old public names directly.
 
 | Old public/internal name | New public profile or metadata |
 | --- | --- |
-| `visual` | `profile=world-labels` when used as the default visual cleanup result. |
-| `semantic` | `profile=smoke` for cheap contract checks, or `report=semantic_report` in metadata. |
-| `raw-fpv` | `profile=camera-raw`. |
+| `visual` | legacy `world-labels` cleanup profile when used as the default visual cleanup result. |
+| `semantic` | legacy `smoke` cleanup profile for cheap contract checks, or `report=semantic_report` in metadata. |
+| `raw-fpv` | legacy `camera-raw` cleanup profile. |
 | `visible_object_detections` | `agent_input=world_labels` metadata. |
 | `raw_fpv_only` | `agent_input=raw_camera` metadata. |
-| `camera_model_policy` | `profile=camera-labels`, with `input_provenance=simulated_camera_model` today. |
+| `camera_model_policy` | legacy `camera-labels` cleanup profile, with `input_provenance=simulated_camera_model` today. |
 | `synthetic` | `world_backend=synthetic_contract` metadata. |
 | `molmospaces` | `world_backend=molmospaces_sim` metadata. |
 
@@ -399,16 +399,16 @@ The refactor should make these gaps visible and testable:
 
 | Test target | Purpose |
 | --- | --- |
-| `profile=smoke` | Cheap contract sanity still works. |
-| `profile=world-labels` | Current structured-label cleanup input lane still produces robot-view artifacts, but structured labels are semantic candidates until source-FPV confirmation authorizes navigation. |
-| `profile=world-labels-sanitized` | Structured detections keep producer/source/actionability fields while omitting destination/tool oracle hints and pre-confirmed navigation authorization. |
-| `profile=camera-raw` | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
-| `profile=camera-labels` | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
+| legacy `smoke` cleanup profile | Cheap contract sanity still works. |
+| legacy `world-labels` cleanup profile | Structured-label cleanup input lane still produces robot-view artifacts, but structured labels are semantic candidates until source-FPV confirmation authorizes navigation. |
+| legacy `world-labels-sanitized` cleanup profile | Structured detections keep producer/source/actionability fields while omitting destination/tool oracle hints and pre-confirmed navigation authorization. |
+| legacy `camera-raw` cleanup profile | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
+| legacy `camera-labels` cleanup profile | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
 
 The most important regression test is:
 
 ```text
-profile=world-labels must not be described as image reasoning, online mapping,
+The legacy `world-labels` cleanup profile must not be described as image reasoning, online mapping,
 or offline prior-map cleanup. Cleanup starts from the Base Navigation Map by
 default; runtime_map_prior may add prior Runtime Metric Map or Actionable
 Semantic Map Snapshot evidence.
@@ -417,7 +417,7 @@ Semantic Map Snapshot evidence.
 The fair-comparison regression test is:
 
 ```text
-profile=world-labels-sanitized must not expose candidate_fixture_id,
+The legacy `world-labels-sanitized` cleanup profile must not expose candidate_fixture_id,
 cleanup_recommended, or recommended_tool in visible_object_detections.
 It must not expose cleanup_recommended=false as a skip signal in sanitized
 agent-facing object rows.
@@ -428,29 +428,30 @@ source_observation_id, image_region, grounding_status, and actionability.
 The second most important regression test is:
 
 ```text
-profile=camera-raw must fail if structured object labels leak into agent input.
+The legacy `camera-raw` cleanup profile must fail if structured object labels
+leak into agent input.
 ```
 
 ## Implementation Result
 
-Historical implementation result, superseded by
-`docs/plans/operator-console-orthogonal-launch-refactor.md`:
+Historical implementation result, superseded by the surface/evidence-lane
+launch catalog and `docs/plans/operator-console-orthogonal-launch-refactor.md`:
 
-1. `just task::run household-cleanup <driver> <profile>` treats the third
-   positional argument as the cleanup profile.
-2. The public profiles are `smoke`, `world-labels`,
+1. The retired task facade treated the third positional argument as the cleanup
+   profile.
+2. The legacy cleanup profiles were `smoke`, `world-labels`,
    `world-labels-sanitized`, `camera-raw`, and `camera-labels`.
-3. Old public profile values (`visual`, `semantic`, `raw-fpv`) are not accepted
-   as cleanup profiles.
-4. Profile expansion lives in `roboclaws/household/profiles.py`, while
-   existing perception constants such as `visible_object_detections`,
-   `raw_fpv_only`, and `camera_model_policy` remain internal metadata.
-5. Generated cleanup artifacts can record `cleanup_profile` and
-   `cleanup_profile_metadata`; the HTML report surfaces profile, agent input,
+3. Older public values such as `visual`, `semantic`, and `raw-fpv` were not
+   accepted as cleanup profiles.
+4. Profile expansion lived in `roboclaws/household/profiles.py`, while
+   perception constants such as `visible_object_detections`, `raw_fpv_only`,
+   and `camera_model_policy` remained internal metadata.
+5. Generated cleanup artifacts recorded `cleanup_profile` and
+   `cleanup_profile_metadata`; the HTML report surfaced profile, agent input,
    provenance, report type, and verifier metadata.
-6. Command help, `docs/human/molmospaces-settings.md`, and `just/README.md`
-   use profile names.
-7. Focused tests cover profile expansion, report metadata, command routing,
+6. Historical command help, `docs/human/molmospaces-settings.md`, and
+   `just/README.md` used profile names before evidence lanes replaced them.
+7. Focused tests covered profile expansion, report metadata, command routing,
    raw-camera label leakage, and camera-label provenance.
 
 ## Decisions Made
@@ -461,8 +462,8 @@ Historical implementation result, superseded by
   smoke path, and live cleanup MCP server CLI. It still records
   `input_provenance=simulated_camera_model` until a real detector/VLM path is
   implemented.
-- `profile=world-labels` keeps the current direct-driver multi-seed review
+- The legacy `world-labels` cleanup profile kept the direct-driver multi-seed review
   behavior (`1 2 3`) and live-driver single-seed behavior.
-- `profile=world-labels-sanitized` keeps the `world-labels` backend,
+- The legacy `world-labels-sanitized` cleanup profile kept the `world-labels` backend,
   robot-view, and minimal-map behavior, but strips destination/tool oracle hints
   from the agent-facing detection and runtime-map boundary.
