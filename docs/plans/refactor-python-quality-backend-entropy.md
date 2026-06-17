@@ -46,12 +46,21 @@ should remove or relocate stale current-looking guidance, duplicate command
 tables, historical launch/profile narratives, and implementation/proof detail
 that makes humans or future agents rediscover old routes.
 
-Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-17 after the cleanup report Agibot section owner
-split. Treat this as the planning snapshot for the next slice; refresh before
-executing again.
+Implementation refresh on 2026-06-18 completed the MolmoSpaces robot-map
+renderer split. `render_robot_map()` now delegates projection, frame, room
+outline, focus marker, object marker, trajectory, heading, and legend drawing to
+focused helpers inside `molmospaces_room_map.py`. Behavior-change class:
+internal cleanup; map dimensions, colors, labels, bounds, artifact names, and
+callers are unchanged. The ratchet reports 9 complexity rows and 77 oversized
+modules; `scripts/molmo_cleanup/molmospaces_room_map.py` is 414 lines and no
+longer appears in the complexity list.
 
-- 14 Ruff complexity violations and 74 oversized modules remain.
+Latest refreshed quality signal from `python
+scripts/dev/check_python_quality_ratchet.py --summary --top 60` on 2026-06-18.
+Treat this as the planning snapshot for the next slice; refresh before executing
+again.
+
+- 9 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -111,10 +120,10 @@ executing again.
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
-  operator-console tests, B1 preview rendering, a cleanup checker helper, live
-  eval polling, MCP semantic tool registration, prompt preview, and eval-harness
-  blockers. They should not hide while a file-size slice improves, but they are
-  not the default next P1 unless the active product focus changes.
+  operator-console tests, a cleanup checker helper, live eval polling, MCP
+  semantic tool registration, prompt preview, and eval-harness blockers. They
+  should not hide while a file-size slice improves, but they are not the default
+  next P1 unless the active product focus changes.
 
 Current closure snapshot:
 
@@ -1010,7 +1019,9 @@ be claimed without an explicit local run.
   scene-camera USD render-contract,
   image metric, lighting/tone/shadow, render-domain, and render-source
   diagnostics in focused scene-camera modules; B1 runtime-bundle and label-tool
-  validation helper families.
+  validation helper families; MolmoSpaces robot-map projection, room, focus,
+  object, trajectory, heading, and legend drawing helpers in
+  `molmospaces_room_map.py`.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad

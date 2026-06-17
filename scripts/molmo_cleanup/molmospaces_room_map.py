@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+from dataclasses import dataclass
 from typing import Any, Callable
 
 import mujoco
@@ -10,6 +11,28 @@ from PIL import Image, ImageDraw
 ROBOT_PATH_COLOR = (37, 99, 235)
 ROBOT_HEADING_COLOR = (15, 23, 42)
 MANUAL_ADJUSTMENT_COLOR = (168, 85, 247)
+MAP_WIDTH = 620
+MAP_HEIGHT = 420
+MAP_MARGIN = 34
+
+
+@dataclass(frozen=True)
+class _MapProjection:
+    min_x: float
+    max_x: float
+    min_y: float
+    max_y: float
+
+    def project(self, x: float, y: float) -> tuple[int, int]:
+        px = MAP_MARGIN + (x - self.min_x) / max(self.max_x - self.min_x, 0.001) * (
+            MAP_WIDTH - 2 * MAP_MARGIN
+        )
+        py = (
+            MAP_HEIGHT
+            - MAP_MARGIN
+            - (y - self.min_y) / max(self.max_y - self.min_y, 0.001) * (MAP_HEIGHT - 2 * MAP_MARGIN)
+        )
+        return (int(round(px)), int(round(py)))
 
 
 def render_robot_map(
@@ -17,36 +40,68 @@ def render_robot_map(
     *,
     focus: dict[str, Any] | None = None,
 ) -> Image.Image:
-    width, height = 620, 420
-    margin = 34
-    image = Image.new("RGB", (width, height), (247, 248, 250))
+    image = Image.new("RGB", (MAP_WIDTH, MAP_HEIGHT), (247, 248, 250))
     draw = ImageDraw.Draw(image)
-    draw.rectangle((12, 12, width - 12, height - 12), outline=(187, 193, 204), width=2)
 
     focus = focus or {}
-    points = map_points(state, focus)
-    min_x, max_x, min_y, max_y = map_bounds(points)
+    projection = _map_projection(state, focus)
 
-    def project(x: float, y: float) -> tuple[int, int]:
-        px = margin + (x - min_x) / max(max_x - min_x, 0.001) * (width - 2 * margin)
-        py = height - margin - (y - min_y) / max(max_y - min_y, 0.001) * (height - 2 * margin)
-        return (int(round(px)), int(round(py)))
+    _draw_map_frame(draw)
+    _draw_room_outlines(draw, state, projection)
+    _draw_focus_receptacle(draw, state, focus, projection)
+    _draw_receptacles(draw, state, projection)
+    _draw_selected_objects(draw, state, focus, projection)
+    _draw_robot_trajectory(draw, state, projection)
+    _draw_map_legend(draw)
+    return image
 
+
+def _map_projection(state: dict[str, Any], focus: dict[str, Any]) -> _MapProjection:
+    min_x, max_x, min_y, max_y = map_bounds(map_points(state, focus))
+    return _MapProjection(min_x=min_x, max_x=max_x, min_y=min_y, max_y=max_y)
+
+
+def _draw_map_frame(draw: ImageDraw.ImageDraw) -> None:
+    draw.rectangle((12, 12, MAP_WIDTH - 12, MAP_HEIGHT - 12), outline=(187, 193, 204), width=2)
+
+
+def _draw_room_outlines(
+    draw: ImageDraw.ImageDraw,
+    state: dict[str, Any],
+    projection: _MapProjection,
+) -> None:
     for outline in state.get("room_outlines", []):
-        center = outline["center"]
-        half_x, half_y = outline["half_extents"]
-        x1, y1 = project(float(center[0]) - float(half_x), float(center[1]) - float(half_y))
-        x2, y2 = project(float(center[0]) + float(half_x), float(center[1]) + float(half_y))
-        left, right = sorted((x1, x2))
-        top, bottom = sorted((y1, y2))
+        left, top, right, bottom = _project_room_outline(outline, projection)
         draw.rectangle((left, top, right, bottom), outline=(148, 163, 184), width=2)
         draw.text((left + 5, top + 5), str(outline.get("label", "room")), fill=(71, 85, 105))
 
+
+def _project_room_outline(
+    outline: dict[str, Any],
+    projection: _MapProjection,
+) -> tuple[int, int, int, int]:
+    center = outline["center"]
+    half_x, half_y = outline["half_extents"]
+    x1, y1 = projection.project(float(center[0]) - float(half_x), float(center[1]) - float(half_y))
+    x2, y2 = projection.project(float(center[0]) + float(half_x), float(center[1]) + float(half_y))
+    left, right = sorted((x1, x2))
+    top, bottom = sorted((y1, y2))
+    return left, top, right, bottom
+
+
+def _draw_focus_receptacle(
+    draw: ImageDraw.ImageDraw,
+    state: dict[str, Any],
+    focus: dict[str, Any],
+    projection: _MapProjection,
+) -> None:
     focus_receptacle_id = focus.get("receptacle_id")
-    focus_object_id = focus.get("object_id")
     if focus_receptacle_id in state["receptacles"]:
         receptacle = state["receptacles"][focus_receptacle_id]
-        x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
+        x, y = projection.project(
+            float(receptacle["position"][0]),
+            float(receptacle["position"][1]),
+        )
         draw.rounded_rectangle(
             (x - 13, y - 13, x + 13, y + 13),
             radius=5,
@@ -59,59 +114,111 @@ def render_robot_map(
             fill=(8, 92, 116),
         )
 
+
+def _draw_receptacles(
+    draw: ImageDraw.ImageDraw,
+    state: dict[str, Any],
+    projection: _MapProjection,
+) -> None:
     for receptacle in state["receptacles"].values():
-        x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
+        x, y = projection.project(
+            float(receptacle["position"][0]),
+            float(receptacle["position"][1]),
+        )
         draw.rounded_rectangle((x - 5, y - 5, x + 5, y + 5), radius=2, fill=(99, 116, 139))
 
+
+def _draw_selected_objects(
+    draw: ImageDraw.ImageDraw,
+    state: dict[str, Any],
+    focus: dict[str, Any],
+    projection: _MapProjection,
+) -> None:
+    focus_object_id = focus.get("object_id")
     for object_id in state["selected_object_ids"]:
         obj = state["objects"][object_id]
-        x, y = project(float(obj["position"][0]), float(obj["position"][1]))
+        x, y = projection.project(float(obj["position"][0]), float(obj["position"][1]))
         draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(192, 88, 68))
         if object_id == focus_object_id:
-            draw.ellipse((x - 11, y - 11, x + 11, y + 11), outline=(220, 38, 38), width=4)
-            draw.text((x + 10, y + 4), item_label(obj, "object_id"), fill=(153, 27, 27))
+            _draw_focused_object(draw, obj, x, y)
 
+
+def _draw_focused_object(
+    draw: ImageDraw.ImageDraw,
+    obj: dict[str, Any],
+    x: int,
+    y: int,
+) -> None:
+    draw.ellipse((x - 11, y - 11, x + 11, y + 11), outline=(220, 38, 38), width=4)
+    draw.text((x + 10, y + 4), item_label(obj, "object_id"), fill=(153, 27, 27))
+
+
+def _draw_robot_trajectory(
+    draw: ImageDraw.ImageDraw,
+    state: dict[str, Any],
+    projection: _MapProjection,
+) -> None:
     trajectory = state.get("robot_trajectory", [])
-    projected_path = [project(float(pose["x"]), float(pose["y"])) for pose in trajectory]
+    projected_path = [projection.project(float(pose["x"]), float(pose["y"])) for pose in trajectory]
     if len(projected_path) >= 2:
         draw.line(projected_path, fill=ROBOT_PATH_COLOR, width=3)
     for index, (x, y) in enumerate(projected_path):
         pose = trajectory[index]
         manual_adjustment = _is_manual_adjustment_pose(pose)
         color = MANUAL_ADJUSTMENT_COLOR if manual_adjustment else ROBOT_PATH_COLOR
-        radius = 7 if manual_adjustment and index == len(projected_path) - 1 else 5
-        if not manual_adjustment:
-            radius = 5 if index == len(projected_path) - 1 else 3
+        radius = _robot_path_point_radius(
+            manual_adjustment=manual_adjustment,
+            index=index,
+            path_length=len(projected_path),
+        )
         draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=color)
         if manual_adjustment:
             draw.ellipse((x - radius, y - radius, x + radius, y + radius), outline=(255, 255, 255))
-    if trajectory:
-        pose = trajectory[-1]
-        x, y = projected_path[-1]
-        heading = float(pose["theta"])
-        tip = (int(round(x + math.cos(heading) * 18)), int(round(y - math.sin(heading) * 18)))
-        left = (
-            int(round(x + math.cos(heading + 2.45) * 10)),
-            int(round(y - math.sin(heading + 2.45) * 10)),
-        )
-        right = (
-            int(round(x + math.cos(heading - 2.45) * 10)),
-            int(round(y - math.sin(heading - 2.45) * 10)),
-        )
-        draw.polygon([tip, left, right], fill=ROBOT_HEADING_COLOR)
 
+    _draw_robot_heading(draw, trajectory, projected_path)
+
+
+def _robot_path_point_radius(*, manual_adjustment: bool, index: int, path_length: int) -> int:
+    if manual_adjustment:
+        return 7 if index == path_length - 1 else 5
+    return 5 if index == path_length - 1 else 3
+
+
+def _draw_robot_heading(
+    draw: ImageDraw.ImageDraw,
+    trajectory: list[dict[str, Any]],
+    projected_path: list[tuple[int, int]],
+) -> None:
+    if not trajectory:
+        return
+
+    pose = trajectory[-1]
+    x, y = projected_path[-1]
+    heading = float(pose["theta"])
+    tip = (int(round(x + math.cos(heading) * 18)), int(round(y - math.sin(heading) * 18)))
+    left = (
+        int(round(x + math.cos(heading + 2.45) * 10)),
+        int(round(y - math.sin(heading + 2.45) * 10)),
+    )
+    right = (
+        int(round(x + math.cos(heading - 2.45) * 10)),
+        int(round(y - math.sin(heading - 2.45) * 10)),
+    )
+    draw.polygon([tip, left, right], fill=ROBOT_HEADING_COLOR)
+
+
+def _draw_map_legend(draw: ImageDraw.ImageDraw) -> None:
     draw.text((24, 22), "RBY1M map", fill=(31, 41, 55))
     draw.text(
-        (24, height - 30),
+        (24, MAP_HEIGHT - 30),
         "blue: robot path  purple: manual adjust waypoint  gray: receptacles  red: objects",
         fill=(75, 85, 99),
     )
     draw.text(
-        (24, height - 16),
+        (24, MAP_HEIGHT - 16),
         "cyan/red rings: focus",
         fill=(75, 85, 99),
     )
-    return image
 
 
 def _is_manual_adjustment_pose(pose: Any) -> bool:

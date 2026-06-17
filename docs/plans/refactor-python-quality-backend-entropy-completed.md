@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: MolmoSpaces robot-map rendering moved projection, frame, room
+  outline, focus marker, object marker, trajectory, heading, and legend drawing
+  out of `render_robot_map()` into focused helpers inside the existing map
+  owner. Behavior-change class: internal cleanup; map dimensions, colors,
+  labels, bounds, artifact names, and callers are unchanged. Metric: ratchet
+  reports 9 complexity rows and 77 oversized modules, and
+  `molmospaces_room_map.py` dropped from the complexity list while staying small
+  at 414 lines. Proof: focused map-rendering unit test, ruff, format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 camera preview candidate evaluation moved out of
   `_promote_b1_camera_previews()` into focused helpers for candidate
   diagnostics and accepted-score calculation. The promotion function keeps
