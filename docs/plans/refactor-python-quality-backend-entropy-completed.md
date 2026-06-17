@@ -99,6 +99,19 @@ logs before choosing the next slice.
   focused RealWorldCleanupContract visual-grounding tests, touched-file ruff and
   format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: Visual-grounding HTTP request validation now rejects empty image
+  evidence. `validate_visual_grounding_request()` requires non-empty
+  `image.bytes_base64` plus positive `image.width` / `image.height` values
+  instead of allowing zero-sized image payloads through the sidecar boundary.
+  Behavior-change class: fail-aloud visual-grounding contract validation; valid
+  image-backed requests, response schema validation, sim camera-model
+  declarations, missing-client status, public launch axes, and upstream
+  `missing_raw_fpv_image` classification are unchanged. Metric: ratchet remains
+  at 0 complexity rows and 79 oversized modules; `visual_grounding_contract.py`
+  is 183 lines. Proof: focused visual-grounding client and service contract
+  tests, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
   default/env validation moved into `openai_agents_perf_profile.py`. Malformed
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct

@@ -112,6 +112,17 @@ again.
   schemas, and public launch axes are unchanged. The ratchet remains 0
   complexity rows and 79 oversized modules;
   `realworld_visual_candidate_declarations.py` is 570 lines.
+- Follow-up implementation refresh on 2026-06-18 tightened the
+  visual-grounding HTTP request contract to reject empty image payloads.
+  `validate_visual_grounding_request()` now requires non-empty
+  `image.bytes_base64` plus positive `image.width` / `image.height` values
+  instead of allowing zero-sized image evidence through the sidecar boundary.
+  Behavior-change class: fail-aloud visual-grounding contract validation; valid
+  image-backed requests, response schema validation, sim camera-model
+  declarations, missing-client status, public launch axes, and upstream
+  `missing_raw_fpv_image` classification are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules; `visual_grounding_contract.py` is
+  183 lines.
 - Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
   runner-side MCP client-session timeout default/env validation into
   `openai_agents_perf_profile.py`. Malformed

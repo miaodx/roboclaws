@@ -169,6 +169,50 @@ def test_visual_grounding_request_rejects_invalid_base64_as_contract_error() -> 
         )
 
 
+def test_visual_grounding_request_rejects_empty_image_bytes() -> None:
+    with pytest.raises(VisualGroundingContractError, match="image.bytes_base64 is required"):
+        visual_grounding_request(
+            run_id="seed-7",
+            raw_observation={
+                "observation_id": "raw_fpv_001",
+                "waypoint_id": "wp_01",
+                "room_id": "kitchen",
+                "artifact_status": "recorded",
+            },
+            category_hints=["dish"],
+            static_fixture_projection=[],
+            pipeline_id="grounding-dino",
+            image={
+                "mime_type": "image/jpeg",
+                "bytes_base64": "",
+                "width": 2,
+                "height": 2,
+            },
+        )
+
+
+def test_visual_grounding_request_rejects_zero_image_dimensions() -> None:
+    with pytest.raises(VisualGroundingContractError, match="image.width must be positive"):
+        visual_grounding_request(
+            run_id="seed-7",
+            raw_observation={
+                "observation_id": "raw_fpv_001",
+                "waypoint_id": "wp_01",
+                "room_id": "kitchen",
+                "artifact_status": "recorded",
+            },
+            category_hints=["dish"],
+            static_fixture_projection=[],
+            pipeline_id="grounding-dino",
+            image={
+                "mime_type": "image/jpeg",
+                "bytes_base64": "ZmFrZQ==",
+                "width": 0,
+                "height": 2,
+            },
+        )
+
+
 def _request() -> dict[str, Any]:
     return visual_grounding_request(
         run_id="seed-7",
