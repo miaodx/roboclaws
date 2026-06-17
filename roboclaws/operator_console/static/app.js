@@ -945,16 +945,19 @@ function renderMessupAction(route) {
       route.world_id.startsWith("molmospaces/") &&
       route.backend_id === "mujoco"
   );
-  const statusKey = route ? `${route.world_id}:${route.backend_id}` : "";
-  els.messupButton.disabled = !supported || Boolean(state.activeRunId);
-  els.messupButton.hidden = !supported;
+  const relocation = selectedScenarioSetup() !== "baseline";
+  const statusKey = currentMessupStatusKey(route);
+  els.messupButton.disabled = !supported || !relocation || Boolean(state.activeRunId);
+  els.messupButton.hidden = !supported || !relocation;
   els.messupStatus.hidden = !supported;
   if (!supported) {
     return;
   }
   if (state.messupStatusKey !== statusKey) {
     state.messupStatusKey = statusKey;
-    els.messupStatus.textContent = "Mess-up check is optional and does not block baseline tests.";
+    els.messupStatus.textContent = relocation
+      ? "Mess-up check is optional; run it before Start Agent Run to check target capacity."
+      : "Baseline means no pre-run relocation. Start Agent Run will not mess up objects.";
   }
 }
 
@@ -967,6 +970,7 @@ function resetMessupStatusForManualSetup() {
   els.messupStatus.textContent = relocation
     ? "Mess-up check is optional; run it again after changing setup or count."
     : "Baseline means no pre-run relocation. Start Agent Run will not mess up objects.";
+  state.messupStatusKey = currentMessupStatusKey(route);
 }
 
 function renderIntentSelector(route) {
@@ -1019,6 +1023,13 @@ function withoutKeys(parts, keys) {
 
 function selectedScenarioSetup() {
   return els.scenarioSetupInput.value || "baseline";
+}
+
+function currentMessupStatusKey(route) {
+  if (!route) {
+    return "";
+  }
+  return `${route.world_id}:${route.backend_id}:${selectedScenarioSetup()}`;
 }
 
 function routeDefaultOverrides(route) {
@@ -1535,6 +1546,7 @@ async function previewMessup() {
   if (result.error) {
     els.scenarioSetupInput.value = "baseline";
     els.messupStatus.textContent = `Mess-up check failed: ${result.error}. Baseline remains available.`;
+    markCurrentMessupStatus(route);
     renderSelection();
     return;
   }
@@ -1545,12 +1557,14 @@ async function previewMessup() {
     els.messupStatus.textContent =
       `Mess-up ready: ${result.selected_count} / ${result.requested_count} targets. ` +
       "Start Agent Run will use this relocation setup.";
+    markCurrentMessupStatus(route);
   } else {
     els.scenarioSetupInput.value = "baseline";
     markCurrentSetupSelection(route);
     els.messupStatus.textContent =
       `Mess-up unavailable: ${result.message || "not enough eligible targets"}. ` +
       "Baseline remains available for follow-up tests.";
+    markCurrentMessupStatus(route);
   }
   renderSelection();
   scheduleReadinessRefresh();
@@ -1558,6 +1572,10 @@ async function previewMessup() {
 
 function markCurrentSetupSelection(route) {
   state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
+}
+
+function markCurrentMessupStatus(route) {
+  state.messupStatusKey = currentMessupStatusKey(route);
 }
 
 function launchRequestBody(route = state.selectedRoute) {
