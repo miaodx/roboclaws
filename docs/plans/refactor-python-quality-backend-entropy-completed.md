@@ -1022,6 +1022,18 @@ logs before choosing the next slice.
   comparison families. Proof: ratchet summary and static call-site scan only;
   no code behavior changed in this triage row.
 
+- 2026-06-17: Planner-probe runtime diagnostics moved from
+  `run_molmo_planner_manipulation_probe.py` into
+  `planner_probe_runtime_diagnostics.py`, covering runtime module/version
+  discovery, torch/CUDA diagnostics, CUDA memory snapshots, CuRobo extension
+  cache evidence, Warp compatibility and minimal `warp.torch` adapter, renderer
+  device selection, headless renderer env setup, and renderer constructor
+  patching. The runner keeps orchestration and worker event emission. Metric:
+  planner probe runner 2948 -> 2510 lines; new owner is 474 lines; ratchet
+  remains 11 complexity rows and 68 oversized modules. Proof: planner headless
+  renderer unit tests, planner manipulation checker contract tests, ruff,
+  format check, py_compile, diff check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1111,6 +1123,12 @@ logs before choosing the next slice.
   reopen only if `report.py` starts rebuilding proof-bundle result summaries,
   proof-quality summary rows, grasp-feasibility signature tables, proof result
   cards, or proof-result view figures directly.
+- Planner-probe runtime diagnostics are owned by
+  `planner_probe_runtime_diagnostics.py`; reopen only if
+  `run_molmo_planner_manipulation_probe.py` starts rebuilding runtime
+  module/version packets, torch/CUDA diagnostics, CUDA snapshot math, CuRobo
+  extension-cache evidence, Warp adapter diagnostics, or headless renderer
+  adapter setup directly.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state
