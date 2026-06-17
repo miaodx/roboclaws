@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+
+import pytest
+
+
+def test_init_state_builds_init_envelope_with_injected_hooks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    from scripts.molmo_cleanup.molmospaces_worker_state import init_state
+
+    _install_fake_molmospaces_modules(tmp_path, monkeypatch)
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    model = SimpleNamespace(nbody=1, ngeom=2, njnt=3, nq=4)
+    data = SimpleNamespace(qpos=[0.1, 0.2, 0.3, 0.4])
+
+    hooks = _init_hooks(scene_xml=scene_xml, model=model, data=data)
+
+    result = init_state(
+        state_path=state_path,
+        seed=7,
+        scene_source="procthor-10k-val",
+        scene_index=3,
+        generated_mess_count=0,
+        hooks=hooks,
+    )
+
+    written_state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert result["tool"] == "init"
+    assert result["model_stats"] == {"nbody": 1, "ngeom": 2, "njnt": 3, "nq": 4}
+    assert result["generated_mess_manifest"] is None
+    assert result["scenario"]["scenario_id"] == "molmospaces-unit-1"
+    assert written_state["current_receptacle_id"] == "sink_01"
+    assert written_state["room_outlines"] == [{"room_id": "room_1"}]
+
+
+def _install_fake_molmospaces_modules(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    molmo_spaces = ModuleType("molmo_spaces")
+    constants = ModuleType("molmo_spaces.molmo_spaces_constants")
+    constants.get_robot_path = lambda robot_name: tmp_path / "robots" / str(robot_name)
+    constants.get_scenes = lambda *_args, **_kwargs: {}
+    constants.get_scenes_root = lambda: tmp_path
+    utils = ModuleType("molmo_spaces.utils")
+    lazy_loading = ModuleType("molmo_spaces.utils.lazy_loading_utils")
+    lazy_loading.install_scene_with_objects_and_grasps_from_path = lambda _scene_xml: None
+    metadata_utils = ModuleType("molmo_spaces.utils.scene_metadata_utils")
+    metadata_utils.get_scene_metadata = lambda _scene_xml: {"objects": {"apple_01": {}}}
+    for name, module in {
+        "molmo_spaces": molmo_spaces,
+        "molmo_spaces.molmo_spaces_constants": constants,
+        "molmo_spaces.utils": utils,
+        "molmo_spaces.utils.lazy_loading_utils": lazy_loading,
+        "molmo_spaces.utils.scene_metadata_utils": metadata_utils,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+
+def _init_hooks(
+    *,
+    scene_xml: Path,
+    model: SimpleNamespace,
+    data: SimpleNamespace,
+):
+    from scripts.molmo_cleanup.molmospaces_worker_state import MolmoInitHooks
+
+    return MolmoInitHooks(
+        backend="molmospaces_subprocess",
+        collect_dynamic_objects=lambda *_args: [
+            {
+                "object_id": "apple_01",
+                "name": "Apple",
+                "category": "Apple",
+                "body_name": "apple/body",
+            }
+        ],
+        collect_receptacles=lambda *_args: [
+            {"receptacle_id": "sink_01", "name": "Sink", "category": "Sink"}
+        ],
+        collect_room_outlines=lambda *_args: [{"room_id": "room_1"}],
+        first_receptacle_id=lambda _state: "sink_01",
+        load_generated_mess_manifest=lambda _path: {},
+        load_model_data=lambda _scene_xml: (model, data),
+        load_robot_model_data=lambda *_args: (model, data),
+        ok=lambda tool, **payload: {"ok": True, "tool": tool, "status": "ok", **payload},
+        prepare_molmospaces_scene=lambda **_kwargs: (
+            scene_xml,
+            {"schema": "molmospaces_scene_resolution_v1"},
+        ),
+        public_scenario=lambda state: {
+            "scenario_id": state["private_manifest"]["scenario_id"],
+            "scene_xml": state["scene_xml"],
+        },
+        refresh_object_positions=lambda *_args: None,
+        robot_camera_names=lambda _model: [],
+        robot_pose_near_receptacle=lambda *_args: {},
+        robot_result_payload=lambda *_args: {},
+        robot_xml_name=lambda robot_name: f"{robot_name}.xml",
+        scenario_id=lambda **_kwargs: "molmospaces-unit-1",
+        seed_misplaced_objects=lambda *_args: None,
+        set_robot_pose=lambda *_args: None,
+        target_start_receptacle_id=lambda *_args: "sink_01",
+        write_state=lambda path, state: path.write_text(
+            json.dumps(state, sort_keys=True),
+            encoding="utf-8",
+        ),
+    )

@@ -111,6 +111,134 @@ def capture_isaac_lab_scene_camera_views(
     )
 
 
+def capture_scene_camera_request_with_existing_sim(
+    *,
+    camera_request: dict[str, Any],
+    output_dir: Path,
+    width: int,
+    height: int,
+    sim: Any,
+    sim_utils: Any,
+    stage_utils: Any,
+    camera_type: Any,
+    camera_cfg_type: Any,
+    torch: Any,
+    np: Any,
+    scene_bounds: dict[str, Any],
+    normalize_camera_control_request: Callable[..., dict[str, Any]],
+    ensure_capture_lighting: Callable[..., dict[str, Any]],
+    horizontal_aperture_from_lens: Callable[..., float],
+    isaac_native_render_diagnostics: Callable[..., dict[str, Any]],
+    camera_render_product_paths: Callable[[Any], list[str]],
+    isaac_scene_camera_view_spec: Callable[..., dict[str, Any]],
+    rgb_tensor_to_uint8: Callable[..., Any],
+    image_has_variance: Callable[..., bool],
+    renderer_mode: str,
+) -> dict[str, Any]:
+    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
+    resolution = camera_request["render_resolution"]
+    width = int(resolution["width"])
+    height = int(resolution["height"])
+    lighting_diagnostics = ensure_capture_lighting(
+        stage_utils,
+        profile=camera_request.get("lighting_profile"),
+    )
+    lens = _lens(camera_request)
+    color_profile = dict(camera_request.get("color_profile") or {})
+    focal_length = float(lens.get("focal_length_mm", 24.0))
+    horizontal_aperture = horizontal_aperture_from_lens(
+        lens,
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
+    sim_utils.create_prim("/World/RoboclawsSceneRequestCameraRig", "Xform")
+    camera = camera_type(
+        cfg=camera_cfg_type(
+            prim_path="/World/RoboclawsSceneRequestCameraRig/Camera",
+            update_period=0.0,
+            height=height,
+            width=width,
+            data_types=["rgb"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=focal_length,
+                focus_distance=4.0,
+                horizontal_aperture=horizontal_aperture,
+            ),
+        )
+    )
+    sim.reset()
+    native_render_diagnostics = isaac_native_render_diagnostics(
+        renderer_mode=renderer_mode,
+        capture_method="isaac_lab_camera_rgb_scene_probe",
+        view_kind="scene_camera_request",
+        render_resolution={"width": width, "height": height},
+        camera_prim_paths=["/World/RoboclawsSceneRequestCameraRig/Camera"],
+        render_product_paths=camera_render_product_paths(camera),
+        isaac_lab_isp_active=False,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved: dict[str, str] = {}
+    shapes: dict[str, list[int]] = {}
+    color_diagnostics: dict[str, dict[str, Any]] = {}
+    views: list[dict[str, Any]] = []
+    total_render_steps = 0
+    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
+        spec = isaac_scene_camera_view_spec(raw_spec, index=index, stage_utils=stage_utils)
+        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
+        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
+        camera.set_world_poses_from_view(position, target)
+        rgb_image, render_steps = _render_existing_sim_scene_rgb_image(
+            view_id=str(spec["view_id"]),
+            sim=sim,
+            camera=camera,
+            np=np,
+            rgb_tensor_to_uint8=rgb_tensor_to_uint8,
+            image_has_variance=image_has_variance,
+        )
+        total_render_steps += render_steps
+        rgb_image, color_diagnostic = apply_camera_color_profile(
+            rgb_image,
+            np=np,
+            profile=color_profile,
+            backend="isaaclab-prepared-usd",
+            view_id=str(spec["view_id"]),
+        )
+        output_path = output_dir / f"{spec['view_id']}.png"
+        Image.fromarray(rgb_image, mode="RGB").save(output_path)
+        saved[str(spec["view_id"])] = str(output_path)
+        shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        color_diagnostics[str(spec["view_id"])] = color_diagnostic
+        views.append(
+            {
+                **spec,
+                "image_path": str(output_path),
+                "shape": list(rgb_image.shape),
+            }
+        )
+    return {
+        "schema": "isaac_scene_camera_views_v1",
+        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
+        "camera_request_schema": camera_request.get("schema"),
+        "calibration_status": camera_request.get("calibration_status"),
+        "lighting_profile": camera_request.get("lighting_profile") or {},
+        "color_profile": color_profile,
+        "color_management": color_diagnostics,
+        "lighting_diagnostics": lighting_diagnostics,
+        "native_render_diagnostics": native_render_diagnostics,
+        "lens": camera_request.get("lens") or {},
+        "derived_lens": {
+            "focal_length_mm": focal_length,
+            "horizontal_aperture_mm": horizontal_aperture,
+        },
+        "render_steps": total_render_steps,
+        "scene_bounds": scene_bounds,
+        "views": views,
+        "images": saved,
+        "shapes": shapes,
+    }
+
+
 def _prepare_scene_camera_capture(
     *,
     request: IsaacSceneCameraCaptureRequest,
@@ -301,6 +429,31 @@ def _render_scene_rgb_image(
     if rgb_image is None:
         raise RuntimeError(f"Isaac Lab camera did not produce an RGB tensor for {view_id}")
     if not hooks.image_has_variance(rgb_image, np=context.np):
+        raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_id}")
+    return rgb_image, render_steps
+
+
+def _render_existing_sim_scene_rgb_image(
+    *,
+    view_id: str,
+    sim: Any,
+    camera: Any,
+    np: Any,
+    rgb_tensor_to_uint8: Callable[..., Any],
+    image_has_variance: Callable[..., bool],
+) -> tuple[Any, int]:
+    rgb_image = None
+    render_steps = 0
+    for _ in range(24):
+        sim.step()
+        render_steps += 1
+        camera.update(dt=sim.get_physics_dt())
+        rgb_image = rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+        if rgb_image is not None and image_has_variance(rgb_image, np=np):
+            break
+    if rgb_image is None:
+        raise RuntimeError(f"Isaac Lab camera did not produce an RGB tensor for {view_id}")
+    if not image_has_variance(rgb_image, np=np):
         raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_id}")
     return rgb_image, render_steps
 

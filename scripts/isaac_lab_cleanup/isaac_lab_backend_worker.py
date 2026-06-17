@@ -3,278 +3,216 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
-import platform
-import re
 import sys
 import traceback
-from collections import Counter
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 from roboclaws.household.backend import HELD_LOCATION_ID
 from roboclaws.household.camera_control import (
-    ANCHOR_ORBIT_CAMERA_MODEL,
-    CAMERA_CONTROL_API_NAME,
-    CANONICAL_CAMERA_MODEL,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
-    MOLMOSPACES_SCENE_FRAME,
-    load_camera_control_request,
     normalize_camera_control_request,
-    scene_light_rig,
-    scene_light_rig_roles,
-)
-from roboclaws.household.color_management import apply_camera_color_profile
-from roboclaws.household.generated_mess import (
-    GENERATED_MESS_MANIFEST_SCHEMA,
-    generated_mess_success_threshold,
-    select_generated_mess_targets,
-    targets_from_generated_mess_manifest,
 )
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-    ISAACLAB_ROBOT_VIEW_VARIANT,
-    ISAACLAB_SUBPROCESS_BACKEND,
-)
-from roboclaws.household.robot_view_camera_control import (
-    backend_local_robot_view_camera_control_contract,
-    robot_mounted_head_camera_control_contract,
-    robot_view_display_color_profile,
-)
-from roboclaws.household.robot_view_pose import resolve_cleanup_robot_pose
-from roboclaws.household.scenario import build_cleanup_scenario
-from roboclaws.household.scoring import score_cleanup
-from roboclaws.household.semantic_acceptability import (
-    annotate_score_with_semantic_acceptability,
 )
 from roboclaws.household.types import (
-    CleanupObject,
-    CleanupReceptacle,
     CleanupScenario,
-    PrivateScoringManifest,
-    TargetRule,
 )
-from scripts.isaac_lab_cleanup.isaac_camera_capture import (
-    IsaacCameraCaptureHooks,
-    IsaacCameraCaptureRequest,
-    capture_isaac_lab_camera_views,
+from scripts.isaac_lab_cleanup import (
+    isaac_camera_capture,
+    isaac_camera_geometry,
+    isaac_capture_quality,
+    isaac_mapping_diagnostics,
+    isaac_placement_resolution,
+    isaac_render_diagnostics,
+    isaac_robot_camera_stage,
+    isaac_robot_import,
+    isaac_robot_pose_focus,
+    isaac_robot_view_artifacts,
+    isaac_runtime_capture,
+    isaac_runtime_diagnostics,
+    isaac_runtime_smoke_usd,
+    isaac_scenario_builders,
+    isaac_scenario_state,
+    isaac_scene_bindings,
+    isaac_scene_camera_capture,
+    isaac_scene_camera_geometry,
+    isaac_scene_index_geometry,
+    isaac_scene_index_metadata,
+    isaac_segmentation_diagnostics,
+    isaac_semantic_labels,
+    isaac_semantic_pose_projection,
+    isaac_semantic_pose_robot_view,
+    isaac_semantic_pose_stage,
+    isaac_semantic_pose_state,
+    isaac_stage_lighting,
+    isaac_support_surface_geometry,
+    isaac_usd_xform,
+    isaac_worker_cli,
+    isaac_worker_commands,
+    isaac_worker_context,
+    isaac_worker_outputs,
+    isaac_worker_protocol,
+    isaac_worker_state,
 )
-from scripts.isaac_lab_cleanup.isaac_capture_quality import (
-    apply_isaac_capture_quality_overrides,
-)
-from scripts.isaac_lab_cleanup.isaac_capture_quality import (
-    json_safe_setting_value as _json_safe_setting_value,
-)
-from scripts.isaac_lab_cleanup.isaac_capture_quality import (
-    restore_isaac_capture_quality_overrides as _restore_isaac_capture_quality_overrides,
-)
-from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
-    IsaacSceneCameraCaptureHooks,
-    IsaacSceneCameraCaptureRequest,
-    capture_isaac_lab_scene_camera_views,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
-    apply_scene_index_semantic_labels,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
-    semantic_label_application_not_requested as _semantic_label_application_not_requested,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
-    semantic_label_target_prims as _semantic_label_target_prims,
-)
-from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
-    SemanticPoseRobotViewHooks,
-    SemanticPoseRobotViewRequest,
-    real_semantic_pose_robot_view_images,
-)
-from scripts.isaac_lab_cleanup.isaac_support_surfaces import usd_support_surface_union
-from scripts.isaac_lab_cleanup.isaac_usd_xform import (
-    set_usd_xform_translate as _set_usd_xform_translate,
-)
-from scripts.isaac_lab_cleanup.isaac_worker_cli import build_arg_parser
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
-SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
-SEGMENTATION_SCHEMA = "isaac_segmentation_diagnostics_v1"
-ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
-ISAAC_SEGMENTATION_DATA_TYPES = (
-    "semantic_segmentation",
-    "instance_segmentation_fast",
-    "instance_id_segmentation_fast",
+SCENE_BINDING_SCHEMA = isaac_scene_bindings.SCENE_BINDING_SCHEMA
+_bind_public_scene_item = isaac_scene_bindings.bind_public_scene_item
+_scene_binding_diagnostics = isaac_scene_bindings.scene_binding_diagnostics
+_scene_index_match = isaac_scene_bindings.scene_index_match
+_authored_reference_asset_paths = isaac_scene_index_geometry.authored_reference_asset_paths
+_fallback_room_outlines_from_indices = (
+    isaac_scene_index_geometry.fallback_room_outlines_from_indices
 )
-GENERATED_SCENE_KINDS = ("roboclaws_smoke", "isaac_official_blocks")
-ISAAC_OFFICIAL_ASSET_ROOT = (
-    "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac"
+_is_local_reference_asset_path = isaac_scene_index_geometry.is_local_reference_asset_path
+_local_reference_asset_missing = isaac_scene_index_geometry.local_reference_asset_missing
+_room_outlines_from_scene_index_diagnostics = (
+    isaac_scene_index_geometry.room_outlines_from_scene_index_diagnostics
 )
-ISAAC_OFFICIAL_BLOCK_ASSETS = (
-    "Props/Blocks/blue_block.usd",
-    "Props/Blocks/red_block.usd",
-    "Props/Blocks/green_block.usd",
+_round_vec3 = isaac_scene_index_geometry.round_vec3
+_usd_list_op_items = isaac_scene_index_geometry.usd_list_op_items
+_category_from_usd_name = isaac_scene_index_metadata.category_from_usd_name
+_contains_child_segment = isaac_scene_index_metadata.contains_child_segment
+_is_molmospaces_object_metadata = isaac_scene_index_metadata.is_molmospaces_object_metadata
+_is_molmospaces_receptacle_metadata = isaac_scene_index_metadata.is_molmospaces_receptacle_metadata
+_is_object_prim_path = isaac_scene_index_metadata.is_object_prim_path
+_is_receptacle_prim_path = isaac_scene_index_metadata.is_receptacle_prim_path
+_load_molmospaces_scene_metadata = isaac_scene_index_metadata.load_molmospaces_scene_metadata
+_merge_molmospaces_metadata_index = isaac_scene_index_metadata.merge_molmospaces_metadata_index
+_metadata_room_id = isaac_scene_index_metadata.metadata_room_id
+_molmospaces_metadata_prim_path = isaac_scene_index_metadata.molmospaces_metadata_prim_path
+_molmospaces_prim_path_rank = isaac_scene_index_metadata.molmospaces_prim_path_rank
+_usd_handle_from_prim = isaac_scene_index_metadata.usd_handle_from_prim
+_usd_index_entry = isaac_scene_index_metadata.usd_index_entry
+_usd_metadata_index_entry = isaac_scene_index_metadata.usd_metadata_index_entry
+_usd_safe_name = isaac_scene_index_metadata.usd_safe_name
+_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = (
+    isaac_scene_index_metadata.MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS
 )
-MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS = {
-    "sink",
-    "shelvingunit",
-    "desk",
-    "fridge",
-    "tvstand",
-    "bed",
-    "sofa",
-    "diningtable",
-    "countertop",
-}
-MAX_SEGMENTATION_CANDIDATES = 24
+_is_usd_renderable_support_candidate = (
+    isaac_support_surface_geometry.is_usd_renderable_support_candidate
+)
+_support_pose_from_support_surface = (
+    isaac_support_surface_geometry.support_pose_from_support_surface
+)
+_support_pose_from_usd_bounds = isaac_support_surface_geometry.support_pose_from_usd_bounds
+_support_surface_from_usd_bounds = isaac_support_surface_geometry.support_surface_from_usd_bounds
+_usd_support_surface_score = isaac_support_surface_geometry.usd_support_surface_score
+_usd_support_surface_union = isaac_support_surface_geometry.usd_support_surface_union_entry
+SEGMENTATION_SCHEMA = isaac_segmentation_diagnostics.SEGMENTATION_SCHEMA
+ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = (
+    isaac_render_diagnostics.ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA
+)
+ISAAC_SEGMENTATION_DATA_TYPES = isaac_segmentation_diagnostics.ISAAC_SEGMENTATION_DATA_TYPES
+MAX_SEGMENTATION_CANDIDATES = isaac_segmentation_diagnostics.MAX_SEGMENTATION_CANDIDATES
+RBY1M_CHASE_CAMERA_OFFSET_M = isaac_camera_geometry.RBY1M_CHASE_CAMERA_OFFSET_M
+RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = isaac_camera_geometry.RBY1M_CHASE_CAMERA_TARGET_OFFSET_M
+RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = isaac_camera_geometry.RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ
+RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = isaac_camera_geometry.RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG
+RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = isaac_camera_geometry.RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_ROBOT_VIEW_RERENDER_METHOD = "isaac_lab_camera_rgb_semantic_pose_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
-PLACEMENT_DIAGNOSTIC_SCHEMA = "molmospaces_semantic_placement_diagnostic_v1"
-ISAAC_PLACEMENT_RESOLVER_SOURCE = "isaac_support_placement_resolver"
-ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = "isaac_usd_descendant_support_surface"
-ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = "isaac_usd_descendant_support_surface_union"
-ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = "isaac_usd_world_bounds"
-ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = "isaac_rby1m_robot_import_plan_v1"
-ISAAC_RBY1M_HEAD_CAMERA_PRIM = "/World/robot_0/head_camera"
-RBY1M_HEAD_PITCH_PIVOT_M = (0.022, 0.0, 1.506)
-RBY1M_HEAD_CAMERA_ZERO_POSITION_M = (0.072, 0.0, 1.556)
-RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = (-0.5, -0.5, 0.5, 0.5)
-RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = 45.0
-RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = 24.0
-RBY1M_CHASE_CAMERA_OFFSET_M = (-1.3, 0.0, 2.705)
-RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = (0.0, 0.0, 1.405)
-ISAAC_NATIVE_RENDER_SETTING_PATHS = {
-    "tone_mapping": {
-        "operator": (
-            "/rtx/post/tonemap/op",
-            "/rtx/post/tonemap/operator",
-            "/rtx/post/tonemap/tonemapOp",
-        ),
-        "exposure_bias": (
-            "/rtx/post/tonemap/exposure",
-            "/rtx/post/tonemap/exposureBias",
-        ),
-        "exposure_value": (
-            "/rtx/post/tonemap/cameraExposure",
-            "/rtx/post/camera/exposure",
-            "/rtx/post/camera/exposureValue",
-        ),
-        "white_point": (
-            "/rtx/post/tonemap/whitepoint",
-            "/rtx/post/tonemap/whitePoint",
-        ),
-        "cm2_factor": ("/rtx/post/tonemap/cm2Factor",),
-        "max_white_luminance": ("/rtx/post/tonemap/maxWhiteLuminance",),
-    },
-    "camera_exposure": {
-        "auto_exposure_enabled": (
-            "/rtx/post/histogram/autoExposure/enabled",
-            "/rtx/post/tonemap/autoExposure",
-            "/rtx/post/tonemap/autoExposure/enabled",
-        ),
-        "auto_exposure_min": (
-            "/rtx/post/histogram/autoExposure/min",
-            "/rtx/post/tonemap/autoExposure/min",
-        ),
-        "auto_exposure_max": (
-            "/rtx/post/histogram/autoExposure/max",
-            "/rtx/post/tonemap/autoExposure/max",
-        ),
-        "iso": (
-            "/rtx/post/camera/iso",
-            "/rtx/post/tonemap/filmIso",
-        ),
-        "f_stop": (
-            "/rtx/post/camera/fStop",
-            "/rtx/post/tonemap/fNumber",
-        ),
-        "shutter_speed": (
-            "/rtx/post/camera/shutterSpeed",
-            "/rtx/post/tonemap/cameraShutter",
-        ),
-    },
-    "ocio": {
-        "enabled": (
-            "/rtx/post/ocio/enabled",
-            "/app/renderer/colorManagement/ocio/enabled",
-        ),
-        "config": (
-            "/rtx/post/ocio/config",
-            "/app/renderer/colorManagement/ocio/config",
-        ),
-        "display": (
-            "/rtx/post/ocio/display",
-            "/app/renderer/colorManagement/ocio/display",
-        ),
-        "view": (
-            "/rtx/post/ocio/view",
-            "/app/renderer/colorManagement/ocio/view",
-        ),
-        "look": (
-            "/rtx/post/ocio/look",
-            "/app/renderer/colorManagement/ocio/look",
-        ),
-    },
-    "color_correction": {
-        "enabled": ("/rtx/post/colorcorr/enabled",),
-        "mode": ("/rtx/post/colorcorr/mode",),
-        "saturation": ("/rtx/post/colorcorr/saturation",),
-        "contrast": ("/rtx/post/colorcorr/contrast",),
-        "gamma": ("/rtx/post/colorcorr/gamma",),
-        "gain": ("/rtx/post/colorcorr/gain",),
-        "offset": ("/rtx/post/colorcorr/offset",),
-    },
-    "color_grading": {
-        "enabled": ("/rtx/post/colorGrading/enabled",),
-        "lut": (
-            "/rtx/post/colorGrading/lut",
-            "/rtx/post/colorGrading/lutFile",
-        ),
-        "amount": ("/rtx/post/colorGrading/amount",),
-    },
-    "renderer": {
-        "renderer": (
-            "/renderer/active",
-            "/rtx/rendermode",
-        ),
-        "render_mode": (
-            "/rtx/mode",
-            "/rtx/renderMode",
-        ),
-        "anti_aliasing": ("/rtx/post/aa/op",),
-    },
-}
-ISAAC_CAPTURE_QUALITY_SETTING_FIELDS = {
-    "samples_per_pixel": (),
-    "anti_aliasing": ISAAC_NATIVE_RENDER_SETTING_PATHS["renderer"]["anti_aliasing"],
-    "denoise": (),
-    "taa": (),
-    "texture_filtering": (),
-}
-ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
-ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
-    "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
+PLACEMENT_DIAGNOSTIC_SCHEMA = isaac_placement_resolution.PLACEMENT_DIAGNOSTIC_SCHEMA
+ISAAC_PLACEMENT_RESOLVER_SOURCE = isaac_placement_resolution.ISAAC_PLACEMENT_RESOLVER_SOURCE
+ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = (
+    isaac_support_surface_geometry.ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE
 )
+ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = (
+    isaac_support_surface_geometry.ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE
+)
+ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = (
+    isaac_support_surface_geometry.ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE
+)
+ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = isaac_robot_import.ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA
 _DEFERRED_SIMULATION_APP: Any | None = None
+_current_stage_bounds = isaac_stage_lighting.current_stage_bounds
+_ensure_capture_lighting = isaac_stage_lighting.ensure_capture_lighting
+_normalized_vec3 = isaac_stage_lighting.normalized_vec3
+_isaac_distant_light_rotation_from_direction = (
+    isaac_stage_lighting.isaac_distant_light_rotation_from_direction
+)
+_scale_stage_light_intensities = isaac_stage_lighting.scale_stage_light_intensities
+_stage_light_paths = isaac_stage_lighting.stage_light_paths
+_prim_type_is_light = isaac_stage_lighting.prim_type_is_light
+_robot_view_color_profile = isaac_camera_geometry.robot_view_color_profile
+_isaac_camera_view_poses = isaac_camera_geometry.isaac_camera_view_poses
+_robot_relative_chase_eye_target = isaac_camera_geometry.robot_relative_chase_eye_target
+_static_head_camera_pose_for_pitch = isaac_camera_geometry.static_head_camera_pose_for_pitch
+_rotate_point_y_about_pivot = isaac_camera_geometry.rotate_point_y_about_pivot
+_quat_from_axis_angle = isaac_camera_geometry.quat_from_axis_angle
+_quat_multiply = isaac_camera_geometry.quat_multiply
+_normalize_quat = isaac_camera_geometry.normalize_quat
+_usd_camera_fov_metadata = isaac_camera_geometry.usd_camera_fov_metadata
+_matrix4d_rowmajor = isaac_camera_geometry.matrix4d_rowmajor
+_usd_attr_float = isaac_camera_geometry.usd_attr_float
+_usd_vec = isaac_camera_geometry.usd_vec
+_tensor_first_vec3 = isaac_camera_geometry.tensor_first_vec3
+_robot_pose_yaw_deg = isaac_camera_geometry.robot_pose_yaw_deg
+_optional_float = isaac_camera_geometry.optional_float
+_load_camera_view_specs = isaac_scene_camera_geometry.load_camera_view_specs
+_lane_camera_orbit = isaac_scene_camera_geometry.lane_camera_orbit
+_backend_transform_for_lane = isaac_scene_camera_geometry.backend_transform_for_lane
+_apply_scene_transform_to_point = isaac_scene_camera_geometry.apply_scene_transform_to_point
+_camera_vec3 = isaac_scene_camera_geometry.camera_vec3
+_image_has_variance = isaac_scene_camera_geometry.image_has_variance
+_module_version = isaac_runtime_diagnostics.module_version
+_generated_scene_filename = isaac_runtime_smoke_usd.generated_scene_filename
+_isaac_native_render_diagnostics_unavailable = (
+    isaac_render_diagnostics.native_render_diagnostics_unavailable
+)
+_native_setting_candidate_count = isaac_render_diagnostics.native_setting_candidate_count
+_capture_quality_settings_unavailable = (
+    isaac_render_diagnostics.capture_quality_settings_unavailable
+)
+_capture_quality_settings = isaac_render_diagnostics.capture_quality_settings
+_isaac_setting_value = isaac_render_diagnostics.isaac_setting_value
+_camera_render_product_paths = isaac_render_diagnostics.camera_render_product_paths
+_render_product_paths_from_value = isaac_render_diagnostics.render_product_paths_from_value
+_restore_isaac_capture_quality_overrides = (
+    isaac_capture_quality.restore_isaac_capture_quality_overrides
+)
+_semantic_label_application_not_requested = (
+    isaac_semantic_labels.semantic_label_application_not_requested
+)
+_semantic_label_target_prims = isaac_semantic_labels.semantic_label_target_prims
+_set_usd_xform_translate = isaac_usd_xform.set_usd_xform_translate
+_norm = isaac_worker_context.norm
+_dict = isaac_worker_context.dict_value
+_vec3 = isaac_worker_context.vec3
+_has_xy = isaac_worker_context.has_xy
+_index_or_default = isaac_worker_context.index_or_default
+_objects_by_id = isaac_worker_context.objects_by_id
+_receptacles_by_id = isaac_worker_context.receptacles_by_id
+_object_index = isaac_worker_context.object_index
+_receptacle_index = isaac_worker_context.receptacle_index
+_pose_near = isaac_worker_context.pose_near
+ISAAC_RBY1M_ROBOT_USD_PATH = isaac_robot_import.ISAAC_RBY1M_ROBOT_USD_PATH
+ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = isaac_robot_import.ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    return build_arg_parser(
+    return isaac_worker_cli.build_arg_parser(
         default_width=DEFAULT_WIDTH,
         default_height=DEFAULT_HEIGHT,
-        generated_scene_kinds=GENERATED_SCENE_KINDS,
+        generated_scene_kinds=isaac_runtime_smoke_usd.GENERATED_SCENE_KINDS,
         segmentation_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
     ).parse_args(argv)
 
@@ -324,177 +262,45 @@ def _close_deferred_simulation_app() -> None:
 
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
-    args.scene_index = _effective_scene_index(args)
-    generated_mess_manifest = _load_generated_mess_manifest(args.generated_mess_manifest_path)
-    scenario = _scenario_for_init(args, generated_mess_manifest=generated_mess_manifest)
-    scenario_source = _scenario_source(args)
-    real_smoke = None
-    if args.runtime_mode == "real":
-        try:
-            real_smoke = real_runtime_smoke(args, scenario)
-        except Exception as exc:
-            raise RuntimeError(
-                "Real Isaac runtime smoke failed before backend init could prove "
-                "renderer/USD evidence. Run `just agent::harness "
-                "molmo-isaac-runtime-preflight` first and keep CI-only protocol "
-                "tests on ROBOCLAWS_ISAACLAB_RUNTIME_MODE=fake."
-            ) from exc
-    runtime = runtime_diagnostics(args.runtime_mode, real_smoke=real_smoke)
-    scene_load = scene_load_diagnostics(
-        args.runtime_mode,
-        args.scene_source,
-        args.scene_index,
-        real_smoke=real_smoke,
+    return isaac_worker_state.init_state(
+        args,
+        hooks=_isaac_init_hooks(),
+        state_schema=STATE_SCHEMA,
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
     )
-    scene_usd = str(scene_load["scene_usd"])
-    object_index = _object_index(scenario)
-    receptacle_index = _receptacle_index(scenario)
-    scene_index_diagnostics: dict[str, Any] = {
-        "status": "placeholder_mapping",
-        "source": "scenario_fixture",
-        "object_candidate_count": len(object_index),
-        "receptacle_candidate_count": len(receptacle_index),
-        "blockers": ["Object and receptacle USD prim paths are deterministic placeholders."],
-    }
-    if real_smoke is not None:
-        scene_index_diagnostics = _dict(real_smoke.get("scene_index_diagnostics"))
-        object_index = _index_or_default(real_smoke.get("object_index"), object_index)
-        receptacle_index = _index_or_default(real_smoke.get("receptacle_index"), receptacle_index)
-    room_outlines = _room_outlines_from_scene_index_diagnostics(scene_index_diagnostics)
-    if not room_outlines:
-        room_outlines = _fallback_room_outlines_from_indices(
-            scenario=scenario,
-            object_index=object_index,
-            receptacle_index=receptacle_index,
-        )
-        scene_index_diagnostics["room_outline_count"] = len(room_outlines)
-        scene_index_diagnostics["room_outlines"] = room_outlines
-    scene_binding_diagnostics = _scene_binding_diagnostics(
-        runtime_mode=args.runtime_mode,
-        scenario=scenario,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        real_smoke=real_smoke,
+
+
+def _isaac_init_hooks() -> isaac_worker_state.IsaacInitHooks:
+    return isaac_worker_state.IsaacInitHooks(
+        dict_value=_dict,
+        effective_scene_index=_effective_scene_index,
+        fallback_room_outlines_from_indices=_fallback_room_outlines_from_indices,
+        first_target_object_location=_first_target_object_location,
+        index_or_default=_index_or_default,
+        initial_receptacle_id=_initial_receptacle_id,
+        initial_semantic_pose_state_from_state=_initial_semantic_pose_state_from_state,
+        load_generated_mess_manifest=_load_generated_mess_manifest,
+        mapping_gap_diagnostics=mapping_gap_diagnostics,
+        object_index=_object_index,
+        rby1m_robot_import_plan=_rby1m_robot_import_plan,
+        real_runtime_smoke=real_runtime_smoke,
+        real_smoke_robot_view_images=_real_smoke_robot_view_images,
+        receptacle_index=_receptacle_index,
+        robot_payload=_robot_payload,
+        robot_view_provenance=_robot_view_provenance,
+        room_outlines_from_scene_index_diagnostics=(_room_outlines_from_scene_index_diagnostics),
+        runtime_diagnostics=runtime_diagnostics,
+        scenario_for_init=_scenario_for_init,
+        scenario_source=_scenario_source,
+        scene_binding_diagnostics=_scene_binding_diagnostics,
+        scene_load_diagnostics=scene_load_diagnostics,
+        scene_specific_scenario_if_needed=_scene_specific_scenario_if_needed,
+        seed_generated_mess_placements=_seed_generated_mess_placements,
+        segmentation_diagnostics=segmentation_diagnostics,
+        write_placeholder_image=_write_placeholder_image,
+        write_state=write_state,
     )
-    scene_specific_scenario = _scene_specific_scenario_if_needed(
-        args=args,
-        generated_mess_manifest=generated_mess_manifest,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        real_smoke=real_smoke,
-    )
-    if scene_specific_scenario is not None:
-        scenario = scene_specific_scenario
-        scenario_source = "isaac_scene_index"
-        scene_binding_diagnostics = _scene_binding_diagnostics(
-            runtime_mode=args.runtime_mode,
-            scenario=scenario,
-            object_index=object_index,
-            receptacle_index=receptacle_index,
-            real_smoke=real_smoke,
-        )
-    segmentation = segmentation_diagnostics(
-        runtime_mode=args.runtime_mode,
-        real_smoke=real_smoke,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-    )
-    mapping_gaps = mapping_gap_diagnostics(
-        runtime_mode=args.runtime_mode,
-        map_bundle_dir=args.map_bundle_dir,
-        real_smoke=real_smoke,
-        scene_binding_diagnostics=scene_binding_diagnostics,
-        segmentation=segmentation,
-    )
-    runtime["scenario_source"] = scenario_source
-    initial_receptacle_id = _initial_receptacle_id(scenario)
-    before_path = args.run_dir / "isaac_runtime_smoke.png"
-    if real_smoke is not None:
-        before_path = Path(str(real_smoke["image_path"]))
-        if not before_path.is_file():
-            raise RuntimeError(f"real Isaac smoke image is missing: {before_path}")
-    state = {
-        "schema": STATE_SCHEMA,
-        "backend": ISAACLAB_SUBPROCESS_BACKEND,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "runtime": runtime,
-        "scene_load": scene_load,
-        "scene_source": args.scene_source,
-        "scene_index": args.scene_index,
-        "scene_usd": scene_usd,
-        "scenario_source": scenario_source,
-        "real_runtime_smoke": real_smoke,
-        "requested_generated_mess_count": args.generated_mess_count,
-        "scenario": scenario.public_payload(),
-        "private_manifest": scenario.private_manifest.to_private_dict(),
-        "generated_mess_manifest": generated_mess_manifest,
-        "locations": scenario.object_locations(),
-        "held_object_id": None,
-        "current_receptacle_id": initial_receptacle_id,
-        "open_receptacle_ids": [],
-        "containment": {},
-        "object_pose_overrides": {},
-        "mess_placement_diagnostics": [],
-        "tool_event_counts": {},
-        "placement_diagnostics": [],
-        "mapping_gaps": mapping_gaps,
-        "object_index": object_index,
-        "receptacle_index": receptacle_index,
-        "room_outlines": room_outlines,
-        "scene_index_diagnostics": scene_index_diagnostics,
-        "scene_binding_diagnostics": scene_binding_diagnostics,
-        "robot_view_images": _real_smoke_robot_view_images(real_smoke),
-        "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
-        "native_render_diagnostics": _dict(
-            _dict(runtime.get("rendering")).get("native_render_diagnostics")
-        ),
-        "segmentation": segmentation,
-        "robot": _robot_payload(args.robot_name) if args.include_robot else None,
-        "robot_import": _rby1m_robot_import_plan(args.robot_name) if args.include_robot else None,
-    }
-    _seed_generated_mess_placements(state)
-    state["current_receptacle_id"] = _first_target_object_location(state) or initial_receptacle_id
-    state["semantic_pose_state"] = _initial_semantic_pose_state_from_state(state)
-    args.run_dir.mkdir(parents=True, exist_ok=True)
-    write_state(args.state_path, state)
-    if real_smoke is None:
-        _write_placeholder_image(
-            before_path,
-            title="Isaac Lab runtime smoke",
-            subtitle=runtime["renderer_mode"],
-            state=state,
-            width=DEFAULT_WIDTH,
-            height=DEFAULT_HEIGHT,
-        )
-    return {
-        "ok": True,
-        "tool": "init",
-        "backend": ISAACLAB_SUBPROCESS_BACKEND,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "scenario": state["scenario"],
-        "private_manifest": state["private_manifest"],
-        "generated_mess_manifest": state.get("generated_mess_manifest") or None,
-        "runtime": runtime,
-        "scene_usd": state["scene_usd"],
-        "scene_load": scene_load,
-        "scene_index": args.scene_index,
-        "scenario_source": scenario_source,
-        "scene_index_diagnostics": scene_index_diagnostics,
-        "scene_binding_diagnostics": scene_binding_diagnostics,
-        "object_index": state["object_index"],
-        "receptacle_index": state["receptacle_index"],
-        "mapping_gaps": mapping_gaps,
-        "segmentation": state["segmentation"],
-        "native_render_diagnostics": state["native_render_diagnostics"],
-        "requested_generated_mess_count": args.generated_mess_count,
-        "generated_mess_count": len(state["private_manifest"]["targets"]),
-        "robot": state["robot"],
-        "robot_import": state["robot_import"],
-        "artifacts": {
-            "runtime_smoke_image": str(before_path),
-            "robot_view_images": state["robot_view_images"],
-        },
-    }
 
 
 def _require_isaac_import() -> None:
@@ -512,103 +318,18 @@ def real_runtime_smoke(
     args: argparse.Namespace,
     scenario: CleanupScenario,
 ) -> dict[str, Any]:
-    """Launch Isaac Lab and capture the minimal renderer/USD proof for Phase A.
-
-    This function intentionally stays behind the worker subprocess. Normal
-    Roboclaws imports must not import Isaac packages or start Omniverse.
-    """
-
-    _require_isaac_import()
-    args.run_dir.mkdir(parents=True, exist_ok=True)
-    smoke_image = args.run_dir / "isaac_runtime_smoke.png"
-    robot_view_paths = _runtime_smoke_robot_view_paths(args.run_dir, smoke_image=smoke_image)
-    if args.scene_usd_path is not None:
-        scene_usd = args.scene_usd_path
-        if not scene_usd.is_file():
-            raise RuntimeError(f"local Isaac scene USD is missing: {scene_usd}")
-        loaded_asset_kind = "local_scene_usd"
-    else:
-        scene_usd = args.run_dir / _generated_scene_filename(args.generated_scene_kind)
-        loaded_asset_kind = "generated_runtime_smoke_usd"
-    robot_import = _rby1m_robot_import_plan(args.robot_name) if args.include_robot else {}
-
-    simulation_app = None
-    render_steps = 0
-    scene_index_diagnostics: dict[str, Any] | None = None
-    stage_prim_count = 0
-    from isaaclab.app import AppLauncher
-
-    launcher_args = _isaac_app_launcher_args(AppLauncher)
-    app_launcher = AppLauncher(launcher_args)
-    simulation_app = app_launcher.app
-    global _DEFERRED_SIMULATION_APP
-    _DEFERRED_SIMULATION_APP = simulation_app
-
-    # Isaac Sim requires that Omniverse/pxr modules are not imported before
-    # SimulationApp starts. Generate and inspect USD only after AppLauncher
-    # owns the Kit bootstrap.
-    if args.scene_usd_path is None:
-        _write_generated_runtime_smoke_usd(
-            scene_usd,
-            scenario,
-            scene_kind=args.generated_scene_kind,
-        )
-    scene_index_diagnostics = _inspect_usd_scene_index(scene_usd)
-    stage_prim_count = int(scene_index_diagnostics["stage_prim_count"])
-
-    capture = _capture_isaac_lab_camera_views(
-        scene_usd=scene_usd,
-        view_paths=robot_view_paths,
-        width=DEFAULT_WIDTH,
-        height=DEFAULT_HEIGHT,
-        simulation_app=simulation_app,
-        robot_import=robot_import,
-        include_segmentation=args.enable_segmentation,
-        segmentation_data_types=tuple(args.segmentation_data_type or ISAAC_SEGMENTATION_DATA_TYPES),
-        semantic_filter=tuple(args.segmentation_semantic_filter or ("class",)),
-        scene_index_diagnostics=scene_index_diagnostics,
+    return isaac_runtime_capture.real_runtime_smoke(
+        args,
+        scenario,
+        hooks=_isaac_runtime_capture_hooks(),
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        segmentation_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
+        real_smoke_renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
+        real_robot_view_capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
     )
-    render_steps = int(capture["render_steps"])
-    robot_view_images = dict(capture["robot_view_images"])
-    segmentation = _dict(capture.get("segmentation"))
-
-    if not smoke_image.is_file():
-        raise RuntimeError(f"Isaac Lab camera capture did not write {smoke_image}")
-    if scene_index_diagnostics is None:
-        raise RuntimeError("Isaac Lab runtime smoke did not inspect the USD scene index.")
-    missing_views = sorted(
-        key for key in ROBOT_VIEW_KEYS if not Path(str(robot_view_images.get(key, ""))).is_file()
-    )
-    if missing_views:
-        raise RuntimeError(f"Isaac Lab robot view capture missed views: {', '.join(missing_views)}")
-    return {
-        "image_path": str(smoke_image),
-        "scene_usd": str(scene_usd),
-        "loaded_asset_kind": loaded_asset_kind,
-        "generated_scene_kind": args.generated_scene_kind if args.scene_usd_path is None else "",
-        "requested_scene_source": args.scene_source,
-        "requested_scene_index": args.scene_index,
-        "requested_molmospaces_scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
-        "isaac_lab_version": _module_version("isaaclab"),
-        "isaac_sim_version": _module_version("isaacsim"),
-        "renderer_mode": REAL_SMOKE_RENDERER_MODE,
-        "capture_method": REAL_SMOKE_CAPTURE_METHOD,
-        "robot_view_capture_method": REAL_ROBOT_VIEW_CAPTURE_METHOD,
-        "robot_view_images": robot_view_images,
-        "robot_import": robot_import,
-        "robot_view_uses_mounted_head_camera": bool(
-            capture.get("robot_view_uses_mounted_head_camera")
-        ),
-        "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
-        "scene_bounds": capture.get("scene_bounds"),
-        "stage_prim_count": stage_prim_count,
-        "render_steps": render_steps,
-        "scene_index_diagnostics": scene_index_diagnostics,
-        "object_index": scene_index_diagnostics["object_index"],
-        "receptacle_index": scene_index_diagnostics["receptacle_index"],
-        "segmentation": segmentation,
-        "native_render_diagnostics": _dict(capture.get("native_render_diagnostics")),
-    }
 
 
 def capture_semantic_pose_robot_views(
@@ -627,22 +348,15 @@ def capture_semantic_pose_robot_views(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    _require_isaac_import()
-    from isaaclab.app import AppLauncher
-
-    launcher_args = _isaac_app_launcher_args(AppLauncher)
-    app_launcher = AppLauncher(launcher_args)
-    simulation_app = app_launcher.app
-    global _DEFERRED_SIMULATION_APP
-    _DEFERRED_SIMULATION_APP = simulation_app
-    capture = _capture_isaac_lab_camera_views(
+    return isaac_runtime_capture.capture_semantic_pose_robot_views(
+        state=state,
         scene_usd=scene_usd,
         view_paths=view_paths,
         width=width,
         height=height,
-        simulation_app=simulation_app,
-        robot_import=_dict(state.get("robot_import")),
-        semantic_pose_state=_dict(state.get("semantic_pose_state")),
+        hooks=_isaac_runtime_capture_hooks(),
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
         color_profile_override=color_profile_override,
         render_settle_frames=render_settle_frames,
         isaac_aa_op=isaac_aa_op,
@@ -650,8 +364,28 @@ def capture_semantic_pose_robot_views(
         isaac_exposure_bias=isaac_exposure_bias,
         isaac_colorcorr_gain=isaac_colorcorr_gain,
     )
-    capture["simulation_app_reuse_token"] = simulation_app
-    return capture
+
+
+def _isaac_runtime_capture_hooks() -> isaac_runtime_capture.IsaacRuntimeCaptureHooks:
+    return isaac_runtime_capture.IsaacRuntimeCaptureHooks(
+        capture_isaac_lab_camera_views=_capture_isaac_lab_camera_views,
+        dict_value=_dict,
+        generated_scene_filename=isaac_runtime_smoke_usd.generated_scene_filename,
+        inspect_usd_scene_index=_inspect_usd_scene_index,
+        isaac_app_launcher_args=_isaac_app_launcher_args,
+        module_version=_module_version,
+        rby1m_robot_import_plan=_rby1m_robot_import_plan,
+        require_isaac_import=_require_isaac_import,
+        runtime_smoke_robot_view_paths=_runtime_smoke_robot_view_paths,
+        scene_usd_path=_scene_usd_path,
+        set_deferred_simulation_app=_set_deferred_simulation_app,
+        write_generated_runtime_smoke_usd=isaac_runtime_smoke_usd.write_generated_runtime_smoke_usd,
+    )
+
+
+def _set_deferred_simulation_app(simulation_app: Any) -> None:
+    global _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = simulation_app
 
 
 def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
@@ -671,244 +405,34 @@ def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
     )
 
 
-def _generated_scene_filename(scene_kind: str) -> str:
-    if scene_kind == "isaac_official_blocks":
-        return "roboclaws_isaac_official_blocks_scene.usda"
-    return "roboclaws_phase_a_smoke_scene.usda"
-
-
-def _write_generated_runtime_smoke_usd(
-    usd_path: Path,
-    scenario: CleanupScenario,
-    *,
-    scene_kind: str = "roboclaws_smoke",
-) -> int:
-    if scene_kind == "isaac_official_blocks":
-        return _write_isaac_official_blocks_runtime_smoke_usd(usd_path, scenario)
-    return _write_roboclaws_runtime_smoke_usd(usd_path, scenario)
-
-
-def _write_roboclaws_runtime_smoke_usd(
-    usd_path: Path,
-    scenario: CleanupScenario,
-) -> int:
-    from pxr import Gf, Usd, UsdGeom, UsdLux
-
-    usd_path.parent.mkdir(parents=True, exist_ok=True)
-    stage = Usd.Stage.CreateNew(str(usd_path))
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-    world = UsdGeom.Xform.Define(stage, "/World")
-    stage.SetDefaultPrim(world.GetPrim())
-
-    floor = UsdGeom.Cube.Define(stage, "/World/Floor")
-    floor.CreateSizeAttr(1.0)
-    floor.CreateDisplayColorAttr([Gf.Vec3f(0.28, 0.31, 0.33)])
-    UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
-    UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.0, 3.0, 0.05))
-
-    selected_object_ids = _selected_cleanup_object_ids(scenario) or [
-        scenario.objects[0].object_id if scenario.objects else "object"
-    ]
-    selected_object_id_set = set(selected_object_ids)
-    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
-    source_receptacle_ids = [
-        obj.location_id for obj in scenario.objects if obj.object_id in selected_object_id_set
-    ]
-    receptacle_ids = _dedupe(
-        [
-            *source_receptacle_ids,
-            *selected_receptacle_ids,
-            *(item.receptacle_id for item in scenario.receptacles[:1]),
-        ]
-    )
-    if not receptacle_ids:
-        receptacle_ids = ["fixture"]
-
-    fixture_positions: dict[str, tuple[float, float, float]] = {}
-    for index, receptacle_id in enumerate(receptacle_ids):
-        x = (index % 3 - 1) * 0.95
-        y = (index // 3) * 0.85
-        z = 0.35
-        fixture_positions[receptacle_id] = (x, y, z)
-        fixture = UsdGeom.Cube.Define(
-            stage,
-            f"/World/Receptacles/{_usd_safe_name(receptacle_id)}",
-        )
-        fixture.CreateSizeAttr(1.0)
-        fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.46, 0.75)])
-        UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(x, y, z))
-        UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(0.9, 0.55, 0.25))
-
-    objects_by_id = {item.object_id: item for item in scenario.objects}
-    for index, object_id in enumerate(selected_object_ids):
-        cleanup_object = UsdGeom.Sphere.Define(
-            stage,
-            f"/World/Objects/{_usd_safe_name(object_id)}",
-        )
-        cleanup_object.CreateRadiusAttr(0.16)
-        cleanup_object.CreateDisplayColorAttr([Gf.Vec3f(0.95, 0.42, 0.12)])
-        source_id = objects_by_id.get(object_id).location_id if object_id in objects_by_id else ""
-        x, y, z = fixture_positions.get(source_id, (0.0, 0.0, 0.35))
-        UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
-            Gf.Vec3d(x + 0.18 + 0.08 * index, y - 0.16, z + 0.38)
-        )
-
-    key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
-    key_light.CreateIntensityAttr(5000.0)
-    UsdGeom.XformCommonAPI(key_light).SetRotate(Gf.Vec3f(-45.0, 0.0, 35.0))
-
-    camera = UsdGeom.Camera.Define(stage, "/World/ReferenceCamera")
-    camera.CreateFocalLengthAttr(24.0)
-    camera.CreateHorizontalApertureAttr(20.955)
-    UsdGeom.XformCommonAPI(camera).SetTranslate(Gf.Vec3d(2.4, -2.6, 1.8))
-
-    stage.GetRootLayer().Save()
-    return sum(1 for _ in stage.Traverse())
-
-
-def _write_isaac_official_blocks_runtime_smoke_usd(
-    usd_path: Path,
-    scenario: CleanupScenario,
-) -> int:
-    from pxr import Gf, Usd, UsdGeom, UsdLux
-
-    usd_path.parent.mkdir(parents=True, exist_ok=True)
-    stage = Usd.Stage.CreateNew(str(usd_path))
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-    world = UsdGeom.Xform.Define(stage, "/World")
-    stage.SetDefaultPrim(world.GetPrim())
-
-    floor = UsdGeom.Cube.Define(stage, "/World/Floor")
-    floor.CreateSizeAttr(1.0)
-    floor.CreateDisplayColorAttr([Gf.Vec3f(0.24, 0.26, 0.28)])
-    UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
-    UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.2, 3.2, 0.05))
-
-    selected_object_ids = _selected_cleanup_object_ids(scenario) or [
-        scenario.objects[0].object_id if scenario.objects else "official_block"
-    ]
-    selected_object_id_set = set(selected_object_ids)
-    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
-    source_receptacle_ids = [
-        obj.location_id for obj in scenario.objects if obj.object_id in selected_object_id_set
-    ]
-    receptacle_ids = _dedupe(
-        [
-            *source_receptacle_ids,
-            *selected_receptacle_ids,
-            *(item.receptacle_id for item in scenario.receptacles[:1]),
-        ]
-    )
-    if not receptacle_ids:
-        receptacle_ids = ["fixture"]
-
-    fixture_positions: dict[str, tuple[float, float, float]] = {}
-    for index, receptacle_id in enumerate(receptacle_ids):
-        x = (index % 3 - 1) * 0.95
-        y = (index // 3) * 0.85
-        z = 0.28
-        fixture_positions[receptacle_id] = (x, y, z)
-        fixture = UsdGeom.Cube.Define(
-            stage,
-            f"/World/Receptacles/{_usd_safe_name(receptacle_id)}",
-        )
-        fixture.CreateSizeAttr(1.0)
-        fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.44, 0.72)])
-        UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(x, y, z))
-        UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(0.9, 0.55, 0.18))
-
-    objects_by_id = {item.object_id: item for item in scenario.objects}
-    for index, object_id in enumerate(selected_object_ids):
-        object_prim_path = f"/World/Objects/{_usd_safe_name(object_id)}"
-        cleanup_object = UsdGeom.Xform.Define(stage, object_prim_path)
-        cleanup_asset = UsdGeom.Xform.Define(stage, f"{object_prim_path}/Asset")
-        asset = ISAAC_OFFICIAL_BLOCK_ASSETS[index % len(ISAAC_OFFICIAL_BLOCK_ASSETS)]
-        cleanup_asset.GetPrim().GetReferences().AddReference(f"{ISAAC_OFFICIAL_ASSET_ROOT}/{asset}")
-        source_id = objects_by_id.get(object_id).location_id if object_id in objects_by_id else ""
-        x, y, z = fixture_positions.get(source_id, (0.0, 0.0, 0.28))
-        UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
-            Gf.Vec3d(x + 0.22 + 0.12 * index, y - 0.18, z + 0.26)
-        )
-        UsdGeom.XformCommonAPI(cleanup_object).SetScale(Gf.Vec3f(1.6, 1.6, 1.6))
-
-    key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
-    key_light.CreateIntensityAttr(5000.0)
-    UsdGeom.XformCommonAPI(key_light).SetRotate(Gf.Vec3f(-45.0, 0.0, 35.0))
-
-    camera = UsdGeom.Camera.Define(stage, "/World/ReferenceCamera")
-    camera.CreateFocalLengthAttr(24.0)
-    camera.CreateHorizontalApertureAttr(20.955)
-    UsdGeom.XformCommonAPI(camera).SetTranslate(Gf.Vec3d(2.4, -2.6, 1.8))
-
-    stage.GetRootLayer().Save()
-    return sum(1 for _ in stage.Traverse())
-
-
 def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
-    from pxr import Usd, UsdGeom
-
-    stage = Usd.Stage.Open(str(usd_path))
-    if stage is None:
-        raise RuntimeError(f"Isaac USD stage could not be opened for indexing: {usd_path}")
-
-    object_index: dict[str, dict[str, Any]] = {}
-    receptacle_index: dict[str, dict[str, Any]] = {}
-    room_outlines: list[dict[str, Any]] = []
-    prim_paths_by_name: dict[str, list[str]] = {}
-    stage_prim_count = 0
-    for prim in stage.Traverse():
-        stage_prim_count += 1
-        prim_path = str(prim.GetPath())
-        prim_paths_by_name.setdefault(prim.GetName(), []).append(prim_path)
-        handle = _usd_handle_from_prim(prim_path, object_index, receptacle_index)
-        room_outline = _room_outline_from_usd_prim(
-            prim_path,
-            prim,
-            usd_geom=UsdGeom,
-        )
-        if room_outline is not None:
-            room_outlines.append(room_outline)
-        if _is_object_prim_path(prim_path):
-            object_index[handle] = _usd_index_entry(prim_path, prim.GetName(), "object")
-        elif _is_receptacle_prim_path(prim_path):
-            receptacle_index[handle] = {
-                **_usd_index_entry(prim_path, prim.GetName(), "receptacle"),
-                "support_pose": _pose_near(handle),
-            }
-    _merge_molmospaces_metadata_index(
-        usd_path=usd_path,
-        prim_paths_by_name=prim_paths_by_name,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-    )
-    _annotate_usd_index_geometry(
-        usd_path=usd_path,
-        stage=stage,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-        usd_geom=UsdGeom,
+    return isaac_scene_index_geometry.inspect_usd_scene_index(
+        usd_path,
+        hooks=_isaac_usd_scene_index_hooks(),
     )
 
-    blockers = []
-    if not object_index:
-        blockers.append("No movable-object USD prim candidates matched current path heuristics.")
-    if not receptacle_index:
-        blockers.append(
-            "No receptacle/support USD prim candidates matched current path heuristics."
-        )
-    return {
-        "schema": "isaac_usd_scene_index_v1",
-        "status": "indexed" if not blockers else "partial",
-        "source": str(usd_path),
-        "stage_prim_count": stage_prim_count,
-        "object_candidate_count": len(object_index),
-        "receptacle_candidate_count": len(receptacle_index),
-        "room_outline_count": len(room_outlines),
-        "room_outlines": sorted(room_outlines, key=lambda item: str(item.get("room_id") or "")),
-        "object_index": object_index,
-        "receptacle_index": receptacle_index,
-        "blockers": blockers,
-    }
+
+def _isaac_usd_scene_index_hooks() -> isaac_scene_index_geometry.IsaacUsdSceneIndexHooks:
+    return isaac_scene_index_geometry.IsaacUsdSceneIndexHooks(
+        annotate_usd_index_geometry=_annotate_usd_index_geometry,
+        authored_reference_asset_paths=_authored_reference_asset_paths,
+        dict_value=_dict,
+        iter_usd_prim_range=_iter_usd_prim_range,
+        is_object_prim_path=_is_object_prim_path,
+        is_receptacle_prim_path=_is_receptacle_prim_path,
+        local_reference_asset_missing=_local_reference_asset_missing,
+        merge_molmospaces_metadata_index=_merge_molmospaces_metadata_index,
+        pose_near=_pose_near,
+        room_outline_from_usd_prim=_room_outline_from_usd_prim,
+        round_vec3=_round_vec3,
+        support_pose_from_support_surface=_support_pose_from_support_surface,
+        support_pose_from_usd_bounds=_support_pose_from_usd_bounds,
+        usd_handle_from_prim=_usd_handle_from_prim,
+        usd_index_entry=_usd_index_entry,
+        usd_receptacle_support_surfaces=_usd_receptacle_support_surfaces,
+        usd_world_bounds=_usd_world_bounds,
+        usd_world_root_position=_usd_world_root_position,
+    )
 
 
 def _annotate_usd_index_geometry(
@@ -919,322 +443,47 @@ def _annotate_usd_index_geometry(
     receptacle_index: dict[str, dict[str, Any]],
     usd_geom: Any,
 ) -> None:
-    for index in (object_index, receptacle_index):
-        for entry in index.values():
-            prim_path = str(entry.get("usd_prim_path") or "")
-            if not prim_path:
-                entry.update(
-                    {
-                        "prim_type": "",
-                        "valid_stage_prim": False,
-                        "has_renderable_geometry": False,
-                        "renderable_descendant_count": 0,
-                        "mesh_descendant_count": 0,
-                        "authored_reference_count": 0,
-                        "missing_referenced_asset_count": 0,
-                        "missing_referenced_assets": [],
-                        "geometry_status": "missing_prim_path",
-                    }
-                )
-                continue
-            prim = stage.GetPrimAtPath(prim_path)
-            diagnostics = _usd_prim_geometry_diagnostics(
-                usd_path=usd_path,
-                prim=prim,
-                usd_geom=usd_geom,
-            )
-            entry.update(diagnostics)
-            if str(entry.get("kind") or "") == "receptacle" or isinstance(
-                entry.get("support_pose"), dict
-            ):
-                support_surfaces = _usd_receptacle_support_surfaces(prim=prim, usd_geom=usd_geom)
-                if support_surfaces:
-                    entry["support_surfaces"] = support_surfaces
-                support_pose = _support_pose_from_usd_bounds(
-                    entry.get("usd_world_bounds"),
-                    fallback=_dict(entry.get("support_pose")),
-                )
-                if support_surfaces:
-                    support_pose = _support_pose_from_support_surface(
-                        support_surfaces[0],
-                        fallback=support_pose,
-                    )
-                if support_pose is not None:
-                    entry["support_pose"] = support_pose
+    return isaac_scene_index_geometry.annotate_usd_index_geometry(
+        usd_path=usd_path,
+        stage=stage,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        usd_geom=usd_geom,
+        hooks=_isaac_usd_scene_index_hooks(),
+    )
 
 
 def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) -> dict[str, Any]:
-    if not prim or not prim.IsValid():
-        return {
-            "prim_type": "",
-            "valid_stage_prim": False,
-            "has_renderable_geometry": False,
-            "renderable_descendant_count": 0,
-            "mesh_descendant_count": 0,
-            "authored_reference_count": 0,
-            "missing_referenced_asset_count": 0,
-            "missing_referenced_assets": [],
-            "geometry_status": "missing_stage_prim",
-        }
-    gprim_type = getattr(usd_geom, "Gprim", None)
-    renderable_descendant_count = 0
-    mesh_descendant_count = 0
-    for descendant in _iter_usd_prim_range(prim):
-        if gprim_type is not None and descendant.IsA(gprim_type):
-            renderable_descendant_count += 1
-        if str(descendant.GetTypeName() or "") == "Mesh":
-            mesh_descendant_count += 1
-    reference_assets = _authored_reference_asset_paths(usd_path=usd_path, prim=prim)
-    missing_assets = [asset for asset in reference_assets if _local_reference_asset_missing(asset)]
-    has_renderable_geometry = renderable_descendant_count > 0
-    if has_renderable_geometry:
-        geometry_status = "renderable"
-    elif missing_assets:
-        geometry_status = "missing_referenced_geometry"
-    else:
-        geometry_status = "no_renderable_descendants"
-    world_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
-    world_root_position = _usd_world_root_position(prim, usd_geom=usd_geom)
-    return {
-        "prim_type": str(prim.GetTypeName() or ""),
-        "valid_stage_prim": True,
-        "has_renderable_geometry": has_renderable_geometry,
-        "renderable_descendant_count": renderable_descendant_count,
-        "mesh_descendant_count": mesh_descendant_count,
-        "authored_reference_count": len(reference_assets),
-        "missing_referenced_asset_count": len(missing_assets),
-        "missing_referenced_assets": missing_assets[:5],
-        "geometry_status": geometry_status,
-        "is_instanceable": bool(prim.IsInstanceable()),
-        "is_instance": bool(prim.IsInstance()),
-        "usd_world_bounds": world_bounds,
-        "usd_world_root_position": world_root_position,
-    }
+    return isaac_scene_index_geometry.usd_prim_geometry_diagnostics(
+        usd_path=usd_path,
+        prim=prim,
+        usd_geom=usd_geom,
+        hooks=_isaac_usd_scene_index_hooks(),
+    )
 
 
 def _usd_world_bounds(prim: Any, *, usd_geom: Any) -> dict[str, Any] | None:
-    from pxr import Usd
-
-    bbox_cache = usd_geom.BBoxCache(
-        Usd.TimeCode.Default(),
-        [usd_geom.Tokens.default_, usd_geom.Tokens.render, usd_geom.Tokens.proxy],
+    return isaac_scene_index_geometry.usd_world_bounds(
+        prim,
+        usd_geom=usd_geom,
+        round_vec3=_round_vec3,
     )
-    bbox = bbox_cache.ComputeWorldBound(prim).ComputeAlignedBox()
-    min_point = [float(value) for value in bbox.GetMin()]
-    max_point = [float(value) for value in bbox.GetMax()]
-    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
-    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
-        return None
-    if max(size) <= 0:
-        return None
-    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
-    return {
-        "min": _round_vec3(min_point),
-        "max": _round_vec3(max_point),
-        "center": _round_vec3(center),
-        "size": _round_vec3(size),
-    }
 
 
 def _usd_world_root_position(prim: Any, *, usd_geom: Any) -> list[float] | None:
-    try:
-        transform = usd_geom.Xformable(prim).ComputeLocalToWorldTransform(0.0)
-        position = transform.Transform((0.0, 0.0, 0.0))
-    except Exception:
-        return None
-    values = [float(value) for value in position]
-    if any(not math.isfinite(value) for value in values):
-        return None
-    return _round_vec3(values)
-
-
-def _support_pose_from_usd_bounds(
-    bounds: Any,
-    *,
-    fallback: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    raw_bounds = bounds if isinstance(bounds, dict) else {}
-    center = _vec3(raw_bounds.get("center"))
-    max_point = _vec3(raw_bounds.get("max"))
-    if center is None:
-        return dict(fallback) if fallback else None
-    pose = {
-        "frame": "usd_world",
-        "x": center[0],
-        "y": center[1],
-        "z": max_point[2] if max_point is not None else center[2],
-        "yaw_deg": float(_dict(fallback).get("yaw_deg") or 0.0),
-        "source": "usd_world_bounds_top_center",
-    }
-    size = _vec3(raw_bounds.get("size"))
-    if size is not None:
-        pose["support_radius_m"] = round(max(size[0], size[1]) / 2.0, 6)
-    return pose
-
-
-def _support_pose_from_support_surface(
-    surface: dict[str, Any],
-    *,
-    fallback: dict[str, Any] | None = None,
-) -> dict[str, Any] | None:
-    center = surface.get("center")
-    if not isinstance(center, (list, tuple)) or len(center) < 2:
-        return dict(fallback) if fallback else None
-    try:
-        x = float(center[0])
-        y = float(center[1])
-        z = float(surface["top_z"])
-    except (KeyError, TypeError, ValueError):
-        return dict(fallback) if fallback else None
-    half_extents = surface.get("half_extents")
-    pose = {
-        "frame": "usd_world",
-        "x": x,
-        "y": y,
-        "z": z,
-        "yaw_deg": _float_or_default(_dict(fallback).get("yaw_deg"), 0.0),
-        "source": str(surface.get("source") or ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE),
-        "support_surface_id": surface.get("surface_id"),
-    }
-    if isinstance(half_extents, (list, tuple)) and len(half_extents) >= 2:
-        try:
-            pose["support_radius_m"] = round(
-                max(abs(float(half_extents[0])), abs(float(half_extents[1]))),
-                6,
-            )
-        except (TypeError, ValueError):
-            pass
-    return pose
-
-
-def _float_or_default(value: Any, default: float) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return float(default)
+    return isaac_scene_index_geometry.usd_world_root_position(
+        prim,
+        usd_geom=usd_geom,
+        round_vec3=_round_vec3,
+    )
 
 
 def _usd_receptacle_support_surfaces(*, prim: Any, usd_geom: Any) -> list[dict[str, Any]]:
-    whole_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
-    whole_surface = _support_surface_from_usd_bounds(
-        bounds=whole_bounds,
-        surface_id=str(prim.GetPath()),
-        source=ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
-    )
-    candidates = []
-    for descendant in _iter_usd_prim_range(prim):
-        if descendant == prim:
-            continue
-        if not _is_usd_renderable_support_candidate(descendant, usd_geom=usd_geom):
-            continue
-        bounds = _usd_world_bounds(descendant, usd_geom=usd_geom)
-        surface = _support_surface_from_usd_bounds(
-            bounds=bounds,
-            surface_id=str(descendant.GetPath()),
-            source=ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
-        )
-        if surface is None:
-            continue
-        score = _usd_support_surface_score(surface, whole_surface=whole_surface)
-        if score is None:
-            continue
-        surface["selection_score"] = round(float(score), 6)
-        candidates.append(surface)
-    candidates.sort(
-        key=lambda item: (
-            float(item.get("selection_score") or 0.0),
-            float(item.get("area_m2") or 0.0),
-            -float(item.get("top_z") or 0.0),
-            str(item.get("surface_id") or ""),
-        ),
-        reverse=True,
-    )
-    if candidates:
-        union = _usd_support_surface_union(candidates, whole_surface=whole_surface)
-        if union is not None:
-            return [union, *candidates[:7]]
-        return candidates[:8]
-    return [whole_surface] if whole_surface is not None else []
-
-
-def _is_usd_renderable_support_candidate(prim: Any, *, usd_geom: Any) -> bool:
-    gprim_type = getattr(usd_geom, "Gprim", None)
-    if gprim_type is not None and prim.IsA(gprim_type):
-        return True
-    return str(prim.GetTypeName() or "") in {"Mesh", "Cube", "Sphere", "Cylinder", "Capsule"}
-
-
-def _support_surface_from_usd_bounds(
-    *,
-    bounds: Any,
-    surface_id: str,
-    source: str,
-) -> dict[str, Any] | None:
-    raw_bounds = bounds if isinstance(bounds, dict) else {}
-    center = _vec3(raw_bounds.get("center"))
-    size = _vec3(raw_bounds.get("size"))
-    max_point = _vec3(raw_bounds.get("max"))
-    if center is None or size is None or max_point is None:
-        return None
-    half_extents = [abs(float(size[0])) / 2.0, abs(float(size[1])) / 2.0]
-    if min(half_extents) < 0.03:
-        return None
-    area = 4.0 * float(half_extents[0]) * float(half_extents[1])
-    if area <= 0.0:
-        return None
-    return {
-        "surface_id": surface_id,
-        "center": [round(float(center[0]), 6), round(float(center[1]), 6)],
-        "top_z": round(float(max_point[2]), 6),
-        "half_extents": [
-            round(float(half_extents[0]), 6),
-            round(float(half_extents[1]), 6),
-        ],
-        "area_m2": round(float(area), 6),
-        "source": source,
-    }
-
-
-def _usd_support_surface_score(
-    surface: dict[str, Any],
-    *,
-    whole_surface: dict[str, Any] | None,
-) -> float | None:
-    area = float(surface.get("area_m2") or 0.0)
-    if area < 0.03:
-        return None
-    half_extents = surface.get("half_extents")
-    if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
-        return None
-    try:
-        min_half_extent = min(abs(float(half_extents[0])), abs(float(half_extents[1])))
-        top_z = float(surface["top_z"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    if min_half_extent < 0.06:
-        return None
-    whole_area = float(_dict(whole_surface).get("area_m2") or 0.0)
-    whole_top_z = _dict(whole_surface).get("top_z")
-    area_ratio = area / whole_area if whole_area > 0.0 else 1.0
-    try:
-        below_whole_top = max(float(whole_top_z) - top_z, 0.0)
-    except (TypeError, ValueError):
-        below_whole_top = 0.0
-    # Beds and similar receptacles often include tall backboards in the parent
-    # bounds. Favor broad lower descendants over the highest broad descendant.
-    return area + min(area_ratio, 1.25) + min(below_whole_top * 2.0, 3.0)
-
-
-def _usd_support_surface_union(
-    candidates: list[dict[str, Any]],
-    *,
-    whole_surface: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    return usd_support_surface_union(
-        candidates,
-        whole_surface=whole_surface,
-        descendant_source=ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
-        union_source=ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
+    return isaac_scene_index_geometry.receptacle_support_surfaces(
+        prim=prim,
+        usd_geom=usd_geom,
+        world_bounds=_usd_world_bounds,
+        iter_prim_range=_iter_usd_prim_range,
     )
 
 
@@ -1244,641 +493,16 @@ def _room_outline_from_usd_prim(
     *,
     usd_geom: Any,
 ) -> dict[str, Any] | None:
-    match = re.search(r"/(room_\d+)_visual(?:_\d+)?$", prim_path)
-    if match is None:
-        return None
-    bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
-    if bounds is None:
-        return None
-    center = _vec3(bounds.get("center"))
-    size = _vec3(bounds.get("size"))
-    if center is None or size is None:
-        return None
-    half_extents = [abs(size[0]) / 2.0, abs(size[1]) / 2.0]
-    if min(half_extents) < 0.25:
-        return None
-    room_id = match.group(1)
-    return {
-        "room_id": room_id,
-        "label": room_id.replace("_", " ").title(),
-        "center": [round(center[0], 6), round(center[1], 6)],
-        "half_extents": [round(half_extents[0], 6), round(half_extents[1], 6)],
-        "provenance": "isaac_usd_room_mesh_world_bounds",
-        "usd_prim_path": prim_path,
-    }
-
-
-def _room_outlines_from_scene_index_diagnostics(
-    diagnostics: dict[str, Any],
-) -> list[dict[str, Any]]:
-    return [dict(item) for item in diagnostics.get("room_outlines") or [] if isinstance(item, dict)]
-
-
-def _fallback_room_outlines_from_indices(
-    *,
-    scenario: CleanupScenario,
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    grouped: dict[str, list[list[float]]] = {}
-    room_by_receptacle = {
-        item.receptacle_id: str(item.room_area or "isaac_scene") for item in scenario.receptacles
-    }
-    for receptacle in scenario.receptacles:
-        position = _support_pose_position(
-            _dict(_dict(receptacle_index.get(receptacle.receptacle_id)).get("support_pose"))
-        )
-        if position is None:
-            position = _vec3(
-                _dict(
-                    _dict(receptacle_index.get(receptacle.receptacle_id)).get("usd_world_bounds")
-                ).get("center")
-            )
-        if position is None:
-            continue
-        grouped.setdefault(room_by_receptacle[receptacle.receptacle_id], []).append(position)
-    for obj in scenario.objects:
-        position = _vec3(
-            _dict(_dict(object_index.get(obj.object_id)).get("usd_world_bounds")).get("center")
-        )
-        if position is None:
-            continue
-        grouped.setdefault(room_by_receptacle.get(obj.location_id, "isaac_scene"), []).append(
-            position
-        )
-    outlines = []
-    for room_id, points in grouped.items():
-        if not points:
-            continue
-        xs = [float(point[0]) for point in points]
-        ys = [float(point[1]) for point in points]
-        center = [round((min(xs) + max(xs)) / 2.0, 6), round((min(ys) + max(ys)) / 2.0, 6)]
-        half_extents = [
-            round(max((max(xs) - min(xs)) / 2.0, 0.8), 6),
-            round(max((max(ys) - min(ys)) / 2.0, 0.8), 6),
-        ]
-        outlines.append(
-            {
-                "room_id": room_id,
-                "label": room_id.replace("_", " ").title(),
-                "center": center,
-                "half_extents": half_extents,
-                "provenance": "scenario_fixture_room_bounds",
-            }
-        )
-    return sorted(outlines, key=lambda item: str(item.get("room_id") or ""))
-
-
-def _round_vec3(values: list[float] | tuple[float, ...]) -> list[float]:
-    return [round(float(value), 6) for value in values[:3]]
-
-
-def _iter_usd_prim_range(prim: Any) -> Iterable[Any]:
-    from pxr import Usd
-
-    return Usd.PrimRange(prim)
-
-
-def _authored_reference_asset_paths(*, usd_path: Path, prim: Any) -> list[str]:
-    assets: list[str] = []
-    for spec in prim.GetPrimStack():
-        reference_list = getattr(spec, "referenceList", None)
-        for reference in _usd_list_op_items(reference_list):
-            asset_path = str(getattr(reference, "assetPath", "") or "")
-            if not asset_path:
-                continue
-            layer_path = Path(str(getattr(spec.layer, "realPath", "") or usd_path))
-            if not _is_local_reference_asset_path(asset_path):
-                assets.append(asset_path)
-            else:
-                assets.append(str((layer_path.parent / asset_path).resolve()))
-    return sorted(dict.fromkeys(assets))
-
-
-def _usd_list_op_items(list_op: Any) -> list[Any]:
-    items: list[Any] = []
-    for attr in ("prependedItems", "addedItems", "appendedItems", "explicitItems"):
-        values = getattr(list_op, attr, None)
-        if values:
-            items.extend(list(values))
-    return items
-
-
-def _is_local_reference_asset_path(asset_path: str) -> bool:
-    return "://" not in asset_path and not asset_path.startswith("@")
-
-
-def _local_reference_asset_missing(asset_path: str) -> bool:
-    return _is_local_reference_asset_path(asset_path) and not Path(asset_path).exists()
-
-
-def _merge_molmospaces_metadata_index(
-    *,
-    usd_path: Path,
-    prim_paths_by_name: dict[str, list[str]],
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> None:
-    metadata = _load_molmospaces_scene_metadata(usd_path)
-    if not metadata:
-        return
-
-    for handle, raw_info in metadata.items():
-        if not isinstance(raw_info, dict):
-            continue
-        prim_path = _molmospaces_metadata_prim_path(handle, prim_paths_by_name)
-        if prim_path is None:
-            continue
-        if _is_molmospaces_receptacle_metadata(raw_info):
-            receptacle_index.setdefault(
-                handle,
-                {
-                    **_usd_metadata_index_entry(prim_path, handle, raw_info, "receptacle"),
-                    "support_pose": _pose_near(handle),
-                },
-            )
-        elif _is_molmospaces_object_metadata(raw_info):
-            object_index.setdefault(
-                handle,
-                _usd_metadata_index_entry(prim_path, handle, raw_info, "object"),
-            )
-
-
-def _load_molmospaces_scene_metadata(usd_path: Path) -> dict[str, dict[str, Any]]:
-    metadata_path = usd_path.parent / "scene_metadata.json"
-    if not metadata_path.is_file():
-        return {}
-    try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    objects = payload.get("objects") if isinstance(payload, dict) else None
-    if not isinstance(objects, dict):
-        return {}
-    return {
-        str(handle): dict(info)
-        for handle, info in objects.items()
-        if isinstance(info, dict) and str(handle)
-    }
-
-
-def _molmospaces_metadata_prim_path(
-    handle: str,
-    prim_paths_by_name: dict[str, list[str]],
-) -> str | None:
-    candidates = list(prim_paths_by_name.get(handle) or [])
-    if not candidates:
-        return None
-    return sorted(candidates, key=_molmospaces_prim_path_rank)[0]
-
-
-def _molmospaces_prim_path_rank(prim_path: str) -> tuple[int, int, str]:
-    normalized = f"/{prim_path.strip('/')}/"
-    is_top_level_geometry = "/geometry/" in normalized.lower() and normalized.count("/") <= 4
-    return (0 if is_top_level_geometry else 1, normalized.count("/"), prim_path)
-
-
-def _usd_metadata_index_entry(
-    prim_path: str,
-    handle: str,
-    metadata: dict[str, Any],
-    kind: str,
-) -> dict[str, Any]:
-    category = str(metadata.get("category") or _category_from_usd_name(handle))
-    metadata_object_id = str(metadata.get("object_id") or "")
-    asset_id = str(metadata.get("asset_id") or "")
-    label_parts = [category, metadata_object_id, asset_id]
-    public_label = " ".join(part for part in label_parts if part)
-    return {
-        "usd_prim_path": prim_path,
-        "category": category,
-        "public_label": public_label or handle,
-        "index_source": "usd_stage_traversal",
-        "kind": kind,
-        "metadata_source": "molmospaces_scene_metadata",
-        "metadata_handle": handle,
-        "metadata_object_id": metadata_object_id,
-        "asset_id": asset_id,
-        "metadata_room_id": _metadata_room_id(metadata),
-        "parent": str(metadata.get("parent") or ""),
-        "is_static": bool(metadata.get("is_static")),
-    }
-
-
-def _metadata_room_id(metadata: dict[str, Any]) -> str:
-    raw_room_id = metadata.get("room_id")
-    if raw_room_id in {None, ""}:
-        return ""
-    room_id = str(raw_room_id)
-    return room_id if room_id.startswith("room_") else f"room_{room_id}"
-
-
-def _is_molmospaces_object_metadata(metadata: dict[str, Any]) -> bool:
-    return metadata.get("is_static") is False
-
-
-def _is_molmospaces_receptacle_metadata(metadata: dict[str, Any]) -> bool:
-    category = _norm(metadata.get("category"))
-    if not category:
-        return False
-    if category in _MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS:
-        return True
-    return bool(metadata.get("children")) and metadata.get("is_static") is True
-
-
-_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = {
-    "bed",
-    "bookshelf",
-    "chair",
-    "countertop",
-    "desk",
-    "diningtable",
-    "dresser",
-    "fridge",
-    "garbagecan",
-    "shelf",
-    "shelvingunit",
-    "sink",
-    "sofa",
-    "stand",
-    "toilet",
-    "tvstand",
-}
-
-
-def _usd_index_entry(prim_path: str, prim_name: str, kind: str) -> dict[str, Any]:
-    return {
-        "usd_prim_path": prim_path,
-        "category": _category_from_usd_name(prim_name),
-        "public_label": prim_name,
-        "index_source": "usd_stage_traversal",
-        "kind": kind,
-    }
-
-
-def _usd_handle_from_prim(
-    prim_path: str,
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> str:
-    base = _usd_safe_name(Path(prim_path).name)
-    if base in {"World", "Objects", "Receptacles", "Fixtures", "Scene"}:
-        base = _usd_safe_name(prim_path.strip("/").replace("/", "_"))
-    existing = set(object_index) | set(receptacle_index)
-    if base not in existing:
-        return base
-    suffix = 2
-    while f"{base}_{suffix}" in existing:
-        suffix += 1
-    return f"{base}_{suffix}"
-
-
-def _is_object_prim_path(prim_path: str) -> bool:
-    normalized = f"/{prim_path.strip('/').lower()}/"
-    return any(
-        _contains_child_segment(normalized, segment) for segment in ("objects", "movable", "props")
+    return isaac_scene_index_geometry.room_outline_from_usd_prim(
+        prim_path,
+        prim,
+        usd_geom=usd_geom,
+        world_bounds=_usd_world_bounds,
     )
 
 
-def _is_receptacle_prim_path(prim_path: str) -> bool:
-    normalized = f"/{prim_path.strip('/').lower()}/"
-    return any(
-        _contains_child_segment(normalized, segment)
-        for segment in ("receptacles", "fixtures", "surfaces", "support_surfaces")
-    )
-
-
-def _contains_child_segment(normalized_path: str, segment: str) -> bool:
-    token = f"/{segment}/"
-    return token in normalized_path and not normalized_path.endswith(token)
-
-
-def _category_from_usd_name(value: str) -> str:
-    normalized = _norm(value)
-    if normalized:
-        return normalized
-    return "unknown"
-
-
-def _scene_binding_diagnostics(
-    *,
-    runtime_mode: str,
-    scenario: CleanupScenario,
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-    real_smoke: dict[str, Any] | None,
-) -> dict[str, Any]:
-    object_bindings = {
-        item.object_id: _bind_public_scene_item(
-            public_id=item.object_id,
-            public_label=item.name,
-            category=item.category,
-            index=object_index,
-            kind="object",
-        )
-        for item in scenario.objects
-    }
-    receptacle_bindings = {
-        item.receptacle_id: _bind_public_scene_item(
-            public_id=item.receptacle_id,
-            public_label=item.name,
-            category=item.category or item.kind,
-            index=receptacle_index,
-            kind="receptacle",
-        )
-        for item in scenario.receptacles
-    }
-    selected_object_ids = _selected_cleanup_object_ids(scenario)
-    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
-    selected_object_bindings = {
-        object_id: object_bindings.get(object_id) or _unbound_scene_item(object_id, "object")
-        for object_id in selected_object_ids
-    }
-    selected_receptacle_bindings = {
-        receptacle_id: receptacle_bindings.get(receptacle_id)
-        or _unbound_scene_item(receptacle_id, "receptacle")
-        for receptacle_id in selected_receptacle_ids
-    }
-    selected_object_bound_count = _bound_count(selected_object_bindings)
-    selected_receptacle_bound_count = _bound_count(selected_receptacle_bindings)
-    blockers = _binding_blockers(
-        selected_object_bindings,
-        selected_receptacle_bindings,
-    )
-    if real_smoke is None:
-        status = "placeholder_mapping"
-        source = "scenario_fixture"
-    elif blockers:
-        status = "partial"
-        source = "usd_stage_traversal"
-    else:
-        status = "selected_bound"
-        source = "usd_stage_traversal"
-    return {
-        "schema": SCENE_BINDING_SCHEMA,
-        "status": status,
-        "source": source,
-        "runtime_mode": runtime_mode,
-        "public_object_count": len(object_bindings),
-        "public_receptacle_count": len(receptacle_bindings),
-        "public_object_bound_count": _bound_count(object_bindings),
-        "public_receptacle_bound_count": _bound_count(receptacle_bindings),
-        "selected_object_count": len(selected_object_bindings),
-        "selected_target_receptacle_count": len(selected_receptacle_bindings),
-        "selected_object_bound_count": selected_object_bound_count,
-        "selected_target_receptacle_bound_count": selected_receptacle_bound_count,
-        "object_bindings": object_bindings,
-        "receptacle_bindings": receptacle_bindings,
-        "selected_object_bindings": selected_object_bindings,
-        "selected_target_receptacle_bindings": selected_receptacle_bindings,
-        "blockers": blockers,
-        "private_manifest_exposed_to_agent": False,
-    }
-
-
-def _bind_public_scene_item(
-    *,
-    public_id: str,
-    public_label: str,
-    category: str | None,
-    index: dict[str, dict[str, Any]],
-    kind: str,
-) -> dict[str, Any]:
-    match = _scene_index_match(
-        public_id=public_id,
-        public_label=public_label,
-        category=category,
-        index=index,
-        kind=kind,
-    )
-    if match is None:
-        return _unbound_scene_item(public_id, kind)
-    handle, entry, strategy = match
-    return {
-        "status": "bound",
-        "kind": kind,
-        "public_id": public_id,
-        "usd_handle": handle,
-        "usd_prim_path": str(entry.get("usd_prim_path") or ""),
-        "public_label": public_label,
-        "category": category or "",
-        "usd_public_label": str(entry.get("public_label") or ""),
-        "usd_category": str(entry.get("category") or ""),
-        "match_strategy": strategy,
-        "index_source": str(entry.get("index_source") or ""),
-        "has_renderable_geometry": entry.get("has_renderable_geometry"),
-        "renderable_descendant_count": int(entry.get("renderable_descendant_count") or 0),
-        "mesh_descendant_count": int(entry.get("mesh_descendant_count") or 0),
-        "authored_reference_count": int(entry.get("authored_reference_count") or 0),
-        "missing_referenced_asset_count": int(entry.get("missing_referenced_asset_count") or 0),
-        "missing_referenced_assets": list(entry.get("missing_referenced_assets") or [])[:5],
-        "geometry_status": str(entry.get("geometry_status") or ""),
-    }
-
-
-def _scene_index_match(
-    *,
-    public_id: str,
-    public_label: str,
-    category: str | None,
-    index: dict[str, dict[str, Any]],
-    kind: str,
-) -> tuple[str, dict[str, Any], str] | None:
-    if public_id in index:
-        return public_id, index[public_id], "exact_public_id"
-    public_norm = _norm(public_id)
-    label_norm = _norm(public_label)
-    for handle, entry in index.items():
-        handle_norm = _norm(handle)
-        prim_name_norm = _norm(Path(str(entry.get("usd_prim_path") or "")).name)
-        entry_label_norm = _norm(entry.get("public_label"))
-        if public_norm and public_norm in {handle_norm, prim_name_norm, entry_label_norm}:
-            return handle, entry, "normalized_public_id"
-        if label_norm and label_norm in {handle_norm, prim_name_norm, entry_label_norm}:
-            return handle, entry, "normalized_public_label"
-
-    prefix_match = _first_semantic_index_match(
-        public_id=public_id,
-        public_label=public_label,
-        category=category,
-        index=index,
-        kind=kind,
-    )
-    if prefix_match is not None:
-        return prefix_match
-
-    category_norm = _norm(category)
-    if not category_norm or not _allow_category_fallback(kind, category_norm):
-        return None
-    category_matches = [
-        (handle, entry)
-        for handle, entry in index.items()
-        if _norm(entry.get("category")) == category_norm
-        or category_norm in _norm(entry.get("public_label"))
-    ]
-    if len(category_matches) == 1:
-        handle, entry = category_matches[0]
-        return handle, entry, "unique_category"
-    return None
-
-
-def _first_semantic_index_match(
-    *,
-    public_id: str,
-    public_label: str,
-    category: str | None,
-    index: dict[str, dict[str, Any]],
-    kind: str,
-) -> tuple[str, dict[str, Any], str] | None:
-    public_prefix = _public_handle_prefix(public_id)
-    if public_prefix:
-        matches = _semantic_index_matches((public_prefix,), index)
-        if matches:
-            handle, entry = matches[0]
-            return handle, entry, "public_id_prefix_first"
-
-    label_tokens = _scene_match_tokens(public_label)
-    if label_tokens:
-        matches = _semantic_index_matches(tuple(sorted(label_tokens)), index)
-        if matches:
-            handle, entry = matches[0]
-            return handle, entry, "semantic_label_token_first"
-
-    category_norm = _norm(category)
-    if category_norm and _allow_category_fallback(kind, category_norm):
-        category_tokens = _scene_match_tokens(category)
-        matches = _semantic_index_matches(tuple(sorted(category_tokens)), index)
-        if len(matches) == 1:
-            handle, entry = matches[0]
-            return handle, entry, "semantic_category_token_unique"
-    return None
-
-
-def _semantic_index_matches(
-    tokens: tuple[str, ...],
-    index: dict[str, dict[str, Any]],
-) -> list[tuple[str, dict[str, Any]]]:
-    matches: list[tuple[str, dict[str, Any]]] = []
-    for handle, entry in sorted(index.items()):
-        entry_text = _norm(
-            " ".join(
-                str(entry.get(key) or "")
-                for key in (
-                    "metadata_handle",
-                    "public_label",
-                    "category",
-                    "metadata_object_id",
-                    "asset_id",
-                )
-            )
-        )
-        handle_norm = _norm(handle)
-        if any(
-            token and (handle_norm.startswith(token) or token in entry_text) for token in tokens
-        ):
-            matches.append((handle, entry))
-    return matches
-
-
-def _public_handle_prefix(public_id: str) -> str:
-    prefix = str(public_id or "").split("_", 1)[0]
-    normalized = _norm(prefix)
-    return normalized if len(normalized) >= 3 else ""
-
-
-def _allow_category_fallback(kind: str, category_norm: str) -> bool:
-    if not category_norm:
-        return False
-    if kind == "object" and category_norm in _GENERIC_CLEANUP_OBJECT_CATEGORY_NORMS:
-        return False
-    return True
-
-
-_GENERIC_CLEANUP_OBJECT_CATEGORY_NORMS = {
-    # These are public cleanup buckets, not Isaac USD object categories.
-    "book",
-    "dish",
-    "electronics",
-    "food",
-    "linen",
-    "toy",
-}
-
-
-def _scene_match_tokens(*values: Any) -> set[str]:
-    tokens: set[str] = set()
-    for value in values:
-        text = str(value or "")
-        for token in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)|\d+", text):
-            normalized = _norm(token)
-            if len(normalized) >= 3:
-                tokens.add(normalized)
-        normalized = _norm(text)
-        if len(normalized) >= 3:
-            tokens.add(normalized)
-    for token, aliases in {
-        "remotecontrol": ("remote",),
-        "cellphone": ("phone", "cellulartelephone"),
-        "cellulartelephone": ("phone", "cellphone"),
-        "tvstand": ("stand",),
-    }.items():
-        if token in tokens:
-            tokens.update(aliases)
-    return tokens
-
-
-def _unbound_scene_item(public_id: str, kind: str) -> dict[str, Any]:
-    return {
-        "status": "unresolved",
-        "kind": kind,
-        "public_id": public_id,
-        "usd_handle": "",
-        "usd_prim_path": "",
-        "match_strategy": "none",
-        "blocker": "No stable USD prim candidate matched this public cleanup handle.",
-    }
-
-
-def _binding_blockers(
-    selected_object_bindings: dict[str, dict[str, Any]],
-    selected_receptacle_bindings: dict[str, dict[str, Any]],
-) -> list[str]:
-    blockers = []
-    for object_id, binding in selected_object_bindings.items():
-        if binding.get("status") != "bound":
-            blockers.append(f"Selected cleanup object has no USD binding: {object_id}")
-    for receptacle_id, binding in selected_receptacle_bindings.items():
-        if binding.get("status") != "bound":
-            blockers.append(f"Selected target receptacle has no USD binding: {receptacle_id}")
-    return blockers
-
-
-def _bound_count(bindings: dict[str, dict[str, Any]]) -> int:
-    return sum(1 for item in bindings.values() if item.get("status") == "bound")
-
-
-def _selected_cleanup_object_ids(scenario: CleanupScenario) -> list[str]:
-    return _dedupe(target.object_id for target in scenario.private_manifest.targets)
-
-
-def _selected_cleanup_receptacle_ids(scenario: CleanupScenario) -> list[str]:
-    return _dedupe(
-        receptacle_id
-        for target in scenario.private_manifest.targets
-        for receptacle_id in target.valid_receptacle_ids
-    )
-
-
-def _dedupe(values: Any) -> list[str]:
-    seen = set()
-    result = []
-    for value in values:
-        item = str(value or "")
-        if not item or item in seen:
-            continue
-        seen.add(item)
-        result.append(item)
-    return result
+def _iter_usd_prim_range(prim: Any) -> Any:
+    return isaac_scene_index_geometry.iter_usd_prim_range(prim)
 
 
 def _runtime_smoke_robot_view_paths(
@@ -1914,8 +538,8 @@ def _capture_isaac_lab_camera_views(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    return capture_isaac_lab_camera_views(
-        request=IsaacCameraCaptureRequest(
+    return isaac_camera_capture.capture_isaac_lab_camera_views(
+        request=isaac_camera_capture.IsaacCameraCaptureRequest(
             scene_usd=scene_usd,
             view_paths=view_paths,
             width=width,
@@ -1934,14 +558,14 @@ def _capture_isaac_lab_camera_views(
             isaac_exposure_bias=isaac_exposure_bias,
             isaac_colorcorr_gain=isaac_colorcorr_gain,
             robot_view_keys=ROBOT_VIEW_KEYS,
-            head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-            head_camera_vertical_fov_deg=RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
-            head_camera_focal_length_mm=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+            head_camera_prim=isaac_camera_geometry.ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            head_camera_vertical_fov_deg=(isaac_camera_geometry.RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG),
+            head_camera_focal_length_mm=isaac_camera_geometry.RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
             renderer_mode=REAL_SMOKE_RENDERER_MODE,
             capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
             default_lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
         ),
-        hooks=IsaacCameraCaptureHooks(
+        hooks=isaac_camera_capture.IsaacCameraCaptureHooks(
             wait_for_stage_load=_wait_for_stage_load,
             load_current_stage_payloads=_load_current_stage_payloads,
             apply_semantic_pose_state_to_stage=_apply_semantic_pose_state_to_stage,
@@ -1990,117 +614,29 @@ def _capture_scene_camera_request_with_existing_sim(
     np: Any,
     scene_bounds: dict[str, Any],
 ) -> dict[str, Any]:
-    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
-    resolution = camera_request["render_resolution"]
-    width = int(resolution["width"])
-    height = int(resolution["height"])
-    lighting_diagnostics = _ensure_capture_lighting(
-        stage_utils,
-        profile=camera_request.get("lighting_profile"),
-    )
-    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
-    color_profile = camera_request.get("color_profile") or {}
-    focal_length = float(lens.get("focal_length_mm", 24.0))
-    horizontal_aperture = _horizontal_aperture_from_lens(
-        lens,
+    return isaac_scene_camera_capture.capture_scene_camera_request_with_existing_sim(
+        camera_request=camera_request,
+        output_dir=output_dir,
         width=width,
         height=height,
-        focal_length=focal_length,
-    )
-    sim_utils.create_prim("/World/RoboclawsSceneRequestCameraRig", "Xform")
-    camera = camera_type(
-        cfg=camera_cfg_type(
-            prim_path="/World/RoboclawsSceneRequestCameraRig/Camera",
-            update_period=0.0,
-            height=height,
-            width=width,
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=focal_length,
-                focus_distance=4.0,
-                horizontal_aperture=horizontal_aperture,
-            ),
-        )
-    )
-    sim.reset()
-    native_render_diagnostics = _isaac_native_render_diagnostics(
+        sim=sim,
+        sim_utils=sim_utils,
+        stage_utils=stage_utils,
+        camera_type=camera_type,
+        camera_cfg_type=camera_cfg_type,
+        torch=torch,
+        np=np,
+        scene_bounds=scene_bounds,
+        normalize_camera_control_request=normalize_camera_control_request,
+        ensure_capture_lighting=_ensure_capture_lighting,
+        horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+        isaac_native_render_diagnostics=_isaac_native_render_diagnostics,
+        camera_render_product_paths=_camera_render_product_paths,
+        isaac_scene_camera_view_spec=_isaac_scene_camera_view_spec,
+        rgb_tensor_to_uint8=_rgb_tensor_to_uint8,
+        image_has_variance=_image_has_variance,
         renderer_mode=REAL_SMOKE_RENDERER_MODE,
-        capture_method="isaac_lab_camera_rgb_scene_probe",
-        view_kind="scene_camera_request",
-        render_resolution={"width": width, "height": height},
-        camera_prim_paths=["/World/RoboclawsSceneRequestCameraRig/Camera"],
-        render_product_paths=_camera_render_product_paths(camera),
-        isaac_lab_isp_active=False,
     )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    saved: dict[str, str] = {}
-    shapes: dict[str, list[int]] = {}
-    color_diagnostics: dict[str, dict[str, Any]] = {}
-    views: list[dict[str, Any]] = []
-    total_render_steps = 0
-    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
-        spec = _isaac_scene_camera_view_spec(
-            raw_spec,
-            index=index,
-            stage_utils=stage_utils,
-        )
-        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
-        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
-        camera.set_world_poses_from_view(position, target)
-        rgb_image = None
-        for _ in range(24):
-            sim.step()
-            total_render_steps += 1
-            camera.update(dt=sim.get_physics_dt())
-            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                break
-        if rgb_image is None:
-            raise RuntimeError(
-                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
-            )
-        if not _image_has_variance(rgb_image, np=np):
-            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
-        rgb_image, color_diagnostic = apply_camera_color_profile(
-            rgb_image,
-            np=np,
-            profile=color_profile,
-            backend="isaaclab-prepared-usd",
-            view_id=str(spec["view_id"]),
-        )
-        output_path = output_dir / f"{spec['view_id']}.png"
-        Image.fromarray(rgb_image, mode="RGB").save(output_path)
-        saved[str(spec["view_id"])] = str(output_path)
-        shapes[str(spec["view_id"])] = list(rgb_image.shape)
-        color_diagnostics[str(spec["view_id"])] = color_diagnostic
-        views.append(
-            {
-                **spec,
-                "image_path": str(output_path),
-                "shape": list(rgb_image.shape),
-            }
-        )
-    return {
-        "schema": "isaac_scene_camera_views_v1",
-        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
-        "camera_request_schema": camera_request.get("schema"),
-        "calibration_status": camera_request.get("calibration_status"),
-        "lighting_profile": camera_request.get("lighting_profile") or {},
-        "color_profile": color_profile,
-        "color_management": color_diagnostics,
-        "lighting_diagnostics": lighting_diagnostics,
-        "native_render_diagnostics": native_render_diagnostics,
-        "lens": camera_request.get("lens") or {},
-        "derived_lens": {
-            "focal_length_mm": focal_length,
-            "horizontal_aperture_mm": horizontal_aperture,
-        },
-        "render_steps": total_render_steps,
-        "scene_bounds": scene_bounds,
-        "views": views,
-        "images": saved,
-        "shapes": shapes,
-    }
 
 
 def capture_scene_camera_views(
@@ -2140,8 +676,8 @@ def _capture_isaac_lab_scene_camera_views(
     simulation_app: Any,
     semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return capture_isaac_lab_scene_camera_views(
-        request=IsaacSceneCameraCaptureRequest(
+    return isaac_scene_camera_capture.capture_isaac_lab_scene_camera_views(
+        request=isaac_scene_camera_capture.IsaacSceneCameraCaptureRequest(
             scene_usd=scene_usd,
             camera_request=camera_request,
             output_dir=output_dir,
@@ -2151,7 +687,7 @@ def _capture_isaac_lab_scene_camera_views(
             semantic_pose_state=_dict(semantic_pose_state),
             renderer_mode=REAL_SMOKE_RENDERER_MODE,
         ),
-        hooks=IsaacSceneCameraCaptureHooks(
+        hooks=isaac_scene_camera_capture.IsaacSceneCameraCaptureHooks(
             normalize_camera_control_request=normalize_camera_control_request,
             wait_for_stage_load=_wait_for_stage_load,
             load_current_stage_payloads=_load_current_stage_payloads,
@@ -2173,97 +709,17 @@ def _apply_semantic_pose_state_to_stage(
     stage_utils: Any,
     semantic_pose_state: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    pose_state = _dict(semantic_pose_state)
-    if not pose_state:
-        return {
-            "schema": "isaac_semantic_pose_stage_application_v1",
-            "status": "not_requested",
-            "applied_object_count": 0,
-            "failed_object_count": 0,
-            "rendered_to_usd": False,
-        }
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        raise RuntimeError("Isaac stage utils do not expose get_current_stage")
-    stage = get_current_stage()
-    if stage is None:
-        raise RuntimeError("Isaac semantic-pose rerender has no current USD stage")
-    from pxr import Gf, UsdGeom
-
-    object_poses = _dict(pose_state.get("object_poses"))
-    receptacle_index = _dict(pose_state.get("receptacle_index"))
-    applied: list[dict[str, Any]] = []
-    failed: list[dict[str, Any]] = []
-    for object_id, raw_pose in object_poses.items():
-        pose = _dict(raw_pose)
-        object_prim_path = str(pose.get("usd_prim_path") or "")
-        support_id = str(pose.get("support_receptacle_id") or "")
-        if not object_prim_path or pose.get("attached_to_robot") is True:
-            continue
-        object_prim = stage.GetPrimAtPath(object_prim_path)
-        if not object_prim or not object_prim.IsValid():
-            failed.append({"object_id": str(object_id), "reason": "missing_object_prim"})
-            continue
-        target = _semantic_pose_target_position(
-            support_id=support_id,
-            receptacle_index=receptacle_index,
-            fallback_pose=_dict(pose),
-        )
-        if target is None:
-            failed.append({"object_id": str(object_id), "reason": "missing_target_pose"})
-            continue
-        try:
-            local_translate = _world_position_to_parent_local_translate(
-                UsdGeom=UsdGeom,
-                prim=object_prim,
-                world_position=target,
-            )
-        except RuntimeError as exc:
-            failed.append(
-                {
-                    "object_id": str(object_id),
-                    "reason": "parent_local_transform_failed",
-                    "detail": str(exc),
-                }
-            )
-            continue
-        try:
-            translate_application = _set_usd_xform_translate(
-                UsdGeom=UsdGeom,
-                Gf=Gf,
-                prim=object_prim,
-                translate=local_translate,
-            )
-        except RuntimeError as exc:
-            failed.append(
-                {
-                    "object_id": str(object_id),
-                    "reason": "translate_authoring_failed",
-                    "detail": str(exc),
-                }
-            )
-            continue
-        applied.append(
-            {
-                "object_id": str(object_id),
-                "object_usd_prim_path": object_prim_path,
-                "support_receptacle_id": support_id,
-                "target_position": list(target),
-                "authored_translate": list(local_translate),
-                "authored_translate_frame": "parent_local",
-                "translate_application_method": translate_application.get("method"),
-                "authored_xform_op": translate_application.get("xform_op"),
-            }
-        )
-    return {
-        "schema": "isaac_semantic_pose_stage_application_v1",
-        "status": "applied" if applied and not failed else ("partial" if applied else "blocked"),
-        "applied_object_count": len(applied),
-        "failed_object_count": len(failed),
-        "applied_objects": applied,
-        "failed_objects": failed,
-        "rendered_to_usd": bool(applied) and not failed,
-    }
+    return isaac_semantic_pose_stage.apply_semantic_pose_state_to_stage(
+        stage_utils=stage_utils,
+        semantic_pose_state=semantic_pose_state,
+        hooks=isaac_semantic_pose_stage.IsaacSemanticPoseStageHooks(
+            dict_value=_dict,
+            set_usd_xform_translate=_set_usd_xform_translate,
+            semantic_pose_target_position=_semantic_pose_target_position,
+            vec3=_vec3,
+            world_position_to_parent_local_translate=_world_position_to_parent_local_translate,
+        ),
+    )
 
 
 def _world_position_to_parent_local_translate(
@@ -2272,18 +728,11 @@ def _world_position_to_parent_local_translate(
     prim: Any,
     world_position: tuple[float, float, float],
 ) -> tuple[float, float, float]:
-    parent = prim.GetParent() if hasattr(prim, "GetParent") else None
-    if parent is None or not parent:
-        return tuple(float(value) for value in world_position)
-    try:
-        parent_world = UsdGeom.Xformable(parent).ComputeLocalToWorldTransform(0.0)
-        world_to_parent = parent_world.GetInverse()
-        local = world_to_parent.Transform(tuple(float(value) for value in world_position))
-        return (float(local[0]), float(local[1]), float(local[2]))
-    except Exception as exc:
-        raise RuntimeError(
-            "could not convert world semantic pose into parent-local USD frame"
-        ) from exc
+    return isaac_semantic_pose_stage.world_position_to_parent_local_translate(
+        UsdGeom=UsdGeom,
+        prim=prim,
+        world_position=world_position,
+    )
 
 
 def _semantic_pose_target_position(
@@ -2292,21 +741,13 @@ def _semantic_pose_target_position(
     receptacle_index: dict[str, Any],
     fallback_pose: dict[str, Any],
 ) -> tuple[float, float, float] | None:
-    exact_position = _vec3(fallback_pose.get("position"))
-    if exact_position is not None:
-        return (exact_position[0], exact_position[1], exact_position[2])
-    support = _dict(receptacle_index.get(support_id))
-    pose = _dict(support.get("support_pose")) or fallback_pose
-    try:
-        x = float(pose.get("x"))
-        y = float(pose.get("y"))
-    except (TypeError, ValueError):
-        return None
-    try:
-        z = float(pose.get("z") or 0.0)
-    except (TypeError, ValueError):
-        z = 0.0
-    return (x, y, z + 0.18)
+    return isaac_semantic_pose_stage.semantic_pose_target_position(
+        support_id=support_id,
+        receptacle_index=receptacle_index,
+        fallback_pose=fallback_pose,
+        dict_value=_dict,
+        vec3=_vec3,
+    )
 
 
 def _load_current_stage_payloads(stage_utils: Any) -> None:
@@ -2328,7 +769,7 @@ def _apply_scene_index_semantic_labels(
     sim_utils: Any,
     scene_index_diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    return apply_scene_index_semantic_labels(
+    return isaac_semantic_labels.apply_scene_index_semantic_labels(
         stage_utils=stage_utils,
         sim_utils=sim_utils,
         scene_index_diagnostics=scene_index_diagnostics,
@@ -2343,43 +784,13 @@ def _camera_segmentation_view_diagnostics(
     view_name: str,
     np: Any,
 ) -> dict[str, Any]:
-    outputs = getattr(getattr(camera, "data", None), "output", {}) or {}
-    info = getattr(getattr(camera, "data", None), "info", {}) or {}
-    output_rows: dict[str, dict[str, Any]] = {}
-    candidates: list[dict[str, Any]] = []
-    for data_type in data_types:
-        if data_type not in outputs:
-            continue
-        array = _segmentation_array(outputs.get(data_type), np=np)
-        labels = _segmentation_label_map(_segmentation_info_for_data_type(info, data_type))
-        row: dict[str, Any] = {
-            "present": array is not None,
-            "label_count": len(labels),
-            "labels_available": bool(labels),
-        }
-        if array is not None:
-            row.update(
-                {
-                    "shape": [int(dim) for dim in array.shape],
-                    "dtype": str(array.dtype),
-                    "unique_id_count": _segmentation_unique_count(array, np=np),
-                }
-            )
-            candidates.extend(
-                _segmentation_bbox_candidates(
-                    array,
-                    labels,
-                    data_type=data_type,
-                    view_name=view_name,
-                    np=np,
-                )
-            )
-        output_rows[data_type] = row
-    return {
-        "view": view_name,
-        "outputs": output_rows,
-        "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
-    }
+    return isaac_segmentation_diagnostics.camera_segmentation_view_diagnostics(
+        camera,
+        data_types=data_types,
+        view_name=view_name,
+        np=np,
+        max_candidates=MAX_SEGMENTATION_CANDIDATES,
+    )
 
 
 def _camera_segmentation_capture_diagnostics(
@@ -2389,508 +800,18 @@ def _camera_segmentation_capture_diagnostics(
     semantic_label_application: dict[str, Any] | None = None,
     semantic_filter: str | list[str] | None = None,
 ) -> dict[str, Any]:
-    output_data_types = sorted(
-        {
-            data_type
-            for view in views
-            for data_type, row in _dict(view.get("outputs")).items()
-            if _dict(row).get("present") is True
-        }
+    return isaac_segmentation_diagnostics.camera_segmentation_capture_diagnostics(
+        views,
+        requested_data_types=requested_data_types,
+        semantic_label_application=semantic_label_application,
+        semantic_filter=semantic_filter,
+        max_candidates=MAX_SEGMENTATION_CANDIDATES,
     )
-    candidates = [
-        candidate
-        for view in views
-        for candidate in view.get("candidate_bboxes", [])
-        if isinstance(candidate, dict)
-    ]
-    return {
-        "schema": SEGMENTATION_SCHEMA,
-        "source": "isaac_lab_camera",
-        "capture_method": "isaac_lab_camera_segmentation",
-        "requested_data_types": list(requested_data_types),
-        "output_data_types": output_data_types,
-        "tensor_output_available": bool(output_data_types),
-        "semantic_filter": semantic_filter,
-        "candidate_bbox_count": len(candidates),
-        "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
-        "view_outputs": views,
-        "semantic_label_application": _dict(semantic_label_application),
-        "no_simulator_label_fallback": True,
-    }
 
 
 def _camera_segmentation_not_requested_diagnostics() -> dict[str, Any]:
-    return {
-        "schema": SEGMENTATION_SCHEMA,
-        "source": "isaac_lab_camera",
-        "capture_method": "not_requested_for_rgb_runtime_smoke",
-        "requested_data_types": list(ISAAC_SEGMENTATION_DATA_TYPES),
-        "output_data_types": [],
-        "tensor_output_available": False,
-        "candidate_bbox_count": 0,
-        "candidate_bboxes": [],
-        "view_outputs": [],
-        "no_simulator_label_fallback": True,
-    }
-
-
-def _segmentation_array(value: Any, *, np: Any) -> Any | None:
-    if value is None:
-        return None
-    if hasattr(value, "detach"):
-        value = value.detach()
-    if hasattr(value, "cpu"):
-        value = value.cpu()
-    if hasattr(value, "numpy"):
-        value = value.numpy()
-    array = np.asarray(value)
-    if array.size == 0:
-        return None
-    while array.ndim > 2 and array.shape[0] == 1:
-        array = array[0]
-    if array.ndim == 3 and array.shape[-1] == 1:
-        array = array[..., 0]
-    if array.ndim != 2:
-        return None
-    return array
-
-
-def _segmentation_info_for_data_type(info: Any, data_type: str) -> dict[str, Any]:
-    if isinstance(info, dict):
-        nested = info.get(data_type)
-        if isinstance(nested, dict):
-            return nested
-        return info
-    if isinstance(info, (list, tuple)):
-        merged: dict[str, Any] = {}
-        for item in info:
-            labels = _segmentation_label_map(_segmentation_info_for_data_type(item, data_type))
-            if labels:
-                merged.setdefault("idToLabels", {}).update(labels)
-        return merged
-    return {}
-
-
-def _segmentation_label_map(info: Any) -> dict[int, str]:
-    if isinstance(info, (list, tuple)):
-        labels: dict[int, str] = {}
-        for item in info:
-            labels.update(_segmentation_label_map(item))
-        return labels
-    if not isinstance(info, dict):
-        return {}
-    raw_labels = (
-        info.get("idToLabels")
-        or info.get("id_to_labels")
-        or info.get("idToSemantics")
-        or info.get("id_to_semantics")
-        or {}
-    )
-    if not isinstance(raw_labels, dict):
-        return {}
-    labels: dict[int, str] = {}
-    for raw_id, raw_label in raw_labels.items():
-        label_id = _int_or_none(raw_id)
-        if label_id is None:
-            continue
-        label = _segmentation_label_text(raw_label)
-        if label:
-            labels[label_id] = label
-    return labels
-
-
-def _segmentation_label_text(raw_label: Any) -> str:
-    if isinstance(raw_label, str):
-        return raw_label
-    if isinstance(raw_label, dict):
-        for key in (
-            "usd_prim_path",
-            "prim_path",
-            "path",
-            "instance",
-            "class",
-            "semantic",
-            "label",
-            "name",
-        ):
-            value = raw_label.get(key)
-            if isinstance(value, str) and value:
-                return value
-        return " ".join(str(value) for value in raw_label.values() if value)
-    if raw_label is None:
-        return ""
-    return str(raw_label)
-
-
-def _segmentation_unique_count(array: Any, *, np: Any) -> int:
-    try:
-        return int(np.unique(array).size)
-    except Exception:
-        return 0
-
-
-def _segmentation_bbox_candidates(
-    array: Any,
-    labels: dict[int, str],
-    *,
-    data_type: str,
-    view_name: str,
-    np: Any,
-) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    height, width = array.shape
-    for label_id, label in sorted(labels.items()):
-        mask = array == label_id
-        pixel_count = int(np.count_nonzero(mask))
-        if pixel_count <= 0:
-            continue
-        ys, xs = np.where(mask)
-        if len(xs) == 0 or len(ys) == 0:
-            continue
-        candidate = {
-            "view": view_name,
-            "data_type": data_type,
-            "label_id": int(label_id),
-            "label": label,
-            "usd_prim_path": label if label.startswith("/") else "",
-            "bbox_xyxy": [
-                int(xs.min()),
-                int(ys.min()),
-                int(xs.max()) + 1,
-                int(ys.max()) + 1,
-            ],
-            "pixel_count": pixel_count,
-            "image_size": [int(width), int(height)],
-        }
-        candidates.append(candidate)
-        if len(candidates) >= MAX_SEGMENTATION_CANDIDATES:
-            break
-    return candidates
-
-
-def _int_or_none(value: Any) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _current_stage_bounds(stage_utils: Any) -> dict[str, list[float]] | None:
-    from pxr import Usd, UsdGeom
-
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        return None
-    stage = get_current_stage()
-    if stage is None:
-        return None
-    root = stage.GetDefaultPrim() or stage.GetPseudoRoot()
-    cache = UsdGeom.BBoxCache(
-        Usd.TimeCode.Default(),
-        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
-    )
-    bbox = cache.ComputeWorldBound(root).ComputeAlignedBox()
-    min_point = [float(value) for value in bbox.GetMin()]
-    max_point = [float(value) for value in bbox.GetMax()]
-    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
-    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]) or max(size) <= 0:
-        return None
-    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
-    return {"min": min_point, "max": max_point, "size": size, "center": center}
-
-
-def _ensure_capture_lighting(
-    stage_utils: Any, profile: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    from pxr import Gf, UsdGeom, UsdLux
-
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        return {"status": "missing_stage_api", "existing_light_count": 0, "added_light_count": 0}
-    stage = get_current_stage()
-    if stage is None:
-        return {"status": "missing_stage", "existing_light_count": 0, "added_light_count": 0}
-    profile = profile if isinstance(profile, dict) else dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
-    rig = scene_light_rig(profile)
-    ambient = _dict(rig.get("ambient"))
-    key = _dict(rig.get("key"))
-    isaac_overrides = _dict(_dict(rig.get("backend_overrides")).get("isaac"))
-    ambient_enabled = bool(ambient.get("enabled", False))
-    key_enabled = bool(key.get("enabled", False))
-    dome_intensity = float(ambient.get("isaac_dome_intensity", 0.0)) if ambient_enabled else 0.0
-    key_intensity = float(isaac_overrides.get("key_intensity", 0.0)) if key_enabled else 0.0
-    existing_light_intensity_scale = float(
-        isaac_overrides.get("existing_light_intensity_scale", 1.0)
-    )
-    key_direction = _normalized_vec3(key.get("direction"))
-    key_rotation_source = "scene_light_rig.key.direction"
-    key_rotation = (
-        _isaac_distant_light_rotation_from_direction(key_direction)
-        if key_direction is not None
-        else None
-    )
-    if key_rotation is None:
-        key_rotation_source = "scene_light_rig.backend_overrides.isaac.key_rotation_deg"
-        key_rotation = isaac_overrides.get("key_rotation_deg")
-    if not isinstance(key_rotation, (list, tuple)) or len(key_rotation) < 3:
-        key_rotation_source = "fallback"
-        key_rotation = [-55.0, 0.0, 35.0]
-    existing_lights = _stage_light_paths(stage, exclude_prefix="/RoboclawsSmoke")
-    existing_light_adjustments = _scale_stage_light_intensities(
-        stage,
-        existing_lights,
-        scale=existing_light_intensity_scale,
-    )
-    added_lights = []
-    if dome_intensity > 0.0:
-        dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
-        dome.CreateIntensityAttr(dome_intensity)
-        added_lights.append("/RoboclawsSmokeDomeLight")
-    if key_intensity > 0.0:
-        key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
-        key.CreateIntensityAttr(key_intensity)
-        UsdGeom.XformCommonAPI(key).SetRotate(
-            Gf.Vec3f(float(key_rotation[0]), float(key_rotation[1]), float(key_rotation[2]))
-        )
-        added_lights.append("/RoboclawsSmokeKeyLight")
-    return {
-        "schema": "isaac_capture_lighting_diagnostics_v1",
-        "status": "using_existing_stage_lights" if not added_lights else "added_capture_lights",
-        "profile_id": str(profile.get("profile_id") or ""),
-        "profile_source": str(profile.get("source") or ""),
-        "scene_light_rig": rig,
-        "scene_light_rig_schema": rig.get("schema"),
-        "scene_light_rig_roles": scene_light_rig_roles(rig),
-        "authored_scene_lights_policy": rig.get("authored_scene_lights_policy"),
-        "scene_key_light_direction": key_direction,
-        "scene_key_light_frame": rig.get("frame"),
-        "mujoco_headlight_ambient": ambient.get("mujoco_headlight_ambient"),
-        "mujoco_headlight_diffuse": ambient.get("mujoco_headlight_diffuse"),
-        "existing_light_count": len(existing_lights),
-        "existing_light_paths": existing_lights,
-        "existing_light_intensity_scale": existing_light_intensity_scale,
-        "existing_light_intensity_adjustments": existing_light_adjustments,
-        "added_light_count": len(added_lights),
-        "added_light_paths": added_lights,
-        "requested_dome_intensity": dome_intensity,
-        "requested_key_intensity": key_intensity,
-        "requested_key_rotation_deg": [
-            float(key_rotation[0]),
-            float(key_rotation[1]),
-            float(key_rotation[2]),
-        ],
-        "requested_key_rotation_source": key_rotation_source,
-        "applied_key_light_direction": key_direction if key_intensity > 0.0 else None,
-        "applied_key_light_frame": rig.get("frame"),
-    }
-
-
-def _normalized_vec3(value: Any) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return None
-    try:
-        vector = [float(value[0]), float(value[1]), float(value[2])]
-    except (TypeError, ValueError):
-        return None
-    magnitude = math.sqrt(sum(component * component for component in vector))
-    if magnitude <= 0.0:
-        return None
-    return [component / magnitude for component in vector]
-
-
-def _isaac_distant_light_rotation_from_direction(direction: list[float]) -> list[float]:
-    """Return XYZ Euler degrees rotating the USD DistantLight -Z axis to direction."""
-
-    x, y, z = direction
-    pitch = math.degrees(math.asin(max(-1.0, min(1.0, y))))
-    yaw = math.degrees(math.atan2(-x, -z))
-    return [pitch, yaw, 0.0]
-
-
-def _scale_stage_light_intensities(
-    stage: Any,
-    light_paths: list[str],
-    *,
-    scale: float,
-) -> list[dict[str, Any]]:
-    if scale == 1.0:
-        return []
-    from pxr import UsdLux
-
-    adjustments: list[dict[str, Any]] = []
-    for path in light_paths:
-        prim = stage.GetPrimAtPath(path)
-        if not prim or not prim.IsValid():
-            adjustments.append({"path": path, "status": "missing_prim"})
-            continue
-        try:
-            light_api = UsdLux.LightAPI(prim)
-            intensity_attr = light_api.GetIntensityAttr()
-        except Exception as exc:  # pragma: no cover - defensive against USD schema drift.
-            adjustments.append({"path": path, "status": "missing_intensity_api", "error": str(exc)})
-            continue
-        if not intensity_attr:
-            adjustments.append({"path": path, "status": "missing_intensity_attr"})
-            continue
-        try:
-            previous = float(intensity_attr.Get() or 0.0)
-            updated = previous * scale
-            intensity_attr.Set(updated)
-            adjustments.append(
-                {
-                    "path": path,
-                    "status": "scaled",
-                    "previous_intensity": previous,
-                    "updated_intensity": updated,
-                    "scale": scale,
-                }
-            )
-        except Exception as exc:  # pragma: no cover - defensive against USD value errors.
-            adjustments.append({"path": path, "status": "scale_failed", "error": str(exc)})
-    return adjustments
-
-
-def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:
-    profile = _json_roundtrip(robot_view_display_color_profile())
-    luminance_gain = _dict(profile.get("backend_luminance_gain"))
-    luminance_gain["isaaclab_subprocess"] = 1.0
-    luminance_gain["isaaclab-prepared-usd"] = 1.0
-    profile["backend_luminance_gain"] = luminance_gain
-    profile["backend_luminance_gain_source"] = "robot_view_display_default_no_scene_probe_delta"
-    if isinstance(override, dict) and override:
-        profile.update(override)
-    return profile
-
-
-def _stage_light_paths(
-    stage: Any, *, exclude_prefix: str = "", light_api: Any | None = None
-) -> list[str]:
-    if light_api is None:
-        from pxr import UsdLux
-
-        light_api = UsdLux.LightAPI
-    paths = []
-    for prim in stage.Traverse():
-        if not prim or not prim.IsValid():
-            continue
-        path = str(prim.GetPath())
-        if exclude_prefix and path.startswith(exclude_prefix):
-            continue
-        if prim.IsA(light_api) or _prim_type_is_light(prim):
-            paths.append(path)
-    return paths
-
-
-_USD_LIGHT_TYPE_NAMES = frozenset(
-    {
-        "CylinderLight",
-        "DiskLight",
-        "DistantLight",
-        "DomeLight",
-        "GeometryLight",
-        "PortalLight",
-        "RectLight",
-        "SphereLight",
-    }
-)
-
-
-def _prim_type_is_light(prim: Any) -> bool:
-    type_name = ""
-    get_type_name = getattr(prim, "GetTypeName", None)
-    if callable(get_type_name):
-        type_name = str(get_type_name() or "")
-    if not type_name:
-        get_type_info = getattr(prim, "GetPrimTypeInfo", None)
-        if callable(get_type_info):
-            type_info = get_type_info()
-            info_type_name = getattr(type_info, "GetTypeName", None)
-            if callable(info_type_name):
-                type_name = str(info_type_name() or "")
-    return type_name in _USD_LIGHT_TYPE_NAMES
-
-
-def _isaac_camera_view_poses(
-    *,
-    torch: Any,
-    device: Any,
-    scene_bounds: dict[str, list[float]] | None = None,
-    semantic_pose_state: dict[str, Any] | None = None,
-) -> dict[str, tuple[Any, Any]]:
-    def tensor(values: list[list[float]]) -> Any:
-        return torch.tensor(values, dtype=torch.float32, device=device)
-
-    pose = _dict(_dict(semantic_pose_state).get("robot_pose"))
-    if scene_bounds:
-        center = scene_bounds["center"]
-        size = scene_bounds["size"]
-        span_x = max(size[0], 1.5)
-        span_y = max(size[1], 1.5)
-        span = max(span_x, span_y, size[2], 2.0)
-        floor_z = scene_bounds["min"][2]
-        target_z = max(floor_z + 0.9, center[2])
-        target = [center[0], center[1], target_z]
-        chase_eye_target = _robot_relative_chase_eye_target(pose)
-        chase_pose = (
-            (tensor([[*chase_eye_target[0]]]), tensor([[*chase_eye_target[1]]]))
-            if chase_eye_target is not None
-            else (
-                tensor([[center[0] + span_x * 0.55, center[1] - span_y * 0.75, floor_z + 2.4]]),
-                tensor([[center[0], center[1], target_z * 0.9]]),
-            )
-        )
-        return {
-            "fpv": (
-                tensor([[center[0] - span_x * 0.35, center[1] - span_y * 0.55, floor_z + 1.25]]),
-                tensor([target]),
-            ),
-            "chase": chase_pose,
-            "map": (
-                tensor([[center[0], center[1], scene_bounds["max"][2] + span * 1.25]]),
-                tensor([[center[0], center[1], floor_z]]),
-            ),
-            "verify": (
-                tensor([[center[0] - span_x * 0.18, center[1] - span_y * 0.35, floor_z + 1.6]]),
-                tensor([[center[0] + span_x * 0.08, center[1] + span_y * 0.05, target_z]]),
-            ),
-        }
-
-    chase_eye_target = _robot_relative_chase_eye_target(pose)
-    chase_pose = (
-        (tensor([[*chase_eye_target[0]]]), tensor([[*chase_eye_target[1]]]))
-        if chase_eye_target is not None
-        else (tensor([[2.4, -2.6, 1.8]]), tensor([[0.0, 0.0, 0.35]]))
-    )
-    return {
-        "fpv": (tensor([[1.35, -1.35, 1.1]]), tensor([[0.05, 0.0, 0.55]])),
-        "chase": chase_pose,
-        "map": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
-        "verify": (tensor([[0.9, -1.0, 0.85]]), tensor([[0.2, -0.15, 0.55]])),
-    }
-
-
-def _robot_relative_chase_eye_target(
-    pose: dict[str, Any],
-) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
-    if not _has_xy(pose):
-        return None
-    yaw_deg = _robot_pose_yaw_deg(pose)
-    if yaw_deg is None:
-        return None
-    yaw = math.radians(float(yaw_deg))
-    cos_yaw = math.cos(yaw)
-    sin_yaw = math.sin(yaw)
-
-    def transform(offset: tuple[float, float, float]) -> tuple[float, float, float]:
-        return (
-            float(pose["x"]) + offset[0] * cos_yaw - offset[1] * sin_yaw,
-            float(pose["y"]) + offset[0] * sin_yaw + offset[1] * cos_yaw,
-            float(pose.get("z", 0.0)) + offset[2],
-        )
-
-    return (
-        transform(RBY1M_CHASE_CAMERA_OFFSET_M),
-        transform(RBY1M_CHASE_CAMERA_TARGET_OFFSET_M),
+    return isaac_segmentation_diagnostics.camera_segmentation_not_requested_diagnostics(
+        requested_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
     )
 
 
@@ -2899,48 +820,26 @@ def _ensure_rby1m_robot_on_stage(
     stage_utils: Any,
     robot_import: dict[str, Any],
 ) -> dict[str, Any]:
-    if robot_import.get("status") != "imported":
-        return {
-            "schema": "isaac_rby1m_robot_stage_reference_v1",
-            "status": "not_available",
-            "head_camera_prim_exists": False,
-            "reason": robot_import.get("status") or "robot_not_requested",
-        }
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        raise RuntimeError("Isaac stage utils do not expose get_current_stage")
-    stage = get_current_stage()
-    if stage is None:
-        raise RuntimeError("Isaac robot import has no current USD stage")
-    from pxr import UsdGeom
-
-    robot_prim_path = str(robot_import.get("stage_prim_path") or "/World/robot_0")
-    head_camera_prim_path = str(
-        robot_import.get("head_camera_prim_path") or ISAAC_RBY1M_HEAD_CAMERA_PRIM
+    return isaac_robot_camera_stage.ensure_rby1m_robot_on_stage(
+        stage_utils=stage_utils,
+        robot_import=robot_import,
     )
-    robot_usd_path = Path(str(robot_import.get("usd_path") or ""))
-    if not robot_usd_path.is_file():
-        return {
-            "schema": "isaac_rby1m_robot_stage_reference_v1",
-            "status": "blocked",
-            "head_camera_prim_exists": False,
-            "robot_prim_path": robot_prim_path,
-            "head_camera_prim_path": head_camera_prim_path,
-            "reason": f"missing imported robot USD: {robot_usd_path}",
-        }
-    robot_prim = stage.GetPrimAtPath(robot_prim_path)
-    if not robot_prim or not robot_prim.IsValid():
-        robot_prim = UsdGeom.Xform.Define(stage, robot_prim_path).GetPrim()
-        robot_prim.GetReferences().AddReference(str(robot_usd_path))
-    head_camera_prim = stage.GetPrimAtPath(head_camera_prim_path)
-    return {
-        "schema": "isaac_rby1m_robot_stage_reference_v1",
-        "status": "referenced",
-        "robot_prim_path": robot_prim_path,
-        "head_camera_prim_path": head_camera_prim_path,
-        "robot_usd_path": str(robot_usd_path),
-        "head_camera_prim_exists": bool(head_camera_prim and head_camera_prim.IsValid()),
-    }
+
+
+def _isaac_robot_camera_stage_hooks() -> isaac_robot_camera_stage.IsaacRobotCameraStageHooks:
+    return isaac_robot_camera_stage.IsaacRobotCameraStageHooks(
+        dict_value=_dict,
+        has_xy=_has_xy,
+        horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+        matrix4d_rowmajor=_matrix4d_rowmajor,
+        optional_float=_optional_float,
+        robot_pose_yaw_deg=_robot_pose_yaw_deg,
+        static_head_camera_pose_for_pitch=_static_head_camera_pose_for_pitch,
+        tensor_first_vec3=_tensor_first_vec3,
+        usd_attr_float=_usd_attr_float,
+        usd_camera_fov_metadata=_usd_camera_fov_metadata,
+        usd_vec=_usd_vec,
+    )
 
 
 def _position_robot_for_head_camera_view(
@@ -2949,71 +848,12 @@ def _position_robot_for_head_camera_view(
     scene_bounds: dict[str, list[float]] | None,
     semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        return {
-            "schema": "isaac_robot_head_camera_pose_application_v1",
-            "status": "missing_stage_api",
-        }
-    stage = get_current_stage()
-    if stage is None:
-        return {"schema": "isaac_robot_head_camera_pose_application_v1", "status": "missing_stage"}
-    robot_prim = stage.GetPrimAtPath("/World/robot_0")
-    if not robot_prim or not robot_prim.IsValid():
-        return {
-            "schema": "isaac_robot_head_camera_pose_application_v1",
-            "status": "missing_robot_prim",
-            "robot_prim_path": "/World/robot_0",
-        }
-    from pxr import Gf, UsdGeom
-
-    pose = _dict(_dict(semantic_pose_state).get("robot_pose"))
-    pose_source = str(pose.get("pose_source") or "")
-    if _has_xy(pose):
-        position = (
-            float(pose["x"]),
-            float(pose["y"]),
-            float(pose.get("z", 0.0)),
-        )
-        position_source = "semantic_pose_state.robot_pose"
-    elif scene_bounds:
-        center = scene_bounds["center"]
-        size = scene_bounds["size"]
-        span_x = max(float(size[0]), 1.5)
-        span_y = max(float(size[1]), 1.5)
-        floor_z = float(scene_bounds["min"][2])
-        position = (float(center[0]) - span_x * 0.35, float(center[1]) - span_y * 0.55, floor_z)
-        position_source = "scene_bounds_fallback"
-    else:
-        position = (1.35, -1.35, 0.0)
-        position_source = "static_fallback"
-    xform = UsdGeom.XformCommonAPI(robot_prim)
-    xform.SetTranslate(Gf.Vec3d(*position))
-    yaw_deg = _robot_pose_yaw_deg(pose)
-    if yaw_deg is not None:
-        xform.SetRotate(Gf.Vec3f(0.0, 0.0, yaw_deg))
-    head_pitch = _optional_float(pose.get("head_pitch"))
-    head_pitch_application = _apply_static_head_camera_pitch(
-        stage=stage,
-        head_pitch=head_pitch,
+    return isaac_robot_camera_stage.position_robot_for_head_camera_view(
+        stage_utils=stage_utils,
+        scene_bounds=scene_bounds,
+        semantic_pose_state=semantic_pose_state,
+        hooks=_isaac_robot_camera_stage_hooks(),
     )
-    return {
-        "schema": "isaac_robot_head_camera_pose_application_v1",
-        "status": "applied",
-        "robot_prim_path": "/World/robot_0",
-        "position": [float(value) for value in position],
-        "position_source": position_source,
-        "pose_source": pose_source,
-        "yaw_deg": yaw_deg,
-        "yaw_source": "semantic_pose_state.robot_pose.theta_or_yaw_deg"
-        if yaw_deg is not None
-        else "not_available",
-        "head_pitch": head_pitch,
-        "head_pitch_source": str(pose.get("head_pitch_source") or ""),
-        "head_pitch_applied": head_pitch_application.get("status") == "applied",
-        "head_pitch_application": head_pitch_application,
-        "head_pitch_note": _static_head_pitch_note(head_pitch_application),
-    }
 
 
 def _apply_static_head_camera_pitch(
@@ -3021,131 +861,15 @@ def _apply_static_head_camera_pitch(
     stage: Any,
     head_pitch: float | None,
 ) -> dict[str, Any]:
-    if head_pitch is None:
-        return {
-            "schema": "isaac_static_head_camera_pitch_application_v1",
-            "status": "not_requested",
-            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-        }
-    head_camera_prim = stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM)
-    if not head_camera_prim or not head_camera_prim.IsValid():
-        return {
-            "schema": "isaac_static_head_camera_pitch_application_v1",
-            "status": "missing_head_camera_prim",
-            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-            "head_pitch_rad": float(head_pitch),
-        }
-    from pxr import Gf, UsdGeom
-
-    position, quat = _static_head_camera_pose_for_pitch(float(head_pitch))
-    xform = UsdGeom.Xformable(head_camera_prim)
-    xform.ClearXformOpOrder()
-    xform.AddTranslateOp().Set(Gf.Vec3d(*position))
-    xform.AddOrientOp().Set(Gf.Quatf(quat[0], Gf.Vec3f(*quat[1:])))
-    xform.AddScaleOp().Set(Gf.Vec3f(1.0, 1.0, 1.0))
-    return {
-        "schema": "isaac_static_head_camera_pitch_application_v1",
-        "status": "applied",
-        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-        "head_pitch_rad": round(float(head_pitch), 6),
-        "head_pitch_axis": [0.0, 1.0, 0.0],
-        "head_pitch_joint": "head_1",
-        "head_pitch_pivot_m": [round(float(value), 6) for value in RBY1M_HEAD_PITCH_PIVOT_M],
-        "zero_position_m": [round(float(value), 6) for value in RBY1M_HEAD_CAMERA_ZERO_POSITION_M],
-        "applied_position_m": [round(float(value), 6) for value in position],
-        "applied_quat_wxyz": [round(float(value), 6) for value in quat],
-        "pose_source": "static_usd_head_camera_local_transform_with_mujoco_head_1_pitch",
-    }
-
-
-def _static_head_camera_pose_for_pitch(
-    head_pitch: float,
-) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
-    position = _rotate_point_y_about_pivot(
-        RBY1M_HEAD_CAMERA_ZERO_POSITION_M,
-        pivot=RBY1M_HEAD_PITCH_PIVOT_M,
-        angle_rad=head_pitch,
+    return isaac_robot_camera_stage.apply_static_head_camera_pitch(
+        stage=stage,
+        head_pitch=head_pitch,
+        hooks=_isaac_robot_camera_stage_hooks(),
     )
-    pitch_quat = _quat_from_axis_angle((0.0, 1.0, 0.0), head_pitch)
-    quat = _quat_multiply(pitch_quat, RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ)
-    return position, quat
-
-
-def _rotate_point_y_about_pivot(
-    point: tuple[float, float, float],
-    *,
-    pivot: tuple[float, float, float],
-    angle_rad: float,
-) -> tuple[float, float, float]:
-    dx = point[0] - pivot[0]
-    dy = point[1] - pivot[1]
-    dz = point[2] - pivot[2]
-    cos_pitch = math.cos(angle_rad)
-    sin_pitch = math.sin(angle_rad)
-    return (
-        pivot[0] + cos_pitch * dx + sin_pitch * dz,
-        pivot[1] + dy,
-        pivot[2] - sin_pitch * dx + cos_pitch * dz,
-    )
-
-
-def _quat_from_axis_angle(
-    axis: tuple[float, float, float],
-    angle_rad: float,
-) -> tuple[float, float, float, float]:
-    norm = math.sqrt(sum(float(value) * float(value) for value in axis))
-    if norm <= 0.0:
-        return (1.0, 0.0, 0.0, 0.0)
-    half = angle_rad * 0.5
-    scale = math.sin(half) / norm
-    return _normalize_quat(
-        (
-            math.cos(half),
-            float(axis[0]) * scale,
-            float(axis[1]) * scale,
-            float(axis[2]) * scale,
-        )
-    )
-
-
-def _quat_multiply(
-    left: tuple[float, float, float, float],
-    right: tuple[float, float, float, float],
-) -> tuple[float, float, float, float]:
-    lw, lx, ly, lz = left
-    rw, rx, ry, rz = right
-    return _normalize_quat(
-        (
-            lw * rw - lx * rx - ly * ry - lz * rz,
-            lw * rx + lx * rw + ly * rz - lz * ry,
-            lw * ry - lx * rz + ly * rw + lz * rx,
-            lw * rz + lx * ry - ly * rx + lz * rw,
-        )
-    )
-
-
-def _normalize_quat(
-    quat: tuple[float, float, float, float],
-) -> tuple[float, float, float, float]:
-    norm = math.sqrt(sum(value * value for value in quat))
-    if norm <= 0.0:
-        return (1.0, 0.0, 0.0, 0.0)
-    return tuple(float(value / norm) for value in quat)  # type: ignore[return-value]
 
 
 def _static_head_pitch_note(head_pitch_application: dict[str, Any]) -> str:
-    if head_pitch_application.get("status") == "applied":
-        return (
-            "Isaac currently uses a static visual robot USD, so it cannot drive the "
-            "articulated head_1 joint. For robot-view parity it rewrites the mounted "
-            "head_camera prim local transform with the same Y-axis head pitch used by "
-            "MuJoCo before FPV capture."
-        )
-    return (
-        "The current static Isaac robot USD has a mounted head_camera prim but could not "
-        "apply a static head pitch correction for this capture; inspect "
-        "head_pitch_application before treating FPV as articulated parity."
-    )
+    return isaac_robot_camera_stage.static_head_pitch_note(head_pitch_application)
 
 
 def _usd_camera_diagnostics(
@@ -3158,51 +882,16 @@ def _usd_camera_diagnostics(
     robot_pose_application: dict[str, Any] | None = None,
     lens_application: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    try:
-        stage = stage_utils.get_current_stage()
-        prim = stage.GetPrimAtPath(prim_path) if stage is not None else None
-        if not prim or not prim.IsValid():
-            return {
-                "schema": "isaac_usd_camera_diagnostics_v1",
-                "status": "missing_camera_prim",
-                "view_name": view_name,
-                "prim_path": prim_path,
-            }
-        from pxr import UsdGeom
-
-        camera = UsdGeom.Camera(prim)
-        xform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(0.0)
-        focal_length = _usd_attr_float(camera.GetFocalLengthAttr())
-        horizontal_aperture = _usd_attr_float(camera.GetHorizontalApertureAttr())
-        fov = _usd_camera_fov_metadata(
-            focal_length=focal_length,
-            horizontal_aperture=horizontal_aperture,
-            width=width,
-            height=height,
-        )
-        return {
-            "schema": "isaac_usd_camera_diagnostics_v1",
-            "status": "ready",
-            "view_name": view_name,
-            "camera_type": "usd_camera_prim",
-            "prim_path": prim_path,
-            "world_matrix_rowmajor": _matrix4d_rowmajor(xform),
-            "focal_length_mm": focal_length,
-            "horizontal_aperture_mm": horizontal_aperture,
-            **fov,
-            "clipping_range": _usd_vec(camera.GetClippingRangeAttr()),
-            "render_resolution": {"width": width, "height": height},
-            "robot_pose_stage_application": _dict(robot_pose_application),
-            "lens_application": _dict(lens_application),
-        }
-    except Exception as exc:
-        return {
-            "schema": "isaac_usd_camera_diagnostics_v1",
-            "status": "unavailable",
-            "view_name": view_name,
-            "prim_path": prim_path,
-            "reason": f"{type(exc).__name__}: {exc}",
-        }
+    return isaac_robot_camera_stage.usd_camera_diagnostics(
+        stage_utils=stage_utils,
+        prim_path=prim_path,
+        view_name=view_name,
+        width=width,
+        height=height,
+        robot_pose_application=robot_pose_application,
+        lens_application=lens_application,
+        hooks=_isaac_robot_camera_stage_hooks(),
+    )
 
 
 def _isaac_eye_target_camera_diagnostics(
@@ -3214,32 +903,15 @@ def _isaac_eye_target_camera_diagnostics(
     height: int,
     camera_basis: str = "scene_bounds_eye_target",
 ) -> dict[str, Any]:
-    focal_length = RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM
-    horizontal_aperture = _horizontal_aperture_from_lens(
-        {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
+    return isaac_robot_camera_stage.isaac_eye_target_camera_diagnostics(
+        view_name=view_name,
+        positions=positions,
+        targets=targets,
         width=width,
         height=height,
-        focal_length=focal_length,
+        camera_basis=camera_basis,
+        hooks=_isaac_robot_camera_stage_hooks(),
     )
-    fov = _usd_camera_fov_metadata(
-        focal_length=focal_length,
-        horizontal_aperture=horizontal_aperture,
-        width=width,
-        height=height,
-    )
-    return {
-        "schema": "isaac_eye_target_camera_diagnostics_v1",
-        "status": "ready",
-        "view_name": view_name,
-        "camera_type": "eye_target_scene_camera",
-        "camera_basis": camera_basis,
-        "eye": _tensor_first_vec3(positions),
-        "target": _tensor_first_vec3(targets),
-        "focal_length_mm": focal_length,
-        "horizontal_aperture_mm": horizontal_aperture,
-        **fov,
-        "render_resolution": {"width": width, "height": height},
-    }
 
 
 def _configure_rby1m_head_camera_lens(
@@ -3248,124 +920,12 @@ def _configure_rby1m_head_camera_lens(
     width: int,
     height: int,
 ) -> dict[str, Any]:
-    try:
-        from pxr import UsdGeom
-
-        stage = stage_utils.get_current_stage()
-        prim = stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM) if stage is not None else None
-        if not prim or not prim.IsValid():
-            return {
-                "schema": "isaac_rby1m_head_camera_lens_application_v1",
-                "status": "missing_head_camera_prim",
-                "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-            }
-        focal_length = RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM
-        horizontal_aperture = _horizontal_aperture_from_lens(
-            {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
-            width=width,
-            height=height,
-            focal_length=focal_length,
-        )
-        camera = UsdGeom.Camera(prim)
-        camera.CreateFocalLengthAttr(focal_length).Set(focal_length)
-        camera.CreateHorizontalApertureAttr(horizontal_aperture).Set(horizontal_aperture)
-        return {
-            "schema": "isaac_rby1m_head_camera_lens_application_v1",
-            "status": "applied",
-            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-            "source_camera_name": "robot_0/head_camera",
-            "source_vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
-            "focal_length_mm": round(focal_length, 6),
-            "horizontal_aperture_mm": round(horizontal_aperture, 6),
-            "render_resolution": {"width": int(width), "height": int(height)},
-        }
-    except Exception as exc:
-        return {
-            "schema": "isaac_rby1m_head_camera_lens_application_v1",
-            "status": "unavailable",
-            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-            "reason": f"{type(exc).__name__}: {exc}",
-        }
-
-
-def _usd_camera_fov_metadata(
-    *,
-    focal_length: float | None,
-    horizontal_aperture: float | None,
-    width: int,
-    height: int,
-) -> dict[str, float]:
-    if focal_length is None or horizontal_aperture is None or width <= 0 or height <= 0:
-        return {}
-    horizontal_fov = math.degrees(
-        2.0 * math.atan(float(horizontal_aperture) / (2.0 * focal_length))
+    return isaac_robot_camera_stage.configure_rby1m_head_camera_lens(
+        stage_utils=stage_utils,
+        width=width,
+        height=height,
+        hooks=_isaac_robot_camera_stage_hooks(),
     )
-    vertical_aperture = float(horizontal_aperture) * float(height) / float(width)
-    vertical_fov = math.degrees(2.0 * math.atan(vertical_aperture / (2.0 * focal_length)))
-    return {
-        "vertical_aperture_mm": round(vertical_aperture, 6),
-        "vertical_fov_deg": round(vertical_fov, 6),
-        "horizontal_fov_deg": round(horizontal_fov, 6),
-    }
-
-
-def _matrix4d_rowmajor(matrix: Any) -> list[float]:
-    return [round(float(matrix[row][column]), 6) for row in range(4) for column in range(4)]
-
-
-def _usd_attr_float(attr: Any) -> float | None:
-    if not attr:
-        return None
-    value = attr.Get()
-    if value is None:
-        return None
-    return round(float(value), 6)
-
-
-def _usd_vec(attr: Any) -> list[float] | None:
-    if not attr:
-        return None
-    value = attr.Get()
-    if value is None:
-        return None
-    try:
-        return [round(float(item), 6) for item in value]
-    except TypeError:
-        return None
-
-
-def _tensor_first_vec3(value: Any) -> list[float]:
-    if hasattr(value, "detach"):
-        value = value.detach()
-    if hasattr(value, "cpu"):
-        value = value.cpu()
-    if hasattr(value, "tolist"):
-        value = value.tolist()
-    if isinstance(value, list) and value and isinstance(value[0], list):
-        value = value[0]
-    if not isinstance(value, list | tuple) or len(value) < 3:
-        return []
-    return [round(float(value[index]), 6) for index in range(3)]
-
-
-def _robot_pose_yaw_deg(pose: dict[str, Any]) -> float | None:
-    if not isinstance(pose, dict):
-        return None
-    try:
-        if "theta" in pose:
-            return round(math.degrees(float(pose["theta"])), 6)
-        if "yaw_deg" in pose:
-            return round(float(pose["yaw_deg"]), 6)
-    except (TypeError, ValueError):
-        return None
-    return None
-
-
-def _optional_float(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
@@ -3399,14 +959,6 @@ def _rgb_tensor_to_uint8(value: Any, *, np: Any) -> Any:
     return np.clip(array, 0, 255).astype("uint8")
 
 
-def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    raw_views = payload.get("views") if isinstance(payload, dict) else payload
-    if not isinstance(raw_views, list):
-        raise ValueError("camera view spec must be a list or an object with a views list")
-    return [dict(item) for item in raw_views if isinstance(item, dict)]
-
-
 def _load_camera_request_from_args(
     *,
     view_specs_path: Path | None,
@@ -3414,15 +966,12 @@ def _load_camera_request_from_args(
     width: int,
     height: int,
 ) -> dict[str, Any]:
-    if camera_request_path is not None:
-        return load_camera_control_request(camera_request_path, width=width, height=height)
-    if view_specs_path is not None:
-        return normalize_camera_control_request(
-            _load_camera_view_specs(view_specs_path),
-            width=width,
-            height=height,
-        )
-    raise ValueError("camera_views requires --camera-request-path or --view-specs-path")
+    return isaac_scene_camera_geometry.load_camera_request_from_args(
+        view_specs_path=view_specs_path,
+        camera_request_path=camera_request_path,
+        width=width,
+        height=height,
+    )
 
 
 def _isaac_scene_camera_view_spec(
@@ -3431,103 +980,11 @@ def _isaac_scene_camera_view_spec(
     index: int,
     stage_utils: Any | None = None,
 ) -> dict[str, Any]:
-    view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
-    safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
-    usd_prim_path = str(raw_spec.get("usd_prim_path") or "")
-    usd_bounds = _bounds_from_usd_prim_path(
+    return isaac_scene_camera_geometry.isaac_scene_camera_view_spec(
+        raw_spec,
+        index=index,
         stage_utils=stage_utils,
-        usd_prim_path=usd_prim_path,
-        min_target_z=float(raw_spec.get("min_target_z", 0.6)),
     )
-    usd_bounds_target = usd_bounds.get("target") if isinstance(usd_bounds, dict) else None
-    target_source = "usd_prim_world_bounds" if usd_bounds_target is not None else ""
-    if raw_spec.get("camera_model") == CANONICAL_CAMERA_MODEL:
-        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
-        target_source = "canonical_explicit_target"
-    elif usd_bounds_target is not None:
-        target = usd_bounds_target
-    else:
-        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
-        target_source = "explicit_target_or_default"
-    backend_transform = _backend_transform_for_lane(raw_spec, "isaaclab-prepared-usd")
-    if "eye" in raw_spec and raw_spec.get("eye") is not None:
-        eye = _camera_vec3(
-            raw_spec.get("eye"),
-            default=[target[0], target[1] - 4.0, target[2] + 2.0],
-        )
-        if backend_transform:
-            eye = _apply_scene_transform_to_point(eye, backend_transform)
-            target = _apply_scene_transform_to_point(target, backend_transform)
-    else:
-        camera_orbit = _lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")
-        eye = _eye_from_lookat_spec(
-            target=target,
-            distance=float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0))),
-            azimuth=float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 225.0))),
-            elevation=abs(
-                float(camera_orbit.get("elevation_deg", raw_spec.get("elevation", 35.0)))
-            ),
-        )
-    return {
-        "view_id": safe_view_id,
-        "label": str(raw_spec.get("label") or view_id),
-        "anchor_id": str(raw_spec.get("anchor_id") or ""),
-        "anchor_kind": str(raw_spec.get("anchor_kind") or ""),
-        "robot_view_role": str(raw_spec.get("robot_view_role") or ""),
-        "camera_basis": str(raw_spec.get("camera_basis") or ""),
-        "camera_mode": str(raw_spec.get("camera_mode") or "free_camera"),
-        "usd_prim_path": usd_prim_path,
-        "eye": eye,
-        "target": target,
-        "lookat": target,
-        "backend_eye": eye,
-        "backend_target": target,
-        "usd_bounds_target": usd_bounds_target,
-        "usd_bounds": usd_bounds,
-        "target_source": target_source,
-        "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
-        "coordinate_frame": str(raw_spec.get("coordinate_frame") or ""),
-        "camera_orbit": dict(_lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")),
-        "lens": dict(raw_spec.get("lens")) if isinstance(raw_spec.get("lens"), dict) else {},
-        "calibration_status": str(raw_spec.get("calibration_status") or ""),
-        "coordinate_convention": str(raw_spec.get("coordinate_convention") or ""),
-    }
-
-
-def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
-    lane_orbits = raw_spec.get("lane_camera_orbits")
-    if isinstance(lane_orbits, dict):
-        lane_orbit = lane_orbits.get(lane_id)
-        if isinstance(lane_orbit, dict):
-            return lane_orbit
-    camera_orbit = raw_spec.get("camera_orbit")
-    return camera_orbit if isinstance(camera_orbit, dict) else {}
-
-
-def _backend_transform_for_lane(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
-    transforms = raw_spec.get("backend_transforms")
-    if isinstance(transforms, dict):
-        transform = transforms.get(lane_id)
-        if isinstance(transform, dict):
-            return transform
-    return {}
-
-
-def _apply_scene_transform_to_point(point: list[float], transform: dict[str, Any]) -> list[float]:
-    scale = float(transform.get("xy_scale", 1.0))
-    rotation_rad = math.radians(float(transform.get("rotation_z_deg", 0.0)))
-    raw_translation = transform.get("translation")
-    translation = raw_translation if isinstance(raw_translation, list) else []
-    tx = float(translation[0]) if len(translation) > 0 else 0.0
-    ty = float(translation[1]) if len(translation) > 1 else 0.0
-    tz = float(translation[2]) if len(translation) > 2 else 0.0
-    x = float(point[0])
-    y = float(point[1])
-    return [
-        scale * (math.cos(rotation_rad) * x - math.sin(rotation_rad) * y) + tx,
-        scale * (math.sin(rotation_rad) * x + math.cos(rotation_rad) * y) + ty,
-        float(point[2]) + tz,
-    ]
 
 
 def _horizontal_aperture_from_lens(
@@ -3537,11 +994,12 @@ def _horizontal_aperture_from_lens(
     height: int,
     focal_length: float,
 ) -> float:
-    if "vertical_fov_deg" in lens:
-        vertical_fov_rad = math.radians(float(lens["vertical_fov_deg"]))
-        vertical_aperture = 2.0 * focal_length * math.tan(vertical_fov_rad / 2.0)
-        return vertical_aperture * float(width) / float(height)
-    return float(lens.get("horizontal_aperture_mm", 20.955))
+    return isaac_camera_geometry.horizontal_aperture_from_lens(
+        lens,
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
 
 
 def _bounds_from_usd_prim_path(
@@ -3550,42 +1008,11 @@ def _bounds_from_usd_prim_path(
     usd_prim_path: str,
     min_target_z: float,
 ) -> dict[str, Any] | None:
-    if stage_utils is None or not usd_prim_path:
-        return None
-    from pxr import Usd, UsdGeom
-
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    if not callable(get_current_stage):
-        return None
-    stage = get_current_stage()
-    if stage is None:
-        return None
-    prim = stage.GetPrimAtPath(usd_prim_path)
-    if not prim or not prim.IsValid():
-        return None
-    cache = UsdGeom.BBoxCache(
-        Usd.TimeCode.Default(),
-        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+    return isaac_scene_camera_geometry.bounds_from_usd_prim_path(
+        stage_utils=stage_utils,
+        usd_prim_path=usd_prim_path,
+        min_target_z=min_target_z,
     )
-    bbox = cache.ComputeWorldBound(prim).ComputeAlignedBox()
-    min_point = [float(value) for value in bbox.GetMin()]
-    max_point = [float(value) for value in bbox.GetMax()]
-    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
-    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
-        return None
-    if max(size) <= 0:
-        return None
-    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
-    target = list(center)
-    target[2] = max(target[2], min_target_z)
-    return {
-        "min": min_point,
-        "max": max_point,
-        "size": size,
-        "center": center,
-        "target": target,
-        "target_z_floor": min_target_z,
-    }
 
 
 def _eye_from_lookat_spec(
@@ -3595,41 +1022,12 @@ def _eye_from_lookat_spec(
     azimuth: float,
     elevation: float,
 ) -> list[float]:
-    azimuth_rad = math.radians(azimuth)
-    elevation_rad = math.radians(elevation)
-    horizontal = math.cos(elevation_rad) * distance
-    return [
-        float(target[0]) + math.sin(azimuth_rad) * horizontal,
-        float(target[1]) + math.cos(azimuth_rad) * horizontal,
-        float(target[2]) + math.sin(elevation_rad) * distance,
-    ]
-
-
-def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return [float(default[0]), float(default[1]), float(default[2])]
-    return [float(value[0]), float(value[1]), float(value[2])]
-
-
-def _image_has_variance(array: Any, *, np: Any) -> bool:
-    return bool(np.max(array) > np.min(array))
-
-
-def _module_version(module_name: str) -> str | None:
-    try:
-        module = __import__(module_name)
-    except Exception:
-        return None
-    return str(getattr(module, "__version__", "unknown"))
-
-
-def _usd_safe_name(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in value)
-    if not cleaned:
-        return "unnamed"
-    if cleaned[0].isdigit():
-        return f"_{cleaned}"
-    return cleaned
+    return isaac_scene_camera_geometry.eye_from_lookat_spec(
+        target=target,
+        distance=distance,
+        azimuth=azimuth,
+        elevation=elevation,
+    )
 
 
 def runtime_diagnostics(
@@ -3637,56 +1035,15 @@ def runtime_diagnostics(
     *,
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    isaac_lab_version = real_smoke.get("isaac_lab_version") if real_smoke else None
-    isaac_sim_version = real_smoke.get("isaac_sim_version") if real_smoke else None
-    if runtime_mode == "real":
-        try:
-            import isaaclab
-
-            isaac_lab_version = isaac_lab_version or getattr(isaaclab, "__version__", "unknown")
-        except Exception:
-            isaac_lab_version = isaac_lab_version or None
-        try:
-            import isaacsim
-
-            isaac_sim_version = isaac_sim_version or getattr(isaacsim, "__version__", "unknown")
-        except Exception:
-            isaac_sim_version = isaac_sim_version or None
-    cuda_available = False
-    gpu_name = ""
-    gpu_vram_mb = None
-    try:
-        import torch
-
-        cuda_available = bool(torch.cuda.is_available())
-        if cuda_available:
-            gpu_name = str(torch.cuda.get_device_name(0))
-            props = torch.cuda.get_device_properties(0)
-            gpu_vram_mb = int(props.total_memory / (1024 * 1024))
-    except Exception:
-        pass
-    rendering = rendering_diagnostics(runtime_mode, real_smoke=real_smoke)
-    camera_resolution = (
-        list(real_smoke["camera_resolution"])
-        if real_smoke and real_smoke.get("camera_resolution")
-        else [DEFAULT_WIDTH, DEFAULT_HEIGHT]
+    return isaac_runtime_diagnostics.runtime_diagnostics(
+        runtime_mode,
+        real_smoke=real_smoke,
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        real_smoke_renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
     )
-    return {
-        "runtime_mode": runtime_mode,
-        "python_version": platform.python_version(),
-        "isaac_sim_version": isaac_sim_version,
-        "isaac_lab_version": isaac_lab_version,
-        "cuda_available": cuda_available,
-        "gpu_name": gpu_name,
-        "gpu_vram_mb": gpu_vram_mb,
-        "renderer_mode": rendering["renderer_mode"],
-        "rendering": rendering,
-        "visual_artifact_provenance": rendering["visual_artifact_provenance"],
-        "camera_resolution": camera_resolution,
-        "physical_robot": False,
-        "planner_backed": False,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-    }
 
 
 def rendering_diagnostics(
@@ -3694,207 +1051,12 @@ def rendering_diagnostics(
     *,
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if real_smoke is not None:
-        native_render_diagnostics = _dict(real_smoke.get("native_render_diagnostics"))
-        return {
-            "status": "real_rendering_proven",
-            "renderer_mode": str(real_smoke.get("renderer_mode") or REAL_SMOKE_RENDERER_MODE),
-            "real_rendering_proven": True,
-            "placeholder_visuals": False,
-            "visual_artifact_provenance": REAL_SMOKE_CAPTURE_METHOD,
-            "capture_method": str(real_smoke.get("capture_method") or REAL_SMOKE_CAPTURE_METHOD),
-            "render_steps": int(real_smoke.get("render_steps") or 0),
-            "image_path": str(real_smoke["image_path"]),
-            "native_render_diagnostics": native_render_diagnostics
-            or _isaac_native_render_diagnostics_unavailable(
-                runtime_mode="real",
-                reason="real runtime smoke did not return native render diagnostics",
-            ),
-            "reason": (
-                "The worker launched Isaac Lab, loaded a generated Phase A USD "
-                "stage, and saved an RGB camera frame from the Isaac renderer."
-            ),
-        }
-    if runtime_mode == "real":
-        return {
-            "status": "runtime_import_only",
-            "renderer_mode": "isaac_runtime_unvalidated",
-            "real_rendering_proven": False,
-            "placeholder_visuals": True,
-            "visual_artifact_provenance": "placeholder_protocol_image",
-            "native_render_diagnostics": _isaac_native_render_diagnostics_unavailable(
-                runtime_mode="real",
-                reason="real Isaac app launch and camera capture have not produced diagnostics",
-            ),
-            "reason": (
-                "The worker imports Isaac Lab in real mode, but real Isaac app "
-                "launch, scene loading, and camera capture are not implemented "
-                "in this semantic-pose scaffold yet."
-            ),
-        }
-    return {
-        "status": "fake_protocol",
-        "renderer_mode": "fake_isaac_protocol",
-        "real_rendering_proven": False,
-        "placeholder_visuals": True,
-        "visual_artifact_provenance": "fake_protocol_placeholder_image",
-        "native_render_diagnostics": _isaac_native_render_diagnostics_unavailable(
-            runtime_mode="fake",
-            reason="CI fake mode does not launch Isaac Kit or mutate renderer settings",
-        ),
-        "reason": "CI-safe fake mode writes deterministic placeholder images only.",
-    }
-
-
-def _isaac_native_render_diagnostics_unavailable(
-    *,
-    runtime_mode: str,
-    reason: str,
-) -> dict[str, Any]:
-    groups = {
-        group: {
-            key: {
-                "status": "not_available",
-                "value": None,
-                "setting_path": "",
-                "candidate_paths": list(paths),
-            }
-            for key, paths in fields.items()
-        }
-        for group, fields in ISAAC_NATIVE_RENDER_SETTING_PATHS.items()
-    }
-    return {
-        "schema": ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA,
-        "status": "fake_protocol" if runtime_mode == "fake" else "settings_unavailable",
-        "source": "fake_protocol" if runtime_mode == "fake" else "isaac_kit_settings_unavailable",
-        "renderer_mode": "fake_isaac_protocol"
-        if runtime_mode == "fake"
-        else "isaac_runtime_unvalidated",
-        "capture_method": "not_attempted",
-        "view_kind": "not_captured",
-        "settings_api_available": False,
-        "available_setting_count": 0,
-        "missing_setting_count": _native_setting_candidate_count(),
-        "groups": groups,
-        "tone_mapping": groups["tone_mapping"],
-        "camera_exposure": groups["camera_exposure"],
-        "ocio": groups["ocio"],
-        "color_correction": groups["color_correction"],
-        "color_grading": groups["color_grading"],
-        "renderer": groups["renderer"],
-        "camera_prim_paths": [],
-        "render_product_paths": [],
-        "render_resolution": {},
-        "capture_quality_settings": _capture_quality_settings_unavailable(
-            render_settle_frames=0,
-            reason=reason,
-        ),
-        "isaac_lab_isp_active": False,
-        "settings_mutation_attempted": False,
-        "default_render_settings_changed": False,
-        "post_render_comparison_profile": {
-            "applied": False,
-            "source": "not_a_native_renderer_setting",
-        },
-        "reason": reason,
-    }
-
-
-def _native_setting_candidate_count() -> int:
-    return sum(
-        len(fields)
-        for fields in ISAAC_NATIVE_RENDER_SETTING_PATHS.values()
-        if isinstance(fields, dict)
+    return isaac_runtime_diagnostics.rendering_diagnostics(
+        runtime_mode,
+        real_smoke=real_smoke,
+        real_smoke_renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
     )
-
-
-def _capture_quality_settings_unavailable(
-    *,
-    render_settle_frames: int,
-    reason: str,
-) -> dict[str, Any]:
-    return {
-        "schema": "isaac_capture_quality_settings_v1",
-        "render_settle_frames": max(0, int(render_settle_frames)),
-        "samples_per_pixel": {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": [],
-        },
-        "anti_aliasing": {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": list(ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"]),
-        },
-        "denoise": {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": [],
-        },
-        "taa": {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": [],
-        },
-        "texture_filtering": {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": [],
-        },
-        "settings_mutation_attempted": False,
-        "default_render_settings_changed": False,
-        "reason": reason,
-    }
-
-
-def _capture_quality_settings(
-    *,
-    render_settle_frames: int,
-    settings: Any | None,
-    settings_mutation: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    rows = {
-        key: _isaac_setting_value(settings, paths)
-        if paths
-        else {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": [],
-        }
-        for key, paths in ISAAC_CAPTURE_QUALITY_SETTING_FIELDS.items()
-    }
-    mutation = _dict(settings_mutation)
-    mutated_rows = _dict(mutation.get("settings"))
-    for key, row in mutated_rows.items():
-        rows[str(key)] = _dict(row)
-    settings_mutation_attempted = bool(mutation.get("settings_mutation_attempted"))
-    default_render_settings_changed = bool(mutation.get("default_render_settings_changed"))
-    reason = (
-        "Capture-quality probe metadata includes explicit opt-in native renderer setting "
-        "mutation. The worker records previous values and attempts to restore them after "
-        "capture."
-        if settings_mutation_attempted
-        else (
-            "Capture-quality probe metadata is recorded without mutating native renderer "
-            "defaults. Unsupported sampling, denoise, TAA, or texture filtering knobs are "
-            "reported as not_available."
-        )
-    )
-    return {
-        "schema": "isaac_capture_quality_settings_v1",
-        "render_settle_frames": max(0, int(render_settle_frames)),
-        **rows,
-        "settings_mutation_attempted": settings_mutation_attempted,
-        "default_render_settings_changed": default_render_settings_changed,
-        "settings_mutation": mutation,
-        "reason": reason,
-    }
 
 
 def _isaac_native_render_diagnostics(
@@ -3908,85 +1070,17 @@ def _isaac_native_render_diagnostics(
     isaac_lab_isp_active: bool = False,
     capture_quality_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    settings = _isaac_settings_interface()
-    groups: dict[str, Any] = {}
-    available_count = 0
-    missing_count = 0
-    for group_name, fields in ISAAC_NATIVE_RENDER_SETTING_PATHS.items():
-        group: dict[str, Any] = {}
-        for field_name, candidate_paths in fields.items():
-            row = _isaac_setting_value(settings, candidate_paths)
-            group[field_name] = row
-            if row["status"] == "available":
-                available_count += 1
-            else:
-                missing_count += 1
-        groups[group_name] = group
-    status = "captured" if settings is not None else "settings_api_unavailable"
-    settings_mutation = _dict(
-        capture_quality_settings.get("settings_mutation")
-        if isinstance(capture_quality_settings, dict)
-        else None
+    return isaac_render_diagnostics.native_render_diagnostics(
+        renderer_mode=renderer_mode,
+        capture_method=capture_method,
+        view_kind=view_kind,
+        render_resolution=render_resolution,
+        camera_prim_paths=camera_prim_paths,
+        settings=_isaac_settings_interface(),
+        render_product_paths=render_product_paths,
+        isaac_lab_isp_active=isaac_lab_isp_active,
+        capture_quality_settings=capture_quality_settings,
     )
-    settings_mutation_attempted = bool(
-        capture_quality_settings.get("settings_mutation_attempted")
-        if isinstance(capture_quality_settings, dict)
-        else False
-    )
-    default_render_settings_changed = bool(
-        capture_quality_settings.get("default_render_settings_changed")
-        if isinstance(capture_quality_settings, dict)
-        else False
-    )
-    reason = (
-        "Native Isaac renderer/camera settings were read from carb.settings. "
-        + (
-            "An explicit capture-quality probe setting was applied for this capture "
-            "and restoration was attempted afterward."
-            if settings_mutation_attempted
-            else "No renderer defaults were changed by this diagnostics capture."
-        )
-        if settings is not None
-        else (
-            "Isaac Kit settings API was not available to this worker; diagnostics "
-            "record the requested native axes without changing renderer defaults."
-        )
-    )
-    return {
-        "schema": ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA,
-        "status": status,
-        "source": "carb.settings" if settings is not None else "isaac_kit_settings_unavailable",
-        "renderer_mode": renderer_mode,
-        "capture_method": capture_method,
-        "view_kind": view_kind,
-        "settings_api_available": settings is not None,
-        "available_setting_count": available_count,
-        "missing_setting_count": missing_count,
-        "groups": groups,
-        "tone_mapping": groups["tone_mapping"],
-        "camera_exposure": groups["camera_exposure"],
-        "ocio": groups["ocio"],
-        "color_correction": groups["color_correction"],
-        "color_grading": groups["color_grading"],
-        "renderer": groups["renderer"],
-        "camera_prim_paths": _dedupe([path for path in camera_prim_paths if path]),
-        "render_product_paths": _dedupe(render_product_paths or []),
-        "render_resolution": dict(render_resolution),
-        "capture_quality_settings": capture_quality_settings
-        or _capture_quality_settings(
-            render_settle_frames=0,
-            settings=settings,
-        ),
-        "isaac_lab_isp_active": bool(isaac_lab_isp_active),
-        "settings_mutation_attempted": settings_mutation_attempted,
-        "default_render_settings_changed": default_render_settings_changed,
-        "settings_mutation": settings_mutation,
-        "post_render_comparison_profile": {
-            "applied": False,
-            "source": "not_a_native_renderer_setting",
-        },
-        "reason": reason,
-    }
 
 
 def _apply_isaac_capture_quality_overrides(
@@ -3997,10 +1091,10 @@ def _apply_isaac_capture_quality_overrides(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    return apply_isaac_capture_quality_overrides(
+    return isaac_capture_quality.apply_isaac_capture_quality_overrides(
         settings=settings,
-        setting_paths=ISAAC_NATIVE_RENDER_SETTING_PATHS,
-        capture_quality_fields=ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
+        setting_paths=isaac_render_diagnostics.ISAAC_NATIVE_RENDER_SETTING_PATHS,
+        capture_quality_fields=isaac_render_diagnostics.ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
         isaac_aa_op=isaac_aa_op,
         isaac_tonemap_op=isaac_tonemap_op,
         isaac_exposure_bias=isaac_exposure_bias,
@@ -4017,67 +1111,6 @@ def _isaac_settings_interface() -> Any | None:
         return None
 
 
-def _isaac_setting_value(settings: Any | None, candidate_paths: tuple[str, ...]) -> dict[str, Any]:
-    paths = list(candidate_paths)
-    if settings is None:
-        return {
-            "status": "not_available",
-            "value": None,
-            "setting_path": "",
-            "candidate_paths": paths,
-        }
-    for path in candidate_paths:
-        try:
-            value = settings.get(path)
-        except Exception:
-            continue
-        if value is None:
-            continue
-        return {
-            "status": "available",
-            "value": _json_safe_setting_value(value),
-            "setting_path": path,
-            "candidate_paths": paths,
-        }
-    return {
-        "status": "not_available",
-        "value": None,
-        "setting_path": "",
-        "candidate_paths": paths,
-    }
-
-
-def _camera_render_product_paths(camera: Any) -> list[str]:
-    paths: list[str] = []
-    for attr_name in (
-        "render_product_path",
-        "render_product_paths",
-        "_render_product_path",
-        "_render_product_paths",
-    ):
-        value = getattr(camera, attr_name, None)
-        paths.extend(_render_product_paths_from_value(value))
-    data = getattr(camera, "data", None)
-    if data is not None:
-        for attr_name in ("render_product_path", "render_product_paths"):
-            paths.extend(_render_product_paths_from_value(getattr(data, attr_name, None)))
-    return _dedupe(paths)
-
-
-def _render_product_paths_from_value(value: Any) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [value] if value else []
-    if isinstance(value, Path):
-        return [str(value)]
-    if isinstance(value, dict):
-        return [str(item) for item in value.values() if isinstance(item, (str, Path)) and str(item)]
-    if isinstance(value, list | tuple | set):
-        return [str(item) for item in value if isinstance(item, (str, Path)) and str(item)]
-    return []
-
-
 def scene_load_diagnostics(
     runtime_mode: str,
     scene_source: str,
@@ -4085,53 +1118,12 @@ def scene_load_diagnostics(
     *,
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if real_smoke is not None:
-        loaded_asset_kind = str(
-            real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
-        )
-        reason = (
-            "Phase A loaded a generated local USD stage through Isaac Sim. "
-            "MolmoSpaces USD scene loading remains a separate parity gate."
-        )
-        if loaded_asset_kind == "local_scene_usd":
-            reason = (
-                "Real mode loaded the caller-supplied local USD stage through Isaac Sim. "
-                "If this is a MolmoSpaces scene, object/receptacle parity is recorded "
-                "in the USD scene index diagnostics."
-            )
-        return {
-            "status": "loaded",
-            "scene_source": scene_source,
-            "scene_index": scene_index,
-            "scene_usd": str(real_smoke["scene_usd"]),
-            "usd_stage_loaded": True,
-            "loaded_asset_kind": loaded_asset_kind,
-            "requested_molmospaces_scene_usd": _scene_usd_path(scene_source, scene_index),
-            "manual_editor_steps_required": False,
-            "stage_prim_count": int(real_smoke.get("stage_prim_count") or 0),
-            "reason": reason,
-        }
-    if runtime_mode == "real":
-        status = "blocked_capability"
-        reason = (
-            "Real Isaac USD scene loading is not implemented in this "
-            "semantic-pose scaffold. A future local-dev pass must launch Isaac "
-            "Sim/Lab and prove the selected USD scene loads."
-        )
-    else:
-        status = "fake_protocol"
-        reason = (
-            "Fake mode derives scenario state from synthetic/map fixtures, not an Isaac USD stage."
-        )
-    return {
-        "status": status,
-        "scene_source": scene_source,
-        "scene_index": scene_index,
-        "scene_usd": _scene_usd_path(scene_source, scene_index),
-        "usd_stage_loaded": False,
-        "manual_editor_steps_required": None if runtime_mode == "real" else False,
-        "reason": reason,
-    }
+    return isaac_mapping_diagnostics.scene_load_diagnostics(
+        runtime_mode,
+        scene_source,
+        scene_index,
+        real_smoke=real_smoke,
+    )
 
 
 def segmentation_diagnostics(
@@ -4140,145 +1132,13 @@ def segmentation_diagnostics(
     real_smoke: dict[str, Any] | None = None,
     scene_binding_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    selected_paths = _selected_bound_usd_prim_paths(scene_binding_diagnostics)
-    selected_unrenderable_paths = _selected_unrenderable_usd_prim_paths(scene_binding_diagnostics)
-    if real_smoke is None:
-        source = "fake_protocol" if runtime_mode == "fake" else "real_isaac_pending"
-        return {
-            "schema": SEGMENTATION_SCHEMA,
-            "available": False,
-            "status": "blocked_capability",
-            "source": source,
-            "capture_method": "not_attempted",
-            "requested_data_types": list(ISAAC_SEGMENTATION_DATA_TYPES),
-            "output_data_types": [],
-            "tensor_output_available": False,
-            "candidate_overlay_status": "blocked_capability",
-            "candidate_bbox_count": 0,
-            "selected_usd_prim_match_count": 0,
-            "selected_usd_prim_paths": selected_paths,
-            "candidate_bboxes": [],
-            "blockers": [
-                "Isaac semantic/instance segmentation requires a real Isaac camera capture."
-            ],
-            "agent_facing": False,
-            "no_simulator_label_fallback": True,
-            "reason": (
-                "Semantic or instance segmentation is not exposed by fake protocol "
-                "artifacts and no simulator-label fallback was used."
-            ),
-        }
-
-    captured = _dict(real_smoke.get("segmentation"))
-    output_data_types = [str(item) for item in captured.get("output_data_types", []) if str(item)]
-    candidates = [
-        dict(candidate)
-        for candidate in captured.get("candidate_bboxes", [])
-        if isinstance(candidate, dict)
-    ][:MAX_SEGMENTATION_CANDIDATES]
-    selected_matches = _segmentation_selected_matches(candidates, selected_paths)
-    blockers: list[str] = []
-    if not output_data_types:
-        blockers.append("Isaac camera capture returned no segmentation tensors.")
-    if not candidates:
-        blockers.append("Isaac segmentation tensors did not produce label-mapped bbox candidates.")
-    if selected_paths and not selected_matches:
-        blockers.append("Isaac segmentation candidates did not match selected cleanup USD prims.")
-    if selected_unrenderable_paths:
-        blockers.append(
-            "Selected cleanup USD prims have no renderable geometry: "
-            + ", ".join(selected_unrenderable_paths[:5])
-        )
-    if not selected_paths:
-        blockers.append("Selected cleanup handles are not bound to USD prim paths.")
-    status = "available" if not blockers else "blocked_capability"
-    reason = (
-        "Isaac camera segmentation tensors produced label-mapped bbox candidates "
-        "for selected cleanup USD prims."
-        if status == "available"
-        else " ".join(blockers)
+    return isaac_segmentation_diagnostics.segmentation_diagnostics(
+        runtime_mode,
+        real_smoke=real_smoke,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+        requested_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
+        max_candidates=MAX_SEGMENTATION_CANDIDATES,
     )
-    return {
-        "schema": SEGMENTATION_SCHEMA,
-        "available": status == "available",
-        "status": status,
-        "source": captured.get("source") or "isaac_lab_camera",
-        "capture_method": captured.get("capture_method") or "isaac_lab_camera_segmentation",
-        "requested_data_types": captured.get("requested_data_types")
-        or list(ISAAC_SEGMENTATION_DATA_TYPES),
-        "output_data_types": output_data_types,
-        "tensor_output_available": bool(output_data_types),
-        "semantic_filter": captured.get("semantic_filter"),
-        "candidate_overlay_status": (
-            "available" if status == "available" else "blocked_capability"
-        ),
-        "candidate_bbox_count": len(candidates),
-        "selected_usd_prim_match_count": len(selected_matches),
-        "selected_usd_prim_paths": selected_paths,
-        "selected_usd_unrenderable_prim_paths": selected_unrenderable_paths,
-        "selected_candidate_bboxes": selected_matches[:MAX_SEGMENTATION_CANDIDATES],
-        "candidate_bboxes": candidates,
-        "view_outputs": captured.get("view_outputs", []),
-        "semantic_label_application": _dict(captured.get("semantic_label_application")),
-        "blockers": blockers,
-        "agent_facing": False,
-        "no_simulator_label_fallback": captured.get("no_simulator_label_fallback") is not False,
-        "reason": reason,
-    }
-
-
-def _selected_bound_usd_prim_paths(
-    scene_binding_diagnostics: dict[str, Any] | None,
-) -> list[str]:
-    bindings = _dict(scene_binding_diagnostics)
-    selected_paths: list[str] = []
-    for group_key in ("selected_object_bindings", "selected_target_receptacle_bindings"):
-        for binding in _dict(bindings.get(group_key)).values():
-            item = _dict(binding)
-            if item.get("status") == "bound" and item.get("usd_prim_path"):
-                selected_paths.append(str(item["usd_prim_path"]))
-    return _dedupe(selected_paths)
-
-
-def _selected_unrenderable_usd_prim_paths(
-    scene_binding_diagnostics: dict[str, Any] | None,
-) -> list[str]:
-    bindings = _dict(scene_binding_diagnostics)
-    selected_paths: list[str] = []
-    for group_key in ("selected_object_bindings", "selected_target_receptacle_bindings"):
-        for binding in _dict(bindings.get(group_key)).values():
-            item = _dict(binding)
-            if item.get("status") != "bound":
-                continue
-            if item.get("has_renderable_geometry") is False and item.get("usd_prim_path"):
-                selected_paths.append(str(item["usd_prim_path"]))
-    return _dedupe(selected_paths)
-
-
-def _segmentation_selected_matches(
-    candidates: list[dict[str, Any]],
-    selected_paths: list[str],
-) -> list[dict[str, Any]]:
-    selected = set(selected_paths)
-    selected_normalized = {_normalize_usd_path(path) for path in selected_paths if path}
-    matches: list[dict[str, Any]] = []
-    for candidate in candidates:
-        prim_path = str(candidate.get("usd_prim_path") or "")
-        label = str(candidate.get("label") or "")
-        prim_path_normalized = _normalize_usd_path(prim_path)
-        label_normalized = _normalize_usd_path(label)
-        if (
-            prim_path in selected
-            or prim_path_normalized in selected_normalized
-            or any(path and path in label for path in selected)
-            or any(path and path in label_normalized for path in selected_normalized)
-        ):
-            matches.append(candidate)
-    return matches
-
-
-def _normalize_usd_path(value: str) -> str:
-    return str(value or "").strip().casefold()
 
 
 def mapping_gap_diagnostics(
@@ -4289,173 +1149,17 @@ def mapping_gap_diagnostics(
     scene_binding_diagnostics: dict[str, Any] | None = None,
     segmentation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    source = "real_isaac_pending" if runtime_mode == "real" else "fake_protocol"
-    scene_bindings = _dict(scene_binding_diagnostics)
-    segmentation = _dict(segmentation)
-    if real_smoke is not None:
-        loaded_asset_kind = str(
-            real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
-        )
-        scene_index = _dict(real_smoke.get("scene_index_diagnostics"))
-        scene_loading_gap = {
-            "area": "molmospaces_usd_scene_loading",
-            "status": "not_attempted",
-            "source": _scene_usd_path(
-                str(real_smoke.get("requested_scene_source") or ""),
-                int(real_smoke.get("requested_scene_index") or 0),
-            ),
-            "detail": (
-                "The real smoke proves Isaac renderer/USD plumbing only; loading "
-                "the MolmoSpaces USD shard remains a Phase B blocker."
-            ),
-        }
-        if loaded_asset_kind == "local_scene_usd":
-            scene_loading_gap = {
-                "area": "local_usd_scene_loading",
-                "status": "loaded",
-                "source": str(real_smoke["scene_usd"]),
-                "detail": (
-                    "The worker loaded the caller-supplied USD stage. Use a "
-                    "MolmoSpaces USD here for Phase B parity evidence."
-                ),
-            }
-        stage_loading_detail = "Generated local Phase A USD stage loaded through Isaac Sim."
-        if loaded_asset_kind == "local_scene_usd":
-            stage_loading_detail = "Caller-supplied local USD stage loaded through Isaac Sim."
-        robot_view_images = _real_smoke_robot_view_images(real_smoke)
-        robot_view_status = (
-            "real_rendering_proven"
-            if _has_required_robot_view_images(robot_view_images)
-            else "blocked_capability"
-        )
-        robot_view_detail = (
-            "FPV, chase, map, and verification images were captured from the loaded USD scene. "
-            "They are static Phase B camera evidence; semantic pose edits are not yet rendered "
-            "back into Isaac USD state."
-            if robot_view_status == "real_rendering_proven"
-            else "FPV/chase/map/verify Isaac camera variants are not fully captured yet."
-        )
-        gaps = [
-            {
-                "area": "phase_a_usd_stage_loading",
-                "status": "loaded",
-                "source": str(real_smoke["scene_usd"]),
-                "detail": stage_loading_detail,
-            },
-            scene_loading_gap,
-            {
-                "area": "usd_prim_index",
-                "status": scene_index.get("status", "partial"),
-                "source": scene_index.get("source", "usd_stage_traversal"),
-                "detail": (
-                    f"USD traversal found {scene_index.get('object_candidate_count', 0)} "
-                    "object candidates and "
-                    f"{scene_index.get('receptacle_candidate_count', 0)} receptacle candidates."
-                ),
-            },
-            {
-                "area": "public_scene_bindings",
-                "status": scene_bindings.get("status", "unknown"),
-                "source": scene_bindings.get("source", "usd_stage_traversal"),
-                "detail": (
-                    "Selected cleanup USD bindings: "
-                    f"{scene_bindings.get('selected_object_bound_count', 0)}/"
-                    f"{scene_bindings.get('selected_object_count', 0)} objects and "
-                    f"{scene_bindings.get('selected_target_receptacle_bound_count', 0)}/"
-                    f"{scene_bindings.get('selected_target_receptacle_count', 0)} target "
-                    "receptacles."
-                ),
-            },
-            {
-                "area": "camera_capture",
-                "status": "real_rendering_proven",
-                "source": REAL_SMOKE_CAPTURE_METHOD,
-                "detail": "An Isaac Lab RGB camera frame was written as the runtime smoke image.",
-            },
-            {
-                "area": "robot_view_variants",
-                "status": robot_view_status,
-                "source": REAL_ROBOT_VIEW_CAPTURE_METHOD,
-                "detail": robot_view_detail,
-            },
-            {
-                "area": "segmentation",
-                "status": segmentation.get("status", "blocked_capability"),
-                "source": segmentation.get("source", "isaac_lab_camera"),
-                "detail": str(
-                    segmentation.get("reason")
-                    or "Semantic or instance segmentation masks are not exposed yet."
-                ),
-            },
-            {
-                "area": "articulation_and_collision",
-                "status": "semantic_pose_only",
-                "source": "generated_runtime_smoke_usd",
-                "detail": (
-                    "Open/place effects are semantic state edits, not physics or planner proof."
-                ),
-            },
-        ]
-    else:
-        gaps = [
-            {
-                "area": "usd_stage_loading",
-                "status": "blocked_capability" if runtime_mode == "real" else "not_attempted",
-                "source": source,
-                "detail": "MolmoSpaces USD stage loading has not been proven by this worker.",
-            },
-            {
-                "area": "usd_prim_index",
-                "status": "placeholder_mapping",
-                "source": source,
-                "detail": "Object and receptacle USD prim paths are deterministic placeholders.",
-            },
-            {
-                "area": "public_scene_bindings",
-                "status": scene_bindings.get("status", "placeholder_mapping"),
-                "source": scene_bindings.get("source", source),
-                "detail": (
-                    "Selected cleanup object and target-receptacle bindings are "
-                    "derived from synthetic scenario fixtures, not real USD prims."
-                ),
-            },
-            {
-                "area": "camera_capture",
-                "status": "placeholder_visuals",
-                "source": source,
-                "detail": "FPV, chase, map, and verification images are generated placeholders.",
-            },
-            {
-                "area": "segmentation",
-                "status": segmentation.get("status", "blocked_capability"),
-                "source": segmentation.get("source", source),
-                "detail": str(
-                    segmentation.get("reason")
-                    or "Semantic or instance segmentation masks are not exposed yet."
-                ),
-            },
-            {
-                "area": "articulation_and_collision",
-                "status": "semantic_pose_only",
-                "source": source,
-                "detail": (
-                    "Open/place effects are semantic state edits, not physics or planner proof."
-                ),
-            },
-        ]
-    if map_bundle_dir is not None:
-        map_bundle_detail = (
-            "Public map and fixture context still come from the selected Nav2 bundle."
-        )
-        gaps.append(
-            {
-                "area": "public_map_source",
-                "status": "external_map_bundle",
-                "source": str(map_bundle_dir),
-                "detail": map_bundle_detail,
-            }
-        )
-    return gaps
+    return isaac_mapping_diagnostics.mapping_gap_diagnostics(
+        runtime_mode=runtime_mode,
+        map_bundle_dir=map_bundle_dir,
+        real_smoke=real_smoke,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+        segmentation=segmentation,
+        real_smoke_robot_view_images=_real_smoke_robot_view_images,
+        has_required_robot_view_images=_has_required_robot_view_images,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
+        real_robot_view_capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
+    )
 
 
 def _initial_semantic_pose_state(
@@ -4466,19 +1170,14 @@ def _initial_semantic_pose_state(
     scene_binding_diagnostics: dict[str, Any] | None,
     initial_receptacle_id: str,
 ) -> dict[str, Any]:
-    state = {
-        "scenario": scenario.public_payload(),
-        "locations": scenario.object_locations(),
-        "containment": {},
-        "held_object_id": None,
-        "current_receptacle_id": initial_receptacle_id,
-        "open_receptacle_ids": [],
-        "object_index": object_index,
-        "receptacle_index": receptacle_index,
-        "scene_binding_diagnostics": scene_binding_diagnostics or {},
-        "object_pose_overrides": {},
-    }
-    return _semantic_pose_state_from_backend_state(state, transform_events=[])
+    return isaac_semantic_pose_state.initial_semantic_pose_state(
+        scenario=scenario,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+        initial_receptacle_id=initial_receptacle_id,
+        semantic_pose_state_from_backend_state=_semantic_pose_state_from_backend_state,
+    )
 
 
 def _initial_semantic_pose_state_from_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -4490,30 +1189,16 @@ def _semantic_pose_state_from_backend_state(
     *,
     transform_events: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    return {
-        "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
-        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "rendered_to_usd": False,
-        "planner_backed": False,
-        "physical_robot": False,
-        "semantic_pose_only": True,
-        "robot_pose": _robot_pose_for_receptacle(
-            state,
-            str(state.get("current_receptacle_id") or ""),
-        ),
-        "held_object_id": state.get("held_object_id"),
-        "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
-        "object_poses": _semantic_object_poses_from_state(state),
-        "articulations": _semantic_articulations_from_state(state),
-        "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
-        "transform_events": transform_events,
-        "evidence_note": (
-            "Semantic cleanup primitives update backend JSON pose/articulation state "
-            "against public USD prim handles. These edits are not rendered back into "
-            "the Isaac USD stage and are not planner-backed manipulation proof."
-        ),
-    }
+    return isaac_semantic_pose_state.semantic_pose_state_from_backend_state(
+        state,
+        transform_events=transform_events,
+        state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        semantic_object_poses_from_state=_semantic_object_poses_from_state,
+        semantic_articulations_from_state=_semantic_articulations_from_state,
+    )
 
 
 def _record_semantic_pose_event(
@@ -4528,64 +1213,26 @@ def _record_semantic_pose_event(
     relation: str = "",
     **extra: Any,
 ) -> dict[str, Any]:
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    events = [
-        dict(item)
-        for item in semantic_pose_state.get("transform_events", [])
-        if isinstance(item, dict)
-    ]
-    event = {
-        "schema": ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
-        "sequence": len(events) + 1,
-        "tool": tool,
-        "state_mutation": state_mutation,
-        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "rendered_to_usd": False,
-        "planner_backed": False,
-        "physical_robot": False,
-        "object_id": object_id,
-        "object_usd_prim_path": _object_usd_prim_path(state, object_id),
-        "receptacle_id": receptacle_id,
-        "receptacle_usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
-        "previous_location_id": previous_location_id,
-        "location_id": location_id,
-        "location_relation": relation,
-        "robot_pose": _robot_pose_for_receptacle(
-            state,
-            str(state.get("current_receptacle_id") or receptacle_id),
-        ),
-    }
-    event.update({key: value for key, value in extra.items() if value is not None})
-    events.append(event)
-    semantic_pose_state.update(
-        {
-            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-            "rendered_to_usd": False,
-            "planner_backed": False,
-            "physical_robot": False,
-            "semantic_pose_only": True,
-            "robot_pose": _robot_pose_for_receptacle(
-                state,
-                str(state.get("current_receptacle_id") or receptacle_id),
-            ),
-            "held_object_id": state.get("held_object_id"),
-            "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
-            "object_poses": _semantic_object_poses_from_state(state),
-            "articulations": _semantic_articulations_from_state(state),
-            "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
-            "transform_events": events,
-            "evidence_note": (
-                "Semantic cleanup primitives update backend JSON pose/articulation state "
-                "against public USD prim handles. These edits are not rendered back into "
-                "the Isaac USD stage and are not planner-backed manipulation proof."
-            ),
-        }
+    return isaac_semantic_pose_state.record_semantic_pose_event(
+        state,
+        tool=tool,
+        state_mutation=state_mutation,
+        event_schema=ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+        state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        semantic_object_poses_from_state=_semantic_object_poses_from_state,
+        semantic_articulations_from_state=_semantic_articulations_from_state,
+        object_usd_prim_path=_object_usd_prim_path,
+        receptacle_usd_prim_path=_receptacle_usd_prim_path,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        previous_location_id=previous_location_id,
+        location_id=location_id,
+        relation=relation,
+        **extra,
     )
-    state["semantic_pose_state"] = semantic_pose_state
-    return event
 
 
 def _record_waypoint_pose_event(
@@ -4596,784 +1243,189 @@ def _record_waypoint_pose_event(
     previous_waypoint_id: str = "",
     previous_room_id: str = "",
 ) -> dict[str, Any]:
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    events = [
-        dict(item)
-        for item in semantic_pose_state.get("transform_events", [])
-        if isinstance(item, dict)
-    ]
-    waypoint_id = str(waypoint.get("waypoint_id") or "")
-    room_id = str(waypoint.get("room_id") or "")
-    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
-    event = {
-        "schema": ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
-        "sequence": len(events) + 1,
-        "tool": "navigate_to_waypoint",
-        "state_mutation": "isaac_waypoint_pose",
-        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "rendered_to_usd": False,
-        "planner_backed": False,
-        "physical_robot": False,
-        "waypoint_id": waypoint_id,
-        "room_id": room_id,
-        "fixture_ids": fixture_ids,
-        "previous_waypoint_id": previous_waypoint_id,
-        "previous_room_id": previous_room_id,
-        "robot_pose": dict(robot_pose),
-    }
-    events.append(event)
-    semantic_pose_state.update(
-        {
-            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-            "rendered_to_usd": False,
-            "planner_backed": False,
-            "physical_robot": False,
-            "semantic_pose_only": True,
-            "robot_pose": dict(robot_pose),
-            "held_object_id": state.get("held_object_id"),
-            "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
-            "object_poses": _semantic_object_poses_from_state(state),
-            "articulations": _semantic_articulations_from_state(state),
-            "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
-            "transform_events": events,
-            "evidence_note": (
-                "Semantic cleanup primitives update backend JSON pose/articulation state "
-                "against public USD prim handles. Waypoint navigation updates the robot "
-                "pose used by Isaac robot-view rendering, but it is not planner-backed "
-                "navigation proof."
-            ),
-        }
+    return isaac_semantic_pose_state.record_waypoint_pose_event(
+        state,
+        waypoint=waypoint,
+        robot_pose=robot_pose,
+        event_schema=ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+        state_schema=ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        primitive_provenance=ISAAC_SEMANTIC_POSE_PROVENANCE,
+        semantic_object_poses_from_state=_semantic_object_poses_from_state,
+        semantic_articulations_from_state=_semantic_articulations_from_state,
+        previous_waypoint_id=previous_waypoint_id,
+        previous_room_id=previous_room_id,
     )
-    state["semantic_pose_state"] = semantic_pose_state
-    return event
 
 
-def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
-    targets = [_dict(item) for item in _dict(state.get("private_manifest")).get("targets", [])]
-    if not targets:
-        return
-    manifest_targets = _manifest_target_by_object_id(state)
-    target_receptacle_ids = {
-        receptacle_id
-        for target in targets
-        for receptacle_id in target.get("valid_receptacle_ids", [])
-        if str(receptacle_id)
-    }
-    wrong_pool = _mess_wrong_receptacle_pool(state, target_receptacle_ids)
-    if not wrong_pool:
-        return
-    diagnostics = [
-        dict(item) for item in state.get("mess_placement_diagnostics", []) if isinstance(item, dict)
-    ]
-    for index, target in enumerate(targets):
-        object_id = str(target.get("object_id") or "")
-        if not object_id:
-            continue
-        target_ids = {str(item) for item in target.get("valid_receptacle_ids", []) if str(item)}
-        manifest_target = manifest_targets.get(object_id)
-        wrong = _target_start_receptacle(state, wrong_pool, index, target_ids, manifest_target)
-        receptacle_id = str(wrong.get("receptacle_id") or "")
-        if not receptacle_id:
-            continue
-        relation = _target_relation(wrong, manifest_target)
-        placement_index = _target_placement_index(index, manifest_target)
-        placement_resolution = _apply_object_location(
-            state,
-            object_id=object_id,
-            receptacle_id=receptacle_id,
-            relation=relation,
-            placement_index=placement_index,
-            source="canonical_mess_manifest" if manifest_target else "mess_seed",
-        )
-        diagnostic = _isaac_placement_diagnostic(
-            state=state,
-            object_id=object_id,
-            receptacle_id=receptacle_id,
-            relation=relation,
-            source="canonical_mess_manifest" if manifest_target else "mess_seed",
-            placement_index=placement_index,
-            placement_resolution=placement_resolution,
-        )
-        diagnostics.append(diagnostic)
-    state["mess_placement_diagnostics"] = diagnostics
+def _isaac_semantic_pose_projection_hooks() -> (
+    isaac_semantic_pose_projection.IsaacSemanticPoseProjectionHooks
+):
+    return isaac_semantic_pose_projection.IsaacSemanticPoseProjectionHooks(
+        dict_value=_dict,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        round_vec3=_round_vec3,
+        semantic_pose_target_position=_semantic_pose_target_position,
+        vec3=_vec3,
+    )
 
 
-def _manifest_target_by_object_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    manifest = _dict(state.get("generated_mess_manifest"))
-    targets: dict[str, dict[str, Any]] = {}
-    for raw_target in manifest.get("targets", []):
-        target = _dict(raw_target)
-        object_id = str(target.get("object_id") or "")
-        if object_id:
-            targets[object_id] = target
-    return targets
+def _isaac_scenario_state_hooks() -> isaac_scenario_state.IsaacScenarioStateHooks:
+    return isaac_scenario_state.IsaacScenarioStateHooks(
+        dict_value=_dict,
+        isaac_placement_diagnostic=_isaac_placement_diagnostic,
+        receptacle_prefers_inside=_receptacle_prefers_inside,
+        receptacle_requires_open=_receptacle_requires_open,
+        receptacles_by_id=_receptacles_by_id,
+        resolve_isaac_placement=_resolve_isaac_placement,
+        round_vec3=_round_vec3,
+        vec3=_vec3,
+    )
 
 
-def _target_start_receptacle(
-    state: dict[str, Any],
-    wrong_pool: list[dict[str, Any]],
-    index: int,
-    target_ids: set[str],
-    manifest_target: dict[str, Any] | None,
-) -> dict[str, Any]:
-    if manifest_target:
-        start_receptacle_id = str(manifest_target.get("start_receptacle_id") or "")
-        if start_receptacle_id:
-            receptacle = _receptacles_by_id(state).get(start_receptacle_id)
-            if receptacle is None:
-                raise ValueError(
-                    "generated mess manifest start receptacle id is unavailable: "
-                    f"{manifest_target.get('object_id')} -> {start_receptacle_id}"
-                )
-            return receptacle
-    wrong = wrong_pool[index % len(wrong_pool)]
-    if len(wrong_pool) > 1 and str(wrong.get("receptacle_id") or "") in target_ids:
-        wrong = wrong_pool[(index + 1) % len(wrong_pool)]
-    return wrong
+def _with_isaac_scenario_state_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_scenario_state_hooks())
+
+    return call
 
 
-def _target_relation(
-    receptacle: dict[str, Any],
-    manifest_target: dict[str, Any] | None,
-) -> str:
-    if manifest_target:
-        relation = str(manifest_target.get("relation") or "")
-        if relation in {"on", "inside"}:
-            return relation
-    return "inside" if _receptacle_prefers_inside(receptacle) else "on"
+_seed_generated_mess_placements = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.seed_generated_mess_placements
+)
+_manifest_target_by_object_id = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.manifest_target_by_object_id
+)
+_target_start_receptacle = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.target_start_receptacle
+)
+_target_relation = _with_isaac_scenario_state_hooks(isaac_scenario_state.target_relation)
 
 
 def _target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
-    if not manifest_target:
-        return index
-    try:
-        return int(manifest_target.get("placement_index"))
-    except (TypeError, ValueError):
-        return index
+    return isaac_scenario_state.target_placement_index(index, manifest_target)
 
 
-def _mess_wrong_receptacle_pool(
-    state: dict[str, Any],
-    target_receptacle_ids: set[str],
-) -> list[dict[str, Any]]:
-    receptacles = list(_receptacles_by_id(state).values())
-    wrong_pool = [
-        item
-        for item in receptacles
-        if str(item.get("receptacle_id") or "") not in target_receptacle_ids
-        and not _receptacle_requires_open(item)
-    ]
-    if not wrong_pool:
-        wrong_pool = [
-            item
-            for item in receptacles
-            if str(item.get("receptacle_id") or "") not in target_receptacle_ids
-        ]
-    return wrong_pool or receptacles
+_mess_wrong_receptacle_pool = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.mess_wrong_receptacle_pool
+)
+_apply_object_location = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.apply_object_location
+)
+_set_public_scenario_object_location = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.set_public_scenario_object_location
+)
+_first_target_object_location = _with_isaac_scenario_state_hooks(
+    isaac_scenario_state.first_target_object_location
+)
 
 
-def _apply_object_location(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    relation: str,
-    placement_index: int,
-    source: str,
-) -> dict[str, Any]:
-    resolution = _resolve_isaac_placement(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        index=placement_index,
-        relation=relation,
-        source=source,
-    )
-    state.setdefault("locations", {})[object_id] = receptacle_id
-    containment = dict(state.get("containment") or {})
-    containment[object_id] = {
-        "contained_in": receptacle_id if relation == "inside" else "",
-        "location_relation": relation,
-    }
-    state["containment"] = containment
-    overrides = dict(state.get("object_pose_overrides") or {})
-    position = _vec3(resolution.get("position"))
-    if position is not None:
-        overrides[object_id] = {
-            "position": _round_vec3(position),
-            "position_source": ISAAC_PLACEMENT_RESOLVER_SOURCE,
-            "support_receptacle_id": receptacle_id,
-            "relation": relation,
-            "support_status": resolution.get("support_status"),
-            "contact_proof": resolution.get("contact_proof"),
-            "resolution_source": resolution.get("resolution_source"),
-            "source": source,
-        }
-    else:
-        overrides.pop(object_id, None)
-    state["object_pose_overrides"] = overrides
-    _set_public_scenario_object_location(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-    )
-    return resolution
-
-
-def _set_public_scenario_object_location(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    relation: str,
-) -> None:
-    scenario = _dict(state.get("scenario"))
-    for item in scenario.get("objects", []):
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("object_id") or "") != object_id:
-            continue
-        item["location_id"] = receptacle_id
-        item["contained_in"] = receptacle_id if relation == "inside" else ""
-        item["location_relation"] = relation
-        break
-
-
-def _first_target_object_location(state: dict[str, Any]) -> str:
-    for target in _dict(state.get("private_manifest")).get("targets", []):
-        object_id = str(_dict(target).get("object_id") or "")
-        location_id = str(_dict(state.get("locations")).get(object_id) or "")
-        if location_id:
-            return location_id
-    return ""
-
-
-def _resolve_isaac_placement(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    index: int,
-    relation: str,
-    source: str,
-) -> dict[str, Any]:
-    if relation == "on":
-        direct = _isaac_direct_support_placement(
-            state,
-            object_id=object_id,
-            receptacle_id=receptacle_id,
-            index=index,
-        )
-        if direct is not None:
-            direct["source"] = source
-            return direct
-    position = _isaac_fallback_placement_position(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        index=index,
-        relation=relation,
-    )
-    support_status = (
-        "semantic_contained_in_receptacle" if relation == "inside" else "degraded_elevated"
-    )
-    contact_proof = (
-        "semantic_containment" if relation == "inside" else "degraded_no_direct_support_surface"
-    )
-    return {
-        "position": position,
-        "support_status": support_status,
-        "contact_proof": contact_proof,
-        "resolution_source": "isaac_category_fallback",
-        "candidate_count": 0,
-        "degraded": relation == "on",
-        "source": source,
-    }
-
-
-def _isaac_state_objects_for_clearance(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    objects = dict(_objects_by_id(state))
-    for object_id, entry in _dict(state.get("object_index")).items():
-        object_id = str(object_id)
-        if object_id in objects:
-            continue
-        item = _dict(entry)
-        if not item:
-            continue
-        objects[object_id] = {
-            "object_id": object_id,
-            "category": str(item.get("category") or ""),
-            "name": str(item.get("public_label") or object_id),
-            "location_id": str(item.get("parent") or ""),
-            "pickupable": True,
-        }
-    return objects
-
-
-def _isaac_direct_support_placement(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    index: int,
-) -> dict[str, Any] | None:
-    surfaces = _isaac_receptacle_support_surfaces(state, receptacle_id)
-    if not surfaces:
-        return None
-    footprint = _isaac_object_footprint_half_extents(state, object_id)
-    bottom_offset = _isaac_object_bottom_offset(state, object_id)
-    clearance = _isaac_direct_support_clearance(
-        _dict(_objects_by_id(state).get(object_id)),
-        _dict(_receptacles_by_id(state).get(receptacle_id)),
-    )
-    candidate_count = 0
-    for surface in sorted(
-        surfaces,
-        key=lambda item: (
-            float(item.get("area_m2") or 0.0),
-            float(item.get("top_z") or 0.0),
-        ),
-        reverse=True,
-    ):
-        for candidate in _surface_candidate_positions(
-            surface,
-            footprint=footprint,
-            bottom_offset=bottom_offset,
-            clearance=clearance,
-            index=index,
-        ):
-            candidate_count += 1
-            if not _candidate_has_direct_support(candidate, surface, footprint):
-                continue
-            if not _isaac_candidate_is_clear_of_dynamic_objects(
-                state,
-                object_id=object_id,
-                position=candidate,
-                footprint=footprint,
-                bottom_offset=bottom_offset,
-            ):
-                continue
-            return {
-                "position": candidate,
-                "support_status": "direct_support",
-                "contact_proof": "usd_bounds_direct_support",
-                "resolution_source": "isaac_support_surface",
-                "candidate_count": candidate_count,
-                "degraded": False,
-                "support_surface": surface,
-                "object_bottom_offset_m": round(float(bottom_offset), 6),
-                "support_clearance_m": round(float(clearance), 6),
-                "object_footprint_half_extents_m": [
-                    round(float(footprint[0]), 6),
-                    round(float(footprint[1]), 6),
-                ],
-            }
-    surface = surfaces[0]
-    return {
-        "position": _elevated_position_over_surface(surface, bottom_offset=bottom_offset),
-        "support_status": "degraded_elevated",
-        "contact_proof": "degraded_no_candidate_inside_support_surface",
-        "resolution_source": "isaac_support_surface_elevated_fallback",
-        "candidate_count": candidate_count,
-        "degraded": True,
-        "support_surface": surface,
-        "object_bottom_offset_m": round(float(bottom_offset), 6),
-        "support_clearance_m": round(float(clearance), 6),
-        "object_footprint_half_extents_m": [
-            round(float(footprint[0]), 6),
-            round(float(footprint[1]), 6),
-        ],
-    }
-
-
-def _isaac_receptacle_support_surface(
-    state: dict[str, Any],
-    receptacle_id: str,
-) -> dict[str, Any] | None:
-    surfaces = _isaac_receptacle_support_surfaces(state, receptacle_id)
-    return surfaces[0] if surfaces else None
-
-
-def _isaac_receptacle_support_surfaces(
-    state: dict[str, Any],
-    receptacle_id: str,
-) -> list[dict[str, Any]]:
-    entry = _isaac_index_entry(
-        state,
-        receptacle_id,
-        index_name="receptacle_index",
-        binding_groups=("selected_target_receptacle_bindings", "receptacle_bindings"),
-    )
-    surfaces = []
-    for surface in entry.get("support_surfaces") or []:
-        normalized = _normalize_support_surface(surface)
-        if normalized is not None:
-            surfaces.append(normalized)
-    if surfaces:
-        return sorted(
-            surfaces,
-            key=lambda item: (
-                float(item.get("area_m2") or 0.0),
-                float(item.get("top_z") or 0.0),
-            ),
-            reverse=True,
-        )
-    surface = _support_surface_from_usd_bounds(
-        bounds=_dict(entry.get("usd_world_bounds")),
-        surface_id=_receptacle_usd_prim_path(state, receptacle_id) or receptacle_id,
-        source=ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
-    )
-    if surface is not None:
-        return [surface]
-    support_pose = _receptacle_support_pose(state, receptacle_id)
-    center = _support_pose_position(support_pose)
-    radius = float(support_pose.get("support_radius_m") or 0.0) if support_pose else 0.0
-    if center is None or radius <= 0.0:
-        return []
-    area = 4.0 * radius * radius
-    return [
-        {
-            "surface_id": _receptacle_usd_prim_path(state, receptacle_id) or receptacle_id,
-            "center": [round(float(center[0]), 6), round(float(center[1]), 6)],
-            "top_z": round(float(center[2]), 6),
-            "half_extents": [round(float(radius), 6), round(float(radius), 6)],
-            "area_m2": round(float(area), 6),
-            "source": str(support_pose.get("source") or "isaac_support_pose"),
-        }
-    ]
-
-
-def _normalize_support_surface(surface: Any) -> dict[str, Any] | None:
-    raw = _dict(surface)
-    center = raw.get("center")
-    half_extents = raw.get("half_extents")
-    if not isinstance(center, (list, tuple)) or len(center) < 2:
-        return None
-    if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
-        return None
-    try:
-        center_xy = [round(float(center[0]), 6), round(float(center[1]), 6)]
-        top_z = round(float(raw["top_z"]), 6)
-        half_xy = [
-            round(abs(float(half_extents[0])), 6),
-            round(abs(float(half_extents[1])), 6),
-        ]
-    except (KeyError, TypeError, ValueError):
-        return None
-    if min(half_xy) < 0.03:
-        return None
-    area = float(raw.get("area_m2") or (4.0 * half_xy[0] * half_xy[1]))
-    if area <= 0.0:
-        return None
-    normalized = {
-        "surface_id": str(raw.get("surface_id") or ""),
-        "center": center_xy,
-        "top_z": top_z,
-        "half_extents": half_xy,
-        "area_m2": round(area, 6),
-        "source": str(raw.get("source") or ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE),
-    }
-    if raw.get("selection_score") is not None:
-        try:
-            normalized["selection_score"] = round(float(raw["selection_score"]), 6)
-        except (TypeError, ValueError):
-            pass
-    return normalized
-
-
-def _surface_candidate_positions(
-    surface: dict[str, Any],
-    *,
-    footprint: tuple[float, float],
-    bottom_offset: float,
-    clearance: float,
-    index: int,
-) -> list[list[float]]:
-    center = surface["center"]
-    half_extents = surface["half_extents"]
-    margin_x = float(footprint[0]) + 0.04
-    margin_y = float(footprint[1]) + 0.04
-    available_x = max(float(half_extents[0]) - margin_x, 0.0)
-    available_y = max(float(half_extents[1]) - margin_y, 0.0)
-    slot_x = min(available_x * 0.55, 0.28)
-    slot_y = min(available_y * 0.55, 0.28)
-    offsets = [
-        (0.0, 0.0),
-        (-slot_x, 0.0),
-        (slot_x, 0.0),
-        (0.0, -slot_y),
-        (0.0, slot_y),
-        (-slot_x, -slot_y),
-        (slot_x, -slot_y),
-        (-slot_x, slot_y),
-        (slot_x, slot_y),
-    ]
-    if len(offsets) > 1:
-        shift = index % len(offsets)
-        offsets = offsets[shift:] + offsets[:shift]
-    z = float(surface["top_z"]) + float(bottom_offset) + float(clearance)
-    return [
-        [
-            round(float(center[0]) + float(dx), 6),
-            round(float(center[1]) + float(dy), 6),
-            round(z, 6),
-        ]
-        for dx, dy in offsets
-    ]
-
-
-def _candidate_has_direct_support(
-    position: list[float],
-    surface: dict[str, Any],
-    footprint: tuple[float, float],
-) -> bool:
-    center = surface["center"]
-    half_extents = surface["half_extents"]
-    margin_x = float(footprint[0]) + 0.015
-    margin_y = float(footprint[1]) + 0.015
-    return abs(float(position[0]) - float(center[0])) + margin_x <= float(half_extents[0]) and abs(
-        float(position[1]) - float(center[1])
-    ) + margin_y <= float(half_extents[1])
-
-
-def _isaac_candidate_is_clear_of_dynamic_objects(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    position: list[float],
-    footprint: tuple[float, float],
-    bottom_offset: float,
-) -> bool:
-    candidate_bottom = float(position[2]) - float(bottom_offset)
-    candidate_height = max(_isaac_object_height(state, object_id), 0.04)
-    candidate_top = candidate_bottom + candidate_height
-    candidate_aabb = {
-        "min_x": float(position[0]) - float(footprint[0]),
-        "max_x": float(position[0]) + float(footprint[0]),
-        "min_y": float(position[1]) - float(footprint[1]),
-        "max_y": float(position[1]) + float(footprint[1]),
-        "min_z": candidate_bottom,
-        "max_z": candidate_top,
-    }
-    for other_id in _isaac_state_objects_for_clearance(state):
-        if other_id == object_id:
-            continue
-        if _dict(state.get("locations")).get(other_id) == HELD_LOCATION_ID:
-            continue
-        other_aabb = _isaac_object_current_aabb(state, other_id)
-        if other_aabb is None:
-            continue
-        if not _aabb_xy_overlaps(
-            (
-                candidate_aabb["min_x"],
-                candidate_aabb["max_x"],
-                candidate_aabb["min_y"],
-                candidate_aabb["max_y"],
-            ),
-            other_aabb,
-            margin=0.025,
-        ):
-            continue
-        if (
-            candidate_bottom - 0.015 <= other_aabb["max_z"]
-            and candidate_top + 0.015 >= other_aabb["min_z"]
-        ):
-            return False
-    return True
-
-
-def _aabb_xy_overlaps(
-    first: tuple[float, float, float, float],
-    second: dict[str, float],
-    *,
-    margin: float,
-) -> bool:
-    min_x, max_x, min_y, max_y = first
-    return (
-        min_x - margin <= float(second["max_x"])
-        and max_x + margin >= float(second["min_x"])
-        and min_y - margin <= float(second["max_y"])
-        and max_y + margin >= float(second["min_y"])
+def _isaac_placement_hooks() -> isaac_placement_resolution.IsaacPlacementHooks:
+    return isaac_placement_resolution.IsaacPlacementHooks(
+        aabb_xy_overlaps=_aabb_xy_overlaps,
+        binding_for_handle=_binding_for_handle,
+        candidate_has_direct_support=_candidate_has_direct_support,
+        candidate_is_clear_of_dynamic_objects=_isaac_candidate_is_clear_of_dynamic_objects,
+        dict_value=_dict,
+        direct_support_clearance=_isaac_direct_support_clearance,
+        direct_support_placement=_isaac_direct_support_placement,
+        elevated_position_over_surface=_elevated_position_over_surface,
+        fallback_placement_position=_isaac_fallback_placement_position,
+        index_entry=_isaac_index_entry,
+        normalize_support_surface=_normalize_support_surface,
+        norm=_norm,
+        object_bottom_offset=_isaac_object_bottom_offset,
+        object_current_aabb=_isaac_object_current_aabb,
+        object_footprint_half_extents=_isaac_object_footprint_half_extents,
+        object_height=_isaac_object_height,
+        object_surface_lift=_isaac_object_surface_lift,
+        object_usd_prim_path=_object_usd_prim_path,
+        object_world_bounds=_isaac_object_world_bounds,
+        objects_by_id=_objects_by_id,
+        pose_near=_pose_near,
+        receptacle_support_pose=_receptacle_support_pose,
+        receptacle_support_surface=_isaac_receptacle_support_surface,
+        receptacle_support_surfaces=_isaac_receptacle_support_surfaces,
+        receptacle_text=_receptacle_text,
+        receptacle_usd_prim_path=_receptacle_usd_prim_path,
+        receptacle_world_bounds=_isaac_receptacle_world_bounds,
+        receptacles_by_id=_receptacles_by_id,
+        round_vec3=_round_vec3,
+        semantic_object_position_from_state=_semantic_object_position_from_state,
+        state_objects_for_clearance=_isaac_state_objects_for_clearance,
+        support_pose_position=_support_pose_position,
+        support_surface_from_usd_bounds=_support_surface_from_usd_bounds,
+        surface_candidate_positions=_surface_candidate_positions,
+        vec3=_vec3,
     )
 
 
-def _isaac_object_current_aabb(state: dict[str, Any], object_id: str) -> dict[str, float] | None:
-    bounds = _isaac_object_world_bounds(state, object_id)
-    size = _vec3(_dict(bounds).get("size"))
-    center = _vec3(_dict(bounds).get("center"))
-    if center is None or size is None:
-        return None
-    override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
-    override_position = _vec3(override.get("position"))
-    if override_position is not None:
-        center = override_position
-    half_x = max(abs(float(size[0])) / 2.0, 0.025)
-    half_y = max(abs(float(size[1])) / 2.0, 0.025)
-    half_z = max(abs(float(size[2])) / 2.0, 0.02)
-    return {
-        "min_x": float(center[0]) - half_x,
-        "max_x": float(center[0]) + half_x,
-        "min_y": float(center[1]) - half_y,
-        "max_y": float(center[1]) + half_y,
-        "min_z": float(center[2]) - half_z,
-        "max_z": float(center[2]) + half_z,
-    }
+def _with_isaac_placement_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_placement_hooks())
+
+    return call
 
 
-def _elevated_position_over_surface(
-    surface: dict[str, Any],
-    *,
-    bottom_offset: float,
-) -> list[float]:
-    center = surface["center"]
-    return [
-        round(float(center[0]), 6),
-        round(float(center[1]), 6),
-        round(float(surface["top_z"]) + float(bottom_offset) + 0.08, 6),
-    ]
-
-
-def _isaac_fallback_placement_position(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    receptacle_id: str,
-    index: int,
-    relation: str,
-) -> list[float]:
-    receptacle = _dict(_receptacles_by_id(state).get(receptacle_id))
-    support = _receptacle_support_pose(state, receptacle_id)
-    base = _support_pose_position(support)
-    if base is None:
-        base = _vec3(_dict(_isaac_receptacle_world_bounds(state, receptacle_id)).get("center"))
-    if base is None:
-        pose = _pose_near(receptacle_id)
-        base = [float(pose["x"]), float(pose["y"]), float(pose.get("z", 0.0))]
-    text = _receptacle_text(receptacle)
-    if relation == "inside" and ("fridge" in text or "refrigerator" in text):
-        return _round_vec3([base[0] + 0.08, base[1] - 0.16, base[2] + 0.35])
-    offset = ((index % 3) - 1) * 0.12
-    y_offset = 0.08 * (index % 2)
-    category = str(_dict(_objects_by_id(state).get(object_id)).get("category") or "")
-    if _norm(category) in {"apple", "food"}:
-        y_offset = 0.16
-    return _round_vec3([base[0] + offset, base[1] + y_offset, base[2] + 0.18])
-
-
-def _isaac_object_footprint_half_extents(
-    state: dict[str, Any],
-    object_id: str,
-) -> tuple[float, float]:
-    size = _vec3(_dict(_isaac_object_world_bounds(state, object_id)).get("size"))
-    if size is not None:
-        return (max(abs(float(size[0])) / 2.0, 0.025), max(abs(float(size[1])) / 2.0, 0.025))
-    category = _norm(_dict(_objects_by_id(state).get(object_id)).get("category"))
-    if category in {"remotecontrol", "remote", "electronics"}:
-        return (0.09, 0.045)
-    if category in {"plate", "dish"}:
-        return (0.13, 0.13)
-    if category in {"apple", "potato", "food"}:
-        return (0.065, 0.065)
-    if category == "book":
-        return (0.12, 0.08)
-    if category == "pillow":
-        return (0.22, 0.16)
-    return (0.08, 0.08)
-
-
-def _isaac_object_bottom_offset(state: dict[str, Any], object_id: str) -> float:
-    entry = _isaac_index_entry(
-        state,
-        object_id,
-        index_name="object_index",
-        binding_groups=("selected_object_bindings", "object_bindings"),
-    )
-    bounds = _dict(entry.get("usd_world_bounds"))
-    root_position = _vec3(entry.get("usd_world_root_position"))
-    min_point = _vec3(bounds.get("min"))
-    if root_position is not None and min_point is not None:
-        offset = float(root_position[2]) - float(min_point[2])
-        if 0.0 < offset <= 1.0:
-            return max(offset, 0.01)
-    center = _vec3(bounds.get("center"))
-    if center is not None and min_point is not None:
-        offset = float(center[2]) - float(min_point[2])
-        if 0.0 < offset <= 1.0:
-            return max(offset, 0.01)
-    return _isaac_object_surface_lift(_dict(_objects_by_id(state).get(object_id)).get("category"))
-
-
-def _isaac_object_height(state: dict[str, Any], object_id: str) -> float:
-    size = _vec3(_dict(_isaac_object_world_bounds(state, object_id)).get("size"))
-    if size is not None:
-        return max(abs(float(size[2])), 0.01)
-    return _isaac_object_surface_lift(_dict(_objects_by_id(state).get(object_id)).get("category"))
+_resolve_isaac_placement = _with_isaac_placement_hooks(
+    isaac_placement_resolution.resolve_isaac_placement
+)
+_isaac_state_objects_for_clearance = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_state_objects_for_clearance
+)
+_isaac_direct_support_placement = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_direct_support_placement
+)
+_isaac_receptacle_support_surface = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_receptacle_support_surface
+)
+_isaac_receptacle_support_surfaces = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_receptacle_support_surfaces
+)
+_normalize_support_surface = isaac_placement_resolution.normalize_support_surface
+_surface_candidate_positions = isaac_placement_resolution.surface_candidate_positions
+_candidate_has_direct_support = isaac_placement_resolution.candidate_has_direct_support
+_isaac_candidate_is_clear_of_dynamic_objects = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_candidate_is_clear_of_dynamic_objects
+)
+_aabb_xy_overlaps = isaac_placement_resolution.aabb_xy_overlaps
+_isaac_object_current_aabb = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_current_aabb
+)
+_elevated_position_over_surface = isaac_placement_resolution.elevated_position_over_surface
+_isaac_fallback_placement_position = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_fallback_placement_position
+)
+_isaac_object_footprint_half_extents = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_footprint_half_extents
+)
+_isaac_object_bottom_offset = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_bottom_offset
+)
+_isaac_object_height = _with_isaac_placement_hooks(isaac_placement_resolution.isaac_object_height)
+_isaac_object_world_bounds = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_object_world_bounds
+)
+_isaac_receptacle_world_bounds = _with_isaac_placement_hooks(
+    isaac_placement_resolution.isaac_receptacle_world_bounds
+)
+_isaac_index_entry = _with_isaac_placement_hooks(isaac_placement_resolution.isaac_index_entry)
 
 
 def _isaac_object_surface_lift(category: Any) -> float:
-    normalized = _norm(category)
-    if normalized in {"book", "plate", "remotecontrol", "remote", "electronics"}:
-        return 0.04
-    if normalized in {"apple", "potato", "food"}:
-        return 0.08
-    if normalized == "pillow":
-        return 0.12
-    return 0.06
+    return isaac_placement_resolution.isaac_object_surface_lift(category, norm=_norm)
 
 
 def _isaac_direct_support_clearance(
     obj: dict[str, Any],
     receptacle: dict[str, Any],
 ) -> float:
-    receptacle_text = _receptacle_text(receptacle)
-    object_category = _norm(obj.get("category"))
-    if "bed" in receptacle_text or "sofa" in receptacle_text:
-        return 0.035
-    if object_category in {"book", "plate", "remotecontrol", "remote", "electronics"}:
-        return 0.02
-    return 0.015
-
-
-def _isaac_object_world_bounds(state: dict[str, Any], object_id: str) -> dict[str, Any]:
-    return _dict(
-        _isaac_index_entry(
-            state,
-            object_id,
-            index_name="object_index",
-            binding_groups=("selected_object_bindings", "object_bindings"),
-        ).get("usd_world_bounds")
+    return isaac_placement_resolution.isaac_direct_support_clearance(
+        obj,
+        receptacle,
+        norm=_norm,
+        receptacle_text=_receptacle_text,
     )
-
-
-def _isaac_receptacle_world_bounds(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    return _dict(
-        _isaac_index_entry(
-            state,
-            receptacle_id,
-            index_name="receptacle_index",
-            binding_groups=("selected_target_receptacle_bindings", "receptacle_bindings"),
-        ).get("usd_world_bounds")
-    )
-
-
-def _isaac_index_entry(
-    state: dict[str, Any],
-    public_id: str,
-    *,
-    index_name: str,
-    binding_groups: tuple[str, ...],
-) -> dict[str, Any]:
-    binding = _binding_for_handle(state.get("scene_binding_diagnostics"), public_id, binding_groups)
-    index = _dict(state.get(index_name))
-    for handle in (binding.get("usd_handle"), public_id):
-        entry = _dict(index.get(str(handle)))
-        if entry:
-            return entry
-    return {}
 
 
 def _receptacle_requires_open(receptacle: dict[str, Any]) -> bool:
@@ -5410,802 +1462,160 @@ def _isaac_placement_diagnostic(
     placement_index: int | None = None,
     placement_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    obj = _dict(_objects_by_id(state).get(object_id))
-    receptacle = _dict(_receptacles_by_id(state).get(receptacle_id))
-    placement_resolution = placement_resolution or {}
-    requested_position = _vec3(placement_resolution.get("position")) or []
-    object_position = requested_position or _semantic_object_position_from_state(
-        state,
+    return isaac_placement_resolution.isaac_placement_diagnostic(
+        state=state,
         object_id=object_id,
-        location_id=str(_dict(state.get("locations")).get(object_id) or ""),
-        original_location_id=str(obj.get("location_id") or ""),
-        support_receptacle_id=receptacle_id,
-    )
-    if object_position is None:
-        object_position = []
-    receptacle_position = _support_pose_position(_receptacle_support_pose(state, receptacle_id))
-    if receptacle_position is None:
-        receptacle_position = _vec3(
-            _dict(_isaac_receptacle_world_bounds(state, receptacle_id)).get("center")
-        )
-    if receptacle_position is None:
-        receptacle_position = []
-    xy_distance = (
-        math.dist(object_position[:2], receptacle_position[:2])
-        if len(object_position) >= 2 and len(receptacle_position) >= 2
-        else None
-    )
-    z_delta = (
-        float(object_position[2]) - float(receptacle_position[2])
-        if len(object_position) >= 3 and len(receptacle_position) >= 3
-        else None
-    )
-    default_support_status = (
-        "semantic_contained_in_receptacle" if relation == "inside" else "semantic_on_receptacle"
-    )
-    support_status = str(placement_resolution.get("support_status") or default_support_status)
-    diagnostic = {
-        "schema": PLACEMENT_DIAGNOSTIC_SCHEMA,
-        "status": support_status,
-        "object_id": object_id,
-        "object_category": obj.get("category"),
-        "object_usd_prim_path": _object_usd_prim_path(state, object_id),
-        "receptacle_id": receptacle_id,
-        "receptacle_category": receptacle.get("category") or receptacle.get("kind"),
-        "receptacle_usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
-        "relation": relation,
-        "placement_index": placement_index,
-        "requested_position": _round_vec3(requested_position) if requested_position else [],
-        "object_position": _round_vec3(object_position) if object_position else [],
-        "receptacle_position": _round_vec3(receptacle_position) if receptacle_position else [],
-        "xy_distance_m": round(float(xy_distance), 6) if xy_distance is not None else None,
-        "z_delta_m": round(float(z_delta), 6) if z_delta is not None else None,
-        "support_status": support_status,
-        "placement_support_status": support_status,
-        "direct_support_proven": support_status == "direct_support",
-        "contact_proof": str(
-            placement_resolution.get("contact_proof") or "not_measured_isaac_semantic_pose"
-        ),
-        "diagnostic_source": source,
-        "resolution_source": placement_resolution.get("resolution_source", "isaac_semantic"),
-        "candidate_count": int(placement_resolution.get("candidate_count") or 0),
-        "degraded": bool(placement_resolution.get("degraded", False)),
-        "state_mutation": "isaac_prim_transform",
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "planner_backed": False,
-        "physical_robot": False,
-    }
-    support_surface = placement_resolution.get("support_surface")
-    if isinstance(support_surface, dict):
-        diagnostic["support_surface_id"] = support_surface.get("surface_id")
-        diagnostic["support_surface_center"] = support_surface.get("center")
-        diagnostic["support_surface_half_extents"] = support_surface.get("half_extents")
-        diagnostic["support_surface_top_z"] = support_surface.get("top_z")
-        diagnostic["support_surface_source"] = support_surface.get("source")
-        if support_surface.get("member_count") is not None:
-            diagnostic["support_surface_member_count"] = support_surface.get("member_count")
-    for key in (
-        "object_bottom_offset_m",
-        "support_clearance_m",
-        "object_footprint_half_extents_m",
-    ):
-        if placement_resolution.get(key) is not None:
-            diagnostic[key] = placement_resolution[key]
-    return diagnostic
-
-
-def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    poses: dict[str, dict[str, Any]] = {}
-    locations = state.get("locations") or {}
-    containment = state.get("containment") or {}
-    current_receptacle_id = str(state.get("current_receptacle_id") or "")
-    for item in _dict(state.get("scenario")).get("objects", []):
-        if not isinstance(item, dict):
-            continue
-        object_id = str(item.get("object_id") or "")
-        if not object_id:
-            continue
-        location_id = str(locations.get(object_id) or item.get("location_id") or "")
-        support_receptacle_id = (
-            current_receptacle_id if location_id == HELD_LOCATION_ID else location_id
-        )
-        relation = _dict(containment.get(object_id)).get("location_relation") or "on"
-        pose_override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
-        position = _semantic_object_position_from_state(
-            state,
-            object_id=object_id,
-            location_id=location_id,
-            original_location_id=str(item.get("location_id") or ""),
-            support_receptacle_id=support_receptacle_id,
-        )
-        position_source = _semantic_object_position_source(
-            position,
-            location_id=location_id,
-            original_location_id=str(item.get("location_id") or ""),
-            pose_override=pose_override,
-        )
-        poses[object_id] = {
-            "object_id": object_id,
-            "usd_prim_path": _object_usd_prim_path(state, object_id),
-            "location_id": location_id,
-            "support_receptacle_id": support_receptacle_id,
-            "support_usd_prim_path": _receptacle_usd_prim_path(state, support_receptacle_id),
-            "attached_to_robot": location_id == HELD_LOCATION_ID,
-            "location_relation": relation,
-            "position": position,
-            "position_source": position_source,
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "rendered_to_usd": False,
-        }
-        if pose_override:
-            poses[object_id]["placement_support_status"] = pose_override.get("support_status")
-            poses[object_id]["placement_contact_proof"] = pose_override.get("contact_proof")
-            poses[object_id]["placement_resolution_source"] = pose_override.get("resolution_source")
-    return poses
-
-
-def _semantic_object_position_from_state(
-    state: dict[str, Any],
-    *,
-    object_id: str,
-    location_id: str,
-    original_location_id: str,
-    support_receptacle_id: str,
-) -> list[float] | None:
-    if location_id != HELD_LOCATION_ID:
-        pose_override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
-        override_position = _vec3(pose_override.get("position"))
-        if override_position is not None:
-            return _round_vec3(override_position)
-    if location_id == original_location_id:
-        bounds_position = _object_usd_world_bounds_center(state, object_id)
-        if bounds_position is not None:
-            return bounds_position
-    if location_id == HELD_LOCATION_ID:
-        robot_pose = _robot_pose_for_receptacle(
-            state,
-            str(state.get("current_receptacle_id") or support_receptacle_id),
-        )
-        held_target = _vec3(robot_pose.get("target_position"))
-        if held_target is not None:
-            return _round_vec3(held_target)
-    target = _semantic_pose_target_position(
-        support_id=support_receptacle_id,
-        receptacle_index=_dict(state.get("receptacle_index")),
-        fallback_pose={},
-    )
-    if target is not None:
-        return _round_vec3(list(target))
-    return _object_usd_world_bounds_center(state, object_id)
-
-
-def _semantic_object_position_source(
-    position: list[float] | None,
-    *,
-    location_id: str,
-    original_location_id: str,
-    pose_override: dict[str, Any] | None = None,
-) -> str:
-    if position is None:
-        return ""
-    if _vec3(_dict(pose_override).get("position")) is not None and location_id != HELD_LOCATION_ID:
-        return str(_dict(pose_override).get("position_source") or ISAAC_PLACEMENT_RESOLVER_SOURCE)
-    if location_id == HELD_LOCATION_ID:
-        return "isaac_robot_target_position"
-    if location_id == original_location_id:
-        return "usd_world_bounds_center"
-    return "isaac_support_pose_semantic_location"
-
-
-def _object_usd_world_bounds_center(
-    state: dict[str, Any],
-    object_id: str,
-) -> list[float] | None:
-    binding = _binding_for_handle(
-        state.get("scene_binding_diagnostics"),
-        object_id,
-        ("selected_object_bindings", "object_bindings"),
-    )
-    for handle in (binding.get("usd_handle"), object_id):
-        entry = _dict(_dict(state.get("object_index")).get(str(handle)))
-        center = _vec3(_dict(entry.get("usd_world_bounds")).get("center"))
-        if center is not None:
-            return _round_vec3(center)
-    return None
-
-
-def _semantic_articulations_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    open_ids = set(state.get("open_receptacle_ids") or [])
-    articulations: dict[str, dict[str, Any]] = {}
-    for item in _dict(state.get("scenario")).get("receptacles", []):
-        if not isinstance(item, dict):
-            continue
-        receptacle_id = str(item.get("receptacle_id") or "")
-        if not receptacle_id:
-            continue
-        opened = receptacle_id in open_ids
-        articulations[receptacle_id] = {
-            "receptacle_id": receptacle_id,
-            "usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
-            "open": opened,
-            "joint_state": "open" if opened else "closed",
-            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
-            "rendered_to_usd": False,
-        }
-    return articulations
-
-
-def _object_usd_prim_path(state: dict[str, Any], object_id: str) -> str:
-    return _binding_usd_prim_path(
-        state.get("scene_binding_diagnostics"),
-        object_id,
-        ("selected_object_bindings", "object_bindings"),
-    ) or _index_usd_prim_path(state.get("object_index"), object_id)
-
-
-def _receptacle_usd_prim_path(state: dict[str, Any], receptacle_id: str) -> str:
-    return _binding_usd_prim_path(
-        state.get("scene_binding_diagnostics"),
-        receptacle_id,
-        ("selected_target_receptacle_bindings", "receptacle_bindings"),
-    ) or _index_usd_prim_path(state.get("receptacle_index"), receptacle_id)
-
-
-def _binding_usd_prim_path(
-    scene_binding_diagnostics: Any,
-    public_id: str,
-    binding_keys: tuple[str, ...],
-) -> str:
-    if not public_id:
-        return ""
-    diagnostics = _dict(scene_binding_diagnostics)
-    for key in binding_keys:
-        binding = _dict(_dict(diagnostics.get(key)).get(public_id))
-        if binding.get("status") == "bound" and binding.get("usd_prim_path"):
-            return str(binding["usd_prim_path"])
-    return ""
-
-
-def _index_usd_prim_path(index: Any, handle: str) -> str:
-    if not handle:
-        return ""
-    entry = _dict(_dict(index).get(handle))
-    return str(entry.get("usd_prim_path") or "")
-
-
-def observe(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    del args
-    _count(state, "observe")
-    write_state_from_state_arg(state)
-    return _ok(
-        "observe",
-        scenario=_public_state(state),
-        current_receptacle_id=state["current_receptacle_id"],
-        held_object_id=state.get("held_object_id"),
-        isaac_runtime=state["runtime"],
-    )
-
-
-def navigate_to_object(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_object")
-    object_id = args.object_id
-    if object_id not in _objects_by_id(state):
-        return _error("navigate_to_object", "stale_reference", object_id=object_id)
-    location_id = state["locations"].get(object_id)
-    if location_id in {None, HELD_LOCATION_ID}:
-        return _error("navigate_to_object", "object_not_at_public_location", object_id=object_id)
-    previous = state["current_receptacle_id"]
-    state["current_receptacle_id"] = str(location_id)
-    event = _record_semantic_pose_event(
-        state,
-        tool="navigate_to_object",
-        state_mutation="isaac_root_pose",
-        object_id=object_id,
-        receptacle_id=str(location_id),
-        previous_location_id=previous,
-        location_id=str(location_id),
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "navigate_to_object",
-        object_id=object_id,
-        source_receptacle_id=str(location_id),
-        previous_receptacle_id=previous,
-        location_id=str(location_id),
-        robot_pose=_robot_pose_for_receptacle(state, str(location_id)),
-        state_mutation="isaac_root_pose",
-        semantic_pose_event=event,
-    )
-
-
-def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_receptacle")
-    receptacle_id = args.receptacle_id
-    if receptacle_id not in _receptacles_by_id(state):
-        return _error("navigate_to_receptacle", "stale_reference", receptacle_id=receptacle_id)
-    previous = state["current_receptacle_id"]
-    state["current_receptacle_id"] = receptacle_id
-    held_object_id = state.get("held_object_id")
-    event = _record_semantic_pose_event(
-        state,
-        tool="navigate_to_receptacle",
-        state_mutation="isaac_root_pose",
-        object_id=str(held_object_id or ""),
         receptacle_id=receptacle_id,
-        previous_location_id=previous,
-        location_id=receptacle_id,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "navigate_to_receptacle",
-        receptacle_id=receptacle_id,
-        object_id=held_object_id,
-        previous_receptacle_id=previous,
-        robot_pose=_robot_pose_for_receptacle(state, receptacle_id),
-        state_mutation="isaac_root_pose",
-        semantic_pose_event=event,
+        relation=relation,
+        source=source,
+        placement_index=placement_index,
+        placement_resolution=placement_resolution,
+        hooks=_isaac_placement_hooks(),
     )
 
 
-def navigate_to_waypoint(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "navigate_to_waypoint")
-    waypoint = _dict(args.waypoint_json)
-    robot_pose = _robot_pose_for_waypoint(waypoint)
-    if not _has_xy(robot_pose):
-        return _error(
-            "navigate_to_waypoint",
-            "waypoint_pose_missing",
-            waypoint_id=str(waypoint.get("waypoint_id") or ""),
+def _with_semantic_pose_projection_hooks(
+    func: Callable[..., Any],
+    **injected: Any,
+) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(
+            *args,
+            **kwargs,
+            hooks=_isaac_semantic_pose_projection_hooks(),
+            **injected,
         )
-    previous_waypoint_id = str(state.get("current_waypoint_id") or "")
-    previous_room_id = str(state.get("current_room_id") or "")
-    waypoint_id = str(waypoint.get("waypoint_id") or "")
-    room_id = str(waypoint.get("room_id") or "")
-    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
-    state["current_waypoint_id"] = waypoint_id
-    state["current_room_id"] = room_id
-    if fixture_ids:
-        state["current_receptacle_id"] = fixture_ids[0]
-    event = _record_waypoint_pose_event(
-        state,
-        waypoint=waypoint,
-        robot_pose=robot_pose,
-        previous_waypoint_id=previous_waypoint_id,
-        previous_room_id=previous_room_id,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "navigate_to_waypoint",
-        waypoint_id=waypoint_id,
-        room_id=room_id,
-        fixture_ids=fixture_ids,
-        previous_waypoint_id=previous_waypoint_id,
-        previous_room_id=previous_room_id,
-        robot_pose=robot_pose,
-        state_mutation="isaac_waypoint_pose",
-        semantic_pose_event=event,
-        backend_pose_mutation_available=True,
+
+    return call
+
+
+_semantic_object_poses_from_state = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_object_poses_from_state,
+    held_location_id=HELD_LOCATION_ID,
+    state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+)
+_semantic_object_position_from_state = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_object_position_from_state,
+    held_location_id=HELD_LOCATION_ID,
+)
+_semantic_object_position_source = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_object_position_source,
+    held_location_id=HELD_LOCATION_ID,
+)
+_object_usd_world_bounds_center = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.object_usd_world_bounds_center
+)
+_semantic_articulations_from_state = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.semantic_articulations_from_state,
+    state_source=ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+)
+_object_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.object_usd_prim_path
+)
+_receptacle_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.receptacle_usd_prim_path
+)
+_binding_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.binding_usd_prim_path
+)
+_index_usd_prim_path = _with_semantic_pose_projection_hooks(
+    isaac_semantic_pose_projection.index_usd_prim_path
+)
+
+
+def _isaac_worker_command_hooks() -> isaac_worker_commands.IsaacWorkerCommandHooks:
+    return isaac_worker_commands.IsaacWorkerCommandHooks(
+        apply_object_location=_apply_object_location,
+        count=_count,
+        dict_value=_dict,
+        error=_error,
+        has_xy=_has_xy,
+        isaac_placement_diagnostic=_isaac_placement_diagnostic,
+        objects_by_id=_objects_by_id,
+        ok=_ok,
+        public_state=_public_state,
+        receptacles_by_id=_receptacles_by_id,
+        record_semantic_pose_event=_record_semantic_pose_event,
+        record_waypoint_pose_event=_record_waypoint_pose_event,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        robot_pose_for_waypoint=_robot_pose_for_waypoint,
+        scenario_from_state=scenario_from_state,
+        write_state_from_state_arg=write_state_from_state_arg,
     )
 
 
-def pick(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "pick")
-    object_id = args.object_id
-    objects = _objects_by_id(state)
-    obj = objects.get(object_id)
-    if obj is None:
-        return _error("pick", "stale_reference", object_id=object_id)
-    if not obj.get("pickupable", True):
-        return _error("pick", "not_pickupable", object_id=object_id)
-    if state.get("held_object_id") is not None:
-        return _error("pick", "already_holding", held_object_id=state["held_object_id"])
-    previous_location_id = state["locations"][object_id]
-    state["held_object_id"] = object_id
-    state["locations"][object_id] = HELD_LOCATION_ID
-    event = _record_semantic_pose_event(
-        state,
-        tool="pick",
-        state_mutation="isaac_prim_attach",
-        object_id=object_id,
-        receptacle_id=str(previous_location_id),
-        previous_location_id=previous_location_id,
-        location_id=HELD_LOCATION_ID,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "pick",
-        object_id=object_id,
-        previous_location_id=previous_location_id,
-        location_id=HELD_LOCATION_ID,
-        state_mutation="isaac_prim_attach",
-        semantic_pose_event=event,
-    )
+def _with_isaac_worker_command_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_worker_command_hooks())
+
+    return call
 
 
-def open_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "open_receptacle")
-    receptacle_id = args.receptacle_id
-    receptacle = _receptacles_by_id(state).get(receptacle_id)
-    if receptacle is None:
-        return _error("open_receptacle", "stale_reference", receptacle_id=receptacle_id)
-    opened = "fridge" in str(receptacle.get("name", "")).lower()
-    open_ids = set(state.get("open_receptacle_ids") or [])
-    if opened:
-        open_ids.add(receptacle_id)
-    state["open_receptacle_ids"] = sorted(open_ids)
-    event = _record_semantic_pose_event(
-        state,
-        tool="open_receptacle",
-        state_mutation="isaac_articulation_joint_pose",
-        object_id=str(state.get("held_object_id") or ""),
-        receptacle_id=receptacle_id,
-        location_id=receptacle_id,
-        articulation_open=opened,
-        requested_open=True,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "open_receptacle",
-        receptacle_id=receptacle_id,
-        object_id=state.get("held_object_id"),
-        opened=opened,
-        state_mutation="isaac_articulation_joint_pose",
-        semantic_pose_event=event,
-    )
-
-
-def close_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "close_receptacle")
-    receptacle_id = args.receptacle_id
-    if receptacle_id not in _receptacles_by_id(state):
-        return _error("close_receptacle", "stale_reference", receptacle_id=receptacle_id)
-    open_ids = set(state.get("open_receptacle_ids") or [])
-    was_open = receptacle_id in open_ids
-    open_ids.discard(receptacle_id)
-    state["open_receptacle_ids"] = sorted(open_ids)
-    event = _record_semantic_pose_event(
-        state,
-        tool="close_receptacle",
-        state_mutation="isaac_articulation_joint_pose",
-        object_id=str(state.get("held_object_id") or ""),
-        receptacle_id=receptacle_id,
-        location_id=receptacle_id,
-        articulation_open=False,
-        was_open=was_open,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "close_receptacle",
-        receptacle_id=receptacle_id,
-        object_id=state.get("held_object_id"),
-        closed=was_open,
-        state_mutation="isaac_articulation_joint_pose",
-        semantic_pose_event=event,
-    )
+observe = _with_isaac_worker_command_hooks(isaac_worker_commands.observe)
+navigate_to_object = _with_isaac_worker_command_hooks(isaac_worker_commands.navigate_to_object)
+navigate_to_receptacle = _with_isaac_worker_command_hooks(
+    isaac_worker_commands.navigate_to_receptacle
+)
+navigate_to_waypoint = _with_isaac_worker_command_hooks(isaac_worker_commands.navigate_to_waypoint)
+pick = _with_isaac_worker_command_hooks(isaac_worker_commands.pick)
+open_receptacle = _with_isaac_worker_command_hooks(isaac_worker_commands.open_receptacle)
+close_receptacle = _with_isaac_worker_command_hooks(isaac_worker_commands.close_receptacle)
+done = _with_isaac_worker_command_hooks(isaac_worker_commands.done)
 
 
 def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> dict[str, Any]:
-    tool = "place_inside" if relation == "inside" else "place"
-    _count(state, tool)
-    receptacle_id = args.receptacle_id
-    if receptacle_id not in _receptacles_by_id(state):
-        return _error(tool, "stale_reference", receptacle_id=receptacle_id)
-    object_id = state.get("held_object_id")
-    if object_id is None:
-        return _error(tool, "not_holding")
-    object_id = str(object_id)
-    state["held_object_id"] = None
-    state["current_receptacle_id"] = receptacle_id
-    placement_resolution = _apply_object_location(
-        state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        placement_index=len(state.get("placement_diagnostics") or []),
-        source="cleanup_place",
-    )
-    diagnostic = _isaac_placement_diagnostic(
-        state=state,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        relation=relation,
-        source="cleanup_place",
-        placement_resolution=placement_resolution,
-    )
-    state.setdefault("placement_diagnostics", []).append(diagnostic)
-    event = _record_semantic_pose_event(
-        state,
-        tool=tool,
-        state_mutation="isaac_prim_transform",
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        previous_location_id=HELD_LOCATION_ID,
-        location_id=receptacle_id,
-        relation=relation,
-        placement_support_status=diagnostic.get("placement_support_status"),
-        direct_support_proven=diagnostic.get("direct_support_proven"),
-        placement_contact_proof=diagnostic.get("contact_proof"),
-        placement_resolution_source=diagnostic.get("resolution_source"),
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        tool,
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        location_id=receptacle_id,
-        contained_in=receptacle_id if relation == "inside" else None,
-        location_relation=relation,
-        placement_diagnostic=diagnostic,
-        placement_support_status=diagnostic.get("placement_support_status"),
-        direct_support_proven=diagnostic.get("direct_support_proven"),
-        state_mutation="isaac_prim_transform",
-        semantic_pose_event=event,
+    return isaac_worker_commands.place(
+        args, state, relation=relation, hooks=_isaac_worker_command_hooks()
     )
 
 
-def done(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "done")
-    scenario = scenario_from_state(state)
-    score = score_cleanup(state["locations"], scenario.private_manifest)
-    annotated_score = annotate_score_with_semantic_acceptability(
-        score.to_dict(),
-        scenario,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "done",
-        reason=args.reason,
-        cleanup_status=score.status,
-        score=annotated_score,
-        final_locations=dict(state["locations"]),
-        final_containment=dict(state.get("containment") or {}),
-        tool_event_counts=dict(state.get("tool_event_counts") or {}),
-    )
-
-
-def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "snapshot")
-    if _real_rendering_proven(state):
-        try:
-            source_path = _real_snapshot_source_image(state)
-            shape = _copy_real_snapshot_image(
-                source_path,
-                args.output_path,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        except RuntimeError as exc:
-            return _error("snapshot", "real_snapshot_image_invalid", reason=str(exc))
-        write_state_from_state_arg(state)
-        return _ok(
-            "snapshot",
-            output_path=str(args.output_path),
-            visual_artifact_provenance=REAL_SMOKE_CAPTURE_METHOD,
-            placeholder_visuals=False,
-            native_render_diagnostics=_native_render_diagnostics_from_state(state),
-            snapshot_provenance={
-                "source": "isaac_runtime_rgb_capture",
-                "source_path": str(source_path),
-                "output_path": str(args.output_path),
-                "visual_artifact_provenance": REAL_SMOKE_CAPTURE_METHOD,
-                "placeholder_visuals": False,
-                "static_isaac_capture": True,
-                "semantic_pose_rendered": False,
-                "shape": shape,
-                "reason": (
-                    "Snapshot reuses a real Isaac RGB capture. Semantic pose edits "
-                    "are not rendered back into the USD stage yet."
-                ),
-            },
-        )
-    _write_placeholder_image(
-        args.output_path,
-        title=args.title,
-        subtitle=state["runtime"]["renderer_mode"],
-        state=state,
-        width=args.render_width,
-        height=args.render_height,
-    )
-    write_state_from_state_arg(state)
-    return _ok(
-        "snapshot",
-        output_path=str(args.output_path),
-        visual_artifact_provenance=state["runtime"]["visual_artifact_provenance"],
-        placeholder_visuals=True,
-        native_render_diagnostics=_native_render_diagnostics_from_state(state),
-        snapshot_provenance={
-            "source": "placeholder_protocol_image",
-            "output_path": str(args.output_path),
-            "visual_artifact_provenance": state["runtime"]["visual_artifact_provenance"],
-            "placeholder_visuals": True,
-            "static_isaac_capture": False,
-            "semantic_pose_rendered": False,
-            "reason": "Snapshot is a CI-safe placeholder because real Isaac rendering is unproven.",
-        },
+def _isaac_worker_output_hooks() -> isaac_worker_outputs.IsaacWorkerOutputHooks:
+    return isaac_worker_outputs.IsaacWorkerOutputHooks(
+        camera_capture_provenance=_camera_capture_provenance,
+        camera_capture_variant=_camera_capture_variant,
+        capture_scene_camera_views=capture_scene_camera_views,
+        copy_real_robot_view_images=_copy_real_robot_view_images,
+        copy_real_snapshot_image=_copy_real_snapshot_image,
+        count=_count,
+        dict_value=_dict,
+        error=_error,
+        has_xy=_has_xy,
+        load_camera_request_from_args=_load_camera_request_from_args,
+        native_render_diagnostics_from_state=_native_render_diagnostics_from_state,
+        ok=_ok,
+        real_rendering_proven=_real_rendering_proven,
+        real_robot_view_images=_real_robot_view_images,
+        real_semantic_pose_robot_view_images=_real_semantic_pose_robot_view_images,
+        real_snapshot_source_image=_real_snapshot_source_image,
+        robot_pose_for_receptacle=_robot_pose_for_receptacle,
+        robot_view_camera_control_contract=_robot_view_camera_control_contract,
+        robot_view_command_provenance=_robot_view_command_provenance,
+        robot_view_focus=_robot_view_focus,
+        robot_view_rendered_robot_pose=_robot_view_rendered_robot_pose,
+        safe_file_stem=_safe_file_stem,
+        write_placeholder_image=_write_placeholder_image,
+        write_state_from_state_arg=write_state_from_state_arg,
+        real_smoke_capture_method=REAL_SMOKE_CAPTURE_METHOD,
     )
 
 
-def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "robot_views")
-    if state.get("robot") is None:
-        return _error("robot_views", "robot_not_included")
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    safe_label = _safe_file_stem(args.label)
-    views = {
-        "fpv": args.output_dir / f"{safe_label}.fpv.png",
-        "chase": args.output_dir / f"{safe_label}.chase.png",
-        "map": args.output_dir / f"{safe_label}.map.png",
-        "verify": args.output_dir / f"{safe_label}.verify.png",
-    }
-    real_views = _real_semantic_pose_robot_view_images(
-        state,
-        views,
-        width=args.render_width,
-        height=args.render_height,
-        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
-        isaac_aa_op=args.isaac_aa_op,
-        isaac_tonemap_op=args.isaac_tonemap_op,
-        isaac_exposure_bias=args.isaac_exposure_bias,
-        isaac_colorcorr_gain=args.isaac_colorcorr_gain,
-        focus_object_id=args.focus_object_id,
-        focus_receptacle_id=args.focus_receptacle_id,
-    )
-    semantic_pose_state_refreshed = bool(real_views)
-    if not real_views:
-        real_views = _real_robot_view_images(state)
-    shapes: dict[str, list[int]] = {}
-    if real_views:
-        try:
-            shapes = _copy_real_robot_view_images(
-                real_views,
-                views,
-                width=args.render_width,
-                height=args.render_height,
-            )
-        except RuntimeError as exc:
-            return _error(
-                "robot_views",
-                "real_robot_view_images_invalid",
-                reason=str(exc),
-            )
-    elif _real_rendering_proven(state):
-        return _error(
-            "robot_views",
-            "real_robot_view_images_unavailable",
-            reason=(
-                "Real Isaac rendering was proven, but FPV/chase/map/verify view images "
-                "were not recorded in worker state."
-            ),
-        )
-    else:
-        for view_name, path in views.items():
-            _write_placeholder_image(
-                path,
-                title=f"{args.label} {view_name}",
-                subtitle=state["runtime"]["renderer_mode"],
-                state=state,
-                width=args.render_width,
-                height=args.render_height,
-                focus_object_id=args.focus_object_id,
-                focus_receptacle_id=args.focus_receptacle_id,
-            )
-            shapes[view_name] = [args.render_height, args.render_width, 3]
-    write_state_from_state_arg(state)
-    robot_pose = _robot_view_rendered_robot_pose(state)
-    focus = _robot_view_focus(
-        state,
-        robot_pose,
-        focus_object_id=args.focus_object_id,
-        focus_receptacle_id=args.focus_receptacle_id,
-    )
-    return _ok(
-        "robot_views",
-        output_dir=str(args.output_dir),
-        view_variant=ISAACLAB_ROBOT_VIEW_VARIANT,
-        view_provenance=_robot_view_command_provenance(
-            state,
-            semantic_pose_state_refreshed=semantic_pose_state_refreshed,
-        ),
-        camera_control_contract=_robot_view_camera_control_contract(
-            state,
-            robot_pose=robot_pose,
-            focus=focus,
-        ),
-        robot_pose=robot_pose,
-        robot_trajectory=[robot_pose],
-        room_outline_count=len(state.get("room_outlines") or []),
-        color_profile=_dict(state.get("robot_view_color_profile")),
-        color_management=_dict(state.get("robot_view_color_management")),
-        lighting_profile=_dict(state.get("robot_view_lighting_profile")),
-        lighting_diagnostics=_dict(state.get("robot_view_lighting_diagnostics")),
-        camera_diagnostics=_dict(state.get("robot_view_camera_diagnostics")),
-        native_render_diagnostics=_native_render_diagnostics_from_state(state),
-        focus=focus,
-        views={key: str(path) for key, path in views.items()},
-        shapes=shapes,
-        render_resolution={"width": args.render_width, "height": args.render_height},
-        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
-    )
+def _with_isaac_worker_output_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_worker_output_hooks())
+
+    return call
 
 
-def _robot_view_rendered_robot_pose(state: dict[str, Any]) -> dict[str, Any]:
-    semantic_robot_pose = _dict(_dict(state.get("semantic_pose_state")).get("robot_pose"))
-    if _has_xy(semantic_robot_pose):
-        return semantic_robot_pose
-    return _robot_pose_for_receptacle(
-        state,
-        str(state.get("current_receptacle_id") or "floor_01"),
-    )
+write_snapshot = _with_isaac_worker_output_hooks(isaac_worker_outputs.write_snapshot)
+write_robot_views = _with_isaac_worker_output_hooks(isaac_worker_outputs.write_robot_views)
+_robot_view_rendered_robot_pose = _with_isaac_worker_output_hooks(
+    isaac_worker_outputs.robot_view_rendered_robot_pose
+)
+write_camera_views = _with_isaac_worker_output_hooks(isaac_worker_outputs.write_camera_views)
 
 
-def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "camera_views")
-    runtime = _dict(state.get("runtime"))
-    scene_usd = str(state.get("scene_usd") or "")
-    if runtime.get("runtime_mode") != "real":
-        return _error("camera_views", "real_runtime_required")
-    if not scene_usd or not Path(scene_usd).is_file():
-        return _error("camera_views", "local_scene_usd_required", scene_usd=scene_usd)
-    camera_request = _load_camera_request_from_args(
-        view_specs_path=args.view_specs_path,
-        camera_request_path=args.camera_request_path,
-        width=args.render_width,
-        height=args.render_height,
-    )
-    capture = capture_scene_camera_views(
-        scene_usd=Path(scene_usd),
-        camera_request=camera_request,
-        output_dir=args.output_dir,
-        width=args.render_width,
-        height=args.render_height,
-        semantic_pose_state=_dict(state.get("semantic_pose_state")),
-    )
-    semantic_pose_application = _dict(capture.get("semantic_pose_stage_application"))
-    state["scene_camera_view_capture"] = {
-        "schema": "isaac_scene_camera_view_capture_v1",
-        "capture_method": "isaac_lab_camera_rgb_scene_probe",
-        "scene_usd": scene_usd,
-        "render_steps": int(capture.get("render_steps") or 0),
-        "view_count": len(capture.get("views") or []),
-        "semantic_pose_stage_application": semantic_pose_application,
-        "semantic_pose_rendered": semantic_pose_application.get("rendered_to_usd") is True,
-    }
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    if semantic_pose_application.get("rendered_to_usd") is True:
-        semantic_pose_state["rendered_to_usd"] = True
-        semantic_pose_state["scene_camera_view_capture"] = dict(state["scene_camera_view_capture"])
-        state["semantic_pose_state"] = semantic_pose_state
-    write_state_from_state_arg(state)
-    view_variant = _camera_capture_variant(capture)
-    provenance = _camera_capture_provenance(capture)
-    return _ok(
-        "camera_views",
-        camera_control_api=capture.get("camera_control_api") or CAMERA_CONTROL_API_NAME,
-        camera_request_schema=capture.get("camera_request_schema"),
-        calibration_status=capture.get("calibration_status"),
-        lighting_profile=capture.get("lighting_profile") or {},
-        lighting_diagnostics=capture.get("lighting_diagnostics") or {},
-        color_profile=capture.get("color_profile") or {},
-        color_management=capture.get("color_management") or {},
-        native_render_diagnostics=capture.get("native_render_diagnostics") or {},
-        lens=capture.get("lens") or {},
-        derived_lens=capture.get("derived_lens") or {},
-        view_variant=view_variant,
-        visual_artifact_provenance=provenance,
-        scene_usd=scene_usd,
-        views=capture.get("views") or [],
-        images=capture.get("images") or {},
-        shapes=capture.get("shapes") or {},
-        scene_bounds=capture.get("scene_bounds"),
-        semantic_pose_stage_application=semantic_pose_application,
-        semantic_pose_rendered=semantic_pose_application.get("rendered_to_usd") is True,
-        render_steps=int(capture.get("render_steps") or 0),
-        render_resolution={"width": args.render_width, "height": args.render_height},
-    )
-
-
-def _locations_command(_: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
-    return {"ok": True, "tool": "locations", "final_locations": state["locations"]}
+def _locations_command(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    return isaac_worker_outputs.locations_command(args, state)
 
 
 _STATE_COMMANDS: dict[str, _IsaacWorkerCommand] = {
@@ -6232,237 +1642,55 @@ def _robot_view_camera_control_contract(
     robot_pose: dict[str, Any] | None = None,
     focus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    provenance = _dict(state.get("robot_view_provenance"))
-    semantic_pose_state_refreshed = provenance.get("semantic_pose_state_refreshed")
-    robot_import = _dict(state.get("robot_import"))
-    mounted_head_camera = bool(
-        provenance.get("robot_mounted_head_camera")
-        or robot_import.get("status") == "imported"
-        or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
-    )
-    head_camera_equivalent = (
-        bool(provenance.get("head_camera_equivalent")) and not mounted_head_camera
-    )
-    if mounted_head_camera or head_camera_equivalent or robot_import:
-        status = (
-            "robot_mounted_head_camera_robot_view"
-            if mounted_head_camera
-            else "robot_head_camera_equivalent_robot_view"
-        )
-        camera_model = (
-            "robot_mounted_head_camera_v1"
-            if mounted_head_camera
-            else "robot_head_camera_equivalent_v1"
-        )
-        contract = robot_mounted_head_camera_control_contract(
-            backend=ISAACLAB_SUBPROCESS_BACKEND,
-            status=status,
-            camera_model=camera_model,
-            fpv_source=str(
-                provenance.get("fpv")
-                or (
-                    "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-                    if mounted_head_camera
-                    else "isaac_lab_head_camera_equivalent:fpv"
-                )
-            ),
-            verify_source=str(provenance.get("verify") or "isaac_lab_semantic_pose_verify_camera"),
-            chase_source="robot_relative_camera_follower",
-            pose_source=str(
-                _dict(robot_pose).get("pose_source") or "roboclaws_shared_scene_frame_support_pose"
-            ),
-            lens_source=(
-                "rby1m_mujoco_robot_0/head_camera_extrinsics_and_fov"
-                if mounted_head_camera
-                else "rby1m_head_camera_contract_pending_isaac_robot_import"
-            ),
-            camera_prim_path=str(robot_import.get("head_camera_prim_path") or ""),
-            robot_asset=robot_import,
-            robot_pose=dict(robot_pose or {}),
-            focus=dict(focus or {}),
-            color_profile=_dict(state.get("robot_view_color_profile")),
-            color_management=_dict(state.get("robot_view_color_management")),
-            lighting_profile=_dict(state.get("robot_view_lighting_profile")),
-        )
-        contract.update(
-            {
-                "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
-                "evidence_note": (
-                    "Isaac cleanup FPV uses the imported RBY1M mounted head camera "
-                    "when the robot USD import artifact is present. Without that "
-                    "artifact it remains explicitly marked as head-camera-equivalent. "
-                    "Chase is rendered from a robot-relative rear/high report camera; "
-                    "map remains auxiliary report evidence."
-                ),
-            }
-        )
-        return contract
-    contract = backend_local_robot_view_camera_control_contract(
-        backend=ISAACLAB_SUBPROCESS_BACKEND,
-        status="backend_local_scene_bounds_camera",
-        fpv_source=str(provenance.get("fpv") or "isaac_lab_scene_bounds_fpv"),
-        verify_source=str(provenance.get("verify") or "isaac_lab_scene_bounds_verify"),
-        pose_source="isaac_support_pose_near_current_receptacle",
-        lens_source="isaac_robot_view_pinhole_defaults_24mm_20.955mm_aperture",
-    )
-    contract.update(
-        {
-            "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
-            "robot_pose": dict(robot_pose or {}),
-            "focus": dict(focus or {}),
-            "evidence_note": (
-                "Isaac cleanup robot views currently use backend-local scene-bounds/support-pose "
-                "camera placement, not roboclaws.camera_control.render_views. They are useful "
-                "report evidence, but they are not yet proof that the agent-facing FPV is "
-                "backend-swappable at identical scene-frame pose/FOV."
-            ),
-        }
-    )
-    return contract
-
-
-def _target_room_id_from_pose_inputs(
-    state: dict[str, Any],
-    receptacle_id: str,
-    support: dict[str, Any],
-) -> str | None:
-    scenario_receptacle = (
-        _dict(_receptacles_by_id(state).get(receptacle_id))
-        if isinstance(state.get("scenario"), dict)
-        else {}
-    )
-    room_area = str(scenario_receptacle.get("room_area") or "")
-    if room_area.startswith("room_"):
-        return room_area
-    metadata_room_id = str(support.get("metadata_room_id") or "")
-    if metadata_room_id:
-        return (
-            metadata_room_id if metadata_room_id.startswith("room_") else f"room_{metadata_room_id}"
-        )
-    target = _support_pose_position(support)
-    if target is None:
-        return None
-    for outline in state.get("room_outlines") or []:
-        center = outline.get("center")
-        half_extents = outline.get("half_extents")
-        if not isinstance(center, list | tuple) or not isinstance(half_extents, list | tuple):
-            continue
-        if float(center[0]) - float(half_extents[0]) <= target[0] <= float(center[0]) + float(
-            half_extents[0]
-        ) and float(center[1]) - float(half_extents[1]) <= target[1] <= float(center[1]) + float(
-            half_extents[1]
-        ):
-            return str(outline.get("room_id") or "") or None
-    return None
-
-
-def _robot_pose_for_receptacle(
-    state: dict[str, Any],
-    receptacle_id: str,
-) -> dict[str, Any]:
-    support = _receptacle_support_pose(state, receptacle_id)
-    if not support:
-        pose = _pose_near(receptacle_id)
-        pose["pose_source"] = "hash_fallback_pose_near_receptacle"
-        return pose
-    x = float(support["x"])
-    y = float(support["y"])
-    z = float(support.get("z", 0.0))
-    pose = resolve_cleanup_robot_pose(
-        target_position=[x, y, z],
-        target_room_id=_target_room_id_from_pose_inputs(state, receptacle_id, support),
-        target_receptacle_id=receptacle_id,
-        room_outlines=state.get("room_outlines") or [],
-        scene_center=_scene_index_center_xy(state),
-        stand_off_m=1.15,
-        frame=MOLMOSPACES_SCENE_FRAME,
-    )
-    pose["support_pose_source"] = str(support.get("source") or "")
-    return pose
-
-
-def _robot_pose_for_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
-    for key in ("b1_pose", "robot_pose"):
-        pose = _dict(waypoint.get(key))
-        if _has_xy(pose):
-            result = _normalized_waypoint_robot_pose(
-                pose,
-                waypoint=waypoint,
-                pose_source=str(pose.get("pose_source") or key),
-            )
-            result["waypoint_pose_key"] = key
-            return result
-    if not _has_xy(waypoint):
-        return {}
-    return _normalized_waypoint_robot_pose(
-        waypoint,
-        waypoint=waypoint,
-        pose_source=str(waypoint.get("pose_source") or "public_waypoint_map_frame"),
+    return isaac_worker_outputs.robot_view_camera_control_contract(
+        state,
+        robot_pose=robot_pose,
+        focus=focus,
+        hooks=_isaac_worker_output_hooks(),
     )
 
 
-def _normalized_waypoint_robot_pose(
-    pose: dict[str, Any],
-    *,
-    waypoint: dict[str, Any],
-    pose_source: str,
-) -> dict[str, Any]:
-    x = _optional_float(pose.get("x"))
-    y = _optional_float(pose.get("y"))
-    if x is None or y is None:
-        return {}
-    yaw = _optional_float(pose.get("yaw"))
-    yaw_deg = _optional_float(pose.get("yaw_deg"))
-    if yaw_deg is None and yaw is not None:
-        yaw_deg = math.degrees(yaw)
-    result: dict[str, Any] = {
-        "frame": str(
-            pose.get("frame") or pose.get("frame_id") or waypoint.get("frame_id") or "map"
-        ),
-        "x": round(float(x), 6),
-        "y": round(float(y), 6),
-        "z": round(float(_optional_float(pose.get("z")) or 0.0), 6),
-        "pose_source": pose_source,
-        "waypoint_id": str(waypoint.get("waypoint_id") or ""),
-        "room_id": str(waypoint.get("room_id") or ""),
-    }
-    if yaw_deg is not None:
-        result["yaw_deg"] = round(float(yaw_deg), 6)
-    if yaw is not None:
-        result["theta"] = round(float(yaw), 6)
-    target = _vec3(pose.get("target_position"))
-    if target is not None:
-        result["target_position"] = _round_vec3(target)
-    fixture_ids = [str(item) for item in waypoint.get("fixture_ids") or [] if str(item)]
-    if fixture_ids:
-        result["fixture_ids"] = fixture_ids
-    if pose.get("support_pose_source") is not None:
-        result["support_pose_source"] = str(pose.get("support_pose_source"))
-    return result
-
-
-def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    binding = _binding_for_handle(
-        state.get("scene_binding_diagnostics"),
-        receptacle_id,
-        ("selected_target_receptacle_bindings", "receptacle_bindings"),
+def _isaac_robot_pose_hooks() -> isaac_robot_pose_focus.IsaacRobotPoseHooks:
+    return isaac_robot_pose_focus.IsaacRobotPoseHooks(
+        binding_for_handle=_binding_for_handle,
+        dict_value=_dict,
+        has_xy=_has_xy,
+        optional_float=_optional_float,
+        pose_near=_pose_near,
+        receptacle_support_pose=_receptacle_support_pose,
+        receptacles_by_id=_receptacles_by_id,
+        round_vec3=_round_vec3,
+        scene_index_center_xy=_scene_index_center_xy,
+        semantic_object_pose_entry=_semantic_object_pose_entry,
+        support_pose_position=_support_pose_position,
+        vec3=_vec3,
     )
-    for handle in (binding.get("usd_handle"), receptacle_id):
-        support = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get("support_pose")
-        support_pose = _dict(support)
-        if _has_xy(support_pose) and support_pose.get("source") in {
-            "usd_world_bounds_top_center",
-            ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
-            ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
-            ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
-        }:
-            metadata_room_id = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get(
-                "metadata_room_id"
-            )
-            if metadata_room_id is not None:
-                support_pose["metadata_room_id"] = metadata_room_id
-            return support_pose
-    return {}
+
+
+def _with_isaac_robot_pose_hooks(func: Callable[..., Any]) -> Callable[..., Any]:
+    def call(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs, hooks=_isaac_robot_pose_hooks())
+
+    return call
+
+
+_target_room_id_from_pose_inputs = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.target_room_id_from_pose_inputs
+)
+_robot_pose_for_receptacle = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.robot_pose_for_receptacle
+)
+_robot_pose_for_waypoint = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.robot_pose_for_waypoint
+)
+_normalized_waypoint_robot_pose = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.normalized_waypoint_robot_pose
+)
+_receptacle_support_pose = _with_isaac_robot_pose_hooks(
+    isaac_robot_pose_focus.receptacle_support_pose
+)
+_robot_view_focus = _with_isaac_robot_pose_hooks(isaac_robot_pose_focus.robot_view_focus)
+_focus_payload = _with_isaac_robot_pose_hooks(isaac_robot_pose_focus.focus_payload)
 
 
 def _binding_for_handle(
@@ -6470,45 +1698,42 @@ def _binding_for_handle(
     handle: str,
     groups: tuple[str, ...],
 ) -> dict[str, Any]:
-    bindings = _dict(scene_binding_diagnostics)
-    for group in groups:
-        item = _dict(_dict(bindings.get(group)).get(handle))
-        if item:
-            return item
-    return {}
-
-
-def _scene_index_center_xy(state: dict[str, Any]) -> tuple[float, float]:
-    centers: list[list[float]] = []
-    for index_name in ("receptacle_index", "object_index"):
-        for entry in _dict(state.get(index_name)).values():
-            center = _vec3(_dict(_dict(entry).get("usd_world_bounds")).get("center"))
-            if center is not None:
-                centers.append(center)
-    if not centers:
-        return (0.0, 0.0)
-    return (
-        sum(center[0] for center in centers) / len(centers),
-        sum(center[1] for center in centers) / len(centers),
+    return isaac_robot_pose_focus.binding_for_handle(
+        scene_binding_diagnostics,
+        handle,
+        groups,
+        dict_value=_dict,
     )
 
 
-def _camera_capture_variant(capture: dict[str, Any]) -> str:
-    if any(
-        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
-        for item in capture.get("views") or []
-    ):
-        return "isaaclab-canonical-eye-target-camera-control-v1"
-    return "isaaclab-anchor-orbit-camera-control-v1"
+def _scene_index_center_xy(state: dict[str, Any]) -> tuple[float, float]:
+    return isaac_robot_pose_focus.scene_index_center_xy(
+        state,
+        dict_value=_dict,
+        vec3=_vec3,
+    )
 
 
-def _camera_capture_provenance(capture: dict[str, Any]) -> str:
-    if any(
-        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
-        for item in capture.get("views") or []
-    ):
-        return "isaac_lab_camera_rgb_canonical_eye_target_scene_probe"
-    return "isaac_lab_camera_rgb_anchor_orbit_scene_probe"
+def _semantic_object_pose_entry(
+    state: dict[str, Any],
+    object_id: str | None,
+) -> dict[str, Any]:
+    return isaac_robot_pose_focus.semantic_object_pose_entry(
+        state,
+        object_id,
+        dict_value=_dict,
+    )
+
+
+def _support_pose_position(pose: dict[str, Any]) -> list[float] | None:
+    return isaac_robot_pose_focus.support_pose_position(
+        pose,
+        has_xy=_has_xy,
+    )
+
+
+_camera_capture_variant = isaac_worker_outputs.camera_capture_variant
+_camera_capture_provenance = isaac_worker_outputs.camera_capture_provenance
 
 
 def _real_semantic_pose_robot_view_images(
@@ -6525,8 +1750,8 @@ def _real_semantic_pose_robot_view_images(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
-    return real_semantic_pose_robot_view_images(
-        SemanticPoseRobotViewRequest(
+    return isaac_semantic_pose_robot_view.real_semantic_pose_robot_view_images(
+        isaac_semantic_pose_robot_view.SemanticPoseRobotViewRequest(
             state=state,
             target_images=target_images,
             width=width,
@@ -6539,127 +1764,19 @@ def _real_semantic_pose_robot_view_images(
             focus_object_id=focus_object_id,
             focus_receptacle_id=focus_receptacle_id,
         ),
-        hooks=SemanticPoseRobotViewHooks(
+        hooks=isaac_semantic_pose_robot_view.SemanticPoseRobotViewHooks(
             capture_semantic_pose_robot_views=capture_semantic_pose_robot_views,
             has_required_robot_view_images=_has_required_robot_view_images,
             semantic_pose_robot_view_provenance=_semantic_pose_robot_view_provenance,
             write_state_from_state_arg=write_state_from_state_arg,
         ),
         real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
-        isaac_rby1m_head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+        isaac_rby1m_head_camera_prim=isaac_camera_geometry.ISAAC_RBY1M_HEAD_CAMERA_PRIM,
     )
-
-
-def _robot_view_focus(
-    state: dict[str, Any],
-    robot_pose: dict[str, Any],
-    *,
-    focus_object_id: str | None,
-    focus_receptacle_id: str | None,
-) -> dict[str, Any]:
-    focus = _focus_payload(
-        state=state,
-        focus_object_id=focus_object_id,
-        focus_receptacle_id=focus_receptacle_id,
-    )
-    target = _vec3(focus.get("focus_position"))
-    source = str(focus.get("source") or "")
-    if target is None:
-        target = _vec3(robot_pose.get("target_position"))
-        source = "isaac_usd_world_bounds_robot_pose"
-    if target is None:
-        target = [0.0, 0.0, 0.0]
-        source = "isaac_semantic_pose_default_origin"
-    return {
-        **focus,
-        "has_focus": True,
-        "focus_position": target,
-        "object_id": focus_object_id,
-        "receptacle_id": focus_receptacle_id,
-        "source": source,
-    }
-
-
-def _focus_payload(
-    *,
-    state: dict[str, Any] | None = None,
-    focus_object_id: str | None,
-    focus_receptacle_id: str | None,
-) -> dict[str, Any]:
-    state = state if isinstance(state, dict) else {}
-    object_pose = _semantic_object_pose_entry(state, focus_object_id) if focus_object_id else {}
-    receptacle_pose = (
-        _receptacle_support_pose(state, focus_receptacle_id) if focus_receptacle_id else {}
-    )
-    object_position = _vec3(object_pose.get("position"))
-    receptacle_position = _support_pose_position(receptacle_pose)
-    focus_position = (
-        object_position
-        if object_position is not None
-        else receptacle_position
-        if receptacle_position is not None
-        else None
-    )
-    has_focus = bool(focus_object_id or focus_receptacle_id)
-    focus_mode = "object_closeup" if object_position is not None else "receptacle_context"
-    source = (
-        "isaac_semantic_pose_object_pose"
-        if object_position is not None
-        else "isaac_usd_world_bounds_support_pose"
-        if receptacle_position is not None
-        else "isaac_semantic_pose"
-    )
-    segmentation_unavailable = {
-        "status": "segmentation_unavailable",
-        "reason": "Isaac semantic-pose worker has no segmentation mask evidence.",
-    }
-    return {
-        "has_focus": has_focus,
-        "object_id": focus_object_id,
-        "receptacle_id": focus_receptacle_id,
-        "source": source,
-        "focus_mode": focus_mode,
-        "focus_position": focus_position,
-        "object_position": object_position,
-        "receptacle_position": receptacle_position,
-        "visibility": dict(segmentation_unavailable),
-        "fpv_visibility": dict(segmentation_unavailable),
-    }
-
-
-def _semantic_object_pose_entry(
-    state: dict[str, Any],
-    object_id: str | None,
-) -> dict[str, Any]:
-    if not object_id:
-        return {}
-    semantic_pose = _dict(state.get("semantic_pose_state"))
-    object_poses = _dict(semantic_pose.get("object_poses"))
-    return _dict(object_poses.get(object_id))
-
-
-def _support_pose_position(pose: dict[str, Any]) -> list[float] | None:
-    if not _has_xy(pose):
-        return None
-    try:
-        return [
-            float(pose["x"]),
-            float(pose["y"]),
-            float(pose.get("z", 0.0)),
-        ]
-    except (TypeError, ValueError):
-        return None
 
 
 def _real_robot_view_images(state: dict[str, Any]) -> dict[str, str]:
-    images = {
-        key: str(value)
-        for key, value in _dict(state.get("robot_view_images")).items()
-        if key in ROBOT_VIEW_KEYS and value
-    }
-    if _has_required_robot_view_images(images):
-        return images
-    return {}
+    return isaac_robot_view_artifacts.real_robot_view_images(state, robot_view_keys=ROBOT_VIEW_KEYS)
 
 
 def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -6683,20 +1800,15 @@ def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, An
 
 
 def _real_smoke_robot_view_images(real_smoke: dict[str, Any] | None) -> dict[str, str]:
-    if real_smoke is None:
-        return {}
-    images = {
-        key: str(value)
-        for key, value in _dict(real_smoke.get("robot_view_images")).items()
-        if key in ROBOT_VIEW_KEYS and value
-    }
-    if not _has_required_robot_view_images(images):
-        return {}
-    return images if all(Path(value).is_file() for value in images.values()) else {}
+    return isaac_robot_view_artifacts.real_smoke_robot_view_images(
+        real_smoke, robot_view_keys=ROBOT_VIEW_KEYS
+    )
 
 
 def _has_required_robot_view_images(images: dict[str, str]) -> bool:
-    return all(bool(images.get(key)) for key in ROBOT_VIEW_KEYS)
+    return isaac_robot_view_artifacts.has_required_robot_view_images(
+        images, robot_view_keys=ROBOT_VIEW_KEYS
+    )
 
 
 def _copy_real_robot_view_images(
@@ -6706,30 +1818,19 @@ def _copy_real_robot_view_images(
     width: int,
     height: int,
 ) -> dict[str, list[int]]:
-    shapes: dict[str, list[int]] = {}
-    for key in ROBOT_VIEW_KEYS:
-        source = Path(source_images[key])
-        target = target_images[key]
-        shapes[key] = _copy_nonblank_rgb_image(
-            source,
-            target,
-            width=width,
-            height=height,
-            description=f"real Isaac {key} view image",
-        )
-    return shapes
+    return isaac_robot_view_artifacts.copy_real_robot_view_images(
+        source_images,
+        target_images,
+        width=width,
+        height=height,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+    )
 
 
 def _real_snapshot_source_image(state: dict[str, Any]) -> Path:
-    real_smoke = _dict(state.get("real_runtime_smoke"))
-    image_path = str(real_smoke.get("image_path") or "")
-    if image_path:
-        return Path(image_path)
-    robot_views = _real_robot_view_images(state)
-    fpv_path = str(robot_views.get("fpv") or "")
-    if fpv_path:
-        return Path(fpv_path)
-    raise RuntimeError("real Isaac rendering is proven, but no RGB snapshot source is recorded")
+    return isaac_robot_view_artifacts.real_snapshot_source_image(
+        state, robot_view_keys=ROBOT_VIEW_KEYS
+    )
 
 
 def _copy_real_snapshot_image(
@@ -6739,12 +1840,8 @@ def _copy_real_snapshot_image(
     width: int,
     height: int,
 ) -> list[int]:
-    return _copy_nonblank_rgb_image(
-        source,
-        target,
-        width=width,
-        height=height,
-        description="real Isaac snapshot source image",
+    return isaac_robot_view_artifacts.copy_real_snapshot_image(
+        source, target, width=width, height=height
     )
 
 
@@ -6756,71 +1853,33 @@ def _copy_nonblank_rgb_image(
     height: int,
     description: str,
 ) -> list[int]:
-    if not source.is_file():
-        raise RuntimeError(f"missing {description}: {source}")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    same_path = source.resolve() == target.resolve()
-    with Image.open(source) as image:
-        rgb = image.convert("RGB")
-        if not _pil_image_has_variance(rgb):
-            raise RuntimeError(f"{description} appears blank: {source}")
-        if not same_path and rgb.size != (width, height):
-            rgb = rgb.resize((width, height))
-        if not same_path:
-            rgb.save(target)
-        return [rgb.height, rgb.width, 3]
+    return isaac_robot_view_artifacts.copy_nonblank_rgb_image(
+        source,
+        target,
+        width=width,
+        height=height,
+        description=description,
+    )
 
 
 def _pil_image_has_variance(image: Image.Image) -> bool:
-    return any(high > low for low, high in image.getextrema())
+    return isaac_robot_view_artifacts.pil_image_has_variance(image)
 
 
 def _real_rendering_proven(state: dict[str, Any]) -> bool:
-    rendering = _dict(_dict(state.get("runtime")).get("rendering"))
-    return rendering.get("real_rendering_proven") is True
+    return isaac_robot_view_artifacts.real_rendering_proven(state)
 
 
 def _robot_view_provenance(
     runtime_mode: str,
     real_smoke: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    if _has_required_robot_view_images(_real_smoke_robot_view_images(real_smoke)):
-        method = str(real_smoke.get("robot_view_capture_method") or REAL_ROBOT_VIEW_CAPTURE_METHOD)
-        provenance = {key: f"{method}:{key}" for key in ROBOT_VIEW_KEYS}
-        mounted_head_camera = bool(real_smoke.get("robot_view_uses_mounted_head_camera"))
-        if mounted_head_camera:
-            provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-        else:
-            provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
-        provenance["semantic_pose_state_refreshed"] = False
-        provenance["canonical_camera_control"] = False
-        provenance["robot_mounted_head_camera"] = mounted_head_camera
-        provenance["head_camera_equivalent"] = not mounted_head_camera
-        provenance["evidence_note"] = (
-            "Robot-view images are static captures from the loaded USD scene during init. "
-            "FPV uses the imported RBY1M mounted head camera when the robot USD import "
-            "artifact is present; otherwise it is marked as a head-camera equivalent. "
-            "Semantic pose edits are tracked in backend JSON state and are not rendered "
-            "back into Isaac yet."
-        )
-        return provenance
-    if runtime_mode == "real":
-        provenance = {key: "isaac_robot_view_capture_pending" for key in ROBOT_VIEW_KEYS}
-        provenance.update(
-            {
-                "semantic_pose_state_refreshed": False,
-                "evidence_note": "Real Isaac robot-view captures were not recorded.",
-            }
-        )
-        return provenance
-    provenance = {key: "fake_protocol_placeholder_image" for key in ROBOT_VIEW_KEYS}
-    provenance.update(
-        {
-            "semantic_pose_state_refreshed": False,
-            "evidence_note": "CI fake mode writes deterministic placeholder robot-view images.",
-        }
+    return isaac_robot_view_artifacts.robot_view_provenance(
+        runtime_mode,
+        real_smoke,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        real_robot_view_capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
     )
-    return provenance
 
 
 def _robot_view_command_provenance(
@@ -6828,19 +1887,12 @@ def _robot_view_command_provenance(
     *,
     semantic_pose_state_refreshed: bool,
 ) -> dict[str, Any]:
-    if semantic_pose_state_refreshed:
-        provenance = _dict(state.get("robot_view_provenance"))
-        return _semantic_pose_robot_view_provenance(
-            mounted_head_camera=bool(
-                provenance.get("robot_mounted_head_camera")
-                or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
-            ),
-            head_camera_equivalent=bool(
-                provenance.get("head_camera_equivalent")
-                or _dict(state.get("semantic_pose_view_capture")).get("head_camera_equivalent")
-            ),
-        )
-    return _dict(state.get("robot_view_provenance"))
+    return isaac_robot_view_artifacts.robot_view_command_provenance(
+        state,
+        semantic_pose_state_refreshed=semantic_pose_state_refreshed,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
+    )
 
 
 def _semantic_pose_robot_view_provenance(
@@ -6848,961 +1900,90 @@ def _semantic_pose_robot_view_provenance(
     mounted_head_camera: bool = False,
     head_camera_equivalent: bool = False,
 ) -> dict[str, Any]:
-    provenance = {key: f"{REAL_ROBOT_VIEW_RERENDER_METHOD}:{key}" for key in ROBOT_VIEW_KEYS}
-    if mounted_head_camera:
-        provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-    elif head_camera_equivalent:
-        provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
-    provenance["semantic_pose_state_refreshed"] = True
-    provenance["canonical_camera_control"] = False
-    provenance["robot_mounted_head_camera"] = mounted_head_camera
-    provenance["head_camera_equivalent"] = head_camera_equivalent
-    provenance["evidence_note"] = (
-        "Robot-view images were recaptured from the loaded USD scene after applying "
-        "backend semantic pose state. FPV is either the imported RBY1M mounted head "
-        "camera or an explicit head-camera-equivalent view; chase is a robot-relative "
-        "rear/high report view and map remains auxiliary report evidence. "
-        "This is still semantic pose rendering, not planner-backed or "
-        "physics-backed manipulation."
-    )
-    return provenance
-
-
-def _safe_file_stem(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in value)
-    return cleaned or "view"
-
-
-def _write_placeholder_image(
-    path: Path,
-    *,
-    title: str,
-    subtitle: str,
-    state: dict[str, Any],
-    width: int,
-    height: int,
-    focus_object_id: str | None = None,
-    focus_receptacle_id: str | None = None,
-) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image = Image.new("RGB", (width, height), (28, 32, 38))
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, width, 58), fill=(55, 68, 82))
-    draw.text((16, 14), title[:80], fill=(245, 248, 250))
-    draw.text((16, 36), subtitle[:80], fill=(178, 203, 219))
-    receptacles = list((state.get("receptacle_index") or {}).keys())
-    objects = state.get("scenario", {}).get("objects") or []
-    if receptacles:
-        cell_w = max(48, (width - 32) // min(len(receptacles), 5))
-        for index, receptacle_id in enumerate(receptacles[:10]):
-            row = index // 5
-            col = index % 5
-            x0 = 16 + col * cell_w
-            y0 = 82 + row * 88
-            fill = (78, 116, 94) if receptacle_id == focus_receptacle_id else (70, 80, 92)
-            draw.rectangle((x0, y0, x0 + cell_w - 8, y0 + 68), outline=(140, 159, 176), fill=fill)
-            draw.text((x0 + 6, y0 + 6), receptacle_id[:18], fill=(240, 240, 240))
-    for index, obj in enumerate(objects[:12]):
-        object_id = str(obj.get("object_id", ""))
-        location = str(state.get("locations", {}).get(object_id, obj.get("location_id", "")))
-        x = 24 + (index % 6) * max(56, (width - 48) // 6)
-        y = height - 100 + (index // 6) * 34
-        fill = (210, 155, 65) if object_id == focus_object_id else (169, 191, 112)
-        draw.ellipse((x, y, x + 18, y + 18), fill=fill, outline=(245, 245, 245))
-        draw.text((x + 24, y + 1), f"{object_id[:14]}->{location[:14]}", fill=(230, 230, 230))
-    image.save(path)
-
-
-def _ok(tool: str, **payload: Any) -> dict[str, Any]:
-    return {
-        "ok": True,
-        "tool": tool,
-        "status": "ok",
-        "backend": ISAACLAB_SUBPROCESS_BACKEND,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "physical_robot": False,
-        "planner_backed": False,
-        **payload,
-    }
-
-
-def _error(tool: str, error: str, **payload: Any) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "tool": tool,
-        "status": "error",
-        "error": error,
-        "backend": ISAACLAB_SUBPROCESS_BACKEND,
-        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
-        "physical_robot": False,
-        "planner_backed": False,
-        **payload,
-    }
-
-
-def read_state(path: Path) -> dict[str, Any]:
-    state = json.loads(path.read_text(encoding="utf-8"))
-    state["_state_path"] = str(path)
-    return state
-
-
-def write_state(path: Path, state: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    clean = {key: value for key, value in state.items() if not key.startswith("_")}
-    path.write_text(json.dumps(clean, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def write_state_from_state_arg(state: dict[str, Any]) -> None:
-    write_state(Path(state["_state_path"]), state)
-
-
-def _count(state: dict[str, Any], tool: str) -> None:
-    counts = Counter(state.get("tool_event_counts") or {})
-    counts[f"{tool}:request"] += 1
-    state["tool_event_counts"] = dict(counts)
-
-
-def _public_state(state: dict[str, Any]) -> dict[str, Any]:
-    payload = json.loads(json.dumps(state["scenario"]))
-    by_id = {obj["object_id"]: obj for obj in payload["objects"]}
-    for object_id, location_id in state["locations"].items():
-        by_id[object_id]["location_id"] = location_id
-        containment = (state.get("containment") or {}).get(object_id)
-        if containment:
-            by_id[object_id].update(containment)
-    return payload
-
-
-def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
-    private = PrivateScoringManifest.from_dict(state["private_manifest"])
-    public = state["scenario"]
-    objects = tuple(
-        CleanupObject(
-            object_id=str(item["object_id"]),
-            name=str(item["name"]),
-            category=str(item["category"]),
-            location_id=str(item["location_id"]),
-            pickupable=bool(item.get("pickupable", True)),
-        )
-        for item in public.get("objects", [])
-    )
-    receptacles = tuple(
-        CleanupReceptacle(
-            receptacle_id=str(item["receptacle_id"]),
-            name=str(item["name"]),
-            room_area=str(item.get("room_area") or "unknown"),
-            kind=str(item.get("kind") or "receptacle"),
-            category=str(item["category"]) if item.get("category") is not None else None,
-        )
-        for item in public.get("receptacles", [])
-    )
-    return CleanupScenario(
-        scenario_id=str(public["scenario_id"]),
-        task=str(public["task"]),
-        seed=int(public["seed"]),
-        objects=objects,
-        receptacles=receptacles,
-        private_manifest=private,
+    return isaac_robot_view_artifacts.semantic_pose_robot_view_provenance(
+        mounted_head_camera=mounted_head_camera,
+        head_camera_equivalent=head_camera_equivalent,
+        robot_view_keys=ROBOT_VIEW_KEYS,
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
     )
 
 
-def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
-    if path is None:
-        return {}
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict):
-        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
-    if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
-        raise ValueError(
-            "generated mess manifest schema mismatch: "
-            f"{manifest.get('schema')} != {GENERATED_MESS_MANIFEST_SCHEMA}"
-        )
-    return manifest
-
-
-def _scenario_for_init(
-    args: argparse.Namespace,
-    *,
-    generated_mess_manifest: dict[str, Any] | None = None,
-) -> CleanupScenario:
-    if args.scene_usd_path is not None:
-        generated_mess_manifest = None
-    if args.map_bundle_dir is None:
-        return _scenario_from_generated_mess_manifest_or_limit(
-            build_cleanup_scenario(seed=args.seed),
-            generated_mess_count=args.generated_mess_count,
-            generated_mess_manifest=generated_mess_manifest,
-        )
-    return _scenario_from_generated_mess_manifest_or_limit(
-        _scenario_from_map_bundle(
-            args.map_bundle_dir,
-            seed=args.seed,
-            generated_mess_count=args.generated_mess_count,
-        ),
-        generated_mess_count=args.generated_mess_count,
-        generated_mess_manifest=generated_mess_manifest,
-    )
-
-
-def _scenario_source(args: argparse.Namespace) -> str:
-    return "nav2_map_bundle" if args.map_bundle_dir is not None else "default_cleanup_scenario"
-
-
-def _effective_scene_index(args: argparse.Namespace) -> int:
-    scene_usd_path = getattr(args, "scene_usd_path", None)
-    inferred = _scene_index_from_usd_path(scene_usd_path)
-    if inferred is not None:
-        return inferred
-    return int(getattr(args, "scene_index", 0) or 0)
-
-
-def _scene_index_from_usd_path(path: Any) -> int | None:
-    if path is None:
-        return None
-    for part in reversed(Path(path).parts):
-        match = re.search(r"(?:^|_)val_?(\d+)(?:_|$)", part)
-        if match:
-            return int(match.group(1))
-    return None
-
-
-def _scene_specific_scenario_if_needed(
-    *,
-    args: argparse.Namespace,
-    generated_mess_manifest: dict[str, Any] | None,
-    scene_binding_diagnostics: dict[str, Any],
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-    real_smoke: dict[str, Any] | None,
-) -> CleanupScenario | None:
-    if real_smoke is None or args.scene_usd_path is None:
-        return None
-    if not generated_mess_manifest and scene_binding_diagnostics.get("status") == "selected_bound":
-        return None
-    return _scenario_from_scene_index(
-        scene_source=args.scene_source,
-        scene_index=args.scene_index,
-        seed=args.seed,
-        generated_mess_count=args.generated_mess_count,
-        generated_mess_object_ids=tuple(getattr(args, "generated_mess_object_id", None) or ()),
-        generated_mess_manifest=generated_mess_manifest,
-        object_index=object_index,
-        receptacle_index=receptacle_index,
-    )
-
-
-def _scenario_from_scene_index(
-    *,
-    scene_source: str,
-    scene_index: int,
-    seed: int,
-    generated_mess_count: int,
-    generated_mess_object_ids: tuple[str, ...] = (),
-    generated_mess_manifest: dict[str, Any] | None = None,
-    object_index: dict[str, dict[str, Any]],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> CleanupScenario | None:
-    cleanup_receptacle_index = _cleanup_receptacle_index_for_mess_generation(receptacle_index)
-    receptacles = tuple(
-        _cleanup_receptacle_from_scene_index(handle, entry)
-        for handle, entry in sorted(cleanup_receptacle_index.items())
-    )
-    if not receptacles:
-        return None
-
-    selectable_objects: list[dict[str, Any]] = []
-    for handle, entry in sorted(object_index.items()):
-        target_id = _scene_target_receptacle_id(entry, cleanup_receptacle_index)
-        if not target_id:
-            continue
-        source_id = _scene_source_receptacle_id(
-            entry,
-            cleanup_receptacle_index,
-            target_id=target_id,
-        )
-        selectable_objects.append(
-            {
-                "object_id": handle,
-                "name": _scene_object_name(handle, entry),
-                "category": _scene_cleanup_object_category(entry),
-                "location_id": source_id,
-            }
-        )
-
-    receptacle_payloads = [receptacle.to_public_dict() for receptacle in receptacles]
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if generated_mess_count == 0:
-        selected = []
-    elif generated_mess_manifest:
-        selected = targets_from_generated_mess_manifest(
-            selectable_objects,
-            receptacle_payloads,
-            generated_mess_manifest,
-            target_count=int(generated_mess_count),
-        )
-    else:
-        selected = select_generated_mess_targets(
-            selectable_objects,
-            receptacle_payloads,
-            target_count=int(generated_mess_count),
-            seed=seed,
-            object_ids=generated_mess_object_ids or None,
-        )
-
-    objects = tuple(
-        CleanupObject(
-            object_id=str(item["object_id"]),
-            name=str(item["name"]),
-            category=str(item["category"]),
-            location_id=str(item.get("start_receptacle_id") or item["location_id"]),
-        )
-        for item in selected
-    )
-    targets = tuple(
-        TargetRule(
-            object_id=str(item["object_id"]),
-            valid_receptacle_ids=(str(item["target_receptacle_id"]),),
-        )
-        for item in selected
-    )
-
-    scenario_id = f"isaac-scene-index-{scene_source}-{scene_index}-{seed}-{len(targets)}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task="Clean up this Isaac-loaded MolmoSpaces scene using scene-indexed objects.",
-        seed=seed,
-        objects=tuple(objects),
-        receptacles=receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=targets,
-            success_threshold=generated_mess_success_threshold(len(targets)),
-        ),
-    )
-
-
-def _cleanup_receptacle_index_for_mess_generation(
-    receptacle_index: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    cleanup = {
-        handle: entry
-        for handle, entry in receptacle_index.items()
-        if _norm(_scene_object_category(entry)) in MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS
-    }
-    return cleanup or receptacle_index
-
-
-def _cleanup_receptacle_from_scene_index(
-    handle: str,
-    entry: dict[str, Any],
-) -> CleanupReceptacle:
-    category = _scene_object_category(entry)
-    return CleanupReceptacle(
-        receptacle_id=handle,
-        name=str(entry.get("public_label") or category or handle),
-        room_area="isaac_scene",
-        kind=str(entry.get("kind") or "receptacle"),
-        category=category,
-    )
-
-
-def _scene_object_name(handle: str, entry: dict[str, Any]) -> str:
-    category = _scene_object_category(entry)
-    asset_id = str(entry.get("asset_id") or "").strip()
-    if category and asset_id:
-        return f"{category} ({asset_id})"
-    return str(entry.get("public_label") or category or handle)
-
-
-def _scene_object_category(entry: dict[str, Any]) -> str:
-    return str(entry.get("category") or entry.get("asset_id") or "object")
-
-
-def _scene_cleanup_object_category(entry: dict[str, Any]) -> str:
-    category = _scene_object_category(entry)
-    tokens = _scene_entry_tokens("", entry)
-    for category_aliases, _target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
-        matched_aliases = tuple(alias for alias in category_aliases if alias in tokens)
-        if matched_aliases:
-            return _canonical_cleanup_category(category, matched_aliases)
-    return category
-
-
-def _canonical_cleanup_category(category: str, aliases: tuple[str, ...]) -> str:
-    category_norm = _norm(category)
-    for canonical, accepted in _CANONICAL_CLEANUP_CATEGORY_ALIASES:
-        accepted_norms = {_norm(item) for item in accepted}
-        alias_matches = any(_norm(alias) in accepted_norms for alias in aliases)
-        if category_norm in accepted_norms or alias_matches:
-            return canonical
-    return category
-
-
-def _scene_target_receptacle_id(
-    entry: dict[str, Any],
-    receptacle_index: dict[str, dict[str, Any]],
-) -> str:
-    entry_tokens = _scene_entry_tokens("", entry)
-    for category_aliases, target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
-        if any(alias in entry_tokens for alias in category_aliases):
-            target_id = _first_receptacle_matching_aliases(receptacle_index, target_aliases)
-            if target_id:
-                return target_id
-    return ""
-
-
-def _first_receptacle_matching_aliases(
-    receptacle_index: dict[str, dict[str, Any]],
-    aliases: tuple[str, ...],
-) -> str:
-    for handle, entry in sorted(receptacle_index.items()):
-        tokens = _scene_entry_tokens(handle, entry)
-        if any(alias in tokens for alias in aliases):
-            return handle
-    return ""
-
-
-def _scene_source_receptacle_id(
-    entry: dict[str, Any],
-    receptacle_index: dict[str, dict[str, Any]],
-    *,
-    target_id: str,
-) -> str:
-    parent = str(entry.get("parent") or "")
-    if parent and parent in receptacle_index and parent != target_id:
-        return parent
-    for handle in sorted(receptacle_index):
-        if handle != target_id:
-            return handle
-    return target_id
-
-
-def _scene_entry_tokens(handle: str, entry: dict[str, Any]) -> set[str]:
-    return _scene_match_tokens(
-        handle,
-        entry.get("metadata_handle"),
-        entry.get("public_label"),
-        entry.get("category"),
-        entry.get("metadata_object_id"),
-        entry.get("asset_id"),
-    )
-
-
-_SCENE_CLEANUP_TARGET_ALIASES = (
-    (
-        ("dish", "cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"),
-        ("sink", "countertop"),
-    ),
-    (
-        ("book", "newspaper", "notebook", "paper", "magazine"),
-        ("shelvingunit", "bookshelf", "shelf", "desk"),
-    ),
-    (
-        ("food", "apple", "bread", "egg", "potato", "lettuce", "tomato", "banana", "orange"),
-        ("fridge", "refrigerator"),
-    ),
-    (
-        ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
-        ("tvstand", "televisionstand"),
-    ),
-    (("pillow", "teddybear", "cushion"), ("bed", "sofa")),
-    (("linen", "towel", "cloth", "blanket", "shirt", "clothing"), ("laundryhamper", "hamper")),
-    (("toy", "toycar", "ball", "basketball", "soccer"), ("toybin",)),
+_safe_file_stem = isaac_worker_protocol.safe_file_stem
+_write_placeholder_image = isaac_worker_protocol.write_placeholder_image
+_ok = isaac_worker_protocol.ok_response
+_error = isaac_worker_protocol.error_response
+read_state = isaac_worker_protocol.read_state
+write_state = isaac_worker_protocol.write_state
+write_state_from_state_arg = isaac_worker_protocol.write_state_from_state_arg
+_count = isaac_worker_protocol.count_tool_request
+_public_state = isaac_worker_protocol.public_state
+scenario_from_state = isaac_scenario_builders.scenario_from_state
+_load_generated_mess_manifest = isaac_scenario_builders.load_generated_mess_manifest
+_scenario_for_init = isaac_scenario_builders.scenario_for_init
+_scenario_source = isaac_scenario_builders.scenario_source
+_effective_scene_index = isaac_scenario_builders.effective_scene_index
+_scene_index_from_usd_path = isaac_scenario_builders.scene_index_from_usd_path
+_scene_specific_scenario_if_needed = isaac_scenario_builders.scene_specific_scenario_if_needed
+_scenario_from_scene_index = isaac_scenario_builders.scenario_from_scene_index
+_cleanup_receptacle_index_for_mess_generation = (
+    isaac_scenario_builders.cleanup_receptacle_index_for_mess_generation
 )
-
-_SCENE_STRICT_CLEANUP_TARGET_ALIASES = (
-    (("cup", "mug", "plate", "bowl"), ("sink",)),
-    (("book", "newspaper"), ("shelvingunit", "desk")),
-    (("apple", "bread", "egg", "potato", "lettuce"), ("fridge", "refrigerator")),
-    (("remotecontrol",), ("tvstand", "televisionstand")),
-    (("pillow", "teddybear"), ("bed", "sofa")),
+_cleanup_receptacle_from_scene_index = isaac_scenario_builders.cleanup_receptacle_from_scene_index
+_scene_object_name = isaac_scenario_builders.scene_object_name
+_scene_object_category = isaac_scenario_builders.scene_object_category
+_scene_cleanup_object_category = isaac_scenario_builders.scene_cleanup_object_category
+_canonical_cleanup_category = isaac_scenario_builders.canonical_cleanup_category
+_scene_target_receptacle_id = isaac_scenario_builders.scene_target_receptacle_id
+_first_receptacle_matching_aliases = isaac_scenario_builders.first_receptacle_matching_aliases
+_scene_source_receptacle_id = isaac_scenario_builders.scene_source_receptacle_id
+_scene_entry_tokens = isaac_scenario_builders.scene_entry_tokens
+_SCENE_CLEANUP_TARGET_ALIASES = isaac_scenario_builders.SCENE_CLEANUP_TARGET_ALIASES
+_SCENE_STRICT_CLEANUP_TARGET_ALIASES = isaac_scenario_builders.SCENE_STRICT_CLEANUP_TARGET_ALIASES
+_CANONICAL_CLEANUP_CATEGORY_ALIASES = isaac_scenario_builders.CANONICAL_CLEANUP_CATEGORY_ALIASES
+_scenario_from_generated_mess_manifest_or_limit = (
+    isaac_scenario_builders.scenario_from_generated_mess_manifest_or_limit
 )
-
-_CANONICAL_CLEANUP_CATEGORY_ALIASES = (
-    ("Plate", ("dish", "plate", "bowl", "cup", "mug", "utensil", "fork", "knife", "spoon")),
-    ("Book", ("book", "newspaper", "notebook", "paper", "magazine")),
-    (
-        "Potato",
-        ("food", "apple", "bread", "egg", "potato", "lettuce", "tomato", "banana", "orange"),
-    ),
-    (
-        "RemoteControl",
-        ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
-    ),
-    ("TeddyBear", ("teddybear", "teddy", "plush")),
-    ("Pillow", ("pillow", "cushion")),
-    ("Towel", ("linen", "towel", "cloth", "blanket", "shirt", "clothing")),
-    ("ToyCar", ("toy", "toycar", "ball", "basketball", "soccer")),
+_limit_scenario_to_generated_mess_count = (
+    isaac_scenario_builders.limit_scenario_to_generated_mess_count
 )
-
-
-def _scenario_from_generated_mess_manifest_or_limit(
-    scenario: CleanupScenario,
-    *,
-    generated_mess_count: int,
-    generated_mess_manifest: dict[str, Any] | None = None,
-) -> CleanupScenario:
-    if not generated_mess_manifest:
-        return _limit_scenario_to_generated_mess_count(
-            scenario,
-            generated_mess_count=generated_mess_count,
-        )
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if generated_mess_count == 0:
-        return _scenario_without_private_targets(
-            scenario,
-            scenario_id=f"{scenario.scenario_id}-canonical-mess-0",
-            objects=(),
-        )
-    objects = [item.to_public_dict() for item in scenario.objects]
-    receptacles = [item.to_public_dict() for item in scenario.receptacles]
-    selected = targets_from_generated_mess_manifest(
-        objects,
-        receptacles,
-        generated_mess_manifest,
-        target_count=int(generated_mess_count),
-    )
-    target_ids = {str(item["object_id"]) for item in selected}
-    source_objects = {item.object_id: item for item in scenario.objects}
-    selected_objects = []
-    for target in selected:
-        object_id = str(target["object_id"])
-        source = source_objects[object_id]
-        selected_objects.append(
-            CleanupObject(
-                object_id=source.object_id,
-                name=source.name,
-                category=source.category,
-                location_id=str(target.get("start_receptacle_id") or source.location_id),
-                pickupable=source.pickupable,
-            )
-        )
-    targets = tuple(
-        TargetRule(
-            object_id=str(item["object_id"]),
-            valid_receptacle_ids=tuple(str(value) for value in item["valid_receptacle_ids"]),
-        )
-        for item in selected
-    )
-    scenario_id = f"{scenario.scenario_id}-canonical-mess-{len(targets)}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=tuple(item for item in selected_objects if item.object_id in target_ids),
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=targets,
-            success_threshold=generated_mess_success_threshold(len(targets)),
-        ),
-    )
-
-
-def _limit_scenario_to_generated_mess_count(
-    scenario: CleanupScenario,
-    *,
-    generated_mess_count: int,
-) -> CleanupScenario:
-    count = int(generated_mess_count)
-    if count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if count == 0:
-        return _scenario_without_private_targets(
-            scenario,
-            scenario_id=f"{scenario.scenario_id}-isaac-0",
-            objects=(),
-        )
-    targets = tuple(scenario.private_manifest.targets[:count])
-    if not targets:
-        return scenario
-    target_object_ids = {target.object_id for target in targets}
-    objects = tuple(item for item in scenario.objects if item.object_id in target_object_ids)
-    if not objects:
-        return scenario
-    scenario_id = f"{scenario.scenario_id}-isaac-{len(targets)}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=objects,
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=targets,
-            success_threshold=len(targets),
-        ),
-    )
-
-
-def _scenario_without_private_targets(
-    scenario: CleanupScenario,
-    *,
-    scenario_id: str,
-    objects: tuple[CleanupObject, ...],
-) -> CleanupScenario:
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task=scenario.task,
-        seed=scenario.seed,
-        objects=objects,
-        receptacles=scenario.receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=(),
-            success_threshold=0,
-        ),
-    )
-
-
-def _scenario_from_map_bundle(
-    bundle_dir: Path,
-    *,
-    seed: int,
-    generated_mess_count: int,
-) -> CleanupScenario:
-    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
-    raw_fixtures = [dict(item) for item in semantics.get("fixtures") or []]
-    if not raw_fixtures:
-        return build_cleanup_scenario(seed=seed)
-
-    receptacles = tuple(_cleanup_receptacle_from_fixture(item) for item in raw_fixtures)
-    target_specs = _map_aligned_target_specs(raw_fixtures)
-    if not target_specs:
-        return build_cleanup_scenario(seed=seed)
-
-    count = max(1, int(generated_mess_count))
-    objects: list[CleanupObject] = []
-    targets: list[TargetRule] = []
-    for index in range(count):
-        spec = target_specs[index % len(target_specs)]
-        cycle = index // len(target_specs) + 1
-        object_id = spec["object_id"] if cycle == 1 else f"{spec['object_id']}_{cycle}"
-        source_id = str(spec["source_fixture_id"])
-        target_id = str(spec["target_fixture_id"])
-        objects.append(
-            CleanupObject(
-                object_id=object_id,
-                name=str(spec["name"]),
-                category=str(spec["category"]),
-                location_id=source_id,
-            )
-        )
-        targets.append(TargetRule(object_id=object_id, valid_receptacle_ids=(target_id,)))
-
-    scenario_id = f"isaac-map-aligned-{bundle_dir.name}-{seed}"
-    return CleanupScenario(
-        scenario_id=scenario_id,
-        task="Clean up this room by putting misplaced objects in appropriate places.",
-        seed=seed,
-        objects=tuple(objects),
-        receptacles=receptacles,
-        private_manifest=PrivateScoringManifest(
-            scenario_id=scenario_id,
-            targets=tuple(targets),
-            success_threshold=len(targets),
-        ),
-    )
-
-
-def _initial_receptacle_id(scenario: CleanupScenario) -> str:
-    if scenario.objects:
-        return scenario.objects[0].location_id
-    if scenario.receptacles:
-        return scenario.receptacles[0].receptacle_id
-    return "floor_01"
-
-
-def _cleanup_receptacle_from_fixture(fixture: dict[str, Any]) -> CleanupReceptacle:
-    fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-    category = str(fixture.get("category") or fixture.get("name") or fixture_id)
-    return CleanupReceptacle(
-        receptacle_id=fixture_id,
-        name=str(fixture.get("name") or fixture_id),
-        room_area=str(fixture.get("room_id") or fixture.get("room_area") or "unknown"),
-        kind="receptacle",
-        category=category,
-    )
-
-
-def _map_aligned_target_specs(fixtures: list[dict[str, Any]]) -> list[dict[str, str]]:
-    candidates = [
-        {
-            "object_id": "mug_01",
-            "name": "ceramic mug",
-            "category": "dish",
-            "target_aliases": ("sink", "countertop"),
-            "source_aliases": ("sofa", "diningtable", "desk", "bed"),
-        },
-        {
-            "object_id": "plate_01",
-            "name": "dinner plate",
-            "category": "dish",
-            "target_aliases": ("sink", "countertop"),
-            "source_aliases": ("diningtable", "sofa", "desk", "bed"),
-        },
-        {
-            "object_id": "book_01",
-            "name": "paperback book",
-            "category": "book",
-            "target_aliases": ("shelvingunit", "bookshelf", "shelf", "desk"),
-            "source_aliases": ("sofa", "diningtable", "bed"),
-        },
-        {
-            "object_id": "apple_01",
-            "name": "apple",
-            "category": "food",
-            "target_aliases": ("fridge", "refrigerator"),
-            "source_aliases": ("desk", "diningtable", "countertop"),
-        },
-        {
-            "object_id": "remote_01",
-            "name": "TV remote",
-            "category": "electronics",
-            "target_aliases": ("tvstand", "tv stand", "stand"),
-            "source_aliases": ("bed", "desk", "diningtable", "sofa"),
-        },
-    ]
-    specs = []
-    for candidate in candidates:
-        target = _first_fixture_matching(fixtures, candidate["target_aliases"])
-        source = _first_fixture_matching(
-            fixtures,
-            candidate["source_aliases"],
-            exclude_fixture_id=str(target.get("fixture_id") or "") if target else "",
-        )
-        if target is None or source is None:
-            continue
-        specs.append(
-            {
-                "object_id": str(candidate["object_id"]),
-                "name": str(candidate["name"]),
-                "category": str(candidate["category"]),
-                "source_fixture_id": str(source["fixture_id"]),
-                "target_fixture_id": str(target["fixture_id"]),
-            }
-        )
-    return specs
-
-
-def _first_fixture_matching(
-    fixtures: list[dict[str, Any]],
-    aliases: tuple[str, ...],
-    *,
-    exclude_fixture_id: str = "",
-) -> dict[str, Any] | None:
-    for alias in aliases:
-        alias_norm = _norm(alias)
-        for fixture in fixtures:
-            fixture_id = str(fixture.get("fixture_id") or "")
-            if fixture_id == exclude_fixture_id:
-                continue
-            text = _norm(
-                " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
-            )
-            if alias_norm and alias_norm in text:
-                return fixture
-    return None
-
-
-def _norm(value: Any) -> str:
-    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
-
-
-def _dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _json_roundtrip(value: Any) -> Any:
-    return json.loads(json.dumps(value))
-
-
-def _vec3(value: Any) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return None
-    try:
-        return [float(value[0]), float(value[1]), float(value[2])]
-    except (TypeError, ValueError):
-        return None
-
-
-def _has_xy(value: dict[str, Any]) -> bool:
-    if "x" not in value or "y" not in value:
-        return False
-    try:
-        float(value["x"])
-        float(value["y"])
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def _index_or_default(
-    value: Any,
-    default: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    if not isinstance(value, dict) or not value:
-        return default
-    return {
-        str(key): dict(item) for key, item in value.items() if isinstance(item, dict)
-    } or default
-
-
-def _objects_by_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {str(item["object_id"]): item for item in state["scenario"]["objects"]}
-
-
-def _receptacles_by_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {str(item["receptacle_id"]): item for item in state["scenario"]["receptacles"]}
-
-
-def _object_index(scenario: CleanupScenario) -> dict[str, dict[str, Any]]:
-    return {
-        item.object_id: {
-            "usd_prim_path": f"/World/Scene/Objects/{item.object_id}",
-            "category": item.category,
-            "public_label": item.name,
-        }
-        for item in scenario.objects
-    }
-
-
-def _receptacle_index(scenario: CleanupScenario) -> dict[str, dict[str, Any]]:
-    return {
-        item.receptacle_id: {
-            "usd_prim_path": f"/World/Scene/Receptacles/{item.receptacle_id}",
-            "category": item.category or item.kind,
-            "public_label": item.name,
-            "support_pose": _pose_near(item.receptacle_id),
-        }
-        for item in scenario.receptacles
-    }
-
-
-def _pose_near(anchor_id: str) -> dict[str, float | str]:
-    value = sum(ord(char) for char in anchor_id)
-    return {
-        "frame": "world",
-        "x": round((value % 17) * 0.17, 3),
-        "y": round(((value // 17) % 17) * 0.13, 3),
-        "z": 0.0,
-        "yaw_deg": float((value * 13) % 360),
-    }
+_scenario_without_private_targets = isaac_scenario_builders.scenario_without_private_targets
+_scenario_from_map_bundle = isaac_scenario_builders.scenario_from_map_bundle
+_initial_receptacle_id = isaac_scenario_builders.initial_receptacle_id
+_cleanup_receptacle_from_fixture = isaac_scenario_builders.cleanup_receptacle_from_fixture
+_map_aligned_target_specs = isaac_scenario_builders.map_aligned_target_specs
+_first_fixture_matching = isaac_scenario_builders.first_fixture_matching
 
 
 def _robot_payload(robot_name: str) -> dict[str, Any]:
-    robot_import = _rby1m_robot_import_plan(robot_name)
-    imported = robot_import.get("status") == "imported"
-    return {
-        "robot_name": robot_name,
-        "embodiment": "rby1m" if imported else "rby1m_head_camera_equivalent",
-        "physical_robot": False,
-        "planner_backed": False,
-        "robot_import_status": robot_import.get("status") if robot_import else "not_requested",
-        "robot_usd_path": robot_import.get("usd_path") if robot_import else "",
-        "head_camera_prim_path": robot_import.get("head_camera_prim_path") if robot_import else "",
-        "robot_mounted_head_camera": imported,
-    }
+    return isaac_robot_import.robot_payload(robot_name, _rby1m_robot_import_plan(robot_name))
 
 
 def _rby1m_robot_import_plan(robot_name: str) -> dict[str, Any]:
-    if robot_name not in {"rby1m", "rby1"}:
-        return {
-            "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
-            "robot_name": robot_name,
-            "status": "unsupported_robot",
-            "head_camera_prim_path": "",
-            "blockers": [f"unsupported Isaac robot import target: {robot_name}"],
-        }
-    urdf = _find_rby1m_isaac_urdf()
-    usd_path = _repo_path(ISAAC_RBY1M_ROBOT_USD_PATH)
-    summary_path = _repo_path(ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH)
-    summary = _load_json_if_file(summary_path)
-    summary_ready = summary.get("schema") == "isaac_rby1m_robot_usd_import_v1" and (
-        summary.get("status") == "ready"
+    return isaac_robot_import.rby1m_robot_import_plan(
+        robot_name,
+        robot_usd_path=ISAAC_RBY1M_ROBOT_USD_PATH,
+        import_summary_path=ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH,
+        find_urdf=_find_rby1m_isaac_urdf,
+        repo_path=_repo_path,
+        load_json_if_file=_load_json_if_file,
+        head_camera_prim=isaac_camera_geometry.ISAAC_RBY1M_HEAD_CAMERA_PRIM,
     )
-    imported = usd_path.is_file() and summary_ready
-    blockers: list[str] = []
-    if not urdf:
-        blockers.append("RBY1M Isaac URDF not found in MolmoSpaces asset cache.")
-    if not imported:
-        if not usd_path.is_file():
-            blockers.append(f"RBY1M Isaac robot USD import artifact is missing: {usd_path}")
-        if not summary_ready:
-            blockers.append(f"RBY1M Isaac robot import summary is not ready: {summary_path}")
-    return {
-        "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
-        "robot_name": robot_name,
-        "status": "imported"
-        if imported
-        else ("pending_usd_conversion" if urdf else "missing_urdf"),
-        "physical_robot": False,
-        "importer": "isaacsim.asset.importer.urdf",
-        "source_urdf": str(urdf) if urdf else "",
-        "expected_usd_path": str(usd_path),
-        "usd_path": str(usd_path) if imported else "",
-        "import_summary_path": str(summary_path),
-        "stage_prim_path": "/World/robot_0",
-        "head_link_name": "link_head_2",
-        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-        "head_camera_source": "rby1m_mujoco_robot_0/head_camera_extrinsics_and_fov",
-        "head_camera_mounted": imported,
-        "head_camera_equivalent": not imported,
-        "required_joints": ["base_x", "base_y", "base_theta", "head_0", "head_1"],
-        "blockers": blockers,
-        "import_summary": summary if summary_ready else {},
-        "evidence_note": (
-            "Isaac imports the RBY1M holobase URDF to USD, references it at "
-            "/World/robot_0, and uses a head_camera prim authored from the MuJoCo "
-            "robot_0/head_camera extrinsics/FOV. If the import artifact is absent, "
-            "Isaac FPV is reported as a head-camera-equivalent view instead of a "
-            "robot-mounted camera."
-        ),
-    }
 
 
 def _repo_path(path: Path) -> Path:
-    return Path(__file__).resolve().parents[2] / path
+    return isaac_robot_import.repo_path(path, anchor_file=__file__)
 
 
 def _load_json_if_file(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    return isaac_robot_import.load_json_if_file(path)
 
 
 def _find_rby1m_isaac_urdf() -> Path | None:
-    candidates: list[Path] = []
-    env_root = os.environ.get("MLSPACES_ASSETS_DIR")
-    if env_root:
-        candidates.append(
-            Path(env_root).expanduser()
-            / "robots"
-            / "rby1m"
-            / "curobo_config"
-            / "urdf"
-            / "model_holobase_isaac"
-            / "model_holobase_isaac.urdf"
-        )
-    candidates.extend(
-        Path("/home/mi/.cache/molmospaces/assets").glob(
-            "*/robots/rby1m/curobo_config/urdf/model_holobase_isaac/model_holobase_isaac.urdf"
-        )
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    return None
+    return isaac_robot_import.find_rby1m_isaac_urdf()
 
 
 def _scene_usd_path(scene_source: str, scene_index: int) -> str:
-    return f"molmospaces://{scene_source}/scene-{scene_index}.usd"
+    return isaac_mapping_diagnostics.scene_usd_path(scene_source, scene_index)
 
 
 if __name__ == "__main__":

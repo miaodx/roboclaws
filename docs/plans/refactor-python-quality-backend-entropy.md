@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-15
+last_verified: 2026-06-16
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -18,13 +18,31 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest committed Candidate A
-test-helper slices:
+--summary --top 40` on 2026-06-16, after the latest verified realworld
+runtime-map contract split:
 
-- 17 Ruff complexity violations.
+- 0 Ruff complexity violations.
 - 62 oversized modules.
-- Remaining complexity is test-heavy; remaining file-size debt is split between
-  large production modules and large behavior tests.
+- Remaining work is file-size and ownership-boundary debt split between large
+  production modules and large behavior tests.
+- `roboclaws/household/realworld_contract.py` is down to 5095 lines after the
+  projection, agent-view boundary, visual-candidate, and runtime-map contract
+  helper splits, but remains a P1 hard-ceiling candidate.
+- `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is down
+  to 4900 lines after the report renderer split, but remains a P1
+  hard-ceiling candidate.
+- `roboclaws/household/scene_camera_comparison.py` is down to 4693 lines after
+  the first USD render-contract, image-metrics, lighting-diagnostics, and
+  render-domain diagnostics splits, but remains a P1 hard-ceiling candidate.
+- `roboclaws/household/report.py` is down to 4880 lines after the Isaac
+  runtime, grasp diagnostics, and proof request-selection section splits, but
+  remains a P1 hard-ceiling candidate.
+- Backend workers are no longer hard-ceiling blockers:
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
+  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
+- Dirty worktree drift: parallel scene-sampler changes currently put
+  `roboclaws/launch/scene_sampler.py` at 2077 lines. Treat it as reopened P1
+  hard-ceiling drift if those changes remain above the ceiling.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
@@ -115,27 +133,29 @@ and backend/report/evidence boundaries that prevent branching from returning.
 
 ### A: Behavior-Test Fixture Builders
 
-Severity: P1. Remaining complexity is now mostly in tests, led by
-`test_isaac_lab_backend.py`, `test_molmo_cleanup_report.py`,
-`test_molmo_realworld_contract.py`, checker tests, and apple-to-apple tests.
-Use fixture builders and focused assertion helpers; do not split only for line
-count. Owner: `intuitive-tests`. Proof: focused pytest, ruff, ratchet summary.
+Severity: P2 unless a file crosses the hard ceiling or blocks a product
+boundary. Ruff complexity rows are currently zero, but several large behavior
+test modules still obscure setup ownership. Use fixture builders and focused
+assertion helpers only when they make the tested behavior easier to scan; do
+not split only for line count. Owner: `intuitive-tests`. Proof: focused pytest,
+ruff, ratchet summary.
 
 ### B: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` and
-`roboclaws/household/report.py` are still over 6000 lines. Split only around
-real ownership boundaries: payload builders, policy/event families, section
-renderers, or artifact envelopes. Preserve public schemas and rendered report
-shape. Owner: `intuitive-refactor`.
+Severity: P1. `roboclaws/household/realworld_contract.py` is now 5095 lines
+after the projection, agent-view boundary, visual-candidate, and runtime-map
+contract helper splits and remains above the hard ceiling;
+`roboclaws/household/report.py` is now 4880 lines after the Isaac runtime,
+grasp diagnostics, and proof request-selection renderer splits, but remains
+above the hard ceiling. Continue only around real ownership boundaries: payload
+builders, policy/event families, section renderers, or artifact envelopes.
+Preserve public schemas and rendered report shape. Owner: `intuitive-refactor`.
 
 ### C: Backend Worker Hard-Ceiling Split
 
-Severity: P1. `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` and
-`scripts/molmo_cleanup/molmospaces_subprocess_worker.py` remain far above the
-2000-line ceiling. Split command families, runtime metadata, render/camera
-helpers, and state writeback without importing Isaac into normal Roboclaws
-processes. Owner: `intuitive-refactor`.
+Status: cleared on 2026-06-16; see the completed ledger. Keep reopened only
+for fresh backend-worker hard-ceiling regressions or wrapper/import drift that
+pushes either worker back above 2000 lines.
 
 ### D: Visual Comparison Pipeline Split
 
@@ -144,6 +164,13 @@ Severity: P1. `roboclaws/household/scene_camera_comparison.py` and
 oversized. Prefer capture-lane stages, diagnostics builders, manifest/artifact
 setup helpers, and report-specific modules. Real renderer claims still require
 separate local proof. Owner: `intuitive-refactor`.
+Latest metric: `scene_camera_comparison.py` is down to 5476 lines after the
+USD render-contract, image-metrics, and lighting-diagnostics helper splits, but
+remains above the hard ceiling.
+Current metric: `scene_camera_comparison.py` is down to 4693 lines after the
+render-domain diagnostics split; `run_robot_camera_apple2apple_comparison.py`
+is down to 4900 lines after the report renderer split. Both remain P1
+hard-ceiling files.
 
 ### E: Backend Evidence And Live Runtime Normalization
 
@@ -159,6 +186,14 @@ Severity: P2. `AGENTS.md` and `CLAUDE.md` still mention
 `hybrid-phase-pipeline`, while this environment exposes `intuitive-flow`.
 Fix only if startup rediscovery continues to cost time; keep it separate from
 code-size slices. Owner: `intuitive-init`.
+
+### G: Scene Sampler Hard-Ceiling Drift
+
+Severity: P1 if current parallel changes remain. `roboclaws/launch/scene_sampler.py`
+is currently 2077 lines in the dirty worktree, after previously clearing the
+hard ceiling. Recheck after the parallel scene-sampler changes settle; if still
+above 2000, move a real sampler ownership boundary or record a narrow
+exception. Owner: `intuitive-refactor`.
 
 ## Evidence Ladder
 

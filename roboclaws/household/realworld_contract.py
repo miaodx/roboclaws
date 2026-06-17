@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import copy
-import math
 import re
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from roboclaws.household import realworld_contract_init, realworld_contract_payloads
+from roboclaws.household import (
+    realworld_agent_view_contract,
+    realworld_contract_init,
+    realworld_contract_payloads,
+    realworld_contract_projection,
+    realworld_runtime_map_contract,
+    realworld_visual_candidates,
+)
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.planner_observed_binding import (
@@ -53,13 +58,6 @@ from roboclaws.household.visual_scan_guidance import (
 )
 from roboclaws.maps.bundle import metric_map_bundle_metadata
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
-from roboclaws.maps.spatial_contract import (
-    ALIGNMENT_STATUS_NATIVE,
-    GEOMETRY_SOURCE_GENERATED_CANDIDATE,
-    GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-    POLYGON_ROLE_NAVIGATION_AREA,
-    normalize_spatial_room,
-)
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 REAL_ROBOT_MAP_BUNDLE_SCHEMA = "real_robot_map_bundle_v1"
@@ -86,20 +84,26 @@ CAMERA_MODEL_POLICY_SCHEMA = "camera_model_policy_v1"
 CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
-VISUAL_GROUNDING_EVIDENCE_SCHEMA = "visual_grounding_evidence_v1"
+VISUAL_GROUNDING_EVIDENCE_SCHEMA = realworld_visual_candidates.VISUAL_GROUNDING_EVIDENCE_SCHEMA
 DONE_READINESS_SCHEMA = "done_readiness_v1"
 DONE_READINESS_POLICY_RAW_FPV = "raw_fpv_grounded_cleanup_chains"
 DONE_READINESS_POLICY_EXPLICIT = "explicit_grounded_cleanup_chains"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
-MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
-TEST_AGENT_PRODUCER = "test_agent"
-SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
+MAIN_CLEANUP_AGENT_PRODUCER = realworld_visual_candidates.MAIN_CLEANUP_AGENT_PRODUCER
+TEST_AGENT_PRODUCER = realworld_visual_candidates.TEST_AGENT_PRODUCER
+SIMULATED_CAMERA_MODEL_PROVENANCE = realworld_visual_candidates.SIMULATED_CAMERA_MODEL_PROVENANCE
 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE = "sanitized_visible_object_detections"
 WORLD_LABELS_SANITIZED_PROFILE = "world-public-labels"
-VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
-VISUAL_EVIDENCE_REVIEWABLE_STATUS = "reviewable"
-VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS = "not_reviewable"
-VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY = "needs_visual_evidence"
+VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = (
+    realworld_visual_candidates.VISUAL_CANDIDATE_ALREADY_HANDLED_REASON
+)
+VISUAL_EVIDENCE_REVIEWABLE_STATUS = realworld_visual_candidates.VISUAL_EVIDENCE_REVIEWABLE_STATUS
+VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS = (
+    realworld_visual_candidates.VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS
+)
+VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY = (
+    realworld_visual_candidates.VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY
+)
 TARGET_ACTIONABILITY_QUERY_UNMATCHED = "query_unmatched"
 TARGET_ACTIONABILITY_VISIBLE_ONLY = "visible_only"
 TARGET_ACTIONABILITY_ANCHOR_UNBOUND = "anchor_unbound"
@@ -116,19 +120,15 @@ TARGET_ACTIONABILITY_STATUSES = frozenset(
         TARGET_ACTIONABILITY_ACTIONABLE,
     }
 )
-CANDIDATE_STATE_SEMANTIC = "semantic_candidate"
-CANDIDATE_STATE_VISUAL_SCAN_REQUIRED = "visual_scan_required"
-CANDIDATE_STATE_VISUALLY_CONFIRMED = "visually_confirmed"
-CANDIDATE_STATE_NAVIGATION_AUTHORIZED = "navigation_authorized"
-VISUAL_GROUNDING_CATEGORY_HINTS = [
-    "food",
-    "dish",
-    "book",
-    "linen",
-    "toy",
-    "electronics",
-    "pillow",
-]
+CANDIDATE_STATE_SEMANTIC = realworld_visual_candidates.CANDIDATE_STATE_SEMANTIC
+CANDIDATE_STATE_VISUAL_SCAN_REQUIRED = (
+    realworld_visual_candidates.CANDIDATE_STATE_VISUAL_SCAN_REQUIRED
+)
+CANDIDATE_STATE_VISUALLY_CONFIRMED = realworld_visual_candidates.CANDIDATE_STATE_VISUALLY_CONFIRMED
+CANDIDATE_STATE_NAVIGATION_AUTHORIZED = (
+    realworld_visual_candidates.CANDIDATE_STATE_NAVIGATION_AUTHORIZED
+)
+VISUAL_GROUNDING_CATEGORY_HINTS = realworld_visual_candidates.VISUAL_GROUNDING_CATEGORY_HINTS
 REALWORLD_PERCEPTION_MODES = frozenset(
     {
         VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -137,9 +137,88 @@ REALWORLD_PERCEPTION_MODES = frozenset(
     }
 )
 _NON_ACTIONABLE_HANDLE_STATES = frozenset({"placed", "placed_closed", "skipped", "stale"})
-_EXACT_VISUAL_CATEGORY_ALIASES = frozenset(
-    {"cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"}
+_OBJECT_CATEGORY_TARGETS = realworld_contract_projection._OBJECT_CATEGORY_TARGETS
+_INSIDE_DESTINATION_CATEGORY_TERMS = (
+    realworld_contract_projection._INSIDE_DESTINATION_CATEGORY_TERMS
 )
+_anchor_affordances_for_fixture = realworld_contract_projection._anchor_affordances_for_fixture
+_driveable_ways = realworld_contract_projection._driveable_ways
+_first_fixture_for_waypoint = realworld_contract_projection._first_fixture_for_waypoint
+_first_waypoint_id = realworld_contract_projection._first_waypoint_id
+_first_matching_fixture = realworld_contract_projection._first_matching_fixture
+_fixture_affordances = realworld_contract_projection._fixture_affordances
+_fixture_footprint = realworld_contract_projection._fixture_footprint
+_fixture_hints_with_scene_index_overlay = (
+    realworld_contract_projection._fixture_hints_with_scene_index_overlay
+)
+_fixture_prefers_inside = realworld_contract_projection._fixture_prefers_inside
+_fixture_requires_open = realworld_contract_projection._fixture_requires_open
+_fixtures_from_bundle_fixture_hints = (
+    realworld_contract_projection._fixtures_from_bundle_fixture_hints
+)
+_fixture_is_open_container = realworld_contract_projection._fixture_is_open_container
+_fixture_text = realworld_contract_projection._fixture_text
+_fixture_navigation_obstacles = realworld_contract_projection._fixture_navigation_obstacles
+_inspection_waypoints = realworld_contract_projection._inspection_waypoints
+_inspection_waypoints_from_bundle_projection = (
+    realworld_contract_projection._inspection_waypoints_from_bundle_projection
+)
+_is_place_anchor = realworld_contract_projection._is_place_anchor
+_map_bundle_fields_present = realworld_contract_projection._map_bundle_fields_present
+_merge_public_rooms = realworld_contract_projection._merge_public_rooms
+_metric_map_room_payload = realworld_contract_projection._metric_map_room_payload
+_minimal_generated_exploration_waypoints = (
+    realworld_contract_projection._minimal_generated_exploration_waypoints
+)
+_normalize_fixture_category_label = realworld_contract_projection._normalize_fixture_category_label
+_polygon_center_world = realworld_contract_projection._polygon_center_world
+_polygon_from_room_outline = realworld_contract_projection._polygon_from_room_outline
+_point_overlaps_fixture_obstacle = realworld_contract_projection._point_overlaps_fixture_obstacle
+_pose_stamped_waypoints_present = realworld_contract_projection._pose_stamped_waypoints_present
+_private_waypoint_map_for_generated_candidates = (
+    realworld_contract_projection._private_waypoint_map_for_generated_candidates
+)
+_public_destination_policy_for_category = (
+    realworld_contract_projection._public_destination_policy_for_category
+)
+_public_destination_policy_tool_for_fixture_category = (
+    realworld_contract_projection._public_destination_policy_tool_for_fixture_category
+)
+_public_driveable_ways = realworld_contract_projection._public_driveable_ways
+_public_room_hint_payload = realworld_contract_projection._public_room_hint_payload
+_public_room_hints_from_metric_map = (
+    realworld_contract_projection._public_room_hints_from_metric_map
+)
+_recommended_place_tool = realworld_contract_projection._recommended_place_tool
+_room_category_from_label = realworld_contract_projection._room_category_from_label
+_room_category_hints_from_public_rooms = (
+    realworld_contract_projection._room_category_hints_from_public_rooms
+)
+_room_id = realworld_contract_projection._room_id
+_room_label_by_id = realworld_contract_projection._room_label_by_id
+_room_outline_by_id = realworld_contract_projection._room_outline_by_id
+_room_outline_by_id_from_fixtures = realworld_contract_projection._room_outline_by_id_from_fixtures
+_room_outline_center = realworld_contract_projection._room_outline_center
+_room_outline_metadata = realworld_contract_projection._room_outline_metadata
+_room_polygon_bounds = realworld_contract_projection._room_polygon_bounds
+_rooms_from_bundle_projection = realworld_contract_projection._rooms_from_bundle_projection
+_rooms_from_fixtures = realworld_contract_projection._rooms_from_fixtures
+_scene_index_fixture_hint_row = realworld_contract_projection._scene_index_fixture_hint_row
+_scene_index_fixture_pose = realworld_contract_projection._scene_index_fixture_pose
+_scene_index_public_fixture_overlay = (
+    realworld_contract_projection._scene_index_public_fixture_overlay
+)
+_scene_outline_waypoint_candidates = (
+    realworld_contract_projection._scene_outline_waypoint_candidates
+)
+_scene_outline_waypoint_slots_for_room = (
+    realworld_contract_projection._scene_outline_waypoint_slots_for_room
+)
+_scene_room_outlines_from_backend = realworld_contract_projection._scene_room_outlines_from_backend
+_semantic_anchor_type_for_fixture = realworld_contract_projection._semantic_anchor_type_for_fixture
+_split_fixture_groups = realworld_contract_projection._split_fixture_groups
+_vec3 = realworld_contract_projection._vec3
+_waypoint_slots_for_room = realworld_contract_projection._waypoint_slots_for_room
 
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
@@ -160,73 +239,6 @@ _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
         "is_misplaced",
         "global_movable_object_inventory",
         "target_receptacle_id",
-    }
-)
-
-_OBJECT_CATEGORY_TARGETS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
-    (
-        ("dish", "cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"),
-        ("sink", "countertop"),
-    ),
-    (
-        ("book", "newspaper", "notebook", "paper", "magazine"),
-        ("shelvingunit", "bookshelf", "shelf", "desk"),
-    ),
-    (
-        (
-            "food",
-            "apple",
-            "bread",
-            "egg",
-            "potato",
-            "lettuce",
-            "tomato",
-            "banana",
-            "orange",
-            "fruit",
-            "vegetable",
-            "produce",
-        ),
-        ("fridge", "refrigerator"),
-    ),
-    (
-        (
-            "remotecontrol",
-            "remote",
-            "electronics",
-            "phone",
-            "cellphone",
-            "smartphone",
-            "mobilephone",
-            "laptop",
-            "computer",
-            "tablet",
-            "controller",
-            "alarmclock",
-            "clock",
-        ),
-        ("tvstand", "tv stand"),
-    ),
-    (("pillow", "teddybear", "teddy", "plush", "cushion"), ("bed", "sofa")),
-    (
-        ("linen", "towel", "cloth", "blanket", "shirt", "clothing", "clothes"),
-        ("laundryhamper", "laundry hamper", "hamper"),
-    ),
-    (
-        ("toy", "toycar", "ball", "basketball", "soccer", "game", "teddybear", "teddy", "plush"),
-        ("toybin", "toy bin"),
-    ),
-)
-
-_INSIDE_DESTINATION_CATEGORY_TERMS = frozenset(
-    {
-        "bookcase",
-        "bookshelf",
-        "fridge",
-        "refrigerator",
-        "shelf",
-        "shelving",
-        "shelvingunit",
     }
 )
 
@@ -4802,12 +4814,7 @@ class RealWorldCleanupContract:
 
 
 def _target_candidate_type_for_waypoint(waypoint: dict[str, Any]) -> str:
-    source = str(waypoint.get("waypoint_source") or "")
-    if source == "generated_exploration_candidate":
-        return "generated_exploration_candidate"
-    if source == "generated_target_inspection_candidate":
-        return "generated_target_inspection_candidate"
-    return "public_inspection_waypoint"
+    return realworld_runtime_map_contract.target_candidate_type_for_waypoint(waypoint)
 
 
 def _runtime_map_producer_summary(
@@ -4817,38 +4824,19 @@ def _runtime_map_producer_summary(
     map_update_candidates: list[dict[str, Any]] | None = None,
     target_candidates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    producers: dict[str, int] = {}
-    for item in observed_objects:
-        producer_type = str(item.get("producer_type") or "unknown")
-        producers[producer_type] = producers.get(producer_type, 0) + 1
-    anchors = public_semantic_anchors or []
-    anchor_producers: dict[str, int] = {}
-    for item in anchors:
-        producer_type = str(item.get("producer_type") or "unknown")
-        anchor_producers[producer_type] = anchor_producers.get(producer_type, 0) + 1
-    return {
-        "observed_object_count": len(observed_objects),
-        "producer_types": producers,
-        "public_semantic_anchor_count": len(anchors),
-        "public_semantic_anchor_producer_types": anchor_producers,
-        "target_candidate_count": len(target_candidates or []),
-        "map_update_candidate_count": len(map_update_candidates or []),
-    }
+    return realworld_runtime_map_contract.runtime_map_producer_summary(
+        observed_objects,
+        public_semantic_anchors=public_semantic_anchors,
+        map_update_candidates=map_update_candidates,
+        target_candidates=target_candidates,
+    )
 
 
 def _runtime_observed_confidence(
     detection: dict[str, Any],
     declaration: dict[str, Any],
 ) -> float:
-    for key in ("visibility_confidence", "grounding_confidence", "confidence"):
-        value = detection.get(key)
-        if value is None:
-            value = declaration.get(key)
-        try:
-            return round(float(value), 6)
-        except (TypeError, ValueError):
-            continue
-    return 0.0
+    return realworld_runtime_map_contract.runtime_observed_confidence(detection, declaration)
 
 
 def _runtime_actionability(
@@ -4857,15 +4845,11 @@ def _runtime_actionability(
     grounding_status: str,
     cleanup_recommended: bool,
 ) -> str:
-    if state in {"held", "placed", "placed_closed", "stale", "skipped"}:
-        return state
-    if state in {"prior", "needs_confirm"}:
-        return "needs_confirm"
-    if grounding_status in {"ambiguous", "unresolved"}:
-        return "needs_confirm"
-    if cleanup_recommended and state in {"pending", "navigating_to_object"}:
-        return "actionable"
-    return state or "pending"
+    return realworld_runtime_map_contract.runtime_actionability(
+        state=state,
+        grounding_status=grounding_status,
+        cleanup_recommended=cleanup_recommended,
+    )
 
 
 def _visual_grounding_evidence_for_candidate(
@@ -4874,371 +4858,123 @@ def _visual_grounding_evidence_for_candidate(
     fallback_image_bbox: Any = None,
     grounding_status: str = "",
 ) -> dict[str, Any]:
-    image_region = candidate.get("image_region")
-    if not image_region and candidate.get("image_bbox"):
-        image_region = {"type": "bbox", "value": candidate.get("image_bbox")}
-    image_region = _normalize_image_region(image_region)
-    bbox = image_region.get("value") if image_region.get("type") == "bbox" else fallback_image_bbox
-    if bbox is None:
-        bbox = candidate.get("image_bbox")
-    image_dimensions = candidate.get("image_dimensions") or {}
-    review = _bbox_reviewability(bbox, image_dimensions=image_dimensions)
-    if (
-        review["reviewability_status"] != VISUAL_EVIDENCE_REVIEWABLE_STATUS
-        and image_region.get("type") == "verbal_region"
-        and str(candidate.get("producer_type") or "") == TEST_AGENT_PRODUCER
-    ):
-        review = {
-            "reviewability_status": VISUAL_EVIDENCE_REVIEWABLE_STATUS,
-            "reviewability_reason": "test_agent_verbal_region",
-            "bbox_coordinate_space": "",
-            "image_bbox": [],
-        }
-    pipeline = candidate.get("visual_grounding_pipeline") or {}
-    evidence = {
-        "schema": VISUAL_GROUNDING_EVIDENCE_SCHEMA,
-        "camera_frame": "agent_facing_fpv",
-        "source_observation_id": str(candidate.get("source_observation_id") or ""),
-        "producer_type": str(candidate.get("producer_type") or ""),
-        "producer_id": str(candidate.get("producer_id") or ""),
-        "image_region": image_region,
-        "image_bbox": review["image_bbox"],
-        "bbox_coordinate_space": review["bbox_coordinate_space"],
-        "reviewability_status": review["reviewability_status"],
-        "reviewability_reason": review["reviewability_reason"],
-        "grounding_status": str(grounding_status or candidate.get("grounding_status") or ""),
-        "locality_status": str(candidate.get("locality_status") or ""),
-        "actionability_status": "actionable"
-        if review["reviewability_status"] == VISUAL_EVIDENCE_REVIEWABLE_STATUS
-        else VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY,
-        "candidate_state": _candidate_state(
-            {
-                **candidate,
-                "grounding_status": str(
-                    grounding_status or candidate.get("grounding_status") or ""
-                ),
-                "reviewability_status": review["reviewability_status"],
-            }
-        ),
-        "private_truth_included": False,
-    }
-    if candidate.get("visual_grounding_overlay"):
-        evidence["visual_grounding_overlay"] = str(candidate["visual_grounding_overlay"])
-    if pipeline:
-        evidence["visual_grounding_pipeline_id"] = str(pipeline.get("pipeline_id") or "")
-        evidence["visual_grounding_pipeline_status"] = str(pipeline.get("status") or "")
-    _assert_no_forbidden_agent_view_keys(evidence)
-    return evidence
+    return realworld_visual_candidates._visual_grounding_evidence_for_candidate(
+        candidate,
+        fallback_image_bbox=fallback_image_bbox,
+        grounding_status=grounding_status,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
-def _bbox_reviewability(
-    value: Any,
-    *,
-    image_dimensions: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    numbers = _numeric_bbox(value)
-    if numbers is None:
-        return {
-            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
-            "reviewability_reason": "missing_bbox",
-            "bbox_coordinate_space": "",
-            "image_bbox": [],
-        }
-    x, y, width, height = numbers
-    if width <= 0 or height <= 0:
-        return {
-            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
-            "reviewability_reason": "non_positive_bbox_extent",
-            "bbox_coordinate_space": "",
-            "image_bbox": numbers,
-        }
-    if x < 0 or y < 0:
-        return {
-            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
-            "reviewability_reason": "bbox_origin_outside_frame",
-            "bbox_coordinate_space": "",
-            "image_bbox": numbers,
-        }
-    if all(0.0 <= item <= 1.0 for item in numbers):
-        if x + width <= 1.0 and y + height <= 1.0:
-            return {
-                "reviewability_status": VISUAL_EVIDENCE_REVIEWABLE_STATUS,
-                "reviewability_reason": "normalized_bbox_inside_agent_fpv",
-                "bbox_coordinate_space": "normalized_xywh",
-                "image_bbox": numbers,
-            }
-        return {
-            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
-            "reviewability_reason": "normalized_bbox_outside_frame",
-            "bbox_coordinate_space": "normalized_xywh",
-            "image_bbox": numbers,
-        }
-    dimensions = image_dimensions or {}
-    frame_width = _positive_int(dimensions.get("width"))
-    frame_height = _positive_int(dimensions.get("height"))
-    if frame_width is not None and frame_height is not None:
-        if x >= frame_width or y >= frame_height:
-            return {
-                "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
-                "reviewability_reason": "pixel_bbox_outside_frame",
-                "bbox_coordinate_space": "pixel_xywh",
-                "image_bbox": numbers,
-            }
-    return {
-        "reviewability_status": VISUAL_EVIDENCE_REVIEWABLE_STATUS,
-        "reviewability_reason": "pixel_bbox_present_on_agent_fpv",
-        "bbox_coordinate_space": "pixel_xywh",
-        "image_bbox": numbers,
-    }
-
-
-def _numeric_bbox(value: Any) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) != 4:
-        return None
-    numbers = [_float_or_none(item) for item in value]
-    if any(number is None or not math.isfinite(number) for number in numbers):
-        return None
-    return [round(float(number), 6) for number in numbers if number is not None]
+_bbox_reviewability = realworld_visual_candidates._bbox_reviewability
+_numeric_bbox = realworld_visual_candidates._numeric_bbox
+_candidate_state = realworld_visual_candidates._candidate_state
+_candidate_state_history = realworld_visual_candidates._candidate_state_history
+_required_tool_for_candidate_state = realworld_visual_candidates._required_tool_for_candidate_state
+_float_or_none = realworld_visual_candidates._float_or_none
+_float_or_zero = realworld_visual_candidates._float_or_zero
+_clamp = realworld_visual_candidates._clamp
+_normalize_image_region = realworld_visual_candidates._normalize_image_region
+_manual_visual_grounding_pipeline = realworld_visual_candidates._manual_visual_grounding_pipeline
+_average_duplicate_rate = realworld_visual_candidates._average_duplicate_rate
+_image_region_validation_error = realworld_visual_candidates._image_region_validation_error
+_grounding_confidence = realworld_visual_candidates._grounding_confidence
+_declared_category_matches_object = realworld_visual_candidates._declared_category_matches_object
+_category_alias_family = realworld_visual_candidates._category_alias_family
+_category_alias_families = realworld_visual_candidates._category_alias_families
 
 
 def _candidate_actionability_status(candidate: dict[str, Any]) -> str:
-    declaration = candidate.get("model_declared_observation") or {}
-    existing = str(
-        candidate.get("actionability_status") or declaration.get("actionability_status") or ""
+    return realworld_visual_candidates._candidate_actionability_status(
+        candidate,
+        visual_grounding_evidence_builder=_visual_grounding_evidence_for_candidate,
     )
-    if existing == "already_handled":
-        return existing
-    grounding_status = str(
-        candidate.get("grounding_status") or declaration.get("grounding_status") or "resolved"
+
+
+def _visual_candidate_validation_error(
+    candidate: Any,
+    *,
+    require_target_fixture_id: bool = True,
+    map_mode: str = MINIMAL_MAP_MODE,
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
+    producer_type: str = "",
+) -> dict[str, str] | None:
+    return realworld_visual_candidates._visual_candidate_validation_error(
+        candidate,
+        require_target_fixture_id=require_target_fixture_id,
+        map_mode=map_mode,
+        perception_mode=perception_mode,
+        producer_type=producer_type,
     )
-    if grounding_status in {"ambiguous", "unresolved"}:
-        return "needs_clarification"
-    evidence = candidate.get("visual_grounding_evidence")
-    if not isinstance(evidence, dict) or not evidence:
-        evidence = _visual_grounding_evidence_for_candidate(candidate)
-    if evidence.get("reviewability_status") != VISUAL_EVIDENCE_REVIEWABLE_STATUS:
-        return VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY
-    if existing and existing != VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY:
-        return existing
-    return "actionable"
-
-
-def _candidate_state(candidate: dict[str, Any]) -> str:
-    declaration = candidate.get("model_declared_observation") or {}
-    existing = str(candidate.get("candidate_state") or declaration.get("candidate_state") or "")
-    if existing == "already_handled":
-        return existing
-    actionability_status = str(
-        candidate.get("actionability_status") or declaration.get("actionability_status") or ""
-    )
-    if actionability_status == "already_handled":
-        return "already_handled"
-    if existing == CANDIDATE_STATE_VISUAL_SCAN_REQUIRED:
-        return existing
-    grounding_status = str(
-        candidate.get("grounding_status") or declaration.get("grounding_status") or "resolved"
-    )
-    if grounding_status in {"ambiguous", "unresolved"}:
-        return CANDIDATE_STATE_SEMANTIC
-    evidence = candidate.get("visual_grounding_evidence")
-    reviewability_status = (
-        str(evidence.get("reviewability_status") or "")
-        if isinstance(evidence, dict)
-        else str(candidate.get("reviewability_status") or "")
-    )
-    if reviewability_status != VISUAL_EVIDENCE_REVIEWABLE_STATUS:
-        return CANDIDATE_STATE_VISUAL_SCAN_REQUIRED
-    if existing == CANDIDATE_STATE_NAVIGATION_AUTHORIZED:
-        return existing
-    cleanup_recommended = bool(candidate.get("cleanup_recommended"))
-    candidate_fixture_id = str(candidate.get("candidate_fixture_id") or "")
-    recommended_tool = str(candidate.get("recommended_tool") or "")
-    if cleanup_recommended or (candidate_fixture_id and recommended_tool):
-        return CANDIDATE_STATE_NAVIGATION_AUTHORIZED
-    return CANDIDATE_STATE_VISUALLY_CONFIRMED
-
-
-def _candidate_state_history(candidate_state: str) -> list[str]:
-    state = str(candidate_state or "")
-    ordered = [
-        CANDIDATE_STATE_SEMANTIC,
-        CANDIDATE_STATE_VISUAL_SCAN_REQUIRED,
-        CANDIDATE_STATE_VISUALLY_CONFIRMED,
-        CANDIDATE_STATE_NAVIGATION_AUTHORIZED,
-    ]
-    if state in ordered:
-        return ordered[: ordered.index(state) + 1]
-    if state == "already_handled":
-        return ordered + ["already_handled"]
-    return [CANDIDATE_STATE_SEMANTIC]
-
-
-def _required_tool_for_candidate_state(candidate_state: str) -> str:
-    if candidate_state == CANDIDATE_STATE_NAVIGATION_AUTHORIZED:
-        return "navigate_to_object"
-    if candidate_state == CANDIDATE_STATE_VISUALLY_CONFIRMED:
-        return "navigate_to_object"
-    if candidate_state == CANDIDATE_STATE_VISUAL_SCAN_REQUIRED:
-        return "adjust_camera"
-    return "observe"
 
 
 def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
-    waypoint = str(waypoint_id or "")
-    if waypoint:
-        return f"visible_detection:{waypoint}:{handle}"
-    return f"visible_detection:{handle}"
+    return realworld_runtime_map_contract.synthetic_observation_id(handle, waypoint_id)
 
 
 def _runtime_map_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    if not snapshot:
-        return []
-    priors = []
-    for index, item in enumerate(snapshot.get("observed_objects") or [], start=1):
-        if not isinstance(item, dict):
-            continue
-        prior_object_id = str(item.get("object_id") or f"prior_{index:03d}")
-        prior = {
-            "object_id": prior_object_id,
-            "prior_row_id": f"prior_{index:03d}",
-            "prior_object_id": prior_object_id,
-            "snapshot_object_id": prior_object_id,
-            "category": str(item.get("category") or ""),
-            "room_id": str(item.get("room_id") or ""),
-            "waypoint_id": str(item.get("waypoint_id") or ""),
-            "source_fixture_id": str(item.get("source_fixture_id") or ""),
-            "source_observation_id": str(item.get("source_observation_id") or ""),
-            "image_region": item.get("image_region") or {},
-            "producer_type": str(item.get("producer_type") or ""),
-            "producer_id": str(item.get("producer_id") or ""),
-            "confidence": _float_or_zero(item.get("confidence")),
-            "freshness": "prior",
-            "actionability": "needs_confirm",
-            "state": "prior",
-            "grounding_status": str(item.get("grounding_status") or "prior"),
-            "candidate_fixture_id": str(item.get("candidate_fixture_id") or ""),
-            "candidate_source": str(item.get("candidate_source") or "runtime_metric_map_snapshot"),
-        }
-        _assert_no_forbidden_agent_view_keys(prior)
-        priors.append(prior)
-    return priors
+    return realworld_runtime_map_contract.runtime_map_priors_from_snapshot(
+        snapshot,
+        float_or_zero=_float_or_zero,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def _runtime_map_anchor_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    if not snapshot:
-        return []
-    anchors = []
-    for index, item in enumerate(snapshot.get("public_semantic_anchors") or [], start=1):
-        if not isinstance(item, dict):
-            continue
-        anchor = {
-            "anchor_id": str(item.get("anchor_id") or f"prior_anchor_{index:03d}"),
-            "prior_anchor_id": str(item.get("anchor_id") or f"prior_anchor_{index:03d}"),
-            "anchor_type": str(item.get("anchor_type") or ""),
-            "category": str(item.get("category") or ""),
-            "label": str(item.get("label") or ""),
-            "room_id": str(item.get("room_id") or ""),
-            "waypoint_id": str(item.get("waypoint_id") or ""),
-            "pose": dict(item.get("pose") or {}),
-            "affordances": list(item.get("affordances") or []),
-            "producer_type": str(item.get("producer_type") or ""),
-            "producer_id": str(item.get("producer_id") or ""),
-            "confidence": _float_or_zero(item.get("confidence")),
-            "freshness": "prior",
-            "actionability": str(item.get("actionability") or ""),
-            "reachability_status": str(item.get("reachability_status") or ""),
-            "classification_status": str(item.get("classification_status") or ""),
-            "source_observation_id": str(item.get("source_observation_id") or ""),
-            "promotion_status": "prior_runtime_snapshot",
-            "evidence": dict(item.get("evidence") or {}),
-        }
-        _assert_no_forbidden_agent_view_keys(anchor)
-        anchors.append(anchor)
-    return anchors
+    return realworld_runtime_map_contract.runtime_map_anchor_priors_from_snapshot(
+        snapshot,
+        float_or_zero=_float_or_zero,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def _runtime_map_room_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    if not snapshot:
-        return []
-    rooms = []
-    for item in snapshot.get("rooms") or []:
-        if not isinstance(item, dict):
-            continue
-        room = _public_room_hint_payload(item)
-        _assert_no_forbidden_agent_view_keys(room)
-        rooms.append(room)
-    return rooms
+    return realworld_runtime_map_contract.runtime_map_room_priors_from_snapshot(
+        snapshot,
+        public_room_hint_payload=_public_room_hint_payload,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def infer_target_fixture_for_detection(
     detection: dict[str, Any],
     fixture_hints: dict[str, Any],
 ) -> dict[str, Any] | None:
-    direct_candidate = _target_fixture_from_detection_anchor(detection)
-    if direct_candidate is not None:
-        return direct_candidate
-    fixture_candidates = [
-        fixture
-        for room in fixture_hints.get("rooms", [])
-        for fixture in room.get("fixtures", [])
-        if isinstance(fixture, dict)
-    ]
-    object_terms = {
-        _norm(detection.get("category")),
-        _norm(detection.get("name")),
-    }
-    for object_aliases, fixture_aliases in _OBJECT_CATEGORY_TARGETS:
-        if not any(alias in term for alias in object_aliases for term in object_terms):
-            continue
-        for fixture_alias in fixture_aliases:
-            match = _first_matching_fixture(fixture_candidates, fixture_alias)
-            if match is not None:
-                return match
-    return None
+    return realworld_runtime_map_contract.infer_target_fixture_for_detection(
+        detection,
+        fixture_hints,
+        norm=_norm,
+        object_category_targets=_OBJECT_CATEGORY_TARGETS,
+        first_matching_fixture=_first_matching_fixture,
+        fixture_requires_open=_fixture_requires_open,
+    )
 
 
 def _target_fixture_from_detection_anchor(detection: dict[str, Any]) -> dict[str, Any] | None:
-    fixture_id = str(detection.get("candidate_fixture_id") or "")
-    if not fixture_id.startswith("anchor_fixture_"):
-        return None
-    category = str(detection.get("candidate_fixture_category") or "")
-    tool = str(detection.get("recommended_tool") or "")
-    affordances = ["observe", "place"]
-    if tool == "place_inside" or _fixture_requires_open({"category": category}):
-        affordances.append("place_inside")
-    if _fixture_requires_open({"category": category}):
-        affordances.extend(["open", "close"])
-    waypoint_id = str(detection.get("waypoint_id") or "")
-    return {
-        "fixture_id": fixture_id,
-        "receptacle_id": fixture_id,
-        "category": category,
-        "name": category or fixture_id,
-        "room_id": str(detection.get("current_room_id") or ""),
-        "affordances": affordances,
-        "preferred_inspection_waypoint_id": waypoint_id,
-        "preferred_manipulation_waypoint_id": waypoint_id,
-        "public_fixture_source": "runtime_semantic_anchor",
-    }
+    return realworld_runtime_map_contract.target_fixture_from_detection_anchor(
+        detection,
+        fixture_requires_open=_fixture_requires_open,
+    )
 
 
 def forbidden_agent_view_keys() -> set[str]:
-    return set(_FORBIDDEN_AGENT_VIEW_KEYS)
+    return realworld_agent_view_contract.forbidden_agent_view_keys(_FORBIDDEN_AGENT_VIEW_KEYS)
 
 
 def cleanup_policy_trace_from_events(
     trace_events: list[dict[str, Any]],
     agent_view: dict[str, Any],
 ) -> dict[str, Any]:
-    return _cleanup_policy_trace_from_events(
+    return realworld_agent_view_contract.cleanup_policy_trace_from_events(
         trace_events,
         agent_view,
+        builder=_cleanup_policy_trace_from_events,
         schema=CLEANUP_POLICY_TRACE_SCHEMA,
         minimal_map_mode=MINIMAL_MAP_MODE,
     )
@@ -5250,1034 +4986,17 @@ def real_robot_readiness_from_events(
     trace_events: list[dict[str, Any]],
     robot_view_steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
-    policy_view = agent_view.get("policy_view") or {}
-    navigation_backends: dict[str, int] = {}
-    pose_sources: dict[str, int] = {}
-    for raw in trace_events:
-        if raw.get("event") != "response":
-            continue
-        response = raw.get("response") if isinstance(raw.get("response"), dict) else {}
-        backend = response.get("navigation_backend")
-        if backend:
-            navigation_backends[str(backend)] = navigation_backends.get(str(backend), 0) + 1
-        pose_source = response.get("pose_source")
-        if pose_source:
-            pose_sources[str(pose_source)] = pose_sources.get(str(pose_source), 0) + 1
-    report_only_count = sum(
-        1 for step in robot_view_steps if (step.get("views") or {}).get("chase")
+    return realworld_agent_view_contract.real_robot_readiness_from_events(
+        agent_view=agent_view,
+        trace_events=trace_events,
+        robot_view_steps=robot_view_steps,
+        schema=REAL_ROBOT_READINESS_SCHEMA,
+        api_semantic_provenance=API_SEMANTIC_PROVENANCE,
+        sim_costmap_planner=SIM_COSTMAP_PLANNER,
+        map_bundle_fields_present=_map_bundle_fields_present,
+        pose_stamped_waypoints_present=_pose_stamped_waypoints_present,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
     )
-    evidence = {
-        "schema": REAL_ROBOT_READINESS_SCHEMA,
-        "status": "simulation_semantic_not_real_robot_ready",
-        "real_robot_ready": False,
-        "map_bundle_schema": metric_map.get("schema", ""),
-        "map_bundle_fields_present": _map_bundle_fields_present(metric_map),
-        "pose_stamped_waypoints": _pose_stamped_waypoints_present(metric_map),
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
-            and fixture_hints.get("contains_runtime_observations") is False
-        ),
-        "policy_view_chase_excluded": policy_view.get("chase_camera_policy_input") is False,
-        "report_only_simulation_view_count": report_only_count,
-        "report_only_simulation_view_label": "report_only_simulation_view",
-        "navigation_backend_summary": navigation_backends,
-        "pose_source_summary": pose_sources,
-        "semantic_navigation_only": set(navigation_backends)
-        <= {
-            API_SEMANTIC_PROVENANCE,
-            SIM_COSTMAP_PLANNER,
-        },
-        "sim_costmap_route_validation": navigation_backends.get(SIM_COSTMAP_PLANNER, 0) > 0,
-        "physical_navigation_pilot": False,
-        "physical_cleanup_ready": False,
-        "blocked_capabilities": [
-            "nav2_action_backend",
-            "live_ros_graph",
-            "planner_backed_cleanup_primitives",
-        ],
-        "public_contract_note": (
-            "This artifact aligns data boundaries with a real robot contract, but "
-            "semantic simulator navigation remains labelled api_semantic."
-        ),
-    }
-    evidence["readiness_sections_complete"] = bool(
-        evidence["map_bundle_fields_present"]
-        and evidence["pose_stamped_waypoints"]
-        and evidence["static_fixture_semantic_map"]
-        and evidence["policy_view_chase_excluded"]
-        and navigation_backends
-    )
-    _assert_no_forbidden_agent_view_keys(evidence)
-    return evidence
-
-
-def _map_bundle_fields_present(metric_map: dict[str, Any]) -> bool:
-    required = {
-        "schema",
-        "frame_id",
-        "map_id",
-        "map_version",
-        "resolution_m",
-        "origin",
-        "width",
-        "height",
-        "occupancy_values",
-        "map_bundle",
-        "robot_pose",
-        "inspection_waypoints",
-    }
-    return required <= set(metric_map)
-
-
-def _pose_stamped_waypoints_present(metric_map: dict[str, Any]) -> bool:
-    waypoints = metric_map.get("inspection_waypoints") or []
-    required = {
-        "waypoint_id",
-        "frame_id",
-        "x",
-        "y",
-        "yaw",
-        "room_id",
-        "label",
-        "visited",
-        "purpose",
-    }
-    return bool(waypoints) and all(required <= set(item) for item in waypoints)
-
-
-def _fixtures_from_bundle_fixture_hints(fixture_hints: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    fixtures: dict[str, dict[str, Any]] = {}
-    for room in fixture_hints.get("rooms") or []:
-        if not isinstance(room, dict):
-            continue
-        room_id = str(room.get("room_id") or "")
-        room_label = str(room.get("room_label") or room_id)
-        for raw_fixture in room.get("fixtures") or []:
-            if not isinstance(raw_fixture, dict):
-                continue
-            fixture = dict(raw_fixture)
-            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-            if not fixture_id:
-                continue
-            fixture.setdefault("fixture_id", fixture_id)
-            fixture.setdefault("receptacle_id", fixture_id)
-            fixture.setdefault("room_id", room_id)
-            fixture.setdefault("room_area", room_label or room_id)
-            fixture.setdefault("kind", "receptacle")
-            fixture.setdefault("name", fixture_id)
-            fixture.setdefault("category", fixture.get("name", fixture_id))
-            fixtures[fixture_id] = fixture
-    return fixtures
-
-
-def _scene_index_public_fixture_overlay(
-    *,
-    backend: Any,
-    scenario: CleanupScenario,
-    existing_fixtures: dict[str, dict[str, Any]],
-    fallback_waypoint_id: str,
-) -> dict[str, dict[str, Any]]:
-    if str(getattr(backend, "scenario_source", "")) != "isaac_scene_index":
-        return {}
-
-    overlay: dict[str, dict[str, Any]] = {}
-    for receptacle in scenario.receptacles:
-        fixture_id = str(receptacle.receptacle_id)
-        if not fixture_id:
-            continue
-        fixture = dict(existing_fixtures.get(fixture_id, {}))
-        fixture["fixture_id"] = fixture_id
-        fixture["receptacle_id"] = fixture_id
-        fixture["category"] = str(
-            receptacle.category or fixture.get("category") or receptacle.name or fixture_id
-        )
-        fixture["name"] = str(receptacle.name or fixture.get("name") or fixture_id)
-        fixture.setdefault("kind", receptacle.kind)
-        fixture.setdefault("room_area", receptacle.room_area)
-        fixture.setdefault("room_id", _room_id(str(receptacle.room_area)))
-        fixture.setdefault("preferred_inspection_waypoint_id", fallback_waypoint_id)
-        fixture.setdefault("preferred_manipulation_waypoint_id", fallback_waypoint_id)
-        fixture["public_fixture_source"] = "isaac_scene_index"
-        overlay[fixture_id] = fixture
-    return overlay
-
-
-def _metric_map_room_payload(room: dict[str, Any]) -> dict[str, Any]:
-    payload = normalize_spatial_room(
-        {
-            "room_id": room["room_id"],
-            "room_label": room["room_label"],
-            "fixture_count": len(room["fixture_ids"]),
-            "polygon": room.get("polygon", []),
-        },
-        frame_id="map",
-        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
-        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-        alignment_status=ALIGNMENT_STATUS_NATIVE,
-    )
-    if isinstance(room.get("scene_room_outline"), dict):
-        payload["scene_room_outline"] = dict(room["scene_room_outline"])
-    return payload
-
-
-def _public_room_hints_from_metric_map(
-    metric_map: dict[str, Any],
-    *,
-    fallback_rooms: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    source_rooms = [item for item in metric_map.get("rooms") or [] if isinstance(item, dict)] or [
-        item for item in fallback_rooms if isinstance(item, dict)
-    ]
-    rooms: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for raw_room in source_rooms:
-        room = _public_room_hint_payload(raw_room)
-        room_id = str(room.get("room_id") or "")
-        if not room_id or room_id in seen:
-            continue
-        rooms.append(room)
-        seen.add(room_id)
-    return rooms
-
-
-def _public_room_hint_payload(room: dict[str, Any]) -> dict[str, Any]:
-    room_id = str(room.get("room_id") or _room_id(str(room.get("room_label") or "room_area")))
-    room_label = str(room.get("room_label") or room_id.replace("_", " "))
-    polygon = [dict(point) for point in room.get("polygon") or [] if isinstance(point, dict)]
-    map_center = (
-        dict(room.get("map_center") or {})
-        if isinstance(room.get("map_center"), dict)
-        else _polygon_center_world(polygon)
-    )
-    payload: dict[str, Any] = {
-        "room_id": room_id,
-        "room_label": room_label,
-        "category": str(room.get("category") or _room_category_from_label(room_label, room_id)),
-        "polygon": polygon,
-        "map_center": map_center,
-        "public_room_source": "base_navigation_map",
-    }
-    payload = normalize_spatial_room(
-        payload,
-        frame_id=str(room.get("source_map_frame_id") or "map"),
-        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
-        geometry_source=str(room.get("geometry_source") or GEOMETRY_SOURCE_GENERATED_CANDIDATE),
-        alignment_status=str(room.get("alignment_status") or ALIGNMENT_STATUS_NATIVE),
-    )
-    if isinstance(room.get("scene_room_outline"), dict):
-        payload["scene_room_outline"] = dict(room["scene_room_outline"])
-    return payload
-
-
-def _room_category_hints_from_public_rooms(
-    rooms: list[dict[str, Any]],
-    waypoints: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    waypoint_by_room: dict[str, str] = {}
-    for waypoint in waypoints:
-        room_id = str(waypoint.get("room_id") or "")
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        if room_id and waypoint_id:
-            waypoint_by_room.setdefault(room_id, waypoint_id)
-    hints = []
-    for room in rooms:
-        room_id = str(room.get("room_id") or "")
-        room_label = str(room.get("room_label") or room_id.replace("_", " "))
-        if not room_id:
-            continue
-        hint = {
-            "anchor_type": "room_area",
-            "category": str(room.get("category") or _room_category_from_label(room_label, room_id)),
-            "label": room_label,
-            "room_id": room_id,
-            "room_label": room_label,
-            "waypoint_id": waypoint_by_room.get(room_id, ""),
-            "affordances": ["navigate", "observe"],
-            "classification_status": "map_prior",
-            "confidence": 0.8,
-            "aliases": [room_id, room_label],
-            "producer_type": "base_navigation_map",
-        }
-        _assert_no_forbidden_agent_view_keys(hint)
-        hints.append(hint)
-    return hints
-
-
-def _merge_public_rooms(
-    base_rooms: list[dict[str, Any]],
-    prior_rooms: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for raw_room in [*base_rooms, *prior_rooms]:
-        if not isinstance(raw_room, dict):
-            continue
-        room = _public_room_hint_payload(raw_room)
-        room_id = str(room.get("room_id") or "")
-        if not room_id or room_id in seen:
-            continue
-        merged.append(room)
-        seen.add(room_id)
-    return merged
-
-
-def _public_driveable_ways(
-    metric_map: dict[str, Any],
-    rooms: list[dict[str, Any]],
-) -> list[dict[str, str]]:
-    public_room_ids = {str(room.get("room_id") or "") for room in rooms}
-    ways = []
-    for way in metric_map.get("driveable_ways") or []:
-        if not isinstance(way, dict):
-            continue
-        start = str(way.get("from_room_id") or "")
-        goal = str(way.get("to_room_id") or "")
-        if start in public_room_ids and goal in public_room_ids:
-            ways.append({"from_room_id": start, "to_room_id": goal})
-    if ways:
-        return ways
-    return _driveable_ways(rooms)
-
-
-def _room_label_by_id(rooms: list[dict[str, Any]]) -> dict[str, str]:
-    return {
-        str(room.get("room_id") or ""): str(room.get("room_label") or "")
-        for room in rooms
-        if str(room.get("room_id") or "")
-    }
-
-
-def _room_category_from_label(room_label: str, room_id: str = "") -> str:
-    text = f"{room_label} {room_id}".lower()
-    if any(term in text for term in ("kitchen", "dining", "bar", "counter", "厨房", "吧台")):
-        return "kitchen"
-    if any(term in text for term in ("living", "sofa", "lounge", "客厅", "沙发")):
-        return "living_room"
-    if any(term in text for term in ("storage", "store", "utility", "储藏", "库房")):
-        return "storage_room"
-    if any(term in text for term in ("meeting", "conference", "会议")):
-        return "meeting_room"
-    if any(term in text for term in ("bed", "卧室")):
-        return "bedroom"
-    if any(term in text for term in ("bath", "toilet", "卫生间")):
-        return "bathroom"
-    return "room_area"
-
-
-def _scene_room_outlines_from_backend(backend: Any) -> list[dict[str, Any]]:
-    if str(getattr(backend, "scenario_source", "")) != "isaac_scene_index":
-        return []
-    outlines = getattr(backend, "room_outlines", None)
-    if outlines is None:
-        diagnostics = getattr(backend, "scene_index_diagnostics", {})
-        if isinstance(diagnostics, dict):
-            outlines = diagnostics.get("room_outlines")
-    return [
-        dict(item)
-        for item in (outlines or [])
-        if isinstance(item, dict) and item.get("center") and item.get("half_extents")
-    ]
-
-
-def _scene_index_fixture_pose(backend: Any, fixture_id: str) -> list[float] | None:
-    receptacle_index = getattr(backend, "receptacle_index", {})
-    if not isinstance(receptacle_index, dict):
-        return None
-    entry = receptacle_index.get(fixture_id)
-    if not isinstance(entry, dict):
-        return None
-    support_pose = entry.get("support_pose")
-    if isinstance(support_pose, dict):
-        position = support_pose.get("position")
-        pose = _vec3(position)
-        if pose is not None:
-            return pose
-    bounds = entry.get("usd_world_bounds")
-    if isinstance(bounds, dict):
-        pose = _vec3(bounds.get("center"))
-        if pose is not None:
-            return pose
-    return None
-
-
-def _room_outline_by_id(
-    room_outlines: list[dict[str, Any]],
-    room_id: str,
-) -> dict[str, Any] | None:
-    return next((item for item in room_outlines if str(item.get("room_id") or "") == room_id), None)
-
-
-def _fixture_hints_with_scene_index_overlay(
-    rooms: list[Any],
-    overlay_fixtures: dict[str, dict[str, Any]],
-    *,
-    fixture_hint_mode: str,
-) -> list[dict[str, Any]]:
-    overlay_room = {
-        "room_id": "isaac_scene_index",
-        "room_label": "Isaac scene index fixtures",
-        "fixture_source": "isaac_scene_index",
-        "fixtures": [
-            _scene_index_fixture_hint_row(fixture_id, fixture, fixture_hint_mode)
-            for fixture_id, fixture in sorted(overlay_fixtures.items())
-        ],
-    }
-    return [overlay_room] + [dict(room) for room in rooms if isinstance(room, dict)]
-
-
-def _scene_index_fixture_hint_row(
-    fixture_id: str,
-    fixture: dict[str, Any],
-    fixture_hint_mode: str,
-) -> dict[str, Any]:
-    pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-    return {
-        "fixture_id": fixture_id,
-        "category": str(fixture.get("category") or fixture.get("name") or fixture_id),
-        "name": str(fixture.get("name") or fixture_id),
-        "room_id": "isaac_scene_index",
-        "affordances": _fixture_affordances(fixture),
-        "footprint": _fixture_footprint(fixture_id),
-        "pose": {
-            "frame_id": str(pose.get("frame_id") or "map"),
-            "x": float(pose.get("x", 0.0)),
-            "y": float(pose.get("y", 0.0)),
-            "yaw": float(pose.get("yaw", 0.0)),
-        },
-        "manipulation_frame": f"{fixture_id}_manipulation",
-        "preferred_inspection_waypoint_id": str(
-            fixture.get("preferred_inspection_waypoint_id") or ""
-        ),
-        "preferred_manipulation_waypoint_id": str(
-            fixture.get("preferred_manipulation_waypoint_id") or ""
-        ),
-        "position_detail": fixture_hint_mode,
-        "public_fixture_source": "isaac_scene_index",
-    }
-
-
-def _first_waypoint_id(waypoints: list[dict[str, Any]]) -> str:
-    if not waypoints:
-        return ""
-    return str(waypoints[0].get("waypoint_id") or "")
-
-
-def _rooms_from_bundle_projection(
-    metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
-) -> list[dict[str, Any]]:
-    fixture_ids_by_room: dict[str, list[str]] = defaultdict(list)
-    for room in fixture_hints.get("rooms") or []:
-        if not isinstance(room, dict):
-            continue
-        room_id = str(room.get("room_id") or "")
-        for fixture in room.get("fixtures") or []:
-            if not isinstance(fixture, dict):
-                continue
-            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-            if fixture_id:
-                fixture_ids_by_room[room_id].append(fixture_id)
-
-    rooms = []
-    for raw_room in metric_map.get("rooms") or []:
-        if not isinstance(raw_room, dict):
-            continue
-        room = dict(raw_room)
-        room_id = str(room.get("room_id") or "")
-        room["fixture_ids"] = sorted(fixture_ids_by_room.get(room_id, []))
-        room.setdefault("room_label", room_id.replace("_", " "))
-        room.setdefault("map_center", _polygon_center_world(room.get("polygon") or []))
-        rooms.append(room)
-    return rooms
-
-
-def _inspection_waypoints_from_bundle_projection(
-    metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
-) -> list[dict[str, Any]]:
-    fixture_waypoint_ids, room_fixture_ids = _bundle_fixture_projection_indexes(fixture_hints)
-    waypoints = []
-    frame_id = str(metric_map.get("frame_id") or "map")
-    for raw_waypoint in metric_map.get("inspection_waypoints") or []:
-        if not isinstance(raw_waypoint, dict):
-            continue
-        waypoints.append(
-            _bundle_inspection_waypoint(
-                raw_waypoint=raw_waypoint,
-                frame_id=frame_id,
-                fixture_waypoint_ids=fixture_waypoint_ids,
-                room_fixture_ids=room_fixture_ids,
-            )
-        )
-    return waypoints
-
-
-def _bundle_fixture_projection_indexes(
-    fixture_hints: dict[str, Any],
-) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    fixture_waypoint_ids: dict[str, list[str]] = defaultdict(list)
-    room_fixture_ids: dict[str, list[str]] = defaultdict(list)
-    for room in fixture_hints.get("rooms") or []:
-        if not isinstance(room, dict):
-            continue
-        _add_bundle_room_fixture_indexes(
-            room=room,
-            fixture_waypoint_ids=fixture_waypoint_ids,
-            room_fixture_ids=room_fixture_ids,
-        )
-    return fixture_waypoint_ids, room_fixture_ids
-
-
-def _add_bundle_room_fixture_indexes(
-    *,
-    room: dict[str, Any],
-    fixture_waypoint_ids: dict[str, list[str]],
-    room_fixture_ids: dict[str, list[str]],
-) -> None:
-    room_id = str(room.get("room_id") or "")
-    for fixture in room.get("fixtures") or []:
-        if not isinstance(fixture, dict):
-            continue
-        fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-        if not fixture_id:
-            continue
-        room_fixture_ids[room_id].append(fixture_id)
-        for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
-            waypoint_id = str(fixture.get(key) or "")
-            if waypoint_id and fixture_id not in fixture_waypoint_ids[waypoint_id]:
-                fixture_waypoint_ids[waypoint_id].append(fixture_id)
-
-
-def _bundle_inspection_waypoint(
-    *,
-    raw_waypoint: dict[str, Any],
-    frame_id: str,
-    fixture_waypoint_ids: dict[str, list[str]],
-    room_fixture_ids: dict[str, list[str]],
-) -> dict[str, Any]:
-    waypoint = dict(raw_waypoint)
-    waypoint_id = str(waypoint.get("waypoint_id") or "")
-    room_id = str(waypoint.get("room_id") or "")
-    waypoint.setdefault("frame_id", frame_id)
-    waypoint["visited"] = False
-    if not waypoint.get("fixture_ids"):
-        waypoint["fixture_ids"] = sorted(
-            fixture_waypoint_ids.get(waypoint_id) or room_fixture_ids.get(room_id, [])
-        )
-    return waypoint
-
-
-def _minimal_generated_exploration_waypoints(
-    metric_map: dict[str, Any],
-    *,
-    fallback_waypoints: list[dict[str, Any]],
-    public_rooms: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    source_waypoints = [
-        item for item in metric_map.get("inspection_waypoints") or [] if isinstance(item, dict)
-    ] or [item for item in fallback_waypoints if isinstance(item, dict)]
-    frame_id = str(metric_map.get("frame_id") or "map")
-    room_labels = _room_label_by_id(public_rooms)
-    generated = []
-    for index, source in enumerate(source_waypoints, start=1):
-        waypoint_id = f"generated_exploration_{index:03d}"
-        room_id = str(source.get("room_id") or "generated_area")
-        room_label = str(room_labels.get(room_id) or source.get("room_label") or "")
-        generated.append(
-            {
-                "waypoint_id": waypoint_id,
-                "frame_id": frame_id,
-                "x": float(source.get("x", 0.0)),
-                "y": float(source.get("y", 0.0)),
-                "yaw": float(source.get("yaw", 0.0)),
-                "room_id": room_id,
-                "room_label": room_label,
-                "label": f"Generated exploration candidate {index}",
-                "purpose": "minimal_map_exploration",
-                "waypoint_source": "generated_exploration_candidate",
-                "coverage_estimate": round(1.0 / max(len(source_waypoints), 1), 6),
-                "candidate_provenance": {
-                    "source": "public_occupancy_free_space",
-                    "candidate_index": index,
-                    "source_pose": "free_space_sample",
-                    "source_room_hidden": False,
-                    "source_room_label_available": bool(room_label),
-                    "source_fixtures_hidden": True,
-                    "source_waypoint_hidden": True,
-                },
-            }
-        )
-    return generated
-
-
-def _private_waypoint_map_for_generated_candidates(
-    generated_waypoints: list[dict[str, Any]],
-    private_waypoints: list[dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    result = {}
-    for generated, private in zip(generated_waypoints, private_waypoints, strict=False):
-        result[str(generated.get("waypoint_id") or "")] = private
-    return result
-
-
-def _polygon_center_world(polygon: list[Any]) -> dict[str, float]:
-    points = [point for point in polygon if isinstance(point, dict)]
-    if not points:
-        return {"x": 0.0, "y": 0.0}
-    return {
-        "x": round(sum(float(point.get("x", 0.0)) for point in points) / len(points), 3),
-        "y": round(sum(float(point.get("y", 0.0)) for point in points) / len(points), 3),
-    }
-
-
-def _rooms_from_fixtures(fixtures: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    by_room: dict[str, list[str]] = defaultdict(list)
-    labels: dict[str, str] = {}
-    for fixture_id, fixture in fixtures.items():
-        raw_room = str(fixture.get("room_area", "unknown"))
-        room_id = _room_id(raw_room)
-        by_room[room_id].append(fixture_id)
-        labels[room_id] = raw_room.replace("_", " ")
-    rooms = []
-    for index, (room_id, fixture_ids) in enumerate(sorted(by_room.items())):
-        outline = _room_outline_by_id_from_fixtures(fixtures, room_id, fixture_ids)
-        if outline is not None:
-            polygon = _polygon_from_room_outline(outline)
-            center_xy = _room_outline_center(outline)
-            room_label = str(outline.get("label") or labels[room_id])
-            map_center = {"x": center_xy[0], "y": center_xy[1]}
-        else:
-            x0 = float(index * 3)
-            polygon = [
-                {"x": x0, "y": 0.0},
-                {"x": x0 + 2.0, "y": 0.0},
-                {"x": x0 + 2.0, "y": 2.0},
-                {"x": x0, "y": 2.0},
-            ]
-            room_label = labels[room_id]
-            map_center = {"x": x0 + 1.0, "y": 1.0}
-        rooms.append(
-            {
-                "room_id": room_id,
-                "room_label": room_label,
-                "fixture_ids": sorted(fixture_ids),
-                "polygon": polygon,
-                "map_center": map_center,
-                "fixture_navigation_obstacles": _fixture_navigation_obstacles(
-                    fixtures,
-                    fixture_ids,
-                ),
-                **_room_outline_metadata(outline),
-            }
-        )
-    return rooms
-
-
-def _inspection_waypoints(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    waypoints = []
-    for room in rooms:
-        fixture_ids = list(room["fixture_ids"])
-        groups = _split_fixture_groups(fixture_ids)
-        slots = _waypoint_slots_for_room(room, len(groups))
-        for index, group in enumerate(groups, start=1):
-            x, y = slots[index - 1]
-            waypoints.append(
-                {
-                    "waypoint_id": f"{room['room_id']}_scan_{index}",
-                    "room_id": room["room_id"],
-                    "label": f"{room['room_label']} scan {index}",
-                    "x": round(x, 3),
-                    "y": round(y, 3),
-                    "yaw": 0.0,
-                    "fixture_ids": group,
-                    "purpose": "fixture_coverage",
-                    "waypoint_source": "static_map_coverage",
-                    "coverage_estimate": round(1.0 / max(len(groups), 1), 2),
-                }
-            )
-    return waypoints
-
-
-def _room_outline_by_id_from_fixtures(
-    fixtures: dict[str, dict[str, Any]],
-    room_id: str,
-    fixture_ids: list[str],
-) -> dict[str, Any] | None:
-    for fixture_id in fixture_ids:
-        outline = fixtures.get(fixture_id, {}).get("scene_room_outline")
-        if isinstance(outline, dict) and str(outline.get("room_id") or "") == room_id:
-            return dict(outline)
-    return None
-
-
-def _polygon_from_room_outline(outline: dict[str, Any]) -> list[dict[str, float]]:
-    center = _vec2(outline.get("center"))
-    half_extents = _vec2(outline.get("half_extents"))
-    if center is None or half_extents is None:
-        return []
-    cx, cy = center
-    hx, hy = abs(half_extents[0]), abs(half_extents[1])
-    return [
-        {"x": round(cx - hx, 6), "y": round(cy - hy, 6)},
-        {"x": round(cx + hx, 6), "y": round(cy - hy, 6)},
-        {"x": round(cx + hx, 6), "y": round(cy + hy, 6)},
-        {"x": round(cx - hx, 6), "y": round(cy + hy, 6)},
-    ]
-
-
-def _room_outline_center(outline: dict[str, Any]) -> tuple[float, float]:
-    center = _vec2(outline.get("center"))
-    if center is None:
-        return (0.0, 0.0)
-    return (round(center[0], 6), round(center[1], 6))
-
-
-def _room_outline_metadata(outline: dict[str, Any] | None) -> dict[str, Any]:
-    if outline is None:
-        return {}
-    return {
-        "scene_room_outline": {
-            "room_id": str(outline.get("room_id") or ""),
-            "center": list(_room_outline_center(outline)),
-            "half_extents": list(_vec2(outline.get("half_extents")) or (0.0, 0.0)),
-            "provenance": str(outline.get("provenance") or "scene_room_outline"),
-            "usd_prim_path": str(outline.get("usd_prim_path") or ""),
-        }
-    }
-
-
-def _room_polygon_bounds(room: dict[str, Any] | None) -> dict[str, float] | None:
-    if room is None:
-        return None
-    polygon = room.get("polygon") or []
-    xs = [float(point.get("x", 0.0)) for point in polygon if isinstance(point, dict)]
-    ys = [float(point.get("y", 0.0)) for point in polygon if isinstance(point, dict)]
-    if not xs or not ys:
-        center = room.get("map_center") or {}
-        if "x" not in center or "y" not in center:
-            return None
-        x = float(center.get("x", 0.0))
-        y = float(center.get("y", 0.0))
-        return {"min_x": x - 1.0, "max_x": x + 1.0, "min_y": y - 1.0, "max_y": y + 1.0}
-    return {
-        "min_x": round(min(xs), 6),
-        "max_x": round(max(xs), 6),
-        "min_y": round(min(ys), 6),
-        "max_y": round(max(ys), 6),
-    }
-
-
-def _waypoint_slots_for_room(
-    room: dict[str, Any],
-    count: int,
-) -> list[tuple[float, float]]:
-    count = max(1, int(count))
-    polygon = room.get("polygon") or []
-    xs = [float(point.get("x", 0.0)) for point in polygon if isinstance(point, dict)]
-    ys = [float(point.get("y", 0.0)) for point in polygon if isinstance(point, dict)]
-    if not xs or not ys:
-        center = room.get("map_center") or {}
-        x = float(center.get("x", 0.0))
-        y = float(center.get("y", 0.0))
-        return [(x, y + index * 0.45) for index in range(count)]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    center = room.get("map_center") or {}
-    x = float(center.get("x", (min_x + max_x) / 2.0))
-    y = float(center.get("y", (min_y + max_y) / 2.0))
-    if isinstance(room.get("scene_room_outline"), dict):
-        return _scene_outline_waypoint_slots_for_room(
-            room,
-            count=count,
-            center=(x, y),
-            bounds=(min_x, max_x, min_y, max_y),
-        )
-    if count == 1:
-        return [(round(x, 3), round(y, 3))]
-    margin = min(0.75, max((max_y - min_y) * 0.15, 0.25))
-    start_y = min_y + margin
-    end_y = max_y - margin
-    if end_y < start_y:
-        start_y = end_y = y
-    step = (end_y - start_y) / max(count - 1, 1)
-    return [(round(x, 3), round(start_y + step * index, 3)) for index in range(count)]
-
-
-def _scene_outline_waypoint_slots_for_room(
-    room: dict[str, Any],
-    *,
-    count: int,
-    center: tuple[float, float],
-    bounds: tuple[float, float, float, float],
-) -> list[tuple[float, float]]:
-    min_x, max_x, min_y, max_y = bounds
-    width = max_x - min_x
-    depth = max_y - min_y
-    radius = min(0.8, max(min(width, depth) * 0.12, 0.35))
-    candidates = _scene_outline_waypoint_candidates(center, radius)
-    obstacles = [
-        item for item in room.get("fixture_navigation_obstacles") or [] if isinstance(item, dict)
-    ]
-    slots: list[tuple[float, float]] = []
-    for raw_x, raw_y in candidates:
-        x = _clamp(raw_x, min_x + 0.35, max_x - 0.35)
-        y = _clamp(raw_y, min_y + 0.35, max_y - 0.35)
-        if _point_overlaps_fixture_obstacle(x, y, obstacles):
-            continue
-        point = (round(x, 3), round(y, 3))
-        if point not in slots:
-            slots.append(point)
-        if len(slots) >= count:
-            return slots
-    fallback = (round(center[0], 3), round(center[1], 3))
-    if not slots:
-        slots.append(fallback)
-    while len(slots) < count:
-        slots.append(slots[len(slots) % len(slots)])
-    return slots[:count]
-
-
-def _scene_outline_waypoint_candidates(
-    center: tuple[float, float],
-    radius: float,
-) -> list[tuple[float, float]]:
-    cx, cy = center
-    return [
-        (cx, cy),
-        (cx, cy - radius),
-        (cx, cy + radius),
-        (cx - radius, cy),
-        (cx + radius, cy),
-        (cx - radius, cy - radius),
-        (cx + radius, cy - radius),
-        (cx - radius, cy + radius),
-        (cx + radius, cy + radius),
-        (cx, cy - radius * 1.6),
-        (cx, cy + radius * 1.6),
-        (cx - radius * 1.6, cy),
-        (cx + radius * 1.6, cy),
-    ]
-
-
-def _fixture_navigation_obstacles(
-    fixtures: dict[str, dict[str, Any]],
-    fixture_ids: list[str],
-) -> list[dict[str, float]]:
-    obstacles = []
-    for fixture_id in fixture_ids:
-        fixture = fixtures.get(fixture_id, {})
-        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-        if not pose:
-            continue
-        footprint = _fixture_footprint(fixture_id)
-        obstacles.append(
-            {
-                "x": float(pose.get("x", 0.0)),
-                "y": float(pose.get("y", 0.0)),
-                "half_width": float(footprint.get("width_m") or 0.45) / 2.0,
-                "half_depth": float(footprint.get("depth_m") or 0.35) / 2.0,
-            }
-        )
-    return obstacles
-
-
-def _point_overlaps_fixture_obstacle(
-    x: float,
-    y: float,
-    obstacles: list[dict[str, float]],
-) -> bool:
-    clearance_m = 0.2
-    for obstacle in obstacles:
-        if (
-            abs(x - obstacle["x"]) <= obstacle["half_width"] + clearance_m
-            and abs(y - obstacle["y"]) <= obstacle["half_depth"] + clearance_m
-        ):
-            return True
-    return False
-
-
-def _split_fixture_groups(fixture_ids: list[str]) -> list[list[str]]:
-    if len(fixture_ids) <= 1:
-        return [fixture_ids, fixture_ids]
-    return [fixture_ids[::2], fixture_ids[1::2]]
-
-
-def _driveable_ways(rooms: list[dict[str, Any]]) -> list[dict[str, str]]:
-    ways = []
-    for previous, current in zip(rooms, rooms[1:]):
-        ways.append(
-            {
-                "from_room_id": str(previous["room_id"]),
-                "to_room_id": str(current["room_id"]),
-                "kind": "doorway",
-            }
-        )
-    return ways
-
-
-def _fixture_affordances(fixture: dict[str, Any]) -> list[str]:
-    affordances = ["place"]
-    if _fixture_requires_open(fixture):
-        affordances.extend(["open", "place_inside", "close"])
-    elif _fixture_is_open_container(fixture):
-        affordances.append("place_inside")
-    return affordances
-
-
-def _recommended_place_tool(fixture_id: str, fixtures: dict[str, dict[str, Any]]) -> str:
-    fixture = fixtures.get(fixture_id, {})
-    return "place_inside" if _fixture_prefers_inside(fixture) else "place"
-
-
-def _public_destination_policy_for_category(category: Any) -> dict[str, Any]:
-    category_norm = _norm(category)
-    preferred: tuple[str, ...] = ()
-    for object_aliases, fixture_aliases in _OBJECT_CATEGORY_TARGETS:
-        if any(_norm(alias) and _norm(alias) in category_norm for alias in object_aliases):
-            preferred = fixture_aliases
-            break
-    if not preferred:
-        preferred = (
-            "countertop",
-            "table",
-            "desk",
-        )
-    normalized = [_normalize_fixture_category_label(item) for item in preferred]
-    normalized = [
-        item for index, item in enumerate(normalized) if item and item not in normalized[:index]
-    ]
-    placement_tool_by_category = {
-        item: _public_destination_policy_tool_for_fixture_category(item) for item in normalized
-    }
-    placement_tool = (
-        placement_tool_by_category.get(normalized[0], "place") if normalized else "place"
-    )
-    return {
-        "schema": "public_cleanup_destination_policy_v1",
-        "source": "public_category_fixture_affordance",
-        "preferred_fixture_categories": normalized,
-        "acceptable_fixture_categories": normalized,
-        "placement_tool": placement_tool,
-        "placement_tool_by_fixture_category": placement_tool_by_category,
-        "requires_public_anchor_selection": True,
-        "private_truth_included": False,
-        "instruction": (
-            "Select a public semantic anchor or fixture whose category matches one of "
-            "preferred_fixture_categories; do not infer or request private destination ids."
-        ),
-    }
-
-
-def _public_destination_policy_tool_for_fixture_category(category: Any) -> str:
-    return "place_inside" if _norm(category) in _INSIDE_DESTINATION_CATEGORY_TERMS else "place"
-
-
-def _normalize_fixture_category_label(value: Any) -> str:
-    text = str(value or "").strip().lower()
-    compact = _norm(text)
-    aliases = {
-        "tvstand": "tvstand",
-        "tv stand": "tvstand",
-        "shelvingunit": "shelvingunit",
-        "shelving unit": "shelvingunit",
-        "book shelf": "bookshelf",
-        "laundry hamper": "laundryhamper",
-        "toy bin": "toybin",
-    }
-    if text in aliases:
-        return aliases[text]
-    if compact in aliases:
-        return aliases[compact]
-    return compact or text
-
-
-def _fixture_footprint(fixture_id: str) -> dict[str, Any]:
-    suffix = sum(ord(ch) for ch in fixture_id) % 7
-    width = round(0.45 + suffix * 0.03, 3)
-    depth = round(0.35 + suffix * 0.02, 3)
-    return {"shape": "rectangle", "width_m": width, "depth_m": depth}
-
-
-def _fixture_requires_open(fixture: dict[str, Any]) -> bool:
-    text = _fixture_text(fixture)
-    return "fridge" in text or "refrigerator" in text
-
-
-def _fixture_prefers_inside(fixture: dict[str, Any]) -> bool:
-    return _fixture_requires_open(fixture) or _fixture_is_open_container(fixture)
-
-
-def _fixture_is_open_container(fixture: dict[str, Any]) -> bool:
-    text = _fixture_text(fixture)
-    return any(term in text for term in ("shelvingunit", "bookshelf", "bookcase", "shelf"))
-
-
-def _semantic_anchor_type_for_fixture(fixture: dict[str, Any]) -> str:
-    text = _fixture_text(fixture)
-    if any(
-        term in text
-        for term in (
-            "sink",
-            "fridge",
-            "refrigerator",
-            "cabinet",
-            "drawer",
-            "hamper",
-            "bin",
-            "shelvingunit",
-            "bookshelf",
-            "bookcase",
-            "shelf",
-        )
-    ):
-        return "receptacle"
-    if any(term in text for term in ("table", "counter", "desk", "stand", "sofa", "bed")):
-        return "surface"
-    return "fixture"
-
-
-def _is_place_anchor(anchor: dict[str, Any]) -> bool:
-    actionability = str(anchor.get("actionability") or "actionable")
-    if actionability != "actionable":
-        return False
-    anchor_type = str(anchor.get("anchor_type") or "")
-    if anchor_type not in {"surface", "receptacle", "fixture"}:
-        return False
-    affordances = {str(item).lower() for item in anchor.get("affordances") or []}
-    return bool({"place", "place_inside", "open"}.intersection(affordances))
-
-
-def _anchor_affordances_for_fixture(fixture: dict[str, Any]) -> list[str]:
-    affordances = ["observe"]
-    for affordance in _fixture_affordances(fixture):
-        if affordance not in affordances:
-            affordances.append(affordance)
-    return affordances
-
-
-def _fixture_text(fixture: dict[str, Any]) -> str:
-    return f"{fixture.get('name', '')} {fixture.get('category', '')}".lower()
-
-
-def _first_fixture_for_waypoint(waypoint: dict[str, Any]) -> str | None:
-    fixture_ids = waypoint.get("fixture_ids") or []
-    return str(fixture_ids[0]) if fixture_ids else None
-
-
-def _first_matching_fixture(
-    fixtures: list[dict[str, Any]],
-    alias: str,
-) -> dict[str, Any] | None:
-    alias_norm = _norm(alias)
-    for fixture in fixtures:
-        text = _norm(
-            " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
-        )
-        if alias_norm in text:
-            return fixture
-    return None
 
 
 def _location_relation(object_id: str, backend: Any) -> str:
@@ -6299,147 +5018,6 @@ def _image_bbox(handle: str) -> list[int]:
 def _safe_anchor_id(value: str) -> str:
     safe = re.sub(r"[^a-zA-Z0-9_]+", "_", value).strip("_")
     return safe or "unknown"
-
-
-def _float_or_none(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _float_or_zero(value: Any) -> float:
-    number = _float_or_none(value)
-    return number if number is not None else 0.0
-
-
-def _clamp(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
-
-
-def _normalize_image_region(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        region_type = str(value.get("type") or "verbal_region")
-        raw_region_value = value.get("value")
-    else:
-        region_type = "verbal_region"
-        raw_region_value = str(value or "unspecified")
-    if region_type == "bbox" and isinstance(raw_region_value, (list, tuple)):
-        numbers = [_float_or_none(item) for item in raw_region_value[:4]]
-        if len(numbers) == 4 and all(number is not None for number in numbers):
-            return {"type": "bbox", "value": numbers}
-    if region_type == "point" and isinstance(raw_region_value, (list, tuple)):
-        numbers = [_float_or_none(item) for item in raw_region_value[:2]]
-        if len(numbers) == 2 and all(number is not None for number in numbers):
-            return {"type": "point", "value": numbers}
-    return {"type": "verbal_region", "value": str(raw_region_value or "unspecified")}
-
-
-def _manual_visual_grounding_pipeline(
-    *,
-    candidate_count: int,
-    producer_type: str,
-    producer_id: str,
-) -> dict[str, Any]:
-    if producer_type == SIMULATED_CAMERA_MODEL_PROVENANCE:
-        return sim_visual_grounding_pipeline(candidate_count=candidate_count)
-    return {
-        "schema": "visual_grounding_pipeline_v1",
-        "pipeline_id": "manual",
-        "status": "ok",
-        "stages": [
-            {
-                "stage": "manual_declaration",
-                "producer_id": producer_id,
-                "model_id": producer_type,
-                "status": "ok",
-                "latency_ms": 0,
-            }
-        ],
-        "candidate_count": candidate_count,
-        "unresolved_count": 0,
-        "duplicate_rate": 0.0,
-    }
-
-
-def _average_duplicate_rate(events: list[dict[str, Any]]) -> float:
-    rates = []
-    for item in events:
-        pipeline = item.get("visual_grounding_pipeline") or {}
-        rate = _float_or_none(pipeline.get("duplicate_rate"))
-        if rate is not None:
-            rates.append(rate)
-    if not rates:
-        return 0.0
-    return round(sum(rates) / len(rates), 6)
-
-
-def _visual_candidate_validation_error(
-    candidate: Any,
-    *,
-    require_target_fixture_id: bool = True,
-    map_mode: str = MINIMAL_MAP_MODE,
-    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
-    producer_type: str = "",
-) -> dict[str, str] | None:
-    if not isinstance(candidate, dict):
-        return {"field": "candidate", "reason": "candidate must be an object"}
-    for field in ("category", "evidence_note"):
-        if not str(candidate.get(field) or "").strip():
-            return {"field": field, "reason": f"{field} is required"}
-    target_fixture_id = str(candidate.get("target_fixture_id") or "").strip()
-    if (
-        require_target_fixture_id
-        and str(candidate.get("producer_type") or "") != EXTERNAL_VISUAL_GROUNDING_PROVENANCE
-        and not target_fixture_id
-    ):
-        return {"field": "target_fixture_id", "reason": "target_fixture_id is required"}
-    region_error = _image_region_validation_error(candidate.get("image_region"))
-    if region_error is not None:
-        return region_error
-    if (
-        map_mode == MINIMAL_MAP_MODE
-        and perception_mode == RAW_FPV_ONLY_MODE
-        and str(producer_type or "") == MAIN_CLEANUP_AGENT_PRODUCER
-        and target_fixture_id
-    ):
-        return {
-            "field": "target_fixture_id",
-            "reason": (
-                "target_fixture_id must be omitted in minimal map RAW_FPV; use the "
-                "candidate_fixture_id returned by navigate_to_visual_candidate"
-            ),
-        }
-    return None
-
-
-def _image_region_validation_error(value: Any) -> dict[str, str] | None:
-    if not isinstance(value, dict):
-        if str(value or "").strip():
-            return None
-        return {"field": "image_region", "reason": "image_region is required"}
-    region_type = str(value.get("type") or "")
-    raw_region_value = value.get("value")
-    if region_type not in {"bbox", "point", "verbal_region"}:
-        return {
-            "field": "image_region.type",
-            "reason": "image_region.type must be bbox, point, or verbal_region",
-        }
-    if region_type == "verbal_region":
-        if str(raw_region_value or "").strip():
-            return None
-        return {"field": "image_region.value", "reason": "verbal_region value is required"}
-    if not isinstance(raw_region_value, (list, tuple)):
-        return {"field": "image_region.value", "reason": f"{region_type} value must be a list"}
-    expected = 4 if region_type == "bbox" else 2
-    if len(raw_region_value) != expected:
-        return {
-            "field": "image_region.value",
-            "reason": f"{region_type} value must contain {expected} numbers",
-        }
-    if any(_float_or_none(item) is None for item in raw_region_value):
-        return {"field": "image_region.value", "reason": f"{region_type} values must be numbers"}
-    return None
 
 
 def _raw_fpv_artifact_path(
@@ -6470,53 +5048,6 @@ def _safe_artifact_id(value: str) -> str:
     return cleaned or "artifact"
 
 
-def _grounding_confidence(candidate: dict[str, Any], status: str) -> float:
-    base = candidate.get("confidence")
-    try:
-        score = float(base) if base is not None else 0.72
-    except (TypeError, ValueError):
-        score = 0.72
-    region = candidate.get("image_region") or {}
-    if region.get("type") == "verbal_region":
-        score -= 0.12
-    if status == "ambiguous":
-        score -= 0.24
-    elif status == "unresolved":
-        score -= 0.38
-    return round(_clamp(score, 0.05, 0.99), 3)
-
-
-def _declared_category_matches_object(category_norm: str, obj: Any) -> bool:
-    object_norm = _norm(f"{getattr(obj, 'category', '')} {getattr(obj, 'name', '')}")
-    if not category_norm or category_norm in object_norm or object_norm in category_norm:
-        return True
-    if category_norm in _EXACT_VISUAL_CATEGORY_ALIASES:
-        return False
-    declared_families = _category_alias_families(category_norm)
-    object_families = _category_alias_families(object_norm)
-    return bool(declared_families.intersection(object_families))
-
-
-def _category_alias_family(text_norm: str) -> str:
-    families = _category_alias_families(text_norm)
-    return next(iter(families), "")
-
-
-def _category_alias_families(text_norm: str) -> set[str]:
-    families = set()
-    for aliases, _targets in _OBJECT_CATEGORY_TARGETS:
-        for alias in aliases:
-            alias_norm = _norm(alias)
-            if alias_norm and (alias_norm in text_norm or text_norm in alias_norm):
-                families.add(aliases[0])
-    return families
-
-
-def _room_id(room_area: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9]+", "_", room_area.strip().lower()).strip("_")
-    return slug or "unknown"
-
-
 def _vec2(value: Any) -> tuple[float, float] | None:
     if not isinstance(value, (list, tuple)) or len(value) < 2:
         return None
@@ -6526,81 +5057,39 @@ def _vec2(value: Any) -> tuple[float, float] | None:
         return None
 
 
-def _vec3(value: Any) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return None
-    try:
-        return [float(value[0]), float(value[1]), float(value[2])]
-    except (TypeError, ValueError):
-        return None
-
-
 def _norm(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value).lower())
 
 
 def _assert_no_forbidden_agent_view_keys(payload: Any) -> None:
-    if isinstance(payload, dict):
-        forbidden = _FORBIDDEN_AGENT_VIEW_KEYS.intersection(payload)
-        if forbidden:
-            raise AssertionError(f"forbidden agent-view keys present: {sorted(forbidden)}")
-        for value in payload.values():
-            _assert_no_forbidden_agent_view_keys(value)
-    elif isinstance(payload, list):
-        for value in payload:
-            _assert_no_forbidden_agent_view_keys(value)
+    realworld_agent_view_contract.assert_no_forbidden_agent_view_keys(
+        payload,
+        _FORBIDDEN_AGENT_VIEW_KEYS,
+    )
 
 
 def _strip_forbidden_agent_view_keys(payload: Any) -> Any:
-    if isinstance(payload, dict):
-        return {
-            key: _strip_forbidden_agent_view_keys(value)
-            for key, value in payload.items()
-            if key not in _FORBIDDEN_AGENT_VIEW_KEYS
-        }
-    if isinstance(payload, list):
-        return [_strip_forbidden_agent_view_keys(value) for value in payload]
-    return payload
+    return realworld_agent_view_contract.strip_forbidden_agent_view_keys(
+        payload,
+        _FORBIDDEN_AGENT_VIEW_KEYS,
+    )
 
 
 def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
-    source = dict(config or {})
-    accepted: dict[str, Any] = {}
-    for key in (
-        "requested_run_size",
-        "required_grounded_cleanup_chains",
-        "required_model_declared_observations",
-    ):
-        value = _positive_int(source.get(key))
-        if value is not None:
-            accepted[key] = value
-    policy = str(source.get("done_readiness_policy") or "").strip()
-    if policy:
-        accepted["done_readiness_policy"] = policy
-    task_intent = str(source.get("task_intent") or "").strip()
-    if task_intent:
-        accepted["task_intent"] = normalize_household_intent(task_intent)
-    _assert_no_forbidden_agent_view_keys(accepted)
-    return accepted
+    return realworld_agent_view_contract.public_acceptance_config(
+        config,
+        normalize_household_intent=normalize_household_intent,
+        assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+    )
 
 
 def _public_success_threshold(count: int | None) -> int:
-    if count is None or count <= 0:
-        return 0
-    return max(1, math.ceil(count * 0.70))
+    return realworld_agent_view_contract.public_success_threshold(count)
 
 
 def _positive_int(value: Any) -> int | None:
-    try:
-        result = int(value)
-    except (TypeError, ValueError):
-        return None
-    return result if result > 0 else None
+    return realworld_agent_view_contract.positive_int(value)
 
 
 def _nonnegative_int(value: Any) -> int:
-    try:
-        result = int(value)
-    except (TypeError, ValueError):
-        return 0
-    return max(0, result)
+    return realworld_agent_view_contract.nonnegative_int(value)
