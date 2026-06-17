@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: B1 scene topdown and operator preview render dimensions now fail
+  aloud. The Gaussian topdown, scene topdown diagnostic, and operator-console
+  scene preview CLIs reject non-positive `--width` / `--height` values at
+  argument parsing time instead of clamping them to one pixel and emitting
+  plausible but unusable review artifacts. Owner layers: Artifacts, reports,
+  and eval suites; operator console preview artifacts. Behavior-change class:
+  fail-aloud render artifact configuration; default dimensions, valid positive
+  dimensions, camera request/report schemas, B1 static preview behavior,
+  MolmoSpaces preview routing, and rendered artifact names are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `render_b1_scene_gaussian_topdown.py` is 539 lines,
+  `render_b1_scene_topdown_diagnostic.py` is 877 lines, and
+  `render_scene_previews.py` is 1387 lines. Proof: targeted B1 topdown and
+  operator preview tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: RAW-FPV perception probe numeric configuration now fails
   aloud. The probe CLI rejects non-positive `max_frames_per_source`,
   non-positive score thresholds, out-of-contract candidate limits, and

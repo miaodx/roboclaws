@@ -80,8 +80,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--work-dir", type=Path, default=DEFAULT_WORK_DIR)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--width", type=int, default=DEFAULT_WIDTH)
-    parser.add_argument("--height", type=int, default=DEFAULT_HEIGHT)
+    parser.add_argument("--width", type=_positive_int_arg, default=DEFAULT_WIDTH)
+    parser.add_argument("--height", type=_positive_int_arg, default=DEFAULT_HEIGHT)
     parser.add_argument(
         "--skip-existing",
         action="store_true",
@@ -114,8 +114,8 @@ def render_previews(args: argparse.Namespace) -> dict[str, Any]:
         if world_id == B1_MAP12_WORLD_ID:
             result = render_b1_map12_preview(
                 output_dir=output_dir,
-                width=max(1, int(args.width)),
-                height=max(1, int(args.height)),
+                width=int(args.width),
+                height=int(args.height),
                 skip_existing=bool(args.skip_existing),
                 camera_artifact=args.b1_camera_artifact,
             )
@@ -125,8 +125,8 @@ def render_previews(args: argparse.Namespace) -> dict[str, Any]:
                 output_dir=output_dir,
                 work_dir=work_dir,
                 seed=int(args.seed),
-                width=max(1, int(args.width)),
-                height=max(1, int(args.height)),
+                width=int(args.width),
+                height=int(args.height),
                 skip_existing=bool(args.skip_existing),
             )
         results.append(result)
@@ -1371,6 +1371,16 @@ def _image_diagnostics(path: Path) -> dict[str, Any]:
 
 def _utc_timestamp() -> str:
     return dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

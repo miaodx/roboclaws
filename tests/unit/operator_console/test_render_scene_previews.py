@@ -21,6 +21,27 @@ from scripts.operator_console.render_scene_previews import (
 )
 
 
+def test_render_scene_previews_rejects_non_positive_dimensions() -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    for flag in ("--width", "--height"):
+        try:
+            render_scene_previews.parse_args([flag, "0"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag} to fail at parse time")
+
+
+def test_render_scene_previews_accepts_positive_dimensions() -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    args = render_scene_previews.parse_args(["--width", "1", "--height", "1"])
+
+    assert args.width == 1
+    assert args.height == 1
+
+
 def test_topdown_preview_request_uses_scene_camera_not_semantic_map() -> None:
     state = {
         "room_outlines": [

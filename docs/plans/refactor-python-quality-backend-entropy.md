@@ -60,6 +60,19 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one B1 scene topdown
+  and operator-preview render-dimension false-green. The Gaussian topdown,
+  scene topdown diagnostic, and operator-console scene preview CLIs now reject
+  non-positive `--width` / `--height` values at argument parsing time instead
+  of clamping them to one pixel and emitting plausible but unusable review
+  artifacts. Owner layers: Artifacts, reports, and eval suites; operator
+  console preview artifacts. Behavior-change class: fail-aloud render artifact
+  configuration; default dimensions, valid positive dimensions, camera
+  request/report schemas, B1 static preview behavior, MolmoSpaces preview
+  routing, and rendered artifact names are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules; `render_b1_scene_gaussian_topdown.py`
+  is 539 lines, `render_b1_scene_topdown_diagnostic.py` is 877 lines, and
+  `render_scene_previews.py` is 1387 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV perception
   probe numeric-config false-green. The probe CLI now rejects non-positive
   `max_frames_per_source`, non-positive score thresholds, out-of-contract

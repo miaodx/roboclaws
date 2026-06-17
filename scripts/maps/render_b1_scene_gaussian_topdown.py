@@ -39,8 +39,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--scene-usd", type=Path, default=DEFAULT_SCENE_USD)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--width", type=int, default=960)
-    parser.add_argument("--height", type=int, default=640)
+    parser.add_argument("--width", type=_positive_int_arg, default=960)
+    parser.add_argument("--height", type=_positive_int_arg, default=640)
     parser.add_argument(
         "--scene-xy-bounds",
         help="Scene XY bounds as min_x,min_y,max_x,max_y. Required; no inferred fallback.",
@@ -91,8 +91,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     request = build_topdown_camera_request(
         scene_bounds=scene_bounds,
-        width=max(1, int(args.width)),
-        height=max(1, int(args.height)),
+        width=int(args.width),
+        height=int(args.height),
         camera_height_m=float(args.camera_height_m),
         camera_y_offset_m=float(args.camera_y_offset_m),
         target_z_m=float(args.target_z_m),
@@ -117,8 +117,8 @@ def main(argv: list[str] | None = None) -> int:
             camera_request=request_path,
             output_dir=output_dir / "views",
             result_path=result_path,
-            width=max(1, int(args.width)),
-            height=max(1, int(args.height)),
+            width=int(args.width),
+            height=int(args.height),
         )
         packet = topdown_render_packet(
             scene_usd=scene_usd,
@@ -451,8 +451,8 @@ def _capture_one_scene_cli(args: argparse.Namespace) -> int:
             scene_usd=args.scene_usd,
             camera_request=request,
             output_dir=args.views_dir,
-            width=max(1, int(args.width)),
-            height=max(1, int(args.height)),
+            width=int(args.width),
+            height=int(args.height),
             semantic_pose_state={},
         )
         payload = {"ok": True, "scene_usd": str(args.scene_usd), "capture": capture}
@@ -518,6 +518,16 @@ def image_size(path: Path) -> tuple[int, int]:
             return int(image.width), int(image.height)
     except Exception:
         return 0, 0
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

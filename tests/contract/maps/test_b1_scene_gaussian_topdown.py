@@ -177,6 +177,27 @@ def test_topdown_cli_requires_explicit_scene_bounds(tmp_path: Path) -> None:
     assert "--scene-xy-bounds is required" in completed.stderr
 
 
+def test_topdown_cli_rejects_non_positive_dimensions(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            f"--scene-xy-bounds={','.join(str(value) for value in SCENE_BOUNDS)}",
+            "--scene-usd",
+            str(tmp_path / "scene_gs.usda"),
+            "--output-dir",
+            str(tmp_path),
+            "--width",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
+
+
 def test_topdown_cli_can_write_request_without_capture(tmp_path: Path) -> None:
     completed = subprocess.run(
         [
