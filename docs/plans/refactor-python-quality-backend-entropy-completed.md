@@ -73,6 +73,18 @@ logs before choosing the next slice.
   130 lines. Proof: focused worker-runner unit tests, touched-file ruff and
   format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: Codex live-runner idle-timeout env overrides now fail aloud.
+  `_codex_turn_idle_timeout_s()` rejects malformed, non-finite, or negative
+  `ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S` values instead of silently reusing the
+  300s default. Behavior-change class: fail-aloud live-agent runner
+  configuration; omitted env values, explicit configured timeout metadata,
+  valid non-negative env values including zero as disable, Codex live-run
+  commands, public launch axes, live-status packets, and report artifacts are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_live_codex_cleanup.py` is 1250 lines. Proof: focused Codex
+  live-report unit test, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
   aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
   OmDet-Turbo, and sidecar candidate limits reject malformed,

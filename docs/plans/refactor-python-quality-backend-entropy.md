@@ -92,6 +92,15 @@ again.
   command-specific timeout defaults, MolmoSpaces/Isaac worker commands, public
   launch axes, and worker response schemas are unchanged. The ratchet remains
   0 complexity rows and 79 oversized modules; `worker_runner.py` is 130 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one Codex live-runner
+  idle-timeout env false-green. `_codex_turn_idle_timeout_s()` now rejects
+  malformed, non-finite, or negative `ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S`
+  values instead of silently reusing the 300s default. Behavior-change class:
+  fail-aloud live-agent runner configuration; omitted env values, explicit
+  configured timeout metadata, valid non-negative env values including zero as
+  disable, Codex live-run commands, public launch axes, live-status packets,
+  and report artifacts are unchanged. The ratchet remains 0 complexity rows and
+  79 oversized modules; `run_live_codex_cleanup.py` is 1250 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
   real-sidecar runtime-parameter false-green. Explicit request/runtime and env
   knobs for Grounding DINO, YOLO, OmDet-Turbo, and sidecar candidate limits now
