@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import io
+import math
 import os
 import tempfile
 import time
@@ -314,6 +315,10 @@ class VisualGroundingDeviceError(RuntimeError):
     """Requested sidecar model device is unavailable or invalid."""
 
 
+class VisualGroundingRuntimeParameterError(ValueError):
+    """Requested sidecar runtime parameter is malformed or out of range."""
+
+
 def _grounding_dino_real_response(
     *,
     payload: dict[str, Any],
@@ -344,6 +349,31 @@ def _grounding_dino_real_response(
     try:
         image = _decode_request_image(payload)
         labels = _category_hints(payload)
+        threshold = _runtime_float_param(
+            runtime_parameters,
+            "box_threshold",
+            env_name="VISUAL_GROUNDING_DINO_BOX_THRESHOLD",
+            default=0.35,
+            minimum=0.0,
+            maximum=1.0,
+        )
+        text_threshold = _runtime_float_param(
+            runtime_parameters,
+            "text_threshold",
+            env_name="VISUAL_GROUNDING_DINO_TEXT_THRESHOLD",
+            default=0.25,
+            minimum=0.0,
+            maximum=1.0,
+        )
+        runtime_parameters = {
+            **runtime_parameters,
+            "box_threshold": threshold,
+            "text_threshold": text_threshold,
+        }
+        runtime_diagnostics = {
+            **runtime_diagnostics,
+            "runtime_parameters": runtime_parameters,
+        }
         if not labels:
             return _real_adapter_ok_response(
                 pipeline_id=pipeline_id,
@@ -372,25 +402,9 @@ def _grounding_dino_real_response(
             inputs = inputs.to(str(device))
         with torch_module.no_grad():
             outputs = model(**inputs)
-        threshold = _runtime_float_param(
-            runtime_parameters,
-            "box_threshold",
-            env_name="VISUAL_GROUNDING_DINO_BOX_THRESHOLD",
-            default=0.35,
-        )
-        text_threshold = _runtime_float_param(
-            runtime_parameters,
-            "text_threshold",
-            env_name="VISUAL_GROUNDING_DINO_TEXT_THRESHOLD",
-            default=0.25,
-        )
         runtime_diagnostics = {
             **runtime_diagnostics,
-            "runtime_parameters": {
-                **runtime_parameters,
-                "box_threshold": threshold,
-                "text_threshold": text_threshold,
-            },
+            "runtime_parameters": runtime_parameters,
         }
         try:
             results = processor.post_process_grounded_object_detection(
@@ -426,6 +440,22 @@ def _grounding_dino_real_response(
             stage_metadata={
                 "runtime": runtime_diagnostics,
                 "runtime_parameters": runtime_diagnostics["runtime_parameters"],
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
+        )
+    except VisualGroundingRuntimeParameterError as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="invalid_runtime_parameter",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            diagnostic_mode="real_grounding_dino",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
             },
             diagnostics_extra={"runtime": runtime_diagnostics},
         )
@@ -503,6 +533,7 @@ def _yolo_real_response(
             _category_hints(payload),
             runtime_parameters=runtime_parameters,
         )
+        predict_kwargs = _yolo_predict_kwargs(runtime_parameters)
         if not labels:
             return _real_adapter_ok_response(
                 pipeline_id=pipeline_id,
@@ -524,7 +555,7 @@ def _yolo_real_response(
             image=image,
             model=model,
             category_hints=labels,
-            runtime_parameters=runtime_parameters,
+            predict_kwargs=predict_kwargs,
         )
         return _real_adapter_ok_response(
             pipeline_id=pipeline_id,
@@ -534,6 +565,19 @@ def _yolo_real_response(
             latency_ms=_elapsed_ms(started, minimum=latency_ms),
             candidates=candidates,
             raw_proposals=candidates,
+            diagnostic_mode=f"real_{producer_id}",
+            stage_metadata={"runtime_parameters": runtime_parameters},
+            diagnostics_extra={"runtime_parameters": runtime_parameters},
+        )
+    except VisualGroundingRuntimeParameterError as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="invalid_runtime_parameter",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
             diagnostic_mode=f"real_{producer_id}",
             stage_metadata={"runtime_parameters": runtime_parameters},
             diagnostics_extra={"runtime_parameters": runtime_parameters},
@@ -600,6 +644,38 @@ def _omdet_turbo_real_response(
     try:
         image = _decode_request_image(payload)
         labels = _category_hints(payload)
+        threshold = _runtime_float_param(
+            runtime_parameters,
+            "confidence_threshold",
+            env_name="VISUAL_GROUNDING_OMDET_CONFIDENCE_THRESHOLD",
+            default=0.25,
+            minimum=0.0,
+            maximum=1.0,
+        )
+        nms_threshold = _runtime_float_param(
+            runtime_parameters,
+            "nms_threshold",
+            env_name="VISUAL_GROUNDING_OMDET_NMS_THRESHOLD",
+            default=0.5,
+            minimum=0.0,
+            maximum=1.0,
+        )
+        max_num_det = _runtime_int_param(
+            runtime_parameters,
+            "max_detections",
+            env_name="VISUAL_GROUNDING_OMDET_MAX_DET",
+            minimum=1,
+        )
+        runtime_parameters = {
+            **runtime_parameters,
+            "confidence_threshold": threshold,
+            "nms_threshold": nms_threshold,
+            **({"max_detections": max_num_det} if max_num_det is not None else {}),
+        }
+        runtime_diagnostics = {
+            **runtime_diagnostics,
+            "runtime_parameters": runtime_parameters,
+        }
         if not labels:
             return _real_adapter_ok_response(
                 pipeline_id=pipeline_id,
@@ -633,31 +709,9 @@ def _omdet_turbo_real_response(
             inputs = inputs.to(str(device))
         with torch_module.no_grad():
             outputs = model(**inputs)
-        threshold = _runtime_float_param(
-            runtime_parameters,
-            "confidence_threshold",
-            env_name="VISUAL_GROUNDING_OMDET_CONFIDENCE_THRESHOLD",
-            default=0.25,
-        )
-        nms_threshold = _runtime_float_param(
-            runtime_parameters,
-            "nms_threshold",
-            env_name="VISUAL_GROUNDING_OMDET_NMS_THRESHOLD",
-            default=0.5,
-        )
-        max_num_det = _runtime_int_param(
-            runtime_parameters,
-            "max_detections",
-            env_name="VISUAL_GROUNDING_OMDET_MAX_DET",
-        )
         runtime_diagnostics = {
             **runtime_diagnostics,
-            "runtime_parameters": {
-                **runtime_parameters,
-                "confidence_threshold": threshold,
-                "nms_threshold": nms_threshold,
-                **({"max_detections": max_num_det} if max_num_det is not None else {}),
-            },
+            "runtime_parameters": runtime_parameters,
         }
         results = processor.post_process_grounded_object_detection(
             outputs,
@@ -685,6 +739,22 @@ def _omdet_turbo_real_response(
             stage_metadata={
                 "runtime": runtime_diagnostics,
                 "runtime_parameters": runtime_diagnostics["runtime_parameters"],
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
+        )
+    except VisualGroundingRuntimeParameterError as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="invalid_runtime_parameter",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            diagnostic_mode="real_omdet-turbo",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
             },
             diagnostics_extra={"runtime": runtime_diagnostics},
         )
@@ -1098,14 +1168,18 @@ def _runtime_float_param(
     *,
     env_name: str,
     default: float,
+    minimum: float | None = None,
+    maximum: float | None = None,
 ) -> float:
     value = runtime_parameters.get(key)
     if value is None:
-        return _float_env(env_name, default)
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return _float_env(env_name, default)
+        return _float_env(env_name, default, minimum=minimum, maximum=maximum)
+    return _float_setting(
+        value,
+        f"runtime_parameters.{key}",
+        minimum=minimum,
+        maximum=maximum,
+    )
 
 
 def _runtime_int_param(
@@ -1113,14 +1187,12 @@ def _runtime_int_param(
     key: str,
     *,
     env_name: str,
+    minimum: int | None = None,
 ) -> int | None:
     value = runtime_parameters.get(key)
     if value is None:
-        return _int_env_optional(env_name)
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return _int_env_optional(env_name)
+        return _int_env_optional(env_name, minimum=minimum)
+    return _int_setting(value, f"runtime_parameters.{key}", minimum=minimum)
 
 
 def _runtime_bool_param(
@@ -1142,9 +1214,10 @@ def _runtime_bool_param(
         return True
     if normalized in {"0", "false", "no", "off"}:
         return False
-    if _env_is_set(env_name):
-        return _bool_env(env_name)
-    return default
+    raise VisualGroundingRuntimeParameterError(
+        f"visual grounding runtime parameter runtime_parameters.{key} must be a boolean, "
+        f"got {value!r}"
+    )
 
 
 def _label_prompt(label: str) -> str:
@@ -1219,12 +1292,12 @@ def _yolo_candidates_from_model(
     image: Image.Image,
     model: Any,
     category_hints: list[str],
-    runtime_parameters: dict[str, Any],
+    predict_kwargs: dict[str, Any],
 ) -> list[dict[str, Any]]:
     results = _run_yolo_prediction(
         image=image,
         model=model,
-        predict_kwargs=_yolo_predict_kwargs(runtime_parameters),
+        predict_kwargs=predict_kwargs,
     )
     candidates: list[dict[str, Any]] = []
     for result in results or []:
@@ -1245,6 +1318,8 @@ def _yolo_predict_kwargs(runtime_parameters: dict[str, Any]) -> dict[str, Any]:
         "confidence_threshold",
         env_name="VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD",
         default=0.25,
+        minimum=0.0,
+        maximum=1.0,
     )
     predict_kwargs: dict[str, Any] = {
         "conf": threshold,
@@ -1254,22 +1329,30 @@ def _yolo_predict_kwargs(runtime_parameters: dict[str, Any]) -> dict[str, Any]:
         runtime_parameters,
         "image_size",
         env_name="VISUAL_GROUNDING_YOLO_IMAGE_SIZE",
+        minimum=1,
     )
     if imgsz is not None:
         predict_kwargs["imgsz"] = imgsz
     iou_value = runtime_parameters.get("iou_threshold")
-    iou = _float_env_optional("VISUAL_GROUNDING_YOLO_IOU_THRESHOLD")
+    iou = _float_env_optional(
+        "VISUAL_GROUNDING_YOLO_IOU_THRESHOLD",
+        minimum=0.0,
+        maximum=1.0,
+    )
     if iou_value is not None:
-        try:
-            iou = float(iou_value)
-        except (TypeError, ValueError):
-            pass
+        iou = _float_setting(
+            iou_value,
+            "runtime_parameters.iou_threshold",
+            minimum=0.0,
+            maximum=1.0,
+        )
     if iou is not None:
         predict_kwargs["iou"] = iou
     max_det = _runtime_int_param(
         runtime_parameters,
         "max_detections",
         env_name="VISUAL_GROUNDING_YOLO_MAX_DET",
+        minimum=1,
     )
     if max_det is not None:
         predict_kwargs["max_det"] = max_det
@@ -1649,7 +1732,11 @@ def _category_from_yolo_class(
 
 
 def _top_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    max_candidates = max(1, int(_float_env("VISUAL_GROUNDING_MAX_CANDIDATES", 8)))
+    max_candidates = _int_env(
+        "VISUAL_GROUNDING_MAX_CANDIDATES",
+        8,
+        minimum=1,
+    )
     return sorted(
         candidates,
         key=lambda item: -float(item.get("confidence") or 0.0),
@@ -1710,35 +1797,105 @@ def _int_or_none(value: Any) -> int | None:
         return None
 
 
-def _float_env(name: str, default: float) -> float:
-    try:
-        return float(os.environ.get(name, default))
-    except (TypeError, ValueError):
+def _float_env(
+    name: str,
+    default: float,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    raw = os.environ.get(name)
+    if raw in {None, ""}:
         return default
+    return _float_setting(raw, name, minimum=minimum, maximum=maximum)
 
 
-def _float_env_optional(name: str) -> float | None:
+def _float_env_optional(
+    name: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float | None:
     raw = os.environ.get(name)
     if raw in {None, ""}:
         return None
+    return _float_setting(raw, name, minimum=minimum, maximum=maximum)
+
+
+def _float_setting(
+    value: Any,
+    setting_name: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+) -> float:
+    if isinstance(value, bool):
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be numeric, got {value!r}"
+        )
     try:
-        return float(raw)
-    except (TypeError, ValueError):
-        return None
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be numeric, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed):
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be finite, got {value!r}"
+        )
+    if minimum is not None and parsed < minimum:
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be >= {minimum}, got {value!r}"
+        )
+    if maximum is not None and parsed > maximum:
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be <= {maximum}, got {value!r}"
+        )
+    return parsed
 
 
-def _int_env_optional(name: str) -> int | None:
+def _int_env(name: str, default: int, *, minimum: int | None = None) -> int:
+    raw = os.environ.get(name)
+    if raw in {None, ""}:
+        return default
+    return _int_setting(raw, name, minimum=minimum)
+
+
+def _int_env_optional(name: str, *, minimum: int | None = None) -> int | None:
     raw = os.environ.get(name)
     if raw in {None, ""}:
         return None
+    return _int_setting(raw, name, minimum=minimum)
+
+
+def _int_setting(value: Any, setting_name: str, *, minimum: int | None = None) -> int:
+    if isinstance(value, bool):
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be an integer, got {value!r}"
+        )
     try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be an integer, got {value!r}"
+        ) from exc
+    if minimum is not None and parsed < minimum:
+        raise VisualGroundingRuntimeParameterError(
+            f"visual grounding runtime parameter {setting_name} must be >= {minimum}, got {value!r}"
+        )
+    return parsed
 
 
 def _bool_env(name: str) -> bool:
-    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+    raw = os.environ.get(name, "")
+    normalized = str(raw).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise VisualGroundingRuntimeParameterError(
+        f"visual grounding runtime parameter {name} must be a boolean, got {raw!r}"
+    )
 
 
 def _env_is_set(name: str) -> bool:

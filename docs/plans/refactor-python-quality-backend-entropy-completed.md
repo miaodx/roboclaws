@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
+  aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
+  OmDet-Turbo, and sidecar candidate limits reject malformed,
+  boolean-as-number, non-finite, or out-of-range values with an
+  `invalid_runtime_parameter` failure packet instead of silently falling back to
+  env or adapter defaults. Behavior-change class: fail-aloud visual-grounding
+  sidecar runtime configuration; valid defaults, valid request/env overrides,
+  adapter-unavailable responses, missing-dependency responses, visual-grounding
+  request/response schemas, public launch axes, and benchmark row construction
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `scripts/visual_grounding/adapters.py` is 1914 lines. Proof: focused
+  visual-grounding service, client, and benchmark contract tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK performance-profile integer parsing now uses
   the same fail-aloud setting style as the runtime config paths. Malformed
   integer env/direct settings such as

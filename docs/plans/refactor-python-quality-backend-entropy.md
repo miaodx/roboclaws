@@ -56,10 +56,22 @@ modules; `scripts/molmo_cleanup/molmospaces_room_map.py` is 414 lines and no
 longer appears in the complexity list.
 
 Latest refreshed quality signal from `python
-scripts/dev/check_python_quality_ratchet.py --summary --top 60` on 2026-06-18.
+scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
+  real-sidecar runtime-parameter false-green. Explicit request/runtime and env
+  knobs for Grounding DINO, YOLO, OmDet-Turbo, and sidecar candidate limits now
+  reject malformed, boolean-as-number, non-finite, or out-of-range values with a
+  stable `invalid_runtime_parameter` failure packet instead of silently falling
+  back to env or adapter defaults. Behavior-change class: fail-aloud
+  visual-grounding sidecar runtime configuration; valid defaults, valid request
+  and env overrides, adapter-unavailable responses, missing-dependency
+  responses, visual-grounding request/response schemas, public launch axes, and
+  benchmark row construction are unchanged. The ratchet remains 0 complexity
+  rows and 79 oversized modules; `scripts/visual_grounding/adapters.py` is 1914
+  lines.
 - Follow-up implementation refresh on 2026-06-18 aligned OpenAI Agents SDK
   performance-profile integer parsing with the fail-aloud runtime config
   contract. Malformed integer env/direct settings such as
