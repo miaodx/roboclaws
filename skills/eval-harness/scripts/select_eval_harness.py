@@ -140,6 +140,17 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "id": "planner_proof",
+        "label": "Planner proof",
+        "patterns": (
+            r"planner[-_]proof",
+            r"planner proof",
+            r"surface=planner-proof",
+            r"intent=planner-proof",
+            r"planner_proof",
+        ),
+    },
+    {
         "id": "launch_catalog",
         "label": "Launch catalog or product route",
         "patterns": (
@@ -159,6 +170,7 @@ EXPLICIT_AXIS_SIGNAL_OVERRIDES: tuple[tuple[str, str, str], ...] = (
     ("agent_engine", "openai-agents-sdk", "agent_sdk"),
     ("agent_engine", "codex-cli", "cleanup_skill"),
     ("intent", "open-ended", "open_ended"),
+    ("intent", "planner-proof", "planner_proof"),
     ("preset", "cleanup", "cleanup_skill"),
     ("preset", "map-build", "map_build"),
     ("evidence_lane", "camera-grounded-labels", "visual_grounding"),
@@ -223,13 +235,6 @@ def build_eval_harness(
     output_dir: Path | None = None,
 ) -> dict[str, Any]:
     plan_text, plan_path = _read_plan(plan)
-    if since:
-        diff_files = _changed_files_from_git(since)
-    elif plan is None and not changed_files:
-        diff_files = _changed_files_from_worktree()
-    else:
-        diff_files = []
-    all_changed_files = _dedupe([*diff_files, *changed_files])
     explicit_axes = {
         "agent_engine": _dedupe(agent_engine),
         "provider_profile": _dedupe(provider_profile),
@@ -238,6 +243,13 @@ def build_eval_harness(
         "evidence_lane": _dedupe(evidence_lane),
         "camera_labeler": _dedupe(camera_labeler),
     }
+    if since:
+        diff_files = _changed_files_from_git(since)
+    elif plan is None and not changed_files and not _has_explicit_axes(explicit_axes):
+        diff_files = _changed_files_from_worktree()
+    else:
+        diff_files = []
+    all_changed_files = _dedupe([*diff_files, *changed_files])
     signals = _detect_signals(
         plan_text=plan_text,
         changed_files=all_changed_files,
@@ -261,6 +273,7 @@ def build_eval_harness(
             "row_count": len(rows),
             "selected_row_count": len(selected),
             "required_row_count": sum(1 for row in selected if row["requirement"] == "required"),
+            "optional_row_count": sum(1 for row in selected if row["requirement"] != "required"),
             "budget_skipped_count": sum(1 for row in rows if row["status"] == "skipped_by_budget"),
             "eval_suite_row_count": sum(1 for row in selected if row["row_kind"] == "eval_suite"),
             "live_agent_eval_row_count": sum(
@@ -376,6 +389,11 @@ def _apply_selection_rules(
     signal_ids = {signal["id"] for signal in signals}
     signal_by_id = {signal["id"]: signal for signal in signals}
     for row in rows:
+        if row.get("requirement") == "optional" and not _explicitly_matches_optional(
+            row,
+            explicit_axes,
+        ):
+            continue
         matching = [rule_id for rule_id in row["selection_rule_ids"] if rule_id in signal_ids]
         if _explicitly_matches(row, explicit_axes):
             matching.append("explicit_override")
@@ -412,6 +430,16 @@ def _explicitly_matches(row: dict[str, Any], explicit_axes: dict[str, list[str]]
         if requested_values and axes.get(key) in requested_values:
             return True
     return False
+
+
+def _explicitly_matches_optional(row: dict[str, Any], explicit_axes: dict[str, list[str]]) -> bool:
+    axes = row["axes"]
+    provider_profiles = explicit_axes.get("provider_profile") or []
+    return bool(provider_profiles and axes.get("provider_profile") in provider_profiles)
+
+
+def _has_explicit_axes(explicit_axes: dict[str, list[str]]) -> bool:
+    return any(values for values in explicit_axes.values())
 
 
 def _override_signal(signal_id: str, value: str) -> dict[str, Any]:

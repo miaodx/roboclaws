@@ -320,6 +320,12 @@ def _mify_cases() -> tuple[MatrixCase, ...]:
 def _minimax_cases() -> tuple[MatrixCase, ...]:
     route = provider_route_spec("minimax")
     base_url = route_base_url(route)
+    notes = {
+        "MiniMax-M3": (
+            "Default MiniMax model; official route is multimodal and supports image input."
+        ),
+        "MiniMax-M2.7-highspeed": "Explicit non-default text-only comparison row.",
+    }
     return tuple(
         MatrixCase(
             case_id=f"minimax:{model}:responses",
@@ -330,6 +336,7 @@ def _minimax_cases() -> tuple[MatrixCase, ...]:
             api_key_env=route.api_key_env or "",
             base_url=base_url,
             expected_support="native",
+            note=notes[model],
         )
         for model in ("MiniMax-M3", "MiniMax-M2.7-highspeed")
     )
@@ -367,6 +374,8 @@ def _mimo_token_plan_cases() -> tuple[MatrixCase, ...]:
 
 
 def _mimo_inside_cases() -> tuple[MatrixCase, ...]:
+    route = provider_route_spec("mimo-inside")
+    base_url = route_base_url(route)
     return tuple(
         MatrixCase(
             case_id=f"mimo-inside:{model}:{wire}",
@@ -374,9 +383,14 @@ def _mimo_inside_cases() -> tuple[MatrixCase, ...]:
             provider_label="MiMo inside",
             model=model,
             wire_api=wire,
-            api_key_env="MIMO_API_KEY",
-            base_url=os.environ.get("MIMO_BASE_URL", ""),
+            api_key_env=route.api_key_env or "",
+            base_url=base_url,
             expected_support="native" if wire == "openai-chat" else "probe",
+            note=(
+                "Default-enabled on-demand UltraSpeed route."
+                if model == "mimo-1000"
+                else "MiMo inside comparison row."
+            ),
         )
         for model in ("mimo-v2.5", "mimo-v2.5-pro", "mimo-1000")
         for wire in ("openai-chat", "openai-responses")
@@ -397,6 +411,12 @@ def _kimi_cases() -> tuple[MatrixCase, ...]:
             base_url=route_base_url(chat_route),
             headers=(("User-Agent", "claude-code/1.0.0"),),
             expected_support="native",
+            note=(
+                "Kimi K2.7 Code requires Thinking On for the new code-model "
+                "behavior. The chat benchmark sends thinking=enabled and "
+                "preserves reasoning_content; thinking=disabled is only a "
+                "diagnostic contrast."
+            ),
         ),
         MatrixCase(
             case_id="kimi:kimi-k2.7-code:responses",

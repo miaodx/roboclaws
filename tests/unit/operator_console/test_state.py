@@ -29,6 +29,13 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
                 "started_at_epoch": 1.0,
+                "prompt_preview": {
+                    "operator_prompt": "收拾桌面上的杯子",
+                    "agent_kickoff_prompt": "Use cleanup tools for the cup.",
+                    "source": "household-cleanup",
+                    "summary": "household-cleanup kickoff prompt",
+                    "wrapper_notes": ["Codex wrapper applies."],
+                },
             }
         ),
         encoding="utf-8",
@@ -67,6 +74,8 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
     assert state["latest_public_decision_evidence"]["observation_summary"] == "saw a mug"
     assert state["checker_status"]["status"] == "passed"
     assert "private_target_truth" not in json.dumps(state["public_run_result"])
+    assert state["prompt_preview"]["operator_prompt"] == "收拾桌面上的杯子"
+    assert state["agent_kickoff_prompt"] == "Use cleanup tools for the cup."
     assert any(item["label"] == "Report" for item in state["artifact_paths"])
 
 

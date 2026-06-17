@@ -281,10 +281,12 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       smoke)
         backend="api_semantic_synthetic"
         min_generated_mess_count="$generated_mess_count"
+        implementation_evidence_lane="world-oracle-labels"
         ;;
       world-oracle-labels)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
+        implementation_evidence_lane="$profile"
         visual_args=(--include-robot --robot-name rby1m)
         checker_visual_args=(
           --require-waypoint-honesty
@@ -300,6 +302,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       world-public-labels)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
+        implementation_evidence_lane="$profile"
         visual_args=(--include-robot --robot-name rby1m)
         checker_visual_args=(
           --require-waypoint-honesty
@@ -315,6 +318,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       camera-raw-fpv)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
+        implementation_evidence_lane="$profile"
         perception_mode="raw_fpv_only"
         raw_fpv_required_cleanup_count="$generated_mess_success_threshold"
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
@@ -331,6 +335,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       camera-grounded-labels)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
+        implementation_evidence_lane="$profile"
         perception_mode="camera_model_policy"
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
         checker_visual_args=(--require-robot-views --require-camera-model-policy)
@@ -509,6 +514,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     echo "==> Molmo cleanup matrix"
     echo "    driver   : ${driver}"
     echo "    lane     : ${profile}"
+    echo "    evidence : ${implementation_evidence_lane}"
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
     echo "    map      : ${map_bundle_dir:-not required}"
@@ -643,7 +649,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
           --generated-mess-count "$generated_mess_count"
           "${generated_mess_object_args[@]}"
           --perception-mode "$perception_mode"
-          --evidence-lane "$profile"
+          --evidence-lane "$implementation_evidence_lane"
           --scene-source "$scene_source"
           --scene-index "$scene_index"
           "${map_bundle_args[@]}"
@@ -728,6 +734,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
+            --checker-profile "$implementation_evidence_lane"
           )
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
@@ -821,6 +828,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
+            --checker-profile "$implementation_evidence_lane"
           )
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
@@ -866,6 +874,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --agent-sdk-perf-profile "${ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE:-}"
             --prompt-mode "${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-}"
             --continuation-mode "${ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE:-}"
+            --model-thinking-mode "${ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE:-default}"
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
@@ -876,6 +885,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
+            --checker-profile "$implementation_evidence_lane"
           )
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-}" ]]; then
             runner_args+=(--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS}")
@@ -1016,7 +1026,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --expect-task "$task"
             --expect-backend "$backend"
             --expect-policy "$policy"
-            --expect-profile "$profile"
+            --expect-profile "$implementation_evidence_lane"
             --expect-mcp-server molmo_cleanup_realworld
             --min-generated-mess-count "$min_generated_mess_count"
             --require-agent-driven
@@ -1055,7 +1065,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --task "$task" \
             --fixture-hint-mode room_only \
             --perception-mode "$perception_mode" \
-            --evidence-lane "$profile" \
+            --evidence-lane "$implementation_evidence_lane" \
             "${map_bundle_args[@]}" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
@@ -1083,7 +1093,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
             --perception-mode "$perception_mode" \
-            --evidence-lane "$profile" \
+            --evidence-lane "$implementation_evidence_lane" \
             "${map_bundle_args[@]}" \
             "${visual_args[@]}" \
             "${visual_grounding_args[@]}" \

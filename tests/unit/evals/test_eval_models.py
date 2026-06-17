@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "smoke_regression.json"
 MAP_BUILD_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "map_build_consumer.json"
 CLEANUP_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "cleanup_capability.json"
+OPEN_ENDED_SUITE = REPO_ROOT / "evals" / "household_world" / "suites" / "open_ended_goals.json"
 SCENE_SAMPLER_SUITE = (
     REPO_ROOT / "evals" / "household_world" / "suites" / "scene_sampler_stress.json"
 )
@@ -274,6 +275,7 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
         load_eval_suite(SMOKE_SUITE),
         load_eval_suite(MAP_BUILD_SUITE),
         load_eval_suite(CLEANUP_SUITE),
+        load_eval_suite(OPEN_ENDED_SUITE),
         load_eval_suite(SCENE_SAMPLER_SUITE),
     ]
     loaded = [load_eval_sample(path) for path in sample_paths]
@@ -283,6 +285,8 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
         "cleanup.smoke_seed7",
         "map_build.baseline_seed7",
         "open_ended.drink_seed7",
+        "open_ended.living_waypoint_seed7",
+        "open_ended.room4_anchor_seed7",
         "scene_sampler.procthor-10k-val.0.map_build",
         "scene_sampler.procthor-10k-val.2.map_build",
         "scene_sampler.procthor-10k-val.3.map_build",
@@ -306,6 +310,47 @@ def test_all_household_world_sample_fixtures_are_schema_valid() -> None:
     }
     suite_sample_ids = {sample_id for suite in suites for sample_id in suite.sample_ids}
     assert {sample.sample_id for sample in loaded} <= suite_sample_ids
+
+    open_ended_suite = suites[3]
+    assert open_ended_suite.suite_id == "household_world.open_ended_goals"
+    assert open_ended_suite.sample_ids == (
+        "open_ended.drink_seed7",
+        "open_ended.room4_anchor_seed7",
+        "open_ended.living_waypoint_seed7",
+    )
+    open_ended_samples = {
+        sample.sample_id: sample for sample in loaded if sample.sample_id.startswith("open_ended.")
+    }
+    open_ended_sample = open_ended_samples["open_ended.drink_seed7"]
+    room_sample = open_ended_samples["open_ended.room4_anchor_seed7"]
+    living_sample = open_ended_samples["open_ended.living_waypoint_seed7"]
+    assert open_ended_sample.preset == MISSING_NOT_APPLICABLE
+    assert open_ended_sample.allowed_agent_engines == (
+        "direct-runner",
+        "codex-cli",
+        "openai-agents-sdk",
+    )
+    assert open_ended_sample.provider_profiles == (
+        MISSING_NOT_APPLICABLE,
+        "codex-env",
+        "minimax",
+    )
+    assert open_ended_sample.grader_config["semantic_satisfaction_authoritative"] is False
+    assert open_ended_sample.grader_config["open_ended_category"] == "negative_search"
+    assert room_sample.grader_config["open_ended_category"] == "area_inspection"
+    assert room_sample.grader_config["success_predicate"] == {
+        "predicate_id": "waypoint_or_area_visited",
+        "authoritative": True,
+        "anchor_id": "anchor_waypoint_generated_exploration_005",
+        "waypoint_id": "generated_exploration_005",
+    }
+    assert living_sample.grader_config["open_ended_category"] == "positive_observable"
+    assert living_sample.grader_config["success_predicate"] == {
+        "predicate_id": "waypoint_or_area_visited",
+        "authoritative": True,
+        "anchor_id": "anchor_waypoint_generated_exploration_005",
+        "waypoint_id": "generated_exploration_005",
+    }
 
     scene_suite = suites[-1]
     assert scene_suite.suite_id == "household_world.scene_sampler_stress"

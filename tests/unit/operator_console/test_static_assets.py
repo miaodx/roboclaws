@@ -43,6 +43,10 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'class="setup-panel"',
     'class="state-rail"',
     'id="prompt-label"',
+    'id="prompt-preview-panel"',
+    'id="prompt-preview-text"',
+    'id="agent-prompt-state"',
+    "Agent Prompt",
     "Scenario seed for reproducible runs",
     "Baseline does not relocate objects",
     'id="scenario-setup-input"',
@@ -142,6 +146,12 @@ ROUTE_FIELD_APP_REQUIRED = (
     "return leftMolmo ? 1 : -1",
     "payload.runtime",
     "/api/runtime/tasks",
+    "/api/prompt-preview",
+    "refreshPromptPreview",
+    "renderAgentPromptState",
+    "agent_kickoff_prompt",
+    "wrapper_notes",
+    "effectiveLaunchPromptText",
     "renderBackgroundTasks",
     "No blocking background resources detected.",
     "background_blockers",
@@ -187,8 +197,12 @@ def test_static_app_has_route_specific_field_groups() -> None:
 
     setup_html = html.split('<aside class="setup-panel">', 1)[1].split("</aside>", 1)[0]
     state_rail_html = html.split('<aside class="state-rail">', 1)[1].split("</aside>", 1)[0]
+    top_bar_html = html.split('<header class="top-run-bar">', 1)[1].split("</header>", 1)[0]
+    workspace_tabs_html = html.split('<nav class="view-modes"', 1)[1].split("</nav>", 1)[0]
     assert "Operator Input" in setup_html
     assert "Operator Input" not in state_rail_html
+    assert 'data-view="tasks"' in top_bar_html
+    assert 'data-view="tasks"' not in workspace_tabs_html
 
 
 def test_static_app_does_not_short_circuit_context_json_readiness() -> None:
@@ -289,11 +303,15 @@ def test_static_app_renders_scene_preview_assets() -> None:
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
-    assert b1_metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
+    assert b1_metadata["views"]["fpv"]["provenance"] == (
+        "isaac_runtime_robot_mounted_head_camera_fpv"
+    )
+    assert b1_metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
     assert b1_metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
     assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
-    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["chase"]["path"]
+    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["map"]["path"]
+    assert b1_metadata["views"]["chase"]["path"] != b1_metadata["views"]["fpv"]["path"]
+    assert b1_metadata["camera_preview_artifact"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 
@@ -353,7 +371,7 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'panels.add("chase")' in app
     assert 'panels.add("blank-chase")' in app
     assert "No chase frame yet" in app
-    assert "header-layout-20260615" in html
+    assert "prompt-preview-20260616" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
     assert '"chase topdown"' in css
@@ -463,8 +481,8 @@ def test_static_app_keeps_long_run_header_within_fixed_top_bar() -> None:
         .split("\n  }", 1)[0]
     )
 
-    assert 'href="/styles.css?v=header-layout-20260615"' in html
-    assert 'src="/app.js?v=header-layout-20260615"' in html
+    assert 'href="/styles.css?v=prompt-preview-20260616"' in html
+    assert 'src="/app.js?v=prompt-preview-20260616"' in html
     assert ".run-meta {\n  display: flex;" in css
     assert "flex-wrap: nowrap;" in css
     assert ".run-meta > *" in css

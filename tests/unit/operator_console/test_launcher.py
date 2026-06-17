@@ -214,6 +214,13 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     }
     assert state["selected_intent"] == "open-ended"
     assert state["next_goal_packet"] == {"schema": "operator_console_next_goal_packet_v1"}
+    assert state["prompt_preview"]["operator_prompt"] == "收拾桌面上的杯子"
+    assert state["prompt_preview"]["source"] == "household-open-task"
+    assert (
+        "This run is surface=household-world intent=open-ended"
+        in (state["prompt_preview"]["agent_kickoff_prompt"])
+    )
+    assert "收拾桌面上的杯子" in state["agent_kickoff_prompt"]
     assert "continuation_packet" not in state
     assert not any(item.startswith("intent=") for item in state["argv"])
     assert not any(item.startswith("preset=") for item in state["argv"])

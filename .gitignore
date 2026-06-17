@@ -44,3 +44,4 @@ yoloe-*.pt
 yolov8*-world.pt
 .mimo-worktrees
 data/
+MUJOCO_LOG.TXT

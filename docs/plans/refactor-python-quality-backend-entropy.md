@@ -1,6 +1,6 @@
 ---
 refactor_scope: python-quality-backend-entropy
-status: PAUSED
+status: ACTIVE
 accepted_severities:
   - P0
   - P1
@@ -13,36 +13,41 @@ completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.m
 
 ## Status
 
-PAUSED. Code execution is paused while the repo has many parallel changes.
-This file is the unfinished active plan only. Completed work lives in
+ACTIVE. Continue one verified, non-overlapping slice at a time while unrelated
+scene-sampler/operator-console changes remain dirty in the worktree. This file
+is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
-Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-16, after the latest verified realworld
-runtime-map contract split:
+Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
+--summary --top 40` on 2026-06-16 in the current dirty checkout:
 
-- 0 Ruff complexity violations.
+- 1 Ruff complexity violation:
+  `tests/unit/operator_console/test_scene_sampler_readiness_export.py::_assert_next_flow`
+  at `54>50`.
 - 62 oversized modules.
 - Remaining work is file-size and ownership-boundary debt split between large
   production modules and large behavior tests.
-- `roboclaws/household/realworld_contract.py` is down to 5095 lines after the
-  projection, agent-view boundary, visual-candidate, and runtime-map contract
-  helper splits, but remains a P1 hard-ceiling candidate.
+- `roboclaws/household/realworld_contract.py` is down to 4930 lines after the
+  projection, agent-view boundary, visual-candidate, runtime-map contract, and
+  done-readiness helper splits, but remains a P1 hard-ceiling candidate.
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` is down
   to 4900 lines after the report renderer split, but remains a P1
   hard-ceiling candidate.
 - `roboclaws/household/scene_camera_comparison.py` is down to 4693 lines after
   the first USD render-contract, image-metrics, lighting-diagnostics, and
   render-domain diagnostics splits, but remains a P1 hard-ceiling candidate.
-- `roboclaws/household/report.py` is down to 4880 lines after the Isaac
-  runtime, grasp diagnostics, and proof request-selection section splits, but
-  remains a P1 hard-ceiling candidate.
+- `roboclaws/household/report.py` is down to 3820 lines after the Nav2 map,
+  semantic-map artifact, and agent/perception section splits, but remains a P1
+  hard-ceiling candidate.
 - Backend workers are no longer hard-ceiling blockers:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1990 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1811 lines.
-- Dirty worktree drift: parallel scene-sampler changes currently put
-  `roboclaws/launch/scene_sampler.py` at 2077 lines. Treat it as reopened P1
-  hard-ceiling drift if those changes remain above the ceiling.
+- Scene-sampler drift is active again in the current dirty worktree:
+  `roboclaws/launch/scene_sampler.py` is 2444 lines. Treat this as owned by the
+  current scene-sampler/eval work until it lands; if it remains above 2000 lines
+  at the next clean checkpoint, reopen it as a P1 cleanup slice here.
+- `roboclaws/household/agibot_contract_rehearsal.py` is now 1949 lines after
+  the evidence/readiness payload split, below the hard ceiling.
 
 Do not treat these counts as current during execution. Refresh the repo-wide
 summary before selecting or completing a slice.
@@ -109,18 +114,24 @@ largest quality debt.
 - Complexity target: production/shared code trends toward zero ratcheted Ruff
   complexity rows. Test complexity is reduced through fixture builders, data
   factories, behavior-focused split tests, and shared assertions.
+- Line-count relief is evidence, not the goal. Prefer fewer concepts, clearer
+  owners, and less branching over extraction that only moves code around.
 
 ## Refactor Strategy
 
-Future slices may use deeper design refactors when they reduce entropy. Good
-patterns for this repo include backend facade/protocol boundaries, typed
+Use `$intuitive-refactor` ratchet mode for this stream. A slice may simplify
+architecture and delete or change old internal behavior when that removes stale
+surfaces or duplicate concepts. Preserve only current public launch axes,
+artifact schemas, report claims, agent-facing contracts, and private/public
+evaluation boundaries unless the slice explicitly declares and verifies a
+migration.
+
+Good patterns for this repo include backend facade/protocol boundaries, typed
 evidence envelopes, strategy tables, command catalogs, pipeline/stage objects,
 report section renderers, artifact builders, fixture builders, and scenario
-factories.
-
-Preserve public CLI flags, launch axes, artifact schemas, report output,
-agent-facing contracts, and private/public evaluation boundaries unless a slice
-explicitly declares and verifies a migration.
+factories. Bad patterns are compatibility shims for retired names, wrappers
+that only preserve old call shapes, and splits that leave the same branching in
+a different file.
 
 ## Current Target
 
@@ -129,27 +140,99 @@ pressure than the earlier ratchet-only loop. Complexity has fallen quickly;
 the next useful work should prioritize hard-ceiling files, test fixture debt,
 and backend/report/evidence boundaries that prevent branching from returning.
 
+Next execution should start from a clean or explicitly scoped dirty checkpoint:
+first settle the current scene-sampler/eval changes or make them own their
+ratchet fallout, then choose one P1 hard-ceiling architecture slice. Do not
+continue by shaving isolated lines from many files.
+
+## Execution Preflight
+
+Preflight status: DRAFT.
+Task source: plan path.
+Canonical source: `docs/plans/refactor-python-quality-backend-entropy.md`.
+Route: `$intuitive-refactor` ratchet mode.
+Goal: Continue this cleanup with one architecture-simplifying slice, starting
+by resolving or explicitly scoping current scene-sampler/eval ratchet fallout.
+
+Scope:
+
+- Refresh ratchet signal before edits.
+- Treat current `scene_sampler.py` / operator-console test complexity drift as
+  the first checkpoint.
+- If that dirty work is active and in scope, reduce it below the hard ceiling
+  or record a follow-up exception in this plan.
+- Otherwise choose one P1 hard-ceiling architecture slice from this plan and
+  execute it vertically: code, callers, tests, stale internal paths, proof.
+
+Non-goals: broad repo cleanup, line-count shaving across many files,
+preserving obsolete internal wrappers, live/provider/simulator proof unless the
+chosen slice changes that route.
+
+Entity budget: reuse this plan, existing owners, tests, and helpers;
+remove/merge obsolete internal compatibility paths when callers move; add a new
+module or helper only around a named architecture boundary; re-approve if a
+slice would change a public launch, artifact, report, or agent contract.
+
+Context: must-read root orientation docs, this active plan, the completed
+ledger, current ratchet summary, touched module tests, and call sites. Avoid
+old retrospectives, parked `TODOS.md` / `THOUGHTS.md`, and full historical
+phase logs unless needed.
+
+Acceptance:
+
+- Success: one accepted slice reduces architecture friction, updates callers
+  and tests, removes or parks stale surfaces, and leaves ratchet totals
+  non-regressed.
+- Blocked needs decision: public behavior, schema, report contract, or
+  agent-facing contract would change beyond this plan.
+- Blocked needs local validation: only if the chosen slice affects simulator,
+  live provider, or hardware behavior that cannot be proven locally.
+- Intermediate only: none unless explicitly approved before execution.
+- No regressions: current public launch axes, artifact schemas, report claims,
+  agent-facing contracts, and private/public eval boundaries remain intact
+  unless explicitly migrated.
+
+Verification: deterministic gates are `ruff check <touched files>`,
+`ruff format --check <touched files>`,
+`python scripts/dev/check_python_quality_ratchet.py --summary --top 40`, and
+focused pytest via `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
+If eval, launch, or agent-facing files change, use
+`just agent::eval recommend plan=docs/plans/refactor-python-quality-backend-entropy.md budget=focused`
+or `just agent::eval execute ...` for gate selection. Product-run and
+local-live-manual gates are required only when the selected slice changes a
+public route or real simulator/provider claim.
+
+Execution: main session supervises and verifies one slice; no delegated worker
+by default.
+To execute:
+`/goal execute docs/plans/refactor-python-quality-backend-entropy.md with intuitive-flow`.
+Approval: LGTM/approve/go ahead approves; edits request revision.
+
 ## Active Candidates
 
 ### A: Behavior-Test Fixture Builders
 
-Severity: P2 unless a file crosses the hard ceiling or blocks a product
-boundary. Ruff complexity rows are currently zero, but several large behavior
-test modules still obscure setup ownership. Use fixture builders and focused
-assertion helpers only when they make the tested behavior easier to scan; do
-not split only for line count. Owner: `intuitive-tests`. Proof: focused pytest,
+Severity: P2, promoted to P1 when a test file crosses the 2000-line hard
+ceiling or hides a false-green gate. The current lone complexity row is
+operator-console scene-sampler readiness test fallout; keep it with the active
+scene-sampler/eval work unless it survives the next clean checkpoint. Use
+fixture builders and focused assertion helpers only when they make behavior
+ownership easier to scan. Owner: `intuitive-tests`. Proof: focused pytest,
 ruff, ratchet summary.
 
 ### B: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is now 5095 lines
-after the projection, agent-view boundary, visual-candidate, and runtime-map
-contract helper splits and remains above the hard ceiling;
-`roboclaws/household/report.py` is now 4880 lines after the Isaac runtime,
-grasp diagnostics, and proof request-selection renderer splits, but remains
+Severity: P1. `roboclaws/household/realworld_contract.py` is now 4930 lines
+after the projection, agent-view boundary, visual-candidate, runtime-map
+contract, and done-readiness helper splits and remains above the hard ceiling;
+`roboclaws/household/report.py` is now 3820 lines after the Isaac runtime,
+grasp diagnostics, proof request-selection renderer, Nav2 map bundle renderer,
+semantic-map artifact writer, and agent/perception section splits, but remains
 above the hard ceiling. Continue only around real ownership boundaries: payload
 builders, policy/event families, section renderers, or artifact envelopes.
-Preserve public schemas and rendered report shape. Owner: `intuitive-refactor`.
+Preserve current public schemas and report claims, but remove obsolete internal
+compatibility paths when current callers and tests move to the cleaner owner.
+Owner: `intuitive-refactor`.
 
 ### C: Backend Worker Hard-Ceiling Split
 
@@ -189,11 +272,12 @@ code-size slices. Owner: `intuitive-init`.
 
 ### G: Scene Sampler Hard-Ceiling Drift
 
-Severity: P1 if current parallel changes remain. `roboclaws/launch/scene_sampler.py`
-is currently 2077 lines in the dirty worktree, after previously clearing the
-hard ceiling. Recheck after the parallel scene-sampler changes settle; if still
-above 2000, move a real sampler ownership boundary or record a narrow
-exception. Owner: `intuitive-refactor`.
+Status: conditionally reopened by the current dirty checkout. The ratchet now
+reports `roboclaws/launch/scene_sampler.py` at 2444 lines plus one related
+operator-console test complexity row. If the active scene-sampler/eval work is
+about to land, that work should either split the facade back below 2000 lines or
+record why the drift belongs to a follow-up. If the dirty work is parked, reopen
+this plan candidate as P1 before taking another unrelated hard-ceiling slice.
 
 ## Evidence Ladder
 
@@ -201,6 +285,12 @@ exception. Owner: `intuitive-refactor`.
   and `python scripts/dev/check_python_quality_ratchet.py`.
 - Focused tests: use `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
 - Contract/report changes: include the relevant contract or report tests.
+- Changed-code review: after implementation, run `$intuitive-refactor`
+  changed-code review on the changed scope before final verification when the
+  slice is not docs-only.
+- Agent-facing/eval/launch changes: prefer `just agent::eval recommend` or
+  `just agent::eval execute` for gate selection instead of hand-writing a fixed
+  eval list.
 - Simulator/live claims: only claim them after an explicit local run on a ready
   environment.
 

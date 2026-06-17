@@ -136,4 +136,5 @@ aid, not a source of truth for current priority.
 
 ### Naming And Evidence Lanes
 
+- [Drop World Oracle Labels](2026-06-16-drop-world-oracle-labels.md)
 - [Evidence Lane Naming Refactor](refactor-evidence-lane-naming.md)

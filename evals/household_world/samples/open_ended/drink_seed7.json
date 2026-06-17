@@ -14,10 +14,14 @@
   "prompt": "我渴了，帮我找些解渴的东西",
   "goal_contract_hash": "unavailable",
   "allowed_agent_engines": [
-    "direct-runner"
+    "direct-runner",
+    "codex-cli",
+    "openai-agents-sdk"
   ],
   "provider_profiles": [
-    "not_applicable"
+    "not_applicable",
+    "codex-env",
+    "minimax"
   ],
   "trial_count": 1,
   "required_graders": [
@@ -29,10 +33,24 @@
   "private_goal_reference": {
     "schema": "household_eval_private_goal_reference_v1",
     "private_truth_scope": "grader_only",
+    "open_ended_category": "negative_search",
+    "expected_goal_outcome": "not_found_clean_finish",
     "semantic_satisfaction": "advisory"
   },
   "grader_config": {
-    "semantic_satisfaction_authoritative": false
+    "open_ended_category": "negative_search",
+    "expected_goal_outcome": "not_found_clean_finish",
+    "semantic_satisfaction_authoritative": false,
+    "success_predicate": {
+      "predicate_id": "completion_claim",
+      "authoritative": false
+    },
+    "tags": [
+      "open-ended",
+      "negative-search",
+      "coding-agent",
+      "agent-sdk"
+    ]
   },
   "launch_overrides": {
     "agent_engine": "direct-runner",

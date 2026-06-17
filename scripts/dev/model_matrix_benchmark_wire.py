@@ -8,6 +8,8 @@ from typing import Any
 
 from model_matrix_benchmark_catalog import MatrixCase, WireApi
 
+from roboclaws.agents.thinking_policy import thinking_request_body_for_wire
+
 
 def openai_chat_stream_event(raw_line: bytes) -> dict[str, Any] | None:
     line = raw_line.decode("utf-8", errors="replace").strip()
@@ -64,19 +66,36 @@ def endpoint_url(base_url: str, wire_api: WireApi) -> str:
 
 def payload_for_case(case: MatrixCase, *, prompt: str, max_tokens: int) -> dict[str, Any]:
     if case.wire_api == "openai-chat":
-        return {
+        payload: dict[str, Any] = {
             "model": case.model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "stream": False,
         }
+        if case.provider_id == "kimi" and case.model == "kimi-k2.7-code":
+            payload.update(
+                thinking_request_body_for_wire(
+                    provider_profile="kimi-openai-chat",
+                    wire_api="chat-completions",
+                    mode="default",
+                )
+            )
+        return payload
     if case.wire_api == "openai-responses":
-        return {
+        payload = {
             "model": case.model,
             "input": prompt,
             "max_output_tokens": max_tokens,
             "stream": False,
         }
+        payload.update(
+            thinking_request_body_for_wire(
+                provider_profile=case.provider_id,
+                wire_api="responses",
+                mode="default",
+            )
+        )
+        return payload
     return {
         "model": case.model,
         "max_tokens": max_tokens,

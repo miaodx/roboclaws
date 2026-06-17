@@ -72,11 +72,13 @@ def test_agent_sdk_change_selects_openai_agents_sdk_live_eval(tmp_path: Path) ->
     rows = _selected_rows(manifest)
     sdk_row = rows["openai-agents-sdk-open-task-live-eval"]
     assert sdk_row["axes"]["agent_engine"] == "openai-agents-sdk"
-    assert sdk_row["axes"]["provider_profile"] == "codex-env"
+    assert sdk_row["axes"]["provider_profile"] == "minimax"
     assert sdk_row["axes"]["intent"] == "open-ended"
     assert sdk_row["axes"]["preset"] == ""
-    assert "suite=cleanup_capability" in sdk_row["command"]
+    assert "suite=open_ended_goals" in sdk_row["command"]
+    assert "provider_profile=minimax" in sdk_row["command"]
     assert "live_execution=run" in sdk_row["command"]
+    assert "openai-agents-sdk-codex-env-availability" not in rows
 
 
 def test_visual_grounding_change_selects_real_dino_product_row(tmp_path: Path) -> None:
@@ -166,7 +168,12 @@ def test_open_ended_changed_file_selects_open_ended_contract_and_live_eval(
     assert row["axes"]["intent"] == "open-ended"
     assert row["expense"] == "deterministic"
     assert any("test_surface_prompt_omitted_intent" in item for item in row["command"])
+    assert rows["open-ended-goals-eval-suite"]["row_kind"] == "eval_suite"
+    assert "suite=open_ended_goals" in rows["open-ended-goals-eval-suite"]["command"]
     assert rows["codex-open-task-live-eval"]["row_kind"] == "live_agent_eval"
+    assert "suite=open_ended_goals" in rows["codex-open-task-live-eval"]["command"]
+    assert "map-build-consumer-eval-suite" not in rows
+    assert "cleanup-capability-eval-suite" not in rows
 
 
 def test_explicit_open_ended_intent_selects_open_ended_row(tmp_path: Path) -> None:
@@ -178,6 +185,27 @@ def test_explicit_open_ended_intent_selects_open_ended_row(tmp_path: Path) -> No
 
     rows = _selected_rows(manifest)
     assert rows["open-ended-household-contract-tests"]["axes"]["intent"] == "open-ended"
+    assert rows["open-ended-goals-eval-suite"]["axes"]["suite"] == "open_ended_goals"
+    assert rows["codex-open-task-live-eval"]["axes"]["intent"] == "open-ended"
+    assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == "minimax"
+    assert "openai-agents-sdk-codex-env-availability" not in rows
+
+
+def test_explicit_planner_proof_intent_selects_planner_proof_row(tmp_path: Path) -> None:
+    manifest = selector.build_eval_harness(
+        budget="focused",
+        intent=["planner-proof"],
+        output_dir=tmp_path,
+    )
+
+    rows = _selected_rows(manifest)
+    row = rows["planner-proof-dry-run-product"]
+    assert row["row_kind"] == "product_run"
+    assert row["axes"]["intent"] == "planner-proof"
+    assert "surface=planner-proof" in row["command"]
+    assert "intent=planner-proof" in row["command"]
+    assert "mode=dry-run" in row["command"]
+    assert "open-ended-goals-eval-suite" not in rows
 
 
 def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path) -> None:
@@ -229,6 +257,27 @@ def test_explicit_axes_select_first_class_engine_and_provider_profile(
     assert rows["direct-camera-grounded-grounding-dino"]["axes"]["camera_labeler"] == (
         "grounding-dino"
     )
+
+
+def test_explicit_codex_env_selects_agent_sdk_availability_evidence(
+    tmp_path: Path,
+) -> None:
+    manifest = selector.build_eval_harness(
+        budget="focused",
+        agent_engine=["openai-agents-sdk"],
+        provider_profile=["codex-env"],
+        intent=["open-ended"],
+        output_dir=tmp_path,
+    )
+
+    rows = _selected_rows(manifest)
+    behavior_row = rows["openai-agents-sdk-open-task-live-eval"]
+    availability_row = rows["openai-agents-sdk-codex-env-availability"]
+    assert behavior_row["axes"]["provider_profile"] == "minimax"
+    assert behavior_row["requirement"] == "required"
+    assert availability_row["axes"]["provider_profile"] == "codex-env"
+    assert availability_row["requirement"] == "optional"
+    assert manifest["summary"]["optional_row_count"] == 1
 
 
 def test_execute_marks_live_row_blocked_when_provider_is_missing(
@@ -403,6 +452,31 @@ def test_failed_live_row_with_busy_mcp_port_is_classified_as_blocked() -> None:
         assert row["status"] == "blocked"
         assert row["outcome"] == "blocked"
         assert row["blocker_category"] == "environment_blocked"
+
+
+def test_optional_blocked_rows_do_not_fail_harness_exit_status() -> None:
+    manifest = {
+        "rows": [
+            {
+                "selected": True,
+                "requirement": "optional",
+                "status": "blocked",
+                "outcome": "blocked",
+            },
+            {
+                "selected": True,
+                "requirement": "required",
+                "status": "ran",
+                "exit_code": 0,
+                "outcome": "passed",
+            },
+        ]
+    }
+
+    assert runner._exit_status(manifest) == 0
+    manifest["rows"][1]["status"] = "blocked"
+    manifest["rows"][1]["outcome"] = "blocked"
+    assert runner._exit_status(manifest) == 2
 
 
 def test_dino_sidecar_default_matches_documented_service_port(monkeypatch: MonkeyPatch) -> None:

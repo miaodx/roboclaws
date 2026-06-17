@@ -48,6 +48,18 @@ def test_nvidia_cases_read_adjacent_base_url_env(monkeypatch) -> None:
     assert cases["nvidia:nemotron-nano-vl:responses"].base_url == "https://nvidia.example/v1"
 
 
+def test_mimo_inside_cases_read_registry_env(monkeypatch) -> None:
+    monkeypatch.setenv("MIMO_BASE_URL", "https://inside.example/v1")
+    script = _load_script_module()
+
+    cases = {case.case_id: case for case in script.default_cases()}
+
+    case = cases["mimo-inside:mimo-1000:openai-chat"]
+    assert case.base_url == "https://inside.example/v1"
+    assert case.api_key_env == "MIMO_API_KEY"
+    assert "Default-enabled" in case.note
+
+
 def test_endpoint_urls_normalize_wire_api_suffixes() -> None:
     script = _load_script_module()
 
@@ -84,16 +96,24 @@ def test_payloads_match_wire_format() -> None:
         prompt="ping",
         max_tokens=8,
     )
+    kimi_payload = script.payload_for_case(
+        cases["kimi:kimi-k2.7-code:chat"],
+        prompt="ping",
+        max_tokens=8,
+    )
 
     assert chat_payload["messages"] == [{"role": "user", "content": "ping"}]
     assert chat_payload["max_tokens"] == 8
     assert "input" not in chat_payload
+    assert "thinking" not in chat_payload
     assert responses_payload["input"] == "ping"
     assert responses_payload["max_output_tokens"] == 8
+    assert responses_payload["reasoning"] == {"effort": "medium"}
     assert "messages" not in responses_payload
     assert anthropic_payload["messages"] == [{"role": "user", "content": "ping"}]
     assert anthropic_payload["max_tokens"] == 8
     assert "max_output_tokens" not in anthropic_payload
+    assert kimi_payload["thinking"] == {"type": "enabled", "keep": "all"}
 
 
 def test_default_token_budget_leaves_room_for_reasoning() -> None:

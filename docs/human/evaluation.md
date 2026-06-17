@@ -84,6 +84,9 @@ finish.
 `scene_sampler_stress` is the static eval projection for source-aware
 MolmoSpaces scene sampling. It currently admits ten prepared `procthor-10k-val`
 map-build samples and ten prepared `procthor-objaverse-val` map-build samples.
+Sampler selection uses a deterministic seeded-random policy that is scoped per
+`scene_source` and prefers different public room counts before filling remaining
+slots, so UI/eval rows do not depend on a single contiguous scene-index range.
 `ithor` and `holodeck-objaverse-val` remain in the projection as rejected
 exhausted source metadata because their candidate evidence fails the current
 public-room/actionability gates. Its `sampler_admission` grader checks the
@@ -92,6 +95,12 @@ index, readiness status, room/navigation-area count, waypoint count,
 room-category provenance, selected reason, generator version, and
 blocked/rejected projection metadata. The grader is deterministic and must not
 call live providers.
+
+Sampler readiness exports include a separate
+`scene_sampler_candidate_profile.json` for metadata-first curation across all
+four scene groups. The profile can recommend new source-scoped candidate ids for
+`ithor` and `holodeck-objaverse-val`, but it has no admission effect: a scene
+still enters `scene_sampler_stress` only after the normal scanner gates pass.
 
 Blocked live-agent packets include either `roboclaws_live_eval_preflight_v1`
 runner metadata, or a live product-route failure classified separately from

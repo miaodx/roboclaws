@@ -202,6 +202,12 @@ button:not(:disabled):hover {
   white-space: nowrap;
 }
 
+.global-controls .view-mode.active {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .route-rail,
 .setup-panel,
 .state-rail {
@@ -557,6 +563,37 @@ pre,
   font-size: 12px;
 }
 
+.prompt-preview-panel {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.prompt-preview-panel summary,
+.evidence-box summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.prompt-preview-text {
+  max-height: 220px;
+  min-height: 72px;
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
 .view-modes {
   display: flex;
   gap: 8px;
@@ -809,6 +846,14 @@ pre,
   border-radius: 6px;
   background: var(--panel);
   overflow-wrap: anywhere;
+}
+
+.evidence-box p {
+  margin: 8px 0 0;
+}
+
+.evidence-box .prompt-preview-text {
+  max-height: 260px;
 }
 
 .camera-angle-row {

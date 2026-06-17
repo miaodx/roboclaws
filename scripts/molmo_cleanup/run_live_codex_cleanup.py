@@ -421,6 +421,7 @@ class LiveCodexCleanupRunner:
         run_id = _household_run_id(self.args)
         task_intent = _household_intent(self.args)
         open_ended_task = task_intent == "open-ended"
+        checker_profile = str(getattr(self.args, "checker_profile", "") or self.args.profile)
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
             checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
@@ -449,7 +450,7 @@ class LiveCodexCleanupRunner:
             "--expect-policy",
             self.args.policy,
             "--expect-profile",
-            self.args.profile,
+            checker_profile,
             "--expect-mcp-server",
             "molmo_cleanup_realworld",
             "--min-generated-mess-count",

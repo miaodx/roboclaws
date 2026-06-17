@@ -24,12 +24,18 @@ from roboclaws.operator_console.interactions import (
 from roboclaws.operator_console.launcher import (
     ConsoleLaunchError,
     LaunchRequest,
+    load_repo_dotenv,
     route_readiness,
     start_console_run,
     stop_console_run,
 )
 from roboclaws.operator_console.messup import preview_messup
 from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
+from roboclaws.operator_console.prompt_preview import (
+    PromptPreviewRequest,
+    build_prompt_preview,
+    prompt_preview_env,
+)
 from roboclaws.operator_console.routes import (
     get_selection,
     list_console_combinations,
@@ -262,6 +268,9 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         if path == "/api/messup-preview":
             self._serve_messup_preview(payload)
             return True
+        if path == "/api/prompt-preview":
+            self._serve_prompt_preview(payload)
+            return True
         if path == "/api/runs":
             self._serve_run_start(payload)
             return True
@@ -444,6 +453,29 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     def _serve_run_start(self, payload: dict[str, object]) -> None:
         request = _launch_request_from_payload(payload)
         self._json(start_console_run(self.repo_root, request), status=201)
+
+    def _serve_prompt_preview(self, payload: dict[str, object]) -> None:
+        request = _launch_request_from_payload(payload)
+        route = get_selection(request.selection_id)
+        overrides = dict(request.overrides or {})
+        if request.provider_profile:
+            overrides.setdefault("provider_profile", request.provider_profile)
+        if request.scenario_setup:
+            overrides.setdefault("scenario_setup", request.scenario_setup)
+        self._json(
+            build_prompt_preview(
+                route,
+                PromptPreviewRequest(
+                    intent_id=request.intent_id or route.intent_id,
+                    prompt=request.prompt,
+                    overrides=overrides,
+                    env_overrides=prompt_preview_env(
+                        load_repo_dotenv(self.repo_root, os.environ),
+                        request.env_overrides or {},
+                    ),
+                ),
+            )
+        )
 
     def _serve_steer_message(self, run_id: str, payload: dict[str, object]) -> None:
         self._json(

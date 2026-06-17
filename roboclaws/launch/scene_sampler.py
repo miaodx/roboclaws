@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import platform
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +77,10 @@ from roboclaws.launch.scene_sampler_scanner import (
 from roboclaws.launch.scene_sampler_sources import (
     CURRENT_ALIAS_INDICES,
     SCANNER_READY_METADATA,
+    SCENE_SAMPLER_SELECTION_SEED,
+    SCENE_SAMPLER_SELECTION_STRATEGY,
+    SOURCE_EVAL_CANDIDATE_INDICES,
+    SOURCE_UI_CANDIDATE_INDICES,
     admitted_sources,
     category_manifest,
     category_provenance,
@@ -86,23 +89,31 @@ from roboclaws.launch.scene_sampler_sources import (
     sampler_world_id,
     scanner_metadata,
     source_eval_indices,
+    source_selection_metadata,
     source_ui_indices,
     uses_legacy_preview_assets,
+)
+from roboclaws.launch.scene_sampler_types import (
+    EVAL_STRESS_LANE,
+    READINESS_BLOCKED,
+    READINESS_READY,
+    READINESS_REJECTED,
+    SAMPLER_GENERATOR_VERSION,
+    UI_LANE,
+    MolmoSpacesSceneRef,
+    SceneSamplerRow,
 )
 
 SAMPLER_MANIFEST_SCHEMA = "molmospaces_scene_sampler_manifest_v1"
 SAMPLER_LABEL_MANIFEST_SCHEMA = "molmospaces_scene_room_labels_v1"
 SAMPLER_PROJECTION_SCHEMA = "molmospaces_scene_sampler_projection_v1"
-SAMPLER_GENERATOR_VERSION = "2026-06-15.preview-readiness-v1"
 PRIMARY_MOLMOSPACES_BACKEND = "mujoco"
 UI_TARGET_PER_SCENE_SOURCE = 3
 EVAL_TARGET_PER_SCENE_SOURCE = 10
-
-UI_LANE = "ui"
-EVAL_STRESS_LANE = "eval_stress"
-READINESS_READY = "ready"
-READINESS_BLOCKED = "blocked"
-READINESS_REJECTED = "rejected"
+CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE = 10
+CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE = 40
+CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE = 500
+CANDIDATE_PROFILE_LANE = "metadata_profile"
 
 SUPPORTED_SCENE_SOURCES: tuple[str, ...] = (
     "procthor-10k-val",
@@ -124,89 +135,6 @@ _LABEL_MANIFEST_PATH = (
 )
 
 
-@dataclass(frozen=True)
-class MolmoSpacesSceneRef:
-    """A parsed MolmoSpaces world id with explicit source identity."""
-
-    scene_source: str
-    scene_index: int
-
-
-@dataclass(frozen=True)
-class SceneSamplerRow:
-    """One source-qualified scene sampler candidate or blocked source row."""
-
-    scene_family: str
-    scene_split: str
-    scene_source: str
-    scene_index: int | None
-    backend: str
-    readiness_status: str
-    lanes: tuple[str, ...]
-    world_id: str
-    legacy_world_id: str
-    room_count: int
-    waypoint_count: int
-    category_provenance: str
-    category_manifest: str
-    preview_assets: tuple[tuple[str, str], ...]
-    selected_reason: str
-    blocked_reason: str = ""
-    failure_class: str = ""
-    quality_score: float = 0.0
-    coverage_score: float = 0.0
-
-    @property
-    def ui_ready(self) -> bool:
-        return self.readiness_status == READINESS_READY and UI_LANE in self.lanes
-
-    @property
-    def eval_ready(self) -> bool:
-        return self.readiness_status == READINESS_READY and EVAL_STRESS_LANE in self.lanes
-
-    @property
-    def index_token(self) -> str:
-        if self.scene_index is None:
-            return "blocked"
-        return str(self.scene_index)
-
-    @property
-    def default_overrides(self) -> tuple[str, ...]:
-        if self.scene_index is None:
-            return ()
-        overrides = (
-            f"scene_source={self.scene_source}",
-            f"scene_index={self.scene_index}",
-        )
-        if self.scene_source != "procthor-10k-val" or self.scene_index != 0:
-            overrides = (*overrides, "map_bundle=none")
-        return overrides
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "scene_family": self.scene_family,
-            "scene_split": self.scene_split,
-            "scene_source": self.scene_source,
-            "scene_index": self.scene_index,
-            "backend": self.backend,
-            "readiness_status": self.readiness_status,
-            "lanes": list(self.lanes),
-            "world_id": self.world_id,
-            "legacy_world_id": self.legacy_world_id,
-            "room_count": self.room_count,
-            "waypoint_count": self.waypoint_count,
-            "category_provenance": self.category_provenance,
-            "category_manifest": self.category_manifest,
-            "preview_assets": [{"view": view, "path": path} for view, path in self.preview_assets],
-            "selected_reason": self.selected_reason,
-            "blocked_reason": self.blocked_reason,
-            "failure_class": self.failure_class,
-            "quality_score": self.quality_score,
-            "coverage_score": self.coverage_score,
-            "generator_version": SAMPLER_GENERATOR_VERSION,
-        }
-
-
 def sampler_manifest() -> dict[str, Any]:
     """Return the canonical source-aware MolmoSpaces sampler manifest."""
 
@@ -219,6 +147,7 @@ def sampler_manifest() -> dict[str, Any]:
         "eval_target_per_scene_source": EVAL_TARGET_PER_SCENE_SOURCE,
         "supported_scene_sources": list(SUPPORTED_SCENE_SOURCES),
         "room_label_manifest": str(_LABEL_MANIFEST_PATH.relative_to(_repo_root())),
+        "selection_policy": _sampler_selection_policy(),
         "rows": rows,
         "projections": {
             "ui_world_ids": [row.world_id for row in ui_sampler_rows()],
@@ -382,6 +311,7 @@ def eval_projection_metadata() -> dict[str, Any]:
         "schema": SAMPLER_PROJECTION_SCHEMA,
         "projection": EVAL_STRESS_LANE,
         "generator_version": SAMPLER_GENERATOR_VERSION,
+        "selection_policy": _sampler_selection_policy(),
         "scene_sources": by_source,
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
@@ -530,6 +460,7 @@ def readiness_report() -> dict[str, Any]:
         "schema": "molmospaces_scene_sampler_readiness_report_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "primary_backend": PRIMARY_MOLMOSPACES_BACKEND,
+        "selection_policy": _sampler_selection_policy(),
         "sources": by_source,
         "summary": {
             "source_count": len(SUPPORTED_SCENE_SOURCES),
@@ -742,6 +673,7 @@ def candidate_readiness_report(
         "schema": "molmospaces_scene_sampler_candidate_readiness_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "summary": _candidate_readiness_summary(sources),
         "sources": sources,
@@ -763,15 +695,19 @@ def selection_gap_report(
         eval_ready_count = int(source_payload["eval_ready_count"])
         ui_needed = max(0, UI_TARGET_PER_SCENE_SOURCE - ui_ready_count)
         eval_needed = max(0, EVAL_TARGET_PER_SCENE_SOURCE - eval_ready_count)
-        scanner_candidates = [
-            item
-            for item in source_candidates
-            if (
-                item["readiness_status"] == READINESS_BLOCKED
-                and not item["eval_ready"]
-                and (item.get("candidate_file") or {}).get("status") != "missing_from_index_map"
-            )
-        ]
+        scanner_candidates = _rank_selection_candidates(
+            source=source,
+            lane="scanner",
+            candidates=[
+                item
+                for item in source_candidates
+                if (
+                    item["readiness_status"] == READINESS_BLOCKED
+                    and not item["eval_ready"]
+                    and (item.get("candidate_file") or {}).get("status") != "missing_from_index_map"
+                )
+            ],
+        )
         rejected_candidate_indices = [
             item["scene_index"]
             for item in source_candidates
@@ -821,8 +757,116 @@ def selection_gap_report(
         "schema": "molmospaces_scene_sampler_selection_gaps_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "summary": _selection_gap_summary(sources),
+        "sources": sources,
+    }
+
+
+def candidate_profile_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return a metadata-first source-scoped candidate profile.
+
+    This artifact is deliberately weaker than scanner admission: it suggests
+    small source-specific worklists for human/metadata review, but it does not
+    make any candidate UI- or eval-ready.
+    """
+
+    selection = selection_gap_report(candidate_indices=candidate_indices)
+    profile_indices_by_source = {
+        source: _candidate_profile_indices_for_source(
+            source=source,
+            candidate_indices=candidate_indices,
+            selection_source=selection["sources"][source],
+        )
+        for source in SUPPORTED_SCENE_SOURCES
+    }
+    expanded_candidate_indices = tuple(
+        sorted(
+            {
+                index
+                for profile_indices in profile_indices_by_source.values()
+                for index in profile_indices
+            }
+        )
+    )
+    candidates = candidate_readiness_report(candidate_indices=expanded_candidate_indices)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_selection = selection["sources"][source]
+        source_profile_indices = set(profile_indices_by_source[source])
+        worklist_indices = _metadata_profile_worklist_indices(
+            source=source,
+            candidate_indices=candidate_indices,
+            selection_source=source_selection,
+        )
+        worklist_index_set = set(worklist_indices)
+        profile_rows = [
+            _candidate_profile_row(
+                candidate,
+                worklist_rank=(
+                    worklist_indices.index(int(candidate.get("scene_index")))
+                    if candidate.get("scene_index") in worklist_index_set
+                    else None
+                ),
+            )
+            for candidate in candidates["sources"][source].get("candidates") or []
+            if candidate.get("scene_index") in source_profile_indices
+        ]
+        worklist_rows = [
+            row
+            for row in profile_rows
+            if row.get("metadata_worklist_rank") is not None
+            and row.get("next_action")
+            not in {
+                "none",
+                "do_not_scan_without_gate_change_or_new_curation",
+            }
+        ]
+        sources[source] = {
+            "scene_source": source,
+            "scene_family": _family_split(source)[0],
+            "scene_split": _family_split(source)[1],
+            "profile_status": _candidate_profile_status(
+                selection_source=source_selection,
+                worklist_rows=worklist_rows,
+            ),
+            "next_action": _candidate_profile_next_action(
+                selection_source=source_selection,
+                worklist_rows=worklist_rows,
+            ),
+            "selection_capacity_status": source_selection.get("selection_capacity_status", ""),
+            "ui_needed_count": int(source_selection.get("ui_needed_count") or 0),
+            "eval_needed_count": int(source_selection.get("eval_needed_count") or 0),
+            "known_ready_indices": [
+                row["scene_index"] for row in profile_rows if row["profile_status"] == "known_ready"
+            ],
+            "known_rejected_indices": [
+                row["scene_index"]
+                for row in profile_rows
+                if row["profile_status"] == "known_rejected"
+            ],
+            "requested_candidate_indices": list(candidate_indices),
+            "profile_candidate_indices": list(profile_indices_by_source[source]),
+            "metadata_worklist_indices": list(worklist_indices),
+            "metadata_worklist_world_ids": [row["world_id"] for row in worklist_rows],
+            "metadata_worklist_candidate_count": len(worklist_rows),
+            "candidates": profile_rows,
+            "metadata_worklist_candidates": worklist_rows,
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_candidate_profile_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_backend_no_vlm",
+        "download_policy": "manual_operator_only",
+        "candidate_profile_policy": _candidate_profile_policy(),
+        "candidate_indices": list(candidate_indices),
+        "expanded_candidate_indices": list(expanded_candidate_indices),
+        "selection_policy": _sampler_selection_policy(),
+        "summary": _candidate_profile_summary(sources),
         "sources": sources,
     }
 
@@ -835,11 +879,13 @@ def source_prep_report(
 
     availability = source_availability_report(candidate_indices=candidate_indices)
     selection = selection_gap_report(candidate_indices=candidate_indices)
+    candidate_profile = candidate_profile_report(candidate_indices=candidate_indices)
     max_candidate_index = max(candidate_indices) if candidate_indices else -1
     sources: dict[str, dict[str, Any]] = {}
     for source in SUPPORTED_SCENE_SOURCES:
         source_availability = availability["sources"][source]
         source_selection = selection["sources"][source]
+        source_candidate_profile = candidate_profile["sources"][source]
         dataset_name, split = _molmospaces_get_scenes_args(source)
         candidate_scene_refs = [
             _candidate_scene_ref_from_availability(item)
@@ -847,27 +893,49 @@ def source_prep_report(
             if isinstance(item, dict)
         ]
         source_complete = source_selection.get("status") == "complete"
+        metadata_worklist_candidates = _scanner_candidate_profile_worklist_candidates(
+            source_candidate_profile
+        )
+        metadata_worklist_candidate_count = len(metadata_worklist_candidates)
         source_rejected_exhausted = (
             source_selection.get("selection_capacity_status") == "rejected_exhausted"
-        )
-        missing_resources = (
-            []
-            if source_complete or source_rejected_exhausted
-            else _missing_source_resources(
-                source=source,
-                source_availability=source_availability,
-                candidate_scene_refs=candidate_scene_refs,
-            )
+            and metadata_worklist_candidate_count == 0
         )
         recommended_end = max_candidate_index
         next_eval_count = len(source_selection.get("next_eval_scan_world_ids") or [])
         eval_needed = int(source_selection.get("eval_needed_count") or 0)
         if next_eval_count < eval_needed:
             recommended_end = max(recommended_end, 19)
+        profile_indices = [
+            int(index) for index in source_candidate_profile.get("metadata_worklist_indices") or []
+        ]
+        if profile_indices:
+            recommended_end = max(recommended_end, max(profile_indices))
         next_scan_candidates = (
             []
             if source_complete or source_rejected_exhausted
             else source_selection.get("next_scan_candidates") or []
+        )
+        install_candidates = _unique_candidates(
+            [*next_scan_candidates, *metadata_worklist_candidates]
+        )
+        prep_source_availability = _source_availability_for_candidates(
+            source_availability=source_availability,
+            candidates=install_candidates,
+        )
+        prep_candidate_scene_refs = [
+            _candidate_scene_ref_from_availability(item)
+            for item in prep_source_availability.get("candidate_files") or []
+            if isinstance(item, dict)
+        ]
+        missing_resources = (
+            []
+            if source_complete or source_rejected_exhausted
+            else _missing_source_resources(
+                source=source,
+                source_availability=prep_source_availability,
+                candidate_scene_refs=prep_candidate_scene_refs,
+            )
         )
         sources[source] = {
             "scene_source": source,
@@ -877,6 +945,7 @@ def source_prep_report(
                 source_availability=source_availability,
                 source_selection=source_selection,
                 missing_resources=missing_resources,
+                metadata_worklist_candidate_count=metadata_worklist_candidate_count,
             ),
             "download_policy": "manual_operator_only",
             "molmospaces_scene_source": source,
@@ -891,6 +960,15 @@ def source_prep_report(
             "source_dir": source_availability.get("source_dir", ""),
             "source_dir_available": bool(source_availability.get("source_dir_available")),
             "candidate_indices": list(candidate_indices),
+            "candidate_profile_status": source_candidate_profile.get("profile_status", ""),
+            "candidate_profile_next_action": source_candidate_profile.get("next_action", ""),
+            "metadata_worklist_indices": profile_indices,
+            "metadata_worklist_world_ids": source_candidate_profile.get(
+                "metadata_worklist_world_ids", []
+            ),
+            "metadata_worklist_candidate_count": int(
+                source_candidate_profile.get("metadata_worklist_candidate_count") or 0
+            ),
             "candidate_scene_refs": [
                 item
                 for item in candidate_scene_refs
@@ -900,12 +978,15 @@ def source_prep_report(
             "missing_resource_summary": _resource_reason_counts(missing_resources),
             "missing_resources": missing_resources,
             "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
+            "metadata_worklist_scan_world_ids": [
+                item.get("world_id") for item in metadata_worklist_candidates
+            ],
             "install_candidates": []
             if source_complete
             else _source_prep_install_candidates(
                 dataset_name=dataset_name,
                 split=split,
-                candidates=next_scan_candidates,
+                candidates=install_candidates,
             ),
             "recommended_candidate_range": f"0:{recommended_end}" if recommended_end >= 0 else "",
             "operator_commands": _source_prep_operator_commands(
@@ -921,6 +1002,7 @@ def source_prep_report(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_vlm",
         "download_policy": "manual_operator_only",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "worklist": worklist,
         "summary": {
@@ -955,7 +1037,11 @@ def scanner_execution_plan(
     """Return a no-download executable plan for the next scanner/product-smoke step."""
 
     source_prep = source_prep_report(candidate_indices=candidate_indices)
-    scanner_admission = scanner_admission_report(candidate_indices=candidate_indices)
+    scanner_candidate_indices = _scanner_execution_candidate_indices(
+        candidate_indices=candidate_indices,
+        source_prep=source_prep,
+    )
+    scanner_admission = scanner_admission_report(candidate_indices=scanner_candidate_indices)
     sources: dict[str, dict[str, Any]] = {}
     for source in SUPPORTED_SCENE_SOURCES:
         prep_source = source_prep["sources"][source]
@@ -985,7 +1071,10 @@ def scanner_execution_plan(
                 1 for item in candidates if item["scanner_status"] == "ready_for_product_smoke"
             ),
             "blocked_count": sum(
-                1 for item in candidates if item["scanner_status"].startswith("blocked_")
+                1
+                for item in candidates
+                if item["scanner_status"].startswith("blocked_")
+                or item["scanner_status"] == "rejected_by_admission"
             ),
             "candidates": candidates,
         }
@@ -994,7 +1083,8 @@ def scanner_execution_plan(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
-        "candidate_indices": list(candidate_indices),
+        "selection_policy": _sampler_selection_policy(),
+        "candidate_indices": list(scanner_candidate_indices),
         "summary": scanner_execution_summary(sources),
         "sources": sources,
     }
@@ -1011,6 +1101,7 @@ def next_flow_worklist_report(
     projection = eval_projection_metadata()
     readiness = readiness_report()
     selection = selection_gap_report(candidate_indices=candidate_indices)
+    candidate_profile = candidate_profile_report(candidate_indices=candidate_indices)
     source_prep = source_prep_report(candidate_indices=candidate_indices)
     scanner_admission = scanner_admission_report(candidate_indices=candidate_indices)
     scanner_execution = scanner_execution_plan(candidate_indices=candidate_indices)
@@ -1019,6 +1110,7 @@ def next_flow_worklist_report(
         source_projection = projection["scene_sources"][source]
         source_readiness = readiness["sources"][source]
         source_selection = selection["sources"][source]
+        source_candidate_profile = candidate_profile["sources"][source]
         source_prep_payload = source_prep["sources"][source]
         source_admission = scanner_admission["sources"][source]
         source_execution = scanner_execution["sources"][source]
@@ -1033,6 +1125,7 @@ def next_flow_worklist_report(
         next_action = next_flow_next_action(
             readiness_source=source_readiness,
             selection_source=source_selection,
+            candidate_profile_source=source_candidate_profile,
             prep_source=source_prep_payload,
             scanner_source=source_execution,
         )
@@ -1058,6 +1151,14 @@ def next_flow_worklist_report(
             "eval_support_status": source_projection.get("support_status", ""),
             "eval_sample_ids": source_readiness.get("eval_sample_ids") or [],
             "selection_capacity_status": source_selection.get("selection_capacity_status", ""),
+            "candidate_profile_status": source_candidate_profile.get("profile_status", ""),
+            "candidate_profile_next_action": source_candidate_profile.get("next_action", ""),
+            "metadata_worklist_world_ids": source_candidate_profile.get(
+                "metadata_worklist_world_ids", []
+            ),
+            "metadata_worklist_candidate_count": int(
+                source_candidate_profile.get("metadata_worklist_candidate_count") or 0
+            ),
             "source_availability_status": source_selection.get("source_availability_status", ""),
             "prep_status": source_prep_payload.get("prep_status", ""),
             "scanner_candidate_count": int(source_execution.get("candidate_count") or 0),
@@ -1098,6 +1199,7 @@ def next_flow_worklist_report(
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_backend_no_vlm",
         "download_policy": "manual_operator_only",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "artifact_paths": artifact_paths,
         "worklist": summary["worklist"],
@@ -1150,6 +1252,7 @@ def scanner_admission_report(
         "schema": "molmospaces_scene_sampler_scanner_admission_v1",
         "generator_version": SAMPLER_GENERATOR_VERSION,
         "probe_mode": "no_download_no_backend_no_vlm",
+        "selection_policy": _sampler_selection_policy(),
         "candidate_indices": list(candidate_indices),
         "required_gates": list(_scanner_required_gates()),
         "summary": scanner_admission_summary(sources),
@@ -1202,9 +1305,9 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
     ui_ready = scene_index in source_ui_indices(source)
     eval_ready = scene_index in source_eval_indices(source)
     rejected_reason = str((metadata or {}).get("blocked_reason") or "")
-    if room_count < 3:
+    if room_count < 3 and not rejected_reason:
         rejected_reason = "fewer_than_three_public_navigation_areas"
-    elif not all_views_reviewable:
+    elif not all_views_reviewable and not rejected_reason:
         rejected_reason = "preview_not_reviewable"
     status = (
         READINESS_READY if (ui_ready or eval_ready) and not rejected_reason else READINESS_REJECTED
@@ -1219,6 +1322,9 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
         if lanes
         else rejected_reason or "alias_preserved_not_selected"
     )
+    failure_class = str((metadata or {}).get("failure_class") or "")
+    if rejected_reason and not failure_class:
+        failure_class = "map_actionability_failure"
     return SceneSamplerRow(
         scene_family=_family_split(source)[0],
         scene_split=_family_split(source)[1],
@@ -1239,7 +1345,7 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
         preview_assets=_ready_row_preview_assets(source=source, scene_index=scene_index),
         selected_reason=selected_reason,
         blocked_reason=rejected_reason,
-        failure_class="map_actionability_failure" if rejected_reason else "",
+        failure_class=failure_class,
         quality_score=float((metadata or {}).get("quality_score") or _quality_score(preview)),
         coverage_score=float(
             (metadata or {}).get("coverage_score")
@@ -1528,13 +1634,403 @@ def _scanner_candidate_packet(
     )
 
 
+def _sampler_selection_policy() -> dict[str, Any]:
+    return {
+        "schema": "molmospaces_scene_sampler_selection_policy_v1",
+        "selection_seed": SCENE_SAMPLER_SELECTION_SEED,
+        "selection_strategy": SCENE_SAMPLER_SELECTION_STRATEGY,
+        "ui_target_per_scene_source": UI_TARGET_PER_SCENE_SOURCE,
+        "eval_target_per_scene_source": EVAL_TARGET_PER_SCENE_SOURCE,
+        "sources": {
+            source: {
+                "ui": source_selection_metadata(
+                    source=source,
+                    lane=UI_LANE,
+                    target_count=UI_TARGET_PER_SCENE_SOURCE,
+                    candidates=SOURCE_UI_CANDIDATE_INDICES.get(source, ()),
+                ),
+                "eval_stress": source_selection_metadata(
+                    source=source,
+                    lane=EVAL_STRESS_LANE,
+                    target_count=EVAL_TARGET_PER_SCENE_SOURCE,
+                    candidates=SOURCE_EVAL_CANDIDATE_INDICES.get(source, ()),
+                ),
+            }
+            for source in SUPPORTED_SCENE_SOURCES
+        },
+    }
+
+
+def _candidate_profile_policy() -> dict[str, Any]:
+    return {
+        "schema": "molmospaces_scene_sampler_candidate_profile_policy_v1",
+        "selection_seed": SCENE_SAMPLER_SELECTION_SEED,
+        "selection_strategy": SCENE_SAMPLER_SELECTION_STRATEGY,
+        "lane": CANDIDATE_PROFILE_LANE,
+        "worklist_target_per_scene_source": CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE,
+        "pool_size_per_scene_source": CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE,
+        "admission_effect": "none_profile_only",
+        "download_policy": "manual_operator_only",
+        "sources": {
+            source: {
+                "dataset_name": _molmospaces_get_scenes_args(source)[0],
+                "split": _molmospaces_get_scenes_args(source)[1],
+            }
+            for source in SUPPORTED_SCENE_SOURCES
+        },
+    }
+
+
+def _rank_selection_candidates(
+    *,
+    source: str,
+    lane: str,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    metadata = source_selection_metadata(
+        source=source,
+        lane=lane,
+        target_count=len(candidates),
+        candidates=tuple(int(candidate.get("scene_index") or 0) for candidate in candidates),
+    )
+    rank = {scene_index: offset for offset, scene_index in enumerate(metadata["selected_indices"])}
+    return sorted(
+        candidates,
+        key=lambda item: (
+            rank.get(int(item.get("scene_index") or 0), len(rank)),
+            int(item.get("scene_index") or 0),
+        ),
+    )
+
+
+def _candidate_profile_indices_for_source(
+    *,
+    source: str,
+    candidate_indices: tuple[int, ...],
+    selection_source: dict[str, Any],
+) -> tuple[int, ...]:
+    return tuple(
+        sorted(
+            {
+                *candidate_indices,
+                *_known_profile_indices(source),
+                *_metadata_profile_worklist_indices(
+                    source=source,
+                    candidate_indices=candidate_indices,
+                    selection_source=selection_source,
+                ),
+            }
+        )
+    )
+
+
+def _known_profile_indices(source: str) -> tuple[int, ...]:
+    known: set[int] = set()
+    for index in known_indices_for_source(source):
+        if scanner_metadata(source=source, scene_index=index):
+            known.add(index)
+    known.update(source_ui_indices(source))
+    known.update(source_eval_indices(source))
+    if source == "procthor-10k-val":
+        known.update(CURRENT_ALIAS_INDICES)
+    return tuple(sorted(known))
+
+
+def _metadata_profile_worklist_indices(
+    *,
+    source: str,
+    candidate_indices: tuple[int, ...],
+    selection_source: dict[str, Any],
+) -> tuple[int, ...]:
+    if (
+        int(selection_source.get("ui_needed_count") or 0) <= 0
+        and int(selection_source.get("eval_needed_count") or 0) <= 0
+    ):
+        return ()
+    excluded = set(_known_profile_indices(source))
+    excluded.update(
+        int(index)
+        for index in candidate_indices
+        if scanner_metadata(source=source, scene_index=int(index))
+    )
+    pool = [index for index in _metadata_profile_candidate_pool(source) if index not in excluded]
+    ranked = source_selection_metadata(
+        source=source,
+        lane=CANDIDATE_PROFILE_LANE,
+        target_count=len(pool),
+        candidates=tuple(pool),
+    )["selected_indices"]
+    return tuple(
+        int(index) for index in ranked[:CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE]
+    )
+
+
+def _metadata_profile_candidate_pool(source: str) -> tuple[int, ...]:
+    module_available, _, _ = _molmospaces_module_status()
+    dataset_name, split = _molmospaces_get_scenes_args(source)
+    candidate_indices = tuple(range(CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE))
+    scene_index_map = _molmospaces_scene_index_map(
+        source=source,
+        dataset_name=dataset_name,
+        split=split,
+        candidate_indices=candidate_indices,
+        module_available=module_available,
+    )
+    if scene_index_map.get("status") == "available":
+        concrete_indices = [
+            int(item["scene_index"])
+            for item in scene_index_map.get("candidate_scene_refs") or []
+            if isinstance(item, dict)
+            and item.get("status") == "available"
+            and (item.get("primary_path") or item.get("paths") or item.get("missing_paths"))
+        ]
+        if concrete_indices:
+            return tuple(sorted(concrete_indices))
+    return tuple(range(CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE))
+
+
+def _candidate_profile_row(
+    candidate: dict[str, Any],
+    *,
+    worklist_rank: int | None,
+) -> dict[str, Any]:
+    scene_index = int(candidate.get("scene_index") or 0)
+    known_status = _candidate_known_profile_status(candidate)
+    blocked_reason = str(candidate.get("blocked_reason") or "")
+    if worklist_rank is not None and known_status == "unprofiled":
+        profile_status = "metadata_worklist"
+        next_action = "metadata_first_human_curation"
+        selected_reason = "selected_for_metadata_first_source_curation"
+    else:
+        profile_status = known_status
+        next_action = _candidate_profile_row_next_action(candidate, known_status=known_status)
+        selected_reason = str(candidate.get("selected_reason") or "")
+    return {
+        "scene_source": candidate.get("scene_source", ""),
+        "scene_family": candidate.get("scene_family", ""),
+        "scene_split": candidate.get("scene_split", ""),
+        "scene_index": scene_index,
+        "world_id": candidate.get("world_id", ""),
+        "profile_status": profile_status,
+        "readiness_status": candidate.get("readiness_status", ""),
+        "next_action": next_action,
+        "metadata_worklist_rank": worklist_rank,
+        "known_room_count": int(candidate.get("room_count") or 0),
+        "known_waypoint_count": int(candidate.get("waypoint_count") or 0),
+        "known_failure_class": candidate.get("failure_class", ""),
+        "known_blocked_reason": blocked_reason,
+        "candidate_file_status": (candidate.get("candidate_file") or {}).get("status", ""),
+        "candidate_file_exists": bool((candidate.get("candidate_file") or {}).get("exists")),
+        "candidate_file": candidate.get("candidate_file") or {},
+        "selected_reason": selected_reason,
+        "download_policy": "manual_operator_only",
+        "admission_effect": "none_profile_only",
+    }
+
+
+def _source_availability_for_candidates(
+    *,
+    source_availability: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not candidates:
+        return {
+            **source_availability,
+            "candidate_files": [],
+        }
+    candidate_indices = {
+        int(candidate["scene_index"])
+        for candidate in candidates
+        if candidate.get("scene_index") is not None
+    }
+    candidate_files = [
+        item
+        for item in source_availability.get("candidate_files") or []
+        if isinstance(item, dict) and item.get("scene_index") in candidate_indices
+    ]
+    seen_indices = {
+        int(item["scene_index"]) for item in candidate_files if item.get("scene_index") is not None
+    }
+    for candidate in candidates:
+        scene_index = candidate.get("scene_index")
+        if scene_index is None or int(scene_index) in seen_indices:
+            continue
+        candidate_file = candidate.get("candidate_file")
+        if not isinstance(candidate_file, dict):
+            continue
+        candidate_files.append(candidate_file)
+        seen_indices.add(int(scene_index))
+    return {
+        **source_availability,
+        "candidate_files": candidate_files,
+    }
+
+
+def _scanner_execution_candidate_indices(
+    *,
+    candidate_indices: tuple[int, ...],
+    source_prep: dict[str, Any],
+) -> tuple[int, ...]:
+    indices = {int(index) for index in candidate_indices}
+    for source in source_prep.get("sources", {}).values():
+        if not isinstance(source, dict):
+            continue
+        for candidate in source.get("install_candidates") or []:
+            if not isinstance(candidate, dict) or candidate.get("scene_index") is None:
+                continue
+            indices.add(int(candidate["scene_index"]))
+    return tuple(sorted(indices))
+
+
+def _scanner_candidate_profile_worklist_candidates(
+    source_candidate_profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for row in source_candidate_profile.get("metadata_worklist_candidates") or []:
+        if not isinstance(row, dict):
+            continue
+        candidate_file = row.get("candidate_file")
+        if not isinstance(candidate_file, dict):
+            candidate_file = {}
+        has_concrete_scene_ref = bool(
+            candidate_file.get("path")
+            or candidate_file.get("paths")
+            or candidate_file.get("missing_paths")
+        )
+        if not has_concrete_scene_ref:
+            continue
+        candidates.append(
+            {
+                "scene_source": row.get("scene_source", ""),
+                "scene_index": row.get("scene_index"),
+                "world_id": row.get("world_id", ""),
+                "readiness_status": READINESS_BLOCKED,
+                "failure_class": row.get("known_failure_class", "") or "environment_blocked",
+                "blocked_reason": row.get("known_blocked_reason", ""),
+                "source_availability_status": "",
+                "candidate_file": candidate_file,
+            }
+        )
+    return candidates
+
+
+def _candidate_known_profile_status(candidate: dict[str, Any]) -> str:
+    readiness_status = str(candidate.get("readiness_status") or "")
+    if readiness_status == READINESS_READY:
+        return "known_ready"
+    if readiness_status == READINESS_REJECTED:
+        return "known_rejected"
+    if int(candidate.get("room_count") or 0) > 0 or int(candidate.get("waypoint_count") or 0) > 0:
+        return "known_blocked"
+    return "unprofiled"
+
+
+def _candidate_profile_row_next_action(
+    candidate: dict[str, Any],
+    *,
+    known_status: str,
+) -> str:
+    if known_status == "known_ready":
+        return "none"
+    if known_status == "known_rejected":
+        return "do_not_scan_without_gate_change_or_new_curation"
+    candidate_file = candidate.get("candidate_file")
+    if (
+        isinstance(candidate_file, dict)
+        and candidate_file.get("status") == "missing_from_index_map"
+    ):
+        return "choose_valid_source_specific_candidate_index"
+    if not isinstance(candidate_file, dict) or not candidate_file.get("exists"):
+        return "inspect_source_index_before_download"
+    return "render_preview_then_map_build_product_smoke"
+
+
+def _candidate_profile_status(
+    *,
+    selection_source: dict[str, Any],
+    worklist_rows: list[dict[str, Any]],
+) -> str:
+    if selection_source.get("selection_capacity_status") == "complete":
+        return "complete"
+    if worklist_rows:
+        return "metadata_worklist_ready"
+    if selection_source.get("selection_capacity_status") == "rejected_exhausted":
+        return "known_rejected_exhausted"
+    return "needs_candidate_range"
+
+
+def _candidate_profile_next_action(
+    *,
+    selection_source: dict[str, Any],
+    worklist_rows: list[dict[str, Any]],
+) -> str:
+    if selection_source.get("selection_capacity_status") == "complete":
+        return "none"
+    if worklist_rows:
+        return "metadata_first_human_curation"
+    if selection_source.get("selection_capacity_status") == "rejected_exhausted":
+        return "choose_new_candidate_indices_or_gate_change"
+    return "expand_candidate_range"
+
+
+def _candidate_profile_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    worklist = [
+        _candidate_profile_worklist_item(source)
+        for source in sources.values()
+        if source.get("next_action") != "none"
+    ]
+    return {
+        "source_count": len(sources),
+        "complete_source_count": sum(
+            1 for source in sources.values() if source.get("profile_status") == "complete"
+        ),
+        "metadata_worklist_source_count": sum(
+            1
+            for source in sources.values()
+            if source.get("profile_status") == "metadata_worklist_ready"
+        ),
+        "metadata_worklist_candidate_count": sum(
+            int(source.get("metadata_worklist_candidate_count") or 0) for source in sources.values()
+        ),
+        "known_ready_candidate_count": sum(
+            len(source.get("known_ready_indices") or []) for source in sources.values()
+        ),
+        "known_rejected_candidate_count": sum(
+            len(source.get("known_rejected_indices") or []) for source in sources.values()
+        ),
+        "next_actions": _selection_action_counts(worklist),
+        "worklist": worklist,
+    }
+
+
+def _candidate_profile_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_source": source.get("scene_source", ""),
+        "profile_status": source.get("profile_status", ""),
+        "next_action": source.get("next_action", ""),
+        "selection_capacity_status": source.get("selection_capacity_status", ""),
+        "ui_needed_count": int(source.get("ui_needed_count") or 0),
+        "eval_needed_count": int(source.get("eval_needed_count") or 0),
+        "metadata_worklist_candidate_count": int(
+            source.get("metadata_worklist_candidate_count") or 0
+        ),
+        "metadata_worklist_world_ids": source.get("metadata_worklist_world_ids") or [],
+    }
+
+
 def _assign_dynamic_candidate_lanes(
     *,
     source: str,
     candidates: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    if source == "procthor-10k-val":
-        return candidates
+    static_ui_ids = set(source_ui_indices(source))
+    static_eval_ids = set(source_eval_indices(source))
+    if static_ui_ids or static_eval_ids:
+        return _assign_candidate_lanes(
+            candidates=candidates,
+            ui_ids=static_ui_ids,
+            eval_ids=static_eval_ids,
+        )
     eligible = [
         candidate
         for candidate in candidates
@@ -1542,16 +2038,37 @@ def _assign_dynamic_candidate_lanes(
         and candidate.get("eval_ready")
         and candidate.get("scene_index") is not None
     ]
-    eligible.sort(key=lambda item: int(item.get("scene_index") or 0))
+    eligible = _rank_selection_candidates(
+        source=source,
+        lane=EVAL_STRESS_LANE,
+        candidates=eligible,
+    )
     ui_ids = {
         int(candidate.get("scene_index") or 0)
-        for candidate in eligible[:UI_TARGET_PER_SCENE_SOURCE]
+        for candidate in _rank_selection_candidates(
+            source=source,
+            lane=UI_LANE,
+            candidates=eligible,
+        )[:UI_TARGET_PER_SCENE_SOURCE]
         if len(eligible) >= UI_TARGET_PER_SCENE_SOURCE
     }
     eval_ids = {
         int(candidate.get("scene_index") or 0)
         for candidate in eligible[:EVAL_TARGET_PER_SCENE_SOURCE]
     }
+    return _assign_candidate_lanes(
+        candidates=candidates,
+        ui_ids=ui_ids,
+        eval_ids=eval_ids,
+    )
+
+
+def _assign_candidate_lanes(
+    *,
+    candidates: list[dict[str, Any]],
+    ui_ids: set[int],
+    eval_ids: set[int],
+) -> list[dict[str, Any]]:
     updated: list[dict[str, Any]] = []
     for candidate in candidates:
         scene_index = candidate.get("scene_index")

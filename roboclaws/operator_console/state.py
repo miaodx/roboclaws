@@ -97,6 +97,7 @@ def derive_operator_state(
     latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
     latest_agent_message = _latest_agent_message(display_run_dir)
+    prompt_preview = _prompt_preview(status, live_status, run_result, display_run_dir)
     run_id = str(status.get("run_id") or run_dir.name)
     from roboclaws.operator_console.interactions import operator_message_state
 
@@ -136,6 +137,9 @@ def derive_operator_state(
         "checker_status": checker,
         "terminal_reason": terminal_reason,
         "public_run_result": public_result,
+        "prompt_preview": prompt_preview,
+        "operator_prompt": prompt_preview.get("operator_prompt") or "",
+        "agent_kickoff_prompt": prompt_preview.get("agent_kickoff_prompt") or "",
         "operator_session_id": status.get("operator_session_id") or "",
         "operator_messages": interaction_state,
         "controls": {
@@ -241,6 +245,60 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _prompt_preview(
+    status: dict[str, Any],
+    live_status: dict[str, Any],
+    run_result: dict[str, Any],
+    display_run_dir: Path,
+) -> dict[str, Any]:
+    for payload in (status, live_status, run_result):
+        value = payload.get("prompt_preview")
+        if isinstance(value, dict):
+            return value
+    kickoff_path = display_run_dir / "agent_kickoff_prompt.txt"
+    if kickoff_path.exists():
+        try:
+            kickoff = kickoff_path.read_text(encoding="utf-8", errors="replace").strip()
+        except OSError:
+            kickoff = ""
+        if kickoff:
+            return {
+                "operator_prompt": str(
+                    run_result.get("task_prompt") or run_result.get("task") or ""
+                ),
+                "agent_kickoff_prompt": kickoff,
+                "prompt": kickoff,
+                "source": "artifact",
+                "summary": "kickoff prompt artifact",
+                "wrapper_notes": [],
+            }
+    prompt = str(
+        status.get("agent_kickoff_prompt")
+        or live_status.get("agent_kickoff_prompt")
+        or run_result.get("agent_kickoff_prompt")
+        or ""
+    )
+    operator_prompt = str(
+        status.get("operator_prompt")
+        or live_status.get("operator_prompt")
+        or run_result.get("task_prompt")
+        or run_result.get("task")
+        or ""
+    )
+    if not prompt and operator_prompt:
+        prompt = operator_prompt
+    if not prompt:
+        return {}
+    return {
+        "operator_prompt": operator_prompt,
+        "agent_kickoff_prompt": prompt,
+        "prompt": prompt,
+        "source": "status",
+        "summary": "launch prompt from status",
+        "wrapper_notes": [],
+    }
 
 
 def _last_jsonl(path: Path) -> dict[str, Any]:

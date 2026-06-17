@@ -178,7 +178,11 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert command in html
+    assert "just run::surface \\\n" in html
+    assert "surface=household-world" in html
+    assert "agent_engine=codex-cli" in html
+    assert "provider_profile=codex-env" in html
+    assert f"runtime_map_prior={prior}" in html
     assert run_result["rerun_command"] == command
     assert "household-cleanup direct world-oracle-labels" not in html
 

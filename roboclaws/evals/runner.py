@@ -325,7 +325,7 @@ def _grade_trial(
         "outcome": _outcome_grader(sample=sample, run_dir=run_dir, run_result=run_result),
         "sampler_admission": _sampler_admission_grader(sample=sample),
         "open_ended": _open_ended_grader(sample=sample, run_dir=run_dir, run_result=run_result),
-        "efficiency": _efficiency_grader(run_result),
+        "efficiency": _efficiency_grader(run_dir=run_dir, run_result=run_result),
     }
 
 
@@ -382,8 +382,15 @@ def _trajectory_grader(
         for event in trace_events
         if event.get("event") == "response" and event.get("tool")
     }
-    required_tools = {"metric_map", "done"}
-    missing_tools = sorted(required_tools - response_tools)
+    required_groups = (
+        {"done"},
+        {"metric_map", "resolve_target_query"} if sample.intent == "open-ended" else {"metric_map"},
+    )
+    missing_tools = sorted(
+        ",".join(sorted(group))
+        for group in required_groups
+        if not response_tools.intersection(group)
+    )
     fixture_hints_count = sum(1 for event in trace_events if event.get("tool") == "fixture_hints")
     violations = list(missing_tools)
     failed_or_noop_count = _int_value(
@@ -451,10 +458,13 @@ def _outcome_grader(
     if sample.intent == "open-ended":
         open_ended = _open_ended_grader(sample=sample, run_dir=run_dir, run_result=run_result)
         return {
-            "status": "passed",
+            "status": open_ended["status"],
             "completion_claim_present": open_ended["completion_claim_present"],
             "artifact_readiness": open_ended["artifact_readiness"],
             "semantic_satisfaction_status": open_ended["semantic_satisfaction_status"],
+            "open_ended_category": open_ended["open_ended_category"],
+            "expected_goal_outcome": open_ended["expected_goal_outcome"],
+            "success_predicate": open_ended["success_predicate"],
         }
     score = run_result.get("score") if isinstance(run_result.get("score"), dict) else {}
     completion_status = str(
@@ -511,16 +521,46 @@ def _sampler_admission_grader(*, sample: EvalSample) -> dict[str, Any]:
     }
 
 
-def _efficiency_grader(run_result: dict[str, Any]) -> dict[str, Any]:
+def _efficiency_grader(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str, Any]:
     tool_counts = (
         run_result.get("tool_event_counts")
         if isinstance(run_result.get("tool_event_counts"), dict)
         else {}
     )
+    live_status = _merged_live_status(run_dir=run_dir, run_result=run_result)
+    live_timing = _load_json(run_dir / "live_timing.json")
+    timing_payload = dict(run_result)
+    if live_timing:
+        timing_payload["live_timing"] = live_timing
+        timing_payload["runner_wall_time_s"] = _live_wall_time_s(live_timing)
+    model_attempt_summary = _model_attempt_summary(timing_payload)
     return {
         "status": "passed",
         "tool_event_count": sum(_int_value(value) for value in tool_counts.values()),
+        "tool_call_count": sum(
+            _int_value(value)
+            for key, value in tool_counts.items()
+            if str(key).endswith(":request")
+        ),
         "tool_event_counts": dict(tool_counts),
+        "wall_time_s": _first_available_number(
+            timing_payload,
+            (
+                "wall_time_s",
+                "elapsed_s",
+                "duration_s",
+                "runner_wall_time_s",
+                "total_elapsed_s",
+            ),
+        ),
+        "live_status": {
+            "phase": str(live_status.get("phase") or MISSING_UNAVAILABLE),
+            "exit_status": live_status.get("exit_status", MISSING_UNAVAILABLE),
+            "reason": str(live_status.get("reason") or MISSING_UNAVAILABLE),
+            "provider_reason": str(live_status.get("provider_reason") or MISSING_UNAVAILABLE),
+            "retryable": live_status.get("retryable", MISSING_UNAVAILABLE),
+        },
+        "model_attempt_summary": model_attempt_summary,
     }
 
 
@@ -549,14 +589,417 @@ def _open_ended_grader(
     )
     advisory_available = bool(advisory)
     semantic_status = "advisory_available" if advisory_available else "advisory_unavailable"
+    config = sample.grader_config or {}
+    predicate_config = config.get("success_predicate")
+    predicate = _open_ended_success_predicate(
+        predicate_config if isinstance(predicate_config, dict) else {},
+        run_dir=run_dir,
+    )
+    hard_passed = claim_present and artifact_ready
+    if predicate["authoritative"]:
+        hard_passed = hard_passed and predicate["passed"]
     return {
-        "status": "passed" if claim_present and artifact_ready else "failed",
+        "status": "passed" if hard_passed else "failed",
+        "failure_class": (
+            MISSING_NOT_APPLICABLE
+            if hard_passed
+            else (
+                "private_goal_not_satisfied"
+                if claim_present and artifact_ready and predicate["authoritative"]
+                else "agent_no_completion_claim"
+            )
+        ),
+        "open_ended_category": str(config.get("open_ended_category") or MISSING_UNAVAILABLE),
+        "expected_goal_outcome": str(config.get("expected_goal_outcome") or MISSING_UNAVAILABLE),
         "completion_claim_present": claim_present,
         "artifact_readiness": "ready" if artifact_ready else "missing",
         "missing_artifacts": missing,
         "semantic_satisfaction_status": semantic_status,
-        "semantic_satisfaction_authoritative": False,
+        "semantic_satisfaction_authoritative": bool(
+            config.get("semantic_satisfaction_authoritative") is True
+        ),
+        "success_predicate": predicate,
     }
+
+
+def _open_ended_success_predicate(
+    config: dict[str, Any],
+    *,
+    run_dir: Path,
+) -> dict[str, Any]:
+    predicate_id = str(config.get("predicate_id") or "completion_claim")
+    authoritative = bool(config.get("authoritative") is True)
+    runtime_map = _load_json(run_dir / "runtime_metric_map.json")
+    trace_events = _read_trace_events(run_dir / "trace.jsonl")
+    if predicate_id == "completion_claim":
+        return {
+            "predicate_id": predicate_id,
+            "authoritative": authoritative,
+            "passed": True,
+            "evidence": {},
+        }
+    if predicate_id == "public_anchor_observed":
+        return _public_anchor_observed_predicate(
+            config,
+            runtime_map=runtime_map,
+            trace_events=trace_events,
+            authoritative=authoritative,
+        )
+    if predicate_id == "waypoint_or_area_visited":
+        return _waypoint_or_area_visited_predicate(
+            config,
+            runtime_map=runtime_map,
+            trace_events=trace_events,
+            authoritative=authoritative,
+        )
+    if predicate_id == "observed_category_present":
+        return _observed_category_present_predicate(
+            config,
+            runtime_map=runtime_map,
+            authoritative=authoritative,
+        )
+    return {
+        "predicate_id": predicate_id,
+        "authoritative": authoritative,
+        "passed": False,
+        "failure": "unknown_open_ended_success_predicate",
+        "evidence": {},
+    }
+
+
+def _public_anchor_observed_predicate(
+    config: dict[str, Any],
+    *,
+    runtime_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    authoritative: bool,
+) -> dict[str, Any]:
+    anchor_id = str(config.get("anchor_id") or "")
+    room_id = str(config.get("room_id") or "")
+    anchors = [
+        anchor
+        for anchor in _list_of_mappings(runtime_map.get("public_semantic_anchors"))
+        if (not anchor_id or str(anchor.get("anchor_id") or "") == anchor_id)
+        and (not room_id or str(anchor.get("room_id") or "") == room_id)
+    ]
+    observed_rooms = _observed_room_ids(runtime_map=runtime_map, trace_events=trace_events)
+    passed = bool(anchors) and (not room_id or room_id in observed_rooms)
+    return {
+        "predicate_id": "public_anchor_observed",
+        "authoritative": authoritative,
+        "passed": passed,
+        "failure": "" if passed else "required_public_anchor_not_observed",
+        "evidence": {
+            "anchor_id": anchor_id,
+            "room_id": room_id,
+            "matching_anchor_count": len(anchors),
+            "observed_room_ids": sorted(observed_rooms),
+        },
+    }
+
+
+def _waypoint_or_area_visited_predicate(
+    config: dict[str, Any],
+    *,
+    runtime_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    authoritative: bool,
+) -> dict[str, Any]:
+    waypoint_id = str(config.get("waypoint_id") or "")
+    room_id = str(config.get("room_id") or "")
+    anchor_id = str(config.get("anchor_id") or "")
+    visited_waypoints = _visited_waypoint_ids(runtime_map=runtime_map, trace_events=trace_events)
+    observed_rooms = _observed_room_ids(runtime_map=runtime_map, trace_events=trace_events)
+    anchors = _list_of_mappings(runtime_map.get("public_semantic_anchors"))
+    anchor_present = any(
+        (not anchor_id or str(anchor.get("anchor_id") or "") == anchor_id)
+        and (not waypoint_id or str(anchor.get("waypoint_id") or "") == waypoint_id)
+        and (not room_id or str(anchor.get("room_id") or "") == room_id)
+        for anchor in anchors
+    )
+    waypoint_visited = not waypoint_id or waypoint_id in visited_waypoints
+    passed = waypoint_visited and (not room_id or room_id in observed_rooms) and (
+        not anchor_id or anchor_present or waypoint_visited
+    )
+    return {
+        "predicate_id": "waypoint_or_area_visited",
+        "authoritative": authoritative,
+        "passed": passed,
+        "failure": "" if passed else "required_waypoint_or_area_not_visited",
+        "evidence": {
+            "anchor_id": anchor_id,
+            "waypoint_id": waypoint_id,
+            "room_id": room_id,
+            "anchor_present": anchor_present,
+            "visited_waypoint_ids": sorted(visited_waypoints),
+            "observed_room_ids": sorted(observed_rooms),
+        },
+    }
+
+
+def _observed_category_present_predicate(
+    config: dict[str, Any],
+    *,
+    runtime_map: dict[str, Any],
+    authoritative: bool,
+) -> dict[str, Any]:
+    category = str(config.get("category") or "").lower()
+    observed = _list_of_mappings(runtime_map.get("observed_objects"))
+    matching = [
+        item
+        for item in observed
+        if not category
+        or category
+        in {
+            str(item.get("category") or "").lower(),
+            str(item.get("label") or "").lower(),
+            str(item.get("query") or "").lower(),
+        }
+    ]
+    passed = bool(matching)
+    return {
+        "predicate_id": "observed_category_present",
+        "authoritative": authoritative,
+        "passed": passed,
+        "failure": "" if passed else "required_observed_category_missing",
+        "evidence": {
+            "category": category,
+            "matching_observed_count": len(matching),
+        },
+    }
+
+
+def _visited_waypoint_ids(
+    *,
+    runtime_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+) -> set[str]:
+    visited: set[str] = set()
+    summary = runtime_map.get("target_search_summary")
+    if isinstance(summary, dict):
+        viewpoint_budget = summary.get("viewpoint_budget")
+        if isinstance(viewpoint_budget, dict):
+            visited.update(
+                str(item) for item in viewpoint_budget.get("observed_waypoint_ids") or []
+            )
+        for observation in _list_of_mappings(summary.get("inspection_observations")):
+            waypoint_id = str(observation.get("waypoint_id") or "")
+            if waypoint_id:
+                visited.add(waypoint_id)
+    for candidate in _list_of_mappings(runtime_map.get("generated_exploration_candidates")):
+        if candidate.get("visited") is True and candidate.get("waypoint_id"):
+            visited.add(str(candidate["waypoint_id"]))
+    for event in trace_events:
+        if event.get("tool") == "navigate_to_waypoint" and event.get("event") == "request":
+            request = event.get("request") if isinstance(event.get("request"), dict) else {}
+            waypoint_id = str(request.get("waypoint_id") or "")
+            if waypoint_id:
+                visited.add(waypoint_id)
+    return visited
+
+
+def _observed_room_ids(
+    *,
+    runtime_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+) -> set[str]:
+    rooms: set[str] = set()
+    summary = runtime_map.get("target_search_summary")
+    if isinstance(summary, dict):
+        for observation in _list_of_mappings(summary.get("inspection_observations")):
+            room_id = str(observation.get("room_id") or "")
+            if room_id:
+                rooms.add(room_id)
+    waypoint_rooms = {
+        str(candidate.get("waypoint_id") or ""): str(candidate.get("room_id") or "")
+        for candidate in _list_of_mappings(runtime_map.get("generated_exploration_candidates"))
+    }
+    for waypoint_id in _visited_waypoint_ids(runtime_map=runtime_map, trace_events=trace_events):
+        room_id = waypoint_rooms.get(waypoint_id, "")
+        if room_id:
+            rooms.add(room_id)
+    return rooms
+
+
+def _list_of_mappings(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _model_attempt_summary(run_result: dict[str, Any]) -> dict[str, Any]:
+    for key in ("model_attempt_summary", "model_service_summary", "live_timing"):
+        value = run_result.get(key)
+        if isinstance(value, dict):
+            return _compact_model_attempt_summary(value)
+    return {
+        "attempt_count": MISSING_UNAVAILABLE,
+        "success_count": MISSING_UNAVAILABLE,
+        "failure_count": MISSING_UNAVAILABLE,
+        "provider_reasons": {},
+    }
+
+
+def _compact_model_attempt_summary(value: dict[str, Any]) -> dict[str, Any]:
+    live_summary = _model_attempt_summary_from_live_timing(value)
+    if live_summary:
+        return live_summary
+    attempts = _int_or_missing(
+        value.get("attempt_count")
+        or value.get("model_service_attempt_count")
+        or value.get("total_attempts")
+    )
+    successes = _int_or_missing(
+        value.get("success_count")
+        or value.get("model_service_success_count")
+        or value.get("successful_attempts")
+    )
+    failures = _int_or_missing(
+        value.get("failure_count")
+        or value.get("model_service_failure_count")
+        or value.get("failed_attempts")
+    )
+    provider_reasons = value.get("provider_reasons")
+    if not isinstance(provider_reasons, dict):
+        provider_reasons = {}
+    return {
+        "attempt_count": attempts,
+        "success_count": successes,
+        "failure_count": failures,
+        "provider_reasons": dict(provider_reasons),
+    }
+
+
+def _model_attempt_summary_from_live_timing(value: dict[str, Any]) -> dict[str, Any]:
+    fallback = _nested_mapping(
+        value,
+        "timeline",
+        "latency_attribution",
+        "model_service_fallback_metrics",
+    )
+    attempts_list = value.get("openai_agents_attempts")
+    if not isinstance(attempts_list, list):
+        attempts_list = []
+    if fallback:
+        attempt_count = _int_or_missing(
+            fallback.get("attempt_event_count")
+            or fallback.get("attempt_count")
+            or len(attempts_list)
+        )
+        success_count = _int_or_missing(
+            fallback.get("success_event_count")
+            or fallback.get("success_count")
+            or _live_attempt_status_count(attempts_list, "finished")
+        )
+        failure_count = _int_or_missing(
+            fallback.get("failure_event_count")
+            or fallback.get("failure_count")
+            or _live_attempt_failure_count(attempts_list)
+        )
+        provider_reasons = fallback.get("provider_reasons")
+        if not isinstance(provider_reasons, dict):
+            provider_reasons = {}
+        return {
+            "attempt_count": attempt_count,
+            "success_count": success_count,
+            "failure_count": failure_count,
+            "provider_reasons": dict(provider_reasons),
+        }
+    if attempts_list:
+        return {
+            "attempt_count": len(attempts_list),
+            "success_count": _live_attempt_status_count(attempts_list, "finished"),
+            "failure_count": _live_attempt_failure_count(attempts_list),
+            "provider_reasons": _live_provider_reasons(attempts_list),
+        }
+    return {}
+
+
+def _merged_live_status(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str, Any]:
+    live_status = (
+        run_result.get("live_status") if isinstance(run_result.get("live_status"), dict) else {}
+    )
+    sidecar = _load_json(run_dir / "live_status.json")
+    return {**sidecar, **live_status}
+
+
+def _live_wall_time_s(live_timing: dict[str, Any]) -> Any:
+    runner_timing = _nested_mapping(live_timing, "runner_timing")
+    for payload in (
+        runner_timing,
+        _nested_mapping(live_timing, "timeline"),
+        live_timing,
+    ):
+        value = _first_available_number(
+            payload,
+            ("total_elapsed_s", "accounted_elapsed_s", "runner_wall_time_s"),
+        )
+        if value != MISSING_UNAVAILABLE:
+            return value
+    return MISSING_UNAVAILABLE
+
+
+def _nested_mapping(payload: dict[str, Any], *keys: str) -> dict[str, Any]:
+    current: Any = payload
+    for key in keys:
+        if not isinstance(current, dict):
+            return {}
+        current = current.get(key)
+    return current if isinstance(current, dict) else {}
+
+
+def _live_attempt_status_count(attempts: list[Any], phase: str) -> int:
+    return sum(
+        1
+        for attempt in attempts
+        if isinstance(attempt, dict)
+        and (
+            str(attempt.get("phase") or "") == phase
+            or (phase == "finished" and attempt.get("exit_status") == 0)
+        )
+    )
+
+
+def _live_attempt_failure_count(attempts: list[Any]) -> int:
+    return sum(
+        1
+        for attempt in attempts
+        if isinstance(attempt, dict)
+        and (
+            attempt.get("exit_status") not in {None, 0}
+            or str(attempt.get("phase") or "") == "failed"
+        )
+    )
+
+
+def _live_provider_reasons(attempts: list[Any]) -> dict[str, int]:
+    reasons: dict[str, int] = {}
+    for attempt in attempts:
+        if not isinstance(attempt, dict):
+            continue
+        reason = str(attempt.get("provider_reason") or attempt.get("reason") or "").strip()
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+    return reasons
+
+
+def _first_available_number(payload: dict[str, Any], keys: tuple[str, ...]) -> float | str:
+    for key in keys:
+        value = payload.get(key)
+        try:
+            return round(float(value), 3)
+        except (TypeError, ValueError):
+            continue
+    return MISSING_UNAVAILABLE
+
+
+def _int_or_missing(value: Any) -> int | str:
+    if value is None:
+        return MISSING_UNAVAILABLE
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return MISSING_UNAVAILABLE
 
 
 def _status_from_graders(grader_outputs: dict[str, Any]) -> tuple[str, str]:
@@ -592,6 +1035,13 @@ def _metrics_from_graders(
             MISSING_NOT_APPLICABLE,
         ),
         "tool_event_count": grader_outputs["efficiency"]["tool_event_count"],
+        "tool_call_count": grader_outputs["efficiency"].get("tool_call_count", 0),
+        "tool_event_counts": grader_outputs["efficiency"].get("tool_event_counts", {}),
+        "wall_time_s": grader_outputs["efficiency"].get("wall_time_s", MISSING_UNAVAILABLE),
+        "model_attempt_summary": grader_outputs["efficiency"].get(
+            "model_attempt_summary",
+            {},
+        ),
     }
 
 
@@ -620,6 +1070,8 @@ def _failure_class_from_exception(exc: Exception) -> str:
         return "environment_blocked"
     message = str(exc).lower()
     environment_tokens = ("no module named", "not installed", "unavailable", "timed out")
+    if "another interactive codex molmo cleanup session appears to be active" in message:
+        return "environment_blocked"
     if any(token in message for token in environment_tokens):
         return "environment_blocked"
     provider_tokens = (
