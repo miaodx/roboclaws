@@ -61,6 +61,14 @@ Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
 - Follow-up implementation refresh on 2026-06-18 closed an OpenAI Agents SDK
+  direct `max_turns` metadata false-green. Invalid or non-positive direct
+  `max_turns` metadata now fails as a normalized `provider_config_failure`
+  live-status packet instead of silently reusing the default SDK turn budget or
+  clamping to one. Behavior-change class: fail-aloud SDK runtime
+  configuration; omitted metadata, validated `LiveAgentRequest.max_turns`, and
+  positive profile-owned `max_turns` values are unchanged. The ratchet remains
+  0 complexity rows and 79 oversized modules.
+- Follow-up implementation refresh on 2026-06-18 closed an OpenAI Agents SDK
   MCP client-session timeout config false-green. Invalid
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S` values and negative
   direct `mcp_client_session_timeout_s` metadata now fail as normalized
@@ -212,7 +220,7 @@ again.
 - `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is down to 1981
   lines and is no longer a hard-ceiling P1. Keep it below 2000; reopen it only
   if runner-side profile/default/config ownership grows again.
-- `roboclaws/agents/drivers/openai_agents_live.py` is 1873 lines and is
+- `roboclaws/agents/drivers/openai_agents_live.py` is 1883 lines and is
   no longer a hard-ceiling P1. Keep it below 2000; reopen it only if SDK driver
   request/session/provider orchestration grows again or rebuilds model-input or
   span compaction inline.

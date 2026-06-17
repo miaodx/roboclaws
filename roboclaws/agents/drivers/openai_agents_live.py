@@ -558,11 +558,21 @@ def _max_turns(request: LiveAgentRequest) -> int:
     if request.max_turns is not None:
         return request.max_turns
     configured = request.metadata.get("max_turns") if isinstance(request.metadata, dict) else None
-    try:
-        value = int(configured) if configured is not None else DEFAULT_OPENAI_AGENTS_MAX_TURNS
-    except (TypeError, ValueError):
+    if configured is None:
         return DEFAULT_OPENAI_AGENTS_MAX_TURNS
-    return max(1, value)
+    try:
+        value = int(configured)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "OpenAI Agents SDK setting max_turns (max_turns) must be a positive integer, "
+            f"got {configured!r}"
+        ) from exc
+    if value < 1:
+        raise ValueError(
+            "OpenAI Agents SDK setting max_turns (max_turns) must be a positive integer, "
+            f"got {configured!r}"
+        )
+    return value
 
 
 def _cache_tools_list(request: LiveAgentRequest) -> bool:

@@ -34,6 +34,17 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK direct `max_turns` metadata now fails aloud for
+  malformed runtime settings. Invalid or non-positive direct `max_turns`
+  metadata produces normalized `provider_config_failure` live-status packets
+  instead of silently reusing the default SDK turn budget or clamping to one.
+  Behavior-change class: fail-aloud SDK runtime configuration; omitted
+  metadata, validated `LiveAgentRequest.max_turns`, and positive profile-owned
+  `max_turns` values are unchanged. Metric: ratchet remains at 0 complexity
+  rows and 79 oversized modules. Proof: focused OpenAI Agents live runtime
+  tests, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK MCP client-session timeout config now fails
   aloud for malformed runtime settings. Invalid
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S` values and negative
