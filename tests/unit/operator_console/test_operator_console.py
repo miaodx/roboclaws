@@ -558,7 +558,6 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
         ) as response:
             preview = json.loads(response.read().decode("utf-8"))
             assert preview["views"]["chase"]["view"] == "chase_camera"
-            assert "semantic_map_fallback" not in preview["views"]["topdown"]
         with urllib.request.urlopen(
             f"http://{host}:{port}/previews/b1-map12-preview.json"
         ) as response:

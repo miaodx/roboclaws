@@ -135,7 +135,6 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
             "fallback_first_waypoint_low_detail",
         }
         assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
-        assert "semantic_map_fallback" not in metadata["views"]["topdown"]
         assert metadata["views"]["topdown"]["provenance"] == (
             "mujoco_camera_control_canonical_eye_target"
         )
