@@ -75,6 +75,18 @@ logs before choosing the next slice.
   tests, touched-file ruff and format check, py_compile, `git diff --check`,
   and ratchet.
 
+- 2026-06-18: External visual-grounding timeout configuration now fails aloud.
+  `visual_grounding_client_from_env()` rejects malformed, non-finite, or
+  non-positive `VISUAL_GROUNDING_TIMEOUT_S` / direct
+  `visual_grounding_timeout_s` values instead of silently reusing the 20s
+  default for non-sim sidecar routes. Behavior-change class: fail-aloud
+  external sidecar configuration; the `sim` no-client path, omitted timeout
+  default, valid positive timeout values, visual-grounding request/response
+  schemas, and public launch axes are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules; `visual_grounding.py` is 414 lines.
+  Proof: focused visual-grounding client tests, touched-file ruff and format
+  check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
   default/env validation moved into `openai_agents_perf_profile.py`. Malformed
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct

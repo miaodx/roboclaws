@@ -13,6 +13,7 @@ from roboclaws.household.visual_grounding import (
     VisualGroundingClientConfig,
     VisualGroundingContractError,
     validate_visual_grounding_response,
+    visual_grounding_client_from_env,
     visual_grounding_request,
 )
 
@@ -98,6 +99,34 @@ def test_http_visual_grounding_client_retries_connection_setup_errors() -> None:
     assert response["pipeline"]["stages"][0]["status"] == "connection_error"
 
 
+def test_visual_grounding_client_from_env_preserves_sim_without_timeout_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VISUAL_GROUNDING_TIMEOUT_S", "not-a-number")
+
+    assert visual_grounding_client_from_env("sim") is None
+
+
+def test_visual_grounding_client_from_env_rejects_invalid_timeout_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VISUAL_GROUNDING_TIMEOUT_S", "not-a-number")
+
+    with pytest.raises(
+        ValueError,
+        match="VISUAL_GROUNDING_TIMEOUT_S must be a positive finite number of seconds",
+    ):
+        visual_grounding_client_from_env("grounding-dino")
+
+
+def test_visual_grounding_client_from_env_rejects_non_positive_direct_timeout() -> None:
+    with pytest.raises(
+        ValueError,
+        match="visual_grounding_timeout_s must be a positive finite number of seconds",
+    ):
+        visual_grounding_client_from_env("grounding-dino", timeout_s=0)
+
+
 def test_visual_grounding_response_rejects_unnormalized_bbox() -> None:
     with pytest.raises(VisualGroundingContractError):
         validate_visual_grounding_response(
@@ -150,7 +179,9 @@ def _request() -> dict[str, Any]:
             "artifact_status": "recorded",
         },
         category_hints=["dish"],
-        static_fixture_projection=[{"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}],
+        static_fixture_projection=[
+            {"fixture_id": "sink_01", "room_id": "kitchen", "affordances": []}
+        ],
         pipeline_id="grounding-dino",
         image={
             "mime_type": "image/jpeg",

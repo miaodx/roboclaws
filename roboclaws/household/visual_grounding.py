@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import socket
 import time
@@ -193,10 +194,12 @@ def visual_grounding_client_from_env(
         return None
     configured_timeout = timeout_s
     if configured_timeout is None:
-        configured_timeout = _float_env(
+        configured_timeout = _positive_float_env(
             "VISUAL_GROUNDING_TIMEOUT_S",
             DEFAULT_VISUAL_GROUNDING_TIMEOUT_S,
         )
+    else:
+        configured_timeout = _positive_float(timeout_s, "visual_grounding_timeout_s")
     return HttpVisualGroundingClient(
         VisualGroundingClientConfig(
             pipeline_id=selected,
@@ -390,8 +393,22 @@ def _duplicate_rate(candidates: list[dict[str, Any]]) -> float:
     return round(duplicates / len(candidates), 6)
 
 
-def _float_env(name: str, default: float) -> float:
-    try:
-        return float(os.environ.get(name, default))
-    except (TypeError, ValueError):
+def _positive_float_env(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None:
         return default
+    return _positive_float(value, name)
+
+
+def _positive_float(value: Any, setting_name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
+        )
+    return parsed

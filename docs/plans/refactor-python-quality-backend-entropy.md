@@ -92,6 +92,16 @@ again.
   Runtime Map Prior Snapshot contracts are unchanged. The ratchet remains 0
   complexity rows and 79 oversized modules; `runtime_prior_snapshot.py` is 844
   lines and remains a justified warning-band owner.
+- Follow-up implementation refresh on 2026-06-18 closed one external
+  visual-grounding timeout config false-green.
+  `visual_grounding_client_from_env()` now rejects malformed, non-finite, or
+  non-positive `VISUAL_GROUNDING_TIMEOUT_S` / direct
+  `visual_grounding_timeout_s` values instead of silently reusing the 20s
+  default for non-sim sidecar routes. Behavior-change class: fail-aloud
+  external sidecar configuration; the `sim` no-client path, omitted timeout
+  default, valid positive timeout values, visual-grounding request/response
+  schemas, and public launch axes are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules; `visual_grounding.py` is 414 lines.
 - Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
   runner-side MCP client-session timeout default/env validation into
   `openai_agents_perf_profile.py`. Malformed
