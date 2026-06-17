@@ -1,0 +1,157 @@
+{
+  "backend": "isaaclab",
+  "generated_at": "2026-06-15T11:46:36Z",
+  "map_bundle": "assets/maps/b1-map12-room-semantics",
+  "render_resolution": {
+    "height": 560,
+    "width": 900
+  },
+  "renderer": "static_b1_map12_digital_twin_overview",
+  "scene_source": "b1-gaussian-digital-twin",
+  "scene_usd_path": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/configuration/scene_base.usd",
+  "schema": "operator_console_scene_preview_v1",
+  "views": {
+    "chase": {
+      "camera_semantics": "overview_slot_not_live_robot_camera",
+      "correspondence_count": 6,
+      "correspondence_schema": "scene_map_correspondence_v1",
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 255.0,
+        "max_stddev": 37.294,
+        "mean_rgb": [
+          208.876,
+          210.539,
+          212.463
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "path": "b1-map12-chase.png",
+      "provenance": "b1_map12_scene_map_correspondence_static_overview",
+      "semantic_map_fallback": false,
+      "view": "digital_twin_scene_evidence_overview"
+    },
+    "fpv": {
+      "camera_semantics": "overview_slot_not_live_robot_camera",
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 255.0,
+        "max_stddev": 35.544,
+        "mean_rgb": [
+          216.078,
+          219.119,
+          221.777
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "path": "b1-map12-fpv.png",
+      "provenance": "b1_map12_room_semantic_overlay_static_overview",
+      "semantic_map_fallback": false,
+      "view": "digital_twin_room_overview"
+    },
+    "map": {
+      "alignment_status": "candidate",
+      "display_frame": null,
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 255.0,
+        "max_stddev": 25.491,
+        "mean_rgb": [
+          213.142,
+          214.331,
+          215.867
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "path": "b1-map12-map.png",
+      "provenance": "b1_map12_room_semantics_preview_png",
+      "semantic_map_fallback": false,
+      "view": "source_map_preview"
+    },
+    "topdown": {
+      "alignment_status": "candidate",
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 255.0,
+        "max_stddev": 27.789,
+        "mean_rgb": [
+          218.582,
+          219.185,
+          219.449
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "inspection_waypoint_count": 5,
+      "path": "b1-map12-topdown.png",
+      "provenance": "b1_map12_room_semantic_topdown_png",
+      "room_count": 6,
+      "semantic_map_fallback": false,
+      "view": "semantic_room_topdown"
+    }
+  },
+  "world_id": "b1-map12"
+}

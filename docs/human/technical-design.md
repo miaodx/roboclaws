@@ -60,12 +60,15 @@ without leaking private truth into MCP profile metadata or agent inputs.
 Backends are variants under the same surface/preset contract:
 
 - `mujoco` for standard MolmoSpaces local cleanup.
-- `isaaclab` for GPU/high-fidelity scene and segmentation work.
+- `isaaclab` for the B1 / Map 12 digital-twin route and generic Isaac runtime
+  proof needed by that route.
 - `agibot-gdk` for Agibot SDK map, observation, and navigation boundaries.
 
 Backend-specific implementation details stay below the launch catalog. A new
 backend should preserve public artifact names, profile requirements, and checker
-semantics before claiming parity.
+semantics before claiming parity. MolmoSpaces household scenes use MuJoCo as
+the active backend; MolmoSpaces Isaac support is retired rather than kept as a
+hidden or compatibility route.
 
 ## Agent Strategy
 

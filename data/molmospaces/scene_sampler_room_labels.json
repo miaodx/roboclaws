@@ -1,0 +1,104 @@
+{
+  "schema": "molmospaces_scene_room_labels_v1",
+  "generator_version": "2026-06-15.manual-preview-labels-v1",
+  "labeler": {
+    "provider_profile": "codex-env",
+    "model_id": "gpt-5.5",
+    "prompt_or_labeler_version": "molmospaces-room-category-prep-v1",
+    "execution_mode": "prepared_manifest",
+    "live_model_called_in_ci": false,
+    "notes": "Prepared selected-sample labels are intentionally small and reviewable. Large raw preview evidence stays under ignored output artifacts."
+  },
+  "labels": [
+    {
+      "scene_source": "procthor-10k-val",
+      "scene_index": 0,
+      "room_id": "room_2",
+      "room_label": "Room 2",
+      "category": "unlabeled",
+      "category_provenance": "prepared_visual_label_manifest",
+      "confidence": 0.0,
+      "uncertainty_notes": "Preview evidence does not make the room category reliable.",
+      "source_images": [
+        {"view": "map", "path": "roboclaws/operator_console/static/previews/molmospaces-val_0-map.png"},
+        {"view": "fpv", "path": "roboclaws/operator_console/static/previews/molmospaces-val_0-fpv.png"},
+        {"view": "chase", "path": "roboclaws/operator_console/static/previews/molmospaces-val_0-chase.png"},
+        {"view": "topdown", "path": "roboclaws/operator_console/static/previews/molmospaces-val_0-topdown.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-10k-val",
+      "scene_index": 2,
+      "room_id": "room_10",
+      "room_label": "Room 10",
+      "category": "unlabeled",
+      "category_provenance": "prepared_visual_label_manifest",
+      "confidence": 0.0,
+      "uncertainty_notes": "Preview evidence does not make the room category reliable.",
+      "source_images": [
+        {"view": "map", "path": "roboclaws/operator_console/static/previews/molmospaces-val_2-map.png"},
+        {"view": "fpv", "path": "roboclaws/operator_console/static/previews/molmospaces-val_2-fpv.png"},
+        {"view": "chase", "path": "roboclaws/operator_console/static/previews/molmospaces-val_2-chase.png"},
+        {"view": "topdown", "path": "roboclaws/operator_console/static/previews/molmospaces-val_2-topdown.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-10k-val",
+      "scene_index": 9,
+      "room_id": "room_10",
+      "room_label": "Room 10",
+      "category": "unlabeled",
+      "category_provenance": "prepared_visual_label_manifest",
+      "confidence": 0.0,
+      "uncertainty_notes": "Preview evidence does not make the room category reliable.",
+      "source_images": [
+        {"view": "map", "path": "roboclaws/operator_console/static/previews/molmospaces-val_9-map.png"},
+        {"view": "fpv", "path": "roboclaws/operator_console/static/previews/molmospaces-val_9-fpv.png"},
+        {"view": "chase", "path": "roboclaws/operator_console/static/previews/molmospaces-val_9-chase.png"},
+        {"view": "topdown", "path": "roboclaws/operator_console/static/previews/molmospaces-val_9-topdown.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-10k-val",
+      "scene_index": 3,
+      "room_id": "room_2",
+      "room_label": "Room 2",
+      "category": "unlabeled",
+      "category_provenance": "prepared_visual_label_manifest",
+      "confidence": 0.0,
+      "uncertainty_notes": "Eval-only candidate label; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "roboclaws/operator_console/static/previews/molmospaces-val_3-map.png"},
+        {"view": "fpv", "path": "roboclaws/operator_console/static/previews/molmospaces-val_3-fpv.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-10k-val",
+      "scene_index": 4,
+      "room_id": "room_4",
+      "room_label": "Room 4",
+      "category": "unlabeled",
+      "category_provenance": "prepared_visual_label_manifest",
+      "confidence": 0.0,
+      "uncertainty_notes": "Eval-only candidate; FPV preview is low detail, so UI lane does not use it.",
+      "source_images": [
+        {"view": "map", "path": "roboclaws/operator_console/static/previews/molmospaces-val_4-map.png"},
+        {"view": "chase", "path": "roboclaws/operator_console/static/previews/molmospaces-val_4-chase.png"}
+      ]
+    },
+    {
+      "scene_source": "procthor-10k-val",
+      "scene_index": 5,
+      "room_id": "room_4",
+      "room_label": "Room 4",
+      "category": "unlabeled",
+      "category_provenance": "prepared_visual_label_manifest",
+      "confidence": 0.0,
+      "uncertainty_notes": "Eval-only candidate label; category intentionally left uncertain.",
+      "source_images": [
+        {"view": "map", "path": "roboclaws/operator_console/static/previews/molmospaces-val_5-map.png"},
+        {"view": "fpv", "path": "roboclaws/operator_console/static/previews/molmospaces-val_5-fpv.png"}
+      ]
+    }
+  ]
+}

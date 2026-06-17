@@ -7,7 +7,6 @@ import pytest
 
 from roboclaws.operator_console.interactions import (
     InteractionError,
-    append_ask_why,
     append_next_goal_request,
     append_steer_message,
     attach_run_to_session,
@@ -65,27 +64,6 @@ def _write_run(
     return run_dir
 
 
-def test_ask_why_uses_public_artifacts_without_private_terms(tmp_path: Path) -> None:
-    _write_run(
-        tmp_path,
-        phase="finished",
-        run_result={
-            "cleanup_success": True,
-            "private_manifest": {"must_not": "leak"},
-            "generated_mess_set": ["cup"],
-        },
-    )
-
-    answer = append_ask_why(tmp_path, "run-a", "Why did it observe first?")
-
-    assert answer["command_type"] == "ask_why"
-    assert answer["status"] == "answered"
-    assert answer["answer"]["robot_mcp_tools_called"] is False
-    assert answer["answer"]["private_evaluation_used"] is False
-    assert "private_manifest" not in json.dumps(answer)
-    assert "generated_mess_set" not in json.dumps(answer)
-
-
 def test_steer_rejects_terminal_run_and_offers_next_goal(tmp_path: Path) -> None:
     _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
 
@@ -96,7 +74,7 @@ def test_steer_rejects_terminal_run_and_offers_next_goal(tmp_path: Path) -> None
 def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Path) -> None:
     run_dir = _write_run(tmp_path, phase="running-codex")
 
-    with pytest.raises(InteractionError, match="Use Steer or Ask Why"):
+    with pytest.raises(InteractionError, match="Use Steer"):
         append_next_goal_request(tmp_path, "run-a", "Now build the semantic map")
     messages = list_operator_messages(tmp_path, "run-a")
 

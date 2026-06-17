@@ -66,8 +66,9 @@ uv sync --extra dev
 ```
 
 The `dev` extra includes the standard MolmoSpaces/MuJoCo CPU runtime used by
-local cleanup demos. Isaac Lab remains intentionally isolated in
-`.venv-isaaclab/`; use the Isaac preflight harness when testing that backend.
+local cleanup demos. Isaac Lab is scoped to the B1 / Map 12 digital-twin route
+and generic local runtime proof; keep it isolated in `.venv-isaaclab/` and do
+not treat it as part of normal MolmoSpaces demos.
 
 The public command grammar is named-parameter only. Public household launches
 name the operator-facing surface, world or scene, backend runtime, optional task

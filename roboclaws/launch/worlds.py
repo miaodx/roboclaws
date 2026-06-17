@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from roboclaws.launch.scene_sampler import (
+    legacy_molmospaces_world_ids,
+    parse_molmospaces_world_id,
+    sampler_rows,
+    ui_molmospaces_world_ids,
+)
+
 
 @dataclass(frozen=True)
 class WorldSpec:
@@ -20,47 +27,60 @@ class WorldSpec:
     availability: str = "enabled"
     default_overrides: tuple[str, ...] = ()
     preview_assets: tuple[tuple[str, str], ...] = ()
+    sampler_metadata: dict[str, object] | None = None
 
 
-MOLMOSPACES_CONSOLE_SCENE_INDICES: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 7, 9)
-MOLMOSPACES_CONSOLE_WORLD_IDS: tuple[str, ...] = tuple(
-    f"molmospaces/val_{index}" for index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+MOLMOSPACES_CONSOLE_WORLD_IDS: tuple[str, ...] = ui_molmospaces_world_ids()
+MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS: tuple[str, ...] = legacy_molmospaces_world_ids()
+MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES: tuple[int, ...] = tuple(
+    int(world_id.rsplit("_", 1)[1]) for world_id in MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS
 )
 
 
-def _molmospaces_world_spec(scene_index: int) -> WorldSpec:
-    world_id = f"molmospaces/val_{scene_index}"
-    scene_name = f"val_{scene_index}"
-    tags = ("household", "molmospaces", "curated-default" if scene_index == 0 else "curated-10")
-    default_overrides = (
-        "scene_source=procthor-10k-val",
-        f"scene_index={scene_index}",
+def _molmospaces_world_spec(row) -> WorldSpec:
+    scene_index = row.scene_index
+    if scene_index is None:
+        raise ValueError("blocked sampler rows do not create launch worlds")
+    tags = (
+        "household",
+        "molmospaces",
+        "source-aware-sampler",
+        "sampler-ui" if row.ui_ready else "sampler-alias",
+        "curated-default" if scene_index == 0 else "curated-source",
     )
-    if scene_index != 0:
-        default_overrides = (*default_overrides, "map_bundle=none")
     return WorldSpec(
-        id=world_id,
-        label=f"MolmoSpaces {scene_name}",
+        id=row.world_id,
+        label=f"MolmoSpaces {row.scene_source} #{scene_index}",
         surface_id="household-world",
-        available_backends=("mujoco", "isaaclab"),
-        scene_source="procthor-10k-val",
+        available_backends=("mujoco",),
+        scene_source=row.scene_source,
         tags=tags,
         default_backend="mujoco",
         resource_kind="simulator",
-        default_overrides=default_overrides,
-        preview_assets=(
-            ("fpv", f"/previews/molmospaces-{scene_name}-fpv.png"),
-            ("map", f"/previews/molmospaces-{scene_name}-map.png"),
-            ("chase", f"/previews/molmospaces-{scene_name}-chase.png"),
-            ("topdown", f"/previews/molmospaces-{scene_name}-topdown.png"),
-        ),
+        availability="enabled" if row.ui_ready else "hidden",
+        default_overrides=row.default_overrides,
+        preview_assets=row.preview_assets,
+        sampler_metadata={
+            "schema": "molmospaces_scene_sampler_world_metadata_v1",
+            "scene_family": row.scene_family,
+            "scene_split": row.scene_split,
+            "scene_source": row.scene_source,
+            "scene_index": row.scene_index,
+            "room_count": row.room_count,
+            "waypoint_count": row.waypoint_count,
+            "category_provenance": row.category_provenance,
+            "selected_reason": row.selected_reason,
+            "lanes": list(row.lanes),
+            "generator_version": row.to_dict()["generator_version"],
+        },
     )
 
 
 WORLD_SPECS: dict[str, WorldSpec] = {
     **{
-        f"molmospaces/val_{index}": _molmospaces_world_spec(index)
-        for index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+        row.world_id: _molmospaces_world_spec(row)
+        for row in sampler_rows()
+        if row.scene_index is not None
     },
     "agibot-g2/map-12": WorldSpec(
         id="agibot-g2/map-12",
@@ -86,10 +106,15 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         default_overrides=(
             "map_bundle=b1-map12-room-semantics",
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "2rd_floor_seperated/storey_1/scene_gs.usda",
+            "2rd_floor_seperated/storey_1/configuration/scene_base.usd",
             "robot_views=on",
         ),
-        preview_assets=(("map", "/asset-previews/maps/b1-map12-room-semantics/preview.png"),),
+        preview_assets=(
+            ("fpv", "/previews/b1-map12-fpv.png"),
+            ("map", "/previews/b1-map12-map.png"),
+            ("chase", "/previews/b1-map12-chase.png"),
+            ("topdown", "/previews/b1-map12-topdown.png"),
+        ),
     ),
     "planner-proof/default": WorldSpec(
         id="planner-proof/default",
@@ -114,4 +139,34 @@ DEFAULT_WORLD_BY_SURFACE: dict[str, str] = {
 def world_spec(world_id: str) -> WorldSpec:
     """Return a world spec by id."""
 
-    return WORLD_SPECS[world_id]
+    spec = WORLD_SPECS.get(world_id)
+    if spec is not None:
+        return spec
+    return _source_aware_molmospaces_candidate_world_spec(world_id)
+
+
+def _source_aware_molmospaces_candidate_world_spec(world_id: str) -> WorldSpec:
+    scene_ref = parse_molmospaces_world_id(world_id)
+    return WorldSpec(
+        id=world_id,
+        label=f"MolmoSpaces {scene_ref.scene_source} #{scene_ref.scene_index}",
+        surface_id="household-world",
+        available_backends=("mujoco",),
+        scene_source=scene_ref.scene_source,
+        tags=("household", "molmospaces", "source-aware-sampler", "scanner-candidate"),
+        default_backend="mujoco",
+        resource_kind="simulator",
+        availability="hidden",
+        default_overrides=(
+            f"scene_source={scene_ref.scene_source}",
+            f"scene_index={scene_ref.scene_index}",
+            "map_bundle=none",
+        ),
+        sampler_metadata={
+            "schema": "molmospaces_scene_sampler_world_metadata_v1",
+            "scene_source": scene_ref.scene_source,
+            "scene_index": scene_ref.scene_index,
+            "lanes": [],
+            "selected_reason": "dynamic_source_aware_scanner_candidate",
+        },
+    )

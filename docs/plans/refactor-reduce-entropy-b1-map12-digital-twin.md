@@ -375,8 +375,11 @@ Status: current default asset updated.
 
 - Replaced the old `B1_floor2_slow` default asset root with
   `data/robot-data-lab/scene-engine/data/2rd_floor_seperated`.
-- The launch/default smoke scene now uses `storey_1/scene_gs.usda`, with
-  `storey_1/scene.usd` retained in readiness evidence as the mesh scene.
+- The readiness overlay still inventories `storey_1/scene_gs.usda` as the
+  Gaussian/source layer, but operator-console and navigation-smoke robot-view
+  capture now use `storey_1/configuration/scene_base.usd` as the renderable RGB
+  USD. The GS layer opens and supports overlay evidence, but Isaac headless RGB
+  robot-view capture rendered it as near-gray FPV/chase frames.
 - Readiness evidence now inventories the rebuilt scene-engine partitions and
   room-level `scene_gs.usda` layers instead of assuming the old
   `usda/livingroom` / `usda/F2_all` layout.

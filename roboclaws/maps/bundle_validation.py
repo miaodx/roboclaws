@@ -7,6 +7,10 @@ from typing import Any
 
 from roboclaws.maps.rasterize import load_pgm
 from roboclaws.maps.route import validate_metric_map_route
+from roboclaws.maps.spatial_contract import (
+    require_source_frame_spatial_contract,
+    validate_spatial_room_contract,
+)
 
 
 def validate_nav2_map_bundle_payload(
@@ -183,6 +187,12 @@ def _validate_semantics_contract(
         _validate_generated_waypoints(waypoints, errors)
     if not isinstance(semantics.get("frame_ids"), dict) or not semantics["frame_ids"].get("map"):
         errors.append("semantics.json must contain frame_ids.map")
+    require_source_frame_spatial_contract(semantics, errors)
+    for index, room in enumerate(rooms):
+        if isinstance(room, dict):
+            validate_spatial_room_contract(room, index=index, errors=errors)
+        else:
+            errors.append(f"semantics.json rooms[{index}] must be an object")
     _validate_semantics_provenance(semantics, errors)
     return rooms, fixtures, waypoints, driveable
 

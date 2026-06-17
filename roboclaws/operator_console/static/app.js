@@ -104,9 +104,6 @@ const els = {
   imageDialogPath: document.getElementById("image-dialog-path"),
   imageDialogImg: document.getElementById("image-dialog-img"),
   refreshTasksButton: document.getElementById("refresh-tasks-button"),
-  taskStatusFilter: document.getElementById("task-status-filter"),
-  taskOwnerFilter: document.getElementById("task-owner-filter"),
-  taskSearchInput: document.getElementById("task-search-input"),
   backgroundTaskSummary: document.getElementById("background-task-summary"),
   backgroundTaskList: document.getElementById("background-task-list"),
 };
@@ -208,10 +205,6 @@ function bindEvents() {
   els.messupButton.addEventListener("click", previewMessup);
   els.latestResultButton.addEventListener("click", attachLatestResult);
   els.refreshTasksButton.addEventListener("click", refreshRuntimeTasks);
-  [els.taskStatusFilter, els.taskOwnerFilter, els.taskSearchInput].forEach((input) => {
-    input.addEventListener("input", renderBackgroundTasks);
-    input.addEventListener("change", renderBackgroundTasks);
-  });
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
     confirmAction({
@@ -233,7 +226,7 @@ function bindEvents() {
   });
   document.querySelectorAll(".operator-mode").forEach((button) => {
     button.addEventListener("click", () => {
-      state.operatorMode = button.dataset.operatorMode || "ask_why";
+      state.operatorMode = button.dataset.operatorMode || "goal";
       renderSelection();
     });
   });
@@ -784,10 +777,8 @@ function renderOperatorInput(route) {
     els.promptHelp.textContent = "Steer writes an auditable active-run message for supported routes.";
     return;
   }
-  els.promptLabel.textContent = "Ask Why";
-  els.taskPrompt.disabled = false;
-  els.taskPrompt.placeholder = "Ask about public evidence, actions, or terminal status for the attached run.";
-  els.promptHelp.textContent = "Ask Why reads public run artifacts only and cannot change robot state.";
+  state.operatorMode = "goal";
+  renderOperatorInput(route);
 }
 
 function operatorGoalHelp(route) {
@@ -800,7 +791,7 @@ function operatorGoalHelp(route) {
   if (isRunTerminal()) {
     return "Starts a linked Next Goal run using public parent context.";
   }
-  return "Goal starts a run or terminal-parent Next Goal. Use Steer or Ask Why while this run is active.";
+  return "Goal starts a run or terminal-parent Next Goal. Use Steer while this run is active.";
 }
 
 function routeStatusDisplay(route, readiness) {
@@ -1186,14 +1177,6 @@ function isRealMovementGate(gate) {
 
 function renderStartAction(route, readiness) {
   const mode = state.operatorMode;
-  if (mode === "ask_why") {
-    els.startButton.textContent = "Ask Why";
-    els.startButton.disabled = !state.activeRunId;
-    els.startHelp.textContent = state.activeRunId
-      ? "Ask Why will read public artifacts for the attached run."
-      : "Attach a run before asking why.";
-    return;
-  }
   if (mode === "steer") {
     const controls = (state.activeState && state.activeState.controls) || {};
     const enabled = Boolean(state.activeRunId && controls.steer_available);
@@ -1208,7 +1191,7 @@ function renderStartAction(route, readiness) {
     els.startButton.disabled = !terminal || !route.supports_prompt;
     els.startHelp.textContent = terminal
       ? "Start a linked Next Goal from this terminal parent run."
-      : `Watching active run ${state.activeRunId}. Use Steer or Ask Why.`;
+      : `Watching active run ${state.activeRunId}. Use Steer.`;
     return;
   }
   const attachableRun = readiness.attachable_run || null;
@@ -1249,7 +1232,7 @@ function steerHelp(controls) {
 }
 
 function handleStartAction() {
-  if (state.operatorMode === "ask_why" || state.operatorMode === "steer") {
+  if (state.operatorMode === "steer") {
     sendOperatorMessage();
     return;
   }
@@ -1258,7 +1241,7 @@ function handleStartAction() {
     return;
   }
   if (state.activeRunId) {
-    els.startHelp.textContent = "Use Steer or Ask Why while this run is active.";
+    els.startHelp.textContent = "Use Steer while this run is active.";
     return;
   }
   const readiness = effectiveReadiness(state.selectedRoute);
@@ -1740,14 +1723,11 @@ async function sendOperatorMessage() {
     return;
   }
   const encodedRun = encodeURIComponent(state.activeRunId);
-  const mode = state.operatorMode;
-  const endpoint =
-    mode === "ask_why" ? `/api/runs/${encodedRun}/ask-why` : `/api/runs/${encodedRun}/messages`;
-  const key = mode === "ask_why" ? "question" : "body";
+  const endpoint = `/api/runs/${encodedRun}/messages`;
   const result = await fetchJson(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ [key]: text }),
+    body: JSON.stringify({ body: text }),
   });
   if (result.error) {
     els.startHelp.textContent = result.error;
@@ -1760,10 +1740,6 @@ async function sendOperatorMessage() {
 }
 
 function operatorMessageResultText(result) {
-  if (result.command_type === "ask_why") {
-    const summary = result.answer && result.answer.summary ? `: ${result.answer.summary}` : "";
-    return `Ask Why answered${summary}`;
-  }
   if (result.command_type === "next_goal") {
     return `Next Goal ${result.status || "queued"} (${result.queue_reason || "queued"}).`;
   }
@@ -1788,15 +1764,14 @@ function renderArtifacts(items) {
 }
 
 function renderBackgroundTasks() {
-  const tasks = ((state.runtime && state.runtime.tasks) || []).filter(taskMatchesFilters);
-  renderTaskOwnerFilter();
+  const tasks = (state.runtime && state.runtime.tasks) || [];
   const summary = (state.runtime && state.runtime.summary) || {};
   els.backgroundTaskSummary.textContent =
-    `${summary.active || 0} active / ${summary.total || 0} total repo-relevant task` +
-    `${summary.total === 1 ? "" : "s"}.`;
+    `${summary.active || 0} blocking resource${summary.active === 1 ? "" : "s"} affecting ` +
+    `console/UI E2E startup.`;
   els.backgroundTaskList.innerHTML = "";
   if (!tasks.length) {
-    els.backgroundTaskList.textContent = "No matching background tasks.";
+    els.backgroundTaskList.textContent = "No blocking background resources detected.";
     return;
   }
   for (const task of tasks) {
@@ -1817,37 +1792,6 @@ function renderBackgroundTasks() {
     bindTaskActions(row, task);
     els.backgroundTaskList.appendChild(row);
   }
-}
-
-function renderTaskOwnerFilter() {
-  const previous = els.taskOwnerFilter.value;
-  const owners = [
-    ...new Set(((state.runtime && state.runtime.tasks) || []).map((task) => task.owner).filter(Boolean)),
-  ].sort();
-  els.taskOwnerFilter.innerHTML = '<option value="">All</option>';
-  for (const owner of owners) {
-    const option = document.createElement("option");
-    option.value = owner;
-    option.textContent = owner;
-    option.selected = owner === previous;
-    els.taskOwnerFilter.appendChild(option);
-  }
-}
-
-function taskMatchesFilters(task) {
-  const status = els.taskStatusFilter.value;
-  const owner = els.taskOwnerFilter.value;
-  const query = (els.taskSearchInput.value || "").trim().toLowerCase();
-  if (status && task.status !== status) {
-    return false;
-  }
-  if (owner && task.owner !== owner) {
-    return false;
-  }
-  if (!query) {
-    return true;
-  }
-  return JSON.stringify(task).toLowerCase().includes(query);
 }
 
 function taskResourcesHtml(resources) {

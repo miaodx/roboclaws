@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 
-from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_SCENE_INDICES
+from roboclaws.launch.worlds import MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
 
 STATIC_ROOT = Path(__file__).resolve().parents[3] / "roboclaws" / "operator_console" / "static"
 
@@ -51,16 +51,13 @@ ROUTE_FIELD_HTML_REQUIRED = (
     'id="messup-button"',
     'id="messup-status"',
     "Try Mess-up",
-    'data-operator-mode="ask_why"',
     'data-operator-mode="steer"',
     'data-operator-mode="goal"',
     'data-view="tasks"',
     'id="tasks-panel"',
     "Background Tasks",
     'id="background-task-list"',
-    'id="task-status-filter"',
-    'id="task-owner-filter"',
-    'id="task-search-input"',
+    "No blocking background resources loaded.",
 )
 
 ROUTE_FIELD_HTML_FORBIDDEN = (
@@ -71,9 +68,15 @@ ROUTE_FIELD_HTML_FORBIDDEN = (
     "Generated mess count",
     'id="mess-count-input"',
     'data-operator-mode="continue"',
+    'data-operator-mode="ask_why"',
     'id="operator-message-input"',
     'id="operator-message-button"',
     "Continue",
+    "Ask Why",
+    "/ask-why",
+    'id="task-status-filter"',
+    'id="task-owner-filter"',
+    'id="task-search-input"',
 )
 
 ROUTE_FIELD_APP_REQUIRED = (
@@ -108,7 +111,6 @@ ROUTE_FIELD_APP_REQUIRED = (
     "/next-goal",
     "Start Next Goal",
     "Confirm Next Goal",
-    "/ask-why",
     "check_operator_messages",
     "attachLatestResult",
     "/api/runs/latest",
@@ -120,7 +122,7 @@ ROUTE_FIELD_APP_REQUIRED = (
     "compactDisplayRunId",
     "compactRunPart",
     "Run Attached",
-    "Use Steer or Ask Why",
+    "Use Steer while this run is active.",
     "/api/readiness",
     "refreshSelectedRouteReadiness",
     "checkerStatus.message",
@@ -137,6 +139,7 @@ ROUTE_FIELD_APP_REQUIRED = (
     "payload.runtime",
     "/api/runtime/tasks",
     "renderBackgroundTasks",
+    "No blocking background resources detected.",
     "background_blockers",
     "TASK RUNNING",
     "data-open-background-tasks",
@@ -150,6 +153,11 @@ ROUTE_FIELD_APP_FORBIDDEN = (
     "NEEDS OPERATOR GATES",
     "generated_mess_count",
     "/continue",
+    "/ask-why",
+    "ask_why",
+    "Ask Why",
+    "latestAskWhyText",
+    "latestOperatorResultText",
     "?route=",
 )
 
@@ -199,22 +207,31 @@ def test_static_app_renders_scene_preview_assets() -> None:
 
     expected_preview_files = sorted(
         f"molmospaces-val_{scene_index}-{view_name}.png"
-        for scene_index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+        for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
         for view_name in ("chase", "fpv", "map", "topdown")
     )
-    preview_files = sorted(path.name for path in preview_dir.glob("molmospaces-val_*-*.png"))
-    assert preview_files == expected_preview_files
+    molmospaces_preview_files = sorted(
+        path.name for path in preview_dir.glob("molmospaces-val_*-*.png")
+    )
+    assert molmospaces_preview_files == expected_preview_files
     metadata_files = sorted(
         path.name for path in preview_dir.glob("molmospaces-val_*-preview.json")
     )
     assert metadata_files == [
         f"molmospaces-val_{scene_index}-preview.json"
-        for scene_index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+        for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
     ]
-    assert not any(name.startswith("molmospaces-val_6-") for name in preview_files)
-    assert not any(name.startswith("molmospaces-val_8-") for name in preview_files)
+    assert not any(name.startswith("molmospaces-val_6-") for name in molmospaces_preview_files)
+    assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
+    b1_preview_files = sorted(path.name for path in preview_dir.glob("b1-map12-*.png"))
+    assert b1_preview_files == [
+        "b1-map12-chase.png",
+        "b1-map12-fpv.png",
+        "b1-map12-map.png",
+        "b1-map12-topdown.png",
+    ]
 
-    for scene_index in MOLMOSPACES_CONSOLE_SCENE_INDICES:
+    for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES:
         for view_name in ("fpv", "map", "chase", "topdown"):
             path = preview_dir / f"molmospaces-val_{scene_index}-{view_name}.png"
             assert path.is_file()
@@ -234,6 +251,18 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
+    for view_name in ("fpv", "map", "chase", "topdown"):
+        path = preview_dir / f"b1-map12-{view_name}.png"
+        assert path.is_file()
+        assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
+    assert b1_metadata["world_id"] == "b1-map12"
+    assert b1_metadata["backend"] == "isaaclab"
+    assert b1_metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
+    assert b1_metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
+    assert b1_metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
+    assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
+    assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["chase"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 

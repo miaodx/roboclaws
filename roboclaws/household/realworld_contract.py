@@ -53,6 +53,13 @@ from roboclaws.household.visual_scan_guidance import (
 )
 from roboclaws.maps.bundle import metric_map_bundle_metadata
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
+from roboclaws.maps.spatial_contract import (
+    ALIGNMENT_STATUS_NATIVE,
+    GEOMETRY_SOURCE_GENERATED_CANDIDATE,
+    GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+    POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_room,
+)
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 REAL_ROBOT_MAP_BUNDLE_SCHEMA = "real_robot_map_bundle_v1"
@@ -5398,12 +5405,18 @@ def _scene_index_public_fixture_overlay(
 
 
 def _metric_map_room_payload(room: dict[str, Any]) -> dict[str, Any]:
-    payload = {
-        "room_id": room["room_id"],
-        "room_label": room["room_label"],
-        "fixture_count": len(room["fixture_ids"]),
-        "polygon": room.get("polygon", []),
-    }
+    payload = normalize_spatial_room(
+        {
+            "room_id": room["room_id"],
+            "room_label": room["room_label"],
+            "fixture_count": len(room["fixture_ids"]),
+            "polygon": room.get("polygon", []),
+        },
+        frame_id="map",
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+        alignment_status=ALIGNMENT_STATUS_NATIVE,
+    )
     if isinstance(room.get("scene_room_outline"), dict):
         payload["scene_room_outline"] = dict(room["scene_room_outline"])
     return payload
@@ -5446,6 +5459,13 @@ def _public_room_hint_payload(room: dict[str, Any]) -> dict[str, Any]:
         "map_center": map_center,
         "public_room_source": "base_navigation_map",
     }
+    payload = normalize_spatial_room(
+        payload,
+        frame_id=str(room.get("source_map_frame_id") or "map"),
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=str(room.get("geometry_source") or GEOMETRY_SOURCE_GENERATED_CANDIDATE),
+        alignment_status=str(room.get("alignment_status") or ALIGNMENT_STATUS_NATIVE),
+    )
     if isinstance(room.get("scene_room_outline"), dict):
         payload["scene_room_outline"] = dict(room["scene_room_outline"])
     return payload

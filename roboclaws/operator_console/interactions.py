@@ -20,7 +20,6 @@ MESSAGE_SCHEMA = "operator_console_message_v1"
 MESSAGE_LOG = "operator_messages.jsonl"
 SESSION_LOG = "sessions.jsonl"
 SESSION_DIR = "sessions"
-ASK_WHY_DIR = "ask_why"
 NEXT_GOAL_QUEUE = "next_goal_queue.jsonl"
 
 TERMINAL_STATUSES = {
@@ -93,34 +92,6 @@ def attach_run_to_session(root: Path, run_id: str, session_id: str = "") -> dict
     return session
 
 
-def append_ask_why(root: Path, run_id: str, question: str) -> dict[str, Any]:
-    """Answer a read-only operator question from public run artifacts."""
-
-    question = _clean_text(question)
-    if not question:
-        raise InteractionError("Ask Why requires a question.")
-    run_dir, route = _run_context(root, run_id)
-    state = derive_operator_state(root, run_dir, route)
-    message = _base_message(
-        command_type="ask_why",
-        run_id=run_id,
-        body=question,
-        status="answered",
-    )
-    answer = _ask_why_answer(root, state, question)
-    message["answer"] = answer
-    message["artifact_scope"] = answer["artifact_scope"]
-    ask_dir = run_dir / ASK_WHY_DIR
-    ask_dir.mkdir(parents=True, exist_ok=True)
-    (ask_dir / f"{message['message_id']}.json").write_text(
-        json.dumps(message, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    _append_message(run_dir, message)
-    _record_session_message(root, run_dir, message)
-    return message
-
-
 def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     """Append an active-run steering message for routes that support the MCP inbox."""
 
@@ -162,7 +133,7 @@ def append_next_goal_request(
     if not terminal:
         raise InteractionError(
             "Next Goal is available after this Robot Run is terminal. "
-            "Use Steer or Ask Why while the run is active."
+            "Use Steer while this run is active."
         )
     requires_confirmation = _requires_next_goal_confirmation(route)
     result_available = _parent_result_available(run_dir, state)
@@ -318,37 +289,6 @@ def _base_message(
         "status": status,
         "created_at_epoch": now,
         "created_at": _format_epoch(now),
-    }
-
-
-def _ask_why_answer(root: Path, state: dict[str, Any], question: str) -> dict[str, Any]:
-    decision = state.get("latest_public_decision_evidence")
-    if not isinstance(decision, dict):
-        decision = {}
-    public_result = state.get("public_run_result")
-    if not isinstance(public_result, dict):
-        public_result = {}
-    artifacts = state.get("artifact_paths") if isinstance(state.get("artifact_paths"), list) else []
-    public_artifacts = _public_artifact_scope(artifacts)
-    evidence_bits = [
-        str(decision.get("observation_summary") or ""),
-        str(decision.get("decision") or decision.get("reasoning") or ""),
-        str(state.get("latest_action") or ""),
-        json.dumps(public_result, sort_keys=True),
-    ]
-    text = " ".join(item for item in evidence_bits if item).strip()
-    if not text:
-        text = "No public robot-tool evidence has been written for this run yet."
-    text = _strip_private_terms(text)
-    return {
-        "question": question,
-        "summary": text[:1200],
-        "basis": "public_operator_artifacts_only",
-        "robot_mcp_tools_called": False,
-        "private_evaluation_used": False,
-        "artifact_scope": public_artifacts,
-        "report_href": _first_artifact_href(artifacts, "Report"),
-        "run_dir": str(state.get("display_run_dir") or state.get("run_dir") or root),
     }
 
 

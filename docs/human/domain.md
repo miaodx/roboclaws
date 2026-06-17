@@ -60,6 +60,50 @@ A static operator-prepared map package containing navigation geometry, frame
 metadata, fixture semantics, and inspection waypoints.
 _Avoid_: Live SLAM result, hidden target map
 
+**Source Map Frame**:
+The robot, simulator, or imported map coordinate frame used by navigation and
+map tools. Semantic polygons, anchors, and correspondence evidence must be
+authored or transformed into this frame before reports render them.
+_Avoid_: display-only image frame, beautified preview coordinates
+
+**Display Frame**:
+A report or UI coordinate frame derived from the Source Map Frame for human
+inspection. The current map-parity slice explicitly omits rectified display
+frames and renders raw/source map orientation.
+_Avoid_: hidden map mutation, second semantic overlay
+
+**Navigation Area**:
+A public navigable or inspectable map zone. It may be an operator-authored
+rectangle or generated area and is not necessarily a traced physical room
+boundary.
+_Avoid_: physical room outline, wall-truth polygon
+
+**Room Boundary**:
+A traced or derived polygon intended to match physical walls or room
+partitions. Reports must not present Navigation Areas as Room Boundaries unless
+the geometry source and alignment evidence support that claim.
+_Avoid_: navigation-zone bounding box, review-only region
+
+**Scene Partition**:
+A digital-twin asset partition such as a USD, Gaussian, or scene-engine room
+folder. It can provide semantic labels or candidate correspondence evidence,
+but it is not map-frame geometry without an explicit correspondence manifest or
+verified transform.
+_Avoid_: map polygon, physical room truth
+
+**Polygon Geometry Source**:
+The provenance for a map polygon, such as
+`operator_authored_navigation_zone`, `traced_occupancy_room_boundary`,
+`scene_engine_partition`, `runtime_observation`, or `generated_candidate`.
+_Avoid_: unlabeled overlay, inferred room truth
+
+**Alignment Status**:
+The confidence tier for cross-frame or cross-environment spatial evidence:
+`native`, `candidate`, `verified`, `runtime_proven`, `planner_backed`, or
+`blocked`. Candidate overlays may support review but must not be promoted to
+room geometry or planner-safe evidence without proof.
+_Avoid_: implicit trust, list-order correspondence, display polish as proof
+
 **Runtime Metric Map**:
 A public run artifact that enriches the Metric Map with observed-object priors,
 public semantic anchors, map-update candidates, and provenance without mutating
@@ -167,6 +211,14 @@ _Avoid_: assuming object assets imply usable cached grasps
   perception data.
 - A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
   fixture semantics before runtime observations begin.
+- Map overlays use the **Source Map Frame** as spatial truth; a **Display
+  Frame** is a labeled derived view, not a replacement for navigation
+  coordinates.
+- A **Navigation Area** can carry room semantics, but it is not a **Room
+  Boundary** unless its **Polygon Geometry Source** and **Alignment Status**
+  support that stronger claim.
+- A **Scene Partition** binds to map geometry through explicit correspondence,
+  not list order.
 - A **Runtime Metric Map** may be wrapped as an **Actionable Semantic Map
   Snapshot** for downstream cleanup or open household tasks.
 - Offline Agibot `navigation_memory.json` conversion produces an

@@ -55,6 +55,38 @@ def test_molmo_cleanup_rejects_unknown_backend_from_catalog() -> None:
     )
 
 
+def test_molmo_cleanup_rejects_unscoped_isaac_backend_from_private_impl() -> None:
+    result = subprocess.run(
+        [
+            just_bin(),
+            "molmo::household-world-impl",
+            "direct",
+            "world-oracle-labels",
+            "7",
+            "output/test",
+            "task",
+            "1",
+            "127.0.0.1",
+            "18788",
+            "auto",
+            "auto",
+            "auto",
+            "",
+            "auto",
+            "off",
+            "",
+            "backend=isaaclab_subprocess",
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "backend=isaaclab_subprocess is scoped to world=b1-map12" in result.stderr
+
+
 def test_codex_map_build_rejects_unknown_backend_from_catalog() -> None:
     env = os.environ.copy()
     env["ROBOCLAWS_JUST_TRACE"] = "1"

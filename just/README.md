@@ -41,11 +41,13 @@ Worlds and scenes:
 - `b1-map12`
 - `planner-proof/default`
 
-Backends:
+Backends are world-scoped, not a cross product:
 
-- `mujoco`
-- `isaaclab`
-- `agibot-gdk`
+- `mujoco` for MolmoSpaces household scenes and planner proof
+- `isaaclab` for `world=b1-map12` and generic local Isaac runtime proof
+- `agibot-gdk` for `world=agibot-g2/map-12`
+
+MolmoSpaces household routes do not accept `backend=isaaclab`.
 
 Agent engines:
 

@@ -138,6 +138,20 @@ def test_map_build_change_selects_map_build_suite_and_cleanup_consumer_prior(
     assert rows["map-build-consumer-eval-suite"]["row_kind"] == "eval_suite"
 
 
+def test_scene_sampler_change_selects_sampler_stress_suite(tmp_path: Path) -> None:
+    manifest = selector.build_eval_harness(
+        budget="focused",
+        changed_files=["roboclaws/launch/scene_sampler.py"],
+        output_dir=tmp_path,
+    )
+
+    rows = _selected_rows(manifest)
+    row = rows["scene-sampler-stress-eval-suite"]
+    assert row["row_kind"] == "eval_suite"
+    assert row["axes"]["suite"] == "scene_sampler_stress"
+    assert "suite=scene_sampler_stress" in row["command"]
+
+
 def test_open_ended_changed_file_selects_open_ended_contract_and_live_eval(
     tmp_path: Path,
 ) -> None:

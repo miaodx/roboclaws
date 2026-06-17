@@ -359,6 +359,13 @@ class IsaacLabSubprocessBackend:
     def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker("navigate_to_receptacle", "--receptacle-id", receptacle_id)
 
+    def navigate_to_waypoint(self, *, waypoint: dict[str, Any]) -> dict[str, Any]:
+        return self._run_worker(
+            "navigate_to_waypoint",
+            "--waypoint-json",
+            json.dumps(waypoint, sort_keys=True),
+        )
+
     def pick(self, object_id: str) -> dict[str, Any]:
         return self._run_worker("pick", "--object-id", object_id)
 

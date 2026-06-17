@@ -10,6 +10,12 @@ from roboclaws.maps.bundle import (
     parse_map_yaml,
 )
 from roboclaws.maps.rasterize import load_pgm
+from roboclaws.maps.spatial_contract import (
+    ALIGNMENT_STATUS_NATIVE,
+    GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+    POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_rooms,
+)
 
 REAL_ROBOT_MAP_BUNDLE_SCHEMA = "real_robot_map_bundle_v1"
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
@@ -33,6 +39,14 @@ def metric_map_from_bundle(
     )
     map_id = str(semantics.get("map_id") or bundle_dir.name)
     map_version = str(semantics.get("map_version") or "static-fixture-map-v1")
+    frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
+    rooms = normalize_spatial_rooms(
+        semantics.get("rooms") or [],
+        frame_id=frame_id,
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+        alignment_status=ALIGNMENT_STATUS_NATIVE,
+    )
     waypoints = []
     for item in semantics.get("inspection_waypoints") or []:
         waypoint = dict(item)
@@ -54,7 +68,9 @@ def metric_map_from_bundle(
         "status": "ok",
         "contract": contract,
         "schema": REAL_ROBOT_MAP_BUNDLE_SCHEMA,
-        "frame_id": (semantics.get("frame_ids") or {}).get("map", "map"),
+        "frame_id": frame_id,
+        "spatial_contract": semantics.get("spatial_contract") or {},
+        "display_frame": semantics.get("display_frame") if "display_frame" in semantics else None,
         "map_id": map_id,
         "map_version": map_version,
         "resolution_m": resolution,
@@ -72,7 +88,7 @@ def metric_map_from_bundle(
             map_id=map_id,
             map_version=map_version,
         ),
-        "rooms": semantics.get("rooms") or [],
+        "rooms": rooms,
         "driveable_ways": semantics.get("driveable_ways") or [],
         "robot_pose": robot_pose,
         "inspection_waypoints": waypoints,
@@ -91,10 +107,18 @@ def fixture_hints_from_bundle(
 ) -> dict[str, Any]:
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
     fixtures_by_room: dict[str, list[dict[str, Any]]] = {}
+    frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
+    semantic_rooms = normalize_spatial_rooms(
+        semantics.get("rooms") or [],
+        frame_id=frame_id,
+        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
+        alignment_status=ALIGNMENT_STATUS_NATIVE,
+    )
     for fixture in semantics.get("fixtures") or []:
         fixtures_by_room.setdefault(str(fixture.get("room_id") or ""), []).append(dict(fixture))
     rooms = []
-    for room in semantics.get("rooms") or []:
+    for room in semantic_rooms:
         item = dict(room)
         item["fixtures"] = fixtures_by_room.get(str(room.get("room_id") or ""), [])
         rooms.append(item)

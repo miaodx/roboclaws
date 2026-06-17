@@ -257,6 +257,7 @@ class LiveCodexCleanupRunner:
         )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
+            run_id=run_id,
             skill_name=skill_name,
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )

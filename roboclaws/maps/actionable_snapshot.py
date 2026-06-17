@@ -8,6 +8,12 @@ from typing import Any
 
 from roboclaws.maps.bundle import parse_map_yaml
 from roboclaws.maps.rasterize import OccupancyGrid, load_pgm, world_to_grid
+from roboclaws.maps.spatial_contract import (
+    ALIGNMENT_STATUS_CANDIDATE,
+    GEOMETRY_SOURCE_RUNTIME_OBSERVATION,
+    POLYGON_ROLE_NAVIGATION_AREA,
+    normalize_spatial_room,
+)
 
 ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA = "actionable_semantic_map_snapshot_v1"
 RUNTIME_METRIC_MAP_SCHEMA = "runtime_metric_map_v1"
@@ -565,18 +571,24 @@ def _rooms_from_anchors(anchors: list[dict[str, Any]]) -> list[dict[str, Any]]:
             anchor.get("room_label") or anchor.get("label") or room_id.replace("_", " ")
         )
         rooms.append(
-            {
-                "room_id": room_id,
-                "room_label": room_label,
-                "category": _room_category_from_label(room_label, room_id),
-                "map_center": {
-                    "x": float(pose.get("x") or 0.0),
-                    "y": float(pose.get("y") or 0.0),
+            normalize_spatial_room(
+                {
+                    "room_id": room_id,
+                    "room_label": room_label,
+                    "category": _room_category_from_label(room_label, room_id),
+                    "map_center": {
+                        "x": float(pose.get("x") or 0.0),
+                        "y": float(pose.get("y") or 0.0),
+                    },
+                    "polygon": [],
+                    "source_anchor_id": str(anchor.get("anchor_id") or ""),
+                    "public_room_source": "agibot_navigation_memory_room_area",
                 },
-                "polygon": [],
-                "source_anchor_id": str(anchor.get("anchor_id") or ""),
-                "public_room_source": "agibot_navigation_memory_room_area",
-            }
+                frame_id=str(anchor.get("frame_id") or "map"),
+                polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
+                geometry_source=GEOMETRY_SOURCE_RUNTIME_OBSERVATION,
+                alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+            )
         )
         seen.add(room_id)
     return rooms

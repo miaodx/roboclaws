@@ -102,8 +102,12 @@ Each Background Tasks row should include:
 
 ### Background Tasks Page
 
-- Show all active and recently terminal repo-relevant tasks in a dense table.
-- Support filtering by status, owner, resource, route/world/backend, and text.
+- Show active repo-relevant tasks that can affect operator-console/UI E2E
+  startup: backend locks, MCP ports, Molmo visual slots, repo-owned tmux
+  sessions, and repo-mounted Docker containers.
+- Do not make operators filter through terminal, stale, unknown, or unrelated
+  history in the default UI. Keep the full inventory as an internal readiness
+  and debugging source.
 - Prefer operator actions that preserve evidence: attach, tail, open artifacts,
   copy stop command.
 - Make stale ownership explicit when a lock/slot exists but the PID is gone.
@@ -157,9 +161,9 @@ Implemented on 2026-06-15 in the local checkout.
 
 - Added `roboclaws/operator_console/runtime_inventory.py` and
   `GET /api/runtime/tasks`.
-- Added a Background Tasks workspace view with status/owner/text filtering,
-  artifact links, copyable attach/tail/stop commands, and direct Stop only for
-  active operator-console-owned runs.
+- Added a Background Tasks workspace view scoped to resources that can block
+  console/UI E2E startup, with artifact links, copyable attach/tail/stop
+  commands, and direct Stop only for active operator-console-owned runs.
 - Reused the runtime inventory in route readiness so selected Molmo/Codex
   cleanup routes name eval-harness/tmux/slot/port owners before launch.
 - Updated eval-harness direct detached live-product rows so launch success is

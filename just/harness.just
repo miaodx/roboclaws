@@ -12,10 +12,8 @@
 # - just harness::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::molmo-visual-grounding-benchmark  perception-isolated HTTP grounding harness
-# - just harness::molmo-isaac-runtime-preflight  Isaac Lab local runtime setup gate
-# - just harness::molmo-isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
-# - just harness::molmo-isaac-cleanup-smoke  strict Isaac Lab cleanup report gate
-# - just harness::molmo-isaac-prepared-cleanup-smoke  prepare semantic USD + strict cleanup gate
+# - just harness::isaac-runtime-preflight  Isaac Lab local runtime setup gate
+# - just harness::isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
 # - just harness::b1-map12-navigation-smoke  B1 / robot_map_12 local navigation smoke
 
 set working-directory := '..'
@@ -472,7 +470,7 @@ molmo-visual-grounding-benchmark *overrides:
 # Isaac Lab local runtime preflight. This records host readiness and writes a
 # reproducible install script. It creates .venv-isaaclab/ only when both
 # install=true and accept_nvidia_eula=true are supplied.
-molmo-isaac-runtime-preflight *overrides:
+isaac-runtime-preflight *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
     args=("$@")
@@ -485,7 +483,7 @@ molmo-isaac-runtime-preflight *overrides:
     min_free_gb="80"
     skip_gpu_probe="false"
     install="false"
-    accept_nvidia_eula="false"
+    accept_nvidia_eula="true"
     strict="false"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
@@ -535,100 +533,23 @@ molmo-isaac-runtime-preflight *overrides:
     fi
     "${cmd[@]}"
 
-# Install MolmoSpaces USD object packages referenced by Isaac diagnostics. This
-# keeps upstream molmo_spaces_isaac as asset tooling and downloads only the
-# missing object archives needed by local scene evidence unless all_objects=true.
-molmo-isaac-usd-references *overrides:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    args=("$@")
-    install_dir="output/isaaclab/molmospaces-usd"
-    cache_dir="${HOME}/.molmospaces"
-    source="thor"
-    version=""
-    state_path=""
-    asset_path=""
-    package=""
-    output_path="output/isaaclab/molmospaces-usd/usd_reference_install.json"
-    use_r2="true"
-    dry_run="false"
-    all_objects="false"
-    for arg in "${args[@]}"; do
-      if [[ "$arg" != *=* ]]; then
-        echo "error: override '$arg' is not key=value" >&2
-        exit 1
-      fi
-      key="${arg%%=*}"
-      value="${arg#*=}"
-      key="${key#--}"
-      key="${key//-/_}"
-      case "$key" in
-        install_dir|cache_dir|source|version|state_path|asset_path|package|\
-        output_path|use_r2|dry_run|all_objects)
-          ;;
-        *)
-          echo "error: unsupported override key '$key'" >&2
-          exit 1
-          ;;
-      esac
-      printf -v "$key" '%s' "$value"
-    done
-    cmd=(.venv/bin/python scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py \
-      --install-dir "$install_dir" \
-      --cache-dir "$cache_dir" \
-      --source "$source" \
-      --output-path "$output_path")
-    if [[ -n "$version" ]]; then
-      cmd+=(--version "$version")
-    fi
-    if [[ "$use_r2" == "true" ]]; then
-      cmd+=(--use-r2)
-    else
-      cmd+=(--no-use-r2)
-    fi
-    if [[ "$dry_run" == "true" ]]; then
-      cmd+=(--dry-run)
-    fi
-    if [[ "$all_objects" == "true" ]]; then
-      cmd+=(--all-objects)
-    fi
-    if [[ -n "$state_path" ]]; then
-      IFS=', ' read -r -a state_path_args <<< "$state_path"
-      for item in "${state_path_args[@]}"; do
-        [[ -n "$item" ]] && cmd+=(--state-path "$item")
-      done
-    fi
-    if [[ -n "$asset_path" ]]; then
-      IFS=', ' read -r -a asset_path_args <<< "$asset_path"
-      for item in "${asset_path_args[@]}"; do
-        [[ -n "$item" ]] && cmd+=(--asset-path "$item")
-      done
-    fi
-    if [[ -n "$package" ]]; then
-      IFS=', ' read -r -a package_args <<< "$package"
-      for item in "${package_args[@]}"; do
-        [[ -n "$item" ]] && cmd+=(--package "$item")
-      done
-    fi
-    "${cmd[@]}"
-
 # Strict local Isaac Lab runtime smoke. This intentionally fails until the
 # worker proves a real Isaac renderer capture and USD stage load; import-only or
 # placeholder evidence is rejected by the checker.
-molmo-isaac-runtime-smoke *overrides:
+isaac-runtime-smoke *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
     args=("$@")
     runtime_python=".venv-isaaclab/bin/python"
     output_dir="output/isaaclab/runtime-smoke"
     stamp=""
-    scene_source="procthor-10k-val"
+    scene_source="roboclaws-generic"
     scene_index="0"
     scene_usd_path=""
     generated_scene_kind="roboclaws_smoke"
     seed="7"
     generated_mess_count="1"
-    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    map_bundle=""
     include_robot="true"
     robot_name="rby1m"
     require_real_rendering="true"
@@ -832,273 +753,3 @@ b1-map12-navigation-smoke *overrides:
       --navigation-artifact "${run_dir}/navigation_smoke.json" \
       --readiness-artifact "${run_dir}/readiness_with_navigation.json"
     echo "==> report: ${run_dir}/report.html"
-
-# Strict local Isaac Lab cleanup report smoke. This uses the existing
-# household-cleanup backend selector, then applies report-level Isaac gates so a
-# full cleanup run cannot pass with fake runtime, placeholder visuals, or
-# unbound selected USD handles.
-molmo-isaac-cleanup-smoke *overrides:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    args=("$@")
-    runtime_python=".venv-isaaclab/bin/python"
-    output_dir="output/isaaclab/cleanup-smoke"
-    stamp=""
-    seed="7"
-    task="帮我收拾这个房间"
-    scene_source="procthor-10k-val"
-    scene_index="0"
-    scene_usd_path=""
-    generated_mess_count="1"
-    map_bundle="scene-index"
-    robot_name="rby1m"
-    require_real_runtime="true"
-    require_scene_loaded="true"
-    require_local_scene_usd="true"
-    require_selected_usd_bindings="true"
-    require_robot_view_provenance="true"
-    require_robot_head_camera_fpv="true"
-    require_segmentation_evidence="false"
-    segmentation_data_types=""
-    segmentation_semantic_filter=""
-    require_snapshot_provenance="true"
-    accept_nvidia_eula="true"
-    for arg in "${args[@]}"; do
-      if [[ "$arg" != *=* ]]; then
-        echo "error: override '$arg' is not key=value" >&2
-        exit 1
-      fi
-      key="${arg%%=*}"
-      value="${arg#*=}"
-      key="${key#--}"
-      key="${key//-/_}"
-      case "$key" in
-        runtime_python|output_dir|stamp|seed|task|prompt|scene_source|scene_index|\
-        scene_usd_path|generated_mess_count|map_bundle|robot_name|\
-        require_real_runtime|require_scene_loaded|require_local_scene_usd|\
-        require_selected_usd_bindings|require_robot_view_provenance|\
-        require_robot_head_camera_fpv|require_canonical_robot_view_camera_control|\
-        require_segmentation_evidence|segmentation_data_types|segmentation_semantic_filter|\
-        require_snapshot_provenance|accept_nvidia_eula)
-          ;;
-        *)
-          echo "error: unsupported override key '$key'" >&2
-          exit 1
-          ;;
-      esac
-      if [[ "$key" == "prompt" ]]; then
-        key="task"
-      fi
-      printf -v "$key" '%s' "$value"
-    done
-    if [[ -z "$stamp" ]]; then
-      stamp="$({{timestamp_cmd}})"
-    fi
-    if [[ "$require_local_scene_usd" == "true" && -z "$scene_usd_path" ]]; then
-      echo "error: require_local_scene_usd=true needs scene_usd_path=<caller-supplied MolmoSpaces/local USD>" >&2
-      exit 1
-    fi
-    run_dir="${output_dir}/${stamp}"
-    mkdir -p "$run_dir"
-    export ROBOCLAWS_ISAACLAB_PYTHON="$runtime_python"
-    export ROBOCLAWS_ISAACLAB_RUNTIME_MODE="real"
-    if [[ "$accept_nvidia_eula" == "true" ]]; then
-      export OMNI_KIT_ACCEPT_EULA="YES"
-    fi
-    run_cmd=(.venv/bin/python -m roboclaws.household.realworld_cleanup \
-      --output-dir "$run_dir" \
-      --seed "$seed" \
-      --task "$task" \
-      --backend isaaclab_subprocess \
-      --evidence-lane world-oracle-labels \
-      --fixture-hint-mode room_only \
-      --generated-mess-count "$generated_mess_count" \
-      --scene-source "$scene_source" \
-      --scene-index "$scene_index" \
-      --include-robot \
-      --robot-name "$robot_name" \
-      --record-robot-views)
-    case "$map_bundle" in
-      scene-index|none|"")
-        ;;
-      *)
-        run_cmd+=(--map-bundle-dir "$map_bundle" --require-map-bundle)
-        ;;
-    esac
-    if [[ -n "$scene_usd_path" ]]; then
-      run_cmd+=(--isaac-scene-usd-path "$scene_usd_path")
-    fi
-    if [[ "$require_segmentation_evidence" == "true" ]]; then
-      run_cmd+=(--isaac-enable-segmentation)
-      if [[ -n "$segmentation_data_types" ]]; then
-        IFS=', ' read -r -a segmentation_type_args <<< "$segmentation_data_types"
-        for data_type in "${segmentation_type_args[@]}"; do
-          if [[ -n "$data_type" ]]; then
-            run_cmd+=(--isaac-segmentation-data-type "$data_type")
-          fi
-        done
-      fi
-      if [[ -n "$segmentation_semantic_filter" ]]; then
-        IFS=', ' read -r -a semantic_filter_args <<< "$segmentation_semantic_filter"
-        for instance_name in "${semantic_filter_args[@]}"; do
-          if [[ -n "$instance_name" ]]; then
-            run_cmd+=(--isaac-segmentation-semantic-filter "$instance_name")
-          fi
-        done
-      fi
-    fi
-    "${run_cmd[@]}"
-    check_cmd=(.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
-      "$run_dir" \
-      --expect-backend isaaclab_subprocess \
-      --expect-policy deterministic_sweep_baseline \
-      --expect-profile world-oracle-labels \
-      --min-generated-mess-count "$generated_mess_count" \
-      --require-robot-views \
-      --require-advisory-scoring \
-      --min-semantic-accepted-count "$generated_mess_count" \
-      --min-sweep-coverage 1.0 \
-      --require-waypoint-honesty \
-      --require-real-robot-alignment \
-      --require-isaac-runtime \
-      --require-isaac-semantic-pose \
-      --require-isaac-scene-index-map-context)
-    if [[ "$require_real_runtime" == "true" ]]; then
-      check_cmd+=(--require-isaac-real-runtime)
-    fi
-    if [[ "$require_scene_loaded" == "true" ]]; then
-      check_cmd+=(--require-isaac-scene-loaded)
-    fi
-    if [[ "$require_local_scene_usd" == "true" ]]; then
-      check_cmd+=(--require-isaac-local-scene-usd)
-    fi
-    if [[ "$require_selected_usd_bindings" == "true" ]]; then
-      check_cmd+=(--require-isaac-selected-usd-bindings)
-    fi
-    if [[ "$require_robot_view_provenance" == "true" ]]; then
-      check_cmd+=(--require-isaac-robot-view-provenance)
-    fi
-    if [[ "$require_robot_head_camera_fpv" == "true" || "$require_canonical_robot_view_camera_control" == "true" ]]; then
-      check_cmd+=(--require-robot-head-camera-fpv)
-    fi
-    if [[ "$require_segmentation_evidence" == "true" ]]; then
-      check_cmd+=(--require-isaac-segmentation-evidence)
-    fi
-    if [[ "$require_snapshot_provenance" == "true" ]]; then
-      check_cmd+=(--require-isaac-snapshot-provenance)
-    fi
-    "${check_cmd[@]}"
-
-# Prepare a flattened MolmoSpaces semantic USD, then run the strict Isaac
-# cleanup smoke against that prepared artifact. This keeps the explicit
-# prepared-scene boundary out of public household-cleanup defaults.
-molmo-isaac-prepared-cleanup-smoke *overrides:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    args=("$@")
-    runtime_python=".venv-isaaclab/bin/python"
-    output_dir="output/isaaclab/prepared-cleanup-smoke"
-    stamp=""
-    scene_usd_path=""
-    mujoco_scene_xml_path=""
-    prepared_scene_usd_path=""
-    summary_path=""
-    cleanup_stamp="cleanup"
-    seed="7"
-    task="帮我收拾这个房间"
-    scene_source="procthor-10k-val"
-    scene_index="0"
-    generated_mess_count="1"
-    map_bundle="scene-index"
-    robot_name="rby1m"
-    label_containers="true"
-    require_prepare_ready="true"
-    require_segmentation_evidence="true"
-    segmentation_data_types="semantic_segmentation"
-    segmentation_semantic_filter="usd_prim_path"
-    accept_nvidia_eula="true"
-    for arg in "${args[@]}"; do
-      if [[ "$arg" != *=* ]]; then
-        echo "error: override '$arg' is not key=value" >&2
-        exit 1
-      fi
-      key="${arg%%=*}"
-      value="${arg#*=}"
-      key="${key#--}"
-      key="${key//-/_}"
-      case "$key" in
-        runtime_python|output_dir|stamp|scene_usd_path|mujoco_scene_xml_path|prepared_scene_usd_path|\
-        summary_path|cleanup_stamp|seed|task|prompt|scene_source|scene_index|\
-        generated_mess_count|map_bundle|robot_name|label_containers|\
-        require_prepare_ready|require_segmentation_evidence|\
-        segmentation_data_types|segmentation_semantic_filter|accept_nvidia_eula)
-          ;;
-        *)
-          echo "error: unsupported override key '$key'" >&2
-          exit 1
-          ;;
-      esac
-      if [[ "$key" == "prompt" ]]; then
-        key="task"
-      fi
-      printf -v "$key" '%s' "$value"
-    done
-    if [[ -z "$scene_usd_path" ]]; then
-      echo "error: scene_usd_path=<raw MolmoSpaces scene USD> is required" >&2
-      exit 1
-    fi
-    if [[ -z "$stamp" ]]; then
-      stamp="$({{timestamp_cmd}})"
-    fi
-    run_root="${output_dir}/${stamp}"
-    if [[ -z "$prepared_scene_usd_path" ]]; then
-      prepared_scene_usd_path="${run_root}/scene_semantic.usda"
-    fi
-    if [[ -z "$summary_path" ]]; then
-      summary_path="${run_root}/summary.json"
-    fi
-    mkdir -p "$run_root"
-    if [[ "$accept_nvidia_eula" == "true" ]]; then
-      export OMNI_KIT_ACCEPT_EULA="YES"
-    fi
-    prep_cmd=("$runtime_python" scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py \
-      --scene-usd-path "$scene_usd_path" \
-      --output-usd-path "$prepared_scene_usd_path" \
-      --summary-output "$summary_path")
-    if [[ -n "$mujoco_scene_xml_path" ]]; then
-      prep_cmd+=(--mujoco-scene-xml-path "$mujoco_scene_xml_path")
-    fi
-    if [[ "$label_containers" == "true" ]]; then
-      prep_cmd+=(--label-containers)
-    else
-      prep_cmd+=(--no-label-containers)
-    fi
-    "${prep_cmd[@]}"
-    if [[ "$require_prepare_ready" == "true" ]]; then
-      .venv/bin/python scripts/isaac_lab_cleanup/check_prepared_semantic_usd_summary.py \
-        "$summary_path"
-    fi
-    cleanup_cmd=(just harness::molmo-isaac-cleanup-smoke \
-      output_dir="$run_root" \
-      stamp="$cleanup_stamp" \
-      runtime_python="$runtime_python" \
-      scene_usd_path="$prepared_scene_usd_path" \
-      seed="$seed" \
-      task="$task" \
-      scene_source="$scene_source" \
-      scene_index="$scene_index" \
-      generated_mess_count="$generated_mess_count" \
-      map_bundle="$map_bundle" \
-      robot_name="$robot_name" \
-      require_real_runtime=true \
-      require_scene_loaded=true \
-      require_local_scene_usd=true \
-      require_selected_usd_bindings=true \
-      require_robot_view_provenance=true \
-      require_robot_head_camera_fpv=true \
-      require_segmentation_evidence="$require_segmentation_evidence" \
-      segmentation_data_types="$segmentation_data_types" \
-      segmentation_semantic_filter="$segmentation_semantic_filter" \
-      require_snapshot_provenance=true \
-      accept_nvidia_eula="$accept_nvidia_eula")
-    exec "${cleanup_cmd[@]}"

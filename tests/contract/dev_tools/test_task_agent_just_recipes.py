@@ -1278,36 +1278,16 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     assert route[13] == "fake-http"
 
 
-def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
-    route = trace_household_cleanup_run(
+def test_molmo_cleanup_rejects_isaac_backend_override() -> None:
+    stderr = assert_agent_run_fails(
+        "household-world.cleanup",
         "direct",
         "world-oracle-labels",
         "backend=isaaclab_subprocess",
-        "seed=7",
-        "environment_setup=relocate-cleanup-related-objects",
-        "relocation_count=1",
     )
 
-    assert route[:6] == [
-        "just",
-        "molmo::household-world-impl",
-        "direct",
-        "world-oracle-labels",
-        "7",
-        "output/household/household-world/cleanup/direct-report",
-    ]
-    assert route[16:] == [
-        "",
-        "isaaclab_subprocess",
-        "minimal",
-        "procthor-10k-val",
-        "0",
-        "",
-        "auto",
-        "",
-        "household-world",
-        "cleanup",
-    ]
+    assert "backend=isaaclab_subprocess is scoped to world=b1-map12" in stderr
+    assert "MolmoSpaces household routes use backend=molmospaces_subprocess" in stderr
 
 
 def test_household_cleanup_rejects_public_legacy_rich_map_mode() -> None:
@@ -1422,22 +1402,55 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
     assert route[-1] == "map-build"
 
 
-def test_semantic_map_build_codex_routes_isaac_backend_to_live_runner() -> None:
-    route = trace_household_map_build_run(
-        "codex",
+def test_semantic_map_build_codex_rejects_molmospaces_isaac_backend_override() -> None:
+    stderr = assert_agent_run_fails(
+        "household-world.map-build",
+        "codex-cli",
         "world-oracle-labels",
         "backend=isaaclab_subprocess",
     )
 
-    assert route[:4] == [
+    assert "backend=isaaclab_subprocess is scoped to world=b1-map12" in stderr
+
+
+def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> None:
+    route, plan_trace = trace_surface_run_with_plan(
+        "surface=household-world",
+        "world=b1-map12",
+        "backend=isaaclab",
+        "agent_engine=codex-cli",
+        "prompt=inspect the digital twin",
+        "evidence_lane=world-oracle-labels",
+    )
+
+    assert route[:6] == [
         "just",
         "molmo::household-world-impl",
         "codex-live",
         "world-oracle-labels",
+        "7",
+        "output/household/household-world/open-ended/codex-report",
     ]
-    assert route[15] == "on"
+    assert route[10] == "b1-map12-room-semantics"
+    assert route[12] == "on"
     assert route[17] == "isaaclab_subprocess"
-    assert route[-1] == "map-build"
+    assert route[21] == (
+        "data/robot-data-lab/scene-engine/data/"
+        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+    )
+    assert route[-2:] == ["household-world", "open-ended"]
+    assert "world=b1-map12" in plan_trace
+    assert "backend=isaaclab" in plan_trace
+    target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
+    assert "household-world.open-ended codex-cli world-oracle-labels" in target_trace
+    assert "map_bundle=b1-map12-room-semantics" in target_trace
+    assert (
+        "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
+        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+    ) in target_trace
+    assert "world=b1-map12" in target_trace
+    assert "backend=isaaclab_subprocess" in target_trace
+    assert "generated_mess_count=0" in target_trace
 
 
 def test_household_cleanup_routes_agibot_backend_to_physical_pilot_cli() -> None:

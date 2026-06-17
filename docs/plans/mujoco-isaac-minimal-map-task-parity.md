@@ -1,17 +1,20 @@
 # MuJoCo Isaac Minimal Map Task Parity
 
-**Status:** Planned
+**Status:** Superseded by
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142. This file is historical MolmoSpaces Isaac parity planning, not a
+current execution contract.
 **Created:** 2026-06-03
 **Source:** Discussion after MuJoCo/Isaac FPV head-camera alignment, chase-camera
 repair, box visual-state fix, RAW_FPV check request, and the decision that
 minimal map, semantic-map-build, and household-cleanup should be compared in
 both backends.
-**Workflow:** Pre-GSD plan. Use this file as the task-level execution source.
-Use
+**Historical workflow:** Pre-GSD plan superseded before execution. The linked
+camera/render plans below are historical evidence, not current gates. Use
 [`mujoco-isaac-visual-parity-convergence.md`](mujoco-isaac-visual-parity-convergence.md)
 and
 [`mujoco-isaac-object-render-parity-audit.md`](mujoco-isaac-object-render-parity-audit.md)
-as the lower-level camera/object/render gates.
+only as historical context.
 
 ## Problem
 

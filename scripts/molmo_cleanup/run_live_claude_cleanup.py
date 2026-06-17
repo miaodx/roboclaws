@@ -207,6 +207,7 @@ class LiveClaudeCleanupRunner:
         skill_name = getattr(self.args, "skill_name", None) or "molmo-realworld-cleanup"
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
+            run_id=run_id,
             skill_name=skill_name,
         )
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", run_id)

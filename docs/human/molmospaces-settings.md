@@ -53,6 +53,31 @@ for fast contract checks, but it has no robot camera timeline.
 | Provenance | `api_semantic` | Cleanup tools mutate simulator semantic state. | Current normal cleanup loop. |
 | Provenance | `planner_backed` | Cleanup subphase has matching RBY1M/CuRobo proof. | Future strict manipulation target. |
 
+## Scene Sampler Defaults
+
+The operator console uses the source-aware MolmoSpaces sampler for its default
+household scene rail. The visible first-slice UI set is intentionally small:
+`molmospaces/val_0`, `molmospaces/val_2`, and `molmospaces/val_9`, all from
+`scene_source=procthor-10k-val` on the MuJoCo path. Existing launch aliases
+such as `molmospaces/val_1`, `val_3`, `val_4`, `val_5`, and `val_7` remain
+explicitly launchable as `procthor-10k-val` aliases, but they are hidden from
+the default console scene rail unless admitted by the sampler.
+
+The eval stress projection is broader than the UI projection. It currently
+admits prepared `procthor-10k-val` samples `0`, `2`, `3`, `5`, and `9` and
+records the source as partial because the target remains ten eval-ready samples
+per supported `scene_source`. Other MolmoSpaces sources such as `ithor`,
+`procthor-objaverse-val`, and `holodeck-objaverse-val` are represented as
+blocked sampler/eval rows until local assets, previews, room/category
+provenance, navigation waypoints, and map-build artifacts are prepared.
+
+`procthor-10k-val` means the `val` split of the `procthor-10k` scene family; it
+does not mean that Roboclaws has ten thousand validation scenes ready. Sampler
+admission requires reviewable preview artifacts, at least three public
+rooms/navigation areas, waypoint coverage, and source or prepared-manifest room
+category provenance. Heuristic room-label parsing and room-count fallbacks may
+seed review candidates, but they do not satisfy sampler admission.
+
 ## Semantic Contract Profile
 
 `household_world` is the task-neutral MCP contract profile for household
