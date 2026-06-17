@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: RAW-FPV corpus generator numeric configuration now fails aloud.
+  Private-label and public-sweep corpus CLIs reject non-positive render
+  dimensions, non-positive `min_object_pixels`, and negative observation /
+  waypoint limits at argument parsing time instead of clamping invalid values to
+  one and generating plausible but misconfigured scorer artifacts. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud corpus
+  generation configuration; default values, valid positive dimensions,
+  zero-as-unlimited observation/waypoint limits, privacy boundaries,
+  manifest/report schemas, and replay/corpus generation flow are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `generate_raw_fpv_private_labels.py` is 798 lines and
+  `generate_raw_fpv_sweep_corpus.py` is 559 lines. Focused regression tests grow
+  `test_raw_fpv_perception_probe.py` to 1254 lines; leave test pruning for an
+  `$intuitive-tests` pass. Proof: focused RAW-FPV parser/unit tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: MolmoSpaces JSON worker numeric command kwargs now fail aloud.
   Served worker requests reject malformed, boolean, non-finite, or non-positive
   render dimensions and malformed, boolean, or non-finite camera/relative-motion

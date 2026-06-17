@@ -59,10 +59,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-dir", type=Path, default=DEFAULT_RUN_DIR)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--run-id", default="")
-    parser.add_argument("--max-observations", type=int, default=0)
-    parser.add_argument("--min-object-pixels", type=int, default=12)
-    parser.add_argument("--render-width", type=int, default=540)
-    parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument("--max-observations", type=_non_negative_int_arg, default=0)
+    parser.add_argument("--min-object-pixels", type=_positive_int_arg, default=12)
+    parser.add_argument("--render-width", type=_positive_int_arg, default=540)
+    parser.add_argument("--render-height", type=_positive_int_arg, default=360)
     parser.add_argument(
         "--label-scope",
         choices=(LABEL_SCOPE_GENERATED_TARGETS, LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE),
@@ -148,9 +148,9 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
                 source_state=source_state,
                 max_observations=int(args.max_observations or 0),
                 output_dir=replay_root / "robot_views",
-                min_object_pixels=max(1, int(args.min_object_pixels)),
-                render_width=max(1, int(args.render_width)),
-                render_height=max(1, int(args.render_height)),
+                min_object_pixels=int(args.min_object_pixels),
+                render_width=int(args.render_width),
+                render_height=int(args.render_height),
                 label_scope=str(args.label_scope),
             )
         else:
@@ -161,9 +161,9 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
                     source_state=source_state,
                     observation=observation,
                     output_dir=replay_root / "robot_views",
-                    min_object_pixels=max(1, int(args.min_object_pixels)),
-                    render_width=max(1, int(args.render_width)),
-                    render_height=max(1, int(args.render_height)),
+                    min_object_pixels=int(args.min_object_pixels),
+                    render_width=int(args.render_width),
+                    render_height=int(args.render_height),
                     label_scope=str(args.label_scope),
                 )
                 labels.extend(frame_labels)
@@ -231,7 +231,7 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
         "labeled_frame_count": labeled_frame_count,
         "unique_labeled_object_count": unique_object_count,
         "selected_object_count": len(generated_manifest["targets"]),
-        "min_object_pixels": max(1, int(args.min_object_pixels)),
+        "min_object_pixels": int(args.min_object_pixels),
         "artifacts": {
             "manifest": str(manifest_output_path),
             "generated_mess_manifest": str(manifest_path),
@@ -770,6 +770,28 @@ def _console_summary(report: dict[str, Any]) -> dict[str, Any]:
         "unique_labeled_object_count": report.get("unique_labeled_object_count"),
         "report_json": str(Path(str(report.get("output_dir", ""))) / "report.json"),
     }
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _non_negative_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a non-negative integer; got {value!r}"
+        ) from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"expected a non-negative integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

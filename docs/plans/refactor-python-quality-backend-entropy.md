@@ -60,6 +60,20 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV corpus
+  generator numeric-config false-green. Private-label and public-sweep corpus
+  CLIs now reject non-positive render dimensions, non-positive
+  `min_object_pixels`, and negative observation/waypoint limits at argument
+  parsing time instead of clamping invalid values to one and generating
+  plausible but misconfigured scorer artifacts. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud corpus generation
+  configuration; default values, valid positive dimensions, zero-as-unlimited
+  observation/waypoint limits, privacy boundaries, manifest/report schemas, and
+  replay/corpus generation flow are unchanged. The ratchet remains 0 complexity
+  rows and 79 oversized modules; `generate_raw_fpv_private_labels.py` is 798
+  lines and `generate_raw_fpv_sweep_corpus.py` is 559 lines. Focused
+  regression tests grow `test_raw_fpv_perception_probe.py` to 1254 lines; do
+  not prune or split tests outside an `$intuitive-tests` pass.
 - Follow-up implementation refresh on 2026-06-18 closed one MolmoSpaces JSON
   worker command numeric-kwargs false-green. Served worker requests now reject
   malformed, boolean, non-finite, or non-positive render dimensions and

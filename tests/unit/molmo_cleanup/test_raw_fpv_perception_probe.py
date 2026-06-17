@@ -700,6 +700,64 @@ def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) ->
     assert observations[0]["image_artifact"] == "robot_views/0001_raw_fpv_001.fpv.png"
 
 
+def test_private_label_generator_rejects_non_positive_render_dimensions() -> None:
+    labels = _load_label_module()
+
+    try:
+        labels.parse_args(["--render-width", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render width to fail at parse time")
+
+    try:
+        labels.parse_args(["--render-height", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render height to fail at parse time")
+
+
+def test_private_label_generator_rejects_invalid_pixel_and_observation_limits() -> None:
+    labels = _load_label_module()
+
+    try:
+        labels.parse_args(["--min-object-pixels", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid pixel threshold to fail at parse time")
+
+    try:
+        labels.parse_args(["--max-observations", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid observation limit to fail at parse time")
+
+
+def test_private_label_generator_accepts_valid_numeric_config() -> None:
+    labels = _load_label_module()
+
+    args = labels.parse_args(
+        [
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+            "--min-object-pixels",
+            "5",
+            "--max-observations",
+            "0",
+        ]
+    )
+
+    assert args.render_width == 1280
+    assert args.render_height == 720
+    assert args.min_object_pixels == 5
+    assert args.max_observations == 0
+
+
 def test_private_label_generator_full_trace_keeps_later_observations(tmp_path: Path) -> None:
     labels = _load_label_module()
     trace_path = tmp_path / "trace.jsonl"
@@ -892,6 +950,64 @@ def test_raw_fpv_sweep_corpus_public_observation_excludes_private_target_ids() -
     assert "private_plate_001" not in text
     assert "observed_" not in text
     assert "anchor_fixture_" not in text
+
+
+def test_raw_fpv_sweep_corpus_rejects_non_positive_render_dimensions() -> None:
+    sweep = _load_sweep_module()
+
+    try:
+        sweep.parse_args(["--render-width", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render width to fail at parse time")
+
+    try:
+        sweep.parse_args(["--render-height", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid render height to fail at parse time")
+
+
+def test_raw_fpv_sweep_corpus_rejects_invalid_pixel_and_waypoint_limits() -> None:
+    sweep = _load_sweep_module()
+
+    try:
+        sweep.parse_args(["--min-object-pixels", "0"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid pixel threshold to fail at parse time")
+
+    try:
+        sweep.parse_args(["--max-waypoints", "-1"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid waypoint limit to fail at parse time")
+
+
+def test_raw_fpv_sweep_corpus_accepts_valid_numeric_config() -> None:
+    sweep = _load_sweep_module()
+
+    args = sweep.parse_args(
+        [
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+            "--min-object-pixels",
+            "5",
+            "--max-waypoints",
+            "0",
+        ]
+    )
+
+    assert args.render_width == 1280
+    assert args.render_height == 720
+    assert args.min_object_pixels == 5
+    assert args.max_waypoints == 0
 
 
 def test_raw_fpv_sweep_corpus_labels_from_private_focus_only() -> None:

@@ -63,7 +63,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--source-run-dir", type=Path, default=DEFAULT_SOURCE_RUN_DIR)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--run-id", default="")
-    parser.add_argument("--max-waypoints", type=int, default=0)
+    parser.add_argument("--max-waypoints", type=_non_negative_int_arg, default=0)
     parser.add_argument(
         "--camera-yaw-deg",
         action="append",
@@ -78,9 +78,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=[],
         help="Camera pitch offsets to capture at each public waypoint.",
     )
-    parser.add_argument("--min-object-pixels", type=int, default=12)
-    parser.add_argument("--render-width", type=int, default=540)
-    parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument("--min-object-pixels", type=_positive_int_arg, default=12)
+    parser.add_argument("--render-width", type=_positive_int_arg, default=540)
+    parser.add_argument("--render-height", type=_positive_int_arg, default=360)
     parser.add_argument(
         "--label-scope",
         choices=(LABEL_SCOPE_GENERATED_TARGETS, LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE),
@@ -160,8 +160,8 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
                 view = backend.write_robot_views_with_resolution(
                     image_dir,
                     label=label,
-                    width=max(1, int(args.render_width)),
-                    height=max(1, int(args.render_height)),
+                    width=int(args.render_width),
+                    height=int(args.render_height),
                     camera_yaw_offset_deg=float(yaw),
                     camera_pitch_offset_deg=float(pitch),
                 )
@@ -182,9 +182,9 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
                     targets=generated_manifest["targets"],
                     output_dir=image_dir,
                     label_prefix=label,
-                    min_object_pixels=max(1, int(args.min_object_pixels)),
-                    width=max(1, int(args.render_width)),
-                    height=max(1, int(args.render_height)),
+                    min_object_pixels=int(args.min_object_pixels),
+                    width=int(args.render_width),
+                    height=int(args.render_height),
                     yaw=float(yaw),
                     pitch=float(pitch),
                     label_scope=str(args.label_scope),
@@ -271,7 +271,7 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
         "unique_labeled_object_count": len(unique_labeled),
         "selected_object_count": len(target_ids),
         "missing_private_targets": missing_targets,
-        "min_object_pixels": max(1, int(args.min_object_pixels)),
+        "min_object_pixels": int(args.min_object_pixels),
         "label_scope": str(args.label_scope),
         "camera_yaw_offsets_deg": list(yaw_offsets),
         "camera_pitch_offsets_deg": list(pitch_offsets),
@@ -531,6 +531,28 @@ def _console_summary(report: dict[str, Any]) -> dict[str, Any]:
         "missing_private_targets": report.get("missing_private_targets"),
         "report_json": str(Path(str(report.get("output_dir", ""))) / "report.json"),
     }
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _non_negative_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a non-negative integer; got {value!r}"
+        ) from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"expected a non-negative integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":
