@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from scripts.molmo_cleanup import planner_probe_runtime_diagnostics as runtime
+from scripts.molmo_cleanup import planner_probe_task_sampler_diagnostics as sampler
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROBE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_planner_manipulation_probe.py"
@@ -257,8 +258,7 @@ def test_worker_payload_from_stdout_preserves_timeout_diagnostics() -> None:
 
 
 def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="pickup/body",
             cleanup_target_receptacle_id="target/body",
@@ -273,7 +273,7 @@ def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None
         "place_target_name": "target/body",
     }
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+    result = sampler.cleanup_primitive_binding_from_sampled_task(requested, sampled)
 
     assert result["promoted"] is True
     binding = result["cleanup_primitive_binding"]
@@ -290,8 +290,7 @@ def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None
 
 
 def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="observed_001",
             cleanup_target_receptacle_id="sink_01",
@@ -308,7 +307,7 @@ def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases
         "place_target_name": "sink/body",
     }
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+    result = sampler.cleanup_primitive_binding_from_sampled_task(requested, sampled)
 
     assert result["promoted"] is True
     binding = result["cleanup_primitive_binding"]
@@ -319,8 +318,7 @@ def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases
 
 
 def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="observed_001",
             cleanup_target_receptacle_id="sink_01",
@@ -335,7 +333,7 @@ def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
         "place_target_name": "different_target",
     }
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+    result = sampler.cleanup_primitive_binding_from_sampled_task(requested, sampled)
 
     assert result["promoted"] is False
     assert result["cleanup_primitive_binding"] is None
@@ -346,8 +344,7 @@ def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
 
 
 def test_cleanup_primitive_binding_blocks_planner_alias_mismatch() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="observed_001",
             cleanup_target_receptacle_id="sink_01",
@@ -358,7 +355,7 @@ def test_cleanup_primitive_binding_blocks_planner_alias_mismatch() -> None:
         )
     )
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(
+    result = sampler.cleanup_primitive_binding_from_sampled_task(
         requested,
         {
             "schema": "planner_probe_sampled_task_binding_v1",
@@ -462,8 +459,7 @@ def test_policy_exception_context_classifies_no_planned_trajectory() -> None:
 
 
 def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
-    probe = _load_probe_module()
-    requested = probe._requested_cleanup_primitive_binding(
+    requested = sampler.requested_cleanup_primitive_binding(
         Namespace(
             cleanup_object_id="",
             cleanup_target_receptacle_id="",
@@ -472,7 +468,7 @@ def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
         )
     )
 
-    result = probe._cleanup_primitive_binding_from_sampled_task(
+    result = sampler.cleanup_primitive_binding_from_sampled_task(
         requested,
         {"pickup_obj_name": "pickup/body", "place_receptacle_name": "target/body"},
     )

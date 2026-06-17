@@ -1034,6 +1034,21 @@ logs before choosing the next slice.
   renderer unit tests, planner manipulation checker contract tests, ruff,
   format check, py_compile, diff check, and ratchet.
 
+- 2026-06-17: Planner-probe task-sampler diagnostics moved from
+  `run_molmo_planner_manipulation_probe.py` into
+  `planner_probe_task_sampler_diagnostics.py`, covering task-sampler
+  robot-placement profiles, exact cleanup task config, exact sampler adapter,
+  sampler failure diagnostics, placement scene/grasp/candidate-removal
+  diagnostics, diagnostic JSON coercion, sampled task binding, requested
+  cleanup primitive binding, and cleanup binding promotion. Tests now call the
+  owner directly for sampler/binding behavior while runner tests keep worker
+  exception context, CuRobo memory policy, policy execution diagnostics, and
+  image artifact coverage on the runner. Metric: planner probe runner 2510 ->
+  1103 lines, clearing the hard ceiling; new owner is 1412 lines warning-band
+  debt; ratchet is 11 complexity rows and 69 oversized modules. Proof: focused
+  planner headless renderer unit tests, planner manipulation checker contract
+  tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1129,6 +1144,13 @@ logs before choosing the next slice.
   module/version packets, torch/CUDA diagnostics, CUDA snapshot math, CuRobo
   extension-cache evidence, Warp adapter diagnostics, or headless renderer
   adapter setup directly.
+- Planner-probe task-sampler diagnostics are owned by
+  `planner_probe_task_sampler_diagnostics.py`; reopen only if
+  `run_molmo_planner_manipulation_probe.py` starts rebuilding task-sampler
+  robot-placement profiles, exact cleanup task config/binding, sampler failure
+  diagnostics, placement scene/grasp/candidate diagnostics, diagnostic JSON
+  coercion, sampled task binding, requested cleanup primitive binding, or
+  cleanup binding promotion directly.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state

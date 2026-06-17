@@ -18,20 +18,19 @@ the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 80` on 2026-06-17 after the planner-probe runtime diagnostics
-owner split. Treat this as a planning snapshot, not proof of a landed checkpoint;
-refresh before the next execution slice.
+--summary --top 80` on 2026-06-17 after the planner-probe task-sampler
+diagnostics owner split. Treat this as a planning snapshot for the next slice;
+refresh before executing again.
 
-- 11 Ruff complexity violations and 68 oversized modules remain. The oversized
-  count increased by one because the proof-bundle result owner is now counted
-  above the default 800-line target.
+- 11 Ruff complexity violations and 69 oversized modules remain. The oversized
+  count increased by one because the new task-sampler diagnostics owner is now
+  counted above the default 800-line target.
 - Largest P1 production hard-ceiling files are
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
   `roboclaws/household/realworld_contract.py` at 2836,
   `roboclaws/household/scene_camera_comparison.py` at 2830,
   `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` at 2808,
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711,
-  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2510,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 2394,
   and `roboclaws/household/report.py` at 2108.
 - `roboclaws/household/realworld_runtime_map_targets.py` is 1009 lines. Keep
@@ -44,6 +43,15 @@ refresh before the next execution slice.
 - `scripts/molmo_cleanup/planner_probe_runtime_diagnostics.py` is 474 lines and
   owns planner-probe runtime diagnostics, CUDA memory snapshots, CuRobo extension
   cache evidence, Warp compatibility, and headless renderer adapter setup.
+- `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` is down to
+  1103 lines and no longer a hard-ceiling P1. Keep it as the planner-probe
+  orchestration owner for CLI/worker dispatch, subprocess command construction,
+  CuRobo memory profile application, policy execution, diagnostic image capture,
+  and artifact write orchestration.
+- `scripts/molmo_cleanup/planner_probe_task_sampler_diagnostics.py` is 1412
+  lines. This is warning-band debt, not the next default P1: keep it as the
+  cohesive owner for task-sampler profile/config/binding/failure diagnostics
+  unless a later scan finds a second real owner inside it.
 - Backend workers remain below the hard ceiling:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1994 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1841 lines.
@@ -277,11 +285,51 @@ rechecked stale-surface and small-cut candidates against the active hard-ceiling
 frontier. No `pyproject.toml` dependency removal, stdlib/native replacement, or
 single small deletion outranks the current P1 owner-boundary work. The
 camera-labeler pipeline maps remain zero-entry identity indirections but are
-paired with active validation and public camera-labeler metadata; `_task_prefix_legacy`
-still has no in-repo call sites; the canonical-robot-view checker flag remains
-a reachable legacy alias that needs a focused checker migration if selected.
-The only required plan correction is to close or pause the current dirty
-Candidate C runtime-diagnostics checkpoint before choosing the next A-D slice.
+paired with active validation and public camera-labeler metadata;
+`_task_prefix_legacy` still has no in-repo call sites; the canonical-robot-view
+checker flag remains a reachable legacy alias that needs a focused checker
+migration if selected.
+
+Implementation refresh on 2026-06-17 completed Candidate C's task-sampler
+diagnostics owner split. Task-sampler robot-placement profiles, exact cleanup
+task config, exact sampler adapter, sampler failure diagnostics, placement
+scene/grasp/candidate-removal diagnostics, diagnostic JSON coercion, sampled
+task binding, requested cleanup primitive binding, and cleanup binding
+promotion now live in
+`scripts/molmo_cleanup/planner_probe_task_sampler_diagnostics.py`. The runner
+now delegates those concepts directly and keeps probe orchestration, CuRobo
+memory profile application, policy execution, worker exception context,
+execute-mode image artifacts, CLI/worker dispatch, and result writes. Metric:
+planner probe runner 2510 -> 1103 lines; new owner is 1412 lines; ratchet is
+11 complexity rows and 69 oversized modules. Proof: focused planner headless
+renderer unit tests, planner manipulation checker contract tests, ruff, format
+check, py_compile, and ratchet. Reopen this boundary only if the runner starts
+rebuilding task-sampler profiles, exact cleanup task config/binding, sampler
+failure diagnostics, diagnostic JSON coercion, sampled task binding, requested
+cleanup primitive binding, or cleanup binding promotion directly.
+
+Planning-only intuitive-refactor / ponytail recheck on 2026-06-17 refreshed
+the ratchet at 11 complexity rows and 69 oversized modules, then inspected the
+A/B/D frontier without starting implementation. No dependency removal,
+stdlib/native replacement, or small stale-surface deletion outranks the P1
+hard-ceiling frontier. Candidate D now has the clearest default next owner
+boundary: move OpenAI Agents SDK driver-side model-input compaction policy,
+filtering, raw-FPV image-memory policy, camera-grounded history summarization,
+tool-output summaries, model-input shape metrics, and model-input filter event
+writing out of `roboclaws/agents/drivers/openai_agents_live.py` into a focused
+driver owner. Keep runner-side perf-profile/default resolution in
+`run_live_openai_agents_cleanup.py` unless a separate runner slice is selected;
+do not combine SDK driver model-input filtering with live server lifecycle,
+checker invocation, or timing attachment. Candidate B's clearest fallback
+boundary is apple camera-contract diagnostics: move FPV/head-camera contract
+summaries, per-location camera contract diagnostics, FPV pose/lens deltas,
+compact camera metadata, robot-pose delta, Isaac robot import diagnostics,
+head-articulation diagnostics, and chase-contract diagnostics out of
+`run_robot_camera_apple2apple_comparison.py` into a focused apple camera
+contract owner. Candidate A should not be chosen merely because
+`realworld_contract.py` and `report.py` remain above the hard ceiling; select it
+only with a fresh facade-private coupling point or a remaining report-section
+owner such as Agibot rehearsal / SDK runner sections.
 
 ## Operating Rules
 
@@ -322,51 +370,62 @@ Candidate C runtime-diagnostics checkpoint before choosing the next A-D slice.
 
 ## Current Target
 
-Current checkpoint: Candidate C's planner-probe runtime diagnostics split is
-locally complete and verified, but not yet committed in this worktree. Do not
-start another implementation slice until that dirty checkpoint is either
-committed or explicitly paused. After that, refresh the ratchet and choose one
-new owner-boundary slice from Candidates A-D. Candidate A remains active because
+Current checkpoint: Candidate C's planner-probe runtime diagnostics and
+task-sampler diagnostics splits are verified and closed. Refresh the ratchet
+before implementation, then default to Candidate D's OpenAI Agents
+model-input-compaction owner split unless a fresh scan finds a stronger
+contract/report or visual-comparison owner boundary. Candidate A remains active because
 `realworld_contract.py` and `report.py` are still above the hard ceiling, but
-the runtime-map target/public-anchor and proof-bundle result-renderer boundaries
-are closed. Candidate B remains active through the visual comparison family:
-`scene_camera_comparison.py`, `summarize_robot_camera_visual_parity.py`, and the
-apple runner are still above the ceiling, but the apple object-parity audit,
-selected RGB evidence, and visual-state contract boundaries are closed.
-Candidate C still covers the planner manipulation probe runner, now narrowed to
-task-sampler profile/adapter diagnostics, exact cleanup binding, sampler failure
-instrumentation, policy execution, and diagnostic image capture. Candidate D
-covers the OpenAI Agents SDK live runtime/runner pair. Do not choose by line
-count alone; pick the clearer owner boundary from a fresh call-site scan.
+the runtime-map target/public-anchor, proof-bundle result-renderer, and related
+recent contract boundaries are closed. Candidate B remains active through the
+visual comparison family: `scene_camera_comparison.py`,
+`summarize_robot_camera_visual_parity.py`, and the apple runner are still above
+the ceiling, but the apple object-parity audit, selected RGB evidence, and
+visual-state contract boundaries are closed. Candidate B's current best
+fallback is apple camera-contract diagnostics, not capture-lane initialization.
+Candidate D covers the OpenAI Agents SDK live runtime/runner pair and is the
+recommended next P1 because the SDK driver still owns a cohesive model-input
+filtering concept. Candidate C is no longer the default next P1 unless the
+planner probe runner crosses 2000 lines again or the task-sampler owner reveals
+a second real owner with call-site evidence.
 
 Recommended next slice claim:
 
-- Slice: choose one fresh owner boundary confirmed by call-site scan from
-  Candidate A, B, C, or D.
+- Slice: Candidate D default. Move OpenAI Agents SDK driver-side model-input
+  compaction from `openai_agents_live.py` into a focused driver owner. Fallback:
+  Candidate B apple camera-contract diagnostics if D's call-site scan uncovers
+  public provider-behavior risk.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
   Profiles plus Thin Runtime / Server Adapters for Candidate D.
-- Current friction: `openai_agents_live.py` is 2889, `realworld_contract.py` is
-  2836,
+- Current friction: the hard-ceiling frontier is now
+  `openai_agents_live.py` at 2889, `realworld_contract.py` at 2836,
   `scene_camera_comparison.py` is 2830,
   `summarize_robot_camera_visual_parity.py` is 2808,
   `run_live_openai_agents_cleanup.py` is 2711,
-  `run_molmo_planner_manipulation_probe.py` is 2510, the apple runner is 2394,
-  and `report.py` is 2108. Candidate A's runtime-map target and proof-bundle
-  result-renderer splits are closed. Candidate C's runtime diagnostics owner is
-  closed. Candidate B's apple Object Gate,
+  the apple runner is 2394, and `report.py` is 2108. Candidate A's runtime-map
+  target and proof-bundle result-renderer splits are closed. Candidate C's
+  runtime diagnostics and task-sampler diagnostics owner splits are closed.
+  Candidate B's apple Object Gate,
   capture-quality, material/probe primitives, native-render diagnostics,
   image-metric artifacts, object-parity audit assembly, selected RGB evidence,
-  and visual-state contract evidence are closed.
+  and visual-state contract evidence are closed. Candidate D still keeps SDK
+  driver model-input filtering, compaction policies, raw-FPV/camera-grounded
+  history summaries, shape metrics, and filter-event writing inline with
+  provider request/session orchestration.
 - Simplification: move one remaining real responsibility to an existing or
   focused owner and update callers to that owner directly. Delete obsolete
   private wrappers when call-site scan proves they are internal. Do not replace
   private coupling with a loose parameter bag, compatibility alias pile, or new
   wrapper facade.
-- Behavior-change class: internal owner cleanup unless the selected slice
-  explicitly changes report, artifact, launch, MCP, or agent-facing contracts.
+- Behavior-change class: internal owner cleanup. For the D default, preserve
+  SDK request behavior, provider route semantics, model thinking policy, MCP
+  session behavior, continuation policy, event/span schemas, model-input
+  compaction output schemas, and live-status payloads.
 - Proof: focused tests matching the selected boundary, ruff on touched files,
-  format check, py_compile, and ratchet summary.
+  format check, py_compile, `git diff --check`, and ratchet summary. If a future
+  slice creates or keeps a new untracked owner during planning, use `git add -N`
+  before relying on the ratchet line-count output.
 - Non-goals: changing artifact schema, launch axes, `camera_labeler`,
   visual-grounding contracts, map-prior semantics, target-query behavior,
   done-readiness policy, visual-candidate declaration/lifecycle ownership,
@@ -392,15 +451,17 @@ checkpoint.
 ## Execution Preflight
 
 Preflight status: REVIEWED. Route: `$intuitive-refactor` ratchet mode. Default
-execution: close the current dirty Candidate C planner-probe runtime diagnostics
-checkpoint first, then refresh the ratchet and execute one P1 owner-boundary
-slice from Candidates A-D based on a fresh call-site scan. Non-goals: broad repo
-cleanup, line-count shaving across many files, preserving obsolete internal
-wrappers, lane initialization unless fresh drift appears, and live/provider/
-simulator proof unless the chosen slice changes that route. Re-approve if a
-slice would change a public launch,
-artifact schema, report shape, agent-facing payload, provider behavior, or
-private/public eval contract.
+execution: refresh the ratchet, run a short ponytail recheck against current
+hard-ceiling candidates, and execute Candidate D's SDK driver model-input
+compaction owner split. Use Candidate B apple camera-contract diagnostics as
+the fallback if D's call-site scan shows public provider-behavior risk. Non-goals:
+broad repo cleanup, line-count shaving across many files, preserving obsolete
+internal wrappers, lane initialization unless fresh drift appears, mixing SDK
+driver internals with live runner lifecycle, and live/provider/simulator proof
+unless the chosen slice changes that route. Re-approve if a slice would change
+a public launch, artifact schema, report shape, agent-facing payload, provider
+behavior, event/span schema, model-input compaction schema, or private/public
+eval contract.
 
 ## Active Candidates
 
@@ -488,14 +549,17 @@ boundary only if the runner starts rebuilding those audit packets, RGB evidence
 packets, visual-state contracts, or helper aliases directly.
 
 Other candidate-B slices are valid only around fresh real boundaries such as
-duplicated capture-lane initialization, new render contract diagnostics drift,
-or visual-parity summary reporting. After the Candidate A runtime-map target
-split, B is again a plausible next P1 frontier, but only if a fresh scan finds
-a cleaner boundary than the remaining `RealWorldCleanupContract`/report work.
-The apple runner's remaining camera-contract diagnostics and render-domain
-checks are real but less cleanly bounded than the completed object-parity
-family. Capture-lane initialization is parked as runner orchestration unless it
-grows duplicated lane setup or a canonical generated-mess owner emerges. The
+apple camera-contract diagnostics, duplicated capture-lane initialization, new
+render contract diagnostics drift, or visual-parity summary reporting. The
+apple runner's remaining camera-contract diagnostics are the clearest B
+fallback: move FPV/head-camera contract summaries, per-location camera contract
+diagnostics, FPV pose/lens delta summaries, compact camera metadata,
+robot-pose delta, Isaac robot import diagnostics, head-articulation
+diagnostics, and chase-contract diagnostics to a focused owner while keeping
+the runner responsible for lane initialization, state reads, manifest
+attachment, target selection, and render-domain orchestration. Capture-lane
+initialization remains parked as runner orchestration unless it grows duplicated
+lane setup or a canonical generated-mess owner emerges. The
 runner-private material/probe delegate surface has been removed; do not recreate
 `_probe_manifest_summary`,
 `_comparison_probe_comparable`, `_comparison_probe_delta`,
@@ -525,28 +589,21 @@ capture-quality interpretation that already has focused owners.
 
 ### C: Planner Manipulation Probe Runner Split
 
-Severity: P1. `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
-is 2510 lines. Owning architecture layer: Artifacts, reports, and eval suites,
-with Backend Runtime / Environment Primitive details behind the MolmoSpaces
-worker and planner runtime imports. Runtime module/version discovery, torch and
-CUDA diagnostics, CUDA memory snapshots, CuRobo extension-cache packets, Warp
-compatibility, and headless renderer adapter setup now belong to
-`planner_probe_runtime_diagnostics.py`; reopen that boundary only if the runner
-starts rebuilding those packets directly. The runner still owns CLI
-orchestration, worker subprocess setup, task-sampler robot-placement profile
-defaults/adapters, CuRobo memory profile application, exact cleanup task
-binding, sampler failure instrumentation, policy execution, diagnostic image
-capture, and small JSON-safe coercion helpers.
-
-Default C slice candidates are real concept moves, not helper shuffling:
-task-sampler robot-placement profiles, exact cleanup binding, and sampler
-failure instrumentation can move to a planner-probe task-sampler diagnostics
-owner; diagnostic image capture can move only if it is not still tightly coupled
-to execute-mode policy orchestration. Keep `run_probe()`, worker/main dispatch,
-subprocess command construction, policy execution control flow, and artifact
-write orchestration in the runner unless a scan proves a stronger owner. Do not
-reopen the already-extracted planner-probe runtime diagnostic,
-result-writer/checker/report-panel owners.
+Status: cleared from P1 for now. `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
+is 1103 lines after the runtime and task-sampler owner splits. Owning
+architecture layer: Artifacts, reports, and eval suites, with Backend Runtime /
+Environment Primitive details behind the MolmoSpaces worker and planner runtime
+imports. Runtime module/version discovery, torch/CUDA diagnostics, CUDA memory
+snapshots, CuRobo extension-cache packets, Warp compatibility, and headless
+renderer adapter setup belong to `planner_probe_runtime_diagnostics.py`.
+Task-sampler robot-placement profiles, exact cleanup task config/binding,
+sampler failure diagnostics, placement scene/grasp/candidate diagnostics,
+diagnostic JSON coercion, sampled task binding, requested cleanup primitive
+binding, and cleanup binding promotion belong to
+`planner_probe_task_sampler_diagnostics.py`. Reopen Candidate C as P1 only if
+the runner crosses 2000 lines again or starts rebuilding either owner directly.
+The new task-sampler owner is 1412 lines; split it only if a second real owner
+emerges, not for line count alone.
 
 Behavior-change class is internal artifact-construction cleanup unless the slice
 changes probe CLI flags, result schema, report claims, or checker semantics.
@@ -569,10 +626,21 @@ compaction plus raw-FPV/camera-grounded history policy and metrics from the SDK
 driver; model-service retry/model-racing observability from the SDK driver; span
 recorder/event sanitization from the SDK driver; or runner-side
 performance-profile/default resolution and timing summary construction from the
-live cleanup runner. Do not mix SDK driver internals with runner lifecycle in
-one new owner, and do not change provider route semantics, model thinking
-policy, MCP session behavior, continuation policy, checker gates, or
-live-status payloads unless explicitly approved.
+live cleanup runner. Default next slice: extract model-input compaction first,
+covering `_input_compaction_config()`, `_model_input_compaction_filter()`,
+`_compact_model_input_items()`, raw-FPV image-memory policy/planning/candidate
+helpers, camera-grounded history policy/planning/candidate helpers, tool-output
+decoding/summarization, model-input shape summary, and model-input filter event
+writing. Keep `_sdk_run_config_payload()` and `_runtime_config()` in the driver
+as integration points that call the owner; keep runner-side
+`_model_input_compaction_profile()`, `_raw_fpv_image_memory_profile()`, and
+`_camera_grounded_history_profile()` in the live cleanup runner unless a later
+runner slice is selected. Update model-input tests to import the new owner
+directly instead of keeping driver-private alias wrappers. Do not mix SDK driver
+internals with runner lifecycle in one new owner, and do not change provider
+route semantics, model thinking policy, MCP session behavior, continuation
+policy, checker gates, event/span schemas, or live-status payloads unless
+explicitly approved.
 
 Behavior-change class is internal owner cleanup unless the selected slice
 changes provider behavior, event/span schemas, status artifacts, prompt/profile
