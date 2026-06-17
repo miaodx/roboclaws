@@ -363,7 +363,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             ),
             required_overrides=("context_json",),
             default_overrides=(
-                "policy=codex_agibot_semantic_map_build_pilot",
+                "policy=codex_agibot_map_build_pilot",
                 "visual_grounding_timeout_s=20",
             ),
             emergency_stop_required=True,

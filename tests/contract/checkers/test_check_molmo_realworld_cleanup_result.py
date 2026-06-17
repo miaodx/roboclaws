@@ -219,7 +219,7 @@ def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
     assert result["runtime_metric_map"]["target_candidates"]
 
 
-def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> None:
+def test_checker_accepts_agibot_map_build_artifact(tmp_path: Path) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     run_dir = _write_agibot_map_build_fixture(tmp_path)
 
@@ -230,7 +230,7 @@ def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> N
         expect_task=None,
         expect_backend="agibot_gdk",
         expect_policy="semantic_sweep_baseline",
-        expect_mcp_server="agibot_semantic_map_build",
+        expect_mcp_server="agibot_map_build",
         min_generated_mess_count=0,
         require_agent_driven=True,
         require_camera_model_policy=True,
@@ -256,7 +256,7 @@ def test_checker_rejects_agibot_rehearsal_as_hardware_validation(
             expect_task=None,
             expect_backend="agibot_gdk",
             expect_policy="semantic_sweep_baseline",
-            expect_mcp_server="agibot_semantic_map_build",
+            expect_mcp_server="agibot_map_build",
             min_generated_mess_count=0,
             require_agent_driven=True,
             require_camera_model_policy=True,
@@ -268,7 +268,7 @@ def test_checker_rejects_agibot_rehearsal_as_hardware_validation(
         )
 
 
-def test_checker_accepts_agibot_hardware_semantic_map_build_shape(
+def test_checker_accepts_agibot_hardware_map_build_shape(
     tmp_path: Path,
 ) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -282,7 +282,7 @@ def test_checker_accepts_agibot_hardware_semantic_map_build_shape(
         expect_task=None,
         expect_backend="agibot_gdk",
         expect_policy="semantic_sweep_baseline",
-        expect_mcp_server="agibot_semantic_map_build",
+        expect_mcp_server="agibot_map_build",
         min_generated_mess_count=0,
         require_agent_driven=True,
         require_camera_model_policy=True,
@@ -322,7 +322,7 @@ def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
             expect_task=None,
             expect_backend="agibot_gdk",
             expect_policy="semantic_sweep_baseline",
-            expect_mcp_server="agibot_semantic_map_build",
+            expect_mcp_server="agibot_map_build",
             min_generated_mess_count=0,
             require_agent_driven=True,
             require_camera_model_policy=True,
@@ -402,7 +402,7 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     )
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     run_dir = tmp_path / "agibot-map-build"
-    server = agibot.make_agibot_semantic_map_build_mcp(
+    server = agibot.make_agibot_map_build_mcp(
         run_dir=run_dir,
         context_json=AGIBOT_CONTEXT_FIXTURE,
         evidence_lane="camera-grounded-labels",
@@ -422,7 +422,7 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
             path.parent,
             expect_task=None,
             expect_backend="agibot_gdk",
-            expect_policy="codex_agibot_semantic_map_build_pilot",
+            expect_policy="codex_agibot_map_build_pilot",
             min_generated_mess_count=0,
             require_camera_model_policy=True,
             require_runtime_metric_map=True,
@@ -2210,7 +2210,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     )
 
 
-def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -> None:
+def test_checker_accepts_live_raw_fpv_map_build_shape(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -3510,7 +3510,7 @@ def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
         f"agibot_map_build_mcp_server_{id(tmp_path)}",
     )
     run_dir = tmp_path / "agibot-map-build"
-    server = agibot.make_agibot_semantic_map_build_mcp(
+    server = agibot.make_agibot_map_build_mcp(
         run_dir=run_dir,
         context_json=AGIBOT_CONTEXT_FIXTURE,
         evidence_lane="camera-grounded-labels",
@@ -3553,15 +3553,15 @@ def _promote_agibot_fixture_to_hardware_shape(
     image_path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (20, 10), (240, 240, 240)).save(image_path)
 
-    data["cleanup_status"] = "physical_agibot_semantic_map_build_complete"
-    data["completion_status"] = "physical_agibot_semantic_map_build_complete"
+    data["cleanup_status"] = "physical_agibot_map_build_complete"
+    data["completion_status"] = "physical_agibot_map_build_complete"
     data["primitive_provenance"] = "agibot_gdk_normal_navi"
     data["sweep_coverage_rate"] = 1.0
     readiness = data["real_robot_readiness"]
     assert isinstance(readiness, dict)
     readiness.update(
         {
-            "status": "physical_agibot_semantic_map_build_complete",
+            "status": "physical_agibot_map_build_complete",
             "movement_enabled": True,
             "navigation_perception_ready": True,
             "human_takeover_stop": False,

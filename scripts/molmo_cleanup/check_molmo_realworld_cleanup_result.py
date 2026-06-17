@@ -76,10 +76,10 @@ from scripts.molmo_cleanup.realworld_agent_view_checker import (
     assert_runtime_metric_map as _assert_runtime_metric_map,
 )
 from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
-    AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
+    AGIBOT_MAP_BUILD_SCHEMA,
 )
 from scripts.molmo_cleanup.realworld_agibot_map_build_checker import (
-    assert_agibot_semantic_map_build_result as _assert_agibot_semantic_map_build_result,
+    assert_agibot_map_build_result as _assert_agibot_map_build_result,
 )
 from scripts.molmo_cleanup.realworld_minimal_map_checker import (
     assert_minimal_map as _assert_minimal_map,
@@ -376,8 +376,8 @@ def _assert_result(
 ) -> None:
     opts = _result_assert_options(overrides)
     assert data.get("contract") == REALWORLD_CONTRACT, data
-    if data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA:
-        _assert_agibot_semantic_map_build_result(
+    if data.get("schema") == AGIBOT_MAP_BUILD_SCHEMA:
+        _assert_agibot_map_build_result(
             data,
             base,
             expect_backend=opts["expect_backend"],
@@ -524,8 +524,8 @@ def _assert_agent_view_and_runtime_map(
     semantic_sweep = semantic_sweep or runtime_metric_map.get("mode") == "semantic_sweep"
     if opts["require_semantic_sweep"]:
         assert semantic_sweep, data
-        if _is_live_semantic_map_build(data):
-            _assert_live_semantic_map_build_scan_only(data)
+        if _is_live_map_build(data):
+            _assert_live_map_build_scan_only(data)
         else:
             assert data.get("cleanup_actions_disabled") is True, data
             assert data.get("policy") == "semantic_sweep_baseline", data
@@ -595,7 +595,7 @@ def _assert_artifacts_and_report_core(
     assert "ADR-0003 real-world-style cleanup run" not in report_text, report_text[:500]
     if opts["require_runtime_metric_map"]:
         assert "Runtime Metric Map" in report_text, report_text[:500]
-    if opts["require_semantic_sweep"] and not _is_live_semantic_map_build(data):
+    if opts["require_semantic_sweep"] and not _is_live_map_build(data):
         assert "Semantic Sweep Mode" in report_text, report_text[:500]
     elif opts["require_semantic_sweep"]:
         assert "Runtime Metric Map" in report_text, report_text[:500]
@@ -969,11 +969,11 @@ def _is_semantic_sweep_or_map_build(data: dict[str, Any]) -> bool:
     return (
         data.get("semantic_sweep_mode") is True
         or runtime_metric_map.get("mode") == "semantic_sweep"
-        or _is_live_semantic_map_build(data)
+        or _is_live_map_build(data)
     )
 
 
-def _is_live_semantic_map_build(data: dict[str, Any]) -> bool:
+def _is_live_map_build(data: dict[str, Any]) -> bool:
     trace = data.get("cleanup_policy_trace") or {}
     task_identity = {
         str(data.get("task_name") or ""),
@@ -986,7 +986,7 @@ def _is_live_semantic_map_build(data: dict[str, Any]) -> bool:
     )
 
 
-def _assert_live_semantic_map_build_scan_only(data: dict[str, Any]) -> None:
+def _assert_live_map_build_scan_only(data: dict[str, Any]) -> None:
     assert (
         data.get("task_name") == "household-world.map-build"
         or data.get("task_intent") == "map-build"

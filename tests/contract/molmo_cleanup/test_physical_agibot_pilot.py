@@ -7,10 +7,10 @@ import pytest
 
 from roboclaws.household.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.household.agibot_map_build_mcp_server import (
-    AGIBOT_SEMANTIC_MAP_BUILD_TOOLS,
+    AGIBOT_MAP_BUILD_TOOLS,
     MCP_SERVER_NAME,
     _camera_model_policy_evidence,
-    make_agibot_semantic_map_build_mcp,
+    make_agibot_map_build_mcp,
 )
 from roboclaws.household.agibot_map_defaults import (
     DEFAULT_AGIBOT_CONFIDENCE_LAYER,
@@ -70,7 +70,7 @@ def _assert_static_fixture_projection_artifact_only(
     runtime_map: dict,
     trace_events: list[dict],
 ) -> None:
-    assert "static_fixture_projection" not in AGIBOT_SEMANTIC_MAP_BUILD_TOOLS
+    assert "static_fixture_projection" not in AGIBOT_MAP_BUILD_TOOLS
     assert "static_fixture_projection" not in run_result["agent_view"]["public_tool_names"]
     assert "static_fixture_projection" in run_result["agent_view"]
     assert "static_fixture_projection" in runtime_map
@@ -116,7 +116,7 @@ def _assert_agibot_map_build_run_identity(run_result: dict) -> None:
 def _assert_agibot_map_build_policy_trace(run_result: dict) -> None:
     assert run_result["cleanup_policy_trace"]["agent_reasoning_visible"] is True
     assert run_result["cleanup_policy_trace"]["agent_review_kind"] == (
-        "agibot_codex_semantic_map_build_review"
+        "agibot_codex_map_build_review"
     )
     assert run_result["cleanup_policy_trace"]["events"][0]["decision"] == (
         "inspect_public_metric_map"
@@ -125,10 +125,10 @@ def _assert_agibot_map_build_policy_trace(run_result: dict) -> None:
 
 
 def _assert_agibot_map_build_runtime_map(run_result: dict, runtime_map: dict) -> None:
-    assert run_result["real_robot_readiness"]["semantic_map_build"] is True
+    assert run_result["real_robot_readiness"]["map_build"] is True
     assert run_result["real_robot_readiness"]["visited_waypoint_ids"] == ["wp_sofa_front"]
     assert run_result["runtime_metric_map"]["visited_waypoint_ids"] == ["wp_sofa_front"]
-    assert runtime_map["source"] == "agibot_semantic_map_build_mcp"
+    assert runtime_map["source"] == "agibot_map_build_mcp"
     assert runtime_map["visited_waypoint_ids"] == ["wp_sofa_front"]
 
 
@@ -406,14 +406,14 @@ def test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config
     assert "conservative defaults" in nudge["config_reason"]
 
 
-def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
+def test_agibot_map_build_mcp_records_agent_driven_public_trace(
     tmp_path: Path,
 ) -> None:
     _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
     run_dir = tmp_path / "run"
-    server = make_agibot_semantic_map_build_mcp(
+    server = make_agibot_map_build_mcp(
         run_dir=run_dir,
         context_json=context_path,
         evidence_lane="camera-grounded-labels",
@@ -449,7 +449,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     _assert_agibot_map_build_artifacts(run_result, trace_events, report_text)
 
 
-def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
+def test_agibot_map_build_camera_labels_call_external_grounding(
     tmp_path: Path,
 ) -> None:
     grounding_client = _StaticAgibotVisualGroundingClient()
@@ -505,11 +505,11 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
     assert event["visual_grounding_pipeline"]["status"] == "ok"
 
 
-def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
+def test_agibot_map_build_server_accepts_visual_grounding_timeout(
     tmp_path: Path,
 ) -> None:
     _require_agibot_sdk_runner()
-    server = make_agibot_semantic_map_build_mcp(
+    server = make_agibot_map_build_mcp(
         run_dir=tmp_path / "run",
         context_json=COMPLETED_CONTEXT_FIXTURE,
         evidence_lane="camera-grounded-labels",

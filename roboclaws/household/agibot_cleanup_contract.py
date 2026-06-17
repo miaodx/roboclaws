@@ -63,7 +63,7 @@ class AgibotCleanupMCPContract:
         real_movement_enabled: bool = False,
         agibot_map_artifact_dir: Path | None = None,
         scenario: CleanupScenario | None = None,
-        task_prompt: str = "Build a semantic map from Agibot G2 public evidence.",
+        task_prompt: str = "Build a Runtime Metric Map from Agibot G2 public evidence.",
     ) -> None:
         self.scenario = scenario or build_cleanup_scenario(seed=7)
         self.contract = AgibotCleanupBackendSession(self.scenario)

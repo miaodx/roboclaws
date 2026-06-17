@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.household.agibot_map_build_mcp_server import (
-    AGIBOT_SEMANTIC_MAP_BUILD_POLICY,
-    AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
+    AGIBOT_MAP_BUILD_POLICY,
+    AGIBOT_MAP_BUILD_SCHEMA,
 )
 from roboclaws.household.profiles import CAMERA_GROUNDED_LABELS_LANE, PHYSICAL_ROBOT_EVIDENCE_LANE
 from roboclaws.household.realworld_contract import (
@@ -20,10 +20,10 @@ from roboclaws.household.realworld_contract import (
 from roboclaws.household.semantic_timeline import duplicate_post_place_navigations
 from roboclaws.household.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
 
-AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER = "agibot_semantic_map_build"
+AGIBOT_MAP_BUILD_MCP_SERVER = "agibot_map_build"
 
 
-def assert_agibot_semantic_map_build_result(
+def assert_agibot_map_build_result(
     data: dict[str, Any],
     base: Path,
     *,
@@ -41,7 +41,7 @@ def assert_agibot_semantic_map_build_result(
     min_sweep_coverage: float | None,
 ) -> None:
     assert require_semantic_sweep, data
-    assert data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA, data
+    assert data.get("schema") == AGIBOT_MAP_BUILD_SCHEMA, data
     backend_evidence = data.get("backend_evidence") or {}
     assert backend_evidence.get("evidence_lane") == PHYSICAL_ROBOT_EVIDENCE_LANE, data
     assert data.get("backend_variant") == "agibot_gdk", data
@@ -55,9 +55,9 @@ def assert_agibot_semantic_map_build_result(
     )
 
     agent_view = data.get("agent_view") or {}
-    _assert_agibot_semantic_map_build_agent_view(agent_view)
+    _assert_agibot_map_build_agent_view(agent_view)
     if require_runtime_metric_map:
-        _assert_agibot_semantic_map_build_runtime_map(
+        _assert_agibot_map_build_runtime_map(
             data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
         )
     if min_sweep_coverage is not None:
@@ -66,7 +66,7 @@ def assert_agibot_semantic_map_build_result(
     readiness = data.get("real_robot_readiness") or {}
     _assert_agibot_readiness(readiness)
     if require_agibot_g2_hardware:
-        _assert_agibot_g2_hardware_semantic_map_build(data, base, readiness)
+        _assert_agibot_g2_hardware_map_build(data, base, readiness)
     _assert_agibot_blocked_manipulation(data)
     _assert_agibot_policy_trace(data)
     _assert_agibot_private_evaluation(data)
@@ -81,7 +81,7 @@ def assert_agibot_semantic_map_build_result(
         require_runtime_metric_map=require_runtime_metric_map,
     )
     if require_camera_model_policy:
-        _assert_agibot_semantic_map_build_camera_model_policy(
+        _assert_agibot_map_build_camera_model_policy(
             data,
             report_text,
             expect_pipeline_id=expect_visual_grounding_pipeline,
@@ -98,7 +98,7 @@ def _expected_policy(
         "deterministic_sweep_baseline",
         "semantic_sweep_baseline",
     }:
-        return AGIBOT_SEMANTIC_MAP_BUILD_POLICY
+        return AGIBOT_MAP_BUILD_POLICY
     return expect_policy
 
 
@@ -119,7 +119,7 @@ def _assert_expected_identity(
     if expect_mcp_server is not None:
         assert data.get("mcp_server") == expect_mcp_server, data
     else:
-        assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
+        assert data.get("mcp_server") == AGIBOT_MAP_BUILD_MCP_SERVER, data
     if require_agent_driven:
         assert data.get("agent_driven") is True, data
 
@@ -127,7 +127,7 @@ def _assert_expected_identity(
 def _assert_agibot_readiness(readiness: dict[str, Any]) -> None:
     assert readiness.get("schema") == REAL_ROBOT_READINESS_SCHEMA, readiness
     assert readiness.get("backend_variant") == "agibot_gdk", readiness
-    assert readiness.get("semantic_map_build") is True, readiness
+    assert readiness.get("map_build") is True, readiness
     assert readiness.get("physical_navigation_pilot") is True, readiness
     assert readiness.get("physical_cleanup_ready") is False, readiness
     assert readiness.get("manipulation_blocked") is True, readiness
@@ -194,7 +194,7 @@ def _assert_agibot_report_text(
         assert "Runtime Metric Map" in report_text, report_text[:500]
 
 
-def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> None:
+def _assert_agibot_map_build_agent_view(agent_view: dict[str, Any]) -> None:
     assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
     assert "metric_map" in agent_view, agent_view
     assert "static_fixture_projection" in agent_view, agent_view
@@ -217,11 +217,11 @@ def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> 
     _assert_no_forbidden_keys(agent_view)
 
 
-def _assert_agibot_semantic_map_build_runtime_map(
+def _assert_agibot_map_build_runtime_map(
     runtime_metric_map: dict[str, Any],
 ) -> None:
     assert runtime_metric_map.get("schema") == RUNTIME_METRIC_MAP_SCHEMA, runtime_metric_map
-    assert runtime_metric_map.get("source") == "agibot_semantic_map_build_mcp", runtime_metric_map
+    assert runtime_metric_map.get("source") == "agibot_map_build_mcp", runtime_metric_map
     assert "metric_map" in runtime_metric_map, runtime_metric_map
     assert "static_fixture_projection" in runtime_metric_map, runtime_metric_map
     assert isinstance(runtime_metric_map.get("observed_objects") or [], list), runtime_metric_map
@@ -234,7 +234,7 @@ def _assert_agibot_semantic_map_build_runtime_map(
     _assert_no_forbidden_keys(runtime_metric_map)
 
 
-def _assert_agibot_semantic_map_build_camera_model_policy(
+def _assert_agibot_map_build_camera_model_policy(
     data: dict[str, Any],
     report_text: str,
     *,
@@ -297,14 +297,14 @@ def _assert_failed_camera_policy_event(
     assert "external_visual_grounding_not_invoked" in stage_names, event
 
 
-def _assert_agibot_g2_hardware_semantic_map_build(
+def _assert_agibot_g2_hardware_map_build(
     data: dict[str, Any],
     base: Path,
     readiness: dict[str, Any],
 ) -> None:
     assert data.get("agent_driven") is True, data
-    assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
-    assert data.get("policy") == AGIBOT_SEMANTIC_MAP_BUILD_POLICY, data
+    assert data.get("mcp_server") == AGIBOT_MAP_BUILD_MCP_SERVER, data
+    assert data.get("policy") == AGIBOT_MAP_BUILD_POLICY, data
     assert data.get("evidence_lane") == CAMERA_GROUNDED_LABELS_LANE, data
     assert data.get("camera_labeler"), data
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
@@ -312,7 +312,7 @@ def _assert_agibot_g2_hardware_semantic_map_build(
         "runtime_metric_map"
     )
     assert isinstance(runtime_metric_map, dict), data
-    _assert_agibot_semantic_map_build_runtime_map(runtime_metric_map)
+    _assert_agibot_map_build_runtime_map(runtime_metric_map)
     _assert_agibot_g2_readiness(data, readiness)
     _assert_agibot_g2_live_head_color(data, base)
     _assert_agibot_g2_camera_policy(data)
@@ -323,7 +323,7 @@ def _assert_agibot_g2_readiness(
     data: dict[str, Any],
     readiness: dict[str, Any],
 ) -> None:
-    assert readiness.get("status") == "physical_agibot_semantic_map_build_complete", readiness
+    assert readiness.get("status") == "physical_agibot_map_build_complete", readiness
     assert readiness.get("movement_enabled") is True, readiness
     assert readiness.get("navigation_perception_ready") is True, readiness
     assert readiness.get("human_takeover_stop") is False, readiness
@@ -331,7 +331,7 @@ def _assert_agibot_g2_readiness(
     assert int(readiness.get("inspection_waypoint_total") or 0) >= 1, readiness
     assert int(readiness.get("reached_waypoint_count") or 0) >= 1, readiness
     assert float(readiness.get("observed_waypoint_rate") or 0.0) >= 1.0, readiness
-    assert data.get("cleanup_status") == "physical_agibot_semantic_map_build_complete", data
+    assert data.get("cleanup_status") == "physical_agibot_map_build_complete", data
     assert data.get("primitive_provenance") == "agibot_gdk_normal_navi", data
     assert float(data.get("sweep_coverage_rate") or 0.0) >= 1.0, data
 
