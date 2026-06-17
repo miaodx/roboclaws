@@ -58,9 +58,7 @@ for fast contract checks, but it has no robot camera timeline.
 The operator console uses the source-aware MolmoSpaces sampler for its default
 household scene rail. The visible first-slice UI set is intentionally small and
 is selected by a deterministic seeded-random policy that prefers distinct public
-room counts within each source. The current UI set is `molmospaces/val_0`,
-`molmospaces/val_2`, and `molmospaces/val_5`, all from
-`scene_source=procthor-10k-val` on the MuJoCo path, plus
+room counts within each source. The current UI set is
 `molmospaces/procthor-objaverse-val/0`,
 `molmospaces/procthor-objaverse-val/1`, and
 `molmospaces/procthor-objaverse-val/10` from
@@ -70,12 +68,13 @@ launchable as `procthor-10k-val` aliases, but they are hidden from the default
 console scene rail unless admitted by the sampler.
 
 The eval stress projection is broader than the UI projection. It currently
-admits ten prepared `procthor-10k-val` samples
-(`0`, `2`, `3`, `5`, `9`, `10`, `11`, `12`, `13`, `15`) and ten prepared
+admits five prepared `procthor-10k-val` samples
+(`10`, `11`, `12`, `13`, `15`) and ten prepared
 `procthor-objaverse-val` samples (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`,
-`13`, `14`). `ithor` and `holodeck-objaverse-val` are rejected exhausted under
-the current public-room/actionability gates, not waiting on an implicit
-download step. `ithor` candidate evidence for indices `1..12` and
+`13`, `14`). `procthor-10k-val` remains partial until more rows clear scanner
+gates. `ithor` and `holodeck-objaverse-val` are rejected exhausted under the
+current public-room/actionability gates, not waiting on an implicit download
+step. `ithor` candidate evidence for indices `1..12` and
 `holodeck-objaverse-val` candidate evidence for indices `0..19` fail with
 `fewer_than_three_public_navigation_areas`, so they should not be scanned again
 without new human curation or an intentional gate change.

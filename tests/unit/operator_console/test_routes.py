@@ -23,8 +23,19 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
-MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-public-labels"
+MUJOCO_CODEX_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+)
+MUJOCO_CODEX_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
+)
+MUJOCO_CODEX_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+)
+MUJOCO_OPENAI_AGENTS_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+    "world-public-labels"
+)
 
 
 def test_world_catalog_exposes_scene_first_console_choices() -> None:
@@ -35,24 +46,25 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     )
     assert "molmospaces/val_6" not in worlds
     assert "molmospaces/val_8" not in worlds
-    assert worlds["molmospaces/val_0"]["available_backends"] == ["mujoco"]
-    assert worlds["molmospaces/val_5"]["available_backends"] == ["mujoco"]
-    assert worlds["molmospaces/val_5"]["preview_assets"] == {
+    default_world = MOLMOSPACES_CONSOLE_WORLD_IDS[0]
+    assert worlds[default_world]["available_backends"] == ["mujoco"]
+    assert worlds["molmospaces/procthor-objaverse-val/10"]["available_backends"] == ["mujoco"]
+    assert worlds["molmospaces/procthor-objaverse-val/10"]["preview_assets"] == {
         "fpv": {
-            "path": "/previews/molmospaces-val_5-fpv.png",
-            "href": "/previews/molmospaces-val_5-fpv.png",
+            "path": "/previews/molmospaces-procthor-objaverse-val-10-fpv.png",
+            "href": "/previews/molmospaces-procthor-objaverse-val-10-fpv.png",
         },
         "map": {
-            "path": "/previews/molmospaces-val_5-map.png",
-            "href": "/previews/molmospaces-val_5-map.png",
+            "path": "/previews/molmospaces-procthor-objaverse-val-10-map.png",
+            "href": "/previews/molmospaces-procthor-objaverse-val-10-map.png",
         },
         "chase": {
-            "path": "/previews/molmospaces-val_5-chase.png",
-            "href": "/previews/molmospaces-val_5-chase.png",
+            "path": "/previews/molmospaces-procthor-objaverse-val-10-chase.png",
+            "href": "/previews/molmospaces-procthor-objaverse-val-10-chase.png",
         },
         "topdown": {
-            "path": "/previews/molmospaces-val_5-topdown.png",
-            "href": "/previews/molmospaces-val_5-topdown.png",
+            "path": "/previews/molmospaces-procthor-objaverse-val-10-topdown.png",
+            "href": "/previews/molmospaces-procthor-objaverse-val-10-topdown.png",
         },
     }
     assert worlds["agibot-g2/map-12"]["preview_assets"] == {
@@ -186,31 +198,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
         for route in enabled
     } >= {
         (
-            "molmospaces/val_0",
-            "mujoco",
-            "cleanup",
-            "codex-cli",
-            "codex-router-responses",
-            "world-public-labels",
-        ),
-        (
-            "molmospaces/val_0",
-            "mujoco",
-            "cleanup",
-            "claude-code",
-            "mimo-tp-anthropic",
-            "world-public-labels",
-        ),
-        (
-            "molmospaces/val_0",
-            "mujoco",
-            "cleanup",
-            "openai-agents-sdk",
-            "codex-router-responses",
-            "world-public-labels",
-        ),
-        (
-            "molmospaces/val_0",
+            "molmospaces/procthor-objaverse-val/0",
             "mujoco",
             "map-build",
             "codex-cli",
@@ -218,7 +206,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "world-public-labels",
         ),
         (
-            "molmospaces/val_0",
+            "molmospaces/procthor-objaverse-val/0",
             "mujoco",
             "open-ended",
             "codex-cli",
@@ -226,7 +214,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "world-public-labels",
         ),
         (
-            "molmospaces/val_2",
+            "molmospaces/procthor-objaverse-val/1",
             "mujoco",
             "open-ended",
             "codex-cli",
@@ -254,9 +242,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
 
 
 def test_openai_agents_route_payload_lists_provider_profiles() -> None:
-    route = get_selection(
-        "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
-    )
+    route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
     payload = route.to_payload()
 
     assert payload["provider_profile"] == "codex-router-responses"
@@ -292,18 +278,30 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
 
     enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
     for lane in lanes:
-        assert f"molmospaces/val_0::mujoco::cleanup::codex-cli::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::cleanup::claude-code::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::map-build::codex-cli::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::map-build::direct-runner::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::open-task::codex-cli::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::open-task::openai-agents-sdk::{lane}" in enabled_ids
-        assert f"molmospaces/val_2::mujoco::open-task::codex-cli::{lane}" in enabled_ids
+        assert (
+            f"molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::{lane}"
+            in enabled_ids
+        )
+        assert (
+            f"molmospaces/procthor-objaverse-val/0::mujoco::map-build::direct-runner::{lane}"
+            in enabled_ids
+        )
+        assert (
+            f"molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::{lane}"
+            in enabled_ids
+        )
+        assert (
+            f"molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+            f"{lane}" in enabled_ids
+        )
+        assert (
+            f"molmospaces/procthor-objaverse-val/1::mujoco::open-task::codex-cli::{lane}"
+            in enabled_ids
+        )
         assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
 
     grounded = get_selection(
-        "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::camera-grounded-labels"
     )
     assert "camera_labeler=grounding-dino" in grounded.launch_default_overrides
     agibot_grounded = get_selection(AGIBOT_CODEX_MAP_BUILD)
@@ -314,24 +312,32 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
     enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         assert f"{world_id}::mujoco::map-build::direct-runner::world-public-labels" in enabled_ids
+    disabled_ids = {
+        route.id for route in list_console_combinations(include_disabled=True) if not route.enabled
+    }
+    assert MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS == ()
     for world_id in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
-        assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in enabled_ids
+        assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in disabled_ids
+    for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in disabled_ids
 
     val0 = get_selection(MUJOCO_CODEX_CLEANUP)
-    val5 = get_selection("molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels")
-
-    assert "scene_index=0" in val0.launch_default_overrides
-    assert "map_bundle=none" not in val0.launch_default_overrides
-    assert "scene_index=5" in val5.launch_default_overrides
-    assert "map_bundle=none" in val5.launch_default_overrides
-    assert val5.to_payload()["preview_assets"]["fpv"]["href"] == (
-        "/previews/molmospaces-val_5-fpv.png"
+    val10 = get_selection(
+        "molmospaces/procthor-objaverse-val/10::mujoco::map-build::codex-cli::world-public-labels"
     )
 
-    argv = build_launch_argv(val5, root=tmp_path, run_id="run-val-5")
-    assert "world=molmospaces/val_5" in argv
-    assert "scene_source=procthor-10k-val" in argv
-    assert "scene_index=5" in argv
+    assert "scene_index=0" in val0.launch_default_overrides
+    assert "map_bundle=none" in val0.launch_default_overrides
+    assert "scene_index=10" in val10.launch_default_overrides
+    assert "map_bundle=none" in val10.launch_default_overrides
+    assert val10.to_payload()["preview_assets"]["fpv"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-fpv.png"
+    )
+
+    argv = build_launch_argv(val10, root=tmp_path, run_id="run-val-10")
+    assert "world=molmospaces/procthor-objaverse-val/10" in argv
+    assert "scene_source=procthor-objaverse-val" in argv
+    assert "scene_index=10" in argv
     assert "map_bundle=none" in argv
 
 
@@ -350,19 +356,25 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-public-labels" not in all_ids
     assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-public-labels" not in all_ids
 
-    assert "molmospaces/val_2::mujoco::cleanup::codex-cli::world-public-labels" in disabled
-    assert (
-        "at least 5 generated cleanup targets"
-        in disabled["molmospaces/val_2::mujoco::cleanup::codex-cli::world-public-labels"]
+    cleanup_disabled = (
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
     )
+    assert cleanup_disabled in disabled
+    assert "at least 5 generated cleanup targets" in disabled[cleanup_disabled]
     assert not any(
         "::isaaclab::" in route_id for route_id in all_ids if route_id.startswith("molmospaces/")
     )
-    assert "molmospaces/val_2::mujoco::map-build::codex-cli::world-public-labels" in enabled_ids
-    assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-public-labels" in enabled_ids
     assert (
-        "molmospaces/val_0::mujoco::open-task::openai-agents-sdk::world-public-labels"
-        in enabled_ids
+        "molmospaces/procthor-objaverse-val/1::mujoco::map-build::codex-cli::"
+        "world-public-labels" in enabled_ids
+    )
+    assert (
+        "molmospaces/procthor-objaverse-val/1::mujoco::open-task::codex-cli::"
+        "world-public-labels" in enabled_ids
+    )
+    assert (
+        "molmospaces/procthor-objaverse-val/0::mujoco::open-task::openai-agents-sdk::"
+        "world-public-labels" in enabled_ids
     )
 
     enabled_mujoco_cleanup_worlds = {
@@ -375,7 +387,7 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
             and route.evidence_lane == "world-public-labels"
         )
     }
-    assert enabled_mujoco_cleanup_worlds == set(MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS)
+    assert enabled_mujoco_cleanup_worlds == set()
 
 
 def test_console_keeps_b1_unsupported_isaac_lane_visible_but_disabled() -> None:
@@ -406,24 +418,27 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
     )
     assert (
         "Map-build"
-        in reasons["molmospaces/val_0::mujoco::map-build::claude-code::world-public-labels"]
+        in reasons[
+            "molmospaces/procthor-objaverse-val/0::mujoco::map-build::claude-code::"
+            "world-public-labels"
+        ]
     )
     b1_camera_grounded = "b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"
     assert "not wired yet" in reasons[b1_camera_grounded]
 
 
 def test_payload_exposes_orthogonal_ui_metadata() -> None:
-    mujoco = get_selection(MUJOCO_CODEX_CLEANUP).to_payload()
+    mujoco = get_selection(MUJOCO_CODEX_OPEN_TASK).to_payload()
     agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
     b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
 
-    assert mujoco["world_id"] == "molmospaces/val_0"
+    assert mujoco["world_id"] == "molmospaces/procthor-objaverse-val/0"
     assert mujoco["backend_id"] == "mujoco"
     assert mujoco["agent_engine_id"] == "codex-cli"
     assert mujoco["provider_profile"] == "codex-router-responses"
-    assert mujoco["scenario_setup"] == "relocate-cleanup-related-objects"
+    assert mujoco["scenario_setup"] == "baseline"
     assert "agent_engine=codex-cli" in mujoco["argv_preview"]
-    assert "scenario_setup=relocate-cleanup-related-objects" in mujoco["argv_preview"]
+    assert "scenario_setup=baseline" in mujoco["argv_preview"]
     assert mujoco["field_groups"] == ["common"]
     assert "grounding" not in mujoco["view_modes"]
 
@@ -461,7 +476,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         "just",
         "run::surface",
         "surface=household-world",
-        "world=molmospaces/val_0",
+        "world=molmospaces/procthor-objaverse-val/0",
         "backend=mujoco",
         "preset=cleanup",
         "agent_engine=codex-cli",
@@ -484,7 +499,7 @@ def test_map_build_launch_defaults_to_baseline_scenario_setup(tmp_path) -> None:
 
 def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -> None:
     selection = get_selection(
-        "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"
+        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::camera-grounded-labels"
     )
     argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
 

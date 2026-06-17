@@ -49,9 +49,18 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
-MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-public-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
-MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-public-labels"
+MUJOCO_CLAUDE_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
+)
+MUJOCO_CODEX_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+)
+MUJOCO_CODEX_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+)
+MUJOCO_CODEX_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
+)
 
 
 def _free_port() -> str:
@@ -76,8 +85,8 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
     disabled = {route.id: route.disabled_reason for route in routes if not route.enabled}
 
     assert {route.id for route in supported} >= {
-        MUJOCO_CODEX_CLEANUP,
-        MUJOCO_CLAUDE_CLEANUP,
+        MUJOCO_CODEX_OPEN_TASK,
+        MUJOCO_CLAUDE_OPEN_TASK,
         AGIBOT_CODEX_MAP_BUILD,
         MUJOCO_CODEX_MAP_BUILD,
         B1_CODEX_OPEN_TASK,
@@ -95,7 +104,7 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
 
 
 def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
-    mujoco = get_selection(MUJOCO_CODEX_CLEANUP).to_payload()
+    mujoco = get_selection(MUJOCO_CODEX_OPEN_TASK).to_payload()
     b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
     agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
 
@@ -129,7 +138,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         "just",
         "run::surface",
         "surface=household-world",
-        "world=molmospaces/val_0",
+        "world=molmospaces/procthor-objaverse-val/0",
         "backend=mujoco",
         "preset=cleanup",
         "agent_engine=codex-cli",
@@ -188,15 +197,15 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
             method="POST",
             data=json.dumps(
                 {
-                    "world_id": "molmospaces/val_0",
+                    "world_id": "molmospaces/procthor-objaverse-val/0",
                     "backend_id": "mujoco",
-                    "intent_id": "cleanup",
+                    "intent_id": "open-ended",
                     "agent_engine_id": "codex-cli",
                     "provider_profile": "codex-router-responses",
                     "evidence_lane": "world-public-labels",
-                    "scenario_setup": "relocate-cleanup-related-objects",
+                    "scenario_setup": "baseline",
                     "prompt": "只收拾桌面上的杯子",
-                    "overrides": {"relocation_count": "5"},
+                    "overrides": {},
                 }
             ).encode("utf-8"),
             headers={"Content-Type": "application/json"},
@@ -209,12 +218,14 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
         thread.join(timeout=2)
 
     assert payload["operator_prompt"] == "只收拾桌面上的杯子"
-    assert payload["source"] == "household-cleanup"
-    assert payload["intent"] == "cleanup"
+    assert payload["source"] == "household-open-task"
+    assert payload["intent"] == "open-ended"
     assert "prompt_mode" not in payload
-    assert "This run is surface=household-world intent=cleanup" in payload["agent_kickoff_prompt"]
+    assert (
+        "This run is surface=household-world intent=open-ended" in payload["agent_kickoff_prompt"]
+    )
     assert "只收拾桌面上的杯子" in payload["agent_kickoff_prompt"]
-    assert "exact inspection_waypoints checklist" in payload["agent_kickoff_prompt"]
+    assert "household-open-task skill instructions" in payload["agent_kickoff_prompt"]
     assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
 
 
@@ -234,7 +245,7 @@ def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blockin
 
 
 def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     readiness = route_readiness(
         tmp_path,
         route,
@@ -248,7 +259,7 @@ def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> Non
 
 
 def test_console_readiness_uses_claude_provider_profile_override(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CLAUDE_CLEANUP)
+    route = get_selection(MUJOCO_CLAUDE_OPEN_TASK)
     readiness = route_readiness(
         tmp_path,
         route,
@@ -313,7 +324,7 @@ def test_operator_state_derives_public_fields_and_artifact_links(tmp_path: Path)
     )
     (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_OPEN_TASK))
 
     assert state["run_id"] == "run-a"
     assert state["latest_tool_call"]["name"] == "navigate_to_object"
@@ -409,21 +420,22 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
 
     assert [lane["id"] for lane in payload["evidence_lanes"]] == [
         "world-public-labels",
-        "world-public-labels",
         "camera-grounded-labels",
         "camera-raw-fpv",
     ]
     routes = {route["id"]: route for route in payload["combinations"]}
     worlds = {world["id"]: world for world in payload["worlds"]}
-    assert "molmospaces/val_5" in worlds
-    assert worlds["molmospaces/val_5"]["preview_assets"]["map"]["href"] == (
-        "/previews/molmospaces-val_5-map.png"
+    world_id = "molmospaces/procthor-objaverse-val/10"
+    route_id = f"{world_id}::mujoco::map-build::codex-cli::world-public-labels"
+    assert world_id in worlds
+    assert worlds[world_id]["preview_assets"]["map"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-map.png"
     )
-    assert worlds["molmospaces/val_5"]["preview_assets"]["topdown"]["href"] == (
-        "/previews/molmospaces-val_5-topdown.png"
+    assert worlds[world_id]["preview_assets"]["topdown"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-topdown.png"
     )
-    assert worlds["molmospaces/val_5"]["preview_assets"]["chase"]["href"] == (
-        "/previews/molmospaces-val_5-chase.png"
+    assert worlds[world_id]["preview_assets"]["chase"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-chase.png"
     )
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == "/previews/b1-map12-map.png"
     assert worlds["b1-map12"]["preview_assets"]["topdown"]["href"] == (
@@ -432,32 +444,23 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     assert "fpv" not in worlds["b1-map12"]["preview_assets"]
     assert "chase" not in worlds["b1-map12"]["preview_assets"]
     assert (
-        worlds["molmospaces/val_5"]["preview_assets"]["topdown"]["href"]
-        != (worlds["molmospaces/val_5"]["preview_assets"]["map"]["href"])
+        worlds[world_id]["preview_assets"]["topdown"]["href"]
+        != (worlds[world_id]["preview_assets"]["map"]["href"])
     )
-    assert (
-        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels"][
-            "preview_assets"
-        ]["fpv"]["href"]
-        == "/previews/molmospaces-val_5-fpv.png"
+    assert routes[route_id]["preview_assets"]["fpv"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-fpv.png"
     )
-    assert (
-        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels"][
-            "preview_assets"
-        ]["chase"]["href"]
-        == "/previews/molmospaces-val_5-chase.png"
+    assert routes[route_id]["preview_assets"]["chase"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-chase.png"
     )
-    assert (
-        routes["molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels"][
-            "preview_assets"
-        ]["topdown"]["href"]
-        == "/previews/molmospaces-val_5-topdown.png"
+    assert routes[route_id]["preview_assets"]["topdown"]["href"] == (
+        "/previews/molmospaces-procthor-objaverse-val-10-topdown.png"
     )
     if "ai2thor/FloorPlan201" in worlds:
         assert "topdown" not in worlds["ai2thor/FloorPlan201"]["preview_assets"]
-    assert routes["molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"][
-        "enabled"
-    ]
+    assert routes[
+        "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::camera-grounded-labels"
+    ]["enabled"]
     assert not routes["b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"]["enabled"]
     assert not any(
         "::isaaclab::" in route_id for route_id in routes if route_id.startswith("molmospaces/")
@@ -517,8 +520,8 @@ def test_operator_console_messup_preview_endpoint_is_non_launching(tmp_path: Pat
 
 def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
     registered_previews = _registered_preview_asset_names()
-    assert "molmospaces-val_5-map.png" in registered_previews
-    assert "molmospaces-val_5-preview.json" in registered_previews
+    assert "molmospaces-procthor-objaverse-val-10-map.png" in registered_previews
+    assert "molmospaces-procthor-objaverse-val-10-preview.json" in registered_previews
     assert "b1-map12-map.png" in registered_previews
     assert "b1-map12-fpv.png" not in registered_previews
     assert "b1-map12-chase.png" not in registered_previews
@@ -533,7 +536,7 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
     try:
         host, port = server.server_address
         with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-val_5-map.png"
+            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-map.png"
         ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
@@ -541,12 +544,12 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-val_5-topdown.png"
+            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-topdown.png"
         ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-val_5-chase.png"
+            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-chase.png"
         ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
@@ -554,7 +557,7 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-val_5-preview.json"
+            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-preview.json"
         ) as response:
             preview = json.loads(response.read().decode("utf-8"))
             assert preview["views"]["chase"]["view"] == "chase_camera"
@@ -583,7 +586,7 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "latest-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -674,7 +677,7 @@ def test_operator_console_run_endpoint_rejects_legacy_route_id_field(
 
 
 def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "parent-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -752,7 +755,7 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
 def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "control-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -865,7 +868,7 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
 def test_operator_console_control_endpoint_allows_paused_operator_handoff(
     tmp_path: Path,
 ) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "handoff-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -965,7 +968,7 @@ def test_operator_console_control_endpoint_rejects_unsupported_route(tmp_path: P
 
 
 def test_operator_console_control_endpoint_rejects_terminal_run(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "finished-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -1007,8 +1010,11 @@ def test_operator_console_control_endpoint_rejects_terminal_run(tmp_path: Path) 
 
 
 def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
-    run_id = "20260610-224107-molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = (
+        "20260610-224107-molmospaces-procthor-objaverse-val-0-mujoco-open-task-"
+        "codex-cli-world-public-labels"
+    )
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     attempt_dir = run_dir / "0610_2241" / "seed-7"
     attempt_dir.mkdir(parents=True)

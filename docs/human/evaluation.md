@@ -82,8 +82,10 @@ conditions separately from agent behavior when the selected live route cannot
 finish.
 
 `scene_sampler_stress` is the static eval projection for source-aware
-MolmoSpaces scene sampling. It currently admits ten prepared `procthor-10k-val`
-map-build samples and ten prepared `procthor-objaverse-val` map-build samples.
+MolmoSpaces scene sampling. It currently admits five prepared
+`procthor-10k-val` map-build samples and ten prepared `procthor-objaverse-val`
+map-build samples; `procthor-10k-val` remains a partial source until more rows
+clear the scanner gates.
 Sampler selection uses a deterministic seeded-random policy that is scoped per
 `scene_source` and prefers different public room counts before filling remaining
 slots, so UI/eval rows do not depend on a single contiguous scene-index range.

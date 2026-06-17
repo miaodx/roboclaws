@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-17
+last_verified: 2026-06-18
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -581,11 +581,20 @@ provider settings from silently retargeting a selected route. Focused tests
 cover conflicting canonical/env provider input, ambient provider-profile drift,
 and launch-state/child-env consistency. Proof passed with focused
 operator-console provider-profile tests, ruff, format check, py_compile,
-`git diff --check`, and ratchet. The broader
-`tests/unit/operator_console/test_launcher.py` module still has pre-existing
-stale Molmo route IDs (`molmospaces/val_0::...::cleanup`) and fails collection
-against the current route registry; fixing that fixture drift is parked as a
-separate operator-console test maintenance slice.
+`git diff --check`, and ratchet.
+
+Implementation refresh on 2026-06-18 closed the parked operator-console
+route-fixture drift that followed the provider-env slice. The operator-console
+route registry now tracks the current source-aware MolmoSpaces catalog:
+cleanup defaults no longer pretend legacy `molmospaces/val_0` cleanup rows are
+available, disabled Claude map-build rows are generated from the console-visible
+world IDs, and tests use source-aware `procthor-objaverse-val` map-build/open
+task route IDs. The scene-sampler stress fixtures were regenerated from the
+current readiness export: `procthor-objaverse-val` is the complete UI/eval-ready
+source, `procthor-10k-val` is partial with five eval-ready rows, and the suite
+now contains 15 generated samples. Proof passed with focused operator-console
+tests, focused eval/model/scene-sampler tests, ruff, format check, py_compile,
+`git diff --check`, and ratchet.
 
 ### T: Unnecessary Unit-Test Pruning
 

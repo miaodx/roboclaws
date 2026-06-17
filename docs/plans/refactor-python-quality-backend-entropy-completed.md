@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console route fixtures and scene-sampler stress eval
+  artifacts now match the current source-aware MolmoSpaces catalog. The console
+  registry no longer exposes legacy default cleanup rows, disabled Claude
+  map-build rows are derived from the console-visible worlds, operator-console
+  tests assert current `procthor-objaverse-val` route IDs, and the generated
+  scene-sampler stress suite has 15 samples with `procthor-10k-val` recorded as
+  partial. Metric: ratchet reports 14 complexity rows and 76 oversized modules.
+  Proof: focused operator-console tests, focused eval/model/scene-sampler tests,
+  ruff, format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Operator-console provider env override selection moved into the
   existing `launch_support.py` owner and now fails loudly on conflicting
   `provider_profile` / `ROBOCLAWS_PROVIDER_PROFILE` input. Readiness and

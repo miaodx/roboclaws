@@ -1,25 +1,49 @@
 {
-  "schema": "roboclaws_eval_sample_v1",
-  "sample_id": "scene_sampler.procthor-10k-val.11.map_build",
-  "version": "2026-06-15",
-  "surface": "household-world",
-  "intent": "map-build",
-  "preset": "map-build",
-  "world": "molmospaces/procthor-10k-val/11",
-  "backend": "mujoco",
-  "evidence_lane": "world-public-labels",
-  "camera_labeler": "not_applicable",
-  "scenario_setup": "baseline",
-  "seed": 7,
-  "prompt": "not_applicable",
-  "goal_contract_hash": "unavailable",
   "allowed_agent_engines": [
     "direct-runner"
   ],
+  "backend": "mujoco",
+  "camera_labeler": "not_applicable",
+  "evidence_lane": "world-public-labels",
+  "goal_contract_hash": "unavailable",
+  "grader_config": {
+    "min_generated_exploration_candidates": 1,
+    "min_public_semantic_anchors": 1,
+    "require_private_truth_absent": true,
+    "require_runtime_metric_map_schema": "runtime_metric_map_v1",
+    "require_source_map_not_mutated": true,
+    "sampler_admission": {
+      "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+      "category_provenance": "prepared_visual_label_manifest",
+      "generator_version": "2026-06-15.preview-readiness-v1",
+      "room_count": 4,
+      "scene_family": "procthor-10k",
+      "scene_index": 11,
+      "scene_source": "procthor-10k-val",
+      "scene_split": "val",
+      "schema": "molmospaces_scene_sampler_admission_v1",
+      "waypoint_count": 8
+    }
+  },
+  "intent": "map-build",
+  "launch_overrides": {
+    "agent_engine": "direct-runner",
+    "evidence_lane": "world-public-labels",
+    "scenario_setup": "baseline",
+    "scene_index": 11,
+    "scene_source": "procthor-10k-val",
+    "seed": 7
+  },
+  "preset": "map-build",
+  "private_goal_reference": {
+    "expected_runtime_metric_map": true,
+    "private_truth_scope": "grader_only",
+    "schema": "household_eval_private_goal_reference_v1"
+  },
+  "prompt": "not_applicable",
   "provider_profiles": [
     "not_applicable"
   ],
-  "trial_count": 1,
   "required_graders": [
     "artifacts",
     "privacy",
@@ -27,36 +51,12 @@
     "sampler_admission",
     "outcome"
   ],
-  "private_goal_reference": {
-    "schema": "household_eval_private_goal_reference_v1",
-    "private_truth_scope": "grader_only",
-    "expected_runtime_metric_map": true
-  },
-  "grader_config": {
-    "min_public_semantic_anchors": 1,
-    "min_generated_exploration_candidates": 1,
-    "require_runtime_metric_map_schema": "runtime_metric_map_v1",
-    "require_private_truth_absent": true,
-    "require_source_map_not_mutated": true,
-    "sampler_admission": {
-      "schema": "molmospaces_scene_sampler_admission_v1",
-      "scene_family": "procthor-10k",
-      "scene_split": "val",
-      "scene_source": "procthor-10k-val",
-      "scene_index": 11,
-      "room_count": 4,
-      "waypoint_count": 8,
-      "category_provenance": "prepared_visual_label_manifest",
-      "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
-      "generator_version": "2026-06-15.preview-readiness-v1"
-    }
-  },
-  "launch_overrides": {
-    "agent_engine": "direct-runner",
-    "evidence_lane": "world-public-labels",
-    "seed": 7,
-    "scenario_setup": "baseline",
-    "scene_source": "procthor-10k-val",
-    "scene_index": 11
-  }
+  "sample_id": "scene_sampler.procthor-10k-val.11.map_build",
+  "scenario_setup": "baseline",
+  "schema": "roboclaws_eval_sample_v1",
+  "seed": 7,
+  "surface": "household-world",
+  "trial_count": 1,
+  "version": "2026-06-15",
+  "world": "molmospaces/procthor-10k-val/11"
 }

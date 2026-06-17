@@ -9748,14 +9748,53 @@
         },
         "procthor-10k-val": {
           "blocked_count": 0,
-          "blocked_or_rejected_row_count": 3,
+          "blocked_or_rejected_row_count": 8,
           "blocked_rows": [
             {
               "backend": "mujoco",
               "blocked_reason": "fewer_than_three_public_navigation_areas",
               "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
               "category_provenance": "prepared_visual_label_manifest",
-              "coverage_score": 0.2,
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "molmospaces/val_0",
+              "preview_assets": [
+                {
+                  "path": "/previews/molmospaces-val_0-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "/previews/molmospaces-val_0-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "/previews/molmospaces-val_0-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "/previews/molmospaces-val_0-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "procthor-10k",
+              "scene_index": 0,
+              "scene_source": "procthor-10k-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/val_0"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "category_provenance": "prepared_visual_label_manifest",
+              "coverage_score": 0.0,
               "failure_class": "map_actionability_failure",
               "generator_version": "2026-06-15.preview-readiness-v1",
               "lanes": [],
@@ -9780,21 +9819,99 @@
               ],
               "quality_score": 1.0,
               "readiness_status": "rejected",
-              "room_count": 2,
+              "room_count": 0,
               "scene_family": "procthor-10k",
               "scene_index": 1,
               "scene_source": "procthor-10k-val",
               "scene_split": "val",
               "selected_reason": "fewer_than_three_public_navigation_areas",
-              "waypoint_count": 4,
+              "waypoint_count": 0,
               "world_id": "molmospaces/val_1"
             },
             {
               "backend": "mujoco",
-              "blocked_reason": "preview_not_reviewable",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
               "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
               "category_provenance": "prepared_visual_label_manifest",
-              "coverage_score": 0.4,
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "molmospaces/val_2",
+              "preview_assets": [
+                {
+                  "path": "/previews/molmospaces-val_2-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "/previews/molmospaces-val_2-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "/previews/molmospaces-val_2-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "/previews/molmospaces-val_2-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "procthor-10k",
+              "scene_index": 2,
+              "scene_source": "procthor-10k-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/val_2"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "category_provenance": "prepared_visual_label_manifest",
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "molmospaces/val_3",
+              "preview_assets": [
+                {
+                  "path": "/previews/molmospaces-val_3-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "/previews/molmospaces-val_3-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "/previews/molmospaces-val_3-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "/previews/molmospaces-val_3-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "procthor-10k",
+              "scene_index": 3,
+              "scene_source": "procthor-10k-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/val_3"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "category_provenance": "prepared_visual_label_manifest",
+              "coverage_score": 0.0,
               "failure_class": "map_actionability_failure",
               "generator_version": "2026-06-15.preview-readiness-v1",
               "lanes": [],
@@ -9819,13 +9936,13 @@
               ],
               "quality_score": 0.75,
               "readiness_status": "rejected",
-              "room_count": 4,
+              "room_count": 0,
               "scene_family": "procthor-10k",
               "scene_index": 4,
               "scene_source": "procthor-10k-val",
               "scene_split": "val",
-              "selected_reason": "preview_not_reviewable",
-              "waypoint_count": 8,
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 0,
               "world_id": "molmospaces/val_4"
             },
             {
@@ -9833,7 +9950,46 @@
               "blocked_reason": "fewer_than_three_public_navigation_areas",
               "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
               "category_provenance": "prepared_visual_label_manifest",
-              "coverage_score": 0.2,
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "molmospaces/val_5",
+              "preview_assets": [
+                {
+                  "path": "/previews/molmospaces-val_5-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "/previews/molmospaces-val_5-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "/previews/molmospaces-val_5-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "/previews/molmospaces-val_5-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "procthor-10k",
+              "scene_index": 5,
+              "scene_source": "procthor-10k-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/val_5"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "category_provenance": "prepared_visual_label_manifest",
+              "coverage_score": 0.0,
               "failure_class": "map_actionability_failure",
               "generator_version": "2026-06-15.preview-readiness-v1",
               "lanes": [],
@@ -9858,34 +10014,68 @@
               ],
               "quality_score": 1.0,
               "readiness_status": "rejected",
-              "room_count": 2,
+              "room_count": 0,
               "scene_family": "procthor-10k",
               "scene_index": 7,
               "scene_source": "procthor-10k-val",
               "scene_split": "val",
               "selected_reason": "fewer_than_three_public_navigation_areas",
-              "waypoint_count": 4,
+              "waypoint_count": 0,
               "world_id": "molmospaces/val_7"
+            },
+            {
+              "backend": "mujoco",
+              "blocked_reason": "fewer_than_three_public_navigation_areas",
+              "category_manifest": "data/molmospaces/scene_sampler_room_labels.json",
+              "category_provenance": "prepared_visual_label_manifest",
+              "coverage_score": 0.0,
+              "failure_class": "map_actionability_failure",
+              "generator_version": "2026-06-15.preview-readiness-v1",
+              "lanes": [],
+              "legacy_world_id": "molmospaces/val_9",
+              "preview_assets": [
+                {
+                  "path": "/previews/molmospaces-val_9-fpv.png",
+                  "view": "fpv"
+                },
+                {
+                  "path": "/previews/molmospaces-val_9-map.png",
+                  "view": "map"
+                },
+                {
+                  "path": "/previews/molmospaces-val_9-chase.png",
+                  "view": "chase"
+                },
+                {
+                  "path": "/previews/molmospaces-val_9-topdown.png",
+                  "view": "topdown"
+                }
+              ],
+              "quality_score": 1.0,
+              "readiness_status": "rejected",
+              "room_count": 0,
+              "scene_family": "procthor-10k",
+              "scene_index": 9,
+              "scene_source": "procthor-10k-val",
+              "scene_split": "val",
+              "selected_reason": "fewer_than_three_public_navigation_areas",
+              "waypoint_count": 0,
+              "world_id": "molmospaces/val_9"
             }
           ],
-          "needed_count": 0,
-          "partial_gap_count": 0,
-          "ready_count": 10,
-          "rejected_count": 3,
+          "needed_count": 5,
+          "partial_gap_count": 5,
+          "ready_count": 5,
+          "rejected_count": 8,
           "sample_ids": [
-            "scene_sampler.procthor-10k-val.0.map_build",
-            "scene_sampler.procthor-10k-val.2.map_build",
-            "scene_sampler.procthor-10k-val.3.map_build",
-            "scene_sampler.procthor-10k-val.5.map_build",
-            "scene_sampler.procthor-10k-val.9.map_build",
             "scene_sampler.procthor-10k-val.10.map_build",
             "scene_sampler.procthor-10k-val.11.map_build",
             "scene_sampler.procthor-10k-val.12.map_build",
             "scene_sampler.procthor-10k-val.13.map_build",
             "scene_sampler.procthor-10k-val.15.map_build"
           ],
-          "status": "complete",
-          "support_status": "complete",
+          "status": "partial_or_blocked",
+          "support_status": "partial",
           "target_count": 10
         },
         "procthor-objaverse-val": {
@@ -10342,15 +10532,15 @@
         "ui_target_per_scene_source": 3
       },
       "summary": {
-        "blocked_or_rejected_row_count": 257,
+        "blocked_or_rejected_row_count": 262,
         "blocked_row_count": 0,
         "blocked_source_count": 0,
-        "complete_source_count": 2,
-        "partial_source_count": 0,
-        "ready_sample_count": 20,
-        "rejected_row_count": 257,
+        "complete_source_count": 1,
+        "partial_source_count": 1,
+        "ready_sample_count": 15,
+        "rejected_row_count": 262,
         "rejected_source_count": 2,
-        "remaining_sample_count": 20,
+        "remaining_sample_count": 25,
         "source_count": 4,
         "target_sample_count": 40
       }
@@ -10364,11 +10554,6 @@
     "outcome"
   ],
   "sample_ids": [
-    "scene_sampler.procthor-10k-val.0.map_build",
-    "scene_sampler.procthor-10k-val.2.map_build",
-    "scene_sampler.procthor-10k-val.3.map_build",
-    "scene_sampler.procthor-10k-val.5.map_build",
-    "scene_sampler.procthor-10k-val.9.map_build",
     "scene_sampler.procthor-10k-val.10.map_build",
     "scene_sampler.procthor-10k-val.11.map_build",
     "scene_sampler.procthor-10k-val.12.map_build",
@@ -10386,11 +10571,6 @@
     "scene_sampler.procthor-objaverse-val.14.map_build"
   ],
   "sample_refs": [
-    "evals/household_world/samples/scene_sampler/procthor-10k-val_0_map_build.json",
-    "evals/household_world/samples/scene_sampler/procthor-10k-val_2_map_build.json",
-    "evals/household_world/samples/scene_sampler/procthor-10k-val_3_map_build.json",
-    "evals/household_world/samples/scene_sampler/procthor-10k-val_5_map_build.json",
-    "evals/household_world/samples/scene_sampler/procthor-10k-val_9_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_10_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_11_map_build.json",
     "evals/household_world/samples/scene_sampler/procthor-10k-val_12_map_build.json",

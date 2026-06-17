@@ -16,7 +16,9 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_CODEX_OPEN_TASK = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::world-public-labels"
+)
 
 
 def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) -> None:
@@ -216,13 +218,12 @@ def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(tmp_path: Path
     assert payload["summary"]["active"] == 0
     assert all(resource.get("active") is False for resource in task["resources"])
     assert not any(
-        action["label"] in {"Attach", "Copy Stop Command"}
-        for action in task.get("actions", [])
+        action["label"] in {"Attach", "Copy Stop Command"} for action in task.get("actions", [])
     )
 
 
 def test_runtime_inventory_exposes_direct_stop_only_for_operator_runs(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "operator-run"
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     run_dir.mkdir(parents=True)
@@ -245,13 +246,12 @@ def test_runtime_inventory_exposes_direct_stop_only_for_operator_runs(tmp_path: 
     task = next(item for item in payload["tasks"] if item["id"] == f"operator-run:{run_id}")
     assert task["owner"] == "operator-console"
     assert any(
-        action["type"] == "api_post" and action["label"] == "Stop"
-        for action in task["actions"]
+        action["type"] == "api_post" and action["label"] == "Stop" for action in task["actions"]
     )
 
 
 def test_readiness_names_background_eval_owner_before_start(tmp_path: Path) -> None:
-    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "codex-cleanup-live"
     run_dir = row_dir / "run" / "0615_1225" / "seed-7"
     run_dir.mkdir(parents=True)

@@ -38,10 +38,7 @@ ISAAC_SUPPORTED_EVIDENCE_LANES = tuple(
 )
 ISAAC_UNSUPPORTED_EVIDENCE_LANES = (CAMERA_GROUNDED_LABELS_LANE,)
 MOLMOSPACES_DEFAULT_CLEANUP_TARGET_COUNT = 5
-MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS = (
-    "molmospaces/val_0",
-    "molmospaces/val_5",
-)
+MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -530,16 +527,21 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             supports_prompt=False,
             emergency_stop_required=True,
         ),
-        _selection(
-            "molmospaces/val_0",
-            "mujoco",
-            "map-build",
-            "claude-code",
-            "mimo-tp-anthropic",
-            enabled=False,
-            unsupported_reason=(
-                "Map-build is currently proven for Codex CLI and direct runner only."
-            ),
+        *(
+            _selection(
+                world_id,
+                "mujoco",
+                "map-build",
+                "claude-code",
+                "mimo-tp-anthropic",
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                enabled=False,
+                unsupported_reason=(
+                    "Map-build is currently proven for Codex CLI and direct runner only."
+                ),
+                default_overrides=("seed=7",),
+            )
+            for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS
         ),
     )
 
