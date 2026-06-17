@@ -42,10 +42,14 @@ def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
             "filter is model-facing only; MCP traces, reports, and run artifacts remain complete"
         ),
     }
-    for nested_key in ("raw_fpv_image_memory", "camera_grounded_history"):
-        nested = config.get(nested_key)
-        if isinstance(nested, dict):
-            payload[nested_key] = nested
+    raw_fpv_image_memory = config.get("raw_fpv_image_memory")
+    if isinstance(raw_fpv_image_memory, dict):
+        payload["raw_fpv_image_memory"] = _raw_fpv_image_memory_policy(raw_fpv_image_memory)
+    camera_grounded_history = config.get("camera_grounded_history")
+    if isinstance(camera_grounded_history, dict):
+        payload["camera_grounded_history"] = _camera_grounded_history_policy(
+            camera_grounded_history
+        )
     return payload
 
 
@@ -65,11 +69,15 @@ def _boolish(value: Any, *, default: bool) -> bool:
     return str(value).strip().lower() not in {"0", "false", "no", "off", ""}
 
 
-def _positive_int(value: Any, *, default: int) -> int:
+def _positive_int(value: Any, *, default: int, setting_name: str) -> int:
+    if value is None or value == "":
+        return default
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        ) from exc
     return max(1, parsed)
 
 
@@ -275,7 +283,11 @@ def _compaction_candidate(
 def _raw_fpv_image_memory_policy(config: dict[str, Any] | None) -> dict[str, Any]:
     config = config if isinstance(config, dict) else {}
     enabled = _boolish(config.get("enabled"), default=False)
-    retained = _positive_int(config.get("retained_full_frame_limit"), default=1)
+    retained = _positive_int(
+        config.get("retained_full_frame_limit"),
+        default=1,
+        setting_name="raw_fpv_image_memory.retained_full_frame_limit",
+    )
     if not enabled:
         retained = 0
     return {
@@ -413,7 +425,11 @@ def _raw_fpv_image_memory_candidate(
 def _camera_grounded_history_policy(config: dict[str, Any] | None) -> dict[str, Any]:
     config = config if isinstance(config, dict) else {}
     enabled = _boolish(config.get("enabled"), default=False)
-    retained = _positive_int(config.get("retained_recent_outputs"), default=4)
+    retained = _positive_int(
+        config.get("retained_recent_outputs"),
+        default=4,
+        setting_name="camera_grounded_history.retained_recent_outputs",
+    )
     if not enabled:
         retained = 0
     return {
@@ -928,10 +944,12 @@ def _non_negative_int(value: Any, *, env_name: str, default: int) -> int:
     if value is None:
         raw_env = os.environ.get(env_name)
         value = raw_env if raw_env not in {None, ""} else default
+    if value == "":
+        value = default
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{env_name} must be a non-negative integer, got {value!r}") from exc
     return max(0, parsed)
 
 

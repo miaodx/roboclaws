@@ -60,6 +60,16 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 60` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed an OpenAI Agents SDK
+  model-input compaction config false-green. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS` values and invalid direct
+  `raw_fpv_image_memory` / `camera_grounded_history` retained-count metadata now
+  fail as normalized `provider_config_failure` live-status packets instead of
+  silently reusing defaults or carrying malformed policy values into the model
+  input filter. Behavior-change class: fail-aloud SDK runtime configuration;
+  omitted values, valid defaults, profile-owned compaction packets, public
+  launch axes, event schemas, and valid compaction output are unchanged. The
+  ratchet remains 0 complexity rows and 79 oversized modules.
 - Follow-up implementation refresh on 2026-06-18 split provider-registry CLI
   dispatch out of `_main()` into focused parser, JSON payload/write, route-text,
   and supports-engine helpers. Behavior-change class: internal cleanup; provider

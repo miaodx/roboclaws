@@ -1253,7 +1253,12 @@ def test_openai_agents_runtime_configures_model_input_compaction_filter(
         "enabled": True,
         "mode": "retain_latest_actionable_outputs",
         "retained_recent_outputs": 2,
+        "summary_kind": "roboclaws_camera_grounded_history_summary_v1",
         "candidate_ids": ["AC"],
+        "private_artifact_policy": (
+            "model-facing camera-grounded history compaction only; MCP traces, reports, "
+            "and run artifacts remain complete"
+        ),
     }
     assert "call_model_input_filter" not in events[0]["sdk_run_config"]
 
@@ -1289,6 +1294,62 @@ def test_model_input_compaction_reduces_oversized_public_tool_outputs() -> None:
     assert replacement["schema"] == "roboclaws_public_tool_output_summary_v1"
     assert replacement["original_chars"] == len(large_output)
     assert "wp_19" not in json.dumps(filtered)
+
+
+def test_model_input_compaction_rejects_invalid_min_chars_env(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS", "many")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_input_compaction": {"enabled": True}},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS" in payload["detail"]
+    assert "must be a non-negative integer" in payload["detail"]
+
+
+def test_model_input_compaction_rejects_invalid_direct_policy_limits(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "model_input_compaction": {
+                "enabled": True,
+                "raw_fpv_image_memory": {
+                    "enabled": True,
+                    "retained_full_frame_limit": "latest",
+                },
+            }
+        },
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert (
+        "OpenAI Agents SDK setting raw_fpv_image_memory.retained_full_frame_limit"
+        in payload["detail"]
+    )
+    assert "must be a positive integer, got 'latest'" in payload["detail"]
 
 
 def test_model_input_shape_summary_is_aggregate_only() -> None:

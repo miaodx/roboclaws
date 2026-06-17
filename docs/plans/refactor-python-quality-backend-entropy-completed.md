@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK model-input compaction config now fails aloud for
+  malformed numeric runtime settings. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS` values and invalid direct
+  `raw_fpv_image_memory.retained_full_frame_limit` /
+  `camera_grounded_history.retained_recent_outputs` metadata produce normalized
+  `provider_config_failure` live-status packets instead of silently reusing
+  defaults or passing malformed direct policies through to the filter. Behavior-
+  change class: fail-aloud SDK runtime configuration; omitted values, valid
+  defaults, profile-owned compaction packets, public launch axes, event schemas,
+  and valid compaction output are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused OpenAI Agents live
+  runtime tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Active-plan Candidate D guidance now matches the closed code and
   completed-ledger state. Stale prompts that still made runner-side OpenAI
   Agents SDK performance-profile/default extraction the next Candidate D slice

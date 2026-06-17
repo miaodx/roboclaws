@@ -1717,6 +1717,14 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
             detail=detail,
         )
     lowered = detail.lower()
+    if any(
+        item in lowered
+        for item in (
+            "roboclaws_openai_agents_",
+            "openai agents sdk setting",
+        )
+    ):
+        return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
     if any(item in lowered for item in ("requires codex_base_url", "requires codex_api_key")):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
     if any(
