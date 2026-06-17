@@ -1160,6 +1160,15 @@ logs before choosing the next slice.
   summaries, camera-grounded history summaries, tool-output unwrapping,
   metric-map/public output summaries, aggregate model-input shape metrics, or
   model-input filter event writing inline.
+- Robot-camera apple-to-apple camera-contract diagnostics are owned by
+  `robot_camera_apple2apple_camera_contract.py`. Metric: apple runner 2394 ->
+  1803 lines; new owner is 626 lines; staged/add-N ratchet remains 11
+  complexity rows and 70 oversized modules. Proof: focused apple comparison
+  tests, ruff, format check, py_compile, and ratchet. Reopen only if the runner
+  rebuilds top-level camera contract metadata, per-location camera contract
+  diagnostics, FPV pose/lens delta summaries, compact camera metadata,
+  robot-pose delta, Isaac robot import diagnostics, head-articulation
+  diagnostics, or chase-contract diagnostics directly.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state

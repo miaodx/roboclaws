@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from scripts.molmo_cleanup import robot_camera_apple2apple_camera_contract as camera_contract
 from scripts.molmo_cleanup import robot_camera_apple2apple_capture_quality as capture_quality
 from scripts.molmo_cleanup import robot_camera_apple2apple_image_metrics as image_metrics
 from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
@@ -491,10 +492,6 @@ def test_robot_camera_residual_triage_prioritizes_geometry_edges() -> None:
 
 
 def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_contract_diagnostics",
-    )
     robot_pose = {
         "x": 6.37057,
         "y": 8.8752,
@@ -578,8 +575,8 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
         },
     }
 
-    per_location = run_camera._location_camera_contract_diagnostics(location)
-    summary = run_camera._camera_contract_diagnostics([location])
+    per_location = camera_contract.location_camera_contract_diagnostics(location)
+    summary = camera_contract.camera_contract_diagnostics([location])
 
     assert per_location["fpv_head_camera_contract"] is True
     assert per_location["robot_pose_match"] is True
@@ -600,12 +597,7 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
 
 
 def test_robot_camera_contract_diagnostics_recognizes_robot_relative_chase_contract() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_chase_contract",
-    )
-
-    chase = run_camera._chase_contract_diagnostics(
+    chase = camera_contract.chase_contract_diagnostics(
         {
             "report_chase_view": {"source": "robot_0/camera_follower"},
             "report_verify_view": {"source": "mujoco_focus_camera"},
@@ -624,10 +616,6 @@ def test_robot_camera_contract_diagnostics_recognizes_robot_relative_chase_contr
 
 
 def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_correction() -> None:
-    run_camera = _load_module(
-        RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_contract_pitch_correction",
-    )
     robot_pose = {
         "x": 6.37057,
         "y": 8.8752,
@@ -727,8 +715,8 @@ def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_corr
         },
     }
 
-    per_location = run_camera._location_camera_contract_diagnostics(location)
-    summary = run_camera._camera_contract_diagnostics([location])
+    per_location = camera_contract.location_camera_contract_diagnostics(location)
+    summary = camera_contract.camera_contract_diagnostics([location])
 
     assert per_location["head_articulation"]["status"] == (
         "isaac_static_head_pitch_applied_to_head_camera"
