@@ -222,21 +222,32 @@ def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
     assert "provider_profile=mimo-tp-openai-chat" in plan.overrides
 
 
-def test_launch_rejects_explicit_blank_provider_profile() -> None:
-    with pytest.raises(LaunchError, match="provider_profile .* must be non-empty") as exc:
-        resolve_surface_launch(
-            [
-                "surface=household-world",
-                "world=molmospaces/val_0",
-                "backend=mujoco",
-                "intent=cleanup",
-                "agent_engine=codex-cli",
-                "provider_profile=",
-                "evidence_lane=world-public-labels",
-            ]
-        )
+@pytest.mark.parametrize(
+    ("axis", "hint"),
+    (
+        ("world", "omit world= to use the default"),
+        ("backend", "omit backend= to use the default"),
+        ("intent", "omit intent= to use the default"),
+        ("preset", "omit preset= to use the default"),
+        ("provider_profile", "omit provider_profile= to use codex-router-responses"),
+    ),
+)
+def test_launch_rejects_explicit_blank_optional_axes(axis: str, hint: str) -> None:
+    args = [
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=codex-cli",
+        "evidence_lane=world-public-labels",
+    ]
+    args = [item for item in args if not item.startswith(f"{axis}=")]
+    args.append(f"{axis}= ")
 
-    assert "omit provider_profile= to use codex-router-responses" in exc.value.hint
+    with pytest.raises(LaunchError, match=rf"{axis}= must be non-empty") as exc:
+        resolve_surface_launch(args)
+
+    assert hint in exc.value.hint
 
 
 @pytest.mark.parametrize(

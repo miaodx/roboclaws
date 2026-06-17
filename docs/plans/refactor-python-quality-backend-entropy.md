@@ -61,15 +61,15 @@ Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
 - Follow-up implementation refresh on 2026-06-18 closed one launch-catalog
-  provider-profile false-green. `resolve_surface_launch()` now rejects an
-  explicit blank `provider_profile=` value instead of treating it as omitted
-  and silently selecting the agent engine default provider profile. Owner
-  layers: Runnable Surfaces And Presets, and Agent Engines And Provider
-  Profiles. Behavior-change class: fail-aloud launch-axis configuration;
-  omitted provider profiles, valid provider profile aliases, unsupported
+  blank-axis false-green. `resolve_surface_launch()` now rejects explicit blank
+  optional axes for `world=`, `backend=`, `intent=`, `preset=`, and
+  `provider_profile=` instead of treating them as omitted and silently selecting
+  defaults. Owner layers: Runnable Surfaces And Presets, and Agent Engines And
+  Provider Profiles. Behavior-change class: fail-aloud launch-axis
+  configuration; omitted axes, valid axis values and aliases, unsupported
   non-empty provider profile errors, public launch axes, provider env export,
   and runner argv construction are unchanged. The ratchet remains 0 complexity
-  rows and 79 oversized modules; `catalog.py` is 704 lines.
+  rows and 79 oversized modules; `catalog.py` is 716 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
   direct provider/model/env precedence false-green. Provider profile, model,
   base URL, and API key selection for the direct SDK runtime now rejects
