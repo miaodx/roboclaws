@@ -2143,14 +2143,21 @@ def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
     assert "custom operator task" not in prompt
     assert "The following operator task is authoritative" in prompt
     assert "我渴了，帮我找些解渴的东西" in prompt
-    assert "The operator task is the only goal" in prompt
-    assert "Do not start a room-cleanup routine" in prompt
-    assert "visual-scan prerequisite" in prompt
-    assert "If the task asks for information, report the answer" in prompt
-    assert "Do not treat unrelated pending cleanup candidates" in prompt
-    assert "call done so the report is generated" in prompt
+    assert "The operator task is authoritative" in prompt
+    assert "Use metric_map when map context is needed" in prompt
+    assert "Inspect only as much as the operator task needs" in prompt
+    assert "For information, search, or inspection goals" in prompt
+    assert "blocked by a public capability response" in prompt
+    assert "Unless the operator explicitly asks you to wait or not call done" in prompt
+    assert "with a reason summarizing public evidence" in prompt
     assert "Use the MCP tools as a bounded household robot capability surface" in prompt
+    assert "Use the household MCP tool entries exactly as exposed by Codex" in prompt
     assert "Use the bundled molmo-realworld-cleanup skill instructions" not in prompt
+    assert "cleanup MCP tool entries exactly as exposed by Codex" not in prompt
+    assert "room-cleanup routine" not in prompt
+    assert "visual-scan prerequisite" not in prompt
+    assert "unrelated pending cleanup candidates" not in prompt
+    assert "cleanup goals from cleanup implementation details" not in prompt
     assert "build an exact waypoint checklist" not in prompt
     assert "sweep every waypoint" not in prompt
     assert "fresh same-handle source FPV observation" not in prompt

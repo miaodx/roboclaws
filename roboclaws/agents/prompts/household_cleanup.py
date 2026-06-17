@@ -20,13 +20,20 @@ TOOL_PROTOCOL_PREFIX = (
     "use namespace cleanup, never mcp__cleanup__ or roboclaws__. "
 )
 
+OPEN_TASK_TOOL_PROTOCOL_PREFIX = (
+    "Use the household MCP tool entries exactly as exposed by Codex; in text, "
+    "refer to unprefixed tool names, and if the tool protocol requires a namespace "
+    "use namespace cleanup, never mcp__cleanup__ or roboclaws__. "
+)
+
 COMMON_PREFIX = (
     "Use the bundled molmo-realworld-cleanup skill instructions. " + TOOL_PROTOCOL_PREFIX
 )
 
 CUSTOM_PREFIX = (
     "Use the bundled household-open-task skill instructions. "
-    "Use the MCP tools as a bounded household robot capability surface. " + TOOL_PROTOCOL_PREFIX
+    "Use the MCP tools as a bounded household robot capability surface. "
+    + OPEN_TASK_TOOL_PROTOCOL_PREFIX
 )
 
 COMMON_WAYPOINT_RULES = (
@@ -53,21 +60,21 @@ COMMON_CLEANUP_RULES = (
 )
 
 OPEN_ENDED_TASK_RULES = (
-    "The operator task is the only goal. Do not start a room-cleanup routine, full "
-    "waypoint sweep, visual-scan prerequisite, or pick/place chain unless the operator "
-    "task itself requires it. Use metric_map, navigate_to_waypoint, "
-    "resolve_target_query, observe, and adjust_camera only as needed to gather enough "
-    "public evidence for the operator task. If the task names a target or stale label, "
-    "resolve it through public target_candidates first; if no actionable match exists, "
-    "continue public inspection while budget remains and include the public search "
-    "budget in any not-found answer. If the task asks for information, report the "
-    "answer and call "
-    "done once satisfied. If the task requires manipulating an object, act only on "
-    "task-relevant observed objects, use the public navigation/manipulation tools, "
-    "and follow required_tool or public error responses. Do not call scene_objects or "
-    "read private scoring artifacts. Do not treat unrelated pending cleanup candidates "
-    "as part of the operator task. When the operator task is satisfied and you are not "
-    "holding an object, call done so the report is generated."
+    "The operator task is authoritative. Use metric_map when map context is needed. "
+    "Use resolve_target_query for named places, stale labels, or search terms. Navigate "
+    "to public waypoints or target_candidates, call observe, and use adjust_camera only "
+    "for bounded public recovery when target evidence or observation evidence is "
+    "incomplete. Inspect only as much as the operator task needs. For information, "
+    "search, or inspection goals, answer from public observations, target_candidates, "
+    "and the inspected search budget; not-found answers require enough public evidence "
+    "that the useful search space has been checked or exhausted. For manipulation "
+    "goals, act only on task-relevant observed objects or visual candidates, use public "
+    "navigation/manipulation tools, and follow required_tool, required_next_tool, "
+    "blocked_capability, actionability status, or public error responses. Do not call "
+    "scene_objects or read private scoring artifacts. Unless the operator explicitly "
+    "asks you to wait or not call done, call done when the operator task is satisfied, "
+    "blocked by a public capability response, or exhausted by the public search budget, "
+    "with a reason summarizing public evidence and remaining risk."
 )
 HOUSEHOLD_CLEANUP_TASK_PREFIX = (
     "This run is surface=household-world intent=cleanup. User task: {task}. "
@@ -125,23 +132,6 @@ def _with_task(
         )
         + prompt
     )
-
-
-def _open_ended_scope_suffix() -> str:
-    return (
-        " In the no-preset household open-task mode, do not infer additional "
-        "cleanup goals from cleanup implementation details."
-    )
-
-
-def _task_aware_prompt(
-    prompt: str,
-    *,
-    household_intent: str,
-) -> str:
-    if household_intent_is_open_ended(household_intent):
-        return prompt + _open_ended_scope_suffix()
-    return prompt
 
 
 def _normalize_prompt_mode(prompt_mode: str) -> str:
@@ -393,10 +383,7 @@ def render_kickoff_prompt(
                 done_retry_budget=done_retry_budget,
             )
         return _with_task(
-            _task_aware_prompt(
-                OPEN_ENDED_TASK_RULES if open_ended else prompt,
-                household_intent=household_intent,
-            ),
+            OPEN_ENDED_TASK_RULES if open_ended else prompt,
             task,
             household_intent=household_intent,
             goal_contract=goal_contract,
@@ -408,10 +395,7 @@ def render_kickoff_prompt(
         if mode == PROMPT_MODE_COMPACT and camera_grounded_composite_tools:
             prompt = CAMERA_LABELS_COMPOSITE_COMPACT_PROMPT
         return _with_task(
-            _task_aware_prompt(
-                OPEN_ENDED_TASK_RULES if open_ended else prompt,
-                household_intent=household_intent,
-            ),
+            OPEN_ENDED_TASK_RULES if open_ended else prompt,
             task,
             household_intent=household_intent,
             goal_contract=goal_contract,
@@ -423,19 +407,13 @@ def render_kickoff_prompt(
             else WORLD_LABELS_SANITIZED_PROMPT
         )
         return _with_task(
-            _task_aware_prompt(
-                OPEN_ENDED_TASK_RULES if open_ended else prompt,
-                household_intent=household_intent,
-            ),
+            OPEN_ENDED_TASK_RULES if open_ended else prompt,
             task,
             household_intent=household_intent,
             goal_contract=goal_contract,
         )
     return _with_task(
-        _task_aware_prompt(
-            OPEN_ENDED_TASK_RULES if open_ended else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
-            household_intent=household_intent,
-        ),
+        OPEN_ENDED_TASK_RULES if open_ended else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
         task,
         household_intent=household_intent,
         goal_contract=goal_contract,
