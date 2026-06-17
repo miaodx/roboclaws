@@ -267,6 +267,10 @@ def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
     return molmospaces_worker_init.load_generated_mess_manifest(path)
 
 
+def _source_room_labels(scene_xml: Path) -> dict[str, dict[str, str]]:
+    return molmospaces_worker_init.source_room_labels(scene_xml)
+
+
 def init_state(
     *,
     state_path: Path,
@@ -864,6 +868,7 @@ def _molmo_init_hooks() -> molmospaces_worker_state.MolmoInitHooks:
         scenario_id=_scenario_id,
         seed_misplaced_objects=_seed_misplaced_objects,
         set_robot_pose=_set_robot_pose,
+        source_room_labels=_source_room_labels,
         target_start_receptacle_id=_target_start_receptacle_id,
         write_state=_write_state,
     )
