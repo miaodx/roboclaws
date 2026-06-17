@@ -57,7 +57,7 @@ def build_prompt_preview(
     overrides = {str(key): str(value) for key, value in (request.overrides or {}).items()}
     env_overrides = {str(key): str(value) for key, value in (request.env_overrides or {}).items()}
     lane = route.evidence_lane
-    prompt_mode = _prompt_mode(route=route, evidence_lane=lane, env_overrides=env_overrides)
+    prompt_mode = _prompt_mode(route=route, env_overrides=env_overrides)
     target_cleanup_count = _target_cleanup_count(
         selected_intent=selected_intent,
         evidence_lane=lane,
@@ -191,7 +191,6 @@ def _goal_contract(
 def _prompt_mode(
     *,
     route: ConsoleLaunchSelection,
-    evidence_lane: str,
     env_overrides: dict[str, str],
 ) -> str:
     if route.agent_engine_id != "openai-agents-sdk":
@@ -203,8 +202,6 @@ def _prompt_mode(
     if perf_profile in {"gpt_compact_v1", "mimo_compact_v1"}:
         return PROMPT_MODE_COMPACT
     if perf_profile == "raw_fpv_budgeted_v1":
-        return PROMPT_MODE_RAW_FPV_COMPACT
-    if evidence_lane == "camera-raw-fpv" and perf_profile == "raw_fpv_budgeted_v1":
         return PROMPT_MODE_RAW_FPV_COMPACT
     return PROMPT_MODE_FULL
 

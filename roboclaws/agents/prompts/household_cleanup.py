@@ -141,16 +141,6 @@ def _normalize_prompt_mode(prompt_mode: str) -> str:
     return mode
 
 
-def _legacy_task_prefix(task: str) -> str:
-    """Compatibility shim for callers/tests that imported the old helper."""
-
-    normalized = " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
-    return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
-
-
-_task_prefix_legacy = _legacy_task_prefix
-
-
 SEMANTIC_MAP_BUILD_RULES = (
     "This run is surface=household-world intent=map-build. "
     "This is not a cleanup run. User task: {task}. "
@@ -373,7 +363,9 @@ def render_kickoff_prompt(
     household_intent = normalize_household_intent(household_intent)
     open_ended = household_intent_is_open_ended(household_intent)
     mode = _normalize_prompt_mode(prompt_mode)
-    if profile == "camera-raw-fpv":
+    if open_ended:
+        prompt = OPEN_ENDED_TASK_RULES
+    elif profile == "camera-raw-fpv":
         prompt = _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
         if mode == PROMPT_MODE_RAW_FPV_COMPACT:
             prompt = _camera_raw_compact_prompt(
@@ -382,38 +374,22 @@ def render_kickoff_prompt(
                 max_observe_per_waypoint=max_observe_per_waypoint,
                 done_retry_budget=done_retry_budget,
             )
-        return _with_task(
-            OPEN_ENDED_TASK_RULES if open_ended else prompt,
-            task,
-            household_intent=household_intent,
-            goal_contract=goal_contract,
-        )
-    if profile == "camera-grounded-labels":
+    elif profile == "camera-grounded-labels":
         prompt = (
             CAMERA_LABELS_COMPACT_PROMPT if mode == PROMPT_MODE_COMPACT else CAMERA_LABELS_PROMPT
         )
         if mode == PROMPT_MODE_COMPACT and camera_grounded_composite_tools:
             prompt = CAMERA_LABELS_COMPOSITE_COMPACT_PROMPT
-        return _with_task(
-            OPEN_ENDED_TASK_RULES if open_ended else prompt,
-            task,
-            household_intent=household_intent,
-            goal_contract=goal_contract,
-        )
-    if profile == "world-public-labels":
+    elif profile == "world-public-labels":
         prompt = (
             WORLD_LABELS_COMPACT_PROMPT
             if mode == PROMPT_MODE_COMPACT
             else WORLD_LABELS_SANITIZED_PROMPT
         )
-        return _with_task(
-            OPEN_ENDED_TASK_RULES if open_ended else prompt,
-            task,
-            household_intent=household_intent,
-            goal_contract=goal_contract,
-        )
+    else:
+        prompt = COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES
     return _with_task(
-        OPEN_ENDED_TASK_RULES if open_ended else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
+        prompt,
         task,
         household_intent=household_intent,
         goal_contract=goal_contract,
@@ -423,7 +399,7 @@ def render_kickoff_prompt(
 def render_semantic_map_build_prompt(profile: str, task: str) -> str:
     """Render the live-agent kickoff prompt for intent=map-build."""
 
-    prompt = COMMON_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
+    prompt = CUSTOM_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
     if profile == "camera-raw-fpv":
         return (
             prompt + " This is the raw-FPV map-build lane: inspect each raw FPV image block "

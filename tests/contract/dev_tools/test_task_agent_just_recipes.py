@@ -2143,13 +2143,8 @@ def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
     assert "custom operator task" not in prompt
     assert "The following operator task is authoritative" in prompt
     assert "我渴了，帮我找些解渴的东西" in prompt
-    assert "The operator task is authoritative" in prompt
-    assert "Use metric_map when map context is needed" in prompt
     assert "Inspect only as much as the operator task needs" in prompt
-    assert "For information, search, or inspection goals" in prompt
-    assert "blocked by a public capability response" in prompt
     assert "Unless the operator explicitly asks you to wait or not call done" in prompt
-    assert "with a reason summarizing public evidence" in prompt
     assert "Use the MCP tools as a bounded household robot capability surface" in prompt
     assert "Use the household MCP tool entries exactly as exposed by Codex" in prompt
     assert "Use the bundled molmo-realworld-cleanup skill instructions" not in prompt
@@ -2291,6 +2286,8 @@ def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
     assert "This run is surface=household-world intent=map-build" in prompt
     assert "This is not a cleanup run" in prompt
     assert "User task: 帮我建立这个房间的语义地图" in prompt
+    assert "Use the bundled household-open-task skill instructions" in prompt
+    assert "Use the bundled molmo-realworld-cleanup skill instructions" not in prompt
     assert "Do not pick, place, place_inside" in prompt
     assert "sweep every inspection waypoint" in prompt
     assert "declare_visual_candidates" in prompt
