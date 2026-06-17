@@ -91,6 +91,13 @@ but it is not map-frame geometry without an explicit correspondence manifest or
 verified transform.
 _Avoid_: map polygon, physical room truth
 
+**Correspondence Anchor**:
+A human/operator-reviewed physical or semantic landmark that exists in both a
+Source Map Frame and a Scene Partition or scene frame, with explicit coordinates
+or evidence in both frames. It can verify map-scene alignment after residuals
+are computed, but it is not object-level USD truth by itself.
+_Avoid_: bbox seed, model guess, unreviewed visual match, object/receptacle binding
+
 **Polygon Geometry Source**:
 The provenance for a map polygon, such as
 `operator_authored_navigation_zone`, `traced_occupancy_room_boundary`,
@@ -130,6 +137,13 @@ _Avoid_: global object inventory, scorer target
 A public Metric Map pose where the Cleanup Agent can observe part of a room
 during a cleanup sweep.
 _Avoid_: Hidden object viewpoint
+
+**Relative Pose Navigation**:
+A bounded navigation action that moves or turns the robot in the robot-local
+frame from its current pose, such as a short forward/backward nudge, lateral
+nudge, or yaw turn. It is distinct from navigating to a public Metric Map
+Inspection Waypoint.
+_Avoid_: hidden waypoint, map mutation, unbounded teleop
 
 **Room-Level Fixture Hint**:
 A public hint that names a large fixed receptacle or fixture and the room where
@@ -211,6 +225,8 @@ _Avoid_: assuming object assets imply usable cached grasps
   perception data.
 - A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
   fixture semantics before runtime observations begin.
+- **Relative Pose Navigation** starts from the current robot pose and does not
+  create or replace **Inspection Waypoints**.
 - Map overlays use the **Source Map Frame** as spatial truth; a **Display
   Frame** is a labeled derived view, not a replacement for navigation
   coordinates.
@@ -219,6 +235,9 @@ _Avoid_: assuming object assets imply usable cached grasps
   support that stronger claim.
 - A **Scene Partition** binds to map geometry through explicit correspondence,
   not list order.
+- A **Correspondence Anchor** can promote map-scene alignment only after
+  residuals are recorded and accepted; unreviewed suggestions and bbox seeds do
+  not count as accepted anchors.
 - A **Runtime Metric Map** may be wrapped as an **Actionable Semantic Map
   Snapshot** for downstream cleanup or open household tasks.
 - Offline Agibot `navigation_memory.json` conversion produces an

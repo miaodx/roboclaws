@@ -431,7 +431,7 @@ class LiveCodexCleanupRunner:
         )
         checker_policy_args = checker_flags_for_household_intent(
             intent_id=intent_id,
-            profile=self.args.profile,
+            profile=checker_profile,
             min_generated_mess_count=self.args.min_generated_mess_count,
         )
         run_result = self.run_dir / "run_result.json"

@@ -1,6 +1,6 @@
 ---
 plan_scope: molmospaces-scene-sampler-readiness
-status: Implemented; source outcomes classified and verified
+status: Implemented; source outcomes classified and verified; holodeck gate mismatch recorded
 created: 2026-06-15
 last_reviewed: 2026-06-16
 implementation_allowed: true
@@ -29,10 +29,14 @@ next_flow_scope:
   - completed procthor-objaverse-val UI and eval stress projection
   - classified holodeck-objaverse-val as rejected exhausted under current admission gates
   - added metadata-first curation worklists for rejected-exhausted sources
+  - replace blind holodeck source-prep/scanner loops with cheap metadata prefiltering
+  - classify high-confidence cheap-prefilter candidates that pass load/render/map-build but
+    fail public map admission as gate mismatch
 next_flow_policy:
   - treat readiness gates, target sources, vertical slices, acceptance criteria, and verification as implementation scope
   - classify every candidate/source as admitted, normalized blocked, or rejected instead of leaving parked notes
   - preserve no-implicit-download and no-implicit-live-VLM behavior in sampler, eval, and CI paths
+  - do not run object/grasp source prep or scanner product-smoke for ithor/holodeck candidates before a cheap prefilter ranks them as high confidence
 ---
 
 # MolmoSpaces Scene Sampler Readiness
@@ -60,12 +64,19 @@ instead of parked source notes:
   twenty candidates have one public room, two waypoints, coverage `0.1`, and
   `blocked_reason=fewer_than_three_public_navigation_areas`. It now has a
   metadata-first source-scoped worklist for unprofiled candidate ids before any
-  manual download or scanner product-smoke run.
+  manual download or scanner product-smoke run. The cheap-prefilter follow-up
+  selected high-confidence candidates `231` and `344` because their scene-only
+  XML metadata exposes six apparent rooms. Both are worth retaining as evidence:
+  they load, render reviewable `fpv`/`map`/`chase`/`topdown` previews, and
+  complete map-build product smoke. They still fail sampler admission because
+  the public runtime map exposes only `room_0` and two generated exploration
+  waypoints, so they are now classified as `gate_mismatch`, not ready samples.
 
 The top-level readiness summary is now:
 
 - complete sources: 2 (`procthor-10k-val`, `procthor-objaverse-val`);
-- rejected exhausted sources: 2 (`ithor`, `holodeck-objaverse-val`);
+- rejected exhausted sources: 1 (`ithor`);
+- gate-mismatch sources: 1 (`holodeck-objaverse-val`);
 - scanner-ready sources: 0;
 - source-prep-required sources: 0.
 
@@ -77,10 +88,11 @@ product ideas; they are the gate taxonomy required to explain why a source is
 admitted, blocked, or rejected. This implementation converted that taxonomy
 into durable source metadata, readiness artifacts, and next-flow actions. With
 the current evidence, more download permission is not the missing input for
-`ithor` or `holodeck-objaverse-val`; admitting them would require either a new
-candidate that passes the current gates or a deliberate change to the
-public-room/actionability gate. The new metadata-first curation artifact narrows
-that search without making any scene ready by itself.
+`ithor` or `holodeck-objaverse-val`; admitting `ithor` would require a new
+candidate that passes the current gates, while admitting current Holodeck proof
+rows would require a deliberate change to the public-room/actionability gate or
+to the public map generation contract. The metadata-first curation artifact
+narrows that search without making any scene ready by itself.
 
 The 2026-06-16 refresh makes the selection layer suitable for all four scene
 groups without pretending that all four groups are ready. `selection_policy`
@@ -101,6 +113,91 @@ with `next_action=metadata_first_human_curation`. The artifact's
 `admission_effect` is explicitly `none_profile_only`: scanner admission and
 eval readiness still require the normal preview, public-room, waypoint,
 provenance, and map-build gates.
+
+The 2026-06-16 slow-probe review changes the next investigation direction for
+`ithor` and `holodeck-objaverse-val`. The previous metadata-first flow avoided
+full dataset download while choosing candidates, but the follow-on
+`source_prep --execute` and scanner steps still install scene XML, object
+assets, and grasp assets for each candidate before discovering that most
+holodeck rows remain one-room/two-waypoint scenes. That is too slow and too
+expensive as a blind loop. The next flow should add a cheap prefilter stage
+before any object/grasp installation or product-smoke run.
+
+Cheap-prefilter policy:
+
+- Candidate-profile worklists remain no-download and no-backend.
+- A new prefilter may inspect only already-available metadata, source index
+  references, small scene descriptors, or scene XML/header data that can be
+  obtained without installing object/grasp assets.
+- The prefilter must emit machine-readable candidate scores and reasons such
+  as `likely_multi_area`, `single_room_likely`, `descriptor_missing`, or
+  `prefilter_inconclusive`.
+- The prefilter must not mark a row UI-ready or eval-ready. Its only admission
+  effect is to choose a small high-confidence subset for expensive
+  source-prep/scanner proof.
+- Full `install_scene_with_objects_and_grasps_from_path`, preview rendering,
+  and map-build product-smoke should run only for that high-confidence subset,
+  with an explicit batch cap.
+- If source metadata cannot distinguish multi-area candidates, stop with
+  `prefilter_inconclusive` and discuss either a gate change or an external
+  curated candidate source instead of continuing blind downloads.
+- If cheap metadata predicts multi-area scenes but the expensive proof still
+  produces one public room and two generated waypoints, stop with
+  `gate_mismatch` instead of continuing larger random batches.
+- Source-prep failure is not a no-side-effect outcome. The runner may already
+  have installed scene XML or some object/grasp archives before returning
+  `failed`; follow-up flows must report partial-install evidence separately
+  from readiness evidence.
+
+Cheap-prefilter implementation slices:
+
+1. **Prefilter Evidence Inventory**
+   - Inspect what `get_scenes(...)`, installed scene JSON/metadata files,
+     scene XML, and upstream MolmoSpaces descriptors expose for `ithor` and
+     `holodeck-objaverse-val` without object/grasp installation.
+   - Record which fields are stable enough to use as ranking evidence and
+     which fields are only diagnostic.
+
+2. **Scene-Only Metadata Probe**
+   - Add or extend a runner that can collect scene-only metadata for a bounded
+     candidate list without calling object/grasp installation.
+   - Output one row per candidate with source, index, world id, local artifact
+     paths, field provenance, and download/install side effects.
+   - Prefer reusing the existing readiness export/output shape instead of
+     adding a separate public surface.
+
+3. **High-Confidence Candidate Ranking**
+   - Rank candidates by cheap evidence that predicts public navigation area
+     diversity, not by random worklist order alone.
+   - Keep deterministic seeded tie-breaking after the cheap evidence sort.
+   - Emit a capped expensive-proof worklist, for example top 3 to 5 candidates
+     per source per run, plus a reason why lower-ranked rows were skipped.
+
+4. **Expensive Proof Gate**
+   - Run full source prep and scanner only for the capped high-confidence
+     worklist.
+   - Persist successful ready rows or rejected rows exactly as today.
+   - If the high-confidence subset still produces only one-room/two-waypoint
+     rows, classify the source as prefilter-misleading or gate-mismatch before
+     any larger batch is attempted.
+   - When source prep fails after partial install, rerun readiness/export first
+     and classify the candidate state before deciding whether to retry,
+     scanner-run, or delete the candidate from the expensive batch.
+
+Cheap-prefilter acceptance:
+
+- No flow step downloads object/grasp assets for a random or merely unprofiled
+  `ithor`/`holodeck-objaverse-val` candidate.
+- The next-flow worklist distinguishes no-download profile candidates,
+  scene-only prefilter candidates, and expensive-proof candidates.
+- Every expensive-proof candidate has a cheap prefilter score/reason attached.
+- A failed or inconclusive prefilter gives a stop decision instead of silently
+  falling back to the old blind source-prep/scanner loop.
+- Source-prep run artifacts distinguish `not_attempted`, `partial_installed`,
+  `installed`, and `failed_after_partial_install` well enough that a later
+  agent can resume without guessing whether downloads happened.
+- Existing `procthor-10k-val` and `procthor-objaverse-val` ready samples and
+  generated eval-suite behavior remain unchanged.
 
 Historical implementation notes follow.
 
@@ -320,6 +417,17 @@ Historical implementation notes follow.
   `next_action=metadata_first_human_curation`, ten metadata worklist candidates
   per rejected-exhausted source, and read-only profile-refresh commands. This
   keeps the current gates intact while making the next discovery step explicit.
+- The 2026-06-16 cheap-prefilter proof for
+  `holodeck-objaverse-val/{231,344}` showed why those scenes were worth
+  inspecting and why they still cannot enter UI/eval: cheap scene metadata
+  reported `cheap_room_count=6`, previews were reviewable, and map-build
+  product smoke wrote `runtime_metric_map.json`, but the public Runtime Metric
+  Map still had one public room and two generated waypoints. The next-flow
+  artifact now reports `flow_status=gate_mismatch`,
+  `next_action=do_not_scan_without_gate_change`, and
+  `scanner_gate_mismatch_count=2` for Holodeck. It deliberately emits no
+  source-prep/scanner command for Holodeck until the public-room gate or map
+  generation contract is changed.
 
 Verification run on 2026-06-15:
 
@@ -399,6 +507,9 @@ ruff format --check scripts/operator_console/scene_sampler_worklist_alignment.py
 ruff check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/scene_sampler_worklist_alignment.py scripts/operator_console/run_scene_sampler_source_prep.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
 ruff format --check roboclaws/launch/scene_sampler.py scripts/operator_console/export_scene_sampler_readiness.py scripts/operator_console/scene_sampler_worklist_alignment.py scripts/operator_console/run_scene_sampler_source_prep.py scripts/operator_console/run_scene_sampler_scanner_plan.py tests/unit/operator_console/test_scene_sampler_readiness_export.py tests/unit/operator_console/test_scene_sampler_source_prep_runner.py tests/unit/operator_console/test_scene_sampler_scanner_runner.py
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-command-worklist --candidate-range 0:19 --no-generated-eval
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py -q
+ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/scene_sampler_sources.py roboclaws/launch/scene_sampler_scanner.py roboclaws/launch/scene_sampler_prep.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_scene_sampler_readiness_export.py
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-holodeck-gate-mismatch-check --candidate-range 0:10 --no-generated-eval
 ```
 
 Completion audit on 2026-06-16:

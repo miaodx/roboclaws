@@ -1903,6 +1903,98 @@ def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshol
     assert '"--min-semantic-accepted-count", "7"' not in text
 
 
+def test_live_runners_cleanup_checker_policy_uses_checker_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    modules = [
+        (
+            load_script_module(LIVE_CODEX_RUNNER, "run_live_codex_cleanup_checker_profile_test"),
+            "LiveCodexCleanupRunner",
+            {
+                "tmux_session": "checker-profile-test",
+                "codex_bin": "codex",
+                "codex_model": "",
+                "codex_provider_summary": "test",
+                "codex_model_arg": [],
+            },
+        ),
+        (
+            load_script_module(LIVE_CLAUDE_RUNNER, "run_live_claude_cleanup_checker_profile_test"),
+            "LiveClaudeCleanupRunner",
+            {
+                "claude_bin": "claude",
+                "claude_provider_summary": "test",
+                "claude_model_arg": [],
+                "claude_env": [],
+            },
+        ),
+        (
+            load_script_module(
+                LIVE_OPENAI_AGENTS_RUNNER,
+                "run_live_openai_agents_cleanup_checker_profile_test",
+            ),
+            "LiveOpenAIAgentsCleanupRunner",
+            {
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "max_turns": 128,
+                "incomplete_turn_continuation_attempts": 0,
+                "cache_tools_list": True,
+            },
+        ),
+    ]
+
+    for module, runner_name, extra_args in modules:
+        run_dir = tmp_path / runner_name
+        run_dir.mkdir()
+        (run_dir / "run_result.json").write_text("{}\n", encoding="utf-8")
+        captured_commands: list[list[str]] = []
+
+        def fake_run_and_tee(command, *, cwd, stdout_path, stderr_path, env, **_kwargs):
+            captured_commands.append(command)
+            stdout_path.write_text("checker ok\n", encoding="utf-8")
+            return 0
+
+        monkeypatch.setattr(module, "_run_and_tee", fake_run_and_tee)
+        args = SimpleNamespace(
+            run_dir=run_dir,
+            repo_root=REPO_ROOT,
+            status_path=run_dir / "live_status.json",
+            client_url="http://127.0.0.1:18788/mcp",
+            host="127.0.0.1",
+            port=18788,
+            lock_path=tmp_path / f"{runner_name}.lock",
+            server_startup_timeout_s=1.0,
+            kickoff_prompt="custom prompt",
+            backend="molmospaces_subprocess",
+            run_id="household-world.cleanup",
+            intent="cleanup",
+            policy="codex_agent" if "Codex" in runner_name else "test_agent",
+            task="帮我收拾这个房间",
+            min_generated_mess_count="5",
+            profile="smoke",
+            checker_profile="world-oracle-labels",
+            server_arg=[],
+            checker_visual_arg=[],
+            **extra_args,
+        )
+
+        runner = getattr(module, runner_name)(args)
+        runner._check_result()
+
+        assert captured_commands, runner_name
+        checker_command = captured_commands[0]
+        assert checker_command[checker_command.index("--expect-profile") + 1] == (
+            "world-oracle-labels"
+        )
+        assert "--require-clean-agent-run" in checker_command
+        assert "--require-waypoint-honesty" in checker_command
+        assert "--require-real-robot-alignment" in checker_command
+        assert checker_command[checker_command.index("--min-semantic-accepted-count") + 1] == "5"
+        assert checker_command[checker_command.index("--min-sweep-coverage") + 1] == "1.0"
+
+
 def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

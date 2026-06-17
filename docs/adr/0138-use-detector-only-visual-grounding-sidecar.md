@@ -20,9 +20,12 @@ choices.
 Keep the HTTP visual-grounding sidecar boundary, but make the active current
 contract detector-only.
 
-Current visual-grounding runtime choices should be local detector or fake/sim
-labelers such as Grounding DINO, YOLOE, YOLO-World, OmDet-Turbo,
-`sim-projected-labels`, `fake-http`, and `contract-fake`.
+Current visual-grounding runtime choices should be local detector labelers such
+as Grounding DINO, YOLOE, YOLO-World, and OmDet-Turbo.
+
+ADR-0143 later narrows this contract further: `sim-projected-labels`,
+`fake-http`, and `contract-fake` are no longer active public/operator/product
+camera labelers or current validation routes.
 
 Retire hosted VLM visual-grounding camera labelers, refiner stages, and direct
 producer stages from active code, command examples, tests, and benchmark
@@ -44,8 +47,9 @@ a bounded offline/on-demand labeling use case.
 - The Visual Grounding Service remains a sidecar boundary, not an MCP tool.
 - Current camera-grounded household runs should not expose hosted VLM
   direct/refiner camera labelers.
-- Benchmarks should select among sim/fake and detector-only candidates, not
-  direct VLM or proposer-plus-refiner promotions.
+- Benchmarks should select among detector-only candidates, not direct VLM,
+  proposer-plus-refiner promotions, sim projection, or fake transports as
+  current validation proof.
 - Historical plans, reports, and archived ADR-0133 may retain old VLM evidence,
   but current human docs and command surfaces must mark it retired or parked.
 - The implementation plan is

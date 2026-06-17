@@ -431,6 +431,7 @@ _HOLODECK_FEWER_NAVIGATION_AREA_REJECTED_INDICES = (
 
 _HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES = (107, 171, 268)
 _HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = (261, 381, 403)
+_HOLODECK_PREFILTER_GATE_MISMATCH_INDICES = (231, 344)
 
 _HOLODECK_REJECTED_METADATA: dict[int, dict[str, Any]] = (
     {
@@ -463,6 +464,25 @@ _HOLODECK_REJECTED_METADATA: dict[int, dict[str, Any]] = (
             "failure_class": "environment_blocked",
         }
         for index in _HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
+    }
+    | {
+        index: {
+            "room_count": 1,
+            "waypoint_count": 2,
+            "quality_score": 1.0,
+            "coverage_score": 0.1,
+            "blocked_reason": "fewer_than_three_public_navigation_areas",
+            "selected_reason": "prefilter_high_confidence_but_public_map_gate_failed",
+            "source_outcome": "gate_mismatch",
+            "prefilter_status": "high_confidence",
+            "prefilter_reason": "likely_multi_area",
+            "cheap_room_count": 6,
+            "product_smoke_run_dir": (
+                "output/scene-sampler-scanner/product-smoke/"
+                f"molmospaces-holodeck-objaverse-val-{index}/0616_1844/seed-7"
+            ),
+        }
+        for index in _HOLODECK_PREFILTER_GATE_MISMATCH_INDICES
     }
 )
 

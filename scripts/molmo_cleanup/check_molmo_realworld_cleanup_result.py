@@ -32,11 +32,7 @@ from roboclaws.household.planner_proof_quality import (
     validate_planner_proof_quality_evidence,
 )
 from roboclaws.household.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
-from roboclaws.household.profiles import (
-    WORLD_LABELS_PROFILE,
-    evidence_lane,
-    validate_evidence_lane_metadata,
-)
+from roboclaws.household.profiles import evidence_lane, validate_evidence_lane_metadata
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -807,12 +803,15 @@ def _assert_evidence_lane(
     )
     assert profile.evidence_lane in report_text, report_text[:500]
     assert profile.agent_input in report_text, report_text[:500]
-    if profile.profile == WORLD_LABELS_PROFILE:
+    if profile.evidence_lane in {"world-oracle-labels", "world-public-labels"}:
         assert "image reasoning" not in report_text.lower(), report_text[:500]
         model_input_note = str(metadata.get("model_input_note") or "")
-        assert "not model input" in model_input_note.lower(), metadata
-        assert "map_mode" in model_input_note, metadata
-        assert "runtime_map_prior" in model_input_note, metadata
+        if profile.evidence_lane == "world-oracle-labels":
+            assert "not model input" in model_input_note.lower(), metadata
+            assert "map_mode" in model_input_note, metadata
+            assert "runtime_map_prior" in model_input_note, metadata
+        else:
+            assert "withheld" in model_input_note.lower(), metadata
 
 
 def _assert_clean_agent_run(
