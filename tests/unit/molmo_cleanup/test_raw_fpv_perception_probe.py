@@ -44,6 +44,47 @@ def _load_sweep_module():
     return module
 
 
+def test_raw_fpv_probe_rejects_invalid_numeric_config() -> None:
+    probe = _load_module()
+
+    for flag, value in (
+        ("--max-frames-per-source", "0"),
+        ("--threshold", "0"),
+        ("--max-candidates", "0"),
+        ("--max-candidates", "4"),
+        ("--timeout-s", "0"),
+        ("--timeout-s", "nan"),
+    ):
+        try:
+            probe.parse_args([flag, value])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag}={value} to fail at parse time")
+
+
+def test_raw_fpv_probe_accepts_valid_numeric_config() -> None:
+    probe = _load_module()
+
+    args = probe.parse_args(
+        [
+            "--max-frames-per-source",
+            "1",
+            "--threshold",
+            "1",
+            "--max-candidates",
+            "3",
+            "--timeout-s",
+            "0.5",
+        ]
+    )
+
+    assert args.max_frames_per_source == 1
+    assert args.threshold == 1
+    assert args.max_candidates == 3
+    assert args.timeout_s == 0.5
+
+
 def test_raw_fpv_probe_keeps_private_labels_out_of_prompt_inputs(tmp_path: Path) -> None:
     probe = _load_module()
     run_dir = _raw_run_dir(tmp_path)

@@ -7,6 +7,7 @@ import datetime as dt
 import hashlib
 import html
 import json
+import math
 import os
 import re
 import sys
@@ -226,10 +227,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
         default="both",
     )
-    parser.add_argument("--max-frames-per-source", type=int, default=18)
-    parser.add_argument("--threshold", type=int, default=5)
-    parser.add_argument("--max-candidates", type=int, default=3)
-    parser.add_argument("--timeout-s", type=float, default=120.0)
+    parser.add_argument("--max-frames-per-source", type=_positive_int_arg, default=18)
+    parser.add_argument("--threshold", type=_positive_int_arg, default=5)
+    parser.add_argument("--max-candidates", type=_candidate_limit_arg, default=3)
+    parser.add_argument("--timeout-s", type=_positive_float_arg, default=120.0)
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     return parser.parse_args(argv)
 
@@ -243,13 +244,13 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     frames = collect_observation_frames(
         raw_run_dirs=raw_run_dirs,
         contrast_run_dirs=contrast_run_dirs,
-        max_frames_per_source=max(1, int(args.max_frames_per_source)),
+        max_frames_per_source=int(args.max_frames_per_source),
     )
     runtime_map_prior = _load_json_if_exists(args.runtime_map_prior)
     public_inputs = build_public_inputs(
         frames,
         runtime_map_prior=runtime_map_prior,
-        max_candidates=max(1, min(3, int(args.max_candidates))),
+        max_candidates=int(args.max_candidates),
     )
     labels = load_probe_labels(
         tuple(args.private_labels or ()),
@@ -292,7 +293,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             frames=frames,
             labels=labels,
             predictions=variant_predictions,
-            threshold=max(1, int(args.threshold)),
+            threshold=int(args.threshold),
         )
         matrix.append(
             {
@@ -339,7 +340,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "status": status,
         "generated_at": _utc_timestamp(),
         "output_dir": str(output_run_dir),
-        "threshold": max(1, int(args.threshold)),
+        "threshold": int(args.threshold),
         "source_runs": {
             "raw": [str(path) for path in raw_run_dirs],
             "contrast": [str(path) for path in contrast_run_dirs],
@@ -1839,6 +1840,33 @@ def load_dotenv(path: Path) -> None:
             continue
         key, value = line.split("=", 1)
         os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _candidate_limit_arg(value: str) -> int:
+    parsed = _positive_int_arg(value)
+    if parsed > 3:
+        raise argparse.ArgumentTypeError(f"expected a candidate limit from 1 to 3; got {value!r}")
+    return parsed
+
+
+def _positive_float_arg(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive float; got {value!r}") from None
+    if not math.isfinite(parsed) or parsed <= 0.0:
+        raise argparse.ArgumentTypeError(f"expected a positive float; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

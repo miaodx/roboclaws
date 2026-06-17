@@ -60,6 +60,19 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV perception
+  probe numeric-config false-green. The probe CLI now rejects non-positive
+  `max_frames_per_source`, non-positive score thresholds, out-of-contract
+  candidate limits, and non-positive/non-finite provider timeouts at argument
+  parsing time instead of clamping invalid values before collecting frames,
+  building prompt inputs, or scoring reports. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud perception probe
+  configuration; defaults, valid candidate limits from one to three,
+  prompt/report schemas, public prompt privacy boundaries, offline scoring, and
+  provider execution flow are unchanged. The ratchet remains 0 complexity rows
+  and 79 oversized modules; `run_raw_fpv_perception_probe.py` is 1873 lines and
+  `test_raw_fpv_perception_probe.py` is 1295 lines. Do not prune or split tests
+  outside an `$intuitive-tests` pass.
 - Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV corpus
   generator numeric-config false-green. Private-label and public-sweep corpus
   CLIs now reject non-positive render dimensions, non-positive

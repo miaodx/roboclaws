@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: RAW-FPV perception probe numeric configuration now fails
+  aloud. The probe CLI rejects non-positive `max_frames_per_source`,
+  non-positive score thresholds, out-of-contract candidate limits, and
+  non-positive/non-finite provider timeouts at argument parsing time instead of
+  clamping invalid values before collecting frames, building prompt inputs, or
+  scoring reports. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud perception probe configuration; defaults,
+  valid candidate limits from one to three, prompt/report schemas, public
+  prompt privacy boundaries, offline scoring, and provider execution flow are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_raw_fpv_perception_probe.py` is 1873 lines and
+  `test_raw_fpv_perception_probe.py` is 1295 lines. Focused regression tests
+  grow the existing RAW-FPV test file; leave test pruning/splitting for an
+  `$intuitive-tests` pass. Proof: focused RAW-FPV probe parser/unit tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: RAW-FPV corpus generator numeric configuration now fails aloud.
   Private-label and public-sweep corpus CLIs reject non-positive render
   dimensions, non-positive `min_object_pixels`, and negative observation /
