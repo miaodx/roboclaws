@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-17: Cleanup report Agibot section rendering moved from
+  `report.py` into `report_sections_agibot.py`. The new owner covers
+  MolmoSpaces Agibot contract rehearsal rendering, Agibot SDK runner rendering,
+  backend-stage/public-tool mapping, and subphase status labels; `report.py`
+  keeps the cleanup report section sequence, shared report helpers, generic
+  tables, state snapshots, and HTML shell. Two stale private table/format
+  helpers left behind by previous section splits were removed. Metric:
+  `report.py` 2175 -> 1995 lines, clearing the hard ceiling; new owner is 193
+  lines; ratchet reports 14 complexity rows and 74 oversized modules. Owning
+  layer: Artifacts, reports, and eval suites. Behavior-change class: internal
+  owner split plus stale private helper removal. Proof: focused cleanup-report
+  and MolmoSpaces Agibot contract report tests, ruff, touched-file format
+  check, py_compile, and ratchet.
+
 - 2026-06-17: Robot-camera visual-parity summary ownership split into focused
   report and payload owners. HTML report rendering now lives in
   `robot_camera_visual_parity_report.py`; object/capture-quality payload

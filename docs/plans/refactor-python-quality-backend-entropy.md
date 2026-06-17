@@ -47,15 +47,18 @@ tables, historical launch/profile narratives, and implementation/proof detail
 that makes humans or future agents rediscover old routes.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 40` on 2026-06-17 after the visual-parity summary owner split.
-Treat this as the planning snapshot for the next slice; refresh before executing
-again.
+--summary --top 40` on 2026-06-17 after the cleanup report Agibot section owner
+split. Treat this as the planning snapshot for the next slice; refresh before
+executing again.
 
 - 14 Ruff complexity violations and 74 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
-  `roboclaws/household/scene_camera_comparison.py` at 2830,
-  and `roboclaws/household/report.py` at 2175.
+  and `roboclaws/household/scene_camera_comparison.py` at 2830.
+- `roboclaws/household/report.py` is down to 1995 lines and is no longer a
+  hard-ceiling P1. Keep it below 2000; reopen it only if report sections start
+  rebuilding Agibot, proof-bundle, probe, map, timing, agent, or robot section
+  rendering inline again.
 - `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` is down to
   1976 lines and is no longer a hard-ceiling P1. Keep it below 2000; reopen it
   only if the summarizer starts rebuilding HTML report rendering,
@@ -121,9 +124,9 @@ Current closure snapshot:
 - Candidate A closed boundaries: contract init/runtime-prior, Runtime Metric Map
   payloads, target/public-anchor ownership, done-readiness pending/held
   candidates, public manipulation/tool response envelopes, visual-candidate
-  payload/declaration/lifecycle, camera-label producer declaration inputs, and
-  proof-bundle result rendering. Reopen only with fresh facade-private or
-  report-section drift.
+  payload/declaration/lifecycle, camera-label producer declaration inputs,
+  proof-bundle result rendering, and Agibot report section rendering. Reopen
+  only with fresh facade-private or report-section drift.
 - Candidate B closed boundaries: scene-camera report rendering; visual-parity
   HTML report rendering; visual-parity object/capture-quality payload summaries;
   apple Object
@@ -247,6 +250,21 @@ now led by `realworld_contract.py`, `scene_camera_comparison.py`, and
 visual-parity unit tests, ruff, format check, py_compile, and ratchet. Do not
 reopen visual-parity summary ownership unless the summarizer starts rebuilding
 report rendering or payload compaction inline again.
+
+Implementation refresh on 2026-06-17 completed the cleanup report Agibot
+section owner split. MolmoSpaces Agibot contract rehearsal rendering, Agibot SDK
+runner rendering, backend-stage/public-tool mapping, and subphase status labels
+now live in `report_sections_agibot.py`; `report.py` keeps the cleanup report
+section sequence, shared report helpers, generic tables, state snapshots, and
+HTML shell. Two stale private table/format helpers left behind by prior section
+splits were removed. Metric: `report.py` is down to 1995 lines and no longer a
+hard-ceiling P1; the new Agibot report-section owner is 193 lines. The ratchet
+remains 14 complexity rows and 74 oversized modules, now led by
+`realworld_contract.py` and `scene_camera_comparison.py` among production
+hard-ceiling files. Proof passed with focused cleanup-report and MolmoSpaces
+Agibot contract report tests, ruff, format check on touched files, py_compile,
+and ratchet. Do not reopen cleanup-report Agibot section ownership unless
+`report.py` starts rebuilding those sections inline again.
 
 ## Operating Rules
 
