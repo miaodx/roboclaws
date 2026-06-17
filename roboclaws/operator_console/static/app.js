@@ -2206,6 +2206,7 @@ function setImageSlot(name, asset, emptyText) {
       title="Open image preview"
     >
       <img alt="${escapeHtml(label)} artifact" src="${escapeHtml(src)}" />
+      ${robotPoseOverlayMarkup(asset.robot_pose_overlay)}
     </button>
   `;
   const button = slot.querySelector(".image-preview-button");
@@ -2216,6 +2217,28 @@ function setImageSlot(name, asset, emptyText) {
       path: asset.path || "",
     });
   });
+}
+
+function robotPoseOverlayMarkup(overlay) {
+  if (!overlay || !Number.isFinite(Number(overlay.x_pct)) || !Number.isFinite(Number(overlay.y_pct))) {
+    return "";
+  }
+  const x = clampNumber(Number(overlay.x_pct), 0, 100);
+  const y = clampNumber(Number(overlay.y_pct), 0, 100);
+  const yaw = Number.isFinite(Number(overlay.yaw_deg)) ? Number(overlay.yaw_deg) : 0;
+  const title = `Robot pose x=${overlay.x ?? "?"} y=${overlay.y ?? "?"}`;
+  return `
+    <span
+      class="robot-pose-overlay"
+      style="--robot-x: ${x}%; --robot-y: ${y}%; --robot-yaw: ${yaw}deg;"
+      title="${escapeHtml(title)}"
+      aria-hidden="true"
+    ></span>
+  `;
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function imageLabel(name) {

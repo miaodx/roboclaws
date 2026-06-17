@@ -166,6 +166,9 @@ ROUTE_FIELD_APP_REQUIRED = (
     "data-open-background-tasks",
     "copy_command",
     "api_post",
+    "robotPoseOverlayMarkup",
+    "robot_pose_overlay",
+    "clampNumber",
 )
 
 ROUTE_FIELD_APP_FORBIDDEN = (
@@ -216,6 +219,18 @@ def test_static_app_does_not_short_circuit_context_json_readiness() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
     assert 'gate.id === "context_json" && Boolean(els.contextInput.value.trim())' not in app
+
+
+def test_static_app_renders_robot_pose_overlay() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    assert "robotPoseOverlayMarkup" in app
+    assert "robot_pose_overlay" in app
+    assert "robot-pose-overlay" in app
+    assert ".robot-pose-overlay" in css
+    assert "--robot-x" in css
+    assert "--robot-yaw" in css
 
 
 def test_static_app_renders_scene_preview_assets() -> None:
