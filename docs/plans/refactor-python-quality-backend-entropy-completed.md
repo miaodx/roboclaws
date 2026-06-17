@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Visual-grounding benchmark timeout configuration now fails aloud.
+  `run_visual_grounding_benchmark.py` validates `--timeout-s` and
+  `VISUAL_GROUNDING_TIMEOUT_S` as positive finite seconds during argument
+  parsing instead of accepting zero/non-finite values or surfacing raw float
+  conversion failures before benchmark setup. Behavior-change class: fail-aloud
+  visual-grounding benchmark configuration; default timeout, valid CLI/env
+  overrides, visual-grounding client config shape, benchmark result/report
+  schemas, public launch axes, and sidecar service behavior are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py` is 1278 lines.
+  Proof: focused visual-grounding benchmark contract tests, touched-file ruff
+  and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
   aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
   OmDet-Turbo, and sidecar candidate limits reject malformed,

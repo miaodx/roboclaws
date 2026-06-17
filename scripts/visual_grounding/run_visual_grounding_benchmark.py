@@ -5,6 +5,7 @@ import argparse
 import base64
 import io
 import json
+import math
 import os
 import sys
 import time
@@ -86,9 +87,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--timeout-s",
-        type=float,
-        default=float(
-            os.environ.get("VISUAL_GROUNDING_TIMEOUT_S", DEFAULT_VISUAL_GROUNDING_TIMEOUT_S)
+        type=_positive_seconds,
+        default=_positive_seconds(
+            os.environ.get("VISUAL_GROUNDING_TIMEOUT_S", DEFAULT_VISUAL_GROUNDING_TIMEOUT_S),
         ),
     )
     parser.add_argument(
@@ -292,6 +293,20 @@ def _safe_runtime_parameters(value: Any) -> dict[str, Any]:
                 if isinstance(child, (str, int, float, bool)) or child is None
             ]
     return safe
+
+
+def _positive_seconds(value: Any) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise argparse.ArgumentTypeError(
+            f"visual grounding benchmark timeout must be a positive finite number, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise argparse.ArgumentTypeError(
+            f"visual grounding benchmark timeout must be a positive finite number, got {value!r}"
+        )
+    return parsed
 
 
 def _pipeline_ids(raw_values: list[str]) -> list[str]:
