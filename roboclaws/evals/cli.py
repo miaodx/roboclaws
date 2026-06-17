@@ -3,17 +3,26 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
 
 from roboclaws.evals.regression import promote_regression_from_cli_overrides
 from roboclaws.evals.runner import DEFAULT_OUTPUT_ROOT, run_eval_suite
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+EVAL_HARNESS_RUNNER = REPO_ROOT / "skills" / "eval-harness" / "scripts" / "run_eval_harness.py"
+
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run a Roboclaws eval suite.")
+    parser = argparse.ArgumentParser(description="Run Roboclaws eval tools.")
     parser.add_argument("overrides", nargs="*", help="key=value overrides.")
     args = parser.parse_args(argv)
+    if args.overrides and args.overrides[0] in {"recommend", "execute"}:
+        try:
+            return _run_eval_harness(args.overrides[0], _parse_key_value_args(args.overrides[1:]))
+        except ValueError as exc:
+            parser.exit(2, f"error: {exc}\n")
     if args.overrides and args.overrides[0] in {"promote-regression", "promote_regression"}:
         try:
             promotion = promote_regression_from_cli_overrides(
@@ -29,6 +38,46 @@ def main(argv: list[str] | None = None) -> int:
         parser.exit(2, f"error: {exc}\n")
     print(json.dumps({"results": str(run.results_path), "report": str(run.report_path)}))
     return 0
+
+
+def _run_eval_harness(mode: str, overrides: dict[str, str]) -> int:
+    values = dict(overrides)
+    if values.pop("suite", None):
+        raise ValueError(f"{mode} does not accept suite=<suite>; use direct suite mode")
+    argv = [mode]
+    for key in (
+        "budget",
+        "plan",
+        "since",
+        "changed_file",
+        "agent_engine",
+        "provider_profile",
+        "intent",
+        "preset",
+        "evidence_lane",
+        "camera_labeler",
+        "output_dir",
+    ):
+        value = values.pop(key, None)
+        if value in {None, ""}:
+            continue
+        argv.extend([f"--{key.replace('_', '-')}", value])
+    if values:
+        keys = ", ".join(sorted(values))
+        raise ValueError(f"unsupported eval-harness override(s): {keys}")
+    return _load_eval_harness_runner().main(argv)
+
+
+def _load_eval_harness_runner():
+    spec = importlib.util.spec_from_file_location(
+        "roboclaws_eval_harness_runner",
+        EVAL_HARNESS_RUNNER,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load eval harness runner at {EVAL_HARNESS_RUNNER}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _run_eval_from_overrides(overrides: dict[str, str]):

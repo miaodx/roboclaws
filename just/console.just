@@ -7,7 +7,7 @@ default:
     @just --list console
 
 # Run the standalone local operator console.
-run host="127.0.0.1" port="8765":
+run host="0.0.0.0" port="8765":
     #!/usr/bin/env bash
     set -euo pipefail
     python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-}"

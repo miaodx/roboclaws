@@ -359,26 +359,6 @@
         "value": 16
       },
       {
-        "code": "C901",
-        "key": "tests/contract/dev_tools/test_task_agent_just_recipes.py|C901|surface_args_from_legacy_task_args",
-        "limit": 10,
-        "message": "`surface_args_from_legacy_task_args` is too complex (12 > 10)",
-        "path": "tests/contract/dev_tools/test_task_agent_just_recipes.py",
-        "row": 235,
-        "symbol": "surface_args_from_legacy_task_args",
-        "value": 12
-      },
-      {
-        "code": "PLR0912",
-        "key": "tests/contract/dev_tools/test_task_agent_just_recipes.py|PLR0912|surface_args_from_legacy_task_args",
-        "limit": 12,
-        "message": "Too many branches (14 > 12)",
-        "path": "tests/contract/dev_tools/test_task_agent_just_recipes.py",
-        "row": 235,
-        "symbol": "surface_args_from_legacy_task_args",
-        "value": 14
-      },
-      {
         "code": "PLR0915",
         "key": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py|PLR0915|test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates",
         "limit": 50,

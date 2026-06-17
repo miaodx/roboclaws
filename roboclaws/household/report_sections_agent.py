@@ -83,6 +83,57 @@ def cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
     )
 
 
+def evidence_lane_badges(run_result: dict[str, Any], badge_html) -> str:  # noqa: ANN001
+    metadata = _evidence_lane_metadata(run_result)
+    if not metadata:
+        return ""
+    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
+    return "".join(
+        (
+            badge_html(
+                "Evidence lane",
+                metadata.get("evidence_lane", run_result.get("evidence_lane", "")),
+            ),
+            badge_html("Camera labeler", camera_labeler) if camera_labeler else "",
+            badge_html("Agent input", metadata.get("agent_input", "")),
+            badge_html("Input provenance", metadata.get("input_provenance", "")),
+            badge_html("Report", metadata.get("report", "")),
+        )
+    )
+
+
+def evidence_lane_note(run_result: dict[str, Any]) -> str:
+    metadata = _evidence_lane_metadata(run_result)
+    if not metadata:
+        return ""
+    evidence_lane = metadata.get("evidence_lane", run_result.get("evidence_lane", "unknown"))
+    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
+    verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
+    labeler_note = (
+        f"Camera labeler: {camera_labeler}. "
+        if camera_labeler
+        else "Camera labeler: not applicable. "
+    )
+    note = (
+        f"Cleanup evidence lane {evidence_lane}: {metadata.get('summary', '')} "
+        "evidence_lane selects what the agent receives. camera_labeler applies only "
+        "to camera-grounded-labels and selects how camera labels are produced. "
+        f"{labeler_note}"
+        "Map shape and map priors are controlled separately by map_mode and "
+        "runtime_map_prior. "
+        f"Agent input: {metadata.get('agent_input', 'unknown')}; "
+        f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
+        f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "
+        f"{metadata.get('model_input_note', '')}"
+    )
+    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
+
+
+def _evidence_lane_metadata(run_result: dict[str, Any]) -> dict[str, Any]:
+    metadata = run_result.get("evidence_lane_metadata")
+    return metadata or run_result.get("cleanup_profile_metadata", {})
+
+
 def real_robot_readiness_section(run_result: dict[str, Any]) -> str:
     readiness = run_result.get("real_robot_readiness") or {}
     if not readiness:
@@ -434,7 +485,7 @@ def _real_robot_readiness_note(readiness: dict[str, Any]) -> str:
     if readiness.get("backend_variant") == "molmospaces_sim":
         return (
             "This section is a MolmoSpaces Agibot Contract Rehearsal. It validates "
-            "real_robot_cleanup_v1 contract shape, Agibot-shaped stage sequencing, "
+            "household contract shape, Agibot-shaped stage sequencing, "
             "and simulated observe/navigation evidence. It is not physical Agibot "
             "GDK execution, not a real movement gate, and not manipulation proof."
         )
@@ -442,7 +493,7 @@ def _real_robot_readiness_note(readiness: dict[str, Any]) -> str:
         movement_flag = str(readiness.get("movement_enabled", False)).lower()
         return (
             "This section is an AgiBot Navigation + Perception Pilot. Roboclaws keeps "
-            "the real_robot_cleanup_v1 public tool boundary while the AgiBot SDK runner "
+            "the household public tool boundary while the AgiBot SDK runner "
             "owns GDK execution evidence and per-stage reports. Navigation is physical "
             "only when the session-level movement gate is enabled; "
             f"movement_enabled={movement_flag}, "

@@ -12,7 +12,7 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 
-CLEANUP_PROFILE_SCHEMA = "cleanup_evidence_lane_v1"
+EVIDENCE_LANE_SCHEMA = "cleanup_evidence_lane_v1"
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
 ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
@@ -22,6 +22,9 @@ WORLD_ORACLE_LABELS_LANE = "world-oracle-labels"
 WORLD_PUBLIC_LABELS_LANE = "world-public-labels"
 CAMERA_GROUNDED_LABELS_LANE = "camera-grounded-labels"
 CAMERA_RAW_FPV_LANE = "camera-raw-fpv"
+PHYSICAL_ROBOT_EVIDENCE_LANE = "physical-robot-evidence"
+AGIBOT_SDK_RUNNER_BACKEND = "agibot_sdk_runner"
+AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
 
 # Compatibility names for existing Python call sites. The public values are the
 # evidence-lane names above.
@@ -98,7 +101,7 @@ class CleanupProfile:
 
     def metadata(self) -> dict[str, Any]:
         metadata = {
-            "schema": CLEANUP_PROFILE_SCHEMA,
+            "schema": EVIDENCE_LANE_SCHEMA,
             "mode": self.profile,
             "evidence_lane": self.evidence_lane,
             "agent_input": self.agent_input,
@@ -271,28 +274,28 @@ def cleanup_evidence_lane_names() -> tuple[str, ...]:
     )
 
 
-def cleanup_profile_names() -> tuple[str, ...]:
-    return tuple(_PROFILES)
+def evidence_lane_names() -> tuple[str, ...]:
+    return cleanup_evidence_lane_names()
 
 
 def camera_labeler_names() -> tuple[str, ...]:
     return CAMERA_LABELERS
 
 
-def cleanup_profile(name: str) -> CleanupProfile:
-    normalized = normalize_cleanup_profile_name(name)
+def evidence_lane(name: str) -> CleanupProfile:
+    normalized = normalize_evidence_lane_name(name)
     try:
         return _PROFILES[normalized]
     except KeyError as exc:
-        expected = "|".join(cleanup_profile_names())
-        raise ValueError(f"unsupported cleanup profile {name!r} (expected {expected})") from exc
+        expected = "|".join(evidence_lane_names())
+        raise ValueError(f"unsupported evidence lane {name!r} (expected {expected})") from exc
 
 
-def cleanup_profile_metadata(name: str) -> dict[str, Any]:
-    return cleanup_profile(name).metadata()
+def evidence_lane_metadata(name: str) -> dict[str, Any]:
+    return evidence_lane(name).metadata()
 
 
-def normalize_cleanup_profile_name(name: str) -> str:
+def normalize_evidence_lane_name(name: str) -> str:
     normalized = name.strip().lower().replace("_", "-")
     return normalized
 
@@ -319,7 +322,7 @@ def validate_evidence_lane_camera_labeler(
     evidence_lane: str,
     camera_labeler: str | None,
 ) -> str:
-    lane = normalize_cleanup_profile_name(evidence_lane)
+    lane = normalize_evidence_lane_name(evidence_lane)
     if lane not in cleanup_evidence_lane_names():
         expected = "|".join(cleanup_evidence_lane_names())
         raise ValueError(f"unsupported evidence_lane {evidence_lane!r} (expected {expected})")
@@ -338,7 +341,7 @@ def validate_evidence_lane_camera_labeler(
     return ""
 
 
-def infer_cleanup_profile_name(
+def infer_evidence_lane_name(
     *,
     backend: str,
     perception_mode: str,
@@ -355,20 +358,20 @@ def infer_cleanup_profile_name(
     return SMOKE_PROFILE
 
 
-def cleanup_profile_metadata_for_run(
+def evidence_lane_metadata_for_run(
     *,
-    profile_name: str | None,
+    evidence_lane_name: str | None,
     backend: str,
     perception_mode: str,
     record_robot_views: bool,
     camera_labeler: str | None = None,
 ) -> dict[str, Any]:
-    selected_name = profile_name or infer_cleanup_profile_name(
+    selected_name = evidence_lane_name or infer_evidence_lane_name(
         backend=backend,
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
     )
-    profile = cleanup_profile(selected_name)
+    profile = evidence_lane(selected_name)
     selected_camera_labeler = validate_evidence_lane_camera_labeler(
         evidence_lane=profile.evidence_lane,
         camera_labeler=camera_labeler,
@@ -430,15 +433,65 @@ def cleanup_profile_metadata_for_run(
     return metadata
 
 
-def validate_cleanup_profile_metadata(
+def physical_robot_evidence_metadata(
+    *,
+    backend: str,
+    backend_variant: str = "",
+    record_robot_views: bool = False,
+) -> dict[str, Any]:
+    metadata = {
+        "schema": EVIDENCE_LANE_SCHEMA,
+        "mode": PHYSICAL_ROBOT_EVIDENCE_LANE,
+        "evidence_lane": PHYSICAL_ROBOT_EVIDENCE_LANE,
+        "agent_input": "physical_robot_public_state",
+        "input_provenance": "robot_backend_artifact",
+        "world_backend": backend_variant or backend,
+        "report": ROBOT_VIEW_REPORT if record_robot_views else SEMANTIC_REPORT,
+        "verifiers": [REAL_ROBOT_ALIGNMENT_VERIFIER],
+        "backend": backend,
+        "backend_variant": backend_variant,
+        "perception_mode": "physical_robot_public_observations",
+        "detection_exposure_policy": "physical_robot_public_observations",
+        "include_robot": True,
+        "record_robot_views": bool(record_robot_views),
+        "requires_clean_success": False,
+        "summary": (
+            "Physical robot public navigation/perception evidence. Manipulation can return "
+            "blocked_capability until physical proof exists."
+        ),
+        "model_input_note": (
+            "The route reports public robot observations, map context, navigation results, "
+            "and blocked manipulation capability state. It is not a selectable cleanup MCP "
+            "contract profile."
+        ),
+        "profiles": ["household_world", "household_manipulation", "household_episode"],
+    }
+    return {key: value for key, value in metadata.items() if value != ""}
+
+
+def agibot_gdk_evidence_metadata(*, record_robot_views: bool = False) -> dict[str, Any]:
+    return physical_robot_evidence_metadata(
+        backend=AGIBOT_SDK_RUNNER_BACKEND,
+        backend_variant=AGIBOT_GDK_BACKEND_VARIANT,
+        record_robot_views=record_robot_views,
+    )
+
+
+def run_evidence_lane_metadata(run_result: dict[str, Any]) -> dict[str, Any]:
+    return (
+        run_result.get("evidence_lane_metadata") or run_result.get("cleanup_profile_metadata") or {}
+    )
+
+
+def validate_evidence_lane_metadata(
     metadata: dict[str, Any],
     *,
-    expected_profile: str | None = None,
+    expected_evidence_lane: str | None = None,
     expected_backend: str | None = None,
     expected_perception_mode: str | None = None,
 ) -> None:
-    assert metadata.get("schema") == CLEANUP_PROFILE_SCHEMA, metadata
-    profile = cleanup_profile(str(metadata.get("mode") or metadata.get("evidence_lane") or ""))
+    assert metadata.get("schema") == EVIDENCE_LANE_SCHEMA, metadata
+    profile = evidence_lane(str(metadata.get("mode") or metadata.get("evidence_lane") or ""))
     expected = profile.metadata()
     for key in (
         "agent_input",
@@ -467,9 +520,9 @@ def validate_cleanup_profile_metadata(
         assert metadata.get("report") == expected["report"], metadata
     assert isinstance(metadata.get("record_robot_views"), bool), metadata
     assert metadata.get("verifiers") == expected["verifiers"], metadata
-    if expected_profile is not None:
-        expected_name = normalize_cleanup_profile_name(expected_profile)
-        expected_profile_obj = cleanup_profile(expected_name)
+    if expected_evidence_lane is not None:
+        expected_name = normalize_evidence_lane_name(expected_evidence_lane)
+        expected_profile_obj = evidence_lane(expected_name)
         assert metadata.get("mode") == expected_profile_obj.profile, metadata
         assert metadata.get("evidence_lane") == expected_profile_obj.evidence_lane, metadata
     if expected_backend is not None:

@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.operator_console.locks import ResourceLock
+from roboclaws.operator_console.process_status import pid_is_active
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
+from roboclaws.operator_console.state_checker import checker_status
 from roboclaws.operator_console.state_summary import (
     camera_angle_summary,
     is_failure_string,
@@ -66,21 +68,32 @@ def derive_operator_state(
     status = _read_json(run_dir / "operator_state.json")
     live_status = _read_json(_latest_existing(display_run_dir, ("live_status.json",)))
     run_result = _read_json(_latest_existing(display_run_dir, ("run_result.json",)))
+    launch_failure = _wrapper_launch_failure(
+        status, live_status, run_result, run_dir, display_run_dir
+    )
     trace_path = _latest_existing(display_run_dir, ("trace.jsonl",))
     latest_trace = _last_robot_tool_jsonl(trace_path) or _last_jsonl(trace_path)
     camera_state = _camera_angle_summary(trace_path)
     phase = str(
         live_status.get("phase")
+        or launch_failure.get("phase")
         or status.get("phase")
         or live_status.get("status")
         or run_result.get("status")
         or "idle"
     )
-    checker = _checker_status(display_run_dir, run_result, phase)
-    terminal_reason = _terminal_reason(status, live_status, run_result)
+    checker = checker_status(
+        checker_log=_latest_existing(display_run_dir, ("checker.log",)),
+        report=_latest_existing(display_run_dir, ("report.html",)),
+        run_result=run_result,
+        phase=phase,
+        launch_failure_reason=str(launch_failure.get("terminal_reason") or ""),
+    )
+    terminal_status = dict(status)
+    terminal_status.update(launch_failure)
+    terminal_reason = _terminal_reason(terminal_status, live_status, run_result)
     artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
-    if display_run_dir != run_dir:
-        artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
+    artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
     latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
     latest_agent_message = _latest_agent_message(display_run_dir)
@@ -177,6 +190,46 @@ def redacted_artifact_text(path: Path, *, max_bytes: int = 200_000) -> str:
         data = data[:head_bytes] + marker + data[-tail_bytes:]
     text = data.decode("utf-8", errors="replace")
     return redact_text(text)
+
+
+def _wrapper_launch_failure(
+    status: dict[str, Any],
+    live_status: dict[str, Any],
+    run_result: dict[str, Any],
+    run_dir: Path,
+    display_run_dir: Path,
+) -> dict[str, str]:
+    if live_status or run_result or display_run_dir != run_dir:
+        return {}
+    phase = str(status.get("phase") or "").strip().lower()
+    if not _phase_is_active(phase):
+        return {}
+    if pid_is_active(status.get("pid")):
+        return {}
+    reason = _launch_log_failure_reason(run_dir / "console-launch.log")
+    return {
+        "phase": "failed",
+        "terminal_reason": reason or "launch wrapper exited before writing live run artifacts",
+    }
+
+
+def _launch_log_failure_reason(log_path: Path) -> str:
+    if not log_path.exists():
+        return ""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")[-80_000:]
+    except OSError:
+        return ""
+    lines = [line.strip() for line in redact_text(text).splitlines() if line.strip()]
+    error_lines = [line for line in lines if line.lower().startswith("error:")]
+    for line in error_lines:
+        if "recipe `" not in line:
+            return line.split(":", 1)[1].strip()
+    if error_lines:
+        return error_lines[0].split(":", 1)[1].strip()
+    if "Traceback (most recent call last)" in text:
+        return "launch command raised an exception before live artifacts were written"
+    return ""
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -500,140 +553,6 @@ def _artifact_href(root: Path, path: Path) -> str:
     if not _is_relative_to(path, root):
         return ""
     return f"/artifacts/{path.relative_to(root)}?v={path.stat().st_mtime_ns}"
-
-
-def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> dict[str, Any]:
-    checker_log = _latest_existing(run_dir, ("checker.log",))
-    report = _latest_existing(run_dir, ("report.html",))
-    normalized_phase = phase.lower()
-    failure_reason = _checker_failure_reason(run_result, checker_log)
-    if normalized_phase in {"failed", "error", "terminated"}:
-        return {
-            "status": "failed",
-            "report_exists": report.exists(),
-            "checker_log": str(checker_log) if checker_log.exists() else "",
-            "reason": failure_reason,
-            "message": _checker_failure_message(checker_log, failure_reason, "Run failed."),
-        }
-    ok = _run_result_success(run_result)
-    if ok and report.exists():
-        return {
-            "status": "passed",
-            "report_exists": True,
-            "checker_log": str(checker_log) if checker_log.exists() else "",
-            "reason": "",
-            "message": "Checker passed.",
-        }
-    if run_result:
-        return {
-            "status": "failed",
-            "report_exists": report.exists(),
-            "checker_log": str(checker_log) if checker_log.exists() else "",
-            "reason": failure_reason,
-            "message": _checker_failure_message(
-                checker_log, failure_reason, "Run result is present."
-            ),
-        }
-    if normalized_phase == "checking-result":
-        return {
-            "status": "running",
-            "report_exists": report.exists(),
-            "checker_log": str(checker_log) if checker_log.exists() else "",
-            "reason": "",
-            "message": "Checker is running.",
-        }
-    if _phase_is_active(normalized_phase):
-        return {
-            "status": "waiting",
-            "report_exists": False,
-            "checker_log": "",
-            "reason": "",
-            "message": "Checker will run when the live agent hands off to result checking.",
-        }
-    return {
-        "status": "pending",
-        "report_exists": False,
-        "checker_log": str(checker_log) if checker_log.exists() else "",
-        "reason": "",
-        "message": "Checker has not run yet.",
-    }
-
-
-def _checker_failure_message(checker_log: Path, reason: str, fallback: str) -> str:
-    if reason:
-        return f"Checker failed: {reason}"
-    if checker_log.exists():
-        return "Checker failed. Open Checker Output for details."
-    return fallback
-
-
-def _checker_failure_reason(run_result: dict[str, Any], checker_log: Path) -> str:
-    reason = _structured_checker_failure_reason(run_result)
-    if reason:
-        return reason
-    return _checker_log_failure_reason(checker_log)
-
-
-def _structured_checker_failure_reason(run_result: dict[str, Any]) -> str:
-    diagnostics = run_result.get("agent_diagnostics") or {}
-    if not isinstance(diagnostics, dict):
-        diagnostics = {}
-    if diagnostics.get("fridge_inside_sequence_ok") is False:
-        return (
-            "fridge cleanup sequence incomplete; call close_receptacle with the same "
-            "fridge fixture_id after place_inside before moving on or done."
-        )
-    stale_reference_errors = int(diagnostics.get("stale_reference_errors") or 0)
-    if stale_reference_errors > 0:
-        return (
-            f"{stale_reference_errors} stale reference error(s); use object and fixture ids "
-            "from the latest observe response."
-        )
-    semantic_order_errors = int(
-        diagnostics.get("semantic_order_unrecovered_errors")
-        or diagnostics.get("semantic_order_errors")
-        or 0
-    )
-    if semantic_order_errors > 0:
-        return (
-            f"{semantic_order_errors} semantic order error(s); call the required_tool from "
-            "the failed MCP response before trying another cleanup tool."
-        )
-    duplicate_navigation_count = int(diagnostics.get("duplicate_post_place_navigation_count") or 0)
-    if duplicate_navigation_count > 0:
-        return (
-            f"{duplicate_navigation_count} duplicate post-place navigation event(s); after "
-            "placing an object, observe before choosing the next object or waypoint."
-        )
-    if diagnostics.get("premature_done") is True:
-        source = diagnostics.get("premature_done_source")
-        suffix = f" ({source})" if source else ""
-        return f"done was called before cleanup was complete{suffix}."
-    return ""
-
-
-def _checker_log_failure_reason(checker_log: Path) -> str:
-    if not checker_log.exists():
-        return ""
-    try:
-        text = checker_log.read_text(encoding="utf-8", errors="replace")[:80_000]
-    except OSError:
-        return ""
-    if "fridge_inside_sequence_ok" in text:
-        return (
-            "fridge cleanup sequence incomplete; call close_receptacle with the same "
-            "fridge fixture_id after place_inside before moving on or done."
-        )
-    if "stale_reference_errors" in text:
-        return (
-            "stale reference errors; use object and fixture ids from the latest observe response."
-        )
-    if "semantic_order" in text:
-        return (
-            "semantic cleanup order failed; call the required_tool from the failed MCP "
-            "response before trying another cleanup tool."
-        )
-    return ""
 
 
 def _run_result_success(run_result: dict[str, Any]) -> bool:

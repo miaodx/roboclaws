@@ -80,9 +80,104 @@ table for coding-agent routes. The current MiniMax state is:
   M2.7-highspeed finished in about 269.1 s. That is only one run, so use it as
   cautionary evidence, not a benchmark conclusion.
 
+## Periodic Model Benchmarks
+
+Dev-provider probes live in the harness recipe layer, not the product provider
+registry. They are meant to answer "does this route still connect, through
+which wire format, and how fast is sustained output today?"
+
+The broad matrix benchmark covers OpenAI Chat, OpenAI Responses, and Anthropic
+Messages wire formats where each provider route has a plausible endpoint:
+
+```bash
+set -a && source .env && set +a
+just dev::model-matrix-benchmark --iterations 1 --timeout-s 240
+```
+
+The default run has two layers:
+
+- `health`: short support/status probe with `max_tokens=512`
+- `throughput`: longer generation probe with
+  `throughput_max_tokens=2048`, reporting `median_output_tokens_per_s` and
+  `median_output_chars_per_s`
+
+For layered speed checks, use these three groups:
+
+- `first-content`: minimal first visible content probe. OpenAI Chat cases use
+  streaming and record `median_first_content_s`; Responses and Anthropic cases
+  use full-response elapsed time as the visible-output fallback. Its default
+  `first_content_max_tokens=256` leaves room for Anthropic-compatible routes
+  that may emit hidden thinking tokens before visible text.
+- `stream-throughput`: sustained OpenAI Chat streaming decode-rate probe. It
+  reports `median_first_content_s`, `median_decode_s`, and
+  `median_decode_output_tokens_per_s`, which is the clearest MiMo UltraSpeed
+  style TPS measurement.
+- `agent-case`: curated public-safe prompts based on recent Codex / OpenAI
+  Agents SDK cleanup, camera-grounded, raw route-health, and eval-matrix cases.
+  It tests typical Roboclaws agent reasoning/output shape without replaying raw
+  provider prompts, private scorer truth, credentials, or full old model text.
+
+Use `--layer health` for a cheap periodic support check, `--layer first-content`
+for latency, `--layer throughput` for non-stream broad TPS, `--layer
+stream-throughput` for decode-rate TPS, and `--layer agent-case` for realistic
+Roboclaws agent-shaped output. Artifacts are written under
+`output/dev/model-matrix/<timestamp>/model_matrix_benchmark.json`; they record
+configured env-key names, support status, usage token counts when providers
+return them, and output previews only. Full model outputs and configured base
+URLs are intentionally not persisted.
+
+Recommended periodic run:
+
+```bash
+just dev::model-matrix-benchmark --iterations 1 \
+  --layer first-content --layer throughput --layer agent-case \
+  --timeout-s 240
+```
+
+List the curated real-agent cases:
+
+```bash
+just dev::model-matrix-benchmark --list-agent-cases
+```
+
+For MiMo OpenAI Chat-only speed comparison across the three MiMo provider
+groups, use the same matrix benchmark with provider and wire filters:
+
+```bash
+just dev::model-matrix-benchmark --provider mimo-token-plan --provider mify --provider mimo-inside --wire openai-chat --layer throughput --iterations 1 --timeout-s 240
+```
+
+That MiMo-focused benchmark includes:
+
+- MiMo token plan: `mimo-v2.5`, `mimo-v2.5-pro`
+- MiMo mify: `xiaomi/mimo-v2.5`, `xiaomi/mimo-v2.5-pro`
+- MiMo inside: `mimo-v2.5`, `mimo-v2.5-pro`, `mimo-1000`
+
+`mimo-1000` is the current benchmark-only label for the MiMo inside
+MiMo V2.5 Pro UltraSpeed route. Xiaomi's 2026-06-08 UltraSpeed note describes
+the route as a 1T MiMo V2.5 Pro variant focused on 1000+ TPS generation:
+<https://mimo.xiaomi.com/blog/mimo-tilert-1000tps>. Keep it out of active
+product cleanup routes until a separate provider-route decision promotes it.
+Use `--layer stream-throughput` on OpenAI Chat cases when you need a decode-rate
+style measurement that excludes first-content latency from the TPS denominator.
+
+The default stream prompt is deliberately moderate. To reproduce the 1k-class
+UltraSpeed case, force a long enough completion so the fixed first-content cost
+does not dominate the denominator:
+
+```bash
+just dev::model-matrix-benchmark \
+  --case mimo-inside:mimo-1000:openai-chat \
+  --layer stream-throughput \
+  --iterations 1 \
+  --stream-throughput-max-tokens 8192 \
+  --stream-throughput-prompt 'Sustained streaming throughput benchmark. Write exactly 20 numbered paragraphs, each paragraph exactly 180 English words, about household robotics evaluation, semantic maps, model-provider reliability, simulator evidence, route health, and long-running operations. Do not use markdown headings, tables, code blocks, or bullet lists. Continue until all 20 paragraphs are complete.' \
+  --timeout-s 240
+```
+
 > A flush threshold below ~20 k is effectively "trip on the first `observe`
 > turn" because the two prompt images + bootstrap context + SOUL/AGENTS
-> files already consume 7–10 k tokens.
+> files already consume 7-10 k tokens.
 >
 > `maxTokens` is an output-cap hint, not a context budget. It was 4 096 on
 > every MiMo entry (placeholder); live-probed at 2026-04-23 that all three

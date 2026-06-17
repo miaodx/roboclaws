@@ -361,7 +361,7 @@ def product_run_kwargs(
         "seed": sample.seed,
         "task_prompt": task_prompt(sample),
         "backend": implementation_backend(sample, budget=budget),
-        "cleanup_profile": cleanup_profile(sample, budget=budget),
+        "evidence_lane": evidence_lane(sample, budget=budget),
         "semantic_sweep": semantic_sweep,
         "generated_mess_count": generated_mess_count(sample),
         "scene_source": str(launch_overrides.get("scene_source") or "procthor-10k-val"),
@@ -390,7 +390,7 @@ def implementation_backend(sample: EvalSample, *, budget: str) -> str:
     return backend.implementation_backend
 
 
-def cleanup_profile(sample: EvalSample, *, budget: str) -> str:
+def evidence_lane(sample: EvalSample, *, budget: str) -> str:
     if budget == "smoke":
         return "smoke"
     return sample.evidence_lane
@@ -455,14 +455,14 @@ def live_surface_env(kwargs: dict[str, Any], *, base_env: Any) -> dict[str, str]
 
 
 def live_evidence_lane(kwargs: dict[str, Any]) -> str:
-    lane = str(kwargs.get("cleanup_profile") or "")
+    lane = str(kwargs.get("evidence_lane") or "")
     if lane == "smoke":
         return "world-oracle-labels"
     return lane or "world-oracle-labels"
 
 
 def _is_smoke_budget(kwargs: dict[str, Any]) -> bool:
-    return str(kwargs.get("cleanup_profile") or "") == "smoke"
+    return str(kwargs.get("evidence_lane") or "") == "smoke"
 
 
 def _generated_mess_count(kwargs: dict[str, Any]) -> int:

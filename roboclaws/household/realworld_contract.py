@@ -29,10 +29,8 @@ from roboclaws.household.semantic_acceptability import (
 from roboclaws.household.semantic_timeline import SEMANTIC_LOOP_VARIANT
 from roboclaws.household.target_query import resolve_target_query
 from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_DEFAULT,
     household_intent_is_open_ended,
     normalize_household_intent,
-    normalize_task_intent_mode,
 )
 from roboclaws.household.types import CleanupScenario
 from roboclaws.household.visual_grounding import (
@@ -249,7 +247,7 @@ class RealWorldCleanupContract:
         visual_grounding_run_id: str = "",
         runtime_map_prior: dict[str, Any] | None = None,
         map_mode: str = DEFAULT_MAP_MODE,
-        cleanup_profile: str | None = None,
+        evidence_lane: str | None = None,
         public_acceptance_config: dict[str, Any] | None = None,
     ) -> None:
         realworld_contract_init.validate_contract_options(
@@ -266,7 +264,7 @@ class RealWorldCleanupContract:
         self.map_mode = map_mode
         realworld_contract_init.init_profile_and_acceptance(
             self,
-            cleanup_profile,
+            evidence_lane,
             public_acceptance_config,
         )
         realworld_contract_init.init_visual_grounding(
@@ -1708,7 +1706,6 @@ class RealWorldCleanupContract:
             "blockers": blockers,
             "policy_uses_private_truth": False,
             "task_intent": self.task_intent,
-            "task_intent_mode": self.task_intent_mode,
             "public_contract_note": (
                 "Done readiness is evaluated from public Agent View state, public tool "
                 "trace evidence, and public run acceptance configuration. It does not "
@@ -6563,9 +6560,6 @@ def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
     task_intent = str(source.get("task_intent") or "").strip()
     if task_intent:
         accepted["task_intent"] = normalize_household_intent(task_intent)
-    task_intent_mode = normalize_task_intent_mode(source.get("task_intent_mode"))
-    if task_intent_mode != TASK_INTENT_MODE_DEFAULT:
-        accepted["task_intent_mode"] = task_intent_mode
     _assert_no_forbidden_agent_view_keys(accepted)
     return accepted
 

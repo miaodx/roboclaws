@@ -657,7 +657,7 @@ def test_checker_accepts_smoke_profile_metadata_and_report_note(tmp_path: Path) 
     result = demo.run_realworld_cleanup(
         output_dir=tmp_path,
         seed=7,
-        cleanup_profile="smoke",
+        evidence_lane="smoke",
     )
 
     checker._assert_result(
@@ -2221,7 +2221,7 @@ def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -
         perception_mode="raw_fpv_only",
         semantic_sweep=True,
     )
-    result["task_name"] = "semantic-map-build"
+    result["task_name"] = "household-world.map-build"
     result["task_intent"] = "map-build"
     result["policy"] = "codex_agent"
     result["agent_driven"] = True
@@ -2272,7 +2272,7 @@ def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -
         tmp_path,
         expect_task=None,
         expect_backend="api_semantic_synthetic",
-        expect_task_name="semantic-map-build",
+        expect_task_name="household-world.map-build",
         expect_policy="codex_agent",
         expect_mcp_server="molmo_cleanup_realworld",
         min_generated_mess_count=0,

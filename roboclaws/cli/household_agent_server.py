@@ -23,7 +23,7 @@ from roboclaws.household.backend_contract import (
 )
 from roboclaws.household.isaac_lab_backend import ISAACLAB_SUBPROCESS_BACKEND
 from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir
-from roboclaws.household.profiles import cleanup_profile_names
+from roboclaws.household.profiles import evidence_lane_names
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
@@ -44,9 +44,10 @@ from roboclaws.household.realworld_mcp_server import (
 from roboclaws.household.scenario import CleanupScenario, build_cleanup_scenario
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_DEFAULT,
+    HOUSEHOLD_INTENT_CLEANUP,
     household_intent_from_goal_contract,
     household_intent_is_open_ended,
+    normalize_household_intent,
 )
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
@@ -67,7 +68,7 @@ class _ServerBackendSetup:
     agibot_contract: AgibotCleanupMCPContract | None
     perception_mode: str
     map_mode: str
-    cleanup_profile: str | None
+    evidence_lane: str | None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -80,9 +81,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--policy", default="codex_agent")
-    parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--intent", default=HOUSEHOLD_INTENT_CLEANUP)
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--goal-contract", type=Path)
     parser.add_argument("--goal-contract-json")
     parser.add_argument(
@@ -122,8 +122,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
     )
     parser.add_argument(
-        "--cleanup-profile",
-        choices=cleanup_profile_names(),
+        "--evidence-lane",
+        choices=evidence_lane_names(),
         help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
@@ -217,8 +217,7 @@ def print_setup(
     backend: str = SYNTHETIC_BACKEND,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
-    cleanup_profile: str | None = None,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    evidence_lane: str | None = None,
     task_intent: str = "",
 ) -> None:
     commands = client_setup_commands(url)
@@ -230,8 +229,8 @@ def print_setup(
     print(f"MCP server    : {MCP_SERVER_NAME}")
     print(f"Backend       : {backend}")
     print(f"Perception    : {perception_mode}")
-    if cleanup_profile:
-        print(f"Evidence lane : {cleanup_profile}")
+    if evidence_lane:
+        print(f"Evidence lane : {evidence_lane}")
     print(f"Visual report : {'enabled' if record_robot_views else 'disabled'}")
     print("\nIn another terminal from this repo, run one of:")
     print(f"  {commands['Codex']}")
@@ -301,7 +300,7 @@ def _prepare_server_backend_setup(
     scene_source: str,
     scene_index: int,
     isaac_scene_usd_path: str | Path | None,
-    cleanup_profile: str | None,
+    evidence_lane: str | None,
     runtime_map_prior_path: str | Path | None,
     map_mode: str,
     context_json: str | Path | None,
@@ -354,7 +353,7 @@ def _prepare_server_backend_setup(
         runtime_map_prior=runtime_map_prior,
         perception_mode=perception_mode,
         map_mode=map_mode,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
     )
 
 
@@ -402,7 +401,7 @@ def _prepare_agibot_backend_setup(
         agibot_contract=agibot_contract,
         perception_mode=agibot_contract.perception_mode,
         map_mode=agibot_contract.map_mode,
-        cleanup_profile=None,
+        evidence_lane=None,
     )
 
 
@@ -422,7 +421,7 @@ def _prepare_generic_backend_setup(
     runtime_map_prior: dict[str, Any] | None,
     perception_mode: str,
     map_mode: str,
-    cleanup_profile: str | None,
+    evidence_lane: str | None,
 ) -> _ServerBackendSetup:
     base_contract = build_cleanup_backend_session(
         backend_name=backend,
@@ -445,7 +444,7 @@ def _prepare_generic_backend_setup(
         agibot_contract=None,
         perception_mode=perception_mode,
         map_mode=map_mode,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
     )
 
 
@@ -508,7 +507,8 @@ def run_molmo_realworld_cleanup_agent_server(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     policy: str = "codex_agent",
-    task_name: str = "household-cleanup",
+    task_surface: str = "household-world",
+    task_intent: str = HOUSEHOLD_INTENT_CLEANUP,
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
@@ -522,7 +522,7 @@ def run_molmo_realworld_cleanup_agent_server(
     scene_source: str = "procthor-10k-val",
     scene_index: int = 0,
     isaac_scene_usd_path: str | Path | None = None,
-    cleanup_profile: str | None = None,
+    evidence_lane: str | None = None,
     runtime_map_prior_path: str | Path | None = None,
     map_mode: str = DEFAULT_MAP_MODE,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
@@ -534,7 +534,6 @@ def run_molmo_realworld_cleanup_agent_server(
     runner_script: str | Path | None = None,
     agibot_map_artifact_dir: str | Path | None = None,
     real_movement_enabled: bool = False,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     goal_contract_json: str | None = None,
     goal_contract_path: str | Path | None = None,
     rerun_command: str | None = None,
@@ -561,7 +560,7 @@ def run_molmo_realworld_cleanup_agent_server(
         scene_source=scene_source,
         scene_index=scene_index,
         isaac_scene_usd_path=isaac_scene_usd_path,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
         runtime_map_prior_path=runtime_map_prior_path,
         map_mode=map_mode,
         context_json=context_json,
@@ -575,7 +574,10 @@ def run_molmo_realworld_cleanup_agent_server(
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
     )
-    task_intent = household_intent_from_goal_contract(goal_contract)
+    normalized_task_intent = household_intent_from_goal_contract(
+        goal_contract,
+        fallback=normalize_household_intent(task_intent),
+    )
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=output_dir,
         scenario=backend_setup.scenario,
@@ -584,20 +586,20 @@ def run_molmo_realworld_cleanup_agent_server(
         host=host,
         port=port,
         policy=policy,
-        task_name=task_name,
+        task_surface=task_surface,
+        task_intent=normalized_task_intent,
         task_prompt=task_prompt,
         fixture_hint_mode="room_only",
         perception_mode=backend_setup.perception_mode,
         map_bundle_dir=backend_setup.selected_bundle_dir,
         record_robot_views=record_robot_views,
-        cleanup_profile=backend_setup.cleanup_profile,
+        evidence_lane=backend_setup.evidence_lane,
         runtime_map_prior=backend_setup.runtime_map_prior,
         runtime_map_prior_source=str(runtime_map_prior_path or ""),
         map_mode=backend_setup.map_mode,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
-        task_intent_mode=task_intent_mode,
         goal_contract=goal_contract,
         operator_messages_path=operator_messages_path,
         agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
@@ -612,9 +614,8 @@ def run_molmo_realworld_cleanup_agent_server(
             backend=backend,
             perception_mode=backend_setup.perception_mode,
             record_robot_views=record_robot_views,
-            cleanup_profile=backend_setup.cleanup_profile,
-            task_intent_mode=task_intent_mode,
-            task_intent=task_intent,
+            evidence_lane=backend_setup.evidence_lane,
+            task_intent=normalized_task_intent,
         )
     return _run_server_until_done(
         server=server,
@@ -635,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             policy=args.policy,
-            task_name=args.task_name,
+            task_intent=args.intent,
             task_prompt=args.task,
             backend=args.backend,
             generated_mess_count=args.generated_mess_count,
@@ -649,7 +650,7 @@ def main(argv: list[str] | None = None) -> int:
             scene_source=args.scene_source,
             scene_index=args.scene_index,
             isaac_scene_usd_path=args.isaac_scene_usd_path,
-            cleanup_profile=args.cleanup_profile,
+            evidence_lane=args.evidence_lane,
             runtime_map_prior_path=args.runtime_map_prior,
             map_mode=args.map_mode,
             visual_grounding=args.visual_grounding,
@@ -661,7 +662,6 @@ def main(argv: list[str] | None = None) -> int:
             runner_script=args.runner_script,
             agibot_map_artifact_dir=args.agibot_map_artifact_dir,
             real_movement_enabled=args.real_movement_enabled,
-            task_intent_mode=args.task_intent_mode,
             goal_contract_json=args.goal_contract_json,
             goal_contract_path=args.goal_contract,
             rerun_command=args.rerun_command,

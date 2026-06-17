@@ -1,13 +1,18 @@
-# Evaluation Suites
+# Evaluation Harness And Suites
 
 Roboclaws uses four related but separate proof layers:
 
 | Layer | Command shape | Owns |
 | --- | --- | --- |
 | Product run | `just run::surface ...` | One operator-facing run with prompt, surface, world, backend, agent engine, evidence lane, artifacts, and report. |
-| Validation matrix | `just agent::harness agent-validation ...` | Diff- or plan-aware selection of gates that must run for a change. |
-| Eval suite | `just agent::eval ...` | Versioned capability benchmark across samples, trials, graders, aggregate metrics, and failure replay. |
-| Harness recipe | `harness::*` or lower private recipes | Specialist execution mechanics used by product runs, validation gates, and eval suites. |
+| Eval harness | `just agent::eval recommend|execute ...` | Diff- or plan-aware orchestration across deterministic gates, product rows, eval suites, live-agent evals, blocked evidence, and regression-promotion guidance. |
+| Eval suite | `just agent::eval suite=<suite> ...` | Versioned capability benchmark across samples, trials, graders, aggregate metrics, and failure replay. |
+| Harness recipe | `harness::*` or lower private recipes | Specialist execution mechanics used by product runs and eval flows. |
+
+The maintained user-facing skill is `@eval-harness`. The old separate
+`agent-validation-matrix` route is retired; historical evidence may still link
+to it, but active plan/diff validation should use `just agent::eval
+recommend|execute`.
 
 An eval suite answers whether a capability is improving over time, not whether a
 single demo happened to complete. The expected flow is:
@@ -40,6 +45,8 @@ sample definitions live under `evals/<capability>/`, starting with
 The deterministic runner is available through:
 
 ```bash
+just agent::eval recommend plan=docs/plans/example.md budget=focused
+just agent::eval execute since=origin/main budget=focused
 just agent::eval suite=smoke_regression budget=smoke
 just agent::eval suite=map_build_consumer budget=smoke
 just agent::eval suite=cleanup_capability budget=smoke
@@ -99,6 +106,8 @@ last label is a stop label and will not write a sample.
 Keep private scorer truth private. Generated mess sets, acceptable destinations,
 hidden target lists, and private manifests may feed graders and reports, but
 they must not appear in agent-facing MCP inputs or capability profile metadata.
+Eval-harness manifests may link maintainer-only private artifacts, but must not
+inline that private truth.
 Cleanup evals should classify a live `fixture_hints` MCP call as a trajectory
 violation while allowing historical artifact fields with the same name to remain
 readable for reports and map-bundle compatibility. Regression promotion records

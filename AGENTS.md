@@ -274,10 +274,10 @@ This is a thin demo repo. Priorities:
 
 ### 5.1 Legacy support policy
 
-This repo has no backward-compatibility burden for obsolete demo surfaces. When
-you see code, docs, tests, skills, or recipes labeled `legacy`, `current-contract`,
-or kept only for compatibility, treat them as removal or replacement candidates,
-not as APIs to preserve.
+This repo has no general backward-compatibility burden. When you see code, docs,
+tests, skills, or recipes labeled `legacy`, `current-contract`, or kept only for
+compatibility, treat them as removal or replacement candidates, not as APIs to
+preserve.
 
 Prefer the current docs and active profile contracts over preserving old paths.
 If a legacy surface conflicts with a cleaner current design, update or delete
@@ -285,12 +285,27 @@ the legacy surface and its tests/docs in the same scoped change. Preserve a
 legacy path only when the user explicitly asks for it or when it is still the
 sole working route for the requested demo.
 
+Do not add lower-level runner, artifact, `just`, or dispatcher shims solely for
+old names or old call shapes. Persisted schema and artifact version identifiers
+remain versioned contracts unless the active task explicitly changes them.
+
 ---
 
 ## 6) Commit hygiene
 
 - Keep commits scoped: `feat: add cleanup report gate`, `fix: handle provider timeout`
 - Commit messages: `type: description` format
+- Multiple agents may edit the same checkout at the same time. Before committing,
+  inspect `git status --short` and `git diff --cached`; stage only files or hunks
+  that belong to your current task.
+- Do not use broad staging or commit shortcuts such as `git add -A`, `git add .`,
+  or `git commit -a` in a shared checkout. Prefer explicit pathspecs,
+  `git add -p`, or a temporary `GIT_INDEX_FILE` index when the worktree already
+  contains unrelated changes.
+- Do not reset, restore, unstage, or commit another agent's work unless the human
+  explicitly asks for that. If a file contains mixed edits that cannot be safely
+  separated, leave it uncommitted and report the blocker instead of sweeping in
+  unrelated changes.
 - If a commit is created by Codex, include `Co-authored-by: Codex <codex@users.noreply.github.com>`
 - If a commit is created by another AI coding agent, include a corresponding co-author trailer.
 
@@ -385,19 +400,19 @@ When a user asks in natural language to run a demo, cleanup task, or proof task,
 translate it to the composable public surface/preset command instead of
 searching for a bespoke recipe name.
 
-When a plan, diff, PR, or handoff asks which verification gates to run for
-agent-facing changes, prefer the adaptive matrix:
+When a plan, diff, PR, or handoff asks which verification gates or evals to run
+for agent-facing changes, prefer the eval harness:
 
 ```bash
-just agent::harness agent-validation recommend plan=<path> budget=focused
-just agent::harness agent-validation execute since=<base> budget=focused
+just agent::eval recommend plan=<path> budget=focused
+just agent::eval execute since=<base> budget=focused
 ```
 
-Use this instead of hand-writing fixed live/product gate lists. The matrix
-selects deterministic, product, live-agent, Agent SDK, perception/DINO,
-simulator, and map/cleanup-consumer gates from plan, diff, or explicit axis
-signals, and records run/skipped/blocked rationale under
-`output/agent-validation-matrix/`.
+Use this instead of hand-writing fixed live/product/eval lists. The harness
+selects deterministic gates, product rows, eval-suite rows, live-agent eval
+rows, perception/DINO rows, simulator rows, and map/cleanup-consumer rows from
+plan, diff, or explicit axis signals, and records run/skipped/blocked rationale
+under `output/eval-harness/`.
 
 Primary grammar:
 

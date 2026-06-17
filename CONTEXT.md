@@ -137,6 +137,67 @@ evidence. The Base Navigation Map is the start-of-run projection; Runtime
 Metric Map is the enriched current-run projection.
 _Avoid_: raw occupancy map, independent map source, private backend metadata
 
+**Source Map Frame**:
+The robot, simulator, or imported map coordinate frame used by navigation and
+map tools. Spatial tools must treat this as the coordinate truth even when
+reports render a friendlier orientation for review. Semantic polygons, anchors,
+and correspondence evidence must be authored or transformed into this frame
+first; display frames are derived from this source truth.
+_Avoid_: display-only image frame, beautified preview coordinates, parallel map truth
+
+**Display Frame**:
+A report or UI coordinate frame derived from a Source Map Frame for human
+inspection. It may be rectified or aligned for readability, but it must be
+explicitly labeled, traceable back to the source frame, and must not silently
+replace navigation/tool coordinates. If the display differs from source-map
+truth, reports should make that difference visible enough that users are not
+surprised by a mismatch between the pretty view and the real robot map. The UI
+may show a rectified display, but it must render the same source-frame semantic
+geometry through an explicit display transform, not maintain separate semantic
+boxes that only fit the rectified image.
+The Map 12 cross-environment parity first slice intentionally does not use a
+Display Frame; it renders raw/source map orientation and puts semantic overlays
+into that same frame.
+_Avoid_: hidden map mutation, navigation frame, unexplained rotated preview, second semantic overlay
+
+**Navigation Area**:
+A public navigable or inspectable zone on a map. It may be an
+operator-authored rectangle or generated area and is not necessarily a traced
+physical room boundary. Older artifact containers named `rooms` may carry
+Navigation Area entries only when each entry declares its polygon role and
+geometry source.
+_Avoid_: physical room outline, wall-truth polygon, semantic room proof
+
+**Room Boundary**:
+A traced or derived polygon intended to match physical walls or room
+partitions. Reports and agent-facing context must not present a Navigation Area
+as a Room Boundary unless the geometry source and alignment evidence support
+that claim.
+_Avoid_: navigation-zone bounding box, scene partition label, review-only region
+
+**Scene Partition**:
+A digital-twin asset partition such as a USD, Gaussian, or scene-engine room
+folder. It may provide semantic labels or candidate correspondence evidence,
+but it is not map-frame geometry unless an explicit correspondence manifest or
+verified transform ties it to the Source Map Frame.
+_Avoid_: map polygon, navigation area, physical room truth
+
+**Polygon Geometry Source**:
+The provenance for a map polygon, for example
+`operator_authored_navigation_zone`, `traced_occupancy_room_boundary`,
+`scene_engine_partition`, `runtime_observation`, or `generated_candidate`.
+Consumers should inspect this source together with polygon role before treating
+an overlay as navigable, semantic, or review-only.
+_Avoid_: unlabeled overlay, inferred room truth
+
+**Alignment Status**:
+The declared confidence tier for cross-frame or cross-environment spatial
+evidence, such as `native`, `candidate`, `verified`, `runtime_proven`,
+`planner_backed`, or `blocked`. Candidate or blocked overlays may support
+review, but must not be promoted to room geometry or planner-safe evidence
+without matching proof.
+_Avoid_: implicit trust, list-order correspondence, display polish as proof
+
 **Runtime Metric Map**:
 The current-run Metric Map Projection after public runtime evidence is added:
 observed object handles, loaded priors, generated waypoint/area evidence, room
@@ -386,7 +447,7 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
   `cleanup_room()`. `surface=household-world intent=map-build` creates world
   evidence; `surface=household-world intent=cleanup` consumes household world
   evidence and does not own mapping.
-- `household_world_v1` should exclude manipulation tools such as `pick`,
+- `household_world` should exclude manipulation tools such as `pick`,
   `place`, `open_receptacle`, and `close_receptacle`.
 - Small movable cleanup objects belong in runtime observations/worklists, not
   static map semantics.

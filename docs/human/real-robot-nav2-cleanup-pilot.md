@@ -29,19 +29,20 @@ cleanup startup if it is missing or invalid. Override the selection with
 
 - The MCP-facing backend exposes only cleanup tools. Agents must not receive
   direct ROS topic, service, or action access.
+- Room and fixture context may exist in checked preflight map-bundle artifacts,
+  but `fixture_hints` is not a callable active MCP tool for new routes.
 
 ## Pilot Contract
 
 Use the task-neutral household capability profiles:
-`household_world_v1`, `household_manipulation_v1`, and
-`household_episode_v1`. Older pilot artifacts may still record
-`cleanup_profile=real_robot_cleanup_v1` as legacy report metadata, but that id
-is not an active MCP contract profile for new routes.
+`household_world`, `household_manipulation`, and
+`household_episode`. New pilot artifacts record `evidence_lane` and
+`evidence_lane_metadata`; older cleanup-profile strings are historical report
+data, not active MCP contract profiles for new routes.
 
 Navigation and perception pilot tools:
 
 - `metric_map`
-- `fixture_hints`
 - `navigate_to_room`
 - `navigate_to_waypoint`
 - `observe`

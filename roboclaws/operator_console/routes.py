@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any
 
 from roboclaws.agents.provider_registry import (
@@ -249,17 +248,6 @@ MCP_PORT_FREE_GATE = RouteGate(
     kind="mcp_port_free",
     help_text="The runner will start its MCP server on this host and port.",
 )
-ISAAC_PREFLIGHT_GATE = RouteGate(
-    id="isaac_preflight",
-    label="Isaac runtime diagnostic",
-    kind="isaac_preflight",
-    required=False,
-    severity="advisory",
-    help_text=(
-        "Shows recent Isaac runtime preflight/smoke evidence when present; "
-        "launch can start without a manual acceptance marker."
-    ),
-)
 AGIBOT_CONTEXT_GATE = RouteGate(
     id="context_json",
     label="Agibot map context JSON attached",
@@ -361,19 +349,6 @@ def validate_supported_routes_against_catalog() -> None:
             raise AssertionError(f"invalid console selection {selection.id}: {exc}") from exc
 
 
-def accepted_isaac_preflight(root: Path) -> Path | None:
-    """Return the newest accepted Isaac proof marker, if one exists."""
-
-    candidates = [
-        root / "output" / "isaaclab" / "runtime-preflight-accepted.json",
-        root / "output" / "isaaclab" / "runtime-smoke-accepted.json",
-    ]
-    existing = [path for path in candidates if path.exists()]
-    if not existing:
-        return None
-    return max(existing, key=lambda path: path.stat().st_mtime)
-
-
 def _common_gates() -> tuple[RouteGate, ...]:
     return (PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE)
 
@@ -412,7 +387,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             "codex-env",
             evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+            gates=common_gates,
             default_overrides=("seed=7",),
             supports_operator_steer=True,
         ),
@@ -532,7 +507,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     "codex-cli",
                     "codex-env",
                     evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-                    gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+                    gates=common_gates,
                     default_overrides=("seed=7", "relocation_count=1"),
                     supports_operator_steer=True,
                 )
@@ -545,7 +520,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                     "claude-code",
                     "mimo-anthropic",
                     evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-                    gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+                    gates=common_gates,
                     default_overrides=("seed=7", "relocation_count=1"),
                     supports_operator_steer=True,
                 )
@@ -559,7 +534,7 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 "codex-env",
                 evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
                 scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-                gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+                gates=common_gates,
                 default_overrides=("seed=7",),
             )
         )
@@ -580,7 +555,7 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             unsupported_reason=(
                 "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
             ),
-            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            gates=_common_gates(),
             default_overrides=("seed=7", "relocation_count=1"),
             supports_operator_steer=True,
         ),
@@ -595,7 +570,7 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             unsupported_reason=(
                 "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
             ),
-            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            gates=_common_gates(),
             default_overrides=("seed=7", "relocation_count=1"),
             supports_operator_steer=True,
         ),
@@ -611,7 +586,7 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             unsupported_reason=(
                 "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
             ),
-            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            gates=_common_gates(),
             default_overrides=("seed=7",),
         ),
         *_lane_selections(
@@ -626,7 +601,7 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             unsupported_reason=(
                 "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
             ),
-            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            gates=_common_gates(),
             default_overrides=("seed=7",),
             supports_operator_steer=True,
         ),
@@ -705,7 +680,7 @@ def _disabled_molmospaces_cleanup_combinations() -> tuple[ConsoleLaunchSelection
                         evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
                         enabled=False,
                         unsupported_reason=reason,
-                        gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+                        gates=_common_gates(),
                         default_overrides=("seed=7", "relocation_count=1"),
                         supports_operator_steer=True,
                     )

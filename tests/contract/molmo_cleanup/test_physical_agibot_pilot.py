@@ -105,7 +105,8 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     runner = run_result["agibot_sdk_runner"]
     subphase_reports = runner["subphase_reports"]
 
-    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
+    assert run_result["evidence_lane"] == "physical-robot-evidence"
+    assert run_result["evidence_lane_metadata"]["evidence_lane"] == "physical-robot-evidence"
     assert run_result["backend"] == AGIBOT_SDK_RUNNER_BACKEND
     assert run_result["backend_variant"] == "agibot_gdk"
     assert run_result["primitive_provenance"] == "blocked_capability"
@@ -388,8 +389,8 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     assert run_result["agent_driven"] is True
     assert run_result["mcp_server"] == MCP_SERVER_NAME
     assert run_result["backend_variant"] == "agibot_gdk"
-    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
     assert run_result["evidence_lane"] == "camera-grounded-labels"
+    assert run_result["backend_evidence"]["evidence_lane"] == "physical-robot-evidence"
     assert run_result["perception_mode"] == "camera_model_policy"
     assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
     assert run_result["raw_fpv_observations"][0]["camera"] == "head_color"
@@ -527,7 +528,8 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
     assert pick["status"] == "blocked_capability"
     assert done["agent_driven"] is True
     assert run_result["mcp_server"] == "molmo_cleanup_realworld"
-    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
+    assert run_result["evidence_lane"] == "physical-robot-evidence"
+    assert run_result["evidence_lane_metadata"]["evidence_lane"] == "physical-robot-evidence"
     assert run_result["backend"] == AGIBOT_SDK_RUNNER_BACKEND
     assert run_result["backend_variant"] == "agibot_gdk"
     assert run_result["agent_view"]["policy_view"]["policy_observation_camera"] == "head_color"

@@ -35,6 +35,8 @@ from roboclaws.agents.provider_timing_proxy import (
     stop_provider_timing_proxy,
 )
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
+from roboclaws.household.task_intent import household_intent_from_args as _household_intent
+from roboclaws.household.task_intent import household_task_name_from_args as _household_run_id
 from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
     household_intent_id_for_checker,
@@ -244,7 +246,7 @@ class LiveCodexCleanupRunner:
     def _run_codex(self) -> None:
         self._write_status("running-codex")
         self._mark_timing("codex_exec_start")
-        task_name = getattr(self.args, "task_name", "household-cleanup")
+        run_id = _household_run_id(self.args)
         skill_name = getattr(self.args, "skill_name", None) or "molmo-realworld-cleanup"
         env = os.environ.copy()
         self._configure_provider_timing_proxy(env)
@@ -255,11 +257,10 @@ class LiveCodexCleanupRunner:
         )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
-            task_name=task_name,
             skill_name=skill_name,
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", task_name)
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", run_id)
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", skill_name)
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
@@ -416,14 +417,13 @@ class LiveCodexCleanupRunner:
     def _check_result(self) -> None:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
-        task_name = getattr(self.args, "task_name", "household-cleanup")
-        task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+        run_id = _household_run_id(self.args)
+        task_intent = _household_intent(self.args)
         open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
             checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
-            task_name=task_name,
             task_intent=task_intent,
             open_ended_task=open_ended_task,
         )
@@ -442,7 +442,7 @@ class LiveCodexCleanupRunner:
             "--expect-task",
             self.args.task,
             "--expect-task-name",
-            task_name,
+            run_id,
             "--expect-backend",
             self.args.backend,
             "--expect-policy",
@@ -1014,11 +1014,11 @@ def _docker_isolated_workspace_enabled(env: dict[str, str]) -> bool:
 def _prepare_agent_workspace(
     *,
     repo_root: Path,
-    task_name: str,
+    run_id: str,
     skill_name: str,
     workspace: Path | None = None,
 ) -> tuple[Path, Path]:
-    workspace = _agent_workspace_root(repo_root=repo_root, task_name=task_name, workspace=workspace)
+    workspace = _agent_workspace_root(repo_root=repo_root, run_id=run_id, workspace=workspace)
     task_dir = workspace / "task"
     skills_dir = workspace / "skills"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -1054,7 +1054,7 @@ def _prepare_agent_workspace(
 def _agent_workspace_root(
     *,
     repo_root: Path,
-    task_name: str,
+    run_id: str,
     workspace: Path | None = None,
 ) -> Path:
     if workspace is not None:
@@ -1066,7 +1066,7 @@ def _agent_workspace_root(
         "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"
     )
     if not workspace_env:
-        return Path(tempfile.mkdtemp(prefix=f"roboclaws-{task_name}-agent-"))
+        return Path(tempfile.mkdtemp(prefix=f"roboclaws-{run_id}-agent-"))
 
     workspace = Path(workspace_env).expanduser()
     if not workspace.is_absolute():

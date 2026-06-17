@@ -60,12 +60,12 @@ def validate_realworld_mcp_tool_call(server: Any, name: str) -> None:
         raise ValueError("scene_objects is not part of the ADR-0003 real-world MCP contract")
     if name in _extra_tool_names_for_server(server):
         return
-    if name not in public_tool_names_for_profile(server.cleanup_profile):
+    if name not in public_tool_names_for_evidence_lane(server.evidence_lane):
         raise ValueError(f"unknown Molmo real-world cleanup MCP tool {name!r}")
 
 
-def public_tool_names_for_profile(
-    cleanup_profile: str | None,
+def public_tool_names_for_evidence_lane(
+    evidence_lane: str | None,
 ) -> tuple[str, ...]:
     return (
         *SEMANTIC_CLEANUP_TOOL_NAMES,

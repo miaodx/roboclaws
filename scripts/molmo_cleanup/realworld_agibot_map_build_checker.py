@@ -9,6 +9,7 @@ from roboclaws.household.agibot_map_build_mcp_server import (
     AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
 )
 from roboclaws.household.profiles import CAMERA_GROUNDED_LABELS_LANE
+from roboclaws.household.profiles import PHYSICAL_ROBOT_EVIDENCE_LANE
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
@@ -42,7 +43,8 @@ def assert_agibot_semantic_map_build_result(
 ) -> None:
     assert require_semantic_sweep, data
     assert data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA, data
-    assert data.get("cleanup_profile") == "real_robot_cleanup_v1", data
+    backend_evidence = data.get("backend_evidence") or {}
+    assert backend_evidence.get("evidence_lane") == PHYSICAL_ROBOT_EVIDENCE_LANE, data
     assert data.get("backend_variant") == "agibot_gdk", data
     expected_policy = _expected_policy(expect_policy, require_semantic_sweep=require_semantic_sweep)
     _assert_expected_identity(

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.operator_console.paths import console_output_root
+from roboclaws.operator_console.process_status import pid_is_active
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,7 @@ class ResourceLock:
         pid = payload.get("pid")
         stale = False
         if isinstance(pid, int) and pid > 0:
-            stale = not _pid_exists(pid)
+            stale = not pid_is_active(pid)
         return LockState(
             name=self.name,
             path=self.path,
@@ -105,16 +106,6 @@ class ResourceLock:
         if not force and state.owner_run_id and state.owner_run_id != run_id:
             raise ResourceLockError(f"lock {self.name} is owned by {state.owner_run_id}")
         self.path.unlink(missing_ok=True)
-
-
-def _pid_exists(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 def _float_or_none(value: Any) -> float | None:

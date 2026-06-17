@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from roboclaws.household.agibot_contract_rehearsal import (
-    REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
     run_molmospaces_agibot_prehardware_rehearsal,
 )
 
@@ -70,7 +69,7 @@ def test_agibot_molmospaces_sim_rehearsal_records_open_evidence_refresh_prompt(
 
     result = run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
-        task_name=REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
+        intent="map-build",
         profile="camera-grounded-labels",
         task_prompt=prompt,
         generated_mess_count=5,
@@ -85,6 +84,6 @@ def test_agibot_molmospaces_sim_rehearsal_records_open_evidence_refresh_prompt(
     assert result["task_prompt"] == prompt
     assert run_result["task_prompt"] == prompt
     assert runtime_export["task_prompt"] == prompt
-    assert run_result["task_name"] == "semantic-map-build"
+    assert run_result["task_name"] == "household-world.map-build"
     assert run_result["simulated"] is True
     assert run_result["physical_robot"] is False

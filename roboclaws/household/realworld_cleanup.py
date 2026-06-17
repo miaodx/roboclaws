@@ -32,7 +32,7 @@ from roboclaws.household.planner_proof_bundle import (
     planner_proof_attachment_for_target,
 )
 from roboclaws.household.profiles import (
-    cleanup_profile_names,
+    evidence_lane_names,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -123,8 +123,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="External Visual Grounding Service timeout in seconds.",
     )
     parser.add_argument(
-        "--cleanup-profile",
-        choices=cleanup_profile_names(),
+        "--evidence-lane",
+        choices=evidence_lane_names(),
         help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
@@ -253,7 +253,7 @@ def run_realworld_cleanup(
     isaac_segmentation_semantic_filter: tuple[str, ...] | None = None,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
-    cleanup_profile: str | None = None,
+    evidence_lane: str | None = None,
     semantic_sweep: bool = False,
     map_mode: str = DEFAULT_MAP_MODE,
     runtime_map_prior_path: str | Path | None = None,
@@ -327,7 +327,7 @@ def run_realworld_cleanup(
         visual_grounding_run_id=f"seed-{seed}",
         runtime_map_prior=runtime_map_prior,
         map_mode=map_mode,
-        cleanup_profile=cleanup_profile,
+        evidence_lane=evidence_lane,
         public_acceptance_config=(goal_contract and {"task_intent": goal_contract.intent}),
     )
     planner_proof_evidence: dict[str, Any] | None = None
@@ -449,7 +449,7 @@ def run_realworld_cleanup(
             map_mode=map_mode,
             runtime_map_prior=runtime_map_prior,
             runtime_map_prior_path=runtime_map_prior_path,
-            cleanup_profile=cleanup_profile,
+            evidence_lane=evidence_lane,
             perception_mode=perception_mode,
             record_robot_views=record_robot_views,
             selected_bundle_dir=selected_bundle_dir,
@@ -1126,7 +1126,7 @@ def main(argv: list[str] | None = None) -> int:
         isaac_segmentation_semantic_filter=tuple(args.isaac_segmentation_semantic_filter or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
-        cleanup_profile=args.cleanup_profile,
+        evidence_lane=args.evidence_lane,
         semantic_sweep=args.semantic_sweep,
         map_mode=args.map_mode,
         runtime_map_prior_path=args.runtime_map_prior,

@@ -6,11 +6,10 @@ import argparse
 
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_DEFAULT,
+    HOUSEHOLD_INTENT_MAP_BUILD,
     household_intent_from_goal_contract,
     household_intent_is_open_ended,
     normalize_household_intent,
-    normalize_task_intent_mode,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
 from roboclaws.launch.goals import GoalContract, goal_contract_from_json
@@ -93,7 +92,6 @@ def _normalize_task(task: str) -> str:
 def _task_prefix(
     task: str,
     *,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     household_intent: str = "",
     goal_contract: GoalContract | None = None,
 ) -> str:
@@ -110,15 +108,10 @@ def _task_prefix(
     return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
 
 
-def _normalize_task_intent_mode(task_intent_mode: str) -> str:
-    return normalize_task_intent_mode(task_intent_mode)
-
-
 def _with_task(
     prompt: str,
     task: str,
     *,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     household_intent: str = "",
     goal_contract: GoalContract | None = None,
 ) -> str:
@@ -127,7 +120,6 @@ def _with_task(
         prefix
         + _task_prefix(
             task,
-            task_intent_mode=task_intent_mode,
             household_intent=household_intent,
             goal_contract=goal_contract,
         )
@@ -145,7 +137,6 @@ def _open_ended_scope_suffix() -> str:
 def _task_aware_prompt(
     prompt: str,
     *,
-    task_intent_mode: str,
     household_intent: str,
 ) -> str:
     if household_intent_is_open_ended(household_intent):
@@ -378,7 +369,6 @@ def render_kickoff_prompt(
     *,
     task: str = "",
     target_cleanup_count: int = 7,
-    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     intent: str = "",
     goal_contract: GoalContract | None = None,
     prompt_mode: str = PROMPT_MODE_FULL,
@@ -389,7 +379,6 @@ def render_kickoff_prompt(
 ) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
-    intent_mode = _normalize_task_intent_mode(task_intent_mode)
     household_intent = household_intent_from_goal_contract(goal_contract, fallback=intent)
     household_intent = normalize_household_intent(household_intent)
     open_ended = household_intent_is_open_ended(household_intent)
@@ -406,11 +395,9 @@ def render_kickoff_prompt(
         return _with_task(
             _task_aware_prompt(
                 OPEN_ENDED_TASK_RULES if open_ended else prompt,
-                task_intent_mode=intent_mode,
                 household_intent=household_intent,
             ),
             task,
-            task_intent_mode=intent_mode,
             household_intent=household_intent,
             goal_contract=goal_contract,
         )
@@ -423,11 +410,9 @@ def render_kickoff_prompt(
         return _with_task(
             _task_aware_prompt(
                 OPEN_ENDED_TASK_RULES if open_ended else prompt,
-                task_intent_mode=intent_mode,
                 household_intent=household_intent,
             ),
             task,
-            task_intent_mode=intent_mode,
             household_intent=household_intent,
             goal_contract=goal_contract,
         )
@@ -440,22 +425,18 @@ def render_kickoff_prompt(
         return _with_task(
             _task_aware_prompt(
                 OPEN_ENDED_TASK_RULES if open_ended else prompt,
-                task_intent_mode=intent_mode,
                 household_intent=household_intent,
             ),
             task,
-            task_intent_mode=intent_mode,
             household_intent=household_intent,
             goal_contract=goal_contract,
         )
     return _with_task(
         _task_aware_prompt(
             OPEN_ENDED_TASK_RULES if open_ended else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
-            task_intent_mode=intent_mode,
             household_intent=household_intent,
         ),
         task,
-        task_intent_mode=intent_mode,
         household_intent=household_intent,
         goal_contract=goal_contract,
     )
@@ -487,9 +468,7 @@ def main(argv: list[str] | None = None) -> int:
         dest="profile",
         default="world-oracle-labels",
     )
-    parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--intent", default="")
     parser.add_argument("--goal-contract-json", default="")
     parser.add_argument("--target-cleanup-count", type=int, default=7)
@@ -500,7 +479,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--camera-grounded-composite-tools", action="store_true")
     args = parser.parse_args(argv)
     goal_contract = goal_contract_from_json(args.goal_contract_json)
-    if args.task_name == "semantic-map-build":
+    intent = normalize_household_intent(str(getattr(goal_contract, "intent", "") or args.intent))
+    if intent == HOUSEHOLD_INTENT_MAP_BUILD:
         task = args.task or "build a semantic map of this room"
         print(render_semantic_map_build_prompt(args.profile, task))
     else:
@@ -509,8 +489,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.profile,
                 task=args.task,
                 target_cleanup_count=args.target_cleanup_count,
-                task_intent_mode=args.task_intent_mode,
-                intent=args.intent,
+                intent=intent,
                 goal_contract=goal_contract,
                 prompt_mode=args.prompt_mode,
                 raw_fpv_candidate_budget=args.raw_fpv_candidate_budget,

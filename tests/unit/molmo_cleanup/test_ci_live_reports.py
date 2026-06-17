@@ -1126,7 +1126,7 @@ def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
     runner._check_result()
 
     command = captured["command"]
-    assert command[command.index("--expect-task-name") + 1] == "semantic-map-build"
+    assert command[command.index("--expect-task-name") + 1] == "household-world.map-build"
     assert "--require-runtime-metric-map" in command
     assert "--require-clean-agent-run" not in command
     assert "--min-semantic-accepted-count" not in command

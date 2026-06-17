@@ -75,7 +75,7 @@ def test_direct_runner_eval_sample_and_result_round_trip(tmp_path: Path) -> None
         model=MISSING_NOT_APPLICABLE,
         skill_name="molmo-realworld-cleanup",
         prompt_source=MISSING_NOT_APPLICABLE,
-        mcp_profile="household_world_v1+household_manipulation_v1",
+        mcp_profile="household_world+household_manipulation",
         tool_surface=["metric_map", "observe", "done"],
         budgets={"steps": 50, "time_s": 120, "token": MISSING_NOT_APPLICABLE},
         runtime={"host": MISSING_UNAVAILABLE, "network": MISSING_UNAVAILABLE},

@@ -68,7 +68,7 @@ task.
 Composition is the rule. A task or skill may require multiple capability
 profiles or capability modules, but a new profile should not be made by copying
 another profile's tool list and adding more tools. For example,
-`preset=cleanup` should require `household_world_v1` plus manipulation
+`preset=cleanup` should require `household_world` plus manipulation
 capabilities; it should not define a cleanup profile that duplicates the whole
 world profile. The selected skill is where composite behavior such as
 `navigate_to_object -> pick -> navigate_to_receptacle -> open? -> place` lives.
@@ -174,7 +174,7 @@ The current household profile head is task-neutral. Public intents such as
 `surface=household-world`; profiles describe reusable capability environments
 and backend variants.
 
-### `household_world_v1`
+### `household_world`
 
 Canonical public capability tools cover household world evidence only:
 
@@ -188,7 +188,7 @@ Canonical public capability tools cover household world evidence only:
 - public observation, camera adjustment, visual candidate declaration, and
   visible-object inspection.
 
-`household_world_v1` is shared by `preset=map-build`, `preset=cleanup`,
+`household_world` is shared by `preset=map-build`, `preset=cleanup`,
 inspection, search, no-preset household goals, and future household presets.
 It excludes manipulation and task-completion tools such as `pick`, `place`,
 `open_receptacle`,
@@ -206,14 +206,14 @@ Backend variants such as `api_semantic_synthetic`, `molmospaces_subprocess`,
 `nav2_ros2`, and `agibot_gdk` are profile metadata/config. They are not new
 public task names or copied profile ids.
 
-### `household_manipulation_v1` and `household_episode_v1`
+### `household_manipulation` and `household_episode`
 
-Cleanup skills compose `household_world_v1` with manipulation and lifecycle
+Cleanup skills compose `household_world` with manipulation and lifecycle
 capabilities when they need to move objects:
 
-- `household_manipulation_v1` owns object/receptacle navigation plus
+- `household_manipulation` owns object/receptacle navigation plus
   `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`.
-- `household_episode_v1` owns explicit task completion through `done` and
+- `household_episode` owns explicit task completion through `done` and
   active-run operator steering through `check_operator_messages`.
 
 `done` is also the authoritative completion-readiness checkpoint. When public
@@ -239,13 +239,12 @@ responses until manipulation is proven.
 ### Legacy cleanup-shaped profiles
 
 `molmospaces_cleanup_v1` is no longer an active selectable MCP contract profile.
-It remains only as legacy report metadata for archived MolmoSpaces cleanup
-artifacts. New skills and MCP routers compose `household_world_v1`,
-`household_manipulation_v1`, and `household_episode_v1` directly.
+It remains only as historical report metadata for archived MolmoSpaces cleanup
+artifacts. New skills and MCP routers compose `household_world`,
+`household_manipulation`, and `household_episode` directly.
 
-`real_robot_cleanup_v1` is likewise a legacy artifact metadata value for older
-Nav2/Agibot pilot reports while those artifacts migrate to task-neutral
-household profile composition. Active physical routes should describe required
+`real_robot_cleanup_v1` is likewise a historical artifact metadata value for
+older Nav2/Agibot pilot reports. Active physical routes should describe required
 capabilities through the household world, manipulation, and episode profiles,
 with manipulation returning structured `blocked_capability` responses until
 physical proof exists.
@@ -287,8 +286,8 @@ different executable or blocked behavior.
 
 Prefer names that describe reusable capability environments:
 
-- `household_world_v1`
-- `household_manipulation_v1`
+- `household_world`
+- `household_manipulation`
 
 Task-like public work belongs in the surface open-task contract and optional
 preset catalog:
@@ -310,7 +309,7 @@ not the primary task or skill name.
 
 Reusable capability profiles should remain small enough to be shared:
 
-- `household_world_v1` owns world understanding and evidence capture.
+- `household_world` owns world understanding and evidence capture.
 - A manipulation capability profile owns `pick`, `place`, `open_receptacle`,
   and `close_receptacle` when those tools are available or blocked.
 - Agent skills declare the profiles they require, then compose tools into
@@ -364,7 +363,7 @@ honest about whether the result is `api_semantic`, `planner_backed`, or
 
 When adding a profile, start from the capability contract, not the task or skill:
 
-1. Name the reusable capability environment, such as `household_world_v1`, or
+1. Name the reusable capability environment, such as `household_world`, or
    keep an existing backend/domain id only while migrating older surfaces.
 2. Check whether the new need can be represented as a skill requirement over
    existing profiles. Do not copy one profile's tools into another profile just

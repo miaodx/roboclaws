@@ -359,7 +359,7 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
     monkeypatch,
 ) -> None:
     demo = _load_demo_module()
-    prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
+    prior = "output/household/household-world/map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=codex-cli "
@@ -451,7 +451,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         include_robot=True,
         record_robot_views=True,
         generated_mess_count=1,
-        cleanup_profile="world-oracle-labels",
+        evidence_lane="world-oracle-labels",
         map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
         require_map_bundle=True,
     )
@@ -540,8 +540,8 @@ def _assert_isaac_fake_semantic_pose_and_robot_views(run_result: dict[str, objec
         event["state_mutation"] == "isaac_prim_transform"
         for event in semantic_pose_state["transform_events"]
     )
-    assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
-    assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
+    assert run_result["evidence_lane_metadata"]["backend"] == "isaaclab_subprocess"
+    assert run_result["evidence_lane_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
     assert run_result["robot_view_steps"]
     assert run_result["robot_view_camera_control"]["schema"] == (

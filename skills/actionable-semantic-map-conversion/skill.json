@@ -6,14 +6,14 @@
   "role": "map_artifact_conversion",
   "status": "active",
   "mcp": {
-    "profiles": ["household_world_v1"],
+    "profiles": ["household_world"],
     "required_tools": [],
     "optional_tools": [],
     "privileged_tools": [],
     "boundary_notes": "This skill operates at the map-artifact boundary. It parses public navigation memory, Nav2 map files, and scene-engine asset partitions, records classification/actionability/review status, and must not read private cleanup scoring truth."
   },
   "capability_requirements": {
-    "profiles": ["household_world_v1"],
+    "profiles": ["household_world"],
     "backend_variants": ["agibot_gdk", "nav2_ros2", "api_semantic_synthetic"],
     "notes": "The output is consumed by household-world tasks through runtime_map_prior, not through an Agibot-specific cleanup path."
   },

@@ -33,10 +33,10 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   map, observation, target-query, and episode capabilities.
 - `molmo-realworld-cleanup`: household cleanup behavior over public household
   world, manipulation, and episode capabilities.
-- `agent-validation-matrix`: adaptive validation orchestration that selects and
-  optionally executes deterministic, product, live-agent, Agent SDK, perception,
-  simulator, and map/cleanup-consumer gates from plan, diff, or explicit axis
-  signals.
+- `eval-harness`: adaptive validation/eval orchestration that selects and
+  optionally executes deterministic gates, product rows, eval suites,
+  live-agent evals, perception rows, simulator rows, and map/cleanup-consumer
+  rows from plan, diff, or explicit axis signals.
 - `raw-fpv-visual-labeler`: perception-only RAW-FPV frame-group labeling
   contract for visible cleanup-relevant movable objects.
 - `actionable-semantic-map-conversion`: offline robot semantic-memory conversion

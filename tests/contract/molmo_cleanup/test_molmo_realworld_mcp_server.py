@@ -68,6 +68,11 @@ def _fastmcp_tool_names(server: Any) -> set[str]:
     return set(server._mcp._tool_manager._tools)
 
 
+def _assert_run_evidence_lane(run_result: dict[str, Any], expected: str) -> None:
+    assert run_result["evidence_lane"] == expected
+    assert run_result["evidence_lane_metadata"]["evidence_lane"] == expected
+
+
 def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: Path) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
@@ -166,7 +171,7 @@ def test_realworld_mcp_tool_files_are_layered_by_capability(tmp_path: Path) -> N
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        cleanup_profile=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_LABELS_PROFILE,
     )
     try:
         assert _fastmcp_tool_names(server) == semantic | atomic | {
@@ -307,7 +312,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     monkeypatch,
 ) -> None:
     smoke = _load_smoke_module()
-    prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
+    prior = "output/household/household-world/map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=codex-cli "
@@ -442,7 +447,7 @@ def test_realworld_mcp_rejects_removed_cleanup_composite(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        cleanup_profile=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_LABELS_PROFILE,
     )
     try:
         removed_tool = "clean_observed_object"
@@ -465,7 +470,7 @@ def test_realworld_mcp_rejects_removed_fixture_hints_tool(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        cleanup_profile=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_LABELS_PROFILE,
     )
     try:
         assert "fixture_hints" not in _fastmcp_tool_names(server)
@@ -688,7 +693,7 @@ def _raw_fpv_camera_raw_server(tmp_path: Path) -> Any:
         agent_driven=True,
         record_robot_views=True,
         perception_mode=RAW_FPV_ONLY_MODE,
-        cleanup_profile="camera-raw-fpv",
+        evidence_lane="camera-raw-fpv",
     )
 
 
@@ -839,7 +844,7 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
         policy="codex_agent",
         agent_driven=True,
         record_robot_views=True,
-        cleanup_profile=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_LABELS_PROFILE,
     )
     try:
         assert "cleanup_worklist" not in _fastmcp_tool_names(server)
@@ -854,7 +859,7 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
         server.close()
 
     assert done["ok"] is True
-    assert run_result["cleanup_profile"] == WORLD_LABELS_PROFILE
+    _assert_run_evidence_lane(run_result, WORLD_LABELS_PROFILE)
     assert run_result["perception_mode"] != RAW_FPV_ONLY_MODE
     assert run_result["requested_generated_mess_count"] == 5
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] == 0
@@ -908,7 +913,7 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
 
     assert done["ok"] is True
     assert len(handled) >= 5
-    assert run_result["cleanup_profile"] == "camera-raw-fpv"
+    _assert_run_evidence_lane(run_result, "camera-raw-fpv")
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] >= 4
 
 

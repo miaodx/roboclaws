@@ -15,7 +15,6 @@ from roboclaws.household.agibot_contract_rehearsal import (
     NAVIGATION_PROVENANCE,
     PRE_HARDWARE_CONFIDENCE_LAYER,
     REHEARSAL_MODE_CLEANUP_ACTIONS,
-    REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
     RUNTIME_FIXTURE,
     run_molmospaces_agibot_contract_rehearsal,
     run_molmospaces_agibot_prehardware_rehearsal,
@@ -92,7 +91,7 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
 
     assert result["confidence_layer"] == CONFIDENCE_LAYER
     assert run_result["report_title"] == CONFIDENCE_LAYER
-    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
+    assert run_result["evidence_lane"] == "world-oracle-labels"
     assert run_result["simulated"] is True
     assert run_result["physical_robot"] is False
     assert run_result["execution_backend"] == EXECUTION_BACKEND
@@ -274,7 +273,7 @@ def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_m
 
     result = run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
-        task_name=REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
+        intent="map-build",
         profile="camera-grounded-labels",
         generated_mess_count=5,
         camera_labeler="grounding-dino",
@@ -293,7 +292,7 @@ def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_m
 
     assert result["backend"] == "agibot_molmospaces_sim"
     assert run_result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
-    assert run_result["task_name"] == "semantic-map-build"
+    assert run_result["task_name"] == "household-world.map-build"
     assert run_result["cleanup_actions_disabled"] is True
     assert run_result["semantic_sweep_mode"] is True
     assert run_result["map_mode"] == "minimal"
@@ -326,7 +325,7 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
 
     result = run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
-        task_name="household-cleanup",
+        intent="cleanup",
         profile="camera-raw-fpv",
         generated_mess_count=5,
     )
@@ -340,7 +339,7 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
 
     assert result["backend"] == "agibot_molmospaces_sim"
     assert result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
-    assert result["task_name"] == "household-cleanup"
+    assert result["task_name"] == "household-world.cleanup"
     assert result["cleanup_actions_disabled"] is False
     assert result["semantic_sweep_mode"] is False
     assert result["map_mode"] == "minimal"

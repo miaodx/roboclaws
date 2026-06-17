@@ -135,16 +135,16 @@ class LiveCodexAgibotMapBuildRunner:
         )
         workspace = _agent_workspace_root(
             repo_root=self.args.repo_root,
-            task_name="semantic-map-build",
+            task_name="household-world.map-build",
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
-            task_name="semantic-map-build",
+            task_name="household-world.map-build",
             skill_name=AGIBOT_MAP_BUILD_SKILL,
             workspace=workspace,
         )
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "semantic-map-build")
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "household-world.map-build")
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", AGIBOT_MAP_BUILD_SKILL)
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)

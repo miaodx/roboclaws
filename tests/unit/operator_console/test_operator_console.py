@@ -28,7 +28,12 @@ from roboclaws.operator_console.routes import (
     list_console_combinations,
     validate_supported_routes_against_catalog,
 )
-from roboclaws.operator_console.server import ConsoleRequestHandler
+from roboclaws.operator_console.server import (
+    ConsoleRequestHandler,
+)
+from roboclaws.operator_console.server import (
+    main as operator_console_main,
+)
 from roboclaws.operator_console.state import (
     derive_operator_state,
     redacted_artifact_text,
@@ -164,24 +169,13 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         build_launch_argv(route, root=tmp_path, run_id="run-3", overrides={"shell": "true"})
 
 
-def test_console_readiness_keeps_isaac_preflight_advisory_but_locks_blocking(
+def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blocking(
     tmp_path: Path,
 ) -> None:
     route = get_selection(ISAAC_CODEX_CLEANUP)
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is True
-    isaac_gate = next(gate for gate in readiness["gates"] if gate["id"] == "isaac_preflight")
-    assert isaac_gate["severity"] == "advisory"
-    assert isaac_gate["blocks_start"] is False
-
-    accepted = tmp_path / "output" / "isaaclab" / "runtime-preflight-accepted.json"
-    accepted.parent.mkdir(parents=True)
-    accepted.write_text("{}", encoding="utf-8")
-    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
-    assert readiness["can_start"] is True
-    isaac_gate = next(gate for gate in readiness["gates"] if gate["id"] == "isaac_preflight")
-    assert isaac_gate["status"] == "ready"
-    assert isaac_gate["evidence"] == str(accepted)
+    assert {gate["id"] for gate in readiness["gates"]} == {"provider_key", "mcp_port_free"}
 
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id="active", pid=os.getpid())
@@ -286,6 +280,21 @@ def test_just_console_run_recipe_is_public() -> None:
     )
     summary = set(result.stdout.split())
     assert "console::run" in summary
+
+
+def test_operator_console_cli_defaults_to_all_interfaces() -> None:
+    with patch("roboclaws.operator_console.server.run_server") as run_server:
+        assert operator_console_main([]) == 0
+
+    assert run_server.call_args.args[1] == "0.0.0.0"
+    assert run_server.call_args.args[2] == 8765
+
+
+def test_just_console_run_defaults_to_all_interfaces() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    recipe = (repo_root / "just" / "console.just").read_text(encoding="utf-8")
+
+    assert 'run host="0.0.0.0" port="8765":' in recipe
 
 
 def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:

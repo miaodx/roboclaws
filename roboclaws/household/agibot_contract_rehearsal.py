@@ -10,6 +10,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+import roboclaws.household.task_intent as intent_helpers
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
@@ -56,8 +57,6 @@ NAVIGATION_PROVENANCE = "agibot_shaped_molmospaces_sim_normal_navi"
 OBSERVATION_PROVENANCE = "agibot_shaped_molmospaces_sim_policy_observation"
 AGIBOT_MOLMOSPACES_SIM_BACKEND = "agibot_molmospaces_sim"
 AGIBOT_SHAPED_SIM_BACKEND = AGIBOT_MOLMOSPACES_SIM_BACKEND
-REHEARSAL_TASK_SEMANTIC_MAP_BUILD = "semantic-map-build"
-REHEARSAL_TASK_HOUSEHOLD_CLEANUP = "household-cleanup"
 PRE_HARDWARE_CONFIDENCE_LAYER = "Agibot MolmoSpaces Minimal-Map Pre-Hardware Rehearsal"
 
 
@@ -106,7 +105,7 @@ def run_molmospaces_agibot_contract_rehearsal(
 def run_molmospaces_agibot_prehardware_rehearsal(
     *,
     run_dir: Path,
-    task_name: str,
+    intent: str,
     profile: str,
     task_prompt: str | None = None,
     seed: int = 7,
@@ -126,9 +125,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
 ) -> dict[str, Any]:
     """Run the Agibot/MolmoSpaces local rehearsal as a minimal-map robot-like flow."""
 
-    if task_name not in {REHEARSAL_TASK_SEMANTIC_MAP_BUILD, REHEARSAL_TASK_HOUSEHOLD_CLEANUP}:
-        expected = f"{REHEARSAL_TASK_SEMANTIC_MAP_BUILD}|{REHEARSAL_TASK_HOUSEHOLD_CLEANUP}"
-        raise ValueError(f"unsupported rehearsal task {task_name!r} (expected {expected})")
+    intent = intent_helpers.normalize_household_intent(intent)
     if runtime not in {RUNTIME_FIXTURE, RUNTIME_MOLMOSPACES_SUBPROCESS}:
         expected = f"{RUNTIME_FIXTURE}|{RUNTIME_MOLMOSPACES_SUBPROCESS}"
         raise ValueError(f"unsupported rehearsal runtime {runtime!r} (expected {expected})")
@@ -137,7 +134,8 @@ def run_molmospaces_agibot_prehardware_rehearsal(
 
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
-    is_semantic_map_build = task_name == REHEARSAL_TASK_SEMANTIC_MAP_BUILD
+    task_identity = intent_helpers.household_task_identity(intent=intent)
+    is_semantic_map_build = intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
     default_task_prompt = (
         "帮我建立这个房间的语义地图" if is_semantic_map_build else "帮我收拾这个房间"
     )
@@ -165,7 +163,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     )
 
     metadata_overrides = _prehardware_metadata_overrides(
-        task_name=task_name,
+        task_identity=task_identity,
         profile=profile,
         runtime=runtime,
         visual_grounding=visual_grounding,
@@ -185,7 +183,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         molmospaces_python=molmospaces_python,
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
-        cleanup_profile=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
+        evidence_lane=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
         semantic_sweep=is_semantic_map_build,
         map_mode=MINIMAL_MAP_MODE,
         visual_grounding=visual_grounding,
@@ -196,7 +194,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     _write_prehardware_runtime_export(
         run_dir=run_dir,
         result=result,
-        task_name=task_name,
+        task_identity=task_identity,
         task_prompt=selected_task_prompt,
         runtime=runtime,
         profile=profile,
@@ -251,7 +249,7 @@ def _prehardware_perception_mode(profile: str) -> str:
 
 def _prehardware_metadata_overrides(
     *,
-    task_name: str,
+    task_identity: dict[str, str],
     profile: str,
     runtime: str,
     visual_grounding: str,
@@ -259,13 +257,13 @@ def _prehardware_metadata_overrides(
     agibot_map_reference: dict[str, Any],
     cleanup_actions_disabled: bool,
 ) -> dict[str, Any]:
-    cleanup_run = task_name == REHEARSAL_TASK_HOUSEHOLD_CLEANUP
+    intent = task_identity["task_intent"]
     return {
         "schema": REHEARSAL_SCHEMA,
         "report_eyebrow": "Agibot-shaped pre-hardware rehearsal",
         "report_title": (
             "Agibot MolmoSpaces Semantic Map-Build Rehearsal"
-            if task_name == REHEARSAL_TASK_SEMANTIC_MAP_BUILD
+            if intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
             else "Agibot MolmoSpaces Cleanup Rehearsal"
         ),
         "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
@@ -282,11 +280,13 @@ def _prehardware_metadata_overrides(
         "execution_backend": EXECUTION_BACKEND,
         "navigation_backend": NAVIGATION_BACKEND,
         "runtime": runtime,
-        "mcp_server": "roboclaws_real_robot_cleanup_v1_agibot_molmospaces_prehardware",
-        "task_name": task_name,
+        "evidence_lane": profile,
+        "camera_labeler": camera_labeler or "",
+        "mcp_server": "roboclaws_household_agibot_molmospaces_prehardware",
+        **task_identity,
         "agibot_molmospaces_prehardware_rehearsal": {
             "schema": "agibot_molmospaces_minimal_map_prehardware_rehearsal_v1",
-            "task_name": task_name,
+            **task_identity,
             "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
             "runtime": runtime,
             "profile": profile,
@@ -302,7 +302,7 @@ def _prehardware_metadata_overrides(
             "visual_grounding_pipeline_id": visual_grounding,
             "minimal_map_start": True,
             "online_semantic_map_build": True,
-            "cleanup_actions_included": cleanup_run,
+            "cleanup_actions_included": intent == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
             "cleanup_actions_disabled": cleanup_actions_disabled,
             "source_map_mutation_allowed": False,
             "simulated": True,
@@ -338,7 +338,7 @@ def _write_prehardware_runtime_export(
     *,
     run_dir: Path,
     result: dict[str, Any],
-    task_name: str,
+    task_identity: dict[str, str],
     task_prompt: str,
     runtime: str,
     profile: str,
@@ -355,7 +355,7 @@ def _write_prehardware_runtime_export(
     )
     payload = {
         "schema": "agibot_molmospaces_minimal_map_prehardware_runtime_export_v1",
-        "task_name": task_name,
+        **task_identity,
         "task_prompt": task_prompt,
         "runtime": runtime,
         "profile": profile,
@@ -364,7 +364,8 @@ def _write_prehardware_runtime_export(
         "visual_grounding_pipeline_id": visual_grounding,
         "minimal_map_start": True,
         "online_semantic_map_build": True,
-        "cleanup_actions_included": task_name == REHEARSAL_TASK_HOUSEHOLD_CLEANUP,
+        "cleanup_actions_included": task_identity["task_intent"]
+        == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
         "cleanup_object_count_limit": cleanup_object_count,
         "simulated": True,
         "physical_robot": False,
@@ -477,7 +478,6 @@ def _write_preflight_artifacts(
     runner_task_input = {
         "schema": "agibot_shaped_cleanup_runner_task_input_v1",
         "contract": REALWORLD_CONTRACT,
-        "cleanup_profile": "real_robot_cleanup_v1",
         "task_prompt": scenario.task,
         "seed": seed,
         "requested_generated_mess_count": generated_mess_count,
@@ -1557,8 +1557,8 @@ def _run_result(
             )
             if cleanup_actions_enabled
             else (
-                "Validates real_robot_cleanup_v1 contract shape, Agibot-shaped stage "
-                "sequencing, and report evidence plumbing through a simulated "
+                "Validates task-neutral household public tool sequencing and report "
+                "evidence plumbing through a simulated "
                 "MolmoSpaces backend. It is not Agibot Map Visual Dry Run, not Agibot "
                 "SDK Dry Run, not semantic cleanup mock evidence, and not real Agibot "
                 "GDK execution."
@@ -1566,16 +1566,16 @@ def _run_result(
         ),
         "next_confidence_layer": "Optional real Agibot G2 validation",
         "contract": REALWORLD_CONTRACT,
-        "cleanup_profile": "real_robot_cleanup_v1",
         "backend": AGIBOT_SHAPED_SIM_BACKEND,
         "backend_variant": EXECUTION_BACKEND,
         "execution_backend": EXECUTION_BACKEND,
         "navigation_backend": NAVIGATION_BACKEND,
         "runtime": runtime,
+        "evidence_lane": "world-oracle-labels",
         "simulated": True,
         "physical_robot": False,
         "agent_driven": False,
-        "mcp_server": "roboclaws_real_robot_cleanup_v1_agibot_shaped_sim",
+        "mcp_server": "roboclaws_household_agibot_shaped_sim",
         "scenario_id": scenario.scenario_id,
         "task_prompt": scenario.task,
         "seed": seed,
@@ -1661,6 +1661,7 @@ def _run_result(
             "confidence_layer": report_title,
             "rehearsal_mode": rehearsal_mode,
             "runtime": runtime,
+            "evidence_lane": "world-oracle-labels",
             "simulated": True,
             "physical_robot": False,
             "execution_backend": EXECUTION_BACKEND,
@@ -1934,7 +1935,6 @@ def _write_stage_artifact(
         "status": status,
         "ok": ok,
         "contract": REALWORLD_CONTRACT,
-        "cleanup_profile": "real_robot_cleanup_v1",
         "backend": AGIBOT_SHAPED_SIM_BACKEND,
         "execution_backend": EXECUTION_BACKEND,
         "navigation_backend": NAVIGATION_BACKEND,
