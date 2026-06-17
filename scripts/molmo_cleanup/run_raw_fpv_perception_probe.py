@@ -223,7 +223,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "all",
             "both",
             "baseline_json",
-            "skill_json_semantic_map",
+            "skill_json_runtime_map",
             "raw_fpv_visual_labeler",
         ),
         default="both",
@@ -461,14 +461,14 @@ def build_public_inputs(
         },
         "variants": {
             "baseline_json": {
-                "description": "Strict JSON RAW-FPV prompt without semantic-map planning context.",
+                "description": "Strict JSON RAW-FPV prompt without runtime-map planning context.",
                 "frames": [
                     _prompt_payload_for_frame(frame, semantic_context={}) for frame in frames
                 ],
             },
-            "skill_json_semantic_map": {
+            "skill_json_runtime_map": {
                 "description": (
-                    "Skill-shaped strict JSON prompt with compressed semantic-map planning "
+                    "Skill-shaped strict JSON prompt with compressed runtime-map planning "
                     "context only. Prior context is not executable."
                 ),
                 "frames": [
@@ -1031,7 +1031,7 @@ def render_prompt(frame_payload: dict[str, Any], *, variant_id: str) -> str:
     target_text = "; ".join(RAW_FPV_HIGH_CONFIDENCE_TARGETS)
     context = frame_payload.get("runtime_map_context") or {}
     semantic_text = ""
-    if variant_id == "skill_json_semantic_map":
+    if variant_id == "skill_json_runtime_map":
         semantic_text = (
             "\nCompressed public planning context, not executable handles: "
             + json.dumps(context, sort_keys=True)
@@ -1701,9 +1701,9 @@ def _json_object_from_text(text: str) -> dict[str, Any]:
 
 def _selected_variants(value: str) -> tuple[str, ...]:
     if value == "all":
-        return ("baseline_json", "skill_json_semantic_map", "raw_fpv_visual_labeler")
+        return ("baseline_json", "skill_json_runtime_map", "raw_fpv_visual_labeler")
     if value == "both":
-        return ("baseline_json", "skill_json_semantic_map")
+        return ("baseline_json", "skill_json_runtime_map")
     return (value,)
 
 
