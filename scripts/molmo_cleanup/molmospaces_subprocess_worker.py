@@ -143,8 +143,16 @@ def _snapshot_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str
         state,
         Path(str(kwargs["output_path"])),
         str(kwargs.get("title") or ""),
-        width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
-        height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
+        width=_positive_int(
+            kwargs.get("render_width"),
+            DEFAULT_RENDER_WIDTH,
+            setting_name="render_width",
+        ),
+        height=_positive_int(
+            kwargs.get("render_height"),
+            DEFAULT_RENDER_HEIGHT,
+            setting_name="render_height",
+        ),
     )
 
 
@@ -155,16 +163,38 @@ def _robot_views_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[
         str(kwargs["label"]),
         focus_object_id=_optional_str(kwargs.get("focus_object_id")),
         focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
-        camera_yaw_offset_deg=_float_or_zero(kwargs.get("camera_yaw_offset_deg")),
-        camera_pitch_offset_deg=_float_or_zero(kwargs.get("camera_pitch_offset_deg")),
-        width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
-        height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
+        camera_yaw_offset_deg=_float_or_zero(
+            kwargs.get("camera_yaw_offset_deg"),
+            setting_name="camera_yaw_offset_deg",
+        ),
+        camera_pitch_offset_deg=_float_or_zero(
+            kwargs.get("camera_pitch_offset_deg"),
+            setting_name="camera_pitch_offset_deg",
+        ),
+        width=_positive_int(
+            kwargs.get("render_width"),
+            DEFAULT_RENDER_WIDTH,
+            setting_name="render_width",
+        ),
+        height=_positive_int(
+            kwargs.get("render_height"),
+            DEFAULT_RENDER_HEIGHT,
+            setting_name="render_height",
+        ),
     )
 
 
 def _camera_views_command(state: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
-    width = _positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH)
-    height = _positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT)
+    width = _positive_int(
+        kwargs.get("render_width"),
+        DEFAULT_RENDER_WIDTH,
+        setting_name="render_width",
+    )
+    height = _positive_int(
+        kwargs.get("render_height"),
+        DEFAULT_RENDER_HEIGHT,
+        setting_name="render_height",
+    )
     camera_request = _load_camera_request_from_kwargs(kwargs, width=width, height=height)
     return write_camera_views(
         state,
@@ -199,9 +229,9 @@ def _navigate_to_relative_pose_command(
 ) -> dict[str, Any]:
     return navigate_to_relative_pose(
         state,
-        forward_m=_float_or_zero(kwargs.get("forward_m")),
-        lateral_m=_float_or_zero(kwargs.get("lateral_m")),
-        yaw_delta_deg=_float_or_zero(kwargs.get("yaw_delta_deg")),
+        forward_m=_float_or_zero(kwargs.get("forward_m"), setting_name="forward_m"),
+        lateral_m=_float_or_zero(kwargs.get("lateral_m"), setting_name="lateral_m"),
+        yaw_delta_deg=_float_or_zero(kwargs.get("yaw_delta_deg"), setting_name="yaw_delta_deg"),
     )
 
 
@@ -1778,12 +1808,16 @@ def _optional_str(value: Any) -> str | None:
     return molmospaces_worker_protocol.optional_str(value)
 
 
-def _positive_int(value: Any, default: int) -> int:
-    return molmospaces_worker_protocol.positive_int(value, default)
+def _positive_int(value: Any, default: int, *, setting_name: str = "value") -> int:
+    return molmospaces_worker_protocol.positive_int(
+        value,
+        default,
+        setting_name=setting_name,
+    )
 
 
-def _float_or_zero(value: Any) -> float:
-    return molmospaces_worker_protocol.float_or_zero(value)
+def _float_or_zero(value: Any, *, setting_name: str = "value") -> float:
+    return molmospaces_worker_protocol.float_or_zero(value, setting_name=setting_name)
 
 
 def _json_object_from_text(text: str) -> dict[str, Any]:

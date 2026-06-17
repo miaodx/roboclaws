@@ -36,10 +36,7 @@ def test_molmospaces_worker_cli_routes_relative_pose_kwargs() -> None:
         "yaw_delta_deg": 15.0,
     }
     assert "navigate_to_relative_pose" in molmospaces_subprocess_worker._STATE_MUTATING_COMMANDS
-    assert (
-        "navigate_to_relative_pose"
-        in molmospaces_subprocess_worker._WORKER_COMMAND_HANDLERS
-    )
+    assert "navigate_to_relative_pose" in molmospaces_subprocess_worker._WORKER_COMMAND_HANDLERS
 
 
 def test_molmospaces_worker_dispatches_relative_pose_handler(
@@ -81,6 +78,76 @@ def test_molmospaces_worker_dispatches_relative_pose_handler(
         "lateral_m": -0.125,
         "yaw_delta_deg": 15.0,
     }
+
+
+def test_molmospaces_worker_rejects_invalid_relative_pose_kwargs() -> None:
+    with pytest.raises(ValueError, match="forward_m must be a finite number; got 'oops'"):
+        molmospaces_subprocess_worker._run_loaded_state_command(
+            {"robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0}},
+            "navigate_to_relative_pose",
+            {"forward_m": "oops"},
+        )
+
+
+def test_molmospaces_worker_rejects_non_finite_relative_pose_kwargs() -> None:
+    with pytest.raises(ValueError, match="yaw_delta_deg must be a finite number; got 'nan'"):
+        molmospaces_subprocess_worker._run_loaded_state_command(
+            {"robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0}},
+            "navigate_to_relative_pose",
+            {"yaw_delta_deg": "nan"},
+        )
+
+
+def test_molmospaces_worker_defaults_omitted_relative_pose_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_navigate_to_relative_pose(
+        state,  # noqa: ANN001
+        *,
+        forward_m: float,
+        lateral_m: float,
+        yaw_delta_deg: float,
+    ) -> dict[str, object]:
+        captured["forward_m"] = forward_m
+        captured["lateral_m"] = lateral_m
+        captured["yaw_delta_deg"] = yaw_delta_deg
+        return {"ok": True, "tool": "navigate_to_relative_pose"}
+
+    monkeypatch.setattr(
+        molmospaces_subprocess_worker,
+        "navigate_to_relative_pose",
+        fake_navigate_to_relative_pose,
+    )
+
+    result, should_write = molmospaces_subprocess_worker._run_loaded_state_command(
+        {"robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0}},
+        "navigate_to_relative_pose",
+        {},
+    )
+
+    assert result == {"ok": True, "tool": "navigate_to_relative_pose"}
+    assert should_write is True
+    assert captured == {"forward_m": 0.0, "lateral_m": 0.0, "yaw_delta_deg": 0.0}
+
+
+def test_molmospaces_worker_rejects_invalid_render_dimensions() -> None:
+    with pytest.raises(ValueError, match="render_width must be a positive integer; got 'wide'"):
+        molmospaces_subprocess_worker._run_loaded_state_command(
+            {},
+            "snapshot",
+            {"output_path": "/tmp/snapshot.png", "render_width": "wide"},
+        )
+
+
+def test_molmospaces_worker_rejects_non_positive_render_dimensions() -> None:
+    with pytest.raises(ValueError, match="render_height must be a positive integer; got 0"):
+        molmospaces_subprocess_worker._run_loaded_state_command(
+            {},
+            "camera_views",
+            {"output_dir": "/tmp/views", "render_height": 0},
+        )
 
 
 def test_isaac_worker_cli_exposes_relative_pose_command() -> None:

@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: MolmoSpaces JSON worker numeric command kwargs now fail aloud.
+  Served worker requests reject malformed, boolean, non-finite, or non-positive
+  render dimensions and malformed, boolean, or non-finite camera/relative-motion
+  floats instead of silently substituting default dimensions or zero motion
+  before rendering or navigation. Owner layer: Backend Runtime / Environment
+  Primitive. Behavior-change class: fail-aloud worker command configuration;
+  omitted worker kwargs, CLI-parsed numeric args, valid numeric strings, render
+  output shape, relative-pose dispatch, worker response/error packet structure,
+  public launch axes, and backend wrapper commands are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules;
+  `molmospaces_subprocess_worker.py` is 1880 lines and remains below the hard
+  ceiling. Proof: focused MolmoSpaces worker routing tests, adjacent subprocess
+  backend CLI/render tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Provider timing proxy bind-port configuration now fails aloud.
   `start_provider_timing_proxy()` and the direct proxy CLI reject malformed or
   out-of-range `ROBOCLAWS_TIMING_PROXY_BIND_PORT` / `--bind-port` values instead

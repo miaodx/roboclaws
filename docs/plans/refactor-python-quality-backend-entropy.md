@@ -60,6 +60,18 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one MolmoSpaces JSON
+  worker command numeric-kwargs false-green. Served worker requests now reject
+  malformed, boolean, non-finite, or non-positive render dimensions and
+  malformed, boolean, or non-finite camera/relative-motion floats instead of
+  silently substituting default dimensions or zero motion before rendering or
+  navigation. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: fail-aloud worker command configuration; omitted
+  worker kwargs, CLI-parsed numeric args, valid numeric strings, render output
+  shape, relative-pose dispatch, worker response/error packet structure, public
+  launch axes, and backend wrapper commands are unchanged. The ratchet remains
+  0 complexity rows and 79 oversized modules; `molmospaces_subprocess_worker.py`
+  is 1880 lines and remains below the hard ceiling.
 - Follow-up implementation refresh on 2026-06-18 closed one provider timing
   proxy bind-port false-green. `start_provider_timing_proxy()` and the direct
   proxy CLI now reject malformed or out-of-range
