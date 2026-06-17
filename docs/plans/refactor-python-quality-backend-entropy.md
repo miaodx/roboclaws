@@ -744,6 +744,18 @@ operator setup remain unchanged. Proof passed with focused provider catalog and
 operator-console provider/readiness tests, ruff, format check, py_compile,
 `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 closed one Nav2 map-bundle projection
+false-green. `metric_map_from_bundle()` and
+`static_fixture_projection_from_bundle()` now validate the selected Nav2 bundle
+before projecting map evidence, so missing `map.yaml` image metadata, missing
+inspection waypoints, missing source-frame metadata, or other bundle-validation
+errors no longer produce `ok=true` projected artifacts through direct callers.
+Behavior-change class: fail-aloud source-map artifact projection; valid bundle
+projection, public launch axes, artifact schemas, map report shape, and
+product callers that already validate selected bundles are unchanged. Proof
+passed with focused Nav2 map-bundle contract tests, touched-file ruff and
+format check, py_compile, `git diff --check`, and ratchet.
+
 Implementation refresh on 2026-06-18 closed the parked operator-console
 route-fixture drift that followed the provider-env slice. The operator-console
 route registry now tracks the current source-aware MolmoSpaces catalog:

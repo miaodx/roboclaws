@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE, RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
@@ -66,6 +68,43 @@ def test_nav2_bundle_validation_rejects_private_cleanup_truth(tmp_path: Path) ->
 
     assert validation.ok is False
     assert any("private cleanup truth" in error for error in validation.errors)
+
+
+def test_nav2_projection_rejects_map_yaml_without_image(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_fixture_projection=agent_view["static_fixture_projection"],
+    )
+    map_yaml_path = bundle_dir / "map.yaml"
+    map_yaml = "\n".join(
+        line
+        for line in map_yaml_path.read_text(encoding="utf-8").splitlines()
+        if line != "image: map.pgm"
+    )
+    map_yaml_path.write_text(map_yaml + "\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="map.yaml image must resolve to map.pgm"):
+        metric_map_from_bundle(bundle_dir)
+
+
+def test_nav2_projection_rejects_semantics_without_waypoints(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_fixture_projection=agent_view["static_fixture_projection"],
+    )
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["inspection_waypoints"] = []
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="semantics.json must contain inspection_waypoints"):
+        static_fixture_projection_from_bundle(bundle_dir)
 
 
 def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:

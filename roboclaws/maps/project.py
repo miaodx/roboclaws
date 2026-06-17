@@ -8,6 +8,7 @@ from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
     metric_map_bundle_metadata,
     parse_map_yaml,
+    validate_nav2_map_bundle,
 )
 from roboclaws.maps.rasterize import load_pgm
 from roboclaws.maps.spatial_contract import (
@@ -26,6 +27,7 @@ def metric_map_from_bundle(
     *,
     contract: str = REALWORLD_CONTRACT,
 ) -> dict[str, Any]:
+    _validate_projection_source_bundle(bundle_dir)
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
     map_yaml = parse_map_yaml((bundle_dir / "map.yaml").read_text(encoding="utf-8"))
     resolution = float(map_yaml.get("resolution") or DEFAULT_COSTMAP_PARAMETERS["resolution_m"])
@@ -105,6 +107,7 @@ def static_fixture_projection_from_bundle(
     static_fixture_projection_mode: str = "room_only",
     contract: str = REALWORLD_CONTRACT,
 ) -> dict[str, Any]:
+    _validate_projection_source_bundle(bundle_dir)
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
     fixtures_by_room: dict[str, list[dict[str, Any]]] = {}
     frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
@@ -143,3 +146,7 @@ def _waypoint_pose(waypoint: dict[str, Any]) -> dict[str, float]:
         "y": float(waypoint.get("y", 0.0)),
         "yaw": float(waypoint.get("yaw", 0.0)),
     }
+
+
+def _validate_projection_source_bundle(bundle_dir: Path) -> None:
+    validate_nav2_map_bundle(bundle_dir).raise_for_errors()

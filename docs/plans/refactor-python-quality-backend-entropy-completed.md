@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Nav2 map-bundle projection now fails aloud before emitting
+  projected map evidence from invalid source bundles. `metric_map_from_bundle()`
+  and `static_fixture_projection_from_bundle()` call the existing Nav2 bundle
+  validator first, so missing `map.yaml` image metadata, missing inspection
+  waypoints, missing source-frame metadata, or other bundle-validation errors
+  no longer become `ok=true` projected artifacts through direct callers.
+  Behavior-change class: fail-aloud source-map artifact projection; valid bundle
+  projection, public launch axes, artifact schemas, map report shape, and
+  product callers that already validate selected bundles are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules. Proof: focused
+  Nav2 map-bundle contract tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: MiMo inside provider readiness now requires the base URL as well
   as the API key. `mimo-inside-openai-chat` declares both `MIMO_BASE_URL` and
   `MIMO_API_KEY` as required env keys, matching its no-default-base-url
