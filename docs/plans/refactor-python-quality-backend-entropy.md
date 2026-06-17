@@ -22,7 +22,11 @@ fail-aloud-and-early behavior over more silent compatibility cleanup. Silent
 fallbacks that fabricate labels, choose alternate assets, hide missing source
 metadata, normalize invalid launch/profile input without surfacing it, or turn
 real setup failures into plausible defaults are now first-class cleanup targets.
-Execute them as dedicated slices before returning to hard-ceiling owner splits.
+Environment-variable cleanup belongs in the same pass: collapse duplicate env
+knobs, remove stale compatibility aliases, make precedence explicit, and reject
+ambiguous provider/model/key/base-url combinations instead of silently selecting
+another route or developer fallback. Execute these as dedicated slices before
+returning to hard-ceiling owner splits.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
 --summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
@@ -150,11 +154,13 @@ lane/workflow wording.
   touched files, proof, and non-goals. One verified vertical slice beats broad
   line shaving.
 - Fail-aloud rule: when required runtime/source metadata, route support,
-  provider profile, map bundle inputs, room labels, visual artifacts, or
-  readiness facts are missing or inconsistent, prefer an explicit exception,
+  provider profile, environment variable, map bundle inputs, room labels,
+  visual artifacts, readiness facts, or configuration precedence are missing,
+  ambiguous, or inconsistent, prefer an explicit exception,
   blocked/unavailable status, or operator-visible validation error over a
   guessed default. Keep only deliberate, documented defaults that are part of a
-  public contract, and make them visible in artifacts or readiness payloads.
+  public contract, and make them visible in artifacts, readiness payloads, or
+  provider-route diagnostics.
 - Compaction rule: every 3-5 accepted slices, move completed outcomes into the
   ledger and trim this file back to unresolved decisions, current candidates,
   proof gates, and stop conditions.
@@ -181,8 +187,9 @@ lane/workflow wording.
 
 Current checkpoint: pause implementation and treat the next execution as a
 dedicated fail-aloud cleanup pass. Refresh the ratchet and run a targeted
-silent-fallback audit before selecting code changes. The first implementation
-should remove one bounded family of silent fallbacks and prove the new explicit
+silent-fallback and env-var audit before selecting code changes. The first
+implementation should remove one bounded family of silent fallbacks or
+ambiguous environment-variable routes and prove the new explicit
 failure/blocked path with tests before returning to line-count owner splits.
 
 Dedicated implementation prompt for the next cleanup run:
@@ -192,12 +199,17 @@ Update Roboclaws to fail aloud and early instead of silently falling back. Audit
 the touched area first, then choose one bounded fallback family. Remove fallback
 branches that fabricate missing source truth, silently substitute legacy assets,
 normalize unsupported user input without surfacing the canonical value or error,
-or continue after required runtime evidence is absent. Preserve explicit public
-defaults that are documented launch contracts. For every removed fallback, add or
-update focused tests proving the missing/invalid input now raises a clear
-exception or produces an explicit blocked/unavailable readiness/status packet.
-Do not combine this with hard-ceiling file splitting unless the fallback owner is
-the actual reason for the split.
+continue after required runtime evidence is absent, or let missing/ambiguous
+environment variables silently choose a provider route, model, key, base URL, or
+developer-only override. Treat env-var cleanup as part of this pass: collapse
+duplicate knobs, remove stale compatibility aliases, make CLI/config/env
+precedence visible, and reject conflicting combinations instead of selecting a
+plausible default. Preserve explicit public defaults only when they are
+documented launch contracts and surfaced in diagnostics. For every removed
+fallback, add or update focused tests proving the missing/invalid input now
+raises a clear exception or produces an explicit blocked/unavailable
+readiness/status packet. Do not combine this with hard-ceiling file splitting
+unless the fallback owner is the actual reason for the split.
 ```
 
 Candidate D remains a valid follow-up, but it is no longer the default next
@@ -224,15 +236,17 @@ evidence.
 Recommended next slice claim:
 
 - Slice: choose one owner-boundary P1. Default order after this slice is:
-  fail-aloud silent fallback cleanup, Candidate D runner-side Agent SDK
-  performance-profile/default resolution, Candidate D timing/timeline summary
-  only as a separate follow-up if D remains the best frontier, Candidate B
-  scene-camera / visual-parity summary ownership, then Candidate A only with new
-  facade-private/report evidence. Choose by fresh call-site evidence, not file
-  size alone.
+  fail-aloud silent fallback and env-var cleanup, Candidate D runner-side Agent
+  SDK performance-profile/default resolution, Candidate D timing/timeline
+  summary only as a separate follow-up if D remains the best frontier,
+  Candidate B scene-camera / visual-parity summary ownership, then Candidate A
+  only with new facade-private/report evidence. Choose by fresh call-site
+  evidence, not file size alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
-  Profiles plus Thin Runtime / Server Adapters for Candidate D.
+  Profiles plus Thin Runtime / Server Adapters for Candidate D and provider/env
+  cleanup; Runnable Surfaces And Presets when env vars are acting as hidden
+  launch-axis overrides.
 - Current friction: the hard-ceiling frontier is now
   `realworld_contract.py` at 2836, `scene_camera_comparison.py` is 2830,
   `summarize_robot_camera_visual_parity.py` is 2808,
@@ -291,9 +305,9 @@ checkpoint.
 
 Preflight status: REVIEWED, planning-only rechecked on 2026-06-17. Route:
 `$intuitive-refactor` ratchet mode. Default execution: refresh the ratchet, run
-a targeted silent-fallback audit, and select one bounded fail-aloud cleanup
-family before returning to hard-ceiling owner-boundary P1s. The default
-candidate order is Silent Fallback Cleanup, D runner-side Agent SDK
+a targeted silent-fallback/env-var audit, and select one bounded fail-aloud
+cleanup family before returning to hard-ceiling owner-boundary P1s. The default
+candidate order is Silent Fallback And Env-Var Cleanup, D runner-side Agent SDK
 performance-profile/default resolution, D timing/timeline summary only as a
 separate follow-up if D remains best, B scene-camera / visual-parity summary
 ownership, then A only with fresh facade-private/report evidence.
@@ -304,32 +318,43 @@ runner lifecycle, mixing timing/timeline helpers into the profile/default slice,
 and live/provider/simulator proof unless the chosen slice changes that route.
 Re-approve if a slice would change a public launch, artifact schema, report
 shape, agent-facing payload, provider behavior, event/span schema, model-input
-compaction schema, private/public eval contract, or a documented public default.
+compaction schema, private/public eval contract, or a documented public default;
+do not re-approve merely to delete undocumented env aliases or hidden fallback
+routes that the selected slice proves are stale.
 
 ## Active Candidates
 
-### S: Fail-Aloud Silent Fallback Cleanup
+### S: Fail-Aloud Silent Fallback And Env-Var Cleanup
 
 Severity: P1 when a fallback can create false confidence, hide a missing source
 asset, mask unsupported launch/profile input, fabricate room/map/visual
-semantics, or let an operator believe a route is ready when required evidence is
-absent. Severity: P2 when the fallback is local developer convenience with
-clear test coverage and no user-facing claim.
+semantics, mask missing or conflicting environment-variable input, or let an
+operator believe a route is ready when required evidence is absent. Severity: P2
+when the fallback is local developer convenience with clear test coverage and no
+user-facing claim.
 
 Owning architecture layers depend on the selected family:
 Runnable Surfaces And Presets for launch/profile normalization; Agent Engines
 And Provider Profiles for provider route defaults; Thin Runtime / Server
 Adapters for readiness and status packets; Backend Runtime / Environment
 Primitive for simulator/map/source-asset loading; Artifacts, reports, and eval
-suites for preview/report/evidence generation.
+suites for preview/report/evidence generation. Env-var cleanup usually belongs
+to Agent Engines And Provider Profiles, Thin Runtime / Server Adapters, or the
+public launch catalog; avoid burying route choice in ad hoc `os.environ` reads.
 
 Audit prompts for the implementation slice:
 
 - Search for `or {}`, `or []`, `or ""`, broad `except Exception`, broad
   `except (KeyError, TypeError, ValueError)`, `fallback`, `default`, `unknown`,
-  `synthetic`, `legacy`, `missing`, and `skip_existing` in the target owner.
+  `synthetic`, `legacy`, `missing`, `skip_existing`, `os.environ`, `getenv`,
+  `ROBOCLAWS_`, `_API_KEY`, `_BASE_URL`, `_MODEL`, `provider_profile`, and
+  `alias` in the target owner.
 - Classify each hit as explicit public default, explicit blocked/unavailable
   status, test-only fixture convenience, or silent fallback.
+- For env-var hits, classify each knob as canonical public config,
+  provider-secret input, local machine convenience, or stale compatibility
+  alias. Record precedence between CLI args, launch catalog defaults,
+  repo-local `.env`, process env, and hardcoded defaults before changing code.
 - Remove or replace only silent fallback rows in the selected family. Do not
   mechanically delete every default.
 - Make failure actionable: include the missing key/path/route/capability and
@@ -342,7 +367,11 @@ Good first families:
   semantic-map labels, or preview metadata when source manifests are missing.
 - Provider route and launch profile input: accept documented aliases only when
   the resolved canonical value is surfaced; reject unsupported values instead of
-  silently falling back to `codex-env` or another route.
+  silently falling back to `codex-router-responses` or another route.
+- Environment-variable route selection: collapse duplicate provider/profile
+  knobs, remove stale route aliases, reject conflicting key/base-url/model
+  combinations, and make missing required provider keys fail readiness before a
+  live run starts.
 - Runtime artifact discovery: when a report/preview claims real camera, map, or
   robot-view evidence, missing files should produce explicit unavailable status
   rather than reusing stale or semantic-map substitutes.
@@ -353,6 +382,9 @@ Allowed fallbacks:
 
 - Public launch defaults documented in README/ARCHITECTURE/just docs, such as
   default `surface=household-world` axes.
+- Canonical provider secrets and machine-local mirror/proxy env vars that are
+  documented as external setup inputs, as long as missing or conflicting values
+  produce explicit readiness errors instead of route substitution.
 - Explicit operator-console unavailable/blocked readiness states.
 - Test fixtures that intentionally omit optional fields and assert the resulting
   blocked/error behavior.
@@ -361,8 +393,8 @@ Allowed fallbacks:
 
 Proof should include focused tests for the selected owner plus `ruff` on touched
 files, `git diff --check`, and the ratchet summary. If a selected fallback is
-user-facing launch or status behavior, include a contract test proving the
-message/status is visible.
+user-facing launch, env-var, or status behavior, include a contract test proving
+the message/status is visible and the old implicit route no longer starts.
 
 ### A: Contract And Report Hard-Ceiling Split
 
@@ -667,5 +699,9 @@ Stop this cleanup stream when:
 - Silent fallback families that can create false confidence are either removed,
   converted to explicit blocked/unavailable status, or documented as deliberate
   public defaults with tests.
+- Env-var families no longer provide hidden route compatibility: canonical
+  knobs are documented, duplicate aliases are removed or explicitly blocked,
+  precedence is tested, and missing/conflicting provider keys, base URLs, or
+  model/profile settings fail before launch readiness.
 - A fresh reduce-entropy round finds no P0/P1 or material P2 candidate in this
   code-size/backend-complexity class.
