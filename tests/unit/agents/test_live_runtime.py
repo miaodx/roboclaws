@@ -1352,6 +1352,48 @@ def test_model_input_compaction_rejects_invalid_direct_policy_limits(
     assert "must be a positive integer, got 'latest'" in payload["detail"]
 
 
+def test_openai_agents_runtime_rejects_invalid_retry_attempts_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS", "many")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS" in payload["detail"]
+    assert "must be a non-negative integer, got 'many'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_direct_retry_sleep_s(tmp_path: Path) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_service_retry_sleep_s": "later"},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting model_service_retry_sleep_s" in payload["detail"]
+    assert "must be a non-negative number, got 'later'" in payload["detail"]
+
+
 def test_model_input_shape_summary_is_aggregate_only() -> None:
     summary = _model_input_shape_summary(
         [

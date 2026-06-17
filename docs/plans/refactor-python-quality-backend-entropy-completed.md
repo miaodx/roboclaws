@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK retry config now fails aloud for malformed
+  numeric runtime settings. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS` values and invalid
+  direct `model_service_retry_sleep_s` metadata produce normalized
+  `provider_config_failure` live-status packets instead of silently reusing
+  defaults. Behavior-change class: fail-aloud SDK runtime configuration;
+  omitted values, valid non-negative retry attempts/sleep values,
+  profile-owned retry packets, public launch axes, event schemas, and retry
+  observability are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules. Proof: focused OpenAI Agents live runtime tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: OpenAI Agents SDK model-input compaction config now fails aloud for
   malformed numeric runtime settings. Invalid
   `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS` values and invalid direct

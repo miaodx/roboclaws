@@ -821,11 +821,13 @@ def _model_service_retry_config(request: LiveAgentRequest) -> dict[str, int | fl
     metadata = dict(request.metadata)
     attempts = _non_negative_int(
         metadata.get("model_service_retry_attempts"),
+        setting_name="model_service_retry_attempts",
         env_name=MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
         default=DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
     )
     sleep_s = _non_negative_float(
         metadata.get("model_service_retry_sleep_s"),
+        setting_name="model_service_retry_sleep_s",
         env_name=MODEL_SERVICE_RETRY_SLEEP_ENV,
         default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     )
@@ -1685,26 +1687,52 @@ def _require_setting(provider: str, name: str, value: str) -> None:
         raise RuntimeError(f"{provider} requires {name}")
 
 
-def _non_negative_int(value: Any, *, env_name: str, default: int) -> int:
+def _non_negative_int(value: Any, *, setting_name: str, env_name: str, default: int) -> int:
+    source = setting_name
     if value is None:
         raw_env = os.environ.get(env_name)
-        value = raw_env if raw_env not in {None, ""} else default
+        if raw_env not in {None, ""}:
+            value = raw_env
+            source = env_name
+        else:
+            value = default
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        return default
-    return max(0, parsed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative integer, got {value!r}"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative integer, got {value!r}"
+        )
+    return parsed
 
 
-def _non_negative_float(value: Any, *, env_name: str, default: float) -> float:
+def _non_negative_float(value: Any, *, setting_name: str, env_name: str, default: float) -> float:
+    source = setting_name
     if value is None:
         raw_env = os.environ.get(env_name)
-        value = raw_env if raw_env not in {None, ""} else default
+        if raw_env not in {None, ""}:
+            value = raw_env
+            source = env_name
+        else:
+            value = default
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
-        return default
-    return max(0.0, parsed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative number, got {value!r}"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative number, got {value!r}"
+        )
+    return parsed
 
 
 def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
