@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Provider readiness now fails aloud for explicit unknown model
+  overrides. `provider_readiness()` no longer reports `ok=true` with
+  `model_family=unknown` when required provider env vars are present; unknown
+  model ids produce an actionable readiness message while omitted model input
+  still uses the route's documented default model. Behavior-change class:
+  fail-aloud provider readiness only; provider profiles, route defaults, model
+  aliases, launch args, and base-url/key precedence are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules. Proof:
+  focused provider catalog and operator-console provider/readiness tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: Operator-console provider/evidence-lane compatibility lookup
   drift now fails aloud during readiness. `_with_evidence_lane_compatibility()`
   no longer swallows `KeyError` / `ValueError`; lookup failures mark the

@@ -201,6 +201,21 @@ def test_provider_readiness_reports_status_and_missing_env() -> None:
     assert readiness["missing_env"] == ["XM_LLM_API_KEY"]
 
 
+def test_provider_readiness_rejects_unknown_model_override() -> None:
+    readiness = provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile="codex-router-responses",
+        model="not-in-provider-catalog",
+        env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+    )
+
+    assert readiness["ok"] is False
+    assert readiness["missing_env"] == []
+    assert readiness["model"] == "not-in-provider-catalog"
+    assert "unknown model 'not-in-provider-catalog'" in readiness["message"]
+    assert "provider_profile codex-router-responses" in readiness["message"]
+
+
 def test_provider_registry_cli_dispatches_route_and_json_commands(
     tmp_path,
     capsys,

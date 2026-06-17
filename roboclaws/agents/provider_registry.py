@@ -667,6 +667,11 @@ def provider_readiness(
     else:
         message = ""
     model_spec = maybe_resolve_model(selected_model)
+    if model_spec is None:
+        message = (
+            f"unknown model {selected_model!r} for provider_profile "
+            f"{route.public_profile}; add it to the provider registry or use a catalog model."
+        )
     return {
         "driver": _driver_for_agent_engine(agent_engine),
         "agent_engine": agent_engine,
@@ -689,7 +694,7 @@ def provider_readiness(
         "missing_env": missing_env,
         "base_url_env": route.base_url_env or "",
         "base_url_default": route.base_url_default,
-        "ok": not missing_env,
+        "ok": not missing_env and model_spec is not None,
         "message": message,
     }
 

@@ -709,6 +709,16 @@ launch args, model defaults, and supported evidence-lane policy are unchanged.
 Proof passed with focused operator-console provider/readiness tests, ruff,
 format check, py_compile, `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 closed an explicit model-override
+false-green in provider readiness. `provider_readiness()` now rejects unknown
+model ids instead of reporting `model_family=unknown` with `ok=true` when
+required provider env vars are present. Omitted model input still uses the
+route's documented default model. Behavior-change class: fail-aloud provider
+readiness only; provider profiles, route defaults, model aliases, launch args,
+and base-url/key precedence are unchanged. Proof passed with focused provider
+catalog and operator-console provider/readiness tests, ruff, format check,
+py_compile, `git diff --check`, and ratchet.
+
 Implementation refresh on 2026-06-18 closed the parked operator-console
 route-fixture drift that followed the provider-env slice. The operator-console
 route registry now tracks the current source-aware MolmoSpaces catalog:
