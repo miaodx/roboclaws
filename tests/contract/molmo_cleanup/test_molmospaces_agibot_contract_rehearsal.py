@@ -265,7 +265,7 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
     assert "agibot_gdk_normal_navi" not in report_text
 
 
-def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_map(
+def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
     tmp_path: Path,
 ) -> None:
     _require_robot_map_9_artifact()

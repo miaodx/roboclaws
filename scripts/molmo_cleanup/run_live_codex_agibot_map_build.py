@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.agents.drivers.household_live import semantic_map_build_server_argv
+from roboclaws.agents.drivers.household_live import map_build_server_argv
 from roboclaws.household.agibot_map_build_mcp_server import MCP_SERVER_NAME
 from scripts.molmo_cleanup.run_live_codex_cleanup import (
     CODEX_CLEANUP_MCP_SERVER_NAME,
@@ -100,7 +100,7 @@ class LiveCodexAgibotMapBuildRunner:
                 f"TCP port {self.args.host}:{self.args.port} is already in use before server start"
             )
         command = [
-            *semantic_map_build_server_argv(str(self.args.repo_root / ".venv/bin/python")),
+            *map_build_server_argv(str(self.args.repo_root / ".venv/bin/python")),
             *self.args.server_arg,
         ]
         self.server_proc = subprocess.Popen(

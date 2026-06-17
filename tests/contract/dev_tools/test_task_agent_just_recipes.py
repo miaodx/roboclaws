@@ -3183,7 +3183,7 @@ def test_map_build_codex_live_passes_task_identity_to_server_and_checker() -> No
     assert '"--expect-task-name",' in runner_text
     assert "household_task_name_from_args" in runner_text
     assert "household_intent_id_for_checker" in runner_text
-    assert 'SEMANTIC_MAP_BUILD_SERVER_TASK = "household-world.map-build"' in (
+    assert 'MAP_BUILD_SERVER_TASK = "household-world.map-build"' in (
         HOUSEHOLD_LIVE_DRIVER.read_text(encoding="utf-8")
     )
     assert (
