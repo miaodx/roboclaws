@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Real-world contract public map/projection construction moved from
+  `realworld_contract.py` to `realworld_contract_projection.py`; top-level
+  agent-view/policy evidence, visible-detection sanitization, camera-model
+  policy summaries, model-declared observation evidence, raw-FPV observations,
+  and inspection-observation packets moved to `realworld_contract_payloads.py`;
+  visible/camera candidate materialization, generated inspection waypoint
+  creation, and `navigate_to_visual_candidate()` response assembly moved to
+  `realworld_visual_candidate_lifecycle.py`. Dead facade aliases for
+  already-owned helpers were removed instead of preserved as compatibility
+  shims. Behavior-change class: internal owner split; public tool names,
+  agent-view/runtime-map schemas, visual-candidate navigation responses, and
+  private-truth guards are unchanged. Metric: `realworld_contract.py` is 1989
+  lines, projection is 1074 lines, payloads are 703 lines, lifecycle is 1188
+  lines, and the ratchet reports 0 complexity rows and 79 oversized modules.
+  Proof: focused real-world contract/MCP/runtime-map-prior contract tests,
+  touched-file ruff and format check, py_compile for all tracked Python files,
+  `git diff --check`, and ratchet. Global `ruff check .` / format-check remain
+  blocked by unrelated pre-existing files outside this slice.
+
 - 2026-06-18: Scene-camera canonical camera geometry contracts moved from
   `scene_camera_comparison.py` to `scene_camera_geometry_contract.py`,
   including camera pose/intrinsics, room-scale, scene-frame-transform, and

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import copy
 from collections import defaultdict
 from typing import Any
 
 from roboclaws.household import realworld_contract_fixture_projection
 from roboclaws.household.types import CleanupScenario
+from roboclaws.maps.bundle import metric_map_bundle_metadata
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_NATIVE,
     GEOMETRY_SOURCE_GENERATED_CANDIDATE,
@@ -122,6 +124,461 @@ def _pose_stamped_waypoints_present(metric_map: dict[str, Any]) -> bool:
         "purpose",
     }
     return bool(waypoints) and all(required <= set(item) for item in waypoints)
+
+
+def _minimal_metric_map(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    real_robot_map_bundle_schema: str,
+    minimal_map_mode: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    source = (
+        copy.deepcopy(contract._bundle_metric_map_template)
+        if contract._bundle_metric_map_template is not None
+        else contract._fallback_metric_map_template()
+    )
+    frame_id = str(source.get("frame_id") or "map")
+    map_id = str(source.get("map_id") or f"{contract.scenario.scenario_id}_minimal_map")
+    map_version = str(source.get("map_version") or "minimal-navigation-map-v1")
+    metric_map = {
+        "ok": True,
+        "tool": "metric_map",
+        "status": "ok",
+        "contract": realworld_contract,
+        "schema": real_robot_map_bundle_schema,
+        "mode": minimal_map_mode,
+        "frame_id": frame_id,
+        "map_id": map_id,
+        "map_version": map_version,
+        "resolution_m": float(source.get("resolution_m") or 0.05),
+        "origin": dict(source.get("origin") or {"x": 0.0, "y": 0.0, "yaw": 0.0}),
+        "width": int(source.get("width") or 240),
+        "height": int(source.get("height") or 180),
+        "occupancy_values": dict(
+            source.get("occupancy_values") or {"unknown": -1, "free": 0, "occupied": 100}
+        ),
+        "occupancy_grid_artifact": source.get("occupancy_grid_artifact"),
+        "map_bundle": dict(
+            source.get("map_bundle")
+            or metric_map_bundle_metadata(
+                environment_id=contract.scenario.scenario_id,
+                map_id=map_id,
+                map_version=map_version,
+            )
+        ),
+        "rooms": [dict(item) for item in contract._public_rooms],
+        "room_category_hints": _room_category_hints_from_public_rooms(
+            contract._public_rooms,
+            contract._public_waypoints,
+        ),
+        "driveable_ways": _public_driveable_ways(source, contract._public_rooms),
+        "robot_pose": {
+            "frame_id": frame_id,
+            **contract._current_pose(),
+            "room_id": contract._current_room_id(),
+            "waypoint_id": contract._current_waypoint_id,
+            "pose_source": "generated_exploration_candidate",
+        },
+        "inspection_waypoints": _public_navigation_waypoints_with_visits(contract),
+        "generated_exploration_candidates": _public_waypoints_with_visits(
+            contract._public_waypoints,
+            contract,
+        ),
+        "generated_target_inspection_candidates": _public_waypoints_with_visits(
+            contract._generated_inspection_waypoints.values(),
+            contract,
+        ),
+        "minimal_map": {
+            "enabled": True,
+            "source": "public_occupancy_free_space",
+            "generated_candidate_count": len(contract._public_waypoints),
+            "source_rooms_hidden": False,
+            "source_room_labels_visible": bool(contract._public_rooms),
+            "source_fixtures_hidden": True,
+            "source_inspection_waypoints_hidden": True,
+            "public_contract_note": (
+                "Minimal map mode exposes occupancy geometry and generated "
+                "exploration candidates plus public room labels, not authored "
+                "fixture or movable-object semantics."
+            ),
+        },
+        "public_contract_note": (
+            "Base Navigation Map projection: public room labels and generated "
+            "exploration candidates are visible. Static fixture tables, source "
+            "inspection waypoint ids, movable-object inventory, and private scoring "
+            "truth are hidden; Runtime Metric Map observations enrich the run."
+        ),
+    }
+    metric_map["runtime_metric_map"] = contract.runtime_metric_map_payload(
+        metric_map=metric_map,
+        static_fixture_projection=contract.static_fixture_projection(),
+    )
+    assert_no_forbidden_agent_view_keys(metric_map)
+    return metric_map
+
+
+def _metric_map(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    real_robot_map_bundle_schema: str,
+    minimal_map_mode: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    if contract.map_mode == minimal_map_mode:
+        return _minimal_metric_map(
+            contract,
+            realworld_contract=realworld_contract,
+            real_robot_map_bundle_schema=real_robot_map_bundle_schema,
+            minimal_map_mode=minimal_map_mode,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+        )
+    if contract._bundle_metric_map_template is not None:
+        return _bundle_metric_map(
+            contract,
+            realworld_contract=realworld_contract,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+        )
+    return _scenario_metric_map(
+        contract,
+        realworld_contract=realworld_contract,
+        real_robot_map_bundle_schema=real_robot_map_bundle_schema,
+        assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+    )
+
+
+def _bundle_metric_map(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    metric_map = copy.deepcopy(contract._bundle_metric_map_template)
+    frame_id = str(metric_map.get("frame_id") or "map")
+    metric_map["robot_pose"] = {
+        "frame_id": frame_id,
+        **contract._current_pose(),
+        "room_id": contract._current_room_id(),
+        "waypoint_id": contract._current_waypoint_id,
+        "pose_source": "selected_nav2_map_bundle_waypoint",
+    }
+    metric_map["inspection_waypoints"] = _public_waypoints_with_visits(
+        [
+            *(metric_map.get("inspection_waypoints") or []),
+            *contract._generated_inspection_waypoints.values(),
+        ],
+        contract,
+    )
+    metric_map["generated_target_inspection_candidates"] = _public_waypoints_with_visits(
+        contract._generated_inspection_waypoints.values(),
+        contract,
+    )
+    metric_map["contract"] = realworld_contract
+    metric_map["tool"] = "metric_map"
+    metric_map["status"] = "ok"
+    metric_map["ok"] = True
+    metric_map["public_contract_note"] = (
+        "Metric map projection was derived from the selected prebuilt Nav2 "
+        "map bundle. Runtime movable objects and private scoring truth are "
+        "not encoded."
+    )
+    metric_map["runtime_metric_map"] = contract.runtime_metric_map_payload(
+        metric_map=metric_map,
+        static_fixture_projection=contract.static_fixture_projection(),
+    )
+    assert_no_forbidden_agent_view_keys(metric_map)
+    return metric_map
+
+
+def _scenario_metric_map(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    real_robot_map_bundle_schema: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    frame_id = "map"
+    map_id = f"{contract.scenario.scenario_id}_base_navigation_map"
+    map_version = "base-navigation-map-v1"
+    metric_map = contract._ok(
+        "metric_map",
+        contract=realworld_contract,
+        schema=real_robot_map_bundle_schema,
+        frame_id=frame_id,
+        map_id=map_id,
+        map_version=map_version,
+        resolution_m=0.05,
+        origin={"x": 0.0, "y": 0.0, "yaw": 0.0},
+        width=240,
+        height=180,
+        occupancy_values={
+            "unknown": -1,
+            "free": 0,
+            "occupied": 100,
+        },
+        occupancy_grid_artifact=None,
+        map_bundle=metric_map_bundle_metadata(
+            environment_id=contract.scenario.scenario_id,
+            map_id=map_id,
+            map_version=map_version,
+        ),
+        rooms=[_metric_map_room_payload(room) for room in contract._rooms],
+        driveable_ways=_driveable_ways(contract._rooms),
+        robot_pose={
+            "frame_id": frame_id,
+            **contract._current_pose(),
+            "room_id": contract._current_room_id(),
+            "waypoint_id": contract._current_waypoint_id,
+            "pose_source": "metric_map_semantic_waypoint",
+        },
+        inspection_waypoints=[
+            {
+                "waypoint_id": item["waypoint_id"],
+                "frame_id": frame_id,
+                "x": item["x"],
+                "y": item["y"],
+                "yaw": item["yaw"],
+                "room_id": item["room_id"],
+                "label": item["label"],
+                "purpose": item["purpose"],
+                "waypoint_source": item["waypoint_source"],
+                "coverage_estimate": item["coverage_estimate"],
+                "visited": item["waypoint_id"] in contract._observed_waypoint_ids,
+            }
+            for item in contract._public_navigation_waypoints()
+        ],
+        generated_target_inspection_candidates=_public_waypoints_with_visits(
+            contract._generated_inspection_waypoints.values(),
+            contract,
+        ),
+        public_contract_note=(
+            "Inspection waypoints are static map/fixture coverage candidates, "
+            "not generated from movable-object locations, generated mess set, "
+            "target count, or acceptable destination sets."
+        ),
+    )
+    metric_map["runtime_metric_map"] = contract.runtime_metric_map_payload(
+        metric_map=metric_map,
+        static_fixture_projection=contract.static_fixture_projection(),
+    )
+    assert_no_forbidden_agent_view_keys(metric_map)
+    return metric_map
+
+
+def _static_fixture_projection(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    minimal_map_mode: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    if contract.map_mode == minimal_map_mode:
+        return _minimal_static_fixture_projection(
+            contract,
+            realworld_contract=realworld_contract,
+            minimal_map_mode=minimal_map_mode,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+        )
+    if contract._bundle_static_fixture_projection_template is not None:
+        return _bundle_static_fixture_projection(
+            contract,
+            realworld_contract=realworld_contract,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+        )
+    return _scenario_static_fixture_projection(
+        contract,
+        realworld_contract=realworld_contract,
+    )
+
+
+def _bundle_static_fixture_projection(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    static_fixture_projection = copy.deepcopy(contract._bundle_static_fixture_projection_template)
+    if contract._scene_index_fixture_overlay:
+        static_fixture_projection["rooms"] = _static_fixture_projection_with_scene_index_overlay(
+            static_fixture_projection.get("rooms") or [],
+            contract._scene_index_fixture_overlay,
+            static_fixture_projection_mode=contract.static_fixture_projection_mode,
+        )
+        static_fixture_projection["scene_index_fixture_overlay"] = {
+            "enabled": True,
+            "source": "isaac_scene_index",
+            "fixture_count": len(contract._scene_index_fixture_overlay),
+            "public_contract_note": (
+                "Scene-index fixtures are public USD-stage receptacle candidates "
+                "used to keep cleanup routing aligned with the loaded Isaac scene. "
+                "They do not include private acceptable-destination sets."
+            ),
+        }
+    static_fixture_projection["contract"] = realworld_contract
+    static_fixture_projection["tool"] = "static_fixture_projection"
+    static_fixture_projection["status"] = "ok"
+    static_fixture_projection["ok"] = True
+    static_fixture_projection["static_fixture_projection_mode"] = (
+        contract.static_fixture_projection_mode
+    )
+    overlay_note = (
+        " A public Isaac scene-index fixture overlay is preferred for "
+        "backend-generated scene-specific cleanup scenarios."
+        if contract._scene_index_fixture_overlay
+        else ""
+    )
+    static_fixture_projection["public_contract_note"] = (
+        "Static fixture projection is derived from the selected prebuilt Nav2 "
+        "map bundle. Runtime movable-object observations remain separate "
+        f"observed_* handles.{overlay_note}"
+    )
+    assert_no_forbidden_agent_view_keys(static_fixture_projection)
+    return static_fixture_projection
+
+
+def _scenario_static_fixture_projection(
+    contract: Any,
+    *,
+    realworld_contract: str,
+) -> dict[str, Any]:
+    rooms = []
+    for room in contract._rooms:
+        fixtures = []
+        for fixture_id in room["fixture_ids"]:
+            fixture = contract._fixtures[fixture_id]
+            item = {
+                "fixture_id": fixture_id,
+                "category": fixture.get("category") or fixture.get("name", ""),
+                "name": fixture.get("name", fixture_id),
+                "room_id": room["room_id"],
+                "affordances": _fixture_affordances(fixture),
+                "footprint": _fixture_footprint(fixture_id),
+                "pose": contract._fixture_pose(fixture_id),
+                "manipulation_frame": f"{fixture_id}_manipulation",
+                "preferred_inspection_waypoint_id": contract._preferred_waypoint_for_fixture(
+                    fixture_id
+                ),
+                "preferred_manipulation_waypoint_id": contract._preferred_waypoint_for_fixture(
+                    fixture_id
+                ),
+                "position_detail": contract.static_fixture_projection_mode,
+            }
+            if contract.static_fixture_projection_mode == "exact_fixtures":
+                item["room_position"] = "operator_selected_exact_fixture"
+            fixtures.append(item)
+        rooms.append(
+            {
+                "room_id": room["room_id"],
+                "room_label": room["room_label"],
+                "polygon": room.get("polygon", []),
+                "fixtures": fixtures,
+            }
+        )
+    return contract._ok(
+        "static_fixture_projection",
+        contract=realworld_contract,
+        schema="static_fixture_projection_v1",
+        static_fixture_projection_mode=contract.static_fixture_projection_mode,
+        contains_runtime_observations=False,
+        public_contract_note=(
+            "Static fixture projection describes rooms, fixed receptacles, and affordances. "
+            "Runtime movable-object observations remain separate observed_* handles."
+        ),
+        rooms=rooms,
+    )
+
+
+def _minimal_static_fixture_projection(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    minimal_map_mode: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    payload = contract._ok(
+        "static_fixture_projection",
+        contract=realworld_contract,
+        schema="static_fixture_projection_v1",
+        mode=minimal_map_mode,
+        static_fixture_projection_mode=contract.static_fixture_projection_mode,
+        contains_runtime_observations=False,
+        rooms=[],
+        generated_exploration_candidate_count=len(contract._public_waypoints),
+        public_contract_note=(
+            "Base Navigation Map mode intentionally hides authored fixture tables. "
+            "Public room labels live on metric_map.rooms and room_category_hints. "
+            "Runtime observed handles and map update candidates must come from "
+            "public observations, not source-map semantics."
+        ),
+    )
+    assert_no_forbidden_agent_view_keys(payload)
+    return payload
+
+
+def _fallback_metric_map_template(
+    contract: Any,
+    *,
+    realworld_contract: str,
+    real_robot_map_bundle_schema: str,
+) -> dict[str, Any]:
+    frame_id = "map"
+    map_id = f"{contract.scenario.scenario_id}_minimal_map"
+    map_version = "minimal-navigation-map-v1"
+    return {
+        "ok": True,
+        "tool": "metric_map",
+        "status": "ok",
+        "contract": realworld_contract,
+        "schema": real_robot_map_bundle_schema,
+        "frame_id": frame_id,
+        "map_id": map_id,
+        "map_version": map_version,
+        "resolution_m": 0.05,
+        "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+        "width": 240,
+        "height": 180,
+        "occupancy_values": {"unknown": -1, "free": 0, "occupied": 100},
+        "occupancy_grid_artifact": None,
+        "map_bundle": metric_map_bundle_metadata(
+            environment_id=contract.scenario.scenario_id,
+            map_id=map_id,
+            map_version=map_version,
+        ),
+        "rooms": [_metric_map_room_payload(room) for room in contract._rooms],
+        "driveable_ways": _driveable_ways(contract._rooms),
+        "inspection_waypoints": [
+            {
+                "waypoint_id": item["waypoint_id"],
+                "frame_id": frame_id,
+                "x": item["x"],
+                "y": item["y"],
+                "yaw": item["yaw"],
+                "room_id": item["room_id"],
+                "label": item["label"],
+                "purpose": item["purpose"],
+                "waypoint_source": item["waypoint_source"],
+                "coverage_estimate": item["coverage_estimate"],
+                "fixture_ids": list(item.get("fixture_ids") or []),
+            }
+            for item in contract._waypoints
+        ],
+    }
+
+
+def _public_navigation_waypoints_with_visits(contract: Any) -> list[dict[str, Any]]:
+    return _public_waypoints_with_visits(contract._public_navigation_waypoints(), contract)
+
+
+def _public_waypoints_with_visits(waypoints: Any, contract: Any) -> list[dict[str, Any]]:
+    return [
+        {
+            **dict(item),
+            "visited": str(item.get("waypoint_id") or "") in contract._observed_waypoint_ids,
+        }
+        for item in waypoints
+    ]
 
 
 def _fixtures_from_bundle_static_fixture_projection(

@@ -138,10 +138,34 @@ again.
   0 complexity rows and 77 oversized modules; `scene_camera_comparison.py` is
   down to 1999 lines and no longer a hard-ceiling P1, while the new geometry
   owner is 744 lines.
+- Follow-up implementation refresh on 2026-06-18 split real-world contract
+  public map/projection builders, agent-view/policy evidence packets, raw-FPV
+  observation packets, visible/camera candidate materialization, generated
+  inspection waypoint creation, and `navigate_to_visual_candidate()` response
+  assembly into existing projection, payload, and visual-candidate lifecycle
+  owners. Behavior-change class: internal owner split; public tool names,
+  agent-view/runtime-map schemas, visual-candidate navigation responses, and
+  private-truth guards are unchanged. Dead facade aliases for already-owned
+  helpers were removed instead of preserved as compatibility shims. The ratchet
+  reports 0 complexity rows and 79 oversized modules; `realworld_contract.py`
+  is down to 1989 lines and no longer a hard-ceiling P1. The projection and
+  visual-candidate lifecycle owners are warning-band modules at 1074 and 1188
+  lines; keep them as cohesive owners unless a second real owner emerges.
 
-- 0 Ruff complexity violations and 77 oversized modules remain.
-- Largest P1 production hard-ceiling file is
-  `roboclaws/household/realworld_contract.py` at 2846.
+- 0 Ruff complexity violations and 79 oversized modules remain.
+- No active production/shared hard-ceiling P1 is known in the refreshed top-60
+  ratchet snapshot. Continue only with bounded P1/P2 slices from the broader
+  stop condition: fail-aloud/env cleanup, test pruning through `$intuitive-tests`,
+  documentation cleanup through `$intuitive-doc`, or a fresh hard-ceiling
+  regression if another production/shared file crosses 2000 lines.
+- `roboclaws/household/realworld_contract.py` is down to 1989 lines and is no
+  longer a hard-ceiling P1. Keep it below 2000; reopen it only if the contract
+  facade starts rebuilding public map/projection packets, agent-view/policy
+  evidence, observation packets, visible/camera candidate materialization,
+  generated inspection waypoints, visual-candidate navigation response
+  assembly, done-readiness, public manipulation/tool responses, runtime-map
+  target/public-anchor packets, or visual-candidate declarations/lifecycle
+  directly again.
 - `roboclaws/household/scene_camera_comparison.py` is down to 1999 lines and
   is no longer a hard-ceiling P1. Keep it below 2000; reopen it only if the
   facade starts rebuilding canonical camera geometry contracts, report
@@ -844,9 +868,19 @@ human docs intentionally left unchanged.
 
 ### A: Contract And Report Hard-Ceiling Split
 
-Severity: P1. `roboclaws/household/realworld_contract.py` is 2836 lines and
-`roboclaws/household/report.py` is 2108 lines. Owning architecture layers: MCP
-Capability Contract And Tools plus Artifacts, reports, and eval suites.
+Status: cleared from hard-ceiling P1 for now. `realworld_contract.py` is 1989
+lines and `report.py` is 1995 lines. Owning architecture layers: MCP Capability
+Contract And Tools plus Artifacts, reports, and eval suites.
+Public map/projection construction now belongs to
+`realworld_contract_projection.py`; reopen it only if the contract facade
+starts rebuilding Base Navigation Map, bundle metric-map, static fixture
+projection, minimal static projection, fallback map template, generated
+exploration candidate visited-state, or scene-index projection overlay payloads
+inline again. Agent-view and policy evidence packets now belong to
+`realworld_contract_payloads.py`; reopen them only if the contract facade starts
+rebuilding top-level agent-view payloads, visible detection sanitization,
+camera-model policy summaries, model-declared observation evidence, raw-FPV
+observation packets, or inspection observation summaries inline again.
 Done-readiness pending/held cleanup candidate derivation now belongs to
 `realworld_done_readiness.py`; reopen it only if the contract facade starts
 rebuilding pending candidates, held candidates, destination options, or private
@@ -854,19 +888,22 @@ wrapper aliases again. Public manipulation/tool response envelopes now belong
 to `realworld_tool_responses.py`; reopen them only if the contract facade starts
 rebuilding pick/place/open/close success/error payloads, fixture response ids,
 or semantic-order error envelopes inline. Candidate A remains P1 only for a
-fresh boundary that reduces facade-private coupling or report ownership, for
-example agent-view wrapper cleanup, runtime-map/cleanup-worklist caller
-migration, or a remaining report section owner. Do not reopen init
-projection/runtime-prior, Runtime Metric Map payload, Runtime Metric Map
+fresh hard-ceiling regression or direct facade-private/report ownership drift.
+Do not reopen init projection/runtime-prior, public map/projection, top-level
+agent-view/policy evidence, Runtime Metric Map payload, Runtime Metric Map
 target/public-anchor ownership, visual-candidate payload/event/overlay,
-visual-candidate declaration orchestration, visual-candidate
-registration/resolution lifecycle, camera-label producer input construction, or
-planner-probe report-panel slices.
+visual-candidate declaration orchestration, visual-candidate registration,
+resolution, visible/camera candidate materialization, generated inspection
+waypoint creation, visual-candidate navigation response assembly, camera-label
+producer input construction, or planner-probe report-panel slices without fresh
+drift.
 Visual-candidate lifecycle now belongs to
 `realworld_visual_candidate_lifecycle.py`; reopen it only if the contract facade
 starts rebuilding normalization, match resolution, declaration payloads,
-resolved/unresolved detection materialization, visual-evidence error payloads,
-or handle actionability directly. Camera-label producer inputs now belong to
+resolved/unresolved detection materialization, visible/camera candidate
+materialization, generated inspection waypoint creation, visual-candidate
+navigation response assembly, visual-evidence error payloads, or handle
+actionability directly. Camera-label producer inputs now belong to
 `realworld_visual_candidate_declarations.py`; reopen them only if the contract
 facade starts rebuilding simulated declaration input rows, visual-grounding
 requests, producer failure envelopes, model-declared observation events, or
