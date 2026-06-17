@@ -47,6 +47,19 @@ logs before choosing the next slice.
   Proof: focused visual-grounding benchmark contract tests, touched-file ruff
   and format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: Visual-grounding sidecar adapter-mode env configuration now
+  fails aloud. `serve_visual_grounding_service.py` validates
+  `VISUAL_GROUNDING_ADAPTER_MODE` against `auto`, `real`, and `unavailable`
+  before listing adapters or starting the service, instead of allowing an
+  unsupported env default to bypass the CLI choices. Behavior-change class:
+  fail-aloud visual-grounding sidecar service configuration; valid CLI/env
+  values, list-adapter output, service startup with supported modes, sidecar
+  request/response schemas, public launch axes, and benchmark behavior are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `scripts/visual_grounding/serve_visual_grounding_service.py` is 170
+  lines. Proof: focused visual-grounding service contract tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
   aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
   OmDet-Turbo, and sidecar candidate limits reject malformed,

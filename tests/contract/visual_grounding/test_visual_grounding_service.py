@@ -67,6 +67,26 @@ def test_configurable_service_rejects_contract_fake_adapter_mode_from_cli() -> N
     assert "invalid choice" in result.stderr
 
 
+def test_configurable_service_rejects_invalid_adapter_mode_from_env(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("VISUAL_GROUNDING_ADAPTER_MODE", "contract-fake")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SERVICE_SCRIPT),
+            "--list-adapters",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "VISUAL_GROUNDING_ADAPTER_MODE must be one of auto, real, unavailable" in result.stderr
+
+
 def test_configurable_service_contract_fake_pipeline_does_not_dispatch_fake_success() -> None:
     server = _start_service(pipeline_id="contract-fake", adapter_mode="auto")
     try:

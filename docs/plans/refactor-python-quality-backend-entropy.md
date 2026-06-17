@@ -72,6 +72,17 @@ again.
   oversized modules; `scripts/visual_grounding/run_visual_grounding_benchmark.py`
   is 1278 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
+  sidecar adapter-mode env false-green. `serve_visual_grounding_service.py` now
+  validates `VISUAL_GROUNDING_ADAPTER_MODE` against the same `auto`, `real`,
+  and `unavailable` values used by the CLI before listing adapters or starting
+  the sidecar service, instead of letting an unsupported env default bypass
+  `argparse` choices. Behavior-change class: fail-aloud visual-grounding
+  sidecar service configuration; valid CLI/env values, list-adapter output,
+  service startup with supported modes, sidecar request/response schemas,
+  public launch axes, and benchmark behavior are unchanged. The ratchet remains
+  0 complexity rows and 79 oversized modules;
+  `scripts/visual_grounding/serve_visual_grounding_service.py` is 170 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
   real-sidecar runtime-parameter false-green. Explicit request/runtime and env
   knobs for Grounding DINO, YOLO, OmDet-Turbo, and sidecar candidate limits now
   reject malformed, boolean-as-number, non-finite, or out-of-range values with a
