@@ -15,7 +15,7 @@ from roboclaws.maps.spatial_contract import (
     normalize_spatial_room,
 )
 
-ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA = "actionable_semantic_map_snapshot_v1"
+RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA = "runtime_map_prior_snapshot_v1"
 RUNTIME_METRIC_MAP_SCHEMA = "runtime_metric_map_v1"
 PRIVATE_TRUTH_KEYS = frozenset(
     {
@@ -33,7 +33,7 @@ MOVABLE_ANCHOR_TYPES = {"movable_object", "object"}
 ACTIONABLE_ANCHOR_STATUSES = {"actionable"}
 
 
-def actionable_snapshot_from_runtime_metric_map(
+def runtime_prior_snapshot_from_runtime_metric_map(
     runtime_metric_map: dict[str, Any],
     *,
     source_navigation_map: dict[str, Any] | None = None,
@@ -48,7 +48,7 @@ def actionable_snapshot_from_runtime_metric_map(
             f"{RUNTIME_METRIC_MAP_SCHEMA}, got {runtime_metric_map.get('schema')!r}"
         )
     snapshot = {
-        "schema": ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA,
+        "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
         "source_navigation_map": _source_navigation_map_reference(
             source_navigation_map or runtime_metric_map.get("static_map") or {}
         ),
@@ -64,7 +64,7 @@ def actionable_snapshot_from_runtime_metric_map(
             **dict(producer or {}),
         },
         "contract": {
-            "schema": ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA,
+            "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
             "runtime_metric_map_schema": RUNTIME_METRIC_MAP_SCHEMA,
             "online_offline_equivalent_shape": True,
             "private_truth_included": False,
@@ -77,7 +77,7 @@ def actionable_snapshot_from_runtime_metric_map(
     return snapshot
 
 
-def actionable_snapshot_from_agibot_navigation_memory(
+def runtime_prior_snapshot_from_agibot_navigation_memory(
     map_dir: str | Path,
     *,
     producer: dict[str, Any] | None = None,
@@ -169,7 +169,7 @@ def actionable_snapshot_from_agibot_navigation_memory(
         ),
     }
     snapshot = {
-        "schema": ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA,
+        "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
         "source_navigation_map": {
             "schema": "agibot_navigation_memory_source_v1",
             "map_id": _map_id(map_dir, source),
@@ -205,7 +205,7 @@ def actionable_snapshot_from_agibot_navigation_memory(
             **dict(producer or {}),
         },
         "contract": {
-            "schema": ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA,
+            "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
             "runtime_metric_map_schema": RUNTIME_METRIC_MAP_SCHEMA,
             "online_offline_equivalent_shape": True,
             "private_truth_included": False,
@@ -223,26 +223,26 @@ def runtime_metric_map_from_prior_artifact(payload: dict[str, Any] | None) -> di
 
     if not payload:
         return None
-    if payload.get("schema") == ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA:
+    if payload.get("schema") == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA:
         runtime_metric_map = payload.get("runtime_metric_map")
         if not isinstance(runtime_metric_map, dict):
-            raise ValueError("actionable semantic map snapshot lacks runtime_metric_map")
+            raise ValueError("runtime map prior snapshot lacks runtime_metric_map")
         return copy.deepcopy(runtime_metric_map)
     return copy.deepcopy(payload)
 
 
-def materialize_snapshot_targets(snapshot: dict[str, Any]) -> dict[str, Any]:
+def materialize_runtime_prior_targets(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Return consumer-facing waypoint and fixture targets from either producer path."""
 
-    if snapshot.get("schema") == ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA:
+    if snapshot.get("schema") == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA:
         waypoints = [dict(item) for item in snapshot.get("inspection_waypoints") or []]
         fixtures = [dict(item) for item in snapshot.get("fixture_candidates") or []]
     else:
-        wrapped = actionable_snapshot_from_runtime_metric_map(snapshot)
+        wrapped = runtime_prior_snapshot_from_runtime_metric_map(snapshot)
         waypoints = [dict(item) for item in wrapped.get("inspection_waypoints") or []]
         fixtures = [dict(item) for item in wrapped.get("fixture_candidates") or []]
     return {
-        "schema": "actionable_semantic_map_materialized_targets_v1",
+        "schema": "runtime_map_prior_materialized_targets_v1",
         "inspection_waypoints": waypoints,
         "fixture_candidates": fixtures,
         "actionable_waypoint_ids": [
@@ -356,7 +356,7 @@ def _prior_observed_object_from_anchor(anchor: dict[str, Any]) -> dict[str, Any]
         "state": "prior",
         "grounding_status": "prior",
         "candidate_fixture_id": "",
-        "candidate_source": "actionable_semantic_map_snapshot",
+        "candidate_source": "runtime_map_prior_snapshot",
         "promotion_status": "movable_prior_not_static_fixture",
     }
 
@@ -389,7 +389,7 @@ def _fixture_candidate(
         "affordances": list(affordances),
         "preferred_inspection_waypoint_id": waypoint_id,
         "preferred_manipulation_waypoint_id": waypoint_id,
-        "public_fixture_source": "actionable_semantic_map_snapshot",
+        "public_fixture_source": "runtime_map_prior_snapshot",
         "actionability": actionability,
     }
 
@@ -817,7 +817,7 @@ def _require_file(path: Path) -> None:
 def _assert_no_private_truth(value: Any) -> None:
     hits = sorted(_find_private_keys(value))
     if hits:
-        raise ValueError(f"private truth keys present in actionable semantic map snapshot: {hits}")
+        raise ValueError(f"private truth keys present in runtime map prior snapshot: {hits}")
 
 
 def _find_private_keys(value: Any) -> set[str]:

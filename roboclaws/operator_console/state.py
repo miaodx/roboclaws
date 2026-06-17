@@ -567,7 +567,7 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Driver Log", "driver.log", "log"),
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
-        ("Runtime Map Prior", "actionable_semantic_map_snapshot.json", "json"),
+        ("Runtime Map Prior", "runtime_map_prior_snapshot.json", "json"),
     )
     links: list[ArtifactLink] = []
     for label, name, kind in specs:

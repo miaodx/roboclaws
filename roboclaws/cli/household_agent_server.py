@@ -53,7 +53,7 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
-from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
+from roboclaws.maps.runtime_prior_snapshot import runtime_metric_map_from_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 AGIBOT_GDK_BACKEND = "agibot_gdk"

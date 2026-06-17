@@ -14,12 +14,12 @@ from roboclaws.household.realworld_contract import (
     RealWorldCleanupContract,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
-from roboclaws.maps.actionable_snapshot import (
-    ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA,
-    actionable_snapshot_from_agibot_navigation_memory,
-    actionable_snapshot_from_runtime_metric_map,
-    materialize_snapshot_targets,
+from roboclaws.maps.runtime_prior_snapshot import (
+    RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
+    materialize_runtime_prior_targets,
     runtime_metric_map_from_prior_artifact,
+    runtime_prior_snapshot_from_agibot_navigation_memory,
+    runtime_prior_snapshot_from_runtime_metric_map,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -37,12 +37,12 @@ FORBIDDEN_PRIVATE_KEYS = {
 }
 
 
-def test_agibot_navigation_memory_converts_to_actionable_snapshot_shape() -> None:
-    snapshot = actionable_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
+def test_agibot_navigation_memory_converts_to_runtime_prior_snapshot_shape() -> None:
+    snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
     anchors = {item["source_anchor_id"]: item for item in snapshot["public_semantic_anchors"]}
-    targets = materialize_snapshot_targets(snapshot)
+    targets = materialize_runtime_prior_targets(snapshot)
 
-    assert snapshot["schema"] == ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA
+    assert snapshot["schema"] == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA
     assert snapshot["runtime_metric_map"]["schema"] == "runtime_metric_map_v1"
     assert snapshot["producer"]["type"] == "offline_navigation_memory_conversion"
     assert snapshot["contract"]["online_offline_equivalent_shape"] is True
@@ -106,10 +106,10 @@ def test_agibot_navigation_memory_converts_to_actionable_snapshot_shape() -> Non
 
 def test_online_and_offline_snapshots_share_consumer_contract_shape() -> None:
     online_snapshot = _online_minimal_snapshot()
-    offline_snapshot = actionable_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
+    offline_snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
 
     for snapshot in (online_snapshot, offline_snapshot):
-        assert snapshot["schema"] == ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA
+        assert snapshot["schema"] == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA
         assert set(snapshot) >= {
             "source_navigation_map",
             "runtime_metric_map",
@@ -122,8 +122,8 @@ def test_online_and_offline_snapshots_share_consumer_contract_shape() -> None:
         assert snapshot["runtime_metric_map"]["schema"] == "runtime_metric_map_v1"
         assert snapshot["contract"]["private_truth_included"] is False
         assert snapshot["contract"]["source_map_mutated"] is False
-        materialized = materialize_snapshot_targets(snapshot)
-        assert materialized["schema"] == "actionable_semantic_map_materialized_targets_v1"
+        materialized = materialize_runtime_prior_targets(snapshot)
+        assert materialized["schema"] == "runtime_map_prior_materialized_targets_v1"
         assert materialized["inspection_waypoints"]
         assert materialized["fixture_candidates"]
         assert materialized["actionable_waypoint_ids"]
@@ -139,10 +139,10 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
         perception_mode=RAW_FPV_ONLY_MODE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
-    online_snapshot = actionable_snapshot_from_runtime_metric_map(
+    online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
         contract.agent_view_payload()["runtime_metric_map"]
     )
-    targets = materialize_snapshot_targets(online_snapshot)
+    targets = materialize_runtime_prior_targets(online_snapshot)
     fridge_fixture = next(
         item
         for item in targets["fixture_candidates"]
@@ -173,7 +173,7 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
 
 
 def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path() -> None:
-    snapshot = actionable_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
+    snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_mode=MINIMAL_MAP_MODE,
@@ -218,18 +218,18 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     )
 
 
-def test_actionable_snapshot_rejects_private_truth_keys() -> None:
+def test_runtime_prior_snapshot_rejects_private_truth_keys() -> None:
     runtime_map = _online_minimal_snapshot()["runtime_metric_map"]
     runtime_map["private_manifest"] = {"target_count": 1}
 
     with pytest.raises(ValueError, match="private truth keys"):
-        actionable_snapshot_from_runtime_metric_map(runtime_map)
+        runtime_prior_snapshot_from_runtime_metric_map(runtime_map)
 
 
 def test_runtime_map_prior_loader_accepts_raw_runtime_map_and_snapshot(tmp_path: Path) -> None:
     online_snapshot = _online_minimal_snapshot()
     raw_path = tmp_path / "runtime_metric_map.json"
-    snapshot_path = tmp_path / "actionable_semantic_map_snapshot.json"
+    snapshot_path = tmp_path / "runtime_map_prior_snapshot.json"
     raw_path.write_text(json.dumps(online_snapshot["runtime_metric_map"]), encoding="utf-8")
     snapshot_path.write_text(json.dumps(online_snapshot), encoding="utf-8")
 
@@ -248,7 +248,7 @@ def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     tmp_path: Path,
 ) -> None:
     converter = _load_module(CONVERTER_PATH, "convert_agibot_navigation_memory")
-    output = tmp_path / "actionable_semantic_map_snapshot.json"
+    output = tmp_path / "runtime_map_prior_snapshot.json"
     summary = tmp_path / "materialized_targets.json"
 
     converter.main(
@@ -258,7 +258,7 @@ def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     snapshot = json.loads(output.read_text(encoding="utf-8"))
     targets = json.loads(summary.read_text(encoding="utf-8"))
 
-    assert snapshot["schema"] == ACTIONABLE_SEMANTIC_MAP_SNAPSHOT_SCHEMA
+    assert snapshot["schema"] == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA
     assert snapshot["producer"]["type"] == "offline_navigation_memory_conversion"
     assert "anchor_sink_kitchen_1" in targets["actionable_fixture_ids"]
     assert "anchor_plastic_bottle_table_1" not in targets["actionable_fixture_ids"]
@@ -267,8 +267,8 @@ def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
 def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
     tmp_path: Path,
 ) -> None:
-    snapshot = actionable_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
-    prior_path = tmp_path / "actionable_semantic_map_snapshot.json"
+    snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
+    prior_path = tmp_path / "runtime_map_prior_snapshot.json"
     prior_path.write_text(json.dumps(snapshot), encoding="utf-8")
 
     result = run_realworld_cleanup(
@@ -299,7 +299,7 @@ def _online_minimal_snapshot() -> dict:
         map_mode=MINIMAL_MAP_MODE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
-    return actionable_snapshot_from_runtime_metric_map(
+    return runtime_prior_snapshot_from_runtime_metric_map(
         contract.agent_view_payload()["runtime_metric_map"],
         source_navigation_map=contract.metric_map(),
     )

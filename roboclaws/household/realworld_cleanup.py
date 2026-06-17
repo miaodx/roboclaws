@@ -79,7 +79,7 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
 )
 from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
-from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
+from roboclaws.maps.runtime_prior_snapshot import runtime_metric_map_from_prior_artifact
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

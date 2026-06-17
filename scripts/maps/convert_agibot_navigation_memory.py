@@ -11,9 +11,9 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.maps.actionable_snapshot import (  # noqa: E402
-    actionable_snapshot_from_agibot_navigation_memory,
-    materialize_snapshot_targets,
+from roboclaws.maps.runtime_prior_snapshot import (  # noqa: E402
+    materialize_runtime_prior_targets,
+    runtime_prior_snapshot_from_agibot_navigation_memory,
 )
 
 
@@ -21,7 +21,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Convert an Agibot navigation_memory map folder into an "
-            "actionable_semantic_map_snapshot_v1 artifact."
+            "runtime_map_prior_snapshot_v1 artifact."
         )
     )
     parser.add_argument(
@@ -40,10 +40,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    snapshot = actionable_snapshot_from_agibot_navigation_memory(args.map_dir)
+    snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(args.map_dir)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    materialized = materialize_snapshot_targets(snapshot)
+    materialized = materialize_runtime_prior_targets(snapshot)
     if args.summary_json is not None:
         args.summary_json.parent.mkdir(parents=True, exist_ok=True)
         args.summary_json.write_text(
@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> None:
             encoding="utf-8",
         )
     print(
-        "actionable-semantic-map snapshot exported: "
+        "runtime-map-prior snapshot exported: "
         f"{args.output} anchors={snapshot['summary']['anchor_count']} "
         f"fixtures={snapshot['summary']['fixture_candidate_count']} "
         f"waypoints={snapshot['summary']['inspection_waypoint_count']}"
