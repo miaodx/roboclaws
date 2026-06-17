@@ -34,6 +34,15 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Eval-harness row blocker routing moved requirement priority and
+  per-requirement blocker construction out of `_row_blockers()` into focused
+  helpers. Behavior-change class: internal cleanup; selected-row schema,
+  blocker details, DINO sidecar autostart behavior, runtime-map-prior gating,
+  and execution order are unchanged. Metric: ratchet reports 6 complexity rows
+  and 77 oversized modules, and `run_eval_harness.py::_row_blockers` dropped
+  from the complexity list. Proof: focused eval-harness selector tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Live-eval detached-route polling moved early completion checks,
   timeout normalization/deadline calculation, per-poll completion handling, and
   post-deadline artifact recovery out of `wait_for_live_surface_completion()`

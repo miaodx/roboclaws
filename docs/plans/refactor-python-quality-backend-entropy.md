@@ -74,8 +74,15 @@ again.
   `live_status.json` semantics are unchanged. The ratchet reports 7 complexity
   rows and 77 oversized modules; `live_runtime.py::wait_for_live_surface_completion`
   is cleared from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split eval-harness row blocker
+  routing out of `_row_blockers()` into a requirement-priority table and a
+  per-requirement blocker helper. Behavior-change class: internal cleanup;
+  selected-row schema, blocker details, DINO sidecar autostart behavior,
+  runtime-map-prior gating, and execution order are unchanged. The ratchet
+  reports 6 complexity rows and 77 oversized modules;
+  `run_eval_harness.py::_row_blockers` is cleared from the complexity list.
 
-- 7 Ruff complexity violations and 77 oversized modules remain.
+- 6 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -136,9 +143,9 @@ again.
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
   operator-console tests, a cleanup checker helper, MCP semantic tool
-  registration, prompt preview, and eval-harness blockers. They should not hide
-  while a file-size slice improves, but they are not the default next P1 unless
-  the active product focus changes.
+  registration, and prompt preview. They should not hide while a file-size slice
+  improves, but they are not the default next P1 unless the active product focus
+  changes.
 
 Current closure snapshot:
 
@@ -1039,7 +1046,8 @@ be claimed without an explicit local run.
   `molmospaces_room_map.py`; provider-registry CLI parser, JSON output,
   route-text, and supports-engine dispatch helpers in `provider_registry.py`;
   live-eval detached-route early-completion, timeout, poll-completion, and
-  post-deadline recovery helpers in `live_runtime.py`.
+  post-deadline recovery helpers in `live_runtime.py`; eval-harness requirement
+  priority and per-requirement blocker helpers in `run_eval_harness.py`.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad
