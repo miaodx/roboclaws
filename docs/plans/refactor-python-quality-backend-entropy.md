@@ -253,10 +253,13 @@ Current closure snapshot:
 - Candidate C is cleared from P1 for now. The planner probe runner is below the
   hard ceiling after runtime diagnostics and task-sampler diagnostics moved to
   focused owners.
-- Candidate D's SDK driver-side model-input compaction split is verified and
-  closed. `openai_agents_live.py` is below the hard ceiling; reopen only if SDK
-  driver request/session/provider orchestration grows again or rebuilds
-  model-input compaction inline.
+- Candidate D closed boundaries: SDK driver-side model-input compaction,
+  runner-side Agent SDK performance-profile/default resolution, and sanitized
+  SDK span capture. `run_live_openai_agents_cleanup.py` and
+  `openai_agents_live.py` are below the hard ceiling; reopen only if the runner
+  rebuilds profile/default/config packets inline again, or if the SDK driver
+  request/session/provider orchestration grows again or rebuilds model-input or
+  span compaction inline.
 
 Implementation refresh on 2026-06-17 moved apple camera-contract diagnostics
 from `run_robot_camera_apple2apple_comparison.py` into
@@ -269,16 +272,17 @@ from 2394 to 1803 lines and no longer a hard-ceiling P1, while the new owner is
 626 lines. Planning-only recheck on 2026-06-17 refreshed the same ratchet and
 ponytail inputs after this dirty checkpoint. No dependency, stdlib/native, or
 single stale-surface deletion outranks the hard-ceiling frontier. Next
-implementation should choose the remaining P1 by fresh call-site evidence.
-Candidate D runner-side Agent SDK performance-profile/default resolution is now
-the clearest known default; timing/timeline summary ownership is a separate D
-follow-up and should not ride along in the same slice. Candidate B remains
-active through `scene_camera_comparison.py`; the visual-parity summary is now
-below the hard ceiling. Candidate A needs a new facade-private/report ownership
-seam; Candidate C stays parked unless it crosses the hard ceiling again. The
-remaining ponytail small cuts are P2 inputs only: empty camera-labeler identity maps,
-`_task_prefix_legacy`, the reachable legacy checker flag, and duplicated
-lane/workflow wording.
+implementation should choose the remaining P1 by fresh call-site evidence. This
+older checkpoint is superseded for Candidate D by later owner splits: runner-side
+Agent SDK performance-profile/default resolution and SDK sanitized span capture
+are both closed. Timing/timeline summary ownership remains a separate D
+follow-up only if fresh call-site evidence makes it the best frontier. Candidate
+B remains active only when a current hard-ceiling facade starts rebuilding owned
+scene-camera or visual-parity packets inline. Candidate A needs a new
+facade-private/report ownership seam; Candidate C stays parked unless it crosses
+the hard ceiling again. The remaining ponytail small cuts are P2 inputs only:
+empty camera-labeler identity maps, `_task_prefix_legacy`, the reachable legacy
+checker flag, and duplicated lane/workflow wording.
 
 Implementation refresh on 2026-06-17 completed the first fail-aloud runtime
 configuration slice for OpenAI Agents SDK performance-profile selection.
@@ -289,20 +293,20 @@ environment. Matching duplicate values remain valid and are surfaced as
 tests, ruff, format check, py_compile, and a ratchet refresh. The refreshed
 ratchet reports 14 complexity rows and 74 oversized modules; the larger totals
 reflect current repository drift and this slice's regression tests, not a
-closed hard-ceiling owner split. Continue the dedicated fail-aloud/env cleanup
-stream before returning to Candidate D profile-owner extraction or other
-hard-ceiling splits.
+closed hard-ceiling owner split. This checkpoint's recommendation to return to
+Candidate D profile-owner extraction is superseded by the later completed
+profile owner split below.
 
 Implementation refresh on 2026-06-17 extended that fail-aloud rule to the
 shared OpenAI Agents SDK profile setting helpers. String, integer,
 positive-integer, float, and boolean SDK profile knobs now reject CLI/env
 conflicts while preserving the current `just` recipe pattern where environment
 values are passed through to CLI arguments with the same resolved value. This
-closes the broadest known ambiguity in the Agent SDK perf-profile helper family
-without extracting the profile owner yet. The next fail-aloud cleanup should
-pick a new bounded fallback family by fresh audit evidence; if no stronger
-silent-fallback candidate appears, return to the Candidate D runner-side
-profile-owner extraction as the next P1 hard-ceiling slice.
+closes the broadest known ambiguity in the Agent SDK perf-profile helper family.
+The next fail-aloud cleanup should pick a new bounded fallback family by fresh
+audit evidence; do not return to Candidate D runner-side profile-owner
+extraction unless the runner starts rebuilding profile/default/config packets
+inline again.
 
 Implementation refresh on 2026-06-17 closed a RAW-FPV visual-labeler provider
 fallback: `codex-router-responses` now requires explicit `CODEX_BASE_URL` plus
@@ -311,8 +315,9 @@ base URL is missing. This aligns the probe/eval route with the current Codex
 router contract and keeps missing provider setup visible as a `missing_env`
 status. Proof passed with focused RAW-FPV visual-labeler provider tests, ruff,
 format check, py_compile, and ratchet. Continue only with new fail-aloud
-families that have similarly clear false-confidence risk; otherwise return to
-Candidate D profile-owner extraction.
+families that have similarly clear false-confidence risk; otherwise select the
+next P1/P2 frontier from the current closure snapshot instead of reopening the
+closed Candidate D profile-owner split.
 
 Implementation refresh on 2026-06-17 completed the Candidate D runner-side
 OpenAI Agents SDK performance-profile owner split. Profile id/default
@@ -460,17 +465,15 @@ readiness/status packet. Do not combine this with hard-ceiling file splitting
 unless the fallback owner is the actual reason for the split.
 ```
 
-Candidate D remains a valid follow-up, but it is no longer the default next
-choice while fail-aloud cleanup is active. When D resumes, keep it narrower than
-the old "profile plus timing" wording. The default D slice is runner-side Agent
-SDK performance-profile/default resolution:
+Candidate D remains a valid follow-up only with fresh evidence. The runner-side
+Agent SDK performance-profile/default slice is closed; do not reopen
 `_resolve_agent_sdk_perf_profile()`, profile id/default selection, profile
-sub-builders, SDK model/run config payloads, provider route normalization, and
-the setting coercion helpers used by those profile builders.
-Timing/latency/timeline/MCP control-plane summaries are a separate D follow-up
-only if D remains the best frontier after the profile owner split. Do not move
-runner profile construction into the SDK driver and do not combine profile
-defaults with live server lifecycle.
+sub-builders, SDK model/run config payloads, provider route normalization, or
+setting coercion helpers unless `run_live_openai_agents_cleanup.py` starts
+rebuilding those packets inline again. Timing/latency/timeline/MCP control-plane
+summaries are a separate D follow-up only if D becomes the best frontier again.
+Do not move runner profile construction into the SDK driver and do not combine
+profile defaults with live server lifecycle.
 
 Candidate B remains active through `scene_camera_comparison.py` and
 `summarize_robot_camera_visual_parity.py`, but the apple runner is now below the
@@ -522,43 +525,42 @@ route broad agent-guidance refresh through `$intuitive-init`.
 
 Recommended next slice claim:
 
-- Slice: choose one owner-boundary P1. Default order after this slice is:
-  fail-aloud silent fallback and env-var cleanup, Candidate D runner-side Agent
-  SDK performance-profile/default resolution, Candidate D timing/timeline
-  summary only as a separate follow-up if D remains the best frontier,
-  Candidate B scene-camera / visual-parity summary ownership, then Candidate A
-  only with new facade-private/report evidence. Candidate T unit-test pruning
-  and Candidate U documentation cleanup are valid separate P2 slices when
-  production P1 work is paused or when the selected production slice leaves
-  duplicated/low-signal tests or stale docs directly in its touched scope. Choose
-  by fresh call-site, test-value, and doc-truth evidence, not file size alone.
+- Slice: choose one owner-boundary P1/P2 from fresh evidence. Default order after
+  the latest refresh is: fail-aloud silent fallback and env-var cleanup when a
+  false-green family is found; Candidate D timing/timeline summary only as a
+  separate follow-up if D becomes the best frontier again; Candidate B or
+  Candidate A only with new facade-private/report evidence; Candidate T unit-test
+  pruning through `$intuitive-tests`; and Candidate U documentation cleanup
+  through `$intuitive-doc`. Do not reopen the closed Candidate D runner-side
+  Agent SDK performance-profile/default owner split without new inline ownership
+  drift. Choose by fresh call-site, test-value, and doc-truth evidence, not file
+  size alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
   Profiles plus Thin Runtime / Server Adapters for Candidate D and provider/env
   cleanup; Runnable Surfaces And Presets when env vars or docs are acting as
   hidden launch-axis overrides; human documentation surface for Candidate U.
-- Current friction: the hard-ceiling frontier is now
-  `realworld_contract.py` at 2836, `scene_camera_comparison.py` is 2830,
-  `summarize_robot_camera_visual_parity.py` is 2808,
-  `run_live_openai_agents_cleanup.py` is 2711,
-  and `report.py` is 2108. Candidate A's runtime-map
-  target and proof-bundle result-renderer splits are closed. Candidate C's
+- Current friction: the refreshed snapshot reports no active production/shared
+  hard-ceiling P1. Candidate A's runtime-map target, public map/projection,
+  policy/observation evidence, visual-candidate lifecycle, proof-bundle
+  result-renderer, and Agibot report-section splits are closed. Candidate C's
   runtime diagnostics and task-sampler diagnostics owner splits are closed.
-  Candidate B's apple Object Gate,
-  capture-quality, material/probe primitives, native-render diagnostics,
-  image-metric artifacts, object-parity audit assembly, selected RGB evidence,
-  visual-state contract evidence, and camera-contract diagnostics are closed.
-  Candidate D's SDK driver-side model-input filtering boundary is closed; the
-  live cleanup runner still keeps Agent SDK perf-profile/default resolution
-  inline, and timing/latency/timeline helpers form a different owner seam.
+  Candidate B's apple Object Gate, capture-quality, material/probe primitives,
+  native-render diagnostics, image-metric artifacts, object-parity audit
+  assembly, selected RGB evidence, visual-state contract evidence,
+  camera-contract diagnostics, scene-camera report/geometry, visual-parity
+  report, and visual-parity payload owners are closed. Candidate D's SDK
+  driver-side model-input filtering, runner-side Agent SDK
+  performance-profile/default resolution, and SDK span-capture boundaries are
+  closed; timing/latency/timeline helpers form a different possible owner seam
+  only if fresh evidence makes them the next frontier.
 - Simplification: move one remaining real responsibility to an existing or
   focused owner and update callers to that owner directly. Delete obsolete
   private wrappers when call-site scan proves they are internal. Do not replace
   private coupling with a loose parameter bag, compatibility alias pile, or new
-  wrapper facade. For the default D profile slice, move profile/default
-  construction to a runner-owned profile module, not the SDK driver. Keep SDK
-  driver internals separate from live server lifecycle, and keep timing/timeline
-  summaries out of the first profile slice.
+  wrapper facade. For any future D slice, keep SDK driver internals separate from
+  live server lifecycle and keep timing/timeline summaries separate from profile
+  defaults.
 - Behavior-change class: internal owner cleanup. Preserve SDK request behavior,
   provider route semantics, model thinking policy, MCP session behavior,
   continuation policy, event/span schemas, model-input compaction output
@@ -1109,19 +1111,15 @@ raw-FPV/camera-grounded history policy and metrics now belongs to
 `openai_agents_model_input.py`; reopen only if the SDK driver starts rebuilding
 that owner directly.
 
-The default D slice is the runner-owned Agent SDK performance profile/default
-owner. Move `_resolve_agent_sdk_perf_profile()`, `_profile_id_with_source()`,
-`_default_profile_id()`, `_validate_profile_id()`, `_profile_defaults()`,
-profile sub-builders such as `_model_input_compaction_profile()`,
-`_model_racing_observability_profile()`,
-`_raw_fpv_image_memory_profile()`, `_camera_grounded_history_profile()`,
-`_camera_grounded_composite_tools_profile()`, and
-`_robot_view_capture_policy_profile()`, plus SDK settings/run-config helpers
-and their setting coercion helpers, to a focused runner profile module. Tests
-that currently import `_resolve_agent_sdk_perf_profile()` should move to the
-new owner directly instead of keeping runner-private aliases. Preserve the
-profile payload schema, default values, env/CLI override behavior, provider
-route normalization, wire API selection, and model thinking policy.
+The runner-owned Agent SDK performance profile/default owner is closed.
+`resolve_agent_sdk_perf_profile()`, profile id/default selection, profile
+sub-builders, SDK settings/run-config helpers, and setting coercion helpers now
+live in `scripts/molmo_cleanup/openai_agents_perf_profile.py`; tests import the
+resolver from that owner directly instead of keeping runner-private aliases.
+Preserve the profile payload schema, default values, env/CLI override behavior,
+provider route normalization, wire API selection, and model thinking policy.
+Reopen only if the runner starts rebuilding profile/default/config packets
+inline again.
 
 Timing/latency/timeline ownership is a separate D follow-up, not part of the
 profile slice. If selected later, it should move `_runner_timing_breakdown()`,

@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Active-plan Candidate D guidance now matches the closed code and
+  completed-ledger state. Stale prompts that still made runner-side OpenAI
+  Agents SDK performance-profile/default extraction the next Candidate D slice
+  now point to `openai_agents_perf_profile.py` as the owner and say to reopen
+  only if the runner starts rebuilding profile/default/config packets inline
+  again. Behavior-change class: planning/ledger consistency only; no runtime,
+  artifact, profile, or test behavior changed. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused call-site scan,
+  active-plan stale-guidance scan, markdown diff review, and ratchet.
+
 - 2026-06-18: Operator-console runtime artifact discovery now fails honest for
   grounding overlays. `_latest_view_assets()` only treats
   `visual_grounding/overlays/**` images as current grounding overlays;
