@@ -54,20 +54,18 @@ DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
 DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
 
 
-def _round_duration(value: float) -> float:
-    return round(max(0.0, value), 3)
-
-
 def _bool_setting_value(raw: object) -> bool:
     if isinstance(raw, bool):
         return raw
-    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+    if (value := str(raw).strip().lower()) in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
+        return value in {"1", "true", "yes", "on"}
+    raise ValueError(f"OpenAI Agents SDK boolean setting must be true or false, got {raw!r}")
 
 
 def resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
     provider_profile = _normal_provider_profile(str(getattr(args, "provider_profile", "") or ""))
     model = str(getattr(args, "model", "") or "")
-    model_family = _registry_model_family(provider_profile, model)
+    model_family = model_family_for_route_model(provider_profile, model or None)
     route = provider_route_spec(provider_profile)
     profile_id, profile_source = _profile_id_with_source(args, provider_profile, model_family)
     defaults = _profile_defaults(profile_id)
@@ -76,7 +74,7 @@ def resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
         "profile_id": profile_id,
         "source": profile_source,
         "provider_profile": provider_profile,
-        "wire_api": _wire_api_for_provider_profile(provider_profile),
+        "wire_api": route.wire_api,
         "wire_source": route.wire_source,
         "route_status": route.status_for_engine("openai-agents-sdk"),
         "route_status_note": route.status_note,
@@ -105,7 +103,12 @@ def resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             "ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS",
             default=defaults["max_continuations"],
         ),
-        "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
+        "cache_tools_list": _bool_arg_setting(
+            args,
+            "cache_tools_list",
+            "ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST",
+            default=defaults["cache_tools_list"],
+        ),
         "mcp_client_session_timeout_s": _float_setting(
             args,
             "mcp_client_session_timeout_s",
@@ -201,11 +204,7 @@ def _profile_id_with_source(
         return profile_id, "cli"
     if env_value:
         return _validate_profile_id(env_value), "environment"
-    return _validate_profile_id(_default_profile_id(provider_profile, model_family)), "default"
-
-
-def _default_profile_id(_provider_profile: str, _model_family: str) -> str:
-    return "baseline"
+    return "baseline", "default"
 
 
 def _validate_profile_id(value: str) -> str:
@@ -226,6 +225,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
         "continuation_mode": "repeat_full_prompt",
         "max_turns": DEFAULT_OPENAI_AGENTS_MAX_TURNS,
         "max_continuations": DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
+        "cache_tools_list": True,
         "raw_fpv_candidate_budget": None,
         "raw_fpv_repeated_failure_limit": None,
         "done_retry_budget": None,
@@ -657,10 +657,6 @@ def _wire_api_for_provider_profile(provider_profile: str) -> str:
     return provider_route_spec(provider_profile).wire_api
 
 
-def _registry_model_family(provider_profile: str, model: str) -> str:
-    return model_family_for_route_model(provider_profile, model or None)
-
-
 def _string_setting(
     args: argparse.Namespace,
     attr: str,
@@ -750,7 +746,7 @@ def _float_setting(
     value = _number_setting_value(attr, raw, float, "a non-negative number")
     if value < 0:
         raise ValueError(f"{attr} must be non-negative")
-    return _round_duration(value)
+    return round(max(0.0, value), 3)
 
 
 def _number_setting_value(attr: str, raw: object, parser: Any, expected: str) -> Any:

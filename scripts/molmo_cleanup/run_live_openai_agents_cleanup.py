@@ -263,7 +263,9 @@ def _env_bool(name: str, *, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
         return default
-    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+    if (value := raw.strip().lower()) in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
+        return value in {"1", "true", "yes", "on"}
+    raise ValueError(f"{name} must be true or false, got {raw!r}")
 
 
 def _load_agent_sdk_skill_context(repo_root: Path, *, skill_name: str) -> dict[str, Any]:

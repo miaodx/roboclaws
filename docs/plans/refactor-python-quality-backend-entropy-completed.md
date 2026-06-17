@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK cache-tools-list boolean config now fails
+  aloud. Direct runtime metadata, `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST`,
+  and performance-profile resolution accept only explicit true/false spellings
+  instead of treating arbitrary non-false strings as enabled. Behavior-change
+  class: fail-aloud OpenAI Agents SDK boolean/profile configuration; omitted
+  values, default enabled behavior, valid true/false values, matching CLI/env
+  values, provider profiles, public launch axes, normalized live-status packets,
+  and event schemas are unchanged. Metric: ratchet remains at 0 complexity rows
+  and 79 oversized modules; `openai_agents_perf_profile.py` is 796 lines,
+  `openai_agents_live.py` is 1887 lines, and
+  `run_live_openai_agents_cleanup.py` is 1974 lines. Proof: focused OpenAI
+  Agents live runtime/profile tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Visual-grounding benchmark timeout configuration now fails aloud.
   `run_visual_grounding_benchmark.py` validates `--timeout-s` and
   `VISUAL_GROUNDING_TIMEOUT_S` as positive finite seconds during argument

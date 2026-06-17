@@ -576,16 +576,20 @@ def _max_turns(request: LiveAgentRequest) -> int:
 
 
 def _cache_tools_list(request: LiveAgentRequest) -> bool:
-    configured = None
-    if isinstance(request.metadata, dict):
-        configured = request.metadata.get("cache_tools_list")
+    source = "cache_tools_list"
+    configured = request.metadata.get(source) if isinstance(request.metadata, dict) else None
     if configured is None:
+        source = "ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST"
         configured = os.environ.get("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST")
-    if configured is None:
-        return True
-    if isinstance(configured, bool):
-        return configured
-    return str(configured).strip().lower() not in {"0", "false", "no", "off"}
+    if configured is None or isinstance(configured, bool):
+        return True if configured is None else configured
+    true_values = {"1", "true", "yes", "on"}
+    false_values = {"0", "false", "no", "off"}
+    if (value := str(configured).strip().lower()) in true_values | false_values:
+        return value in true_values
+    raise ValueError(
+        f"OpenAI Agents SDK setting {source} must be true or false, got {configured!r}"
+    )
 
 
 def _mcp_client_session_timeout_seconds(request: LiveAgentRequest) -> tuple[bool, float | None]:

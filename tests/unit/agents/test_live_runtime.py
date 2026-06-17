@@ -51,6 +51,9 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _openai_agents_span_metrics,
     _profiled_kickoff_prompt,
 )
+from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
+    parse_args as _parse_live_openai_agents_args,
+)
 
 
 def _isolated_repo_root(tmp_path: Path) -> Path:
@@ -2099,6 +2102,38 @@ def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is False
 
 
+def test_openai_agents_runtime_rejects_invalid_cache_tools_metadata(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"cache_tools_list": "sometimes"},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.exit_status == 1
+    assert result.reason == "provider_config_failure"
+    assert "OpenAI Agents SDK setting cache_tools_list must be true or false" in result.detail
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting cache_tools_list must be true or false" in payload["detail"]
+
+
+def test_openai_agents_live_runner_rejects_invalid_cache_tools_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "sometimes")
+
+    with pytest.raises(ValueError, match="ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST"):
+        _parse_live_openai_agents_args([])
+
+
 def test_openai_agents_runtime_configures_mcp_client_session_timeout(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -3850,6 +3885,7 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     assert baseline["continuation_mode"] == "repeat_full_prompt"
     assert baseline["max_turns"] == 128
     assert baseline["max_continuations"] == 2
+    assert baseline["cache_tools_list"] is True
     assert baseline["mcp_client_session_timeout_s"] == 30.0
     assert baseline["context_soft_limit_tokens"] is None
     assert baseline["camera_grounded_composite_tools"]["enabled"] is False
@@ -3977,6 +4013,28 @@ def test_openai_agents_perf_profile_rejects_invalid_mcp_timeout_env(monkeypatch)
         _resolve_agent_sdk_perf_profile(
             _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=None)
         )
+
+
+def test_openai_agents_perf_profile_rejects_invalid_cache_tools_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "sometimes")
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK boolean setting must be true or false",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(cache_tools_list=None)
+        )
+
+
+def test_openai_agents_perf_profile_uses_cache_tools_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", "off")
+
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(cache_tools_list=None)
+    )
+
+    assert profile["cache_tools_list"] is False
 
 
 def test_openai_agents_perf_profile_rejects_negative_mcp_timeout(monkeypatch) -> None:
