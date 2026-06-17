@@ -26,6 +26,7 @@ DEFAULT_VISUAL_GROUNDING_TIMEOUT_S = 20.0
 EXTERNAL_VISUAL_GROUNDING_PROVENANCE = "external_visual_grounding_service"
 
 _ENDPOINT_PATH = "/v1/visual-grounding/candidates"
+_MAX_HTTP_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -75,8 +76,17 @@ class HttpVisualGroundingClient(VisualGroundingClient):
                 latency_ms=0,
             )
 
-        body = json.dumps(request).encode("utf-8")
-        url = self.config.base_url.rstrip("/") + _ENDPOINT_PATH
+        return self._request_candidates_with_retry(
+            url=self._endpoint_url(),
+            body=json.dumps(request).encode("utf-8"),
+            headers=self._request_headers(),
+            started=time.monotonic(),
+        )
+
+    def _endpoint_url(self) -> str:
+        return self.config.base_url.rstrip("/") + _ENDPOINT_PATH
+
+    def _request_headers(self) -> dict[str, str]:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -84,56 +94,92 @@ class HttpVisualGroundingClient(VisualGroundingClient):
         }
         if self.config.api_key:
             headers["Authorization"] = f"Bearer {self.config.api_key}"
+        return headers
 
-        started = time.monotonic()
+    def _request_candidates_with_retry(
+        self,
+        *,
+        url: str,
+        body: bytes,
+        headers: dict[str, str],
+        started: float,
+    ) -> dict[str, Any]:
         last_error: BaseException | None = None
-        for attempt in range(2):
-            http_request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        for attempt in range(_MAX_HTTP_ATTEMPTS):
             try:
-                with urllib.request.urlopen(http_request, timeout=self.config.timeout_s) as resp:
-                    payload = json.loads(resp.read().decode("utf-8"))
-                return validate_visual_grounding_response(payload)
-            except urllib.error.HTTPError as exc:
-                try:
-                    payload = json.loads(exc.read().decode("utf-8"))
-                    return validate_visual_grounding_response(payload)
-                except (json.JSONDecodeError, UnicodeDecodeError) as parse_exc:
-                    raise VisualGroundingContractError(
-                        f"visual grounding HTTP {exc.code} response was not valid JSON"
-                    ) from parse_exc
-            except (socket.timeout, TimeoutError):
-                latency = round((time.monotonic() - started) * 1000)
-                return visual_grounding_failure_response(
-                    pipeline_id=self.pipeline_id,
-                    reason="timeout",
-                    message="visual grounding service timed out",
-                    latency_ms=latency,
+                return _post_visual_grounding_json(
+                    url=url,
+                    body=body,
+                    headers=headers,
+                    timeout_s=self.config.timeout_s,
                 )
+            except (socket.timeout, TimeoutError):
+                return self._timeout_response(started)
             except urllib.error.URLError as exc:
                 last_error = exc
-                reason = getattr(exc, "reason", None)
-                if isinstance(reason, (socket.timeout, TimeoutError)):
-                    latency = round((time.monotonic() - started) * 1000)
-                    return visual_grounding_failure_response(
-                        pipeline_id=self.pipeline_id,
-                        reason="timeout",
-                        message="visual grounding service timed out",
-                        latency_ms=latency,
-                    )
-                if attempt == 0:
+                if _url_error_is_timeout(exc):
+                    return self._timeout_response(started)
+                if attempt + 1 < _MAX_HTTP_ATTEMPTS:
                     continue
-            except json.JSONDecodeError as exc:
-                raise VisualGroundingContractError(
-                    "visual grounding response was not valid JSON"
-                ) from exc
 
-        latency = round((time.monotonic() - started) * 1000)
+        return self._connection_error_response(last_error, started)
+
+    def _timeout_response(self, started: float) -> dict[str, Any]:
+        return visual_grounding_failure_response(
+            pipeline_id=self.pipeline_id,
+            reason="timeout",
+            message="visual grounding service timed out",
+            latency_ms=_elapsed_ms(started),
+        )
+
+    def _connection_error_response(
+        self,
+        error: BaseException | None,
+        started: float,
+    ) -> dict[str, Any]:
         return visual_grounding_failure_response(
             pipeline_id=self.pipeline_id,
             reason="connection_error",
-            message=str(last_error or "visual grounding service connection failed"),
-            latency_ms=latency,
+            message=str(error or "visual grounding service connection failed"),
+            latency_ms=_elapsed_ms(started),
         )
+
+
+def _post_visual_grounding_json(
+    *,
+    url: str,
+    body: bytes,
+    headers: dict[str, str],
+    timeout_s: float,
+) -> dict[str, Any]:
+    http_request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(http_request, timeout=timeout_s) as resp:
+            return _validated_response_json(
+                resp.read(),
+                invalid_json_message="visual grounding response was not valid JSON",
+            )
+    except urllib.error.HTTPError as exc:
+        return _validated_response_json(
+            exc.read(),
+            invalid_json_message=f"visual grounding HTTP {exc.code} response was not valid JSON",
+        )
+
+
+def _validated_response_json(body: bytes, *, invalid_json_message: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise VisualGroundingContractError(invalid_json_message) from exc
+    return validate_visual_grounding_response(payload)
+
+
+def _url_error_is_timeout(exc: urllib.error.URLError) -> bool:
+    return isinstance(getattr(exc, "reason", None), (socket.timeout, TimeoutError))
+
+
+def _elapsed_ms(started: float) -> int:
+    return round((time.monotonic() - started) * 1000)
 
 
 def visual_grounding_client_from_env(

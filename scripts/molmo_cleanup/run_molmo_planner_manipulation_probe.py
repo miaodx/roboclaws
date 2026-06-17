@@ -1569,44 +1569,19 @@ def _configure_exact_cleanup_task(config: Any, args: argparse.Namespace) -> dict
     scene_xml = str(getattr(args, "cleanup_scene_xml", "") or "")
     planner_object_id = str(requested.get("planner_object_id") or "")
     planner_target_id = str(requested.get("planner_target_receptacle_id") or "")
-    applied = False
     blockers = []
-    if scene_xml:
-        scene_path = Path(scene_xml)
-        if scene_path.is_file():
-            config.scene_dataset = str(scene_path)
-            config.data_split = "val"
-            config.task_sampler_config.house_inds = [0]
-            config.task_sampler_config.samples_per_house = 1
-            config.task_sampler_config.max_tasks = 1
-            applied = True
-        else:
-            blockers.append(
-                {
-                    "code": "cleanup_scene_xml_missing",
-                    "message": f"Requested cleanup scene XML does not exist: {scene_xml}",
-                }
-            )
-    task_config = getattr(config, "task_config", None)
-    if planner_object_id and task_config is not None:
-        task_config.pickup_obj_name = planner_object_id
-        if hasattr(config.task_sampler_config, "pickup_obj_name"):
-            config.task_sampler_config.pickup_obj_name = planner_object_id
-        applied = True
-    if planner_target_id and task_config is not None:
-        if hasattr(task_config, "place_receptacle_name"):
-            task_config.place_receptacle_name = planner_target_id
-        if hasattr(task_config, "place_target_name"):
-            task_config.place_target_name = planner_target_id
-        if hasattr(config.task_sampler_config, "place_target_name"):
-            config.task_sampler_config.place_target_name = planner_target_id
-        applied = True
+    scene_applied = _apply_exact_cleanup_scene_override(config, scene_xml, blockers)
+    alias_applied = _apply_exact_cleanup_alias_overrides(
+        config,
+        planner_object_id=planner_object_id,
+        planner_target_id=planner_target_id,
+    )
     for attr in ("task_config_preset_exp", "task_config_preset_scn"):
         if hasattr(config, attr):
             setattr(config, attr, None)
     return {
         "schema": "planner_probe_exact_cleanup_task_config_v1",
-        "applied": applied,
+        "applied": scene_applied or alias_applied,
         "scene_xml": scene_xml,
         "planner_object_id": planner_object_id,
         "planner_target_receptacle_id": planner_target_id,
@@ -1616,6 +1591,56 @@ def _configure_exact_cleanup_task(config: Any, args: argparse.Namespace) -> dict
             "artifact scene with requested cleanup object/target aliases."
         ),
     }
+
+
+def _apply_exact_cleanup_scene_override(
+    config: Any,
+    scene_xml: str,
+    blockers: list[dict[str, Any]],
+) -> bool:
+    if not scene_xml:
+        return False
+    scene_path = Path(scene_xml)
+    if not scene_path.is_file():
+        blockers.append(
+            {
+                "code": "cleanup_scene_xml_missing",
+                "message": f"Requested cleanup scene XML does not exist: {scene_xml}",
+            }
+        )
+        return False
+    config.scene_dataset = str(scene_path)
+    config.data_split = "val"
+    config.task_sampler_config.house_inds = [0]
+    config.task_sampler_config.samples_per_house = 1
+    config.task_sampler_config.max_tasks = 1
+    return True
+
+
+def _apply_exact_cleanup_alias_overrides(
+    config: Any,
+    *,
+    planner_object_id: str,
+    planner_target_id: str,
+) -> bool:
+    task_config = getattr(config, "task_config", None)
+    if task_config is None:
+        return False
+    applied = False
+    if planner_object_id:
+        task_config.pickup_obj_name = planner_object_id
+        if hasattr(config.task_sampler_config, "pickup_obj_name"):
+            config.task_sampler_config.pickup_obj_name = planner_object_id
+        applied = True
+    if planner_target_id:
+        if hasattr(task_config, "place_receptacle_name"):
+            task_config.place_receptacle_name = planner_target_id
+        if hasattr(task_config, "place_target_name"):
+            task_config.place_target_name = planner_target_id
+        if hasattr(config.task_sampler_config, "place_target_name"):
+            config.task_sampler_config.place_target_name = planner_target_id
+        applied = True
+    return applied
 
 
 def _cleanup_task_config_request_from_args(args: argparse.Namespace) -> dict[str, Any]:
@@ -2033,133 +2058,152 @@ def _install_candidate_removal_diagnostics(
 def _install_grasp_collision_diagnostics(task_sampler: Any, diagnostics: dict[str, Any]) -> None:
     installed_hooks = []
     for module in _task_sampler_grasp_modules(task_sampler):
-        load_grasps_for_object = getattr(module, "load_grasps_for_object", None)
-        if callable(load_grasps_for_object):
-            original_load = getattr(
-                load_grasps_for_object,
-                "__roboclaws_original__",
-                load_grasps_for_object,
-            )
-
-            def recording_load_grasps_for_object(
-                object_name: Any,
-                num_grasps: int = 50,
-                *args: Any,
-                _original_load: Any = original_load,
-                _module_name: str = str(getattr(module, "__name__", "")),
-                **kwargs: Any,
-            ) -> Any:
-                record: dict[str, Any] = {
-                    "schema": "planner_probe_grasp_load_attempt_v1",
-                    "module": _module_name,
-                    "asset_uid": str(object_name or ""),
-                    "pickup_obj_name": _task_sampler_config_pickup_obj_name(task_sampler),
-                    "requested_grasp_count": _safe_count_value(num_grasps),
-                }
-                started_at = time.monotonic()
-                try:
-                    result = _original_load(object_name, num_grasps, *args, **kwargs)
-                except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
-                    record.update(
-                        {
-                            "result": "exception",
-                            "exception_type": type(exc).__name__,
-                            "message": str(exc),
-                        }
-                    )
-                    raise
-                else:
-                    gripper, cached_grasps = result
-                    record.update(
-                        {
-                            "result": "loaded",
-                            "gripper": str(gripper or ""),
-                            "cached_grasp_count": _safe_len(cached_grasps),
-                        }
-                    )
-                    return result
-                finally:
-                    record["elapsed_s"] = round(time.monotonic() - started_at, 6)
-                    diagnostics["grasp_load_attempts"].append(record)
-                    _refresh_task_sampler_failure_diagnostics(diagnostics)
-
-            recording_load_grasps_for_object.__roboclaws_original__ = original_load  # type: ignore[attr-defined]
-            setattr(module, "load_grasps_for_object", recording_load_grasps_for_object)
-            installed_hooks.append(f"{getattr(module, '__name__', '')}.load_grasps_for_object")
-
-        get_noncolliding_grasp_mask = getattr(module, "get_noncolliding_grasp_mask", None)
-        if callable(get_noncolliding_grasp_mask):
-            original_mask = getattr(
-                get_noncolliding_grasp_mask,
-                "__roboclaws_original__",
-                get_noncolliding_grasp_mask,
-            )
-
-            def recording_get_noncolliding_grasp_mask(
-                mj_model: Any,
-                mj_data: Any,
-                grasp_poses_world: Any,
-                batch_size: int,
-                *args: Any,
-                _original_mask: Any = original_mask,
-                _module_name: str = str(getattr(module, "__name__", "")),
-                **kwargs: Any,
-            ) -> Any:
-                record = {
-                    "schema": "planner_probe_grasp_collision_check_v1",
-                    "module": _module_name,
-                    "asset_uid": _latest_grasp_load_asset_uid(diagnostics),
-                    "pickup_obj_name": _task_sampler_config_pickup_obj_name(task_sampler),
-                    "grasp_pose_count": _safe_len(grasp_poses_world),
-                    "batch_size": _safe_count_value(batch_size),
-                }
-                started_at = time.monotonic()
-                try:
-                    result = _original_mask(
-                        mj_model,
-                        mj_data,
-                        grasp_poses_world,
-                        batch_size,
-                        *args,
-                        **kwargs,
-                    )
-                except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
-                    record.update(
-                        {
-                            "result": "exception",
-                            "exception_type": type(exc).__name__,
-                            "message": str(exc),
-                        }
-                    )
-                    raise
-                else:
-                    noncolliding_count = _truthy_count(result)
-                    grasp_pose_count = _safe_len(grasp_poses_world)
-                    record.update(
-                        {
-                            "result": "checked",
-                            "noncolliding_grasp_count": noncolliding_count,
-                            "colliding_grasp_count": (
-                                grasp_pose_count - noncolliding_count
-                                if grasp_pose_count is not None and noncolliding_count is not None
-                                else None
-                            ),
-                            "zero_noncolliding": noncolliding_count == 0,
-                        }
-                    )
-                    return result
-                finally:
-                    record["elapsed_s"] = round(time.monotonic() - started_at, 6)
-                    diagnostics["grasp_collision_checks"].append(record)
-                    _refresh_task_sampler_failure_diagnostics(diagnostics)
-
-            recording_get_noncolliding_grasp_mask.__roboclaws_original__ = original_mask  # type: ignore[attr-defined]
-            setattr(module, "get_noncolliding_grasp_mask", recording_get_noncolliding_grasp_mask)
-            installed_hooks.append(f"{getattr(module, '__name__', '')}.get_noncolliding_grasp_mask")
+        for hook_name in (
+            _install_grasp_load_diagnostic_hook(module, task_sampler, diagnostics),
+            _install_grasp_mask_diagnostic_hook(module, task_sampler, diagnostics),
+        ):
+            if hook_name:
+                installed_hooks.append(hook_name)
 
     if installed_hooks:
         diagnostics["hooks"].append("grasp_collision_diagnostics")
         diagnostics["grasp_collision_hooks"] = installed_hooks
+
+
+def _install_grasp_load_diagnostic_hook(
+    module: Any,
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> str | None:
+    load_grasps_for_object = getattr(module, "load_grasps_for_object", None)
+    if not callable(load_grasps_for_object):
+        return None
+    original_load = getattr(
+        load_grasps_for_object,
+        "__roboclaws_original__",
+        load_grasps_for_object,
+    )
+    module_name = str(getattr(module, "__name__", ""))
+
+    def recording_load_grasps_for_object(
+        object_name: Any,
+        num_grasps: int = 50,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        record: dict[str, Any] = {
+            "schema": "planner_probe_grasp_load_attempt_v1",
+            "module": module_name,
+            "asset_uid": str(object_name or ""),
+            "pickup_obj_name": _task_sampler_config_pickup_obj_name(task_sampler),
+            "requested_grasp_count": _safe_count_value(num_grasps),
+        }
+        started_at = time.monotonic()
+        try:
+            result = original_load(object_name, num_grasps, *args, **kwargs)
+        except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
+            record.update(
+                {
+                    "result": "exception",
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
+            raise
+        else:
+            gripper, cached_grasps = result
+            record.update(
+                {
+                    "result": "loaded",
+                    "gripper": str(gripper or ""),
+                    "cached_grasp_count": _safe_len(cached_grasps),
+                }
+            )
+            return result
+        finally:
+            record["elapsed_s"] = round(time.monotonic() - started_at, 6)
+            diagnostics["grasp_load_attempts"].append(record)
+            _refresh_task_sampler_failure_diagnostics(diagnostics)
+
+    recording_load_grasps_for_object.__roboclaws_original__ = original_load  # type: ignore[attr-defined]
+    setattr(module, "load_grasps_for_object", recording_load_grasps_for_object)
+    return f"{module_name}.load_grasps_for_object"
+
+
+def _install_grasp_mask_diagnostic_hook(
+    module: Any,
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> str | None:
+    get_noncolliding_grasp_mask = getattr(module, "get_noncolliding_grasp_mask", None)
+    if not callable(get_noncolliding_grasp_mask):
+        return None
+    original_mask = getattr(
+        get_noncolliding_grasp_mask,
+        "__roboclaws_original__",
+        get_noncolliding_grasp_mask,
+    )
+    module_name = str(getattr(module, "__name__", ""))
+
+    def recording_get_noncolliding_grasp_mask(
+        mj_model: Any,
+        mj_data: Any,
+        grasp_poses_world: Any,
+        batch_size: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        record = {
+            "schema": "planner_probe_grasp_collision_check_v1",
+            "module": module_name,
+            "asset_uid": _latest_grasp_load_asset_uid(diagnostics),
+            "pickup_obj_name": _task_sampler_config_pickup_obj_name(task_sampler),
+            "grasp_pose_count": _safe_len(grasp_poses_world),
+            "batch_size": _safe_count_value(batch_size),
+        }
+        started_at = time.monotonic()
+        try:
+            result = original_mask(
+                mj_model,
+                mj_data,
+                grasp_poses_world,
+                batch_size,
+                *args,
+                **kwargs,
+            )
+        except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
+            record.update(
+                {
+                    "result": "exception",
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
+            raise
+        else:
+            noncolliding_count = _truthy_count(result)
+            grasp_pose_count = _safe_len(grasp_poses_world)
+            record.update(
+                {
+                    "result": "checked",
+                    "noncolliding_grasp_count": noncolliding_count,
+                    "colliding_grasp_count": (
+                        grasp_pose_count - noncolliding_count
+                        if grasp_pose_count is not None and noncolliding_count is not None
+                        else None
+                    ),
+                    "zero_noncolliding": noncolliding_count == 0,
+                }
+            )
+            return result
+        finally:
+            record["elapsed_s"] = round(time.monotonic() - started_at, 6)
+            diagnostics["grasp_collision_checks"].append(record)
+            _refresh_task_sampler_failure_diagnostics(diagnostics)
+
+    recording_get_noncolliding_grasp_mask.__roboclaws_original__ = original_mask  # type: ignore[attr-defined]
+    setattr(module, "get_noncolliding_grasp_mask", recording_get_noncolliding_grasp_mask)
+    return f"{module_name}.get_noncolliding_grasp_mask"
 
 
 def _task_sampler_grasp_modules(task_sampler: Any) -> list[Any]:

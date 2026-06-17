@@ -37,14 +37,17 @@ def run_grasp_cache_generation(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     if generation_preflight.get("status") != "ready":
-        blocker = {
-            "code": "generation_preflight_not_ready",
-            "message": "Grasp cache generation preflight must be ready before running generation.",
-        }
         return _blocked_result(
             generation_preflight=generation_preflight,
             output_dir=output_dir,
-            blockers=[blocker],
+            blockers=[
+                {
+                    "code": "generation_preflight_not_ready",
+                    "message": (
+                        "Grasp cache generation preflight must be ready before running generation."
+                    ),
+                }
+            ],
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -89,40 +92,12 @@ def run_grasp_cache_generation(
         for asset in generation_preflight.get("assets") or []
         if isinstance(asset, dict)
     ]
-    blockers = []
-    if assets_symlink.get("status") == "blocked":
-        blockers.append(
-            {
-                "code": "molmospaces_assets_symlink_blocked",
-                "message": assets_symlink.get("message") or "assets symlink setup failed",
-            }
-        )
-    if command_result.get("status") == "blocked":
-        blockers.append(
-            {
-                "code": "run_rigid_failed",
-                "message": command_result.get("stderr")
-                or command_result.get("stdout")
-                or "run_rigid.py failed",
-            }
-        )
-    for asset in assets:
-        if not asset.get("generated_valid"):
-            blockers.append(
-                {
-                    "code": "generated_grasp_cache_invalid",
-                    "message": f"Generated grasp cache invalid for {asset.get('asset_uid')}",
-                    "asset_uid": asset.get("asset_uid"),
-                }
-            )
-        elif install and not asset.get("installed_valid"):
-            blockers.append(
-                {
-                    "code": "installed_grasp_cache_invalid",
-                    "message": f"Installed grasp cache invalid for {asset.get('asset_uid')}",
-                    "asset_uid": asset.get("asset_uid"),
-                }
-            )
+    blockers = _generation_blockers(
+        assets_symlink=assets_symlink,
+        command_result=command_result,
+        assets=assets,
+        install=install,
+    )
 
     availability_after_install = {}
     if install and not dry_run:
@@ -180,6 +155,51 @@ def _blocked_result(
         "blockers": blockers,
         "blocker_count": len(blockers),
     }
+
+
+def _generation_blockers(
+    *,
+    assets_symlink: dict[str, Any],
+    command_result: dict[str, Any],
+    assets: list[dict[str, Any]],
+    install: bool,
+) -> list[dict[str, Any]]:
+    blockers = []
+    if assets_symlink.get("status") == "blocked":
+        blockers.append(
+            {
+                "code": "molmospaces_assets_symlink_blocked",
+                "message": assets_symlink.get("message") or "assets symlink setup failed",
+            }
+        )
+    if command_result.get("status") == "blocked":
+        blockers.append(
+            {
+                "code": "run_rigid_failed",
+                "message": command_result.get("stderr")
+                or command_result.get("stdout")
+                or "run_rigid.py failed",
+            }
+        )
+    for asset in assets:
+        asset_uid = asset.get("asset_uid")
+        if not asset.get("generated_valid"):
+            blockers.append(
+                {
+                    "code": "generated_grasp_cache_invalid",
+                    "message": f"Generated grasp cache invalid for {asset_uid}",
+                    "asset_uid": asset_uid,
+                }
+            )
+        elif install and not asset.get("installed_valid"):
+            blockers.append(
+                {
+                    "code": "installed_grasp_cache_invalid",
+                    "message": f"Installed grasp cache invalid for {asset_uid}",
+                    "asset_uid": asset_uid,
+                }
+            )
+    return blockers
 
 
 def objects_list_from_generation_preflight(

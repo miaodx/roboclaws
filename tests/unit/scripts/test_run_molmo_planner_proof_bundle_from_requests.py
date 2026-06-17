@@ -65,6 +65,12 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
 
     manifest = result["manifest"]
     assert result["status"] == "dry_run"
+    _assert_inline_dry_run_manifest(manifest)
+    _assert_inline_dry_run_command(manifest["commands"][0])
+    _assert_inline_dry_run_artifacts(result)
+
+
+def _assert_inline_dry_run_manifest(manifest: dict[str, object]) -> None:
     assert manifest["schema"] == "planner_cleanup_proof_bundle_run_manifest_v1"
     assert manifest["report"].endswith("report.html")
     assert manifest["proof_request_count"] == 1
@@ -79,7 +85,13 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert manifest["proof_execution_horizon"]["prior_covered_min_proof_steps"] == 1
     assert manifest["proof_request_selection"]["mode"] == "all_ready"
     assert manifest["proof_request_selection"]["selected_request_ids"] == ["proof_001"]
-    command_item = manifest["commands"][0]
+    assert manifest["commands"][0]["report"].endswith("report.html")
+    assert manifest["planner_scene"]["scene_xml"] == "/tmp/molmospaces-scene.xml"
+    assert manifest["proof_result_summary"]["expected_count"] == 1
+    assert manifest["proof_result_summary"]["results"][0]["task_feasibility_status"] == "not_run"
+
+
+def _assert_inline_dry_run_command(command_item: dict[str, object]) -> None:
     command = command_item["command"]
     assert command_item["tools"] == [
         "navigate_to_object",
@@ -105,10 +117,9 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "/tmp/molmospaces-scene.xml" in command
     assert "--task-sampler-robot-placement-profile" in command
     assert "relaxed" in command
-    assert manifest["commands"][0]["report"].endswith("report.html")
-    assert manifest["planner_scene"]["scene_xml"] == "/tmp/molmospaces-scene.xml"
-    assert manifest["proof_result_summary"]["expected_count"] == 1
-    assert manifest["proof_result_summary"]["results"][0]["task_feasibility_status"] == "not_run"
+
+
+def _assert_inline_dry_run_artifacts(result: dict[str, object]) -> None:
     assert Path(result["manifest_path"]).is_file()
     assert Path(result["report_path"]).is_file()
     report = Path(result["report_path"]).read_text(encoding="utf-8")

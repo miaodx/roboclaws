@@ -246,6 +246,19 @@ ruff format --check .
 3. **Runtime Metric Map owns semantic enrichment**: map-build and observations create public anchors, target candidates, and observed-object evidence.
 4. **VLM output parsing must be robust**: model-backed runs may return malformed JSON or partial tool arguments. Always wrap parsing in try/except with a safe recovery path.
 5. **Cost guard**: default to cheap provider profiles for development (Kimi/MiMo/codex-env as appropriate) and record model usage/cost when live agents run. See `docs/human/model-matrix.md` for current verified models.
+6. **Every addition names an architecture layer**: new behavior, surfaces,
+   presets, server adapters, agent engines, provider profiles, MCP tools,
+   skills, backends, eval suites, reports, or artifact contracts must name
+   their owning layer from `ARCHITECTURE.md` in the plan, PR note, or doc
+   update. If no existing layer fits, stop and update `ARCHITECTURE.md` or
+   record a focused architecture decision before implementation.
+7. **Server logic stays thin**: server/runtime code is transport and lifecycle
+   plumbing only: MCP target routing, host/port, readiness, locks, run dirs,
+   live status, operator-console launch control, and eval live-run polling.
+   Do not put cleanup/search/map-build strategy, prompt policy, private scorer
+   truth, benchmark-specific hints, or opaque multi-tool task shortcuts in
+   server adapters. Put strategy in skills first; put reusable public robot
+   capabilities in MCP only after the promotion rule is satisfied.
 
 ---
 

@@ -16,6 +16,8 @@ TARGET_RULES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("Pillow", "TeddyBear"), ("Bed", "Sofa")),
 )
 
+GeneratedMessRule = tuple[list[dict[str, Any]], dict[str, Any]]
+
 
 def select_generated_mess_targets(
     objects: list[dict[str, Any]],
@@ -36,10 +38,21 @@ def select_generated_mess_targets(
             target_count=target_count,
         )
 
-    rng = random.Random(seed) if seed is not None else None
-    selected = []
-    used: set[str] = set()
-    eligible_rules = []
+    eligible_rules = _eligible_generated_mess_rules(
+        objects,
+        receptacles,
+        rng=random.Random(seed) if seed is not None else None,
+    )
+    return _select_targets_from_rules(eligible_rules, target_count=target_count)
+
+
+def _eligible_generated_mess_rules(
+    objects: list[dict[str, Any]],
+    receptacles: list[dict[str, Any]],
+    *,
+    rng: random.Random | None,
+) -> list[GeneratedMessRule]:
+    eligible_rules: list[GeneratedMessRule] = []
     for object_categories, receptacle_categories in TARGET_RULES:
         receptacle = first_receptacle_for_categories(receptacles, receptacle_categories)
         if receptacle is None:
@@ -50,26 +63,46 @@ def select_generated_mess_targets(
             rng.shuffle(rule_objects)
         if rule_objects:
             eligible_rules.append((rule_objects, receptacle))
+    return eligible_rules
 
+
+def _select_targets_from_rules(
+    eligible_rules: list[GeneratedMessRule],
+    *,
+    target_count: int,
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    used: set[str] = set()
     while len(selected) < target_count:
-        made_progress = False
-        for rule_objects, receptacle in eligible_rules:
-            obj = next(
-                (item for item in rule_objects if item["object_id"] not in used),
-                None,
-            )
-            if obj is None:
-                continue
-            selected_obj = dict(obj)
-            selected_obj["target_receptacle_id"] = receptacle["receptacle_id"]
-            selected.append(selected_obj)
-            used.add(selected_obj["object_id"])
-            made_progress = True
-            if len(selected) >= target_count:
-                break
-        if not made_progress:
+        selected_count = len(selected)
+        _append_round_robin_rule_targets(
+            selected,
+            used=used,
+            eligible_rules=eligible_rules,
+            target_count=target_count,
+        )
+        if len(selected) == selected_count:
             break
     return selected
+
+
+def _append_round_robin_rule_targets(
+    selected: list[dict[str, Any]],
+    *,
+    used: set[str],
+    eligible_rules: list[GeneratedMessRule],
+    target_count: int,
+) -> None:
+    for rule_objects, receptacle in eligible_rules:
+        obj = next((item for item in rule_objects if item["object_id"] not in used), None)
+        if obj is None:
+            continue
+        selected_obj = dict(obj)
+        selected_obj["target_receptacle_id"] = receptacle["receptacle_id"]
+        selected.append(selected_obj)
+        used.add(selected_obj["object_id"])
+        if len(selected) >= target_count:
+            return
 
 
 def build_generated_mess_manifest(
@@ -178,6 +211,25 @@ def targets_from_generated_mess_manifest(
     target_count: int | None = None,
 ) -> list[dict[str, Any]]:
     """Validate and materialize selected targets from a generated-mess manifest."""
+    manifest_targets = _validated_manifest_targets(manifest, target_count=target_count)
+    object_by_id = {str(item["object_id"]): item for item in objects}
+    receptacle_by_id = {str(item["receptacle_id"]): item for item in receptacles}
+    return [
+        _materialize_manifest_target(
+            raw_target,
+            index=index,
+            object_by_id=object_by_id,
+            receptacle_by_id=receptacle_by_id,
+        )
+        for index, raw_target in enumerate(manifest_targets)
+    ]
+
+
+def _validated_manifest_targets(
+    manifest: dict[str, Any],
+    *,
+    target_count: int | None,
+) -> list[dict[str, Any]]:
     if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
         raise ValueError(
             "generated mess manifest schema mismatch: "
@@ -189,60 +241,100 @@ def targets_from_generated_mess_manifest(
             "generated mess manifest target count must match generated_mess_count "
             f"({len(manifest_targets)} != {target_count})"
         )
+    return manifest_targets
 
-    object_by_id = {str(item["object_id"]): item for item in objects}
-    receptacle_by_id = {str(item["receptacle_id"]): item for item in receptacles}
-    selected: list[dict[str, Any]] = []
-    for index, raw_target in enumerate(manifest_targets):
-        object_id = str(raw_target.get("object_id") or "")
-        if not object_id:
-            raise ValueError(f"generated mess manifest target {index} is missing object_id")
-        obj = object_by_id.get(object_id)
-        if obj is None:
-            raise ValueError(f"generated mess manifest object id is unavailable: {object_id}")
-        valid_receptacle_ids = [
-            str(item)
-            for item in (
-                raw_target.get("valid_receptacle_ids") or [raw_target.get("target_receptacle_id")]
-            )
-            if str(item)
-        ]
-        if not valid_receptacle_ids:
+
+def _materialize_manifest_target(
+    raw_target: dict[str, Any],
+    *,
+    index: int,
+    object_by_id: dict[str, dict[str, Any]],
+    receptacle_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    object_id = str(raw_target.get("object_id") or "")
+    if not object_id:
+        raise ValueError(f"generated mess manifest target {index} is missing object_id")
+    obj = object_by_id.get(object_id)
+    if obj is None:
+        raise ValueError(f"generated mess manifest object id is unavailable: {object_id}")
+    valid_receptacle_ids = _valid_manifest_receptacle_ids(
+        raw_target,
+        object_id=object_id,
+        receptacle_by_id=receptacle_by_id,
+    )
+    selected_obj = dict(obj)
+    selected_obj["target_receptacle_id"] = valid_receptacle_ids[0]
+    selected_obj["valid_receptacle_ids"] = valid_receptacle_ids
+    selected_obj["start_receptacle_id"] = _valid_manifest_start_receptacle_id(
+        raw_target,
+        object_id=object_id,
+        receptacle_by_id=receptacle_by_id,
+    )
+    selected_obj["relation"] = _valid_manifest_relation(raw_target, object_id=object_id)
+    selected_obj["placement_index"] = _valid_manifest_placement_index(
+        raw_target,
+        object_id=object_id,
+    )
+    return selected_obj
+
+
+def _valid_manifest_receptacle_ids(
+    raw_target: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_by_id: dict[str, dict[str, Any]],
+) -> list[str]:
+    valid_receptacle_ids = [
+        str(item)
+        for item in (
+            raw_target.get("valid_receptacle_ids") or [raw_target.get("target_receptacle_id")]
+        )
+        if str(item)
+    ]
+    if not valid_receptacle_ids:
+        raise ValueError(f"generated mess manifest target has no valid receptacle ids: {object_id}")
+    for receptacle_id in valid_receptacle_ids:
+        if receptacle_id not in receptacle_by_id:
             raise ValueError(
-                f"generated mess manifest target has no valid receptacle ids: {object_id}"
+                "generated mess manifest target receptacle id is unavailable: "
+                f"{object_id} -> {receptacle_id}"
             )
-        for receptacle_id in valid_receptacle_ids:
-            if receptacle_id not in receptacle_by_id:
-                raise ValueError(
-                    "generated mess manifest target receptacle id is unavailable: "
-                    f"{object_id} -> {receptacle_id}"
-                )
-        start_receptacle_id = str(raw_target.get("start_receptacle_id") or "")
-        if start_receptacle_id and start_receptacle_id not in receptacle_by_id:
-            raise ValueError(
-                "generated mess manifest start receptacle id is unavailable: "
-                f"{object_id} -> {start_receptacle_id}"
-            )
-        relation = str(raw_target.get("relation") or "")
-        if relation not in {"on", "inside"}:
-            raise ValueError(
-                "generated mess manifest relation must be 'on' or 'inside': "
-                f"{object_id} -> {relation or '<missing>'}"
-            )
-        placement_index = raw_target.get("placement_index")
-        if isinstance(placement_index, bool) or not isinstance(placement_index, int):
-            raise ValueError(
-                "generated mess manifest placement_index must be an integer: "
-                f"{object_id} -> {placement_index!r}"
-            )
-        selected_obj = dict(obj)
-        selected_obj["target_receptacle_id"] = valid_receptacle_ids[0]
-        selected_obj["valid_receptacle_ids"] = valid_receptacle_ids
-        selected_obj["start_receptacle_id"] = start_receptacle_id
-        selected_obj["relation"] = relation
-        selected_obj["placement_index"] = placement_index
-        selected.append(selected_obj)
-    return selected
+    return valid_receptacle_ids
+
+
+def _valid_manifest_start_receptacle_id(
+    raw_target: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_by_id: dict[str, dict[str, Any]],
+) -> str:
+    start_receptacle_id = str(raw_target.get("start_receptacle_id") or "")
+    if start_receptacle_id and start_receptacle_id not in receptacle_by_id:
+        raise ValueError(
+            "generated mess manifest start receptacle id is unavailable: "
+            f"{object_id} -> {start_receptacle_id}"
+        )
+    return start_receptacle_id
+
+
+def _valid_manifest_relation(raw_target: dict[str, Any], *, object_id: str) -> str:
+    relation = str(raw_target.get("relation") or "")
+    if relation not in {"on", "inside"}:
+        raise ValueError(
+            "generated mess manifest relation must be 'on' or 'inside': "
+            f"{object_id} -> {relation or '<missing>'}"
+        )
+    return relation
+
+
+def _valid_manifest_placement_index(raw_target: dict[str, Any], *, object_id: str) -> int:
+    placement_index = raw_target.get("placement_index")
+    if isinstance(placement_index, bool) or not isinstance(placement_index, int):
+        raise ValueError(
+            "generated mess manifest placement_index must be an integer: "
+            f"{object_id} -> {placement_index!r}"
+        )
+    return placement_index
 
 
 def generated_mess_manifest_object_ids(manifest: dict[str, Any]) -> list[str]:

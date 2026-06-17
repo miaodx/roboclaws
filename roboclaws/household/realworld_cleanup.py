@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -710,6 +711,30 @@ def _clean_visible_object(
     return view_index
 
 
+@dataclass(frozen=True)
+class _VisibleObjectCandidate:
+    detection: dict[str, Any]
+    target_fixture: dict[str, Any]
+    support: dict[str, Any]
+    target_fixture_id: str
+    view_index: int
+
+
+def _visible_object_candidate(
+    *,
+    detection: dict[str, Any],
+    target_fixture: dict[str, Any],
+    view_index: int,
+) -> _VisibleObjectCandidate:
+    return _VisibleObjectCandidate(
+        detection=detection,
+        target_fixture=target_fixture,
+        support=detection.get("support_estimate") or {},
+        target_fixture_id=str(target_fixture["fixture_id"]),
+        view_index=view_index,
+    )
+
+
 def _maybe_clean_visible_object(
     *,
     trace_events: list[dict[str, Any]],
@@ -740,108 +765,47 @@ def _maybe_clean_visible_object(
             {"object_id": handle, "reason": "no_public_fixture_match"}
         )
         return view_index
-    target_fixture_id = str(target_fixture["fixture_id"])
-    support = detection.get("support_estimate") or {}
-    if (
-        support.get("fixture_id") == target_fixture_id
-        and str(detection.get("candidate_state") or "") != "visual_scan_required"
-    ):
-        refreshed_target = _current_worklist_target_fixture(
+    candidate = _visible_object_candidate(
+        detection=detection,
+        target_fixture=target_fixture,
+        view_index=view_index,
+    )
+    if str(candidate.detection.get("candidate_state") or "") == "visual_scan_required":
+        candidate, view_index = _confirm_visual_scan_candidate(
+            trace_events=trace_events,
+            started_at=started_at,
             contract=contract,
-            object_id=handle,
-            source_fixture_id=str(support.get("fixture_id") or ""),
+            base_contract=base_contract,
+            handle=handle,
+            candidate=candidate,
+            fixture_hints=fixture_hints,
+            robot_view_steps=robot_view_steps,
+            output_dir=output_dir,
+            view_index=candidate.view_index,
+            record_robot_views=record_robot_views,
+            agent_scratchpad=agent_scratchpad,
         )
-        if refreshed_target is None:
-            agent_scratchpad["notes"].append(
-                {"object_id": handle, "reason": "already_on_inferred_fixture"}
-            )
+        if candidate is None:
             return view_index
-        target_fixture = refreshed_target
-        target_fixture_id = str(target_fixture["fixture_id"])
-    if str(detection.get("candidate_state") or "") == "visual_scan_required":
-        source_waypoint_id = str(
-            detection.get("waypoint_id")
-            or detection.get("last_waypoint_id")
-            or (detection.get("support_estimate") or {}).get("waypoint_id")
-            or ""
+    else:
+        candidate = _redirect_if_already_on_inferred_fixture(
+            contract=contract,
+            handle=handle,
+            candidate=candidate,
+            agent_scratchpad=agent_scratchpad,
         )
-        if source_waypoint_id:
-            _call_tool(
-                trace_events,
-                started_at,
-                "navigate_to_waypoint",
-                {"waypoint_id": source_waypoint_id, "reason": "source_fpv_scan_confirm"},
-                lambda selected=source_waypoint_id: contract.navigate_to_waypoint(selected),
-            )
-        _call_tool(
-            trace_events,
-            started_at,
-            "adjust_camera",
-            {"yaw_delta_deg": 15.0, "pitch_delta_deg": 0.0},
-            lambda: contract.adjust_camera(yaw_delta_deg=15.0, pitch_delta_deg=0.0),
-        )
-        confirmed_observation = _call_tool(
-            trace_events,
-            started_at,
-            "observe",
-            {},
-            contract.observe,
-            postprocess=lambda response: _attach_raw_fpv_robot_view(
-                response=response,
-                contract=contract,
-                base_contract=base_contract,
-                robot_view_steps=robot_view_steps,
-                output_dir=output_dir,
-                view_index_ref=[view_index],
-                record_robot_views=record_robot_views,
-            ),
-        )
-        view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
-        confirmed = next(
-            (
-                item
-                for item in confirmed_observation.get("visible_object_detections", [])
-                if item.get("object_id") == handle
-            ),
-            None,
-        )
-        if confirmed is None:
-            agent_scratchpad["failed_attempts"].append(
-                {"object_id": handle, "reason": "visual_scan_confirmation_missing"}
-            )
+        if candidate is None:
             return view_index
-        detection = dict(confirmed)
-        target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
-        if target_fixture is None:
-            agent_scratchpad["failed_attempts"].append(
-                {"object_id": handle, "reason": "no_public_fixture_match_after_visual_scan"}
-            )
-            return view_index
-        target_fixture_id = str(target_fixture["fixture_id"])
-        support = detection.get("support_estimate") or {}
-        if support.get("fixture_id") == target_fixture_id:
-            refreshed_target = _current_worklist_target_fixture(
-                contract=contract,
-                object_id=handle,
-                source_fixture_id=str(support.get("fixture_id") or ""),
-            )
-            if refreshed_target is None:
-                agent_scratchpad["notes"].append(
-                    {"object_id": handle, "reason": "already_on_inferred_fixture"}
-                )
-                return view_index
-            target_fixture = refreshed_target
-            target_fixture_id = str(target_fixture["fixture_id"])
     next_view_index = _clean_visible_object(
         trace_events=trace_events,
         started_at=started_at,
         contract=contract,
         base_contract=base_contract,
-        detection=detection,
-        target_fixture=target_fixture,
+        detection=candidate.detection,
+        target_fixture=candidate.target_fixture,
         robot_view_steps=robot_view_steps,
         output_dir=output_dir,
-        view_index=view_index,
+        view_index=candidate.view_index,
         record_robot_views=record_robot_views,
         planner_proof_evidence=planner_proof_evidence,
     )
@@ -849,17 +813,134 @@ def _maybe_clean_visible_object(
     agent_scratchpad["observed_handles"][handle].update(
         {
             "object_id": handle,
-            "category": detection.get("category"),
-            "from_fixture_id": support.get("fixture_id"),
-            "to_fixture_id": target_fixture_id,
+            "category": candidate.detection.get("category"),
+            "from_fixture_id": candidate.support.get("fixture_id"),
+            "to_fixture_id": candidate.target_fixture_id,
             "reason": _decision_reason(perception_mode),
-            "perception_source": detection.get("perception_source", "visible_detection"),
-            "model_provenance": detection.get("model_provenance"),
-            "source_observation_id": detection.get("source_observation_id"),
+            "perception_source": candidate.detection.get(
+                "perception_source", "visible_detection"
+            ),
+            "model_provenance": candidate.detection.get("model_provenance"),
+            "source_observation_id": candidate.detection.get("source_observation_id"),
             "handled": True,
         }
     )
     return next_view_index
+
+
+def _redirect_if_already_on_inferred_fixture(
+    *,
+    contract: RealWorldCleanupContract,
+    handle: str,
+    candidate: _VisibleObjectCandidate,
+    agent_scratchpad: dict[str, Any],
+) -> _VisibleObjectCandidate | None:
+    if candidate.support.get("fixture_id") != candidate.target_fixture_id:
+        return candidate
+    refreshed_target = _current_worklist_target_fixture(
+        contract=contract,
+        object_id=handle,
+        source_fixture_id=str(candidate.support.get("fixture_id") or ""),
+    )
+    if refreshed_target is None:
+        agent_scratchpad["notes"].append(
+            {"object_id": handle, "reason": "already_on_inferred_fixture"}
+        )
+        return None
+    return _visible_object_candidate(
+        detection=candidate.detection,
+        target_fixture=refreshed_target,
+        view_index=candidate.view_index,
+    )
+
+
+def _confirm_visual_scan_candidate(
+    *,
+    trace_events: list[dict[str, Any]],
+    started_at: float,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    handle: str,
+    candidate: _VisibleObjectCandidate,
+    fixture_hints: dict[str, Any],
+    robot_view_steps: list[dict[str, Any]],
+    output_dir: Path,
+    view_index: int,
+    record_robot_views: bool,
+    agent_scratchpad: dict[str, Any],
+) -> tuple[_VisibleObjectCandidate | None, int]:
+    source_waypoint_id = str(
+        candidate.detection.get("waypoint_id")
+        or candidate.detection.get("last_waypoint_id")
+        or candidate.support.get("waypoint_id")
+        or ""
+    )
+    if source_waypoint_id:
+        _call_tool(
+            trace_events,
+            started_at,
+            "navigate_to_waypoint",
+            {"waypoint_id": source_waypoint_id, "reason": "source_fpv_scan_confirm"},
+            lambda selected=source_waypoint_id: contract.navigate_to_waypoint(selected),
+        )
+    _call_tool(
+        trace_events,
+        started_at,
+        "adjust_camera",
+        {"yaw_delta_deg": 15.0, "pitch_delta_deg": 0.0},
+        lambda: contract.adjust_camera(yaw_delta_deg=15.0, pitch_delta_deg=0.0),
+    )
+    confirmed_observation = _call_tool(
+        trace_events,
+        started_at,
+        "observe",
+        {},
+        contract.observe,
+        postprocess=lambda response: _attach_raw_fpv_robot_view(
+            response=response,
+            contract=contract,
+            base_contract=base_contract,
+            robot_view_steps=robot_view_steps,
+            output_dir=output_dir,
+            view_index_ref=[view_index],
+            record_robot_views=record_robot_views,
+        ),
+    )
+    view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
+    confirmed = next(
+        (
+            item
+            for item in confirmed_observation.get("visible_object_detections", [])
+            if item.get("object_id") == handle
+        ),
+        None,
+    )
+    if confirmed is None:
+        agent_scratchpad["failed_attempts"].append(
+            {"object_id": handle, "reason": "visual_scan_confirmation_missing"}
+        )
+        return None, view_index
+    detection = dict(confirmed)
+    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    if target_fixture is None:
+        agent_scratchpad["failed_attempts"].append(
+            {"object_id": handle, "reason": "no_public_fixture_match_after_visual_scan"}
+        )
+        return None, view_index
+    candidate = _visible_object_candidate(
+        detection=detection,
+        target_fixture=target_fixture,
+        view_index=view_index,
+    )
+    return (
+        _redirect_if_already_on_inferred_fixture(
+            contract=contract,
+            handle=handle,
+            candidate=candidate,
+            agent_scratchpad=agent_scratchpad,
+        ),
+        view_index,
+    )
 
 
 def _current_worklist_target_fixture(

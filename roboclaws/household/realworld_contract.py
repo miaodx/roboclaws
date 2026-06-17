@@ -921,11 +921,58 @@ class RealWorldCleanupContract:
                 observation_id=str(raw_observation["observation_id"]),
             )
 
+        declaration_inputs = self._visual_candidate_declaration_inputs(
+            raw_observation=raw_observation,
+            producer_type=producer_type,
+            producer_id=producer_id,
+            waypoint=waypoint,
+            candidates=candidates,
+        )
+        if response := declaration_inputs.get("response"):
+            return response
+
+        declarations = self._registered_visual_candidate_declarations(
+            raw_observation=raw_observation,
+            waypoint=waypoint,
+            candidate_inputs=declaration_inputs["candidate_inputs"],
+            producer_type=str(declaration_inputs["producer_type"]),
+            producer_id=str(declaration_inputs["producer_id"]),
+        )
+        if response := declarations.get("response"):
+            return response
+
+        return self._visual_candidate_declaration_response(
+            raw_observation=raw_observation,
+            declared=declarations["declared"],
+            producer_type=str(declaration_inputs["producer_type"]),
+            producer_id=str(declaration_inputs["producer_id"]),
+            visual_grounding_pipeline=declaration_inputs["visual_grounding_pipeline"],
+        )
+
+    def _visual_candidate_declaration_inputs(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        waypoint: dict[str, Any],
+        candidates: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
+        producer_type: str,
+        producer_id: str,
+    ) -> dict[str, Any]:
         candidate_inputs = list(candidates or [])
-        visual_grounding_pipeline: dict[str, Any]
-        if not candidate_inputs:
-            if self.perception_mode == RAW_FPV_ONLY_MODE:
-                return self._error(
+        if candidate_inputs:
+            return {
+                "candidate_inputs": candidate_inputs,
+                "producer_type": producer_type,
+                "producer_id": producer_id,
+                "visual_grounding_pipeline": _manual_visual_grounding_pipeline(
+                    candidate_count=len(candidate_inputs),
+                    producer_type=producer_type,
+                    producer_id=producer_id,
+                ),
+            }
+        if self.perception_mode == RAW_FPV_ONLY_MODE:
+            return {
+                "response": self._error(
                     "declare_visual_candidates",
                     "empty_raw_fpv_candidate_registration",
                     observation_id=str(raw_observation["observation_id"]),
@@ -935,47 +982,87 @@ class RealWorldCleanupContract:
                         "candidate registration is reserved for camera-grounded-labels producers."
                     ),
                 )
-            producer_result = self._camera_label_producer_candidates(
-                raw_observation=raw_observation,
-                waypoint=waypoint,
-            )
-            visual_grounding_pipeline = producer_result["visual_grounding_pipeline"]
-            if not producer_result["ok"]:
-                return self._error(
+            }
+
+        producer_result = self._camera_label_producer_candidates(
+            raw_observation=raw_observation,
+            waypoint=waypoint,
+        )
+        return self._declaration_inputs_from_camera_label_producer(
+            raw_observation=raw_observation,
+            producer_result=producer_result,
+        )
+
+    def _declaration_inputs_from_camera_label_producer(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        producer_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        visual_grounding_pipeline = producer_result["visual_grounding_pipeline"]
+        if not producer_result["ok"]:
+            return {
+                "response": self._error(
                     "declare_visual_candidates",
                     str(producer_result["error_reason"]),
                     observation_id=str(raw_observation["observation_id"]),
                     visual_grounding_pipeline=visual_grounding_pipeline,
                     recovery_hint=producer_result.get("recovery_hint", ""),
                 )
-            candidate_inputs = list(producer_result["candidates"])
-            if visual_grounding_pipeline.get("status") == "failed":
-                evidence = self._model_declared_observation_event(
+            }
+        if visual_grounding_pipeline.get("status") == "failed":
+            return {
+                "response": self._failed_visual_grounding_declaration_response(
                     raw_observation=raw_observation,
-                    producer_type=EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
-                    producer_id=self.visual_grounding_pipeline_id,
-                    declared=[],
                     visual_grounding_pipeline=visual_grounding_pipeline,
                 )
-                self._camera_model_policy_events.append(evidence)
-                return self._ok(
-                    "declare_visual_candidates",
-                    contract=REALWORLD_CONTRACT,
-                    model_declared_observation_evidence=evidence,
-                    model_declared_observations=[],
-                    camera_model_candidates=[],
-                    visible_object_detections=[],
-                    private_target_truth_included=False,
-                )
-            if self.visual_grounding_pipeline_id != SIM_VISUAL_GROUNDING_PIPELINE_ID:
-                producer_type = EXTERNAL_VISUAL_GROUNDING_PROVENANCE
-                producer_id = self.visual_grounding_pipeline_id
-        else:
-            visual_grounding_pipeline = _manual_visual_grounding_pipeline(
-                candidate_count=len(candidate_inputs),
-                producer_type=producer_type,
-                producer_id=producer_id,
-            )
+            }
+
+        producer_type = SIMULATED_CAMERA_MODEL_PROVENANCE
+        producer_id = CAMERA_MODEL_POLICY_NAME
+        if self.visual_grounding_pipeline_id != SIM_VISUAL_GROUNDING_PIPELINE_ID:
+            producer_type = EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+            producer_id = self.visual_grounding_pipeline_id
+        return {
+            "candidate_inputs": list(producer_result["candidates"]),
+            "producer_type": producer_type,
+            "producer_id": producer_id,
+            "visual_grounding_pipeline": visual_grounding_pipeline,
+        }
+
+    def _failed_visual_grounding_declaration_response(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        visual_grounding_pipeline: dict[str, Any],
+    ) -> dict[str, Any]:
+        evidence = self._model_declared_observation_event(
+            raw_observation=raw_observation,
+            producer_type=EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+            producer_id=self.visual_grounding_pipeline_id,
+            declared=[],
+            visual_grounding_pipeline=visual_grounding_pipeline,
+        )
+        self._camera_model_policy_events.append(evidence)
+        return self._ok(
+            "declare_visual_candidates",
+            contract=REALWORLD_CONTRACT,
+            model_declared_observation_evidence=evidence,
+            model_declared_observations=[],
+            camera_model_candidates=[],
+            visible_object_detections=[],
+            private_target_truth_included=False,
+        )
+
+    def _registered_visual_candidate_declarations(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        waypoint: dict[str, Any],
+        candidate_inputs: list[dict[str, Any]],
+        producer_type: str,
+        producer_id: str,
+    ) -> dict[str, Any]:
         declared = []
         for index, candidate in enumerate(candidate_inputs):
             candidate_error = _visual_candidate_validation_error(
@@ -986,22 +1073,13 @@ class RealWorldCleanupContract:
                 producer_type=producer_type,
             )
             if candidate_error is not None:
-                source_observation_id = str(raw_observation["observation_id"])
-                return self._error(
-                    "declare_visual_candidates",
-                    "invalid_visual_candidate",
-                    observation_id=source_observation_id,
-                    candidate_index=index,
-                    candidate_error=candidate_error,
-                    raw_fpv_candidate_recovery=raw_fpv_visual_candidate_recovery(
-                        source_observation_id=source_observation_id,
-                        map_mode=self.map_mode,
-                    ),
-                    recovery_hint=raw_fpv_visual_candidate_recovery_hint(
-                        source_observation_id=source_observation_id,
-                        map_mode=self.map_mode,
-                    ),
-                )
+                return {
+                    "response": self._invalid_visual_candidate_declaration_response(
+                        raw_observation=raw_observation,
+                        candidate_index=index,
+                        candidate_error=candidate_error,
+                    )
+                }
             declared.append(
                 self._register_model_declared_candidate(
                     raw_observation=raw_observation,
@@ -1011,6 +1089,41 @@ class RealWorldCleanupContract:
                     producer_id=producer_id,
                 )
             )
+        return {"declared": declared}
+
+    def _invalid_visual_candidate_declaration_response(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        candidate_index: int,
+        candidate_error: dict[str, str],
+    ) -> dict[str, Any]:
+        source_observation_id = str(raw_observation["observation_id"])
+        return self._error(
+            "declare_visual_candidates",
+            "invalid_visual_candidate",
+            observation_id=source_observation_id,
+            candidate_index=candidate_index,
+            candidate_error=candidate_error,
+            raw_fpv_candidate_recovery=raw_fpv_visual_candidate_recovery(
+                source_observation_id=source_observation_id,
+                map_mode=self.map_mode,
+            ),
+            recovery_hint=raw_fpv_visual_candidate_recovery_hint(
+                source_observation_id=source_observation_id,
+                map_mode=self.map_mode,
+            ),
+        )
+
+    def _visual_candidate_declaration_response(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        declared: list[dict[str, Any]],
+        producer_type: str,
+        producer_id: str,
+        visual_grounding_pipeline: dict[str, Any],
+    ) -> dict[str, Any]:
         resolved_candidates = [
             dict(self._detections_by_handle[str(item["object_id"])])
             for item in declared
@@ -2100,33 +2213,56 @@ class RealWorldCleanupContract:
 
         anchors: list[dict[str, Any]] = []
         seen: set[str] = set()
+        self._append_generated_public_semantic_anchors(anchors=anchors, seen=seen)
+        self._append_fixture_public_semantic_anchors(anchors=anchors, seen=seen)
+        self._append_prior_public_semantic_anchors(anchors=anchors, seen=seen)
+        for anchor in anchors:
+            _assert_no_forbidden_agent_view_keys(anchor)
+        return anchors
 
-        if self.map_mode == MINIMAL_MAP_MODE:
-            for waypoint in self._public_waypoints:
-                waypoint_id = str(waypoint.get("waypoint_id") or "")
-                if waypoint_id not in self._observed_waypoint_ids:
-                    continue
-                for anchor in (
-                    self._room_area_public_semantic_anchor(waypoint),
-                    self._waypoint_public_semantic_anchor(waypoint),
-                ):
-                    anchor_id = str(anchor.get("anchor_id") or "")
-                    if anchor_id and anchor_id not in seen:
-                        anchors.append(anchor)
-                        seen.add(anchor_id)
+    def _append_generated_public_semantic_anchors(
+        self,
+        *,
+        anchors: list[dict[str, Any]],
+        seen: set[str],
+    ) -> None:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return
+        for waypoint in self._public_waypoints:
+            waypoint_id = str(waypoint.get("waypoint_id") or "")
+            if waypoint_id not in self._observed_waypoint_ids:
+                continue
+            for anchor in (
+                self._room_area_public_semantic_anchor(waypoint),
+                self._waypoint_public_semantic_anchor(waypoint),
+            ):
+                anchor_id = str(anchor.get("anchor_id") or "")
+                if anchor_id and anchor_id not in seen:
+                    anchors.append(anchor)
+                    seen.add(anchor_id)
 
+    def _append_fixture_public_semantic_anchors(
+        self,
+        *,
+        anchors: list[dict[str, Any]],
+        seen: set[str],
+    ) -> None:
         for fixture_id, anchor_id in sorted(
             self._public_anchor_ids_by_private_fixture_id.items(),
             key=lambda item: item[1],
         ):
             anchor = self._fixture_public_semantic_anchor(fixture_id, anchor_id)
-            if not anchor:
-                continue
-            if anchor_id in seen:
+            if not anchor or anchor_id in seen:
                 continue
             anchors.append(anchor)
             seen.add(anchor_id)
 
+    def _append_prior_public_semantic_anchors(
+        self,
+        *,
+        anchors: list[dict[str, Any]],
+        seen: set[str],
+    ) -> None:
         for prior_anchor in self._runtime_map_anchor_priors:
             anchor_id = str(prior_anchor.get("anchor_id") or "")
             if anchor_id and anchor_id in seen:
@@ -2134,10 +2270,6 @@ class RealWorldCleanupContract:
             anchors.append(dict(prior_anchor))
             if anchor_id:
                 seen.add(anchor_id)
-
-        for anchor in anchors:
-            _assert_no_forbidden_agent_view_keys(anchor)
-        return anchors
 
     def _room_area_public_semantic_anchor(self, waypoint: dict[str, Any]) -> dict[str, Any]:
         room_id = str(waypoint.get("room_id") or "generated_area")
@@ -5548,40 +5680,76 @@ def _inspection_waypoints_from_bundle_projection(
     metric_map: dict[str, Any],
     fixture_hints: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    fixture_waypoint_ids: dict[str, list[str]] = defaultdict(list)
-    room_fixture_ids: dict[str, list[str]] = defaultdict(list)
-    for room in fixture_hints.get("rooms") or []:
-        if not isinstance(room, dict):
-            continue
-        room_id = str(room.get("room_id") or "")
-        for fixture in room.get("fixtures") or []:
-            if not isinstance(fixture, dict):
-                continue
-            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-            if not fixture_id:
-                continue
-            room_fixture_ids[room_id].append(fixture_id)
-            for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
-                waypoint_id = str(fixture.get(key) or "")
-                if waypoint_id and fixture_id not in fixture_waypoint_ids[waypoint_id]:
-                    fixture_waypoint_ids[waypoint_id].append(fixture_id)
-
+    fixture_waypoint_ids, room_fixture_ids = _bundle_fixture_projection_indexes(fixture_hints)
     waypoints = []
     frame_id = str(metric_map.get("frame_id") or "map")
     for raw_waypoint in metric_map.get("inspection_waypoints") or []:
         if not isinstance(raw_waypoint, dict):
             continue
-        waypoint = dict(raw_waypoint)
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        room_id = str(waypoint.get("room_id") or "")
-        waypoint.setdefault("frame_id", frame_id)
-        waypoint["visited"] = False
-        if not waypoint.get("fixture_ids"):
-            waypoint["fixture_ids"] = sorted(
-                fixture_waypoint_ids.get(waypoint_id) or room_fixture_ids.get(room_id, [])
+        waypoints.append(
+            _bundle_inspection_waypoint(
+                raw_waypoint=raw_waypoint,
+                frame_id=frame_id,
+                fixture_waypoint_ids=fixture_waypoint_ids,
+                room_fixture_ids=room_fixture_ids,
             )
-        waypoints.append(waypoint)
+        )
     return waypoints
+
+
+def _bundle_fixture_projection_indexes(
+    fixture_hints: dict[str, Any],
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    fixture_waypoint_ids: dict[str, list[str]] = defaultdict(list)
+    room_fixture_ids: dict[str, list[str]] = defaultdict(list)
+    for room in fixture_hints.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        _add_bundle_room_fixture_indexes(
+            room=room,
+            fixture_waypoint_ids=fixture_waypoint_ids,
+            room_fixture_ids=room_fixture_ids,
+        )
+    return fixture_waypoint_ids, room_fixture_ids
+
+
+def _add_bundle_room_fixture_indexes(
+    *,
+    room: dict[str, Any],
+    fixture_waypoint_ids: dict[str, list[str]],
+    room_fixture_ids: dict[str, list[str]],
+) -> None:
+    room_id = str(room.get("room_id") or "")
+    for fixture in room.get("fixtures") or []:
+        if not isinstance(fixture, dict):
+            continue
+        fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
+        if not fixture_id:
+            continue
+        room_fixture_ids[room_id].append(fixture_id)
+        for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
+            waypoint_id = str(fixture.get(key) or "")
+            if waypoint_id and fixture_id not in fixture_waypoint_ids[waypoint_id]:
+                fixture_waypoint_ids[waypoint_id].append(fixture_id)
+
+
+def _bundle_inspection_waypoint(
+    *,
+    raw_waypoint: dict[str, Any],
+    frame_id: str,
+    fixture_waypoint_ids: dict[str, list[str]],
+    room_fixture_ids: dict[str, list[str]],
+) -> dict[str, Any]:
+    waypoint = dict(raw_waypoint)
+    waypoint_id = str(waypoint.get("waypoint_id") or "")
+    room_id = str(waypoint.get("room_id") or "")
+    waypoint.setdefault("frame_id", frame_id)
+    waypoint["visited"] = False
+    if not waypoint.get("fixture_ids"):
+        waypoint["fixture_ids"] = sorted(
+            fixture_waypoint_ids.get(waypoint_id) or room_fixture_ids.get(room_id, [])
+        )
+    return waypoint
 
 
 def _minimal_generated_exploration_waypoints(

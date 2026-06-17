@@ -95,19 +95,15 @@ def make_material_response_probe_usd(
     texture_scale_mode: str | None = None,
     texture_scale_power: float | None = None,
 ) -> dict[str, Any]:
-    if not scene_usd_path.is_file():
-        raise FileNotFoundError(scene_usd_path)
-    if scene_usd_path.resolve() == output_usd_path.resolve():
-        raise ValueError("output_usd_path must not overwrite scene_usd_path")
+    _validate_probe_request(
+        scene_usd_path=scene_usd_path,
+        output_usd_path=output_usd_path,
+        material_path_contains=material_path_contains,
+        diffuse_texture_file=diffuse_texture_file,
+        texture_scale_mode=texture_scale_mode,
+        texture_scale_power=texture_scale_power,
+    )
     text = scene_usd_path.read_text(encoding="utf-8", errors="ignore")
-    if diffuse_texture_file is not None and material_path_contains is None:
-        raise ValueError("--diffuse-texture-file requires --material-path-contains")
-    if diffuse_texture_file is not None and not diffuse_texture_file.is_file():
-        raise FileNotFoundError(diffuse_texture_file)
-    if texture_scale_mode is not None and texture_scale_power is not None:
-        raise ValueError("--texture-scale-mode and --texture-scale-power are mutually exclusive")
-    if texture_scale_power is not None and texture_scale_power <= 0:
-        raise ValueError("--texture-scale-power must be positive")
     if material_path_contains:
         (
             updated,
@@ -127,29 +123,19 @@ def make_material_response_probe_usd(
         )
     else:
         matched_material_block_count = None
-        updated = text
-        source_color_space_rewrite_count = 0
-        roughness_rewrite_count = 0
+        (
+            updated,
+            source_color_space_rewrite_count,
+            roughness_rewrite_count,
+            texture_scale_rewrite_count,
+        ) = _rewrite_full_scene(
+            text,
+            source_color_space=source_color_space,
+            roughness=roughness,
+            texture_scale_mode=texture_scale_mode,
+            texture_scale_power=texture_scale_power,
+        )
         diffuse_texture_injection_count = 0
-        texture_scale_rewrite_count = 0
-        if source_color_space is not None:
-            updated, source_color_space_rewrite_count = re.subn(
-                r'token inputs:sourceColorSpace = "[^"]+"',
-                f'token inputs:sourceColorSpace = "{source_color_space}"',
-                updated,
-            )
-        if roughness is not None:
-            updated, roughness_rewrite_count = re.subn(
-                r"float inputs:roughness = [^\s]+",
-                f"float inputs:roughness = {_format_float(roughness)}",
-                updated,
-            )
-        if texture_scale_mode is not None or texture_scale_power is not None:
-            updated, texture_scale_rewrite_count = _rewrite_texture_scale_inputs(
-                updated,
-                mode=texture_scale_mode,
-                power=texture_scale_power,
-            )
     output_usd_path.parent.mkdir(parents=True, exist_ok=True)
     output_usd_path.write_text(updated, encoding="utf-8")
     metadata_copied = _copy_metadata_next_to_output(
@@ -163,7 +149,110 @@ def make_material_response_probe_usd(
         + texture_scale_rewrite_count
     )
     status = "ready" if total_rewrite_count else "no_changes"
-    summary = {
+    summary = _probe_summary(
+        scene_usd_path=scene_usd_path,
+        output_usd_path=output_usd_path,
+        status=status,
+        material_path_contains=material_path_contains,
+        source_color_space=source_color_space,
+        roughness=roughness,
+        diffuse_texture_file=diffuse_texture_file,
+        texture_scale_mode=texture_scale_mode,
+        texture_scale_power=texture_scale_power,
+        matched_material_block_count=matched_material_block_count,
+        source_color_space_rewrite_count=source_color_space_rewrite_count,
+        roughness_rewrite_count=roughness_rewrite_count,
+        diffuse_texture_injection_count=diffuse_texture_injection_count,
+        texture_scale_rewrite_count=texture_scale_rewrite_count,
+        total_rewrite_count=total_rewrite_count,
+        metadata_copied=metadata_copied,
+    )
+    if summary_output is not None:
+        _write_summary(summary_output, summary)
+    return summary
+
+
+def _validate_probe_request(
+    *,
+    scene_usd_path: Path,
+    output_usd_path: Path,
+    material_path_contains: str | None,
+    diffuse_texture_file: Path | None,
+    texture_scale_mode: str | None,
+    texture_scale_power: float | None,
+) -> None:
+    if not scene_usd_path.is_file():
+        raise FileNotFoundError(scene_usd_path)
+    if scene_usd_path.resolve() == output_usd_path.resolve():
+        raise ValueError("output_usd_path must not overwrite scene_usd_path")
+    if diffuse_texture_file is not None and material_path_contains is None:
+        raise ValueError("--diffuse-texture-file requires --material-path-contains")
+    if diffuse_texture_file is not None and not diffuse_texture_file.is_file():
+        raise FileNotFoundError(diffuse_texture_file)
+    if texture_scale_mode is not None and texture_scale_power is not None:
+        raise ValueError("--texture-scale-mode and --texture-scale-power are mutually exclusive")
+    if texture_scale_power is not None and texture_scale_power <= 0:
+        raise ValueError("--texture-scale-power must be positive")
+
+
+def _rewrite_full_scene(
+    text: str,
+    *,
+    source_color_space: str | None,
+    roughness: float | None,
+    texture_scale_mode: str | None,
+    texture_scale_power: float | None,
+) -> tuple[str, int, int, int]:
+    updated = text
+    source_color_space_rewrite_count = 0
+    roughness_rewrite_count = 0
+    texture_scale_rewrite_count = 0
+    if source_color_space is not None:
+        updated, source_color_space_rewrite_count = re.subn(
+            r'token inputs:sourceColorSpace = "[^"]+"',
+            f'token inputs:sourceColorSpace = "{source_color_space}"',
+            updated,
+        )
+    if roughness is not None:
+        updated, roughness_rewrite_count = re.subn(
+            r"float inputs:roughness = [^\s]+",
+            f"float inputs:roughness = {_format_float(roughness)}",
+            updated,
+        )
+    if texture_scale_mode is not None or texture_scale_power is not None:
+        updated, texture_scale_rewrite_count = _rewrite_texture_scale_inputs(
+            updated,
+            mode=texture_scale_mode,
+            power=texture_scale_power,
+        )
+    return (
+        updated,
+        source_color_space_rewrite_count,
+        roughness_rewrite_count,
+        texture_scale_rewrite_count,
+    )
+
+
+def _probe_summary(
+    *,
+    scene_usd_path: Path,
+    output_usd_path: Path,
+    status: str,
+    material_path_contains: str | None,
+    source_color_space: str | None,
+    roughness: float | None,
+    diffuse_texture_file: Path | None,
+    texture_scale_mode: str | None,
+    texture_scale_power: float | None,
+    matched_material_block_count: int | None,
+    source_color_space_rewrite_count: int,
+    roughness_rewrite_count: int,
+    diffuse_texture_injection_count: int,
+    texture_scale_rewrite_count: int,
+    total_rewrite_count: int,
+    metadata_copied: bool,
+) -> dict[str, Any]:
+    return {
         "schema": SCHEMA,
         "status": status,
         "source_scene_usd_path": str(scene_usd_path),
@@ -185,13 +274,14 @@ def make_material_response_probe_usd(
         "total_rewrite_count": total_rewrite_count,
         "scene_metadata_copied": metadata_copied,
     }
-    if summary_output is not None:
-        summary_output.parent.mkdir(parents=True, exist_ok=True)
-        summary_output.write_text(
-            json.dumps(summary, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-    return summary
+
+
+def _write_summary(summary_output: Path, summary: dict[str, Any]) -> None:
+    summary_output.parent.mkdir(parents=True, exist_ok=True)
+    summary_output.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _rewrite_matching_material_blocks(
@@ -279,20 +369,9 @@ def _rewrite_texture_scale_inputs(
 
     def replacement(match: re.Match[str]) -> str:
         values = _parse_float_values(match.group(2))
-        if not values:
+        rewritten = _rewritten_texture_values(values, mode=mode, power=power)
+        if not rewritten:
             return match.group(0)
-        if mode == "identity":
-            rewritten = [1.0 for _ in values]
-        elif mode == "square":
-            rewritten = [value * value for value in values]
-        elif power is not None:
-            if any(value < 0 for value in values):
-                return match.group(0)
-            rewritten = [value**power for value in values]
-        else:
-            raise ValueError(f"unsupported texture scale mode: {mode}")
-        if len(rewritten) >= 4:
-            rewritten[3] = values[3]
         return f"{match.group(1)}({_format_float_list(rewritten)})"
 
     return re.subn(
@@ -300,6 +379,29 @@ def _rewrite_texture_scale_inputs(
         replacement,
         text,
     )
+
+
+def _rewritten_texture_values(
+    values: list[float],
+    *,
+    mode: str | None,
+    power: float | None,
+) -> list[float]:
+    if not values:
+        return []
+    if mode == "identity":
+        rewritten = [1.0 for _ in values]
+    elif mode == "square":
+        rewritten = [value * value for value in values]
+    elif power is not None:
+        if any(value < 0 for value in values):
+            return []
+        rewritten = [value**power for value in values]
+    else:
+        raise ValueError(f"unsupported texture scale mode: {mode}")
+    if len(rewritten) >= 4:
+        rewritten[3] = values[3]
+    return rewritten
 
 
 def _inject_diffuse_texture_shader(block: str, *, texture_file: Path) -> tuple[str, int]:

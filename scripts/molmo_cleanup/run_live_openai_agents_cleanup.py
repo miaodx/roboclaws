@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
@@ -18,7 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.agents.drivers.household_live import (
+    HouseholdLiveRunLease,
+    acquire_household_live_run_lease,
+    add_household_cleanup_live_runner_args,
+    household_cleanup_server_argv,
+    without_full_cleanup_checker_gates,
+)
 from roboclaws.agents.drivers.openai_agents_live import (
     DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
     DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
@@ -46,12 +51,6 @@ from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
 )
-from roboclaws.household.visual_backend_slots import (
-    MOLMOSPACES_SUBPROCESS_BACKEND,
-    VisualBackendSlotError,
-    VisualBackendSlotLease,
-    acquire_visual_backend_slot,
-)
 from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
     household_intent_id_for_checker,
@@ -72,6 +71,21 @@ from scripts.molmo_cleanup.openai_agents_metrics import (
 )
 from scripts.molmo_cleanup.openai_agents_metrics import (
     model_service_fallback_metrics as _model_service_fallback_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_cache_metrics as _cache_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_context_growth_metrics as _context_growth_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_context_metrics as _context_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_event_metrics as _openai_agents_event_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    openai_agents_span_metrics as _openai_agents_span_metrics,
 )
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
@@ -131,13 +145,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--repo-root", type=Path, required=True)
-    parser.add_argument("--status-path", type=Path, required=True)
-    parser.add_argument("--client-url", required=True)
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--lock-path", type=Path, required=True)
+    add_household_cleanup_live_runner_args(parser, policy_default="openai_agents_agent")
     parser.add_argument("--provider-profile", default="codex-env")
     parser.add_argument("--model", default="")
     parser.add_argument(
@@ -274,18 +282,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Delay between Agent SDK model-service retry attempts.",
     )
-    parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
-    parser.add_argument("--kickoff-prompt", required=True)
-    parser.add_argument("--backend", required=True)
-    parser.add_argument("--task-name", default="household-cleanup")
-    parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
-    parser.add_argument("--policy", default="openai_agents_agent")
-    parser.add_argument("--task", required=True)
-    parser.add_argument("--min-generated-mess-count", required=True)
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("--server-arg", action="append", default=[])
-    parser.add_argument("--checker-visual-arg", action="append", default=[])
     return parser.parse_args(argv)
 
 
@@ -312,8 +308,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self.server_log_path = self.run_dir / "openai-agents-server.log"
         self.server_log_file: BinaryIO | None = None
         self.server_log_thread: threading.Thread | None = None
-        self.lock_file = None
-        self.visual_slot: VisualBackendSlotLease | None = None
+        self.run_lease = HouseholdLiveRunLease()
         self.agent_sdk_perf_profile = _resolve_agent_sdk_perf_profile(args)
         self.skill_context = _load_agent_sdk_skill_context(
             args.repo_root,
@@ -400,67 +395,20 @@ class LiveOpenAIAgentsCleanupRunner:
         return 0
 
     def _acquire_lock(self) -> None:
-        if self.args.backend == MOLMOSPACES_SUBPROCESS_BACKEND:
-            try:
-                self.visual_slot = acquire_visual_backend_slot(
-                    repo_root=self.args.repo_root,
-                    run_id=_run_id_from_run_dir(self.run_dir),
-                    pid=os.getpid(),
-                    backend=self.args.backend,
-                    port=self.args.port,
-                    output_dir=self.run_dir,
-                    status_path=self.status_path,
-                    owner="openai-agents-live",
-                )
-            except VisualBackendSlotError as exc:
-                detail = (
-                    f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
-                )
-                raise RuntimeError(
-                    "no MolmoSpaces visual backend slot is available"
-                    f" under {self.args.repo_root / 'output/molmo/visual-backend-slots'}{detail}"
-                ) from exc
-            return
-
-        self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_file = self.args.lock_path.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            lock_file.seek(0)
-            active = lock_file.read().strip()
-            lock_file.close()
-            detail = f": {active}" if active else ""
-            raise RuntimeError(
-                f"another live Molmo cleanup run holds {self.args.lock_path}{detail}"
-            ) from exc
-        lock_file.seek(0)
-        lock_file.truncate()
-        lock_file.write(
-            json.dumps(
-                {
-                    "pid": os.getpid(),
-                    "run_dir": str(self.run_dir),
-                    "status_path": str(self.status_path),
-                    "started_at_epoch": self.started_at_epoch,
-                    "runtime": "openai-agents-live",
-                },
-                sort_keys=True,
-            )
-            + "\n"
+        self.run_lease = acquire_household_live_run_lease(
+            backend=self.args.backend,
+            repo_root=self.args.repo_root,
+            run_dir=self.run_dir,
+            status_path=self.status_path,
+            lock_path=self.args.lock_path,
+            port=self.args.port,
+            owner="openai-agents-live",
+            started_at_epoch=self.started_at_epoch,
+            extra_lock_payload={"runtime": "openai-agents-live"},
         )
-        lock_file.flush()
-        self.lock_file = lock_file
 
     def _release_visual_slot(self) -> None:
-        if self.visual_slot is None:
-            return
-        try:
-            self.visual_slot.release()
-        except VisualBackendSlotError as exc:
-            print(f"warning: could not release visual backend slot: {exc}", file=sys.stderr)
-        finally:
-            self.visual_slot = None
+        self.run_lease.release_visual_slot()
 
     def _start_server(self) -> None:
         print("==> OpenAI Agents SDK Molmo cleanup runner")
@@ -691,7 +639,7 @@ class LiveOpenAIAgentsCleanupRunner:
         open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
-            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
+            checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
             task_name=task_name,
             task_intent=task_intent,
@@ -861,8 +809,7 @@ class LiveOpenAIAgentsCleanupRunner:
             payload["resume_available"] = resume_available
         if detail:
             payload["detail"] = detail
-        if self.visual_slot is not None:
-            payload["visual_backend_slot"] = self.visual_slot.to_payload()
+        payload.update(self.run_lease.status_fields())
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -2549,306 +2496,6 @@ def _mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
     }
 
 
-def _openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
-    event_paths = sorted(run_dir.glob("openai-agents-events*.jsonl"))
-    if not event_paths:
-        return {
-            "available": False,
-            "reason": "openai-agents event files not present",
-        }
-
-    event_counts: dict[str, int] = {}
-    tool_error_classifications: dict[str, int] = {}
-    tool_error_messages: list[str] = []
-    result_count = 0
-    for path in event_paths:
-        for event in _read_jsonl_path(path):
-            event_type = str(event.get("event") or "")
-            if event_type:
-                event_counts[event_type] = event_counts.get(event_type, 0) + 1
-            if event_type == "result":
-                result_count += 1
-            if event_type != "tool_error":
-                continue
-            classification = str(event.get("classification") or "tool_error")
-            tool_error_classifications[classification] = (
-                tool_error_classifications.get(classification, 0) + 1
-            )
-            message = str(event.get("message") or "")
-            if message and len(tool_error_messages) < 8:
-                tool_error_messages.append(message)
-
-    return {
-        "available": True,
-        "event_files": [path.name for path in event_paths],
-        "event_counts": dict(sorted(event_counts.items())),
-        "result_count": result_count,
-        "tool_error_count": sum(tool_error_classifications.values()),
-        "tool_error_classifications": dict(sorted(tool_error_classifications.items())),
-        "tool_error_messages_sample": tool_error_messages,
-    }
-
-
-def _openai_agents_span_metrics(run_dir: Path) -> dict[str, Any]:
-    span_paths = sorted(run_dir.glob("openai-agents-spans*.jsonl"))
-    if not span_paths:
-        return {
-            "available": False,
-            "reason": "openai-agents span files not present",
-        }
-
-    event_counts: dict[str, int] = {}
-    span_type_counts: dict[str, int] = {}
-    limitations: list[dict[str, Any]] = []
-    span_end_count = 0
-    for path in span_paths:
-        for event in _read_jsonl_path(path):
-            event_type = str(event.get("event") or "")
-            if event_type:
-                event_counts[event_type] = event_counts.get(event_type, 0) + 1
-            if event_type == "span_capture_unavailable":
-                limitations.append(
-                    {
-                        "reason": event.get("reason", ""),
-                        "error_type": event.get("error_type", ""),
-                        "message": event.get("message", ""),
-                    }
-                )
-            if event_type != "span_end":
-                continue
-            span_end_count += 1
-            span_type = str(event.get("span_type") or "unknown")
-            span_type_counts[span_type] = span_type_counts.get(span_type, 0) + 1
-
-    return {
-        "available": True,
-        "span_files": [path.name for path in span_paths],
-        "event_counts": dict(sorted(event_counts.items())),
-        "span_end_count": span_end_count,
-        "span_type_counts": dict(sorted(span_type_counts.items())),
-        "limitations": limitations,
-        "sanitization_note": (
-            "Span artifacts retain IDs, timing, span types, model/usage, MCP tool metadata, "
-            "and errors. Raw prompts, model text, function inputs, and function outputs are "
-            "not persisted."
-        ),
-    }
-
-
-def _context_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
-    response_spans = _response_span_end_events(run_dir)
-    kickoff_prompt_chars = _int_or_none(timing.get("kickoff_prompt_chars")) or 0
-    attempts = timing.get("openai_agents_attempts")
-    if not isinstance(attempts, list):
-        attempts = []
-    continuation_prompt_chars = sum(
-        _int_or_none(attempt.get("continuation_prompt_chars")) or 0
-        for attempt in attempts
-        if isinstance(attempt, dict)
-    )
-    base_payload: dict[str, Any] = {
-        "kickoff_prompt_chars": kickoff_prompt_chars,
-        "kickoff_prompt_estimated_tokens": _estimated_tokens_from_chars(kickoff_prompt_chars),
-        "continuation_prompt_chars": continuation_prompt_chars,
-        "continuation_prompt_estimated_tokens": _estimated_tokens_from_chars(
-            continuation_prompt_chars
-        ),
-        "context_window_failure_detected": _context_window_failure_detected(timing, run_dir),
-    }
-    if not response_spans:
-        return {
-            "available": False,
-            "source": "unavailable",
-            "limitations": ["span_usage_missing"],
-            **base_payload,
-        }
-
-    usage_rows: list[dict[str, int | float | None]] = []
-    limitations: list[str] = []
-    for event in response_spans:
-        usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
-        if not usage:
-            limitations.append("response_span_usage_missing")
-            continue
-        input_tokens = _int_or_none(usage.get("input_tokens"))
-        if input_tokens is None:
-            limitations.append("response_span_input_tokens_missing")
-            continue
-        cached_tokens = _cached_input_tokens(usage)
-        output_tokens = _int_or_none(usage.get("output_tokens")) or 0
-        reasoning_tokens = _reasoning_tokens(usage) or 0
-        usage_rows.append(
-            {
-                "input_tokens": input_tokens,
-                "cached_tokens": min(max(cached_tokens, 0), input_tokens),
-                "output_tokens": output_tokens,
-                "reasoning_tokens": reasoning_tokens,
-                "duration_s": _float_or_none(event.get("duration_s")),
-            }
-        )
-
-    if not usage_rows:
-        return {
-            "available": False,
-            "source": "openai_agents_span_usage",
-            "limitations": sorted(set(limitations or ["span_usage_missing"])),
-            "response_span_count": len(response_spans),
-            **base_payload,
-        }
-
-    input_values = [int(row["input_tokens"] or 0) for row in usage_rows]
-    total_input = sum(input_values)
-    total_cached = sum(int(row["cached_tokens"] or 0) for row in usage_rows)
-    total_uncached = max(0, total_input - total_cached)
-    total_output = sum(int(row["output_tokens"] or 0) for row in usage_rows)
-    total_reasoning = sum(int(row["reasoning_tokens"] or 0) for row in usage_rows)
-    durations = [
-        float(row["duration_s"])
-        for row in usage_rows
-        if _float_or_none(row.get("duration_s")) is not None
-    ]
-    return {
-        "available": True,
-        "source": "openai_agents_span_usage",
-        "limitations": sorted(set(limitations)),
-        "response_span_count": len(usage_rows),
-        "total_input_tokens": total_input,
-        "total_cached_input_tokens": total_cached,
-        "total_uncached_input_tokens": total_uncached,
-        "cache_hit_ratio": _ratio(total_cached, total_input),
-        "max_input_tokens": max(input_values),
-        "p50_input_tokens": _nearest_rank_percentile(input_values, 0.50),
-        "p95_input_tokens": _nearest_rank_percentile(input_values, 0.95),
-        "total_output_tokens": total_output,
-        "total_reasoning_tokens": total_reasoning,
-        "max_reasoning_tokens": max(int(row["reasoning_tokens"] or 0) for row in usage_rows),
-        "first_response_cached_tokens": int(usage_rows[0]["cached_tokens"] or 0),
-        "response_span_duration_s": _round_duration(sum(durations)) if durations else None,
-        **base_payload,
-    }
-
-
-def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> dict[str, Any]:
-    model_settings = (
-        timing.get("sdk_model_settings")
-        if isinstance(timing.get("sdk_model_settings"), dict)
-        else {}
-    )
-    stable_prefix = (
-        timing.get("kickoff_prompt_stable_prefix")
-        if isinstance(timing.get("kickoff_prompt_stable_prefix"), dict)
-        else {}
-    )
-    if not context_metrics.get("available"):
-        return {
-            "available": False,
-            "source": context_metrics.get("source") or "unavailable",
-            "limitations": context_metrics.get("limitations") or ["span_usage_missing"],
-            "cache_tools_list": bool(timing.get("cache_tools_list")),
-            "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
-            "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
-            "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
-        }
-    total_input = _int_or_none(context_metrics.get("total_input_tokens")) or 0
-    total_cached = _int_or_none(context_metrics.get("total_cached_input_tokens")) or 0
-    return {
-        "available": True,
-        "source": "openai_agents_span_usage",
-        "limitations": list(context_metrics.get("limitations") or []),
-        "cache_tools_list": bool(timing.get("cache_tools_list")),
-        "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
-        "provider_prompt_cache_observed": total_cached > 0,
-        "cached_input_token_ratio": _ratio(total_cached, total_input),
-        "first_response_cached_tokens": context_metrics.get("first_response_cached_tokens"),
-        "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
-        "prompt_profile_id": str(timing.get("prompt_profile_id") or "baseline"),
-        "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
-    }
-
-
-def _context_growth_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
-    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
-    if not trace_events:
-        return {
-            "available": False,
-            "source": "unavailable",
-            "limitations": ["trace_missing"],
-            "continuation_attempt_count": _continuation_attempt_count(timing),
-        }
-
-    response_events = [event for event in trace_events if event.get("event") == "response"]
-    observe_events = [event for event in response_events if event.get("tool") == "observe"]
-    raw_fpv_events = [
-        event
-        for event in response_events
-        if "raw_fpv" in json.dumps(event, sort_keys=True, ensure_ascii=True)
-    ]
-    response_sizes = [len(json.dumps(event, sort_keys=True)) for event in response_events]
-    return {
-        "available": True,
-        "source": "live_timing_and_trace",
-        "limitations": [],
-        "trace_event_count": len(trace_events),
-        "observe_response_count": len(observe_events),
-        "raw_fpv_observation_count": len(raw_fpv_events),
-        "tool_response_bytes_total": sum(response_sizes),
-        "largest_tool_response_bytes": max(response_sizes) if response_sizes else 0,
-        "agent_visible_state_bytes_p95": _nearest_rank_percentile(response_sizes, 0.95)
-        if response_sizes
-        else 0,
-        "continuation_attempt_count": _continuation_attempt_count(timing),
-    }
-
-
-def _response_span_end_events(run_dir: Path) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
-    for path in sorted(run_dir.glob("openai-agents-spans*.jsonl")):
-        for event in _read_jsonl_path(path):
-            if event.get("event") == "span_end" and event.get("span_type") == "response":
-                events.append(event)
-    return events
-
-
-def _cached_input_tokens(usage: dict[str, Any]) -> int:
-    details = usage.get("input_tokens_details")
-    if isinstance(details, dict):
-        nested = _int_or_none(details.get("cached_tokens"))
-        if nested is not None:
-            return nested
-    return _int_or_none(usage.get("cached_input_tokens")) or 0
-
-
-def _reasoning_tokens(usage: dict[str, Any]) -> int | None:
-    details = usage.get("output_tokens_details")
-    if isinstance(details, dict):
-        return _int_or_none(details.get("reasoning_tokens"))
-    return _int_or_none(usage.get("reasoning_tokens"))
-
-
-def _context_window_failure_detected(timing: dict[str, Any], run_dir: Path) -> bool:
-    haystack_parts = [
-        str(timing.get("reason") or ""),
-        str(timing.get("provider_reason") or ""),
-        str(timing.get("detail") or ""),
-    ]
-    for path in sorted(run_dir.glob("openai-agents-*.jsonl")):
-        text = path.read_text(encoding="utf-8", errors="replace")[:200_000].lower()
-        haystack_parts.append(text)
-    haystack = " ".join(haystack_parts).lower()
-    return any(
-        marker in haystack
-        for marker in (
-            "context window",
-            "context length",
-            "context_length",
-            "maximum context",
-            "input exceeds the context",
-            "context-budget",
-            "provider_context_failure",
-        )
-    )
-
-
 def _model_or_sdk_unattributed_seconds(timing: dict[str, Any]) -> float | None:
     runner_timing = (
         timing.get("runner_timing") if isinstance(timing.get("runner_timing"), dict) else {}
@@ -3001,35 +2648,10 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def _nearest_rank_percentile(values: list[int], percentile: float) -> int | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = max(0, min(len(ordered) - 1, int(len(ordered) * percentile + 0.999999) - 1))
-    return ordered[index]
-
-
-def _ratio(numerator: int, denominator: int) -> float | None:
-    if denominator <= 0:
-        return None
-    return round(numerator / denominator, 6)
-
-
 def _estimated_tokens_from_chars(char_count: int) -> int:
     if char_count <= 0:
         return 0
     return max(1, round(char_count / 4))
-
-
-def _continuation_attempt_count(timing: dict[str, Any]) -> int:
-    attempts = timing.get("openai_agents_attempts")
-    if not isinstance(attempts, list):
-        return 0
-    return sum(
-        1
-        for attempt in attempts
-        if isinstance(attempt, dict) and int(attempt.get("attempt_index") or 0) > 0
-    )
 
 
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
@@ -3086,48 +2708,6 @@ def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
 
 def _probe_host(host: str) -> str:
     return "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-
-
-def _append_missing_checker_flag(args: list[str], flag: str) -> None:
-    if flag not in args:
-        args.append(flag)
-
-
-def _append_missing_checker_value(args: list[str], flag: str, value: str) -> None:
-    if flag not in args:
-        args.extend([flag, value])
-
-
-def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
-    filtered: list[str] = []
-    skip_value = False
-    for arg in args:
-        if skip_value:
-            skip_value = False
-            continue
-        if arg in {
-            "--min-semantic-accepted-count",
-            "--min-model-declared-observations",
-            "--min-model-declared-actions",
-            "--min-sweep-coverage",
-        }:
-            skip_value = True
-            continue
-        if arg in {
-            "--require-clean-agent-run",
-            "--require-model-declared-observations",
-        }:
-            continue
-        filtered.append(arg)
-    return filtered
-
-
-def _run_id_from_run_dir(run_dir: Path) -> str:
-    name = run_dir.name
-    parent = run_dir.parent.name
-    if parent:
-        return f"{parent}/{name}"
-    return name
 
 
 if __name__ == "__main__":

@@ -447,56 +447,126 @@ def _label_full_trace(
     held_public_object_id = ""
     observed_count = 0
     for row in trace_rows:
-        event = str(row.get("event") or "")
-        tool = str(row.get("tool") or "")
+        if str(row.get("event") or "") != "response":
+            continue
         response = row.get("response") if isinstance(row.get("response"), dict) else {}
-        if event == "response" and tool == "observe":
-            raw = _raw_fpv_observation_from_response(response)
-            if not raw or not raw.get("observation_id"):
-                continue
-            observed_count += 1
-            if max_observations and observed_count > max_observations:
-                continue
-            frame_labels, frame_summary = _label_observation(
+        tool = str(row.get("tool") or "")
+        if tool == "observe":
+            frame_labels, frame_summary, observed_count = _label_observe_response(
                 backend,
+                response=response,
+                observed_count=observed_count,
                 source_run_dir=source_run_dir,
                 source_state=source_state,
-                observation=_observation_from_raw(raw),
+                max_observations=max_observations,
                 output_dir=output_dir,
                 min_object_pixels=min_object_pixels,
                 render_width=render_width,
                 render_height=render_height,
                 label_scope=label_scope,
             )
+            if not frame_summary:
+                continue
             labels.extend(frame_labels)
             frame_summaries.append(frame_summary)
             continue
-        if event != "response" or not response.get("ok"):
-            continue
-        if tool == "pick":
-            public_object_id = str(response.get("object_id") or "")
-            binding = bindings.get(public_object_id)
-            if not binding:
-                continue
-            private_object_id = binding["private_object_id"]
-            backend.navigate_to_object(private_object_id)
-            backend.pick(private_object_id)
-            held_public_object_id = public_object_id
-        elif tool == "navigate_to_receptacle" and held_public_object_id:
-            binding = bindings.get(held_public_object_id)
-            if binding:
-                backend.navigate_to_receptacle(binding["receptacle_id"])
-        elif tool in {"place", "place_inside"}:
-            public_object_id = str(response.get("object_id") or held_public_object_id)
-            binding = bindings.get(public_object_id)
-            if not binding:
-                continue
-            if binding["place_tool"] == "place_inside":
-                backend.place_inside(binding["receptacle_id"])
-            else:
-                backend.place(binding["receptacle_id"])
-            held_public_object_id = ""
+        held_public_object_id = _replay_trace_action_response(
+            backend,
+            tool=tool,
+            response=response,
+            bindings=bindings,
+            held_public_object_id=held_public_object_id,
+        )
     return labels, frame_summaries
+
+
+def _label_observe_response(
+    backend: MolmoSpacesSubprocessBackend,
+    *,
+    response: dict[str, Any],
+    observed_count: int,
+    source_run_dir: Path,
+    source_state: dict[str, Any],
+    max_observations: int,
+    output_dir: Path,
+    min_object_pixels: int,
+    render_width: int,
+    render_height: int,
+    label_scope: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any], int]:
+    raw = _raw_fpv_observation_from_response(response)
+    if not raw or not raw.get("observation_id"):
+        return [], {}, observed_count
+    observed_count += 1
+    if max_observations and observed_count > max_observations:
+        return [], {}, observed_count
+    frame_labels, frame_summary = _label_observation(
+        backend,
+        source_run_dir=source_run_dir,
+        source_state=source_state,
+        observation=_observation_from_raw(raw),
+        output_dir=output_dir,
+        min_object_pixels=min_object_pixels,
+        render_width=render_width,
+        render_height=render_height,
+        label_scope=label_scope,
+    )
+    return frame_labels, frame_summary, observed_count
+
+
+def _replay_trace_action_response(
+    backend: MolmoSpacesSubprocessBackend,
+    *,
+    tool: str,
+    response: dict[str, Any],
+    bindings: dict[str, dict[str, str]],
+    held_public_object_id: str,
+) -> str:
+    if not response.get("ok"):
+        return held_public_object_id
+    if tool == "pick":
+        return _replay_pick_response(backend, response=response, bindings=bindings)
+    if tool == "navigate_to_receptacle" and held_public_object_id:
+        binding = bindings.get(held_public_object_id)
+        if binding:
+            backend.navigate_to_receptacle(binding["receptacle_id"])
+    elif tool in {"place", "place_inside"}:
+        public_object_id = str(response.get("object_id") or held_public_object_id)
+        if _replay_place_response(backend, public_object_id=public_object_id, bindings=bindings):
+            return ""
+    return held_public_object_id
+
+
+def _replay_pick_response(
+    backend: MolmoSpacesSubprocessBackend,
+    *,
+    response: dict[str, Any],
+    bindings: dict[str, dict[str, str]],
+) -> str:
+    public_object_id = str(response.get("object_id") or "")
+    binding = bindings.get(public_object_id)
+    if not binding:
+        return ""
+    private_object_id = binding["private_object_id"]
+    backend.navigate_to_object(private_object_id)
+    backend.pick(private_object_id)
+    return public_object_id
+
+
+def _replay_place_response(
+    backend: MolmoSpacesSubprocessBackend,
+    *,
+    public_object_id: str,
+    bindings: dict[str, dict[str, str]],
+) -> bool:
+    binding = bindings.get(public_object_id)
+    if not binding:
+        return False
+    if binding["place_tool"] == "place_inside":
+        backend.place_inside(binding["receptacle_id"])
+    else:
+        backend.place(binding["receptacle_id"])
+    return True
 
 
 def _observation_from_raw(raw: dict[str, Any]) -> dict[str, Any]:

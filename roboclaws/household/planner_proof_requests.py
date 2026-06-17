@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import re
 from collections.abc import Sequence
@@ -8,6 +7,27 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household.planner_proof_fallbacks import (
+    discovered_alias_values as _discovered_alias_values,
+)
+from roboclaws.household.planner_proof_fallbacks import (
+    discovered_runtime_aliases_by_source_request as _discovered_runtime_aliases_by_source_request,
+)
+from roboclaws.household.planner_proof_fallbacks import (
+    planner_arg as _planner_arg,
+)
+from roboclaws.household.planner_proof_fallbacks import (
+    prior_fallback_candidate_filters_by_source_request,
+)
+from roboclaws.household.planner_proof_fallbacks import (
+    prior_pair_filter_lookup as _prior_pair_filter_lookup,
+)
+from roboclaws.household.planner_proof_fallbacks import (
+    proof_cleanup_task_config as _proof_cleanup_task_config,
+)
+from roboclaws.household.planner_proof_fallbacks import (
+    unique_nonempty_values as _unique_nonempty_values,
+)
 from roboclaws.household.planner_proof_quality import (
     planner_proof_quality_evidence,
     planner_proof_quality_summary,
@@ -34,8 +54,10 @@ PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA = "planner_cleanup_proof_execution_horizo
 PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA = (
     "planner_cleanup_proof_request_fallback_generation_v1"
 )
+_prior_fallback_candidate_filters_by_source_request = (
+    prior_fallback_candidate_filters_by_source_request
+)
 _FALLBACK_REQUEST_ID_MARKER = "_fallback_"
-_INVALID_NAME_RE = re.compile(r"Invalid name '([^']+)'\. Valid names: (\[.*\])")
 _RUNTIME_ALIAS_RE = re.compile(r"^(?P<prefix>.+)_(?P<group>\d+)_(?P<variant>\d+)_(?P<room>\d+)$")
 
 
@@ -1423,371 +1445,6 @@ def _runtime_object_root_alias(alias: str) -> str:
     if not match or match.group("variant") == "0":
         return ""
     return f"{match.group('prefix')}_{match.group('group')}_0_{match.group('room')}"
-
-
-def _discovered_alias_values(
-    discovered_aliases: dict[str, list[dict[str, Any]]],
-    axis: str,
-) -> list[str]:
-    return [
-        str(item.get("alias") or "")
-        for item in discovered_aliases.get(axis, [])
-        if isinstance(item, dict)
-    ]
-
-
-def _discovered_runtime_aliases_by_source_request(
-    ready_requests: list[dict[str, Any]],
-    prior_summary: dict[str, Any],
-) -> dict[str, dict[str, list[dict[str, Any]]]]:
-    request_by_id = {
-        str(request.get("request_id") or ""): request
-        for request in ready_requests
-        if request.get("request_id")
-    }
-    discovered: dict[str, dict[str, list[dict[str, Any]]]] = {}
-    seen: set[tuple[str, str, str]] = set()
-    for item in _carried_discovered_aliases(prior_summary):
-        source_request_id = str(item.get("source_request_id") or "")
-        axis = str(item.get("axis") or "")
-        alias = str(item.get("alias") or "")
-        if source_request_id not in request_by_id or axis not in {"object", "target"} or not alias:
-            continue
-        key = (source_request_id, axis, alias)
-        if key in seen:
-            continue
-        seen.add(key)
-        discovered.setdefault(source_request_id, {"object": [], "target": []})[axis].append(
-            dict(item)
-        )
-    for result in prior_summary.get("results") or []:
-        if not isinstance(result, dict):
-            continue
-        source_request_id = _source_request_id_from_result(result)
-        request = request_by_id.get(source_request_id)
-        if not request:
-            continue
-        config = _proof_cleanup_task_config(result)
-        invalid_names = _invalid_name_entries_from_blockers(result.get("blockers") or [])
-        for invalid in invalid_names:
-            axis = _invalid_alias_axis(invalid["invalid_alias"], config)
-            if not axis:
-                continue
-            current_alias = _planner_arg(
-                request.get("planner_probe_args") or {},
-                (
-                    "--cleanup-planner-object-id"
-                    if axis == "object"
-                    else "--cleanup-planner-target-receptacle-id"
-                ),
-            )
-            for alias in _runtime_alias_siblings(current_alias, invalid["valid_names"]):
-                key = (source_request_id, axis, alias)
-                if key in seen:
-                    continue
-                seen.add(key)
-                discovered.setdefault(source_request_id, {"object": [], "target": []})[axis].append(
-                    {
-                        "source_request_id": source_request_id,
-                        "axis": axis,
-                        "alias": alias,
-                        "derived_from": str(result.get("request_id") or ""),
-                        "invalid_alias": invalid["invalid_alias"],
-                        "reason": "valid_name_sibling_from_prior_keyerror",
-                        "evidence_note": (
-                            "Derived from a prior exact-scene KeyError valid-name list "
-                            "for the same runtime object or target family."
-                        ),
-                    }
-                )
-    return discovered
-
-
-def _carried_discovered_aliases(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:
-    fallback_generation = prior_summary.get("fallback_generation") or {}
-    if not isinstance(fallback_generation, dict):
-        return []
-    return [
-        dict(item)
-        for item in fallback_generation.get("discovered_aliases") or []
-        if isinstance(item, dict)
-    ]
-
-
-def _prior_fallback_candidate_filters_by_source_request(
-    prior_summary: dict[str, Any],
-) -> dict[str, dict[str, Any]]:
-    filters: dict[str, dict[str, Any]] = {}
-    seen_aliases: set[tuple[str, str, str]] = set()
-    seen_pairs: set[tuple[str, str, str]] = set()
-    for item in _carried_filtered_aliases(prior_summary):
-        source_request_id = str(item.get("source_request_id") or "")
-        axis = str(item.get("axis") or "")
-        alias = str(item.get("alias") or "")
-        if axis not in {"object", "target"} or not source_request_id or not alias:
-            continue
-        key = (source_request_id, axis, alias)
-        if key in seen_aliases:
-            continue
-        bucket = filters.setdefault(
-            source_request_id,
-            {"aliases": {"object": {}, "target": {}}, "pairs": []},
-        )
-        bucket["aliases"][axis][alias] = dict(item)
-        seen_aliases.add(key)
-    for item in _carried_filtered_pairs(prior_summary):
-        source_request_id = str(item.get("source_request_id") or "")
-        object_alias = str(item.get("object_alias") or "")
-        target_alias = str(item.get("target_alias") or "")
-        if not source_request_id or not object_alias or not target_alias:
-            continue
-        key = (source_request_id, object_alias, target_alias)
-        if key in seen_pairs:
-            continue
-        bucket = filters.setdefault(
-            source_request_id,
-            {"aliases": {"object": {}, "target": {}}, "pairs": []},
-        )
-        bucket["pairs"].append(dict(item))
-        seen_pairs.add(key)
-    for result in prior_summary.get("results") or []:
-        if not isinstance(result, dict):
-            continue
-        result_id = str(result.get("request_id") or "")
-        if _FALLBACK_REQUEST_ID_MARKER not in result_id:
-            continue
-        source_request_id = _source_request_id_from_result(result)
-        config = _proof_cleanup_task_config(result)
-        object_alias = str(config.get("planner_object_id") or "")
-        target_alias = str(config.get("planner_target_receptacle_id") or "")
-        blockers = _blockers(result.get("blockers") or [])
-        bucket = filters.setdefault(
-            source_request_id,
-            {"aliases": {"object": {}, "target": {}}, "pairs": []},
-        )
-        aliases = bucket["aliases"]
-        if _has_non_root_body_blocker(blockers) and object_alias:
-            key = (source_request_id, "object", object_alias)
-            if key in seen_aliases:
-                continue
-            aliases["object"][object_alias] = {
-                "source_request_id": source_request_id,
-                "axis": "object",
-                "alias": object_alias,
-                "derived_from": result_id,
-                "reason": "prior_non_root_body_alias",
-                "prior_blockers": blockers,
-                "evidence_note": (
-                    "Filtered before command generation because a prior generated "
-                    "fallback proof reported that this pickup alias is not a root body."
-                ),
-            }
-            seen_aliases.add(key)
-            continue
-        if (
-            object_alias
-            and target_alias
-            and str(result.get("task_feasibility_status") or "") == "blocked"
-        ):
-            key = (source_request_id, object_alias, target_alias)
-            pair_filter = _task_feasibility_pair_filter(
-                source_request_id=source_request_id,
-                object_alias=object_alias,
-                target_alias=target_alias,
-                derived_from=result_id,
-                blockers=blockers,
-                result=result,
-            )
-            if key in seen_pairs:
-                _enrich_existing_pair_filter(bucket["pairs"], key, pair_filter)
-                continue
-            bucket["pairs"].append(pair_filter)
-            seen_pairs.add(key)
-    return filters
-
-
-def _task_feasibility_pair_filter(
-    *,
-    source_request_id: str,
-    object_alias: str,
-    target_alias: str,
-    derived_from: str,
-    blockers: list[dict[str, Any]],
-    result: dict[str, Any],
-) -> dict[str, Any]:
-    item = {
-        "source_request_id": source_request_id,
-        "object_alias": object_alias,
-        "target_alias": target_alias,
-        "derived_from": derived_from,
-        "reason": "prior_task_feasibility_blocked_pair",
-        "prior_status": str(result.get("status") or ""),
-        "prior_task_feasibility_status": str(result.get("task_feasibility_status") or ""),
-        "prior_blockers": blockers,
-        **_prior_result_evidence_fields(result),
-    }
-    item.update(_prior_result_blocker_fields(result))
-    return item
-
-
-def _enrich_existing_pair_filter(
-    pairs: list[dict[str, Any]],
-    key: tuple[str, str, str],
-    candidate: dict[str, Any],
-) -> None:
-    for item in pairs:
-        if (
-            str(item.get("source_request_id") or ""),
-            str(item.get("object_alias") or ""),
-            str(item.get("target_alias") or ""),
-        ) != key:
-            continue
-        for field in (
-            "prior_status",
-            "prior_task_feasibility_status",
-            "prior_task_feasibility_blocker_kind",
-            "prior_task_feasibility_blocker_summary",
-            "prior_run_result",
-            "prior_report",
-            "prior_stdout",
-            "prior_stderr",
-            "last_worker_stage",
-            "execution_attempted",
-        ):
-            if candidate.get(field) and not item.get(field):
-                item[field] = candidate[field]
-        if candidate.get("prior_blockers") and not item.get("prior_blockers"):
-            item["prior_blockers"] = candidate["prior_blockers"]
-        return
-
-
-def _carried_filtered_aliases(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:
-    fallback_generation = prior_summary.get("fallback_generation") or {}
-    if not isinstance(fallback_generation, dict):
-        return []
-    return [
-        dict(item)
-        for item in fallback_generation.get("filtered_aliases") or []
-        if isinstance(item, dict)
-    ]
-
-
-def _carried_filtered_pairs(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:
-    fallback_generation = prior_summary.get("fallback_generation") or {}
-    if not isinstance(fallback_generation, dict):
-        return []
-    return [
-        dict(item)
-        for item in fallback_generation.get("filtered_pairs") or []
-        if isinstance(item, dict)
-    ]
-
-
-def _prior_pair_filter_lookup(
-    prior_filters: dict[str, Any],
-) -> dict[tuple[str, str], dict[str, Any]]:
-    raw = prior_filters.get("pairs") if isinstance(prior_filters, dict) else []
-    if not isinstance(raw, list):
-        return {}
-    pairs = {}
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-        object_alias = str(item.get("object_alias") or "")
-        target_alias = str(item.get("target_alias") or "")
-        if object_alias and target_alias:
-            pairs[(object_alias, target_alias)] = dict(item)
-    return pairs
-
-
-def _has_non_root_body_blocker(blockers: list[dict[str, Any]]) -> bool:
-    for blocker in blockers:
-        code = str(blocker.get("code") or "")
-        message = str(blocker.get("message") or "").lower()
-        if code == "AssertionError" and "not a root body" in message:
-            return True
-        if "object is not a root body" in message:
-            return True
-    return False
-
-
-def _source_request_id_from_result(result: dict[str, Any]) -> str:
-    request_id = str(result.get("request_id") or "")
-    return request_id.split(_FALLBACK_REQUEST_ID_MARKER, 1)[0]
-
-
-def _proof_cleanup_task_config(result: dict[str, Any]) -> dict[str, Any]:
-    config = result.get("cleanup_task_config")
-    if isinstance(config, dict):
-        return config
-    requested = result.get("requested_cleanup_primitive_binding")
-    return requested if isinstance(requested, dict) else {}
-
-
-def _invalid_name_entries_from_blockers(blockers: Any) -> list[dict[str, Any]]:
-    entries = []
-    for blocker in blockers:
-        if not isinstance(blocker, dict):
-            continue
-        match = _INVALID_NAME_RE.search(str(blocker.get("message") or ""))
-        if not match:
-            continue
-        valid_names = _valid_names_from_literal(match.group(2))
-        if valid_names:
-            entries.append(
-                {
-                    "invalid_alias": match.group(1),
-                    "valid_names": valid_names,
-                }
-            )
-    return entries
-
-
-def _valid_names_from_literal(value: str) -> list[str]:
-    try:
-        parsed = ast.literal_eval(value)
-    except (SyntaxError, ValueError):
-        single_quoted = re.findall(r"'([^']+)'", value)
-        double_quoted = re.findall(r'"([^"]+)"', value)
-        return _unique_nonempty_values([*single_quoted, *double_quoted])
-    if not isinstance(parsed, list):
-        return []
-    return _unique_nonempty_values([str(item) for item in parsed if isinstance(item, str)])
-
-
-def _invalid_alias_axis(invalid_alias: str, config: dict[str, Any]) -> str:
-    if invalid_alias == str(config.get("planner_object_id") or ""):
-        return "object"
-    if invalid_alias == str(config.get("planner_target_receptacle_id") or ""):
-        return "target"
-    return ""
-
-
-def _runtime_alias_siblings(current_alias: str, valid_names: list[str]) -> list[str]:
-    match = _RUNTIME_ALIAS_RE.match(current_alias)
-    if not match:
-        return []
-    siblings = []
-    for name in valid_names:
-        candidate = _RUNTIME_ALIAS_RE.match(name)
-        if (
-            candidate
-            and candidate.group("prefix") == match.group("prefix")
-            and candidate.group("group") == match.group("group")
-            and candidate.group("room") == match.group("room")
-            and name != current_alias
-            and _is_exact_scene_planner_alias(name)
-        ):
-            siblings.append(name)
-    return _unique_nonempty_values(siblings)
-
-
-def _planner_arg(args: Any, key: str) -> str:
-    return str(args.get(key) or "") if isinstance(args, dict) else ""
-
-
-def _unique_nonempty_values(values: list[str]) -> list[str]:
-    return list(dict.fromkeys(str(value) for value in values if str(value)))
 
 
 def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[str, Any]:

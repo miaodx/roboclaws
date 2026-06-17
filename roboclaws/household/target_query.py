@@ -4,6 +4,8 @@ import re
 from typing import Any
 
 TARGET_QUERY_RESOLUTION_SCHEMA = "target_query_resolution_v1"
+_OBJECT_NAVIGATION_OPERATIONS = {"pick", "manipulate"}
+_DESTINATION_NAVIGATION_OPERATIONS = {"destination", "place", "place_inside", "use"}
 
 
 def resolve_target_query(
@@ -206,18 +208,37 @@ def _candidate_actionable_for_operation(candidate: dict[str, Any], operation: st
 def _required_next_tool(candidate: dict[str, Any], operation: str) -> str:
     actionability = str(candidate.get("target_actionability_status") or "")
     if actionability == "actionable":
-        if operation in {"pick", "manipulate"} and candidate.get("object_id"):
-            return "navigate_to_object"
-        if operation in {"destination", "place", "place_inside", "use"}:
-            if candidate.get("candidate_fixture_id"):
-                return "navigate_to_receptacle"
-            if candidate.get("waypoint_id"):
-                return "navigate_to_waypoint"
-        if candidate.get("waypoint_id"):
-            return "navigate_to_waypoint"
-        if candidate.get("object_id"):
-            return "inspect_visible_object"
-        return ""
+        return _required_tool_for_actionable_candidate(candidate, operation)
+    return _required_tool_for_non_actionable_candidate(candidate, actionability)
+
+
+def _required_tool_for_actionable_candidate(candidate: dict[str, Any], operation: str) -> str:
+    if operation in _OBJECT_NAVIGATION_OPERATIONS and candidate.get("object_id"):
+        return "navigate_to_object"
+    if operation in _DESTINATION_NAVIGATION_OPERATIONS:
+        return _required_destination_navigation_tool(candidate)
+    return _required_general_actionable_tool(candidate)
+
+
+def _required_destination_navigation_tool(candidate: dict[str, Any]) -> str:
+    if candidate.get("candidate_fixture_id"):
+        return "navigate_to_receptacle"
+    if candidate.get("waypoint_id"):
+        return "navigate_to_waypoint"
+    return _required_general_actionable_tool(candidate)
+
+
+def _required_general_actionable_tool(candidate: dict[str, Any]) -> str:
+    if candidate.get("waypoint_id"):
+        return "navigate_to_waypoint"
+    if candidate.get("object_id"):
+        return "inspect_visible_object"
+    return ""
+
+
+def _required_tool_for_non_actionable_candidate(
+    candidate: dict[str, Any], actionability: str
+) -> str:
     if actionability == "needs_observe":
         return "navigate_to_waypoint" if candidate.get("waypoint_id") else "observe"
     if actionability == "visible_only":
