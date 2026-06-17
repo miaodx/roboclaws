@@ -116,9 +116,9 @@ relocation setup; reports may record setup provenance, but Agent View must not.
 _Avoid_: task intent, cleanup scenario, agent-facing context
 
 **Relocation Policy**:
-A Scenario Setup mode that moves eligible loose or cleanup-related objects before
-the run starts. The policy, object IDs, before/after locations, and relocation
-count stay private/report-side.
+A Scenario Setup mode that moves cleanup-related objects before the run starts.
+The policy, object IDs, before/after locations, and relocation count stay
+private/report-side.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
 **Base Navigation Map**:

@@ -225,7 +225,11 @@ def _resolve_launch(
     )
     dispatch_overrides = (
         *_without_launch_only_overrides(plan_overrides),
-        *((f"world={world.id}",) if backend.implementation_backend == "isaaclab_subprocess" else ()),
+        *(
+            (f"world={world.id}",)
+            if backend.implementation_backend == "isaaclab_subprocess"
+            else ()
+        ),
         f"backend={backend.implementation_backend}",
         *dispatch_setup_overrides,
     )
@@ -294,7 +298,7 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
     if _override_value(overrides, "environment_setup"):
         raise LaunchError(
             "environment_setup= is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-loose-objects|relocate-cleanup-related-objects",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects",
         )
 
 
@@ -571,13 +575,13 @@ def _normalize_scenario_setup_overrides(
     if _override_value(overrides, "environment_setup") is not None:
         raise LaunchError(
             "environment_setup= is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-loose-objects|relocate-cleanup-related-objects",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects",
         )
     if _override_value(overrides, "generated_mess_count") is not None:
         raise LaunchError(
             "generated_mess_count is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-loose-objects|"
-            "relocate-cleanup-related-objects and relocation_count=<N>",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects "
+            "and relocation_count=<N>",
         )
     default_setup = preset.default_scenario_setup if preset else ENVIRONMENT_SETUP_BASELINE
     setup = _override_value(overrides, "scenario_setup") or default_setup
@@ -595,8 +599,7 @@ def _normalize_scenario_setup_overrides(
     elif relocation_count not in {None, "", "0"}:
         raise LaunchError(
             "relocation_count is only valid when scenario_setup relocates objects",
-            "use scenario_setup=relocate-loose-objects or "
-            "scenario_setup=relocate-cleanup-related-objects",
+            "use scenario_setup=relocate-cleanup-related-objects",
         )
     merged = _without_override(
         _without_override(

@@ -349,7 +349,22 @@ def test_invalid_relocation_count_is_rejected() -> None:
                 "intent=cleanup",
                 "agent_engine=codex-cli",
                 "evidence_lane=world-public-labels",
-                "scenario_setup=relocate-loose-objects",
+                "scenario_setup=relocate-cleanup-related-objects",
                 "relocation_count=-1",
+            ]
+        )
+
+
+def test_loose_object_relocation_setup_is_not_publicly_supported() -> None:
+    with pytest.raises(LaunchError, match="unsupported scenario_setup"):
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=mujoco",
+                "intent=cleanup",
+                "agent_engine=codex-cli",
+                "evidence_lane=world-public-labels",
+                "scenario_setup=relocate-loose-objects",
             ]
         )

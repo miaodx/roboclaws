@@ -118,18 +118,29 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
         run_id="run-1",
         overrides={
             "seed": "9",
-            "scenario_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-cleanup-related-objects",
             "relocation_count": "2",
         },
     )
 
     assert "seed=7" not in argv
-    assert "scenario_setup=relocate-cleanup-related-objects" not in argv
     assert "relocation_count=5" not in argv
     assert "seed=9" in argv
-    assert "scenario_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
+
+
+def test_launcher_rejects_loose_object_relocation_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+
+    with pytest.raises(ConsoleLaunchError, match="unsupported scenario_setup"):
+        build_launch_argv(
+            route,
+            root=tmp_path,
+            run_id="run-1",
+            overrides={"scenario_setup": "relocate-loose-objects"},
+        )
 
 
 def test_launcher_rejects_old_public_generated_mess_override(tmp_path: Path) -> None:

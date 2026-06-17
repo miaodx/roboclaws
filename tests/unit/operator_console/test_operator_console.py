@@ -120,7 +120,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         prompt="pick up the mug; rm -rf /",
         overrides={
             "seed": "8",
-            "scenario_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-cleanup-related-objects",
             "relocation_count": "2",
         },
     )
@@ -138,7 +138,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     assert "evidence_lane=world-public-labels" in argv
     assert "provider_profile=codex-env" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
-    assert "scenario_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
