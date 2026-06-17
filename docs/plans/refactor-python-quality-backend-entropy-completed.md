@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console scene-preview asset endpoint assertions moved
+  registered-asset checks, PNG response checks, JSON response checks, and
+  invalid-path rejection checks out of
+  `test_operator_console_serves_scene_preview_assets()` into focused local
+  helpers. Behavior-change class: test-only cleanup; preview asset route
+  behavior and registered preview names are unchanged. Metric: ratchet reports
+  1 complexity row and 77 oversized modules, and
+  `test_operator_console.py::test_operator_console_serves_scene_preview_assets`
+  dropped from the complexity list. Proof: focused operator-console
+  scene-preview endpoint test, ruff, format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Scene-sampler next-flow readiness assertions moved summary,
   artifact-path, source-status, and scanner-plan checks out of
   `_assert_next_flow()` into focused local assertion helpers. Behavior-change

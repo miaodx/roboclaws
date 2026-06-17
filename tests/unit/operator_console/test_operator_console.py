@@ -520,6 +520,25 @@ def test_operator_console_messup_preview_endpoint_is_non_launching(tmp_path: Pat
 
 def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
     registered_previews = _registered_preview_asset_names()
+    _assert_registered_scene_preview_assets(registered_previews)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        base_url = f"http://{host}:{port}"
+        _assert_scene_preview_png_assets(base_url)
+        _assert_scene_preview_json_assets(base_url)
+        _assert_scene_preview_rejects_invalid_paths(base_url)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def _assert_registered_scene_preview_assets(registered_previews: set[str]) -> None:
     assert "molmospaces-procthor-objaverse-val-10-map.png" in registered_previews
     assert "molmospaces-procthor-objaverse-val-10-preview.json" in registered_previews
     assert "b1-map12-map.png" in registered_previews
@@ -529,58 +548,42 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
     assert "molmospaces-val_6-map.png" not in registered_previews
     assert "molmospaces-val_8-map.png" not in registered_previews
 
-    handler = partial(ConsoleRequestHandler, root=tmp_path)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        host, port = server.server_address
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-map.png"
-        ) as response:
+
+def _assert_scene_preview_png_assets(base_url: str) -> None:
+    for asset_name in (
+        "molmospaces-procthor-objaverse-val-10-map.png",
+        "b1-map12-map.png",
+        "molmospaces-procthor-objaverse-val-10-topdown.png",
+        "molmospaces-procthor-objaverse-val-10-chase.png",
+        "b1-map12-map.png",
+    ):
+        with urllib.request.urlopen(f"{base_url}/previews/{asset_name}") as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(f"http://{host}:{port}/previews/b1-map12-map.png") as response:
-            assert response.headers["Content-Type"] == "image/png"
-            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-topdown.png"
-        ) as response:
-            assert response.headers["Content-Type"] == "image/png"
-            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-chase.png"
-        ) as response:
-            assert response.headers["Content-Type"] == "image/png"
-            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(f"http://{host}:{port}/previews/b1-map12-map.png") as response:
-            assert response.headers["Content-Type"] == "image/png"
-            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/molmospaces-procthor-objaverse-val-10-preview.json"
-        ) as response:
-            preview = json.loads(response.read().decode("utf-8"))
-            assert preview["views"]["chase"]["view"] == "chase_camera"
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/previews/b1-map12-preview.json"
-        ) as response:
-            preview = json.loads(response.read().decode("utf-8"))
-            assert preview["renderer"] == "static_b1_map12_digital_twin_overview"
-            assert "fpv" not in preview["views"]
-            assert "chase" not in preview["views"]
+
+
+def _assert_scene_preview_json_assets(base_url: str) -> None:
+    with urllib.request.urlopen(
+        f"{base_url}/previews/molmospaces-procthor-objaverse-val-10-preview.json"
+    ) as response:
+        preview = json.loads(response.read().decode("utf-8"))
+        assert preview["views"]["chase"]["view"] == "chase_camera"
+    with urllib.request.urlopen(f"{base_url}/previews/b1-map12-preview.json") as response:
+        preview = json.loads(response.read().decode("utf-8"))
+        assert preview["renderer"] == "static_b1_map12_digital_twin_overview"
+        assert "fpv" not in preview["views"]
+        assert "chase" not in preview["views"]
+
+
+def _assert_scene_preview_rejects_invalid_paths(base_url: str) -> None:
+    for path in (
+        "/previews/../app.js",
+        "/previews/molmospaces-val_6-map.png",
+        "/asset-previews/maps/../README.md",
+    ):
         with pytest.raises(urllib.error.HTTPError) as exc_info:
-            urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
+            urllib.request.urlopen(f"{base_url}{path}")
         assert exc_info.value.code == 404
-        with pytest.raises(urllib.error.HTTPError) as exc_info:
-            urllib.request.urlopen(f"http://{host}:{port}/previews/molmospaces-val_6-map.png")
-        assert exc_info.value.code == 404
-        with pytest.raises(urllib.error.HTTPError) as exc_info:
-            urllib.request.urlopen(f"http://{host}:{port}/asset-previews/maps/../README.md")
-        assert exc_info.value.code == 404
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
 
 
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
