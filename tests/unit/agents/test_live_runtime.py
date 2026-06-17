@@ -11,13 +11,15 @@ import pytest
 
 from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
-    _compact_model_input_items,
     _default_sdk_model_settings_payload,
     _failure_from_exception,
-    _model_input_shape_summary,
     _RetryingModel,
     _RoboclawsSpanRecorder,
     _should_retry_model_service_failure,
+)
+from roboclaws.agents.drivers.openai_agents_model_input import (
+    _compact_model_input_items,
+    _model_input_shape_summary,
 )
 from roboclaws.agents.live_runtime import (
     LiveAgentMCPServer,

@@ -18,21 +18,27 @@ the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 80` on 2026-06-17 after the planner-probe task-sampler
-diagnostics owner split. Treat this as a planning snapshot for the next slice;
+--summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
+compaction owner split. Treat this as the planning snapshot for the next slice;
 refresh before executing again.
 
-- 11 Ruff complexity violations and 69 oversized modules remain. The oversized
-  count increased by one because the new task-sampler diagnostics owner is now
+- 11 Ruff complexity violations and 70 oversized modules remain. The oversized
+  count increased by one because the new model-input compaction owner is now
   counted above the default 800-line target.
 - Largest P1 production hard-ceiling files are
-  `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
   `roboclaws/household/realworld_contract.py` at 2836,
   `roboclaws/household/scene_camera_comparison.py` at 2830,
   `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` at 2808,
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711,
   `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 2394,
   and `roboclaws/household/report.py` at 2108.
+- `roboclaws/agents/drivers/openai_agents_live.py` is down to 1994 lines and is
+  no longer a hard-ceiling P1. Keep it below 2000; reopen it only if SDK driver
+  request/session/provider orchestration grows again or rebuilds model-input
+  compaction inline.
+- `roboclaws/agents/drivers/openai_agents_model_input.py` is 972 lines and owns
+  OpenAI Agents SDK model-input compaction. Keep it as a justified cohesive
+  800-1200-line owner unless a second real owner emerges inside it.
 - `roboclaws/household/realworld_runtime_map_targets.py` is 1009 lines. Keep
   it as a justified cohesive 800-1200-line owner only while it owns the single
   target/public-anchor concept; do not split it again just to chase line count.
@@ -331,6 +337,46 @@ contract owner. Candidate A should not be chosen merely because
 only with a fresh facade-private coupling point or a remaining report-section
 owner such as Agibot rehearsal / SDK runner sections.
 
+Planning-only intuitive-refactor / ponytail audit recheck on 2026-06-17
+refreshed the same ratchet at 11 complexity rows and 69 oversized modules, then
+checked Candidate D call sites and the remaining ponytail small cuts without
+starting implementation. Candidate D remains the default next P1: the SDK
+driver's model-input compaction block is still a cohesive owner boundary from
+`_input_compaction_config()` through shape metrics and
+`openai_agents_model_input_filter_v1` event writing, while
+`_sdk_run_config_payload()` is only the RunConfig integration point. The
+existing model-input tests import `_compact_model_input_items()` and
+`_model_input_shape_summary()` from the driver-private module; a D
+implementation should move those tests to the new owner directly instead of
+leaving driver aliases. Keep runner-side profile/default construction in
+`run_live_openai_agents_cleanup.py`: the runner builds perf-profile metadata,
+the driver compacts the SDK model input from that metadata. Ponytail recheck
+confirmed `_task_prefix_legacy` has no in-repo call sites and the camera-labeler
+maps are empty identity mappings, but neither is large enough to outrank D; the
+camera-labeler cut must keep public `camera_labeler` validation and
+`visual_grounding_pipeline_id` round-tripping, and the checker legacy flag is
+still a reachable CLI/docs alias that needs a focused migration if selected.
+Docs-only duplicated lane wording includes a historical duplicate
+`world-public-labels` entry in `docs/human/molmospaces-cleanup-mode-architecture.md`,
+but keep that as L0 cleanup unless paired with a human-doc slice.
+
+Implementation refresh on 2026-06-17 moved OpenAI Agents SDK model-input
+compaction from `openai_agents_live.py` into
+`openai_agents_model_input.py`. The new owner now owns model-input compaction
+config extraction, RunConfig filter construction, raw-FPV image-memory
+summaries, camera-grounded history summaries, tool-output unwrapping,
+metric-map/public tool-output summaries, aggregate model-input shape metrics,
+and `openai_agents_model_input_filter_v1` event writing. The SDK driver keeps
+provider/model settings, retry, model racing, span recording, runtime config,
+and MCP session lifecycle, and imports only the compaction config/filter
+integration. Tests import `_compact_model_input_items()` and
+`_model_input_shape_summary()` from the new owner directly instead of keeping
+driver-private aliases. Metric: `openai_agents_live.py` 2889 -> 1994 lines;
+new owner 972 lines; staged/add-N ratchet is 11 complexity rows and 70
+oversized modules. Reopen this boundary only if the driver starts rebuilding
+model-input compaction policy, raw-FPV/camera-grounded history summaries,
+tool-output summaries, model-input shape metrics, or filter events inline.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
@@ -370,37 +416,36 @@ owner such as Agibot rehearsal / SDK runner sections.
 
 ## Current Target
 
-Current checkpoint: Candidate C's planner-probe runtime diagnostics and
-task-sampler diagnostics splits are verified and closed. Refresh the ratchet
-before implementation, then default to Candidate D's OpenAI Agents
-model-input-compaction owner split unless a fresh scan finds a stronger
-contract/report or visual-comparison owner boundary. Candidate A remains active because
-`realworld_contract.py` and `report.py` are still above the hard ceiling, but
-the runtime-map target/public-anchor, proof-bundle result-renderer, and related
-recent contract boundaries are closed. Candidate B remains active through the
-visual comparison family: `scene_camera_comparison.py`,
-`summarize_robot_camera_visual_parity.py`, and the apple runner are still above
-the ceiling, but the apple object-parity audit, selected RGB evidence, and
-visual-state contract boundaries are closed. Candidate B's current best
-fallback is apple camera-contract diagnostics, not capture-lane initialization.
-Candidate D covers the OpenAI Agents SDK live runtime/runner pair and is the
-recommended next P1 because the SDK driver still owns a cohesive model-input
-filtering concept. Candidate C is no longer the default next P1 unless the
-planner probe runner crosses 2000 lines again or the task-sampler owner reveals
-a second real owner with call-site evidence.
+Current checkpoint: Candidate D's SDK driver-side model-input compaction split
+is verified and closed. Refresh the ratchet before implementation, then choose
+the next P1 from the remaining hard-ceiling frontier by owner-boundary evidence.
+Candidate A remains active because `realworld_contract.py` and `report.py` are
+still above the hard ceiling, but the runtime-map target/public-anchor,
+proof-bundle result-renderer, and related recent contract boundaries are
+closed. Candidate B remains active through the visual comparison family:
+`scene_camera_comparison.py`, `summarize_robot_camera_visual_parity.py`, and the
+apple runner are still above the ceiling, but the apple object-parity audit,
+selected RGB evidence, and visual-state contract boundaries are closed.
+Candidate B's current best fallback is apple camera-contract diagnostics, not
+capture-lane initialization. Candidate D remains active only through the
+OpenAI Agents cleanup runner hard ceiling or a fresh SDK-driver owner seam such
+as model-service retry/racing observability or span/event sanitization; do not
+reopen SDK model-input compaction. Candidate C is no longer the default next P1
+unless the planner probe runner crosses 2000 lines again or the task-sampler
+owner reveals a second real owner with call-site evidence.
 
 Recommended next slice claim:
 
-- Slice: Candidate D default. Move OpenAI Agents SDK driver-side model-input
-  compaction from `openai_agents_live.py` into a focused driver owner. Fallback:
-  Candidate B apple camera-contract diagnostics if D's call-site scan uncovers
-  public provider-behavior risk.
+- Slice: choose the next owner-boundary P1 from Candidate A, Candidate B, or the
+  remaining Candidate D runner. Likely defaults are Candidate B apple
+  camera-contract diagnostics or Candidate D runner-side performance-profile /
+  timing-summary ownership; choose by fresh call-site evidence, not file size
+  alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
   Profiles plus Thin Runtime / Server Adapters for Candidate D.
 - Current friction: the hard-ceiling frontier is now
-  `openai_agents_live.py` at 2889, `realworld_contract.py` at 2836,
-  `scene_camera_comparison.py` is 2830,
+  `realworld_contract.py` at 2836, `scene_camera_comparison.py` is 2830,
   `summarize_robot_camera_visual_parity.py` is 2808,
   `run_live_openai_agents_cleanup.py` is 2711,
   the apple runner is 2394, and `report.py` is 2108. Candidate A's runtime-map
@@ -409,19 +454,21 @@ Recommended next slice claim:
   Candidate B's apple Object Gate,
   capture-quality, material/probe primitives, native-render diagnostics,
   image-metric artifacts, object-parity audit assembly, selected RGB evidence,
-  and visual-state contract evidence are closed. Candidate D still keeps SDK
-  driver model-input filtering, compaction policies, raw-FPV/camera-grounded
-  history summaries, shape metrics, and filter-event writing inline with
-  provider request/session orchestration.
+  and visual-state contract evidence are closed. Candidate D's SDK driver-side
+  model-input filtering boundary is closed; the live cleanup runner still keeps
+  perf-profile/default resolution and timing/latency summary construction
+  inline.
 - Simplification: move one remaining real responsibility to an existing or
   focused owner and update callers to that owner directly. Delete obsolete
   private wrappers when call-site scan proves they are internal. Do not replace
   private coupling with a loose parameter bag, compatibility alias pile, or new
-  wrapper facade.
-- Behavior-change class: internal owner cleanup. For the D default, preserve
-  SDK request behavior, provider route semantics, model thinking policy, MCP
-  session behavior, continuation policy, event/span schemas, model-input
-  compaction output schemas, and live-status payloads.
+  wrapper facade. For any follow-up D runner slice, keep SDK driver internals
+  separate from live server lifecycle and do not move profile/default
+  construction into the SDK driver.
+- Behavior-change class: internal owner cleanup. Preserve SDK request behavior,
+  provider route semantics, model thinking policy, MCP session behavior,
+  continuation policy, event/span schemas, model-input compaction output
+  schemas, live-status payloads, and public launch/profile contracts.
 - Proof: focused tests matching the selected boundary, ruff on touched files,
   format check, py_compile, `git diff --check`, and ratchet summary. If a future
   slice creates or keeps a new untracked owner during planning, use `git add -N`
@@ -434,8 +481,9 @@ Recommended next slice claim:
   report-panel ownership, apple Object Gate / Render Gate classification,
   capture-quality, native-render diagnostics,
   material/probe delegates, image-metric artifacts, apple object-parity
-  audit/RGB/visual-state ownership, OpenAI Agents provider semantics, or lane
-  initialization / manifest setup without fresh duplication.
+  audit/RGB/visual-state ownership, OpenAI Agents model-input compaction
+  ownership, OpenAI Agents provider semantics, or lane initialization / manifest
+  setup without fresh duplication.
 
 Candidate A remains valid only for a new `RealWorldCleanupContract` boundary
 such as agent-view wrapper cleanup that reduces private method coupling,
@@ -452,16 +500,18 @@ checkpoint.
 
 Preflight status: REVIEWED. Route: `$intuitive-refactor` ratchet mode. Default
 execution: refresh the ratchet, run a short ponytail recheck against current
-hard-ceiling candidates, and execute Candidate D's SDK driver model-input
-compaction owner split. Use Candidate B apple camera-contract diagnostics as
-the fallback if D's call-site scan shows public provider-behavior risk. Non-goals:
-broad repo cleanup, line-count shaving across many files, preserving obsolete
-internal wrappers, lane initialization unless fresh drift appears, mixing SDK
-driver internals with live runner lifecycle, and live/provider/simulator proof
-unless the chosen slice changes that route. Re-approve if a slice would change
-a public launch, artifact schema, report shape, agent-facing payload, provider
-behavior, event/span schema, model-input compaction schema, or private/public
-eval contract.
+hard-ceiling candidates, and select one remaining owner-boundary P1 from
+Candidate A/B/D. Candidate B's apple camera-contract diagnostics and Candidate
+D's runner-side performance-profile / timing-summary ownership are the clearest
+known next seams; Candidate A needs fresh facade-private coupling evidence.
+Non-goals: broad repo cleanup, line-count shaving across many files, preserving
+obsolete internal wrappers, lane initialization unless fresh drift appears,
+reopening SDK model-input compaction, mixing SDK driver internals with live
+runner lifecycle, and live/provider/simulator proof unless the chosen slice
+changes that route. Re-approve if a slice would change a public launch,
+artifact schema, report shape, agent-facing payload, provider behavior,
+event/span schema, model-input compaction schema, or private/public eval
+contract.
 
 ## Active Candidates
 
@@ -612,8 +662,9 @@ selected owner, plus ruff, format check, py_compile, and ratchet.
 
 ### D: OpenAI Agents Live Runtime / Runner Split
 
-Severity: P1. `roboclaws/agents/drivers/openai_agents_live.py` is 2889 lines
-and `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is 2711 lines.
+Severity: P1 for the runner only after the model-input slice.
+`roboclaws/agents/drivers/openai_agents_live.py` is 1994 lines and
+`scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is 2711 lines.
 Owning architecture layers: Agent Engines And Provider Profiles for SDK request,
 model settings, retry, input compaction, camera-grounded history, model racing,
 and span/event artifacts; Thin Runtime / Server Adapters for live server
@@ -621,26 +672,21 @@ ownership, lease/status/timing, continuation attempts, checker invocation, and
 live-run metrics attachment.
 
 Default D slice candidates should preserve the runtime/runner boundary instead
-of creating another catch-all module. Plausible owner moves are model-input
-compaction plus raw-FPV/camera-grounded history policy and metrics from the SDK
-driver; model-service retry/model-racing observability from the SDK driver; span
-recorder/event sanitization from the SDK driver; or runner-side
-performance-profile/default resolution and timing summary construction from the
-live cleanup runner. Default next slice: extract model-input compaction first,
-covering `_input_compaction_config()`, `_model_input_compaction_filter()`,
-`_compact_model_input_items()`, raw-FPV image-memory policy/planning/candidate
-helpers, camera-grounded history policy/planning/candidate helpers, tool-output
-decoding/summarization, model-input shape summary, and model-input filter event
-writing. Keep `_sdk_run_config_payload()` and `_runtime_config()` in the driver
-as integration points that call the owner; keep runner-side
-`_model_input_compaction_profile()`, `_raw_fpv_image_memory_profile()`, and
-`_camera_grounded_history_profile()` in the live cleanup runner unless a later
-runner slice is selected. Update model-input tests to import the new owner
-directly instead of keeping driver-private alias wrappers. Do not mix SDK driver
-internals with runner lifecycle in one new owner, and do not change provider
-route semantics, model thinking policy, MCP session behavior, continuation
-policy, checker gates, event/span schemas, or live-status payloads unless
-explicitly approved.
+of creating another catch-all module. Model-input compaction plus
+raw-FPV/camera-grounded history policy and metrics now belongs to
+`openai_agents_model_input.py`; reopen only if the SDK driver starts rebuilding
+that owner directly. Remaining plausible D moves are model-service
+retry/model-racing observability from the SDK driver, span recorder/event
+sanitization from the SDK driver, or runner-side performance-profile/default
+resolution and timing summary construction from the live cleanup runner. For a
+runner slice, keep `_model_input_compaction_profile()`,
+`_raw_fpv_image_memory_profile()`, and `_camera_grounded_history_profile()` out
+of the SDK driver; move them only to a runner-owned profile/default module if
+the slice selects that seam. Do not mix SDK driver internals with runner
+lifecycle in one new owner, and do not change provider route semantics, model
+thinking policy, MCP session behavior, continuation policy, checker gates,
+event/span schemas, model-input compaction schemas, or live-status payloads
+unless explicitly approved.
 
 Behavior-change class is internal owner cleanup unless the selected slice
 changes provider behavior, event/span schemas, status artifacts, prompt/profile
@@ -673,13 +719,15 @@ be claimed without an explicit local run.
   `roboclaws/household/profiles.py` are confirmed zero-entry identity maps; a
   future cut should remove only the maps/get-indirection while keeping
   normalization, validation, and public `camera_labeler` /
-  `visual_grounding_pipeline_id` semantics. The `_task_prefix_legacy` shim has
-  no in-repo call sites and can be deleted with prompt static proof plus
-  focused prompt tests. The checker flag is still a reachable parser/docs alias
-  for `--require-robot-head-camera-fpv`, so it needs a checker-contract
-  migration rather than an opportunistic delete. The guidance wording is
-  docs-only startup friction and should stay L0 unless paired with a human-doc
-  cleanup slice.
+  `visual_grounding_pipeline_id` semantics plus contract profile tests. The
+  `_task_prefix_legacy` shim has no in-repo call sites and can be deleted with
+  prompt static proof plus focused prompt tests. The checker flag is still a
+  reachable parser/docs alias for `--require-robot-head-camera-fpv`, so it needs
+  a checker-contract migration rather than an opportunistic delete. The
+  guidance wording is docs-only startup friction; known evidence includes a
+  duplicated `world-public-labels` entry in
+  `docs/human/molmospaces-cleanup-mode-architecture.md`, but keep that L0
+  unless paired with a human-doc cleanup slice.
 
 ### Cleared Or Parked
 

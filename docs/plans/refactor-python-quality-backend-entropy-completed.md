@@ -1151,6 +1151,15 @@ logs before choosing the next slice.
   diagnostics, placement scene/grasp/candidate diagnostics, diagnostic JSON
   coercion, sampled task binding, requested cleanup primitive binding, or
   cleanup binding promotion directly.
+- OpenAI Agents SDK model-input compaction is owned by
+  `openai_agents_model_input.py`. Metric: `openai_agents_live.py` 2889 ->
+  1994 lines; new owner is 972 lines; staged/add-N ratchet reports 11
+  complexity rows and 70 oversized modules. Proof: focused OpenAI Agents live
+  runtime tests, ruff, format check, py_compile, and ratchet. Reopen only if
+  the SDK driver rebuilds compaction config/filter setup, raw-FPV image-memory
+  summaries, camera-grounded history summaries, tool-output unwrapping,
+  metric-map/public output summaries, aggregate model-input shape metrics, or
+  model-input filter event writing inline.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state
