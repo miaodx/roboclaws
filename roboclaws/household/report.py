@@ -543,6 +543,7 @@ def _cleanup_summary_section(
         <h1>{html.escape(title)}</h1>
       </div>
       {_summary_metrics(run_result, score)}
+      {_failure_reason_summary(run_result)}
       <details class="summary-metadata">
         <summary>Run metadata</summary>
         <div class="badges">
@@ -765,6 +766,56 @@ def _summary_metrics(run_result: dict[str, Any], score: dict[str, Any]) -> str:
         f"{_metric('Semantic', semantic_count or 'n/a')}"
         "</div>"
     )
+
+
+def _failure_reason_summary(run_result: dict[str, Any]) -> str:
+    if not _is_failure_status(run_result):
+        return ""
+    reason = _failure_reason_text(run_result)
+    if not reason:
+        return ""
+    return (
+        '<div class="summary-alert summary-alert-failure">'
+        "<strong>Failure Reason</strong>"
+        f"<p>{html.escape(reason)}</p>"
+        "</div>"
+    )
+
+
+def _is_failure_status(run_result: dict[str, Any]) -> bool:
+    statuses = [
+        run_result.get("cleanup_status"),
+        run_result.get("completion_status"),
+        run_result.get("status"),
+    ]
+    live_status = run_result.get("live_status")
+    if isinstance(live_status, dict):
+        statuses.append(live_status.get("phase"))
+    return any(
+        str(status or "").strip().lower()
+        in {"failed", "failure", "blocked", "error", "errored", "timeout", "timed_out"}
+        for status in statuses
+    )
+
+
+def _failure_reason_text(run_result: dict[str, Any]) -> str:
+    score = run_result.get("score") if isinstance(run_result.get("score"), dict) else {}
+    live_status = run_result.get("live_status")
+    live_status = live_status if isinstance(live_status, dict) else {}
+    candidates = [
+        run_result.get("terminate_reason"),
+        run_result.get("failure_reason"),
+        run_result.get("error_reason"),
+        score.get("completion_summary"),
+        score.get("why_done"),
+        live_status.get("reason"),
+        live_status.get("detail"),
+    ]
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text:
+            return text
+    return ""
 
 
 def _metric(label: str, value: Any) -> str:
@@ -1327,6 +1378,29 @@ def _wrap_html(
       font-weight: 750;
     }}
     .summary-metadata .badges {{ padding: 0 12px 12px; }}
+    .summary-alert {{
+      display: grid;
+      gap: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      margin: 0 0 12px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.07);
+    }}
+    .summary-alert strong {{
+      color: #ffffff;
+      font-size: 14px;
+    }}
+    .summary-alert p {{
+      margin: 0;
+      color: #dbe5ef;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }}
+    .summary-alert-failure {{
+      border-color: rgba(248, 113, 113, 0.44);
+      background: rgba(127, 29, 29, 0.28);
+    }}
     .eyebrow {{
       margin: 0 0 6px;
       color: #a7d8cf;

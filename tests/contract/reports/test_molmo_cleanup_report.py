@@ -187,6 +187,81 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     assert "household-cleanup direct world-public-labels" not in html
 
 
+def test_cleanup_report_surfaces_failure_reason_on_summary(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    reason = (
+        "Task could not be completed with public robot capabilities; "
+        "generated_exploration_004 was blocked by goal_occupied."
+    )
+    run_result = {
+        "cleanup_status": "failed",
+        "completion_status": "failed",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": {**score.to_dict(), "completion_summary": "less specific summary"},
+        "terminate_reason": reason,
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Failure Reason" in html
+    assert reason in html
+    assert html.index("Failure Reason") < html.index("Run metadata")
+
+
+def test_cleanup_report_hides_failure_reason_on_success(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    final_locations = scenario.object_locations()
+    final_locations.update({"mug_01": "sink_01", "book_01": "bookshelf_01"})
+    score = score_cleanup(final_locations, scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(scenario, final_locations, tmp_path / "after.png", title="After")
+    run_result = {
+        "cleanup_status": "success",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "terminate_reason": "successful completion note",
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Failure Reason" not in html
+    assert "successful completion note" not in html
+
+
 def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     locations = {
