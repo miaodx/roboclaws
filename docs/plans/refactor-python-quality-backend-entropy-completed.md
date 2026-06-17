@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Scene-camera canonical camera geometry contracts moved from
+  `scene_camera_comparison.py` to `scene_camera_geometry_contract.py`,
+  including camera pose/intrinsics, room-scale, scene-frame-transform, and
+  projection diagnostics. Dead facade aliases for already-owned
+  USD/render/lighting helpers were removed instead of preserved as compatibility
+  shims. Behavior-change class: internal artifact-construction cleanup; public
+  comparison run orchestration, report rendering, and diagnostic payload schemas
+  are unchanged. Metric: `scene_camera_comparison.py` is 1999 lines, the new
+  geometry owner is 744 lines, and the ratchet reports 0 complexity rows and 77
+  oversized modules. Proof: full scene-camera contract test file, ruff, format
+  check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Operator-console control endpoint assertions moved running-state
   fixture setup, allowlisted transport, blocked-action transport,
   too-large-movement transport, response checks, and persisted operator-artifact

@@ -128,11 +128,25 @@ again.
   oversized modules; the remaining
   `test_operator_console.py::test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows`
   PLR0915 row is cleared from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split scene-camera canonical
+  camera geometry contracts out of `scene_camera_comparison.py` into
+  `scene_camera_geometry_contract.py`. Behavior-change class: internal artifact
+  construction cleanup; camera pose/intrinsics, room-scale,
+  scene-frame-transform, and projection diagnostic payload schemas are
+  unchanged. Dead facade aliases for already-owned USD/render/lighting helpers
+  were removed instead of preserved as compatibility shims. The ratchet reports
+  0 complexity rows and 77 oversized modules; `scene_camera_comparison.py` is
+  down to 1999 lines and no longer a hard-ceiling P1, while the new geometry
+  owner is 744 lines.
 
 - 0 Ruff complexity violations and 77 oversized modules remain.
-- Largest P1 production hard-ceiling files are
-  `roboclaws/household/realworld_contract.py` at 2846,
-  and `roboclaws/household/scene_camera_comparison.py` at 2830.
+- Largest P1 production hard-ceiling file is
+  `roboclaws/household/realworld_contract.py` at 2846.
+- `roboclaws/household/scene_camera_comparison.py` is down to 1999 lines and
+  is no longer a hard-ceiling P1. Keep it below 2000; reopen it only if the
+  facade starts rebuilding canonical camera geometry contracts, report
+  hydration/report sections, image metrics, lighting diagnostics, render-domain
+  contracts, or USD contract parsing inline again.
 - `roboclaws/household/report.py` is down to 1995 lines and is no longer a
   hard-ceiling P1. Keep it below 2000; reopen it only if report sections start
   rebuilding Agibot, proof-bundle, probe, map, timing, agent, or robot section
