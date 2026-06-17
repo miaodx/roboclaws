@@ -102,25 +102,18 @@ def run_physical_nav2_cleanup_pilot(
 
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
-    source_bundle_dir = Path(map_bundle_dir)
-    validation = validate_nav2_map_bundle(source_bundle_dir)
-    validation.raise_for_errors()
-
-    nav2_map_bundle = copy_nav2_map_bundle_snapshot(
-        source_bundle_dir=source_bundle_dir,
+    pilot_inputs = _load_physical_nav2_pilot_inputs(
         run_dir=run_dir,
+        map_bundle_dir=map_bundle_dir,
+        observer=observer,
+        robot_profile_id=robot_profile_id,
+        scenario=scenario,
     )
-    bundle_dir = run_dir / "map_bundle"
-    robot_profile_path = bundle_dir / "profiles" / f"{robot_profile_id}.yaml"
-    if not robot_profile_path.is_file():
-        raise FileNotFoundError(
-            f"robot profile {robot_profile_id!r} is missing from {bundle_dir / 'profiles'}"
-        )
-
-    metric_map = metric_map_from_bundle(bundle_dir)
-    fixture_hints = fixture_hints_from_bundle(bundle_dir)
-    observer = observer or CameraLabelObservationProvider()
-    scenario = scenario or build_cleanup_scenario(seed=7)
+    nav2_map_bundle = pilot_inputs["nav2_map_bundle"]
+    metric_map = pilot_inputs["metric_map"]
+    fixture_hints = pilot_inputs["fixture_hints"]
+    observer = pilot_inputs["observer"]
+    scenario = pilot_inputs["scenario"]
 
     before_snapshot = write_state_snapshot(
         scenario,
@@ -151,66 +144,36 @@ def run_physical_nav2_cleanup_pilot(
     _record(trace_events, started_at, "metric_map", {}, metric_map)
     _record(trace_events, started_at, "fixture_hints", {}, fixture_hints)
 
-    for waypoint in metric_map.get("inspection_waypoints") or []:
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        navigation = adapter.navigate_to_waypoint(
-            waypoint_id=waypoint_id,
-            waypoint_pose=waypoint,
-            current_pose=current_pose,
-            goal_source="inspection_waypoint",
-        )
-        inspection_attempts.append(dict(navigation))
-        policy_events.append(_policy_event(len(policy_events), navigation, "inspection_waypoint"))
-        _record(
-            trace_events,
-            started_at,
-            "navigate_to_waypoint",
-            {"waypoint_id": waypoint_id},
-            navigation,
-        )
-        if navigation.get("ok"):
-            current_pose = dict(navigation.get("current_pose") or current_pose)
-            observation = observer.observe(waypoint=waypoint, navigation_result=navigation)
-            observations.append(observation)
-            policy_events.append(
-                _policy_event(len(policy_events), observation, "reached_waypoint_observe")
-            )
-            _record(trace_events, started_at, "observe", {"waypoint_id": waypoint_id}, observation)
-
-    for fixture in _fixtures(fixture_hints):
-        fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-        navigation = adapter.navigate_to_fixture_preferred_waypoint(
-            fixture_id=fixture_id,
-            fixture=fixture,
-            waypoints_by_id=waypoints_by_id,
-            current_pose=current_pose,
-        )
-        fixture_attempts.append(dict(navigation))
-        policy_events.append(
-            _policy_event(len(policy_events), navigation, "fixture_preferred_waypoint")
-        )
-        _record(
-            trace_events,
-            started_at,
-            "navigate_to_receptacle",
-            {"fixture_id": fixture_id},
-            navigation,
-        )
-        waypoint = waypoints_by_id.get(str(navigation.get("preferred_waypoint_id") or ""))
-        if navigation.get("ok") and waypoint is not None:
-            current_pose = dict(navigation.get("current_pose") or current_pose)
-            observation = observer.observe(waypoint=waypoint, navigation_result=navigation)
-            observations.append(observation)
-            policy_events.append(
-                _policy_event(len(policy_events), observation, "reached_fixture_observe")
-            )
-            _record(trace_events, started_at, "observe", {"fixture_id": fixture_id}, observation)
-
-    for tool in BLOCKED_MANIPULATION_TOOLS:
-        result = adapter.blocked_manipulation(tool=tool)
-        manipulation_results.append(result)
-        policy_events.append(_policy_event(len(policy_events), result, "blocked_manipulation"))
-        _record(trace_events, started_at, tool, {}, result)
+    current_pose = _run_physical_inspection_sweep(
+        adapter=adapter,
+        observer=observer,
+        metric_map=metric_map,
+        current_pose=current_pose,
+        trace_events=trace_events,
+        policy_events=policy_events,
+        observations=observations,
+        inspection_attempts=inspection_attempts,
+        started_at=started_at,
+    )
+    _run_physical_fixture_sweep(
+        adapter=adapter,
+        observer=observer,
+        fixture_hints=fixture_hints,
+        waypoints_by_id=waypoints_by_id,
+        current_pose=current_pose,
+        trace_events=trace_events,
+        policy_events=policy_events,
+        observations=observations,
+        fixture_attempts=fixture_attempts,
+        started_at=started_at,
+    )
+    _record_blocked_manipulation_tools(
+        adapter=adapter,
+        started_at=started_at,
+        trace_events=trace_events,
+        policy_events=policy_events,
+        manipulation_results=manipulation_results,
+    )
 
     trace_path = run_dir / "trace.jsonl"
     trace_path.write_text(
@@ -339,6 +302,134 @@ def run_physical_nav2_cleanup_pilot(
         robot_view_steps=[],
     )
     return run_result
+
+
+def _load_physical_nav2_pilot_inputs(
+    *,
+    run_dir: Path,
+    map_bundle_dir: Path,
+    observer: PhysicalObservationProvider | None,
+    robot_profile_id: str,
+    scenario: CleanupScenario | None,
+) -> dict[str, Any]:
+    source_bundle_dir = Path(map_bundle_dir)
+    validation = validate_nav2_map_bundle(source_bundle_dir)
+    validation.raise_for_errors()
+    nav2_map_bundle = copy_nav2_map_bundle_snapshot(
+        source_bundle_dir=source_bundle_dir,
+        run_dir=run_dir,
+    )
+    bundle_dir = run_dir / "map_bundle"
+    robot_profile_path = bundle_dir / "profiles" / f"{robot_profile_id}.yaml"
+    if not robot_profile_path.is_file():
+        raise FileNotFoundError(
+            f"robot profile {robot_profile_id!r} is missing from {bundle_dir / 'profiles'}"
+        )
+    return {
+        "nav2_map_bundle": nav2_map_bundle,
+        "metric_map": metric_map_from_bundle(bundle_dir),
+        "fixture_hints": fixture_hints_from_bundle(bundle_dir),
+        "observer": observer or CameraLabelObservationProvider(),
+        "scenario": scenario or build_cleanup_scenario(seed=7),
+    }
+
+
+def _run_physical_inspection_sweep(
+    *,
+    adapter: DirectNav2Adapter,
+    observer: PhysicalObservationProvider,
+    metric_map: dict[str, Any],
+    current_pose: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
+    inspection_attempts: list[dict[str, Any]],
+    started_at: float,
+) -> dict[str, Any]:
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        navigation = adapter.navigate_to_waypoint(
+            waypoint_id=waypoint_id,
+            waypoint_pose=waypoint,
+            current_pose=current_pose,
+            goal_source="inspection_waypoint",
+        )
+        inspection_attempts.append(dict(navigation))
+        policy_events.append(_policy_event(len(policy_events), navigation, "inspection_waypoint"))
+        _record(
+            trace_events,
+            started_at,
+            "navigate_to_waypoint",
+            {"waypoint_id": waypoint_id},
+            navigation,
+        )
+        if navigation.get("ok"):
+            current_pose = dict(navigation.get("current_pose") or current_pose)
+            observation = observer.observe(waypoint=waypoint, navigation_result=navigation)
+            observations.append(observation)
+            policy_events.append(
+                _policy_event(len(policy_events), observation, "reached_waypoint_observe")
+            )
+            _record(trace_events, started_at, "observe", {"waypoint_id": waypoint_id}, observation)
+    return current_pose
+
+
+def _run_physical_fixture_sweep(
+    *,
+    adapter: DirectNav2Adapter,
+    observer: PhysicalObservationProvider,
+    fixture_hints: dict[str, Any],
+    waypoints_by_id: dict[str, dict[str, Any]],
+    current_pose: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
+    fixture_attempts: list[dict[str, Any]],
+    started_at: float,
+) -> None:
+    for fixture in _fixtures(fixture_hints):
+        fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
+        navigation = adapter.navigate_to_fixture_preferred_waypoint(
+            fixture_id=fixture_id,
+            fixture=fixture,
+            waypoints_by_id=waypoints_by_id,
+            current_pose=current_pose,
+        )
+        fixture_attempts.append(dict(navigation))
+        policy_events.append(
+            _policy_event(len(policy_events), navigation, "fixture_preferred_waypoint")
+        )
+        _record(
+            trace_events,
+            started_at,
+            "navigate_to_receptacle",
+            {"fixture_id": fixture_id},
+            navigation,
+        )
+        waypoint = waypoints_by_id.get(str(navigation.get("preferred_waypoint_id") or ""))
+        if navigation.get("ok") and waypoint is not None:
+            current_pose = dict(navigation.get("current_pose") or current_pose)
+            observation = observer.observe(waypoint=waypoint, navigation_result=navigation)
+            observations.append(observation)
+            policy_events.append(
+                _policy_event(len(policy_events), observation, "reached_fixture_observe")
+            )
+            _record(trace_events, started_at, "observe", {"fixture_id": fixture_id}, observation)
+
+
+def _record_blocked_manipulation_tools(
+    *,
+    adapter: DirectNav2Adapter,
+    started_at: float,
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    manipulation_results: list[dict[str, Any]],
+) -> None:
+    for tool in BLOCKED_MANIPULATION_TOOLS:
+        result = adapter.blocked_manipulation(tool=tool)
+        manipulation_results.append(result)
+        policy_events.append(_policy_event(len(policy_events), result, "blocked_manipulation"))
+        _record(trace_events, started_at, tool, {}, result)
 
 
 def _fixtures(fixture_hints: dict[str, Any]) -> list[dict[str, Any]]:

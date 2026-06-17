@@ -87,10 +87,22 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     toolchain_text = CODING_AGENT_TOOLCHAIN.read_text(encoding="utf-8")
     ci_text = CI_WORKFLOW.read_text(encoding="utf-8")
 
+    _assert_code_just_uses_pinned_docker_wrappers(code_text)
+    _assert_coding_agent_toolchain_pins_match(dockerfile_text, toolchain_text)
+    _assert_coding_agent_docker_script_isolated(docker_script_text)
+    _assert_ci_uses_pinned_coding_agent_image(ci_text)
+
+
+def _assert_code_just_uses_pinned_docker_wrappers(code_text: str) -> None:
     assert "docker-build:" in code_text
     assert 'docker-install-wrappers shim_dir=".tmp/coding-agent-bin":' in code_text
     assert "scripts/dev/coding_agent_docker.sh install-wrappers" in code_text
 
+
+def _assert_coding_agent_toolchain_pins_match(
+    dockerfile_text: str,
+    toolchain_text: str,
+) -> None:
     assert (
         "ARG ROBOCLAWS_NODE_IMAGE=node:22-bookworm-slim@sha256:"
         "689c11043dad91472750cd824c97dd5e2318e9dd6f954e492fe7af0135d33ceb"
@@ -107,6 +119,8 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert "ROBOCLAWS_CLAUDE_CODE_NPM_PACKAGE:=@anthropic-ai/claude-code@2.1.143" in toolchain_text
     assert "roboclaws-coding-agents:codex-0.130.0-claude-2.1.143" in toolchain_text
 
+
+def _assert_coding_agent_docker_script_isolated(docker_script_text: str) -> None:
     assert "install-wrappers" in docker_script_text
     assert "exec docker" in docker_script_text
     assert "normalized_skill_names" in docker_script_text
@@ -142,6 +156,8 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert "MM_API_KEY" in docker_script_text
     assert "MM_BASE_URL" in docker_script_text
 
+
+def _assert_ci_uses_pinned_coding_agent_image(ci_text: str) -> None:
     assert "Build pinned coding-agent CLI image" in ci_text
     assert "scripts/dev/coding_agent_docker.sh build" in ci_text
     assert "scripts/dev/coding_agent_docker.sh install-wrappers .tmp/coding-agent-bin" in ci_text

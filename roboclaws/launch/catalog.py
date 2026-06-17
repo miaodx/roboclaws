@@ -53,6 +53,37 @@ SUPPORTED_SURFACE_ROUTES: set[tuple[str, str, str]] = {
     for dispatch_runner in spec.supported_dispatch_runners
     if dispatch_runner in TASK_INTENT_SPECS[intent_id].supported_dispatch_runners
 }
+_SURFACE_CONTEXT_STRIPPED_OVERRIDE_KEYS = (
+    "surface",
+    "intent",
+    "preset",
+    "task_preset",
+    "world",
+    "backend",
+    "agent_engine",
+    "provider_profile",
+    "skill_name",
+    "goal_contract_json",
+)
+_LAUNCH_ONLY_OVERRIDE_KEYS = (
+    "task_surface",
+    "task_intent",
+    "task_preset",
+    "world",
+    "backend",
+    "agent_engine",
+    "provider_profile",
+    "skill_name",
+    "goal_contract_json",
+    "goal_contract_path",
+    "evidence_lane",
+    "profile",
+    "report",
+    "run_preset",
+    "preset",
+    "scenario_setup",
+    "relocation_count",
+)
 
 
 class LaunchError(ValueError):
@@ -557,63 +588,42 @@ def _overrides_with_surface_context(
     skill_name: str,
     goal_contract_json: str,
 ) -> tuple[str, ...]:
-    merged = overrides
-    for key in (
-        "surface",
-        "intent",
-        "preset",
-        "task_preset",
-        "world",
-        "backend",
-        "agent_engine",
-        "provider_profile",
-        "skill_name",
-        "goal_contract_json",
-    ):
-        merged = _without_override(merged, key)
-    if _override_value(merged, "task_surface") is None:
-        merged = (*merged, f"task_surface={surface_id}")
-    if _override_value(merged, "task_intent") is None:
-        merged = (*merged, f"task_intent={intent_id}")
-    if preset_id and _override_value(merged, "task_preset") is None:
-        merged = (*merged, f"task_preset={preset_id}")
-    if _override_value(merged, "world") is None:
-        merged = (*merged, f"world={world_id}")
-    if _override_value(merged, "backend") is None:
-        merged = (*merged, f"backend={backend_id}")
-    if _override_value(merged, "agent_engine") is None:
-        merged = (*merged, f"agent_engine={agent_engine_id}")
-    if provider_profile and _override_value(merged, "provider_profile") is None:
-        merged = (*merged, f"provider_profile={provider_profile}")
-    if skill_name and _override_value(merged, "skill_name") is None:
-        merged = (*merged, f"skill_name={skill_name}")
-    if _override_value(merged, "goal_contract_json") is None:
-        merged = (*merged, f"goal_contract_json={goal_contract_json}")
-    return merged
+    merged = _without_overrides(overrides, _SURFACE_CONTEXT_STRIPPED_OVERRIDE_KEYS)
+    return _with_missing_overrides(
+        merged,
+        (
+            ("task_surface", surface_id, True),
+            ("task_intent", intent_id, True),
+            ("task_preset", preset_id, False),
+            ("world", world_id, True),
+            ("backend", backend_id, True),
+            ("agent_engine", agent_engine_id, True),
+            ("provider_profile", provider_profile or "", False),
+            ("skill_name", skill_name, False),
+            ("goal_contract_json", goal_contract_json, True),
+        ),
+    )
 
 
 def _without_launch_only_overrides(overrides: tuple[str, ...]) -> tuple[str, ...]:
+    return _without_overrides(overrides, _LAUNCH_ONLY_OVERRIDE_KEYS)
+
+
+def _without_overrides(overrides: tuple[str, ...], keys: tuple[str, ...]) -> tuple[str, ...]:
     result = overrides
-    for key in (
-        "task_surface",
-        "task_intent",
-        "task_preset",
-        "world",
-        "backend",
-        "agent_engine",
-        "provider_profile",
-        "skill_name",
-        "goal_contract_json",
-        "goal_contract_path",
-        "evidence_lane",
-        "profile",
-        "report",
-        "run_preset",
-        "preset",
-        "scenario_setup",
-        "relocation_count",
-    ):
+    for key in keys:
         result = _without_override(result, key)
+    return result
+
+
+def _with_missing_overrides(
+    overrides: tuple[str, ...],
+    entries: tuple[tuple[str, str, bool], ...],
+) -> tuple[str, ...]:
+    result = overrides
+    for key, value, required in entries:
+        if (required or value) and _override_value(result, key) is None:
+            result = (*result, f"{key}={value}")
     return result
 
 

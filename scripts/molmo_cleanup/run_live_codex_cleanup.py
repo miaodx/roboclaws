@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import fcntl
 import json
 import os
 import shutil
@@ -19,7 +18,13 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.agents.drivers.household_live import (
+    HouseholdLiveRunLease,
+    acquire_household_live_run_lease,
+    add_household_cleanup_live_runner_args,
+    household_cleanup_server_argv,
+    without_full_cleanup_checker_gates,
+)
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
 from roboclaws.agents.provider_timing_proxy import (
     PROVIDER_TIMING_PROXY_UPSTREAM_ENV,
@@ -30,13 +35,6 @@ from roboclaws.agents.provider_timing_proxy import (
     stop_provider_timing_proxy,
 )
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
-from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT
-from roboclaws.household.visual_backend_slots import (
-    MOLMOSPACES_SUBPROCESS_BACKEND,
-    VisualBackendSlotError,
-    VisualBackendSlotLease,
-    acquire_visual_backend_slot,
-)
 from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
     household_intent_id_for_checker,
@@ -106,13 +104,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Own the server, Codex exec, checker, and status files for one live run.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--run-dir", type=Path, required=True)
-    parser.add_argument("--repo-root", type=Path, required=True)
-    parser.add_argument("--status-path", type=Path, required=True)
-    parser.add_argument("--client-url", required=True)
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--lock-path", type=Path, required=True)
+    add_household_cleanup_live_runner_args(parser)
     parser.add_argument("--tmux-session", required=True)
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
@@ -126,19 +118,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "failing this live run. Set to 0 to disable."
         ),
     )
-    parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
-    parser.add_argument("--kickoff-prompt", required=True)
-    parser.add_argument("--backend", required=True)
-    parser.add_argument("--task-name", default="household-cleanup")
-    parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
-    parser.add_argument("--policy", required=True)
-    parser.add_argument("--task", required=True)
-    parser.add_argument("--min-generated-mess-count", required=True)
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("--server-arg", action="append", default=[])
     parser.add_argument("--codex-model-arg", action="append", default=[])
-    parser.add_argument("--checker-visual-arg", action="append", default=[])
     return parser.parse_args(argv)
 
 
@@ -157,8 +137,7 @@ class LiveCodexCleanupRunner:
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.provider_timing_proxy: ProviderTimingProxyHandle | None = None
-        self.lock_file = None
-        self.visual_slot: VisualBackendSlotLease | None = None
+        self.run_lease = HouseholdLiveRunLease()
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
@@ -208,67 +187,20 @@ class LiveCodexCleanupRunner:
         return 0
 
     def _acquire_lock(self) -> None:
-        if self.args.backend == MOLMOSPACES_SUBPROCESS_BACKEND:
-            try:
-                self.visual_slot = acquire_visual_backend_slot(
-                    repo_root=self.args.repo_root,
-                    run_id=_run_id_from_run_dir(self.run_dir),
-                    pid=os.getpid(),
-                    backend=self.args.backend,
-                    port=self.args.port,
-                    output_dir=self.run_dir,
-                    status_path=self.status_path,
-                    owner="codex-live",
-                )
-            except VisualBackendSlotError as exc:
-                detail = (
-                    f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
-                )
-                raise RuntimeError(
-                    "no MolmoSpaces visual backend slot is available"
-                    f" under {self.args.repo_root / 'output/molmo/visual-backend-slots'}{detail}"
-                ) from exc
-            return
-
-        self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_file = self.args.lock_path.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            lock_file.seek(0)
-            active = lock_file.read().strip()
-            lock_file.close()
-            detail = f": {active}" if active else ""
-            raise RuntimeError(
-                f"another live Molmo cleanup run holds {self.args.lock_path}{detail}"
-            ) from exc
-        lock_file.seek(0)
-        lock_file.truncate()
-        lock_file.write(
-            json.dumps(
-                {
-                    "pid": os.getpid(),
-                    "run_dir": str(self.run_dir),
-                    "status_path": str(self.status_path),
-                    "tmux_session": self.args.tmux_session,
-                    "started_at_epoch": self.started_at_epoch,
-                },
-                sort_keys=True,
-            )
-            + "\n"
+        self.run_lease = acquire_household_live_run_lease(
+            backend=self.args.backend,
+            repo_root=self.args.repo_root,
+            run_dir=self.run_dir,
+            status_path=self.status_path,
+            lock_path=self.args.lock_path,
+            port=self.args.port,
+            owner="codex-live",
+            started_at_epoch=self.started_at_epoch,
+            extra_lock_payload={"tmux_session": self.args.tmux_session},
         )
-        lock_file.flush()
-        self.lock_file = lock_file
 
     def _release_visual_slot(self) -> None:
-        if self.visual_slot is None:
-            return
-        try:
-            self.visual_slot.release()
-        except VisualBackendSlotError as exc:
-            print(f"warning: could not release visual backend slot: {exc}", file=sys.stderr)
-        finally:
-            self.visual_slot = None
+        self.run_lease.release_visual_slot()
 
     def _start_server(self) -> None:
         print("==> detached Codex Molmo cleanup runner")
@@ -489,7 +421,7 @@ class LiveCodexCleanupRunner:
         open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
-            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
+            checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
             task_name=task_name,
             task_intent=task_intent,
@@ -639,8 +571,7 @@ class LiveCodexCleanupRunner:
             payload["resume_available"] = resume_available
         if detail:
             payload["detail"] = detail
-        if self.visual_slot is not None:
-            payload["visual_backend_slot"] = self.visual_slot.to_payload()
+        payload.update(self.run_lease.status_fields())
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -1150,48 +1081,6 @@ def _shell_quote(value: str) -> str:
     if all(char in safe for char in value):
         return value
     return "'" + value.replace("'", "'\"'\"'") + "'"
-
-
-def _append_missing_checker_flag(args: list[str], flag: str) -> None:
-    if flag not in args:
-        args.append(flag)
-
-
-def _append_missing_checker_value(args: list[str], flag: str, value: str) -> None:
-    if flag not in args:
-        args.extend([flag, value])
-
-
-def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
-    filtered: list[str] = []
-    skip_value = False
-    for arg in args:
-        if skip_value:
-            skip_value = False
-            continue
-        if arg in {
-            "--min-semantic-accepted-count",
-            "--min-model-declared-observations",
-            "--min-model-declared-actions",
-            "--min-sweep-coverage",
-        }:
-            skip_value = True
-            continue
-        if arg in {
-            "--require-clean-agent-run",
-            "--require-model-declared-observations",
-        }:
-            continue
-        filtered.append(arg)
-    return filtered
-
-
-def _run_id_from_run_dir(run_dir: Path) -> str:
-    name = run_dir.name
-    parent = run_dir.parent.name
-    if parent:
-        return f"{parent}/{name}"
-    return name
 
 
 if __name__ == "__main__":

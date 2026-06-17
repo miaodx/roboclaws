@@ -30,6 +30,21 @@ def load_initial_contact_result(path: Path) -> dict[str, Any]:
     return result
 
 
+def _blocker(code: str, message: str, *, asset_uid: str | None = None) -> dict[str, Any]:
+    result = {"code": code, "message": message}
+    if asset_uid is not None:
+        result["asset_uid"] = asset_uid
+    return result
+
+
+def _blocked_policy(blocker: dict[str, Any]) -> dict[str, Any]:
+    return {"status": "blocked", "blockers": [blocker]}
+
+
+def _blocked_generation_result(output_dir: Path, code: str, message: str) -> dict[str, Any]:
+    return _blocked_result(output_dir=output_dir, blockers=[_blocker(code, message)])
+
+
 def run_grasp_pose_policy_cache_generation(
     *,
     generation_preflight: dict[str, Any],
@@ -50,40 +65,26 @@ def run_grasp_pose_policy_cache_generation(
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generation_preflight.get("status") != "ready":
-        return _blocked_result(
-            output_dir=output_dir,
-            blockers=[
-                {
-                    "code": "generation_preflight_not_ready",
-                    "message": (
-                        "Pose-policy cache generation requires a ready generation preflight."
-                    ),
-                }
-            ],
+        return _blocked_generation_result(
+            output_dir,
+            "generation_preflight_not_ready",
+            "Pose-policy cache generation requires a ready generation preflight.",
         )
 
     objects = objects_list_from_generation_preflight(generation_preflight)
     if not objects:
-        return _blocked_result(
-            output_dir=output_dir,
-            blockers=[
-                {
-                    "code": "no_generation_objects",
-                    "message": "Generation preflight did not expose any rigid objects.",
-                }
-            ],
+        return _blocked_generation_result(
+            output_dir,
+            "no_generation_objects",
+            "Generation preflight did not expose any rigid objects.",
         )
 
     candidate_grasps_path = Path(candidate_grasps_path).resolve()
     if not dry_run and not candidate_grasps_path.is_file():
-        return _blocked_result(
-            output_dir=output_dir,
-            blockers=[
-                {
-                    "code": "candidate_grasps_missing",
-                    "message": f"Candidate grasp JSON is missing: {candidate_grasps_path}",
-                }
-            ],
+        return _blocked_generation_result(
+            output_dir,
+            "candidate_grasps_missing",
+            f"Candidate grasp JSON is missing: {candidate_grasps_path}",
         )
 
     policy = resolve_pose_policy(
@@ -170,58 +171,25 @@ def run_grasp_pose_policy_cache_generation(
     generated_validation = assets[0].get("generated_validation") or {}
     successful_transform_count = int(generated_validation.get("transform_count", 0) or 0)
 
-    blockers: list[dict[str, Any]] = []
-    if assets_symlink.get("status") == "blocked":
-        blockers.append(
-            {
-                "code": "molmospaces_assets_symlink_blocked",
-                "message": assets_symlink.get("message") or "assets symlink setup failed",
-            }
-        )
-    if command_result.get("status") == "blocked":
-        blockers.append(
-            {
-                "code": "pose_policy_cache_probe_failed",
-                "message": command_result.get("stderr")
-                or command_result.get("stdout")
-                or "Pose-policy cache probe failed.",
-            }
-        )
-    if probe_payload.get("status") == "blocked":
-        blockers.append(
-            {
-                "code": "pose_policy_cache_probe_blocked",
-                "message": (
-                    probe_payload.get("error") or "Pose-policy cache probe reported blocked."
-                ),
-            }
-        )
-    if not dry_run and not generated_validation.get("valid"):
-        blockers.append(
-            {
-                "code": "pose_policy_cache_invalid",
-                "message": ("Pose-policy probe did not produce a non-empty loader-compatible NPZ."),
-                "asset_uid": object_name,
-            }
-        )
-    if install and not dry_run and not assets[0].get("installed_valid"):
-        blockers.append(
-            {
-                "code": "installed_grasp_cache_invalid",
-                "message": f"Installed grasp cache invalid for {object_name}",
-                "asset_uid": object_name,
-            }
-        )
-
+    blockers = _pose_policy_cache_blockers(
+        assets_symlink=assets_symlink,
+        command_result=command_result,
+        probe_payload=probe_payload,
+        generated_validation=generated_validation,
+        asset=assets[0],
+        object_name=object_name,
+        install=install,
+        dry_run=dry_run,
+    )
     availability_after_install = {}
     if install and not dry_run:
         availability_after_install = generation_availability_after_install(generation_preflight)
         if availability_after_install.get("status") != "ready":
             blockers.append(
-                {
-                    "code": "availability_preflight_not_ready_after_install",
-                    "message": "Installed grasp cache did not pass availability preflight.",
-                }
+                _blocker(
+                    "availability_preflight_not_ready_after_install",
+                    "Installed grasp cache did not pass availability preflight.",
+                )
             )
 
     status = "dry_run" if dry_run else ("blocked" if blockers else "ready")
@@ -269,18 +237,13 @@ def resolve_pose_policy(
     explicit_values = [approach_sign, approach_distance, settle_steps]
     if any(value is not None for value in explicit_values):
         if not all(value is not None for value in explicit_values):
-            return {
-                "status": "blocked",
-                "blockers": [
-                    {
-                        "code": "incomplete_explicit_pose_policy",
-                        "message": (
-                            "Explicit pose policy requires approach sign, approach distance, "
-                            "and settle steps."
-                        ),
-                    }
-                ],
-            }
+            return _blocked_policy(
+                _blocker(
+                    "incomplete_explicit_pose_policy",
+                    "Explicit pose policy requires approach sign, approach distance, "
+                    "and settle steps.",
+                )
+            )
         return {
             "status": "ready",
             "source": "explicit_cli",
@@ -298,32 +261,22 @@ def resolve_pose_policy(
     if initial_contact_result_path is not None:
         initial_contact_result_path = Path(initial_contact_result_path)
         if not initial_contact_result_path.is_file():
-            return {
-                "status": "blocked",
-                "blockers": [
-                    {
-                        "code": "initial_contact_result_missing",
-                        "message": (
-                            f"Initial-contact result is missing: {initial_contact_result_path}"
-                        ),
-                    }
-                ],
-            }
+            return _blocked_policy(
+                _blocker(
+                    "initial_contact_result_missing",
+                    f"Initial-contact result is missing: {initial_contact_result_path}",
+                )
+            )
         result = load_initial_contact_result(initial_contact_result_path)
         best = result.get("best_variant") or {}
         success_count = int(best.get("success_count") or 0)
         if success_count <= 0:
-            return {
-                "status": "blocked",
-                "blockers": [
-                    {
-                        "code": "initial_contact_policy_has_no_successes",
-                        "message": (
-                            "Initial-contact result does not contain a successful best variant."
-                        ),
-                    }
-                ],
-            }
+            return _blocked_policy(
+                _blocker(
+                    "initial_contact_policy_has_no_successes",
+                    "Initial-contact result does not contain a successful best variant.",
+                )
+            )
         return {
             "status": "ready",
             "source": str(initial_contact_result_path),
@@ -379,6 +332,62 @@ def _dry_run_asset_result(asset: dict[str, Any], generated_npz_path: Path) -> di
         "installed_valid": False,
         "installed": False,
     }
+
+
+def _pose_policy_cache_blockers(
+    *,
+    assets_symlink: dict[str, Any],
+    command_result: dict[str, Any],
+    probe_payload: dict[str, Any],
+    generated_validation: dict[str, Any],
+    asset: dict[str, Any],
+    object_name: str,
+    install: bool,
+    dry_run: bool,
+) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    if assets_symlink.get("status") == "blocked":
+        blockers.append(
+            _blocker(
+                "molmospaces_assets_symlink_blocked",
+                assets_symlink.get("message") or "assets symlink setup failed",
+            )
+        )
+    if command_result.get("status") == "blocked":
+        blockers.append(
+            _blocker(
+                "pose_policy_cache_probe_failed",
+                command_result.get("stderr")
+                or command_result.get("stdout")
+                or "Pose-policy cache probe failed.",
+            )
+        )
+    if probe_payload.get("status") == "blocked":
+        blockers.append(
+            _blocker(
+                "pose_policy_cache_probe_blocked",
+                probe_payload.get("error") or "Pose-policy cache probe reported blocked.",
+            )
+        )
+    if dry_run:
+        return blockers
+    if not generated_validation.get("valid"):
+        blockers.append(
+            _blocker(
+                "pose_policy_cache_invalid",
+                "Pose-policy probe did not produce a non-empty loader-compatible NPZ.",
+                asset_uid=object_name,
+            )
+        )
+    if install and not asset.get("installed_valid"):
+        blockers.append(
+            _blocker(
+                "installed_grasp_cache_invalid",
+                f"Installed grasp cache invalid for {object_name}",
+                asset_uid=object_name,
+            )
+        )
+    return blockers
 
 
 def _blocked_result(*, output_dir: Path, blockers: list[dict[str, Any]]) -> dict[str, Any]:

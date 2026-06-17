@@ -428,26 +428,17 @@ def semantic_substeps(
     for event in trace_events:
         if event.get("event") != "response":
             continue
-        tool = str(event.get("tool", ""))
         response = event.get("response")
         if not isinstance(response, dict):
             continue
-        phase = semantic_phase_for_tool(tool)
+        phase = semantic_phase_for_tool(str(event.get("tool", "")))
         if phase not in SEMANTIC_RESPONSE_PHASE_SET:
             continue
-        object_id = response.get("object_id") or active_object_id
-        if phase == NAVIGATE_TO_OBJECT_PHASE and response.get("object_id"):
-            object_id = str(response["object_id"])
-            active_object_id = object_id
-        elif phase == PICK_PHASE and response.get("ok") and response.get("object_id"):
-            object_id = str(response["object_id"])
-            active_object_id = object_id
-        elif phase == PLACE_PHASE and response.get("ok"):
-            active_object_id = None
-        elif phase == CLOSE_RECEPTACLE_PHASE and response.get("ok"):
-            active_object_id = None
-        elif phase == OBJECT_DONE_PHASE and response.get("object_id"):
-            object_id = str(response["object_id"])
+        object_id, active_object_id = _semantic_object_context(
+            phase,
+            response,
+            active_object_id,
+        )
 
         if not object_id:
             continue
@@ -476,25 +467,29 @@ def semantic_substeps(
     return [steps_by_object[object_id] for object_id in order]
 
 
+def _semantic_object_context(
+    phase: str,
+    response: dict[str, Any],
+    active_object_id: str | None,
+) -> tuple[str | None, str | None]:
+    object_id = response.get("object_id") or active_object_id
+    if phase == NAVIGATE_TO_OBJECT_PHASE and response.get("object_id"):
+        object_id = str(response["object_id"])
+        active_object_id = object_id
+    elif phase == PICK_PHASE and response.get("ok") and response.get("object_id"):
+        object_id = str(response["object_id"])
+        active_object_id = object_id
+    elif phase in {PLACE_PHASE, CLOSE_RECEPTACLE_PHASE} and response.get("ok"):
+        active_object_id = None
+    elif phase == OBJECT_DONE_PHASE and response.get("object_id"):
+        object_id = str(response["object_id"])
+    return str(object_id) if object_id else None, active_object_id
+
+
 def semantic_phase_for_tool(tool: str) -> str:
     if tool == NAVIGATE_TO_VISUAL_CANDIDATE_TOOL:
         return NAVIGATE_TO_OBJECT_PHASE
     return tool
-
-
-def _is_duplicate_adjacent_object_navigation(
-    existing_steps: list[dict[str, Any]],
-    step: dict[str, Any],
-) -> bool:
-    if step.get("phase") != NAVIGATE_TO_OBJECT_PHASE or not existing_steps:
-        return False
-    previous = existing_steps[-1]
-    return (
-        previous.get("phase") == NAVIGATE_TO_OBJECT_PHASE
-        and previous.get("ok") is True
-        and step.get("ok") is True
-        and previous.get("object_id") == step.get("object_id")
-    )
 
 
 def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:

@@ -4,6 +4,7 @@ import copy
 import html
 import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,6 @@ from PIL import Image, ImageDraw
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.cleanup_primitive_evidence import (
-    cleanup_primitive_evidence_from_substeps,
-)
 from roboclaws.household.manipulation_provenance import api_semantic_manipulation_evidence
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.profiles import MOLMOSPACES_SIM_BACKEND
@@ -31,11 +29,8 @@ from roboclaws.household.realworld_contract import (
     RealWorldCleanupContract,
 )
 from roboclaws.household.report import (
-    render_cleanup_report,
     write_state_snapshot,
-    write_trace_jsonl,
 )
-from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_cleanup_loop import (
     SemanticCleanupLoopResult,
     run_semantic_cleanup_loop,
@@ -44,7 +39,6 @@ from roboclaws.household.semantic_timeline import (
     ROBOT_VIEW_VARIANT,
     record_robot_view_step,
     robot_view_capture_for_tool,
-    semantic_substeps,
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 from roboclaws.household.types import CleanupScenario
@@ -85,382 +79,28 @@ def run_molmospaces_agibot_contract_rehearsal(
 ) -> dict[str, Any]:
     """Run the Agibot-shaped cleanup contract against simulated MolmoSpaces semantics."""
 
-    if runtime not in {RUNTIME_FIXTURE, RUNTIME_MOLMOSPACES_SUBPROCESS}:
-        expected = f"{RUNTIME_FIXTURE}|{RUNTIME_MOLMOSPACES_SUBPROCESS}"
-        raise ValueError(f"unsupported rehearsal runtime {runtime!r} (expected {expected})")
-    if rehearsal_mode not in {REHEARSAL_MODE_CONTRACT, REHEARSAL_MODE_CLEANUP_ACTIONS}:
-        expected = f"{REHEARSAL_MODE_CONTRACT}|{REHEARSAL_MODE_CLEANUP_ACTIONS}"
-        raise ValueError(f"unsupported rehearsal mode {rehearsal_mode!r} (expected {expected})")
-    if cleanup_object_count < 1:
-        raise ValueError("cleanup_object_count must be >= 1")
-    if record_robot_views and (runtime != RUNTIME_MOLMOSPACES_SUBPROCESS or not include_robot):
-        raise ValueError(
-            "record_robot_views requires runtime=molmospaces-subprocess and include_robot=true"
-        )
+    from roboclaws.household.agibot_contract_rehearsal_stages import (
+        _ContractRehearsalOptions,
+        run_contract_rehearsal,
+    )
 
-    run_dir = Path(run_dir).resolve()
-    run_dir.mkdir(parents=True, exist_ok=True)
-    started_at = time.time()
-    trace_events: list[dict[str, Any]] = []
-    policy_events: list[dict[str, Any]] = []
-    robot_view_steps: list[dict[str, Any]] = []
-    robot_view_index = 0
-    backend_instance: MolmoSpacesSubprocessBackend | None = None
-
-    try:
-        if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS:
-            backend_instance = MolmoSpacesSubprocessBackend(
-                run_dir=run_dir,
-                seed=seed,
-                python_executable=molmospaces_python,
-                include_robot=include_robot,
-                robot_name=robot_name,
-                generated_mess_count=generated_mess_count,
-            )
-            scenario = backend_instance.scenario
-            base_contract = CleanupBackendSession(scenario, backend=backend_instance)
-        else:
-            scenario = build_cleanup_scenario(seed=seed)
-            base_contract = CleanupBackendSession(scenario)
-
-        contract = RealWorldCleanupContract(
-            base_contract,
-            task_prompt=scenario.task,
-            fixture_hint_mode="exact_fixtures",
-            perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
-        )
-
-        before_snapshot = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=scenario,
-            output_path=run_dir / "before.png",
-            title="Before MolmoSpaces Agibot contract rehearsal",
-        )
-        if record_robot_views:
-            robot_view_index = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index,
-                action="before",
-                label_suffix="before",
-            )
-
-        metric_map = _agibot_shaped_metric_map(contract.metric_map(), seed=seed)
-        fixture_hints = _agibot_shaped_fixture_hints(contract.fixture_hints())
-        preflight = _write_preflight_artifacts(
-            run_dir=run_dir,
-            scenario=scenario,
-            metric_map=metric_map,
-            fixture_hints=fixture_hints,
-            runtime=runtime,
+    return run_contract_rehearsal(
+        run_dir=run_dir,
+        options=_ContractRehearsalOptions(
             seed=seed,
             generated_mess_count=generated_mess_count,
-            backend_instance=backend_instance,
+            runtime=runtime,
+            waypoint_id=waypoint_id,
+            molmospaces_python=molmospaces_python,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            rehearsal_mode=rehearsal_mode,
+            cleanup_object_count=cleanup_object_count,
+            record_robot_views=record_robot_views,
             context_json=context_json,
             agibot_map_artifact_dir=agibot_map_artifact_dir,
-        )
-        preflight_agent_view = _load_json(preflight["agent_view"])
-        waypoint_sequence = _load_json(preflight["waypoint_sequence"])
-        metric_map = dict(preflight_agent_view["metric_map"])
-        fixture_hints = dict(preflight_agent_view["fixture_hints"])
-        subphase_reports = [
-            _write_stage_artifact(
-                run_dir=run_dir,
-                stage_dir=run_dir / "subphases" / "01-agent-view",
-                stage="agent_view_export",
-                status="ok",
-                ok=True,
-                tool_response=metric_map,
-                artifacts={
-                    "metric_map": _relpath(preflight["metric_map"], run_dir),
-                    "fixture_hints": _relpath(preflight["fixture_hints"], run_dir),
-                    "agent_view": _relpath(preflight["agent_view"], run_dir),
-                    "scene_identity": _relpath(preflight["scene_identity"], run_dir),
-                    "map_preview": _relpath(preflight["map_preview"], run_dir),
-                    "waypoint_sequence": _relpath(preflight["waypoint_sequence"], run_dir),
-                    "runner_task_input": _relpath(preflight["runner_task_input"], run_dir),
-                },
-                note=(
-                    "Generated Agibot-shaped preflight artifacts from the simulated "
-                    "MolmoSpaces cleanup scene. No real Agibot map or GDK artifact "
-                    "was consumed."
-                ),
-            )
-        ]
-        _record(trace_events, started_at, "metric_map", {}, metric_map)
-
-        runtime_dir = run_dir / "runtime"
-        runtime_dir.mkdir(parents=True, exist_ok=True)
-        selected_waypoint_id = waypoint_id or _first_waypoint_id_from_sequence(waypoint_sequence)
-
-        observation_image = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=scenario,
-            output_path=runtime_dir / "policy_observation.png",
-            title="Simulated policy observation",
-        )
-        observation = _simulated_observation(
-            contract.observe(),
-            observation_image=observation_image,
-            run_dir=run_dir,
-            runtime=runtime,
-            metric_map=metric_map,
-            waypoint_id=selected_waypoint_id,
-        )
-        (runtime_dir / "observation.json").write_text(
-            json.dumps(observation, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        subphase_reports.append(
-            _write_stage_artifact(
-                run_dir=run_dir,
-                stage_dir=run_dir / "subphases" / "02-observe",
-                stage="observe",
-                status="ok",
-                ok=True,
-                tool_response=observation,
-                artifacts={"observation": "runtime/observation.json"},
-                note=(
-                    "Simulated policy-camera observe evidence. This validates the "
-                    "public observe result shape, not a head_color GDK camera capture."
-                ),
-            )
-        )
-        policy_events.append(_policy_event(len(policy_events), observation, "observe"))
-        _record(trace_events, started_at, "observe", {"label": "pre_navigation"}, observation)
-
-        navigation = _simulated_navigation(
-            contract.navigate_to_waypoint(selected_waypoint_id),
-            metric_map=metric_map,
-            waypoint_id=selected_waypoint_id,
-            runtime=runtime,
-        )
-        (runtime_dir / "navigation.json").write_text(
-            json.dumps(navigation, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        subphase_reports.append(
-            _write_stage_artifact(
-                run_dir=run_dir,
-                stage_dir=run_dir / "subphases" / "03-navigate-waypoint",
-                stage="navigate_waypoint",
-                status="ok",
-                ok=True,
-                tool_response=navigation,
-                artifacts={"navigation": "runtime/navigation.json"},
-                note=(
-                    "Simulated waypoint navigation evidence with Agibot-shaped "
-                    "runner fields and MolmoSpaces simulation provenance."
-                ),
-            )
-        )
-        policy_events.append(_policy_event(len(policy_events), navigation, "navigate_waypoint"))
-        _record(
-            trace_events,
-            started_at,
-            "navigate_to_waypoint",
-            {"waypoint_id": selected_waypoint_id},
-            navigation,
-        )
-        if record_robot_views and navigation.get("ok"):
-            robot_view_index = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index,
-                action=f"navigate_to_waypoint {selected_waypoint_id}",
-                label_suffix=f"navigate_waypoint_{selected_waypoint_id}",
-            )
-
-        manipulation_results = []
-        cleanup_actions = _empty_cleanup_actions_result()
-        final_locations = base_contract.backend.object_locations()
-        done_response: dict[str, Any] | None = None
-        if rehearsal_mode == REHEARSAL_MODE_CONTRACT:
-            for tool in BLOCKED_MANIPULATION_TOOLS:
-                result = _blocked_manipulation(tool)
-                manipulation_results.append(result)
-                policy_events.append(
-                    _policy_event(len(policy_events), result, "blocked_manipulation")
-                )
-                _record(trace_events, started_at, tool, {}, result)
-            subphase_reports.append(
-                _write_stage_artifact(
-                    run_dir=run_dir,
-                    stage_dir=run_dir / "subphases" / "04-blocked-manipulation",
-                    stage="blocked_manipulation",
-                    status="blocked_capability",
-                    ok=False,
-                    tool_response={"blocked_tools": manipulation_results},
-                    artifacts={"blocked_manipulation": "runtime/blocked_manipulation.json"},
-                    note=(
-                        "Manipulation tools are intentionally visible but blocked in this "
-                        "contract rehearsal."
-                    ),
-                )
-            )
-            (runtime_dir / "blocked_manipulation.json").write_text(
-                json.dumps(manipulation_results, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-        else:
-            cleanup_actions = _run_cleanup_action_rehearsal(
-                contract=contract,
-                base_contract=base_contract,
-                metric_map=metric_map,
-                fixture_hints=fixture_hints,
-                trace_events=trace_events,
-                policy_events=policy_events,
-                started_at=started_at,
-                runtime=runtime,
-                run_dir=run_dir,
-                robot_view_steps=robot_view_steps,
-                robot_view_index_ref=[robot_view_index],
-                record_robot_views=record_robot_views,
-                cleanup_object_count=cleanup_object_count,
-            )
-            robot_view_index = int(cleanup_actions.get("robot_view_index", robot_view_index))
-            done_response = _record_action_done(
-                contract=base_contract,
-                trace_events=trace_events,
-                started_at=started_at,
-                runtime=runtime,
-            )
-            final_locations = dict(done_response.get("final_locations") or final_locations)
-            cleanup_actions["final_object_locations"] = final_locations
-            (runtime_dir / "cleanup_actions.json").write_text(
-                json.dumps(cleanup_actions, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-            subphase_reports.append(
-                _write_stage_artifact(
-                    run_dir=run_dir,
-                    stage_dir=run_dir / "subphases" / "04-cleanup-actions",
-                    stage="cleanup_actions",
-                    status="ok" if cleanup_actions["completed_object_count"] else "partial",
-                    ok=bool(cleanup_actions["completed_object_count"]),
-                    tool_response=cleanup_actions,
-                    artifacts={"cleanup_actions": "runtime/cleanup_actions.json"},
-                    note=(
-                        "Opt-in simulated cleanup-action rehearsal. Pick/place effects "
-                        "are api_semantic MolmoSpaces state updates, not Agibot GDK "
-                        "manipulation or planner-backed proof."
-                    ),
-                )
-            )
-
-        after_snapshot = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=scenario,
-            output_path=run_dir / "after.png",
-            title="After MolmoSpaces Agibot contract rehearsal",
-        )
-        if record_robot_views:
-            robot_view_index = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index,
-                action="after",
-                label_suffix="after",
-            )
-
-        top_level_agent_view = _agent_view_with_runtime_observation(
-            metric_map=metric_map,
-            fixture_hints=fixture_hints,
-            observation=observation,
-        )
-        if rehearsal_mode == REHEARSAL_MODE_CLEANUP_ACTIONS:
-            top_level_agent_view = _agent_view_with_cleanup_actions(
-                contract.agent_view_payload(),
-                metric_map=metric_map,
-                fixture_hints=fixture_hints,
-                fallback_observation=observation,
-            )
-        substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
-        cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
-        runtime_export = _runtime_export(
-            observation=observation,
-            navigation=navigation,
-            manipulation_results=manipulation_results,
-            subphase_reports=subphase_reports,
-            runtime=runtime,
-            rehearsal_mode=rehearsal_mode,
-            cleanup_actions=cleanup_actions,
-            semantic_substeps=substeps,
-            final_locations=final_locations,
-            robot_view_steps=robot_view_steps,
-        )
-        (runtime_dir / "runtime_export.json").write_text(
-            json.dumps(runtime_export, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        (run_dir / "agent_view.json").write_text(
-            json.dumps(top_level_agent_view, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        trace_path = run_dir / "trace.jsonl"
-        write_trace_jsonl(trace_path, trace_events)
-
-        run_result = _run_result(
-            run_dir=run_dir,
-            scenario=scenario,
-            runtime=runtime,
-            seed=seed,
-            generated_mess_count=generated_mess_count,
-            started_at=started_at,
-            metric_map=metric_map,
-            fixture_hints=fixture_hints,
-            observation=observation,
-            navigation=navigation,
-            manipulation_results=manipulation_results,
-            cleanup_actions=cleanup_actions,
-            agent_view=top_level_agent_view,
-            runtime_export=runtime_export,
-            subphase_reports=subphase_reports,
-            trace_path=trace_path,
-            before_snapshot=before_snapshot,
-            after_snapshot=after_snapshot,
-            policy_events=policy_events,
-            semantic_substeps=substeps,
-            cleanup_primitive_evidence=cleanup_primitive_evidence,
-            final_locations=final_locations,
-            done_response=done_response,
-            robot_view_steps=robot_view_steps,
-            backend_instance=backend_instance,
-            scene_identity_path=preflight["scene_identity"],
-            map_preview_path=preflight["map_preview"],
-            agibot_map_reference_path=preflight["agibot_map_reference"],
-            rehearsal_mode=rehearsal_mode,
-            record_robot_views=record_robot_views,
-        )
-        (run_dir / "run_result.json").write_text(
-            json.dumps(run_result, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        render_cleanup_report(
-            run_dir=run_dir,
-            scenario=scenario,
-            run_result=run_result,
-            trace_events=trace_events,
-            before_snapshot=before_snapshot,
-            after_snapshot=after_snapshot,
-            robot_view_steps=robot_view_steps,
-        )
-        return run_result
-    finally:
-        if backend_instance is not None:
-            backend_instance.close()
+        ),
+    )
 
 
 def run_molmospaces_agibot_prehardware_rehearsal(
@@ -1288,6 +928,13 @@ def _empty_cleanup_actions_result() -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True)
+class _CleanupActionSelection:
+    selected_targets: list[dict[str, Any]]
+    observations: list[dict[str, Any]]
+    navigation_attempts: list[dict[str, Any]]
+
+
 def _run_cleanup_action_rehearsal(
     *,
     contract: RealWorldCleanupContract,
@@ -1304,103 +951,24 @@ def _run_cleanup_action_rehearsal(
     record_robot_views: bool,
     cleanup_object_count: int,
 ) -> dict[str, Any]:
-    selected_targets: list[dict[str, Any]] = []
-    seen_handles: set[str] = set()
-    observations: list[dict[str, Any]] = []
-    navigation_attempts: list[dict[str, Any]] = []
-
-    for waypoint in metric_map.get("inspection_waypoints") or []:
-        waypoint_id = str(waypoint.get("waypoint_id") or "")
-        if not waypoint_id:
-            continue
-        nav_response = contract.navigate_to_waypoint(waypoint_id)
-        nav = _simulated_navigation(
-            nav_response,
-            metric_map=metric_map,
-            waypoint_id=waypoint_id,
-            runtime=runtime,
-        )
-        navigation_attempts.append(nav)
-        _record(trace_events, started_at, "navigate_to_waypoint", {"waypoint_id": waypoint_id}, nav)
-        policy_events.append(_policy_event(len(policy_events), nav, "cleanup_sweep_nav"))
-        if record_robot_views and nav.get("ok"):
-            robot_view_index_ref[0] = _record_robot_view(
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                index=robot_view_index_ref[0],
-                action=f"navigate_to_waypoint {waypoint_id}",
-                label_suffix=f"cleanup_waypoint_{waypoint_id}",
-            )
-
-        observation_image = _write_snapshot(
-            runtime=runtime,
-            contract=base_contract,
-            scenario=contract.scenario,
-            output_path=run_dir / "runtime" / f"policy_observation_{waypoint_id}.png",
-            title=f"Simulated policy observation at {waypoint_id}",
-        )
-        obs = _simulated_observation(
-            contract.observe(),
-            observation_image=observation_image,
-            run_dir=run_dir,
-            runtime=runtime,
-            metric_map=metric_map,
-            waypoint_id=waypoint_id,
-        )
-        observations.append(obs)
-        _record(trace_events, started_at, "observe", {"waypoint_id": waypoint_id}, obs)
-        policy_events.append(_policy_event(len(policy_events), obs, "cleanup_sweep_observe"))
-        if record_robot_views and obs.get("ok"):
-            robot_view_index_ref[0] = _record_tool_robot_view(
-                contract=contract,
-                backend=base_contract.backend,
-                run_dir=run_dir,
-                robot_view_steps=robot_view_steps,
-                trace_events=trace_events,
-                started_at=started_at,
-                index=robot_view_index_ref[0],
-                tool="observe",
-                request={"waypoint_id": waypoint_id},
-                response=obs,
-            )
-
-        for detection in obs.get("visible_object_detections") or []:
-            handle = str(detection.get("object_id") or "")
-            if not handle or handle in seen_handles:
-                continue
-            target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
-            if target_fixture is None:
-                continue
-            target_fixture_id = str(target_fixture.get("fixture_id") or "")
-            source_fixture_id = str(
-                (detection.get("support_estimate") or {}).get("fixture_id") or ""
-            )
-            if not target_fixture_id or target_fixture_id == source_fixture_id:
-                continue
-            selected_targets.append(
-                {
-                    "object_id": handle,
-                    "internal_object_id": str(contract._internal_object_id(handle) or ""),
-                    "category": str(detection.get("category") or ""),
-                    "source_receptacle_id": source_fixture_id,
-                    "target_receptacle_id": target_fixture_id,
-                    "target_receptacle": target_fixture,
-                    "recommended_tool": str(detection.get("recommended_tool") or "auto"),
-                    "source_observation_id": str(obs.get("observation_id") or ""),
-                    "waypoint_id": waypoint_id,
-                }
-            )
-            seen_handles.add(handle)
-            if len(selected_targets) >= cleanup_object_count:
-                break
-        if len(selected_targets) >= cleanup_object_count:
-            break
+    selection = _select_cleanup_action_targets(
+        contract=contract,
+        base_contract=base_contract,
+        metric_map=metric_map,
+        fixture_hints=fixture_hints,
+        trace_events=trace_events,
+        policy_events=policy_events,
+        started_at=started_at,
+        runtime=runtime,
+        run_dir=run_dir,
+        robot_view_steps=robot_view_steps,
+        robot_view_index_ref=robot_view_index_ref,
+        record_robot_views=record_robot_views,
+        cleanup_object_count=cleanup_object_count,
+    )
 
     loop_result = run_semantic_cleanup_loop(
-        targets=selected_targets,
+        targets=selection.selected_targets,
         contract=contract,
         call_tool=lambda tool, request, fn: _call_cleanup_action_tool(
             trace_events=trace_events,
@@ -1432,11 +1000,226 @@ def _run_cleanup_action_rehearsal(
     )
     return _cleanup_actions_payload(
         loop_result=loop_result,
+        selected_targets=selection.selected_targets,
+        observations=selection.observations,
+        navigation_attempts=selection.navigation_attempts,
+        robot_view_index=robot_view_index_ref[0],
+    )
+
+
+def _select_cleanup_action_targets(
+    *,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    started_at: float,
+    runtime: str,
+    run_dir: Path,
+    robot_view_steps: list[dict[str, Any]],
+    robot_view_index_ref: list[int],
+    record_robot_views: bool,
+    cleanup_object_count: int,
+) -> _CleanupActionSelection:
+    selected_targets: list[dict[str, Any]] = []
+    seen_handles: set[str] = set()
+    observations: list[dict[str, Any]] = []
+    navigation_attempts: list[dict[str, Any]] = []
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if not waypoint_id:
+            continue
+        nav = _record_cleanup_sweep_navigation(
+            contract=contract,
+            base_contract=base_contract,
+            metric_map=metric_map,
+            trace_events=trace_events,
+            policy_events=policy_events,
+            started_at=started_at,
+            runtime=runtime,
+            run_dir=run_dir,
+            robot_view_steps=robot_view_steps,
+            robot_view_index_ref=robot_view_index_ref,
+            record_robot_views=record_robot_views,
+            waypoint_id=waypoint_id,
+        )
+        navigation_attempts.append(nav)
+        obs = _record_cleanup_sweep_observation(
+            contract=contract,
+            base_contract=base_contract,
+            metric_map=metric_map,
+            trace_events=trace_events,
+            policy_events=policy_events,
+            started_at=started_at,
+            runtime=runtime,
+            run_dir=run_dir,
+            robot_view_steps=robot_view_steps,
+            robot_view_index_ref=robot_view_index_ref,
+            record_robot_views=record_robot_views,
+            waypoint_id=waypoint_id,
+        )
+        observations.append(obs)
+        _append_cleanup_action_targets(
+            contract=contract,
+            fixture_hints=fixture_hints,
+            selected_targets=selected_targets,
+            seen_handles=seen_handles,
+            observation=obs,
+            waypoint_id=waypoint_id,
+            cleanup_object_count=cleanup_object_count,
+        )
+        if len(selected_targets) >= cleanup_object_count:
+            break
+    return _CleanupActionSelection(
         selected_targets=selected_targets,
         observations=observations,
         navigation_attempts=navigation_attempts,
-        robot_view_index=robot_view_index_ref[0],
     )
+
+
+def _record_cleanup_sweep_navigation(
+    *,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    metric_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    started_at: float,
+    runtime: str,
+    run_dir: Path,
+    robot_view_steps: list[dict[str, Any]],
+    robot_view_index_ref: list[int],
+    record_robot_views: bool,
+    waypoint_id: str,
+) -> dict[str, Any]:
+    nav = _simulated_navigation(
+        contract.navigate_to_waypoint(waypoint_id),
+        metric_map=metric_map,
+        waypoint_id=waypoint_id,
+        runtime=runtime,
+    )
+    _record(trace_events, started_at, "navigate_to_waypoint", {"waypoint_id": waypoint_id}, nav)
+    policy_events.append(_policy_event(len(policy_events), nav, "cleanup_sweep_nav"))
+    if record_robot_views and nav.get("ok"):
+        robot_view_index_ref[0] = _record_robot_view(
+            robot_view_steps=robot_view_steps,
+            trace_events=trace_events,
+            started_at=started_at,
+            backend=base_contract.backend,
+            run_dir=run_dir,
+            index=robot_view_index_ref[0],
+            action=f"navigate_to_waypoint {waypoint_id}",
+            label_suffix=f"cleanup_waypoint_{waypoint_id}",
+        )
+    return nav
+
+
+def _record_cleanup_sweep_observation(
+    *,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    metric_map: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    policy_events: list[dict[str, Any]],
+    started_at: float,
+    runtime: str,
+    run_dir: Path,
+    robot_view_steps: list[dict[str, Any]],
+    robot_view_index_ref: list[int],
+    record_robot_views: bool,
+    waypoint_id: str,
+) -> dict[str, Any]:
+    observation_image = _write_snapshot(
+        runtime=runtime,
+        contract=base_contract,
+        scenario=contract.scenario,
+        output_path=run_dir / "runtime" / f"policy_observation_{waypoint_id}.png",
+        title=f"Simulated policy observation at {waypoint_id}",
+    )
+    obs = _simulated_observation(
+        contract.observe(),
+        observation_image=observation_image,
+        run_dir=run_dir,
+        runtime=runtime,
+        metric_map=metric_map,
+        waypoint_id=waypoint_id,
+    )
+    _record(trace_events, started_at, "observe", {"waypoint_id": waypoint_id}, obs)
+    policy_events.append(_policy_event(len(policy_events), obs, "cleanup_sweep_observe"))
+    if record_robot_views and obs.get("ok"):
+        robot_view_index_ref[0] = _record_tool_robot_view(
+            contract=contract,
+            backend=base_contract.backend,
+            run_dir=run_dir,
+            robot_view_steps=robot_view_steps,
+            trace_events=trace_events,
+            started_at=started_at,
+            index=robot_view_index_ref[0],
+            tool="observe",
+            request={"waypoint_id": waypoint_id},
+            response=obs,
+        )
+    return obs
+
+
+def _append_cleanup_action_targets(
+    *,
+    contract: RealWorldCleanupContract,
+    fixture_hints: dict[str, Any],
+    selected_targets: list[dict[str, Any]],
+    seen_handles: set[str],
+    observation: dict[str, Any],
+    waypoint_id: str,
+    cleanup_object_count: int,
+) -> None:
+    for detection in observation.get("visible_object_detections") or []:
+        handle = str(detection.get("object_id") or "")
+        if not handle or handle in seen_handles:
+            continue
+        target = _cleanup_action_target(
+            contract=contract,
+            fixture_hints=fixture_hints,
+            detection=detection,
+            observation=observation,
+            waypoint_id=waypoint_id,
+        )
+        if target is None:
+            continue
+        selected_targets.append(target)
+        seen_handles.add(handle)
+        if len(selected_targets) >= cleanup_object_count:
+            return
+
+
+def _cleanup_action_target(
+    *,
+    contract: RealWorldCleanupContract,
+    fixture_hints: dict[str, Any],
+    detection: dict[str, Any],
+    observation: dict[str, Any],
+    waypoint_id: str,
+) -> dict[str, Any] | None:
+    handle = str(detection.get("object_id") or "")
+    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    if target_fixture is None:
+        return None
+    target_fixture_id = str(target_fixture.get("fixture_id") or "")
+    source_fixture_id = str((detection.get("support_estimate") or {}).get("fixture_id") or "")
+    if not target_fixture_id or target_fixture_id == source_fixture_id:
+        return None
+    return {
+        "object_id": handle,
+        "internal_object_id": str(contract._internal_object_id(handle) or ""),
+        "category": str(detection.get("category") or ""),
+        "source_receptacle_id": source_fixture_id,
+        "target_receptacle_id": target_fixture_id,
+        "target_receptacle": target_fixture,
+        "recommended_tool": str(detection.get("recommended_tool") or "auto"),
+        "source_observation_id": str(observation.get("observation_id") or ""),
+        "waypoint_id": waypoint_id,
+    }
 
 
 def _call_cleanup_action_tool(

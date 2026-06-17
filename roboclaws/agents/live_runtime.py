@@ -144,26 +144,24 @@ class LiveAgentResult:
         """Return the stable ``live_status.json``-compatible status fields."""
 
         payload: dict[str, Any] = {"phase": self.phase}
-        if self.started_at_epoch is not None:
-            payload["started_at_epoch"] = self.started_at_epoch
-        if self.finished_at_epoch is not None:
-            payload["finished_at_epoch"] = self.finished_at_epoch
-        if self.exit_status is not None:
-            payload["exit_status"] = self.exit_status
-        if self.reason:
-            payload["reason"] = self.reason
-        if self.provider_reason:
-            payload["provider_reason"] = self.provider_reason
-        if self.retryable is not None:
-            payload["retryable"] = self.retryable
-        if self.resume_available is not None:
-            payload["resume_available"] = self.resume_available
-        if self.detail:
-            payload["detail"] = self.detail
-        if self.provider_session_id:
-            payload["provider_session_id"] = self.provider_session_id
-        if self.trace_id:
-            payload["trace_id"] = self.trace_id
+        for key, value in (
+            ("started_at_epoch", self.started_at_epoch),
+            ("finished_at_epoch", self.finished_at_epoch),
+            ("exit_status", self.exit_status),
+            ("retryable", self.retryable),
+            ("resume_available", self.resume_available),
+        ):
+            if value is not None:
+                payload[key] = value
+        for key, value in (
+            ("reason", self.reason),
+            ("provider_reason", self.provider_reason),
+            ("detail", self.detail),
+            ("provider_session_id", self.provider_session_id),
+            ("trace_id", self.trace_id),
+        ):
+            if value:
+                payload[key] = value
         return payload
 
 

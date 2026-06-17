@@ -452,72 +452,33 @@ def _color_profile(value: Any) -> dict[str, Any]:
         "highlight_compression": float(raw.get("highlight_compression", 0.55)),
         "gamma": float(raw.get("gamma", 1.0)),
     }
-    backend_luminance_gain = _float_mapping(
-        raw.get(
-            "backend_luminance_gain",
-            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_luminance_gain"),
-        )
-    )
-    if backend_luminance_gain:
-        profile["backend_luminance_gain"] = backend_luminance_gain
-    backend_luminance_gain_source = raw.get(
-        "backend_luminance_gain_source",
-        DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_luminance_gain_source"),
-    )
-    if backend_luminance_gain_source:
-        profile["backend_luminance_gain_source"] = str(backend_luminance_gain_source)
-    backend_view_luminance_gain = _nested_float_mapping(
-        raw.get(
-            "backend_view_luminance_gain",
-            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_view_luminance_gain"),
-        )
-    )
-    if backend_view_luminance_gain:
-        profile["backend_view_luminance_gain"] = backend_view_luminance_gain
-    if raw.get("backend_view_luminance_gain_source"):
-        profile["backend_view_luminance_gain_source"] = str(
-            raw["backend_view_luminance_gain_source"]
-        )
-    backend_rgb_gain = _rgb_gain_mapping(
-        raw.get("backend_rgb_gain", DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_rgb_gain"))
-    )
-    if backend_rgb_gain:
-        profile["backend_rgb_gain"] = backend_rgb_gain
-    if raw.get("backend_rgb_gain_source"):
-        profile["backend_rgb_gain_source"] = str(raw["backend_rgb_gain_source"])
-    backend_view_rgb_gain = _nested_rgb_gain_mapping(
-        raw.get(
-            "backend_view_rgb_gain",
-            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_view_rgb_gain"),
-        )
-    )
-    if backend_view_rgb_gain:
-        profile["backend_view_rgb_gain"] = backend_view_rgb_gain
-    if raw.get("backend_view_rgb_gain_source"):
-        profile["backend_view_rgb_gain_source"] = str(raw["backend_view_rgb_gain_source"])
-    backend_tone_adjustment = _tone_adjustment_mapping(
-        raw.get(
-            "backend_tone_adjustment",
-            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_tone_adjustment"),
-        )
-    )
-    if backend_tone_adjustment:
-        profile["backend_tone_adjustment"] = backend_tone_adjustment
-    if raw.get("backend_tone_adjustment_source"):
-        profile["backend_tone_adjustment_source"] = str(raw["backend_tone_adjustment_source"])
-    backend_view_tone_adjustment = _nested_tone_adjustment_mapping(
-        raw.get(
-            "backend_view_tone_adjustment",
-            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_view_tone_adjustment"),
-        )
-    )
-    if backend_view_tone_adjustment:
-        profile["backend_view_tone_adjustment"] = backend_view_tone_adjustment
-    if raw.get("backend_view_tone_adjustment_source"):
-        profile["backend_view_tone_adjustment_source"] = str(
-            raw["backend_view_tone_adjustment_source"]
-        )
+    _extend_color_profile_mappings(profile, raw)
     return profile
+
+
+def _extend_color_profile_mappings(profile: dict[str, Any], raw: dict[str, Any]) -> None:
+    for field, source_field, parser in (
+        ("backend_luminance_gain", "backend_luminance_gain_source", _float_mapping),
+        (
+            "backend_view_luminance_gain",
+            "backend_view_luminance_gain_source",
+            _nested_float_mapping,
+        ),
+        ("backend_rgb_gain", "backend_rgb_gain_source", _rgb_gain_mapping),
+        ("backend_view_rgb_gain", "backend_view_rgb_gain_source", _nested_rgb_gain_mapping),
+        ("backend_tone_adjustment", "backend_tone_adjustment_source", _tone_adjustment_mapping),
+        (
+            "backend_view_tone_adjustment",
+            "backend_view_tone_adjustment_source",
+            _nested_tone_adjustment_mapping,
+        ),
+    ):
+        parsed = parser(raw.get(field, DEFAULT_SCENE_PROBE_COLOR_PROFILE.get(field)))
+        if parsed:
+            profile[field] = parsed
+        source = raw.get(source_field, DEFAULT_SCENE_PROBE_COLOR_PROFILE.get(source_field))
+        if source:
+            profile[source_field] = str(source)
 
 
 def _float_mapping(value: Any) -> dict[str, float]:

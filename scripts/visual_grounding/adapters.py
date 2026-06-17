@@ -1273,6 +1273,25 @@ def _yolo_candidates_from_model(
     category_hints: list[str],
     runtime_parameters: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    results = _run_yolo_prediction(
+        image=image,
+        model=model,
+        predict_kwargs=_yolo_predict_kwargs(runtime_parameters),
+    )
+    candidates: list[dict[str, Any]] = []
+    for result in results or []:
+        candidates.extend(
+            _yolo_candidates_from_result(
+                payload=payload,
+                image=image,
+                result=result,
+                category_hints=category_hints,
+            )
+        )
+    return _top_candidates(candidates)
+
+
+def _yolo_predict_kwargs(runtime_parameters: dict[str, Any]) -> dict[str, Any]:
     threshold = _runtime_float_param(
         runtime_parameters,
         "confidence_threshold",
@@ -1327,23 +1346,20 @@ def _yolo_candidates_from_model(
     )
     if retina_masks is not None:
         predict_kwargs["retina_masks"] = retina_masks
+    return predict_kwargs
+
+
+def _run_yolo_prediction(
+    *,
+    image: Image.Image,
+    model: Any,
+    predict_kwargs: dict[str, Any],
+) -> Any:
     with tempfile.NamedTemporaryFile(suffix=".jpg") as temp_image:
         image.save(temp_image.name, format="JPEG", quality=90)
         if hasattr(model, "predict"):
-            results = model.predict(source=temp_image.name, **predict_kwargs)
-        else:
-            results = model(temp_image.name)
-    candidates: list[dict[str, Any]] = []
-    for result in results or []:
-        candidates.extend(
-            _yolo_candidates_from_result(
-                payload=payload,
-                image=image,
-                result=result,
-                category_hints=category_hints,
-            )
-        )
-    return _top_candidates(candidates)
+            return model.predict(source=temp_image.name, **predict_kwargs)
+        return model(temp_image.name)
 
 
 def _yolo_candidates_from_result(

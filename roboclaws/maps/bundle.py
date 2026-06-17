@@ -403,19 +403,22 @@ def _normalize_room_only_fixture_poses(
                 continue
             candidates = _fixture_slot_candidates(room, fixture)
             offset = next_slot_by_room.get(room_id, 0)
-            ordered_candidates = candidates[offset:] + candidates[:offset]
-            for index, candidate in enumerate(ordered_candidates):
-                if _fixture_pose_blocks_waypoint(fixture, candidate, waypoints):
-                    continue
-                pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
-                fixture["pose"] = {
-                    "frame_id": str(pose.get("frame_id") or "map"),
-                    "x": round(candidate[0], 3),
-                    "y": round(candidate[1], 3),
-                    "yaw": float(pose.get("yaw") or 0.0),
-                }
-                next_slot_by_room[room_id] = (offset + index + 1) % max(len(candidates), 1)
-                break
+            candidate, index = _next_nonblocking_fixture_pose(
+                fixture,
+                waypoints=waypoints,
+                candidates=candidates,
+                offset=offset,
+            )
+            if candidate is None:
+                continue
+            pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+            fixture["pose"] = {
+                "frame_id": str(pose.get("frame_id") or "map"),
+                "x": round(candidate[0], 3),
+                "y": round(candidate[1], 3),
+                "yaw": float(pose.get("yaw") or 0.0),
+            }
+            next_slot_by_room[room_id] = (offset + index + 1) % max(len(candidates), 1)
 
 
 def _fixture_blocks_waypoint(
@@ -425,6 +428,20 @@ def _fixture_blocks_waypoint(
     pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
     center = (float(pose.get("x") or 0.0), float(pose.get("y") or 0.0))
     return _fixture_pose_blocks_waypoint(fixture, center, waypoints)
+
+
+def _next_nonblocking_fixture_pose(
+    fixture: dict[str, Any],
+    *,
+    waypoints: list[dict[str, Any]],
+    candidates: list[tuple[float, float]],
+    offset: int,
+) -> tuple[tuple[float, float] | None, int]:
+    ordered_candidates = candidates[offset:] + candidates[:offset]
+    for index, candidate in enumerate(ordered_candidates):
+        if not _fixture_pose_blocks_waypoint(fixture, candidate, waypoints):
+            return candidate, index
+    return None, 0
 
 
 def _fixture_pose_blocks_waypoint(

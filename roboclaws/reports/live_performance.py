@@ -573,51 +573,105 @@ def _estimate_model_work_s(
     calibration: dict[str, Any] | None,
     run_identity: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    unavailable = {
+    calibration = _dict(calibration)
+    if not calibration:
+        return _unavailable_model_work_estimate()
+    limitations = _calibration_limitations(calibration)
+    if calibration.get("schema") != "roboclaws_model_latency_calibration_v1":
+        return _unavailable_model_work_estimate(
+            source=_calibration_source(calibration),
+            limitations=["calibration_schema_unrecognized"],
+        )
+    if calibration.get("available") is not True:
+        return _unavailable_model_work_estimate(
+            source=_calibration_source(calibration),
+            calibration=calibration,
+            limitations={"calibration_unavailable", *limitations},
+        )
+    coefficient_selection = _select_calibration_coefficients(calibration, run_identity)
+    coefficients = coefficient_selection["coefficients"]
+    if not coefficients:
+        return _unavailable_model_work_estimate(
+            source=_calibration_source(calibration),
+            calibration=calibration,
+            limitations={
+                "calibration_coefficients_unavailable",
+                *limitations,
+                *coefficient_selection["limitations"],
+            },
+        )
+    values, missing = _coefficient_values_and_missing(model_work, coefficients)
+    image_units, image_coefficient, image_missing = _image_estimation_inputs(
+        model_work,
+        coefficients,
+    )
+    missing.extend(image_missing)
+    if missing or not model_work.get("available"):
+        return _unavailable_model_work_estimate(
+            source=_calibration_source(calibration),
+            calibration=calibration,
+            limitations={
+                *limitations,
+                *coefficient_selection["limitations"],
+                *(f"{item}_unavailable" for item in missing),
+                *([] if model_work.get("available") else ["model_work_unavailable"]),
+            },
+        )
+    estimated = _estimated_model_work_seconds(
+        model_work,
+        values,
+        image_units=image_units,
+        image_coefficient=image_coefficient,
+    )
+    return {
+        "available": True,
+        "source": _calibration_source(calibration),
+        "estimated_s": round(estimated, 3),
+        "limitations": sorted({*limitations, *coefficient_selection["limitations"]}),
+        "policy": "calibrated_explicit_packet_required_for_normalized_model_time",
+        "sample_count": _int_or_none(calibration.get("sample_count")),
+        "total_row_count": _int_or_none(calibration.get("total_row_count")),
+        "coefficient_scope": coefficient_selection["scope"],
+    }
+
+
+def _unavailable_model_work_estimate(
+    *,
+    source: str = "unavailable",
+    limitations: set[str] | list[str] | None = None,
+    calibration: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    packet = {
         "available": False,
-        "source": "unavailable",
+        "source": source,
         "estimated_s": None,
-        "limitations": ["calibration_coefficients_unavailable"],
+        "limitations": sorted({str(item) for item in limitations if str(item)})
+        if limitations is not None
+        else ["calibration_coefficients_unavailable"],
         "policy": (
             "No authoritative repo-default coefficients are committed for v1. "
             "Use calibrate_model_latency.py with a named dataset before making "
             "normalized speed claims."
         ),
     }
-    calibration = _dict(calibration)
-    if not calibration:
-        return unavailable
-    limitations = [str(item) for item in calibration.get("limitations") or [] if str(item)]
-    if calibration.get("schema") != "roboclaws_model_latency_calibration_v1":
-        return {
-            **unavailable,
-            "limitations": ["calibration_schema_unrecognized"],
-            "source": str(calibration.get("source_path") or "calibration_packet"),
-        }
-    if calibration.get("available") is not True:
-        return {
-            **unavailable,
-            "limitations": sorted({"calibration_unavailable", *limitations}),
-            "source": str(calibration.get("source_path") or "calibration_packet"),
-            "sample_count": _int_or_none(calibration.get("sample_count")),
-            "total_row_count": _int_or_none(calibration.get("total_row_count")),
-        }
-    coefficient_selection = _select_calibration_coefficients(calibration, run_identity)
-    coefficients = coefficient_selection["coefficients"]
-    if not coefficients:
-        return {
-            **unavailable,
-            "limitations": sorted(
-                {
-                    "calibration_coefficients_unavailable",
-                    *limitations,
-                    *coefficient_selection["limitations"],
-                }
-            ),
-            "source": str(calibration.get("source_path") or "calibration_packet"),
-            "sample_count": _int_or_none(calibration.get("sample_count")),
-            "total_row_count": _int_or_none(calibration.get("total_row_count")),
-        }
+    if calibration is not None:
+        packet["sample_count"] = _int_or_none(calibration.get("sample_count"))
+        packet["total_row_count"] = _int_or_none(calibration.get("total_row_count"))
+    return packet
+
+
+def _calibration_source(calibration: dict[str, Any]) -> str:
+    return str(calibration.get("source_path") or "calibration_packet")
+
+
+def _calibration_limitations(calibration: dict[str, Any]) -> list[str]:
+    return [str(item) for item in calibration.get("limitations") or [] if str(item)]
+
+
+def _coefficient_values_and_missing(
+    model_work: dict[str, Any],
+    coefficients: dict[str, Any],
+) -> tuple[dict[str, float], list[str]]:
     required = {
         "uncached_input_s_per_token": "total_uncached_input_tokens",
         "cached_input_s_per_token": "total_cached_input_tokens",
@@ -629,19 +683,43 @@ def _estimate_model_work_s(
     }
     missing: list[str] = []
     for coefficient_key, work_key in required.items():
-        work_value = _int_or_none(model_work.get(work_key))
-        coefficient_value = _float_or_none(coefficients.get(coefficient_key))
-        if work_value is None:
-            if coefficient_value not in {None, 0.0}:
-                missing.append(work_key)
-            values[coefficient_key] = 0.0
-            continue
-        if coefficient_value is None:
-            if work_value > 0:
-                missing.append(coefficient_key)
-            values[coefficient_key] = 0.0
-            continue
-        values[coefficient_key] = coefficient_value
+        _record_coefficient_value(
+            values,
+            missing,
+            coefficient_key=coefficient_key,
+            coefficient_value=_float_or_none(coefficients.get(coefficient_key)),
+            work_key=work_key,
+            work_value=_int_or_none(model_work.get(work_key)),
+        )
+    return values, missing
+
+
+def _record_coefficient_value(
+    values: dict[str, float],
+    missing: list[str],
+    *,
+    coefficient_key: str,
+    coefficient_value: float | None,
+    work_key: str,
+    work_value: int | None,
+) -> None:
+    if work_value is None:
+        if coefficient_value not in {None, 0.0}:
+            missing.append(work_key)
+        values[coefficient_key] = 0.0
+        return
+    if coefficient_value is None:
+        if work_value > 0:
+            missing.append(coefficient_key)
+        values[coefficient_key] = 0.0
+        return
+    values[coefficient_key] = coefficient_value
+
+
+def _image_estimation_inputs(
+    model_work: dict[str, Any],
+    coefficients: dict[str, Any],
+) -> tuple[int, float | None, list[str]]:
     image_units = _image_input_units(model_work)
     image_coefficient = _first_float(
         coefficients,
@@ -650,24 +728,18 @@ def _estimate_model_work_s(
         "image_input_s_per_pixel",
     )
     if image_units > 0 and image_coefficient is None:
-        missing.append("image_s_per_unit")
-        image_coefficient = 0.0
-    if missing or not model_work.get("available"):
-        return {
-            **unavailable,
-            "limitations": sorted(
-                {
-                    *limitations,
-                    *coefficient_selection["limitations"],
-                    *(f"{item}_unavailable" for item in missing),
-                    *([] if model_work.get("available") else ["model_work_unavailable"]),
-                }
-            ),
-            "source": str(calibration.get("source_path") or "calibration_packet"),
-            "sample_count": _int_or_none(calibration.get("sample_count")),
-            "total_row_count": _int_or_none(calibration.get("total_row_count")),
-        }
-    estimated = (
+        return image_units, 0.0, ["image_s_per_unit"]
+    return image_units, image_coefficient, []
+
+
+def _estimated_model_work_seconds(
+    model_work: dict[str, Any],
+    values: dict[str, float],
+    *,
+    image_units: int,
+    image_coefficient: float | None,
+) -> float:
+    return (
         values["intercept_s"]
         + (_int_or_none(model_work.get("total_uncached_input_tokens")) or 0)
         * values["uncached_input_s_per_token"]
@@ -678,16 +750,6 @@ def _estimate_model_work_s(
         * values["reasoning_s_per_token"]
         + image_units * (image_coefficient or 0.0)
     )
-    return {
-        "available": True,
-        "source": str(calibration.get("source_path") or "calibration_packet"),
-        "estimated_s": round(estimated, 3),
-        "limitations": sorted({*limitations, *coefficient_selection["limitations"]}),
-        "policy": "calibrated_explicit_packet_required_for_normalized_model_time",
-        "sample_count": _int_or_none(calibration.get("sample_count")),
-        "total_row_count": _int_or_none(calibration.get("total_row_count")),
-        "coefficient_scope": coefficient_selection["scope"],
-    }
 
 
 def _select_calibration_coefficients(

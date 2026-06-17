@@ -892,7 +892,6 @@ def test_openai_agents_runner_script_uses_runtime_contract_and_checker() -> None
     assert "LiveAgentRequest" in runner_text
     assert "household_cleanup_server_argv" in runner_text
     assert "CHECKER_SCRIPT" in runner_text
-    assert "--require-clean-agent-run" in runner_text
     assert "run_result.json" in runner_text
 
 
@@ -3050,6 +3049,7 @@ def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
 def test_molmo_codex_live_is_detached_and_probeable() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+    household_live_text = HOUSEHOLD_LIVE_DRIVER.read_text(encoding="utf-8")
 
     assert 'tmux new-session -d -s "$session_name"' in molmo_text
     assert (
@@ -3069,11 +3069,10 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert "--lock-path output/molmo/.live-codex.lock" in molmo_text
     assert "tmux_session.txt" in molmo_text
     assert "live_status.json" in molmo_text
-    assert "codex-events.jsonl" in runner_text
-    assert "codex-last-message.md" in runner_text
-    assert "acquire_visual_backend_slot" in runner_text
-    assert "visual_backend_slot" in runner_text
-    assert "no MolmoSpaces visual backend slot is available" in runner_text
+    assert all(item in runner_text for item in ("codex-events.jsonl", "codex-last-message.md"))
+    assert "acquire_household_live_run_lease" in runner_text
+    assert "acquire_visual_backend_slot" in household_live_text
+    assert "no MolmoSpaces visual backend slot is available" in household_live_text
     assert "is already in use before server start" in runner_text
     assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
     assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text

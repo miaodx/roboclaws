@@ -78,38 +78,75 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    entries = MODEL_ENTRIES if args.all else (entry_by_name(args.entry),)
+    entries = _selected_entries(args)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     publish_root = args.published_dir or args.output_dir / "published"
     publish_root.mkdir(parents=True, exist_ok=True)
 
+    preflight_statuses = _run_preflight_or_statuses(entries, args, publish_root)
+    if preflight_statuses is not None:
+        write_manifest(publish_root, preflight_statuses)
+        return 1
+
+    statuses, failure_count = _run_entries(entries, args, publish_root)
+    write_manifest(publish_root, statuses)
+    if failure_count:
+        return 1
+    return 0
+
+
+def _selected_entries(args: argparse.Namespace) -> tuple[MolmoLiveModelEntry, ...]:
+    return MODEL_ENTRIES if args.all else (entry_by_name(args.entry),)
+
+
+def _run_preflight_or_statuses(
+    entries: tuple[MolmoLiveModelEntry, ...],
+    args: argparse.Namespace,
+    publish_root: Path,
+) -> list[dict[str, Any]] | None:
+    if args.dry_run or not _any_entry_has_secret(entries):
+        return None
+    try:
+        if not args.skip_version_check:
+            _version_checks(args)
+        if not args.skip_uv_sync:
+            _run_checked([args.uv_bin, "sync", "--extra", "dev", "--extra", "molmospaces"])
+        if not args.skip_prewarm:
+            _prewarm(args, generated_mess_count=_prewarm_generated_mess_count(entries, args))
+    except Exception as exc:
+        return [
+            _preflight_failed_status(entry, args, publish_root, reason=str(exc))
+            for entry in entries
+        ]
+    return None
+
+
+def _preflight_failed_status(
+    entry: MolmoLiveModelEntry,
+    args: argparse.Namespace,
+    publish_root: Path,
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    status = base_status(
+        entry,
+        seed=args.seed,
+        generated_mess_count=_entry_generated_mess_count(entry, args),
+        profile=_entry_profile(entry, args),
+        task=args.task,
+    )
+    status["status"] = "failed"
+    status["reason"] = f"preflight failed: {reason}"
+    return _finalize_status(status, publish_root)
+
+
+def _run_entries(
+    entries: tuple[MolmoLiveModelEntry, ...],
+    args: argparse.Namespace,
+    publish_root: Path,
+) -> tuple[list[dict[str, Any]], int]:
     statuses: list[dict[str, Any]] = []
     failure_count = 0
-    if not args.dry_run and _any_entry_has_secret(entries):
-        try:
-            if not args.skip_version_check:
-                _version_checks(args)
-            if not args.skip_uv_sync:
-                _run_checked([args.uv_bin, "sync", "--extra", "dev", "--extra", "molmospaces"])
-            if not args.skip_prewarm:
-                _prewarm(args, generated_mess_count=_prewarm_generated_mess_count(entries, args))
-        except Exception as exc:
-            for entry in entries:
-                profile = _entry_profile(entry, args)
-                generated_mess_count = _entry_generated_mess_count(entry, args)
-                status = base_status(
-                    entry,
-                    seed=args.seed,
-                    generated_mess_count=generated_mess_count,
-                    profile=profile,
-                    task=args.task,
-                )
-                status["status"] = "failed"
-                status["reason"] = f"preflight failed: {exc}"
-                statuses.append(_finalize_status(status, publish_root))
-            write_manifest(publish_root, statuses)
-            return 1
-
     for entry in entries:
         status = _run_entry(entry, args, publish_root=publish_root)
         statuses.append(status)
@@ -117,11 +154,7 @@ def main(argv: list[str] | None = None) -> int:
             failure_count += 1
             if not args.continue_on_error and not args.all:
                 break
-
-    write_manifest(publish_root, statuses)
-    if failure_count:
-        return 1
-    return 0
+    return statuses, failure_count
 
 
 def _run_entry(

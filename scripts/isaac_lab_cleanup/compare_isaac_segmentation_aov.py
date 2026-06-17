@@ -3,12 +3,24 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 SCHEMA = "isaac_segmentation_aov_comparison_v1"
 SEGMENTATION_TYPE = "semantic_segmentation"
 BACKGROUND_LABELS = {"", "background", "unlabelled", "unlabeled"}
+
+
+@dataclass(frozen=True)
+class DecisionFeatures:
+    control_has_tensor: bool
+    candidate_has_tensor: bool
+    control_has_non_background: bool
+    candidate_has_non_background: bool
+    candidate_labels_applied: bool
+    candidate_collapsed: bool
+    selected_match_count_zero: bool
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -139,6 +151,17 @@ def _semantic_view_summary(view: Any) -> dict[str, Any]:
 
 
 def _decision(control: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    features = _decision_features(control, candidate)
+    first_layer, classification, next_action = _first_divergence(features)
+    return {
+        "first_divergent_layer": first_layer,
+        "root_cause_classification": classification,
+        "next_action": next_action,
+        "evidence": _decision_evidence(features),
+    }
+
+
+def _decision_features(control: dict[str, Any], candidate: dict[str, Any]) -> DecisionFeatures:
     control_has_tensor = SEGMENTATION_TYPE in set(control["output_data_types"])
     candidate_has_tensor = SEGMENTATION_TYPE in set(candidate["output_data_types"])
     control_has_non_background = control["non_background_label_count"] > 0
@@ -153,60 +176,72 @@ def _decision(control: dict[str, Any], candidate: dict[str, Any]) -> dict[str, A
         and candidate["semantic_view_count"] > 0
         and candidate["full_frame_background_view_count"] == candidate["semantic_view_count"]
     )
+    return DecisionFeatures(
+        control_has_tensor=control_has_tensor,
+        candidate_has_tensor=candidate_has_tensor,
+        control_has_non_background=control_has_non_background,
+        candidate_has_non_background=candidate_has_non_background,
+        candidate_labels_applied=candidate_labels_applied,
+        candidate_collapsed=candidate_collapsed,
+        selected_match_count_zero=candidate["selected_usd_prim_match_count"] == 0,
+    )
 
-    evidence: list[str] = []
-    first_layer = ""
-    classification = ""
-    next_action = ""
 
-    if not control_has_tensor:
-        first_layer = "control_missing_semantic_tensor"
-        classification = "comparison_control_invalid"
-        next_action = "Regenerate the generated-control segmentation artifact before comparing."
-    elif not candidate_has_tensor:
-        first_layer = "candidate_missing_semantic_tensor"
-        classification = "segmentation_request_or_capture"
-        next_action = (
-            "Debug camera data_types/render-product tensor capture for the candidate scene."
+def _first_divergence(features: DecisionFeatures) -> tuple[str, str, str]:
+    if not features.control_has_tensor:
+        return (
+            "control_missing_semantic_tensor",
+            "comparison_control_invalid",
+            "Regenerate the generated-control segmentation artifact before comparing.",
         )
-    elif control_has_non_background and candidate_labels_applied and candidate_collapsed:
-        first_layer = "semantic_tensor_ids_collapsed_to_background"
-        classification = "semantic_aov_rendered_geometry_not_labelled"
-        next_action = (
+    if not features.candidate_has_tensor:
+        return (
+            "candidate_missing_semantic_tensor",
+            "segmentation_request_or_capture",
+            "Debug camera data_types/render-product tensor capture for the candidate scene.",
+        )
+    if (
+        features.control_has_non_background
+        and features.candidate_labels_applied
+        and features.candidate_collapsed
+    ):
+        return (
+            "semantic_tensor_ids_collapsed_to_background",
+            "semantic_aov_rendered_geometry_not_labelled",
             "Probe whether labels must be authored on rendered payload/reference Gprims "
-            "rather than MolmoSpaces scene-index prims, or defer Phase E segmentation."
+            "rather than MolmoSpaces scene-index prims, or defer Phase E segmentation.",
         )
-    elif control_has_non_background and not candidate_has_non_background:
-        first_layer = "semantic_label_map_has_no_candidate_geometry_labels"
-        classification = "semantic_label_projection"
-        next_action = (
+    if features.control_has_non_background and not features.candidate_has_non_background:
+        return (
+            "semantic_label_map_has_no_candidate_geometry_labels",
+            "semantic_label_projection",
             "Inspect label map contents and authored semantics on rendered descendants "
-            "before changing selected-path matching."
+            "before changing selected-path matching.",
         )
-    elif candidate["selected_usd_prim_match_count"] == 0 and candidate_has_non_background:
-        first_layer = "selected_path_matching"
-        classification = "roboclaws_candidate_matching"
-        next_action = "Debug candidate label-to-selected-USD matching."
+    if features.selected_match_count_zero and features.candidate_has_non_background:
+        return (
+            "selected_path_matching",
+            "roboclaws_candidate_matching",
+            "Debug candidate label-to-selected-USD matching.",
+        )
+    return "", "", ""
 
-    if control_has_tensor:
+
+def _decision_evidence(features: DecisionFeatures) -> list[str]:
+    evidence: list[str] = []
+    if features.control_has_tensor:
         evidence.append("control produced semantic_segmentation tensors")
-    if candidate_has_tensor:
+    if features.candidate_has_tensor:
         evidence.append("candidate produced semantic_segmentation tensors")
-    if control_has_non_background:
+    if features.control_has_non_background:
         evidence.append("control produced non-background semantic labels")
-    if candidate_labels_applied:
+    if features.candidate_labels_applied:
         evidence.append("candidate scene-index labels were applied without failures")
-    if candidate_collapsed:
+    if features.candidate_collapsed:
         evidence.append("candidate semantic views each contain one tensor id")
-    if candidate["selected_usd_prim_match_count"] == 0:
+    if features.selected_match_count_zero:
         evidence.append("candidate has zero selected USD prim matches")
-
-    return {
-        "first_divergent_layer": first_layer,
-        "root_cause_classification": classification,
-        "next_action": next_action,
-        "evidence": evidence,
-    }
+    return evidence
 
 
 def _label_class(label: str) -> str:

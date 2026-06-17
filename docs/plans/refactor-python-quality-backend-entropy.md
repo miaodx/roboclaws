@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-14
+last_verified: 2026-06-15
 ---
 
 # Refactor Scope: Python Quality And Backend Entropy
@@ -208,6 +208,12 @@ Rejected alternatives:
     material checker split.
   - Preserve current `just verify` / `just harness` behavior and checker
     contract tests.
+
+- [x] **C1.2: Split live checker CLI argument registration.**
+  - Target `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`.
+  - Extract CLI argument registration into core, evidence, planner, Isaac, and
+    robot-camera helper groups.
+  - Preserve current flag names, defaults, help text, and checker behavior.
 
 - [x] **C1.5: Split direct cleanup orchestration from artifact/result assembly.**
   - Target `roboclaws/household/realworld_cleanup.py`.
@@ -4577,3 +4583,784 @@ Stop this refactor loop when:
   and the module dropped from 2359 to 2357 lines. Remaining Candidate C work is
   limited to broader Agibot contract rehearsal complexity and planner-proof
   fallback rows.
+- 2026-06-15: Continued Candidate C by splitting MolmoSpaces Agibot contract
+  rehearsal orchestration into `roboclaws/household/agibot_contract_rehearsal_stages.py`.
+  `run_molmospaces_agibot_contract_rehearsal(...)` is now a thin public wrapper;
+  validation, backend/session construction, preflight export, observe/navigation,
+  blocked-manipulation versus cleanup-action execution, runtime export, and
+  report/run-result finalization are named stage helpers. Evidence:
+  `ruff check roboclaws/household/agibot_contract_rehearsal.py roboclaws/household/agibot_contract_rehearsal_stages.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py -q`
+  passed with 4 tests and 2 skips; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 83 to 80 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/agibot_contract_rehearsal.py` dropped from 2357 to
+  1996 lines and no longer appears in the complexity-by-file summary; the new
+  stage helper module is 785 lines, below the oversized-module threshold.
+  Remaining Candidate C work is limited to planner-proof fallback rows.
+- 2026-06-15: Completed the remaining Candidate C planner-proof fallback rows
+  by moving prior fallback alias discovery, carried-filter hydration, prior
+  generated-result filtering, and helper parsers into
+  `roboclaws/household/planner_proof_fallbacks.py`. The public
+  `planner_proof_requests.py` APIs and proof request payloads are unchanged;
+  the fallback module preserves prior evidence fields such as `last_worker_stage`
+  and proof-quality summaries. Evidence:
+  `ruff check roboclaws/household/planner_proof_requests.py roboclaws/household/planner_proof_fallbacks.py tests/unit/molmo_cleanup/test_molmo_planner_proof_requests.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_planner_proof_requests.py -q`
+  passed with 26 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 80 to 76 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/planner_proof_requests.py` dropped from 2187 to 1844
+  lines and no longer appears in the complexity-by-file summary. Candidate C is
+  complete for this backend-quality loop.
+- 2026-06-15: Continued the visual-grounding benchmark residual candidate by
+  moving benchmark scoring into `scripts/visual_grounding/benchmark_scoring.py`.
+  `scripts/visual_grounding/run_visual_grounding_benchmark.py::_score_predictions`
+  remains available as an imported delegate for current tests, while category
+  matching, bbox IoU matching, destination-hint/actionability scoring,
+  duplicate accounting, and private label detail assembly live in the focused
+  helper. Evidence:
+  `ruff check scripts/visual_grounding/run_visual_grounding_benchmark.py scripts/visual_grounding/benchmark_scoring.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+  passed with 18 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 76 to 75 Ruff complexity violations, with oversized modules unchanged at
+  59. `scripts/visual_grounding/run_visual_grounding_benchmark.py` dropped from
+  1566 to 1253 lines and no longer appears in the complexity-by-file summary.
+- 2026-06-15: Completed Candidate D by extracting default live MCP contract
+  construction from `RealWorldMolmoCleanupMCPServer.__init__(...)` into
+  `_build_realworld_mcp_contract(...)`. The public MCP server factory, server
+  class, tool registration, visual-grounding setup, runtime-map prior handling,
+  and acceptance-config payloads are unchanged; the constructor now leaves
+  backend/session/default contract setup in one named helper. Evidence:
+  `ruff check roboclaws/household/realworld_mcp_server.py roboclaws/household/realworld_mcp_run_artifacts.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check roboclaws/household/realworld_mcp_server.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q`
+  passed with 26 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 75 to 74 Ruff complexity violations, with oversized modules unchanged at
+  59. `RealWorldMolmoCleanupMCPServer.__init__` no longer appears in the
+  complexity summary.
+- 2026-06-15: Continued the robot-camera apple-to-apple parity residual by
+  splitting `run_comparison(...)` setup into path, initial manifest, lane
+  initialization, generated-mess summary, and blocked-manifest helpers. The
+  MuJoCo and Isaac worker command arguments, canonical generated mess manifest,
+  lane summaries, target-selection flow, per-location render loop, and report
+  output schema remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py -q`
+  passed with 39 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 74 to 73 Ruff complexity violations, with oversized modules unchanged at
+  59. `run_comparison(...)` no longer appears in the complexity summary.
+- 2026-06-15: Continued the detector-sidecar residual by splitting YOLO-family
+  adapter runtime parsing in `scripts/visual_grounding/adapters.py`.
+  `_yolo_candidates_from_model(...)` now delegates runtime-parameter to
+  `predict_kwargs` translation and temporary-image model invocation to focused
+  helpers, while candidate parsing and response schemas remain unchanged.
+  Evidence:
+  `ruff check scripts/visual_grounding/adapters.py roboclaws/household/visual_grounding.py scripts/visual_grounding/run_visual_grounding_benchmark.py tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py tests/contract/visual_grounding/test_visual_grounding_service.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check scripts/visual_grounding/adapters.py --select C901,PLR0912,PLR0915`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py -q`
+  passed with 33 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 73 to 72 Ruff complexity violations, with oversized modules unchanged at
+  59. `scripts/visual_grounding/adapters.py` no longer appears in the
+  complexity-by-file summary.
+- 2026-06-15: Continued the detector-sidecar residual by splitting
+  `HttpVisualGroundingClient.request_candidates(...)` transport handling in
+  `roboclaws/household/visual_grounding.py`. Request URL/header construction,
+  retry handling, timeout/connection failure responses, HTTP error JSON parsing,
+  and response validation now live in focused helpers while the public client
+  API and visual-grounding response contract remain unchanged. A focused test
+  now covers HTTP non-2xx responses that still return a valid contract failure
+  packet. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/visual_grounding.py tests/unit/molmo_cleanup/test_visual_grounding.py`
+  passed; `ruff format --check roboclaws/household/visual_grounding.py tests/unit/molmo_cleanup/test_visual_grounding.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py`
+  passed with 34 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 72 to 71 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/visual_grounding.py` no longer appears in the
+  complexity-by-file summary.
+- 2026-06-15: Continued the backend/engine consistency residual by making
+  `roboclaws/launch/runners.py::export_env_from_overrides(...)` use the
+  launch agent-engine catalog for provider-profile environment export.
+  Provider env keys now come from `AgentEngineSpec.provider_env_key` instead of
+  being repeated as local `codex-cli` / `claude-code` / `openai-agents-sdk`
+  branches, while task metadata, goal contract, and scenario setup exports keep
+  the same external shape. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/launch/runners.py tests/unit/launch/test_environment_setup_catalog.py`
+  passed; `ruff format --check roboclaws/launch/runners.py tests/unit/launch/test_environment_setup_catalog.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed with 154 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 71 to 70 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/launch/runners.py` no longer appears in the complexity summary.
+- 2026-06-15: Continued the backend-neutral generated-mess residual by splitting
+  `roboclaws/household/generated_mess.py` target selection and manifest
+  materialization helpers. Rule eligibility, round-robin target selection,
+  manifest target-list validation, single-target materialization, receptacle id
+  validation, relation validation, and placement-index validation are now named
+  helpers while `select_generated_mess_targets(...)`,
+  `build_generated_mess_manifest(...)`, and
+  `targets_from_generated_mess_manifest(...)` keep the same public contracts.
+  Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/generated_mess.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py`
+  passed; `ruff format --check roboclaws/household/generated_mess.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+  passed with 88 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 70 to 68 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/generated_mess.py` no longer appears in the
+  complexity-by-file summary.
+- 2026-06-15: Continued the target-query recovery residual by splitting
+  `roboclaws/household/target_query.py::_required_next_tool(...)` into named
+  next-tool policy helpers for actionable, destination-navigation, general
+  actionable, and non-actionable candidates. The target-query resolution schema,
+  required-next-tool strings, actionability priorities, and MCP recovery
+  guidance remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/target_query.py`
+  passed; `ruff check roboclaws/household/target_query.py` passed;
+  `ruff format --check roboclaws/household/target_query.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_target_query_recovery_resolves_stale_fixture_id_through_public_anchor tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_target_query_recovery_not_found_includes_public_search_budget tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_resolves_stale_target_query_to_public_anchor tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance`
+  passed with 4 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 68 to 67 Ruff complexity violations, with oversized modules unchanged at
+  59. A broader `ruff check --select C901,PLR0912,PLR0915` over the two
+  contract test files still reports existing oversized test bodies unrelated to
+  this slice.
+- 2026-06-15: Continued the launch/backend context residual by splitting
+  `roboclaws/launch/catalog.py::_overrides_with_surface_context(...)` into
+  table-driven launch-only stripping and missing-context merge helpers. The
+  public `run::surface` grammar, normalized surface/world/backend/agent-engine
+  overrides, provider-profile export path, dispatch backend lowering, and
+  scenario setup behavior remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/launch/catalog.py`
+  passed; `ruff check roboclaws/launch/catalog.py` passed;
+  `ruff format --check roboclaws/launch/catalog.py tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_backend_catalog_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_backend_catalog_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed with 156 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 67 to 66 Ruff complexity violations, with oversized modules unchanged at
+  59. A broader `ruff check --select C901,PLR0912,PLR0915` over the launch
+  tests still reports the existing `surface_args_from_legacy_task_args` helper
+  complexity unrelated to this slice.
+- 2026-06-15: Continued the backend-adapter consistency residual by splitting
+  Isaac Lab subprocess backend constructor setup details in
+  `roboclaws/household/isaac_lab_backend.py`. Generated-mess, robot, map-bundle,
+  scene-USD, and segmentation worker argument assembly now live in focused
+  helpers while the public backend wrapper, worker command shape, fake protocol
+  behavior, and result payload fields remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/isaac_lab_backend.py`
+  passed; `ruff check roboclaws/household/isaac_lab_backend.py` passed;
+  `ruff format --check roboclaws/household/isaac_lab_backend.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_backend_reports_missing_runtime tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_backend_can_request_segmentation tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_lab_backend_can_request_segmentation_semantic_filter`
+  passed with 4 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 66 to 64 Ruff complexity violations, with oversized modules unchanged at
+  59. This slice validated the fake worker/mock-covered adapter contract only;
+  it does not claim a real Isaac Lab runtime proof.
+- 2026-06-15: Continued the camera-control normalization residual by making
+  `roboclaws/household/camera_control.py::_color_profile(...)` table-driven for
+  backend/view luminance, RGB, and tone-adjustment profile fields and their
+  source metadata. The camera-control request schema, default display profile,
+  backend gain defaults, replay normalization, and tone-adjustment output shape
+  remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/camera_control.py`
+  passed; `ruff check roboclaws/household/camera_control.py` passed;
+  `ruff format --check roboclaws/household/camera_control.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_comparison_default_color_profile_contract tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_replay_normalizes_legacy_profile tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_replay_normalizes_view_gain tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_replay_normalizes_rgb_gain tests/contract/molmo_cleanup/test_scene_camera_comparison.py::test_scene_camera_color_profile_normalizes_backend_tone_adjustment tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_applies_backend_luminance_gain tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_prefers_backend_view_luminance_gain tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_prefers_backend_view_rgb_gain tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py::test_camera_color_profile_applies_backend_tone_adjustment`
+  passed with 9 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 64 to 63 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/camera_control.py` dropped by 39 net lines. A
+  broader `ruff check --select C901,PLR0912,PLR0915` over the scene-camera test
+  file still reports an existing oversized report-rendering test unrelated to
+  this slice.
+- 2026-06-15: Continued the semantic-timeline residual by extracting active
+  object context advancement from
+  `roboclaws/household/semantic_timeline.py::semantic_substeps(...)` and pruning
+  an unused adjacent-navigation helper. Semantic substep grouping, phase names,
+  source/target receptacle fields, visual-candidate phase mapping, primitive
+  evidence consumers, and report/checker payloads remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/semantic_timeline.py`
+  passed; `ruff check roboclaws/household/semantic_timeline.py` passed;
+  `ruff format --check roboclaws/household/semantic_timeline.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmo_semantic_cleanup_loop.py tests/unit/molmo_cleanup/test_molmo_planner_primitive_executor.py tests/unit/molmo_cleanup/test_molmo_planner_probe_primitive_executor.py tests/contract/reports/test_molmo_cleanup_artifact_report.py`
+  passed with 27 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 63 to 61 Ruff complexity violations, with oversized modules unchanged at
+  59, and `roboclaws/household/semantic_timeline.py` dropped from 846 to 841
+  lines.
+- 2026-06-15: Continued the MolmoSpaces grasp-cache residual by splitting
+  pose-policy cache blocker construction out of
+  `roboclaws/household/grasp_pose_policy_cache.py::run_grasp_pose_policy_cache_generation(...)`
+  and reusing compact blocker helpers across pose-policy resolution and
+  generation preflight failures. The pose-policy cache schema, command
+  arguments, dry-run behavior, install validation, availability-after-install
+  gate, and blocker codes/messages remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/grasp_pose_policy_cache.py`
+  passed; `ruff check roboclaws/household/grasp_pose_policy_cache.py` passed;
+  `ruff format --check roboclaws/household/grasp_pose_policy_cache.py tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
+  passed with 7 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 61 to 59 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/household/grasp_pose_policy_cache.py` no longer appears in the
+  complexity-by-file summary; the file grew from 411 to 420 lines, so the next
+  slices should favor net line reduction where materiality is otherwise equal.
+- 2026-06-15: Continued the same MolmoSpaces cache-generation residual by
+  splitting generation blocker collection out of
+  `roboclaws/household/grasp_cache_generation.py::run_grasp_cache_generation(...)`.
+  The upstream `run_rigid.py` command, objects-list artifact, symlink setup,
+  generated/installed cache validation, availability-after-install gate, and
+  result schema remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/grasp_cache_generation.py`
+  passed; `ruff check roboclaws/household/grasp_cache_generation.py` passed;
+  `ruff format --check roboclaws/household/grasp_cache_generation.py tests/unit/molmo_cleanup/test_grasp_cache_generation.py tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_grasp_cache_generation.py tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
+  passed with 7 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 59 to 58 Ruff complexity violations, with oversized modules unchanged at
+  59. The MolmoSpaces grasp cache generation files no longer appear in the
+  complexity-by-file summary; this file grew from 350 to 370 lines, reinforcing
+  that the next loop should prioritize backend/cleanup seams with net line
+  reduction.
+- 2026-06-15: Continued the map-bundle residual by extracting non-blocking
+  room-only fixture pose selection from
+  `roboclaws/maps/bundle.py::_normalize_room_only_fixture_poses(...)`. Nav2
+  bundle projection, room-only fixture hint normalization, candidate slot
+  rotation, and waypoint-collision avoidance remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/maps/bundle.py` passed;
+  `ruff check roboclaws/maps/bundle.py` passed;
+  `ruff format --check roboclaws/maps/bundle.py tests/contract/maps/test_nav2_map_bundle_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/maps/test_nav2_map_bundle_contract.py`
+  passed with 6 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 58 to 57 Ruff complexity violations, with oversized modules unchanged at
+  59. `roboclaws/maps/bundle.py` no longer appears in the complexity-by-file
+  summary; the file grew from 643 to 660 lines.
+- 2026-06-15: Switched the next loop from pure complexity extraction to
+  backend/live-runner consistency and centralized the common household cleanup
+  live-runner CLI contract in
+  `roboclaws/agents/drivers/household_live.py::add_household_cleanup_live_runner_args(...)`.
+  Codex, Claude Code, and OpenAI Agents SDK cleanup runners now share the same
+  run-dir, repo-root, status, host/port, lock, backend, task identity, profile,
+  server-arg, checker-visual-arg, and startup-timeout parser contract while
+  preserving engine-specific options and the OpenAI Agents policy default.
+  Evidence:
+  `ruff check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
+  passed; `ruff format --check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_runners_open_ended_checker_drops_full_cleanup_gates tests/contract/dev_tools/test_task_agent_just_recipes.py::test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 35 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed with 57 Ruff complexity violations and 59 oversized modules unchanged.
+  This slice reduced live-runner code by 11 net lines while improving backend
+  argument contract consistency.
+- 2026-06-15: Continued the live-runtime status residual by making
+  `roboclaws/agents/live_runtime.py::LiveAgentResult.to_live_status_payload(...)`
+  table-driven for optional status fields. Timestamp, exit-status, retryable,
+  and resume-available fields continue to preserve falsey values through
+  `is not None`, while optional reason/detail/session fields keep the existing
+  truthy-only emission behavior. Evidence:
+  `ruff check roboclaws/agents/live_runtime.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/live_runtime.py`
+  passed; `ruff format --check roboclaws/agents/live_runtime.py tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_live_agent_result_from_failure_matches_live_status_fields tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 2 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 57 to 56 Ruff complexity violations, with oversized modules unchanged at
+  59. This slice reduced `roboclaws/agents/live_runtime.py` by 2 net lines.
+- 2026-06-15: Continued the backend/live-runner consistency residual by moving
+  live-run backend resource leasing into
+  `roboclaws/agents/drivers/household_live.py::acquire_household_live_run_lease(...)`.
+  Codex, Claude Code, and OpenAI Agents SDK cleanup runners now share the same
+  MolmoSpaces visual-backend-slot acquisition/status payload behavior and the
+  same non-Molmo file-lock payload path, while preserving engine-specific
+  runner execution, provider timing, server startup, and checker behavior.
+  Evidence:
+  `ruff check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py`
+  passed; `ruff format --check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_molmo_codex_live_is_detached_and_probeable tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_runners_open_ended_checker_drops_full_cleanup_gates tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_claude_print_command_uses_verbose_for_stream_json tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 6 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. Ruff complexity violations stayed
+  at 56 and oversized modules dropped from 59 to 58 because
+  `scripts/molmo_cleanup/run_live_claude_cleanup.py` fell below the 800-line
+  threshold. The touched live-runner scripts dropped by 186 net lines; after
+  the shared helper and focused tests, the slice is still a net line reduction.
+- 2026-06-15: Continued under `$intuitive-flow` by moving the open-ended
+  live-runner checker-gate filter into
+  `roboclaws/agents/drivers/household_live.py::without_full_cleanup_checker_gates(...)`.
+  Codex, Claude Code, and OpenAI Agents SDK cleanup runners now share the same
+  policy for dropping full-cleanup-only checker gates on no-preset open-ended
+  tasks; unused adjacent local checker helper definitions were removed from the
+  runner scripts. Evidence:
+  `ruff check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py`
+  passed; `ruff format --check roboclaws/agents/drivers/household_live.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_household_live_driver.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_runners_open_ended_checker_drops_full_cleanup_gates tests/unit/molmo_cleanup/test_ci_live_reports.py::test_live_claude_camera_raw_checker_requires_all_generated_mess_actions tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 6 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed with Ruff complexity unchanged at 56 and oversized modules unchanged
+  at 58. This slice reduced the touched live-runner/helper/test files by 36 net
+  lines without changing public live-runner CLI or checker output behavior.
+- 2026-06-15: Continued under `$intuitive-flow` by moving OpenAI Agents event
+  and span artifact metrics readers from
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` into the existing
+  `scripts/molmo_cleanup/openai_agents_metrics.py` ownership module. The live
+  timing payload keys `openai_agents_event_metrics` and
+  `openai_agents_span_metrics` remain unchanged; runner tests keep importing
+  the same private aliases through the runner module. Evidence:
+  `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py tests/unit/agents/test_live_runtime.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py`
+  passed; `ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_openai_agents_event_metrics_parse_tool_errors tests/unit/agents/test_live_runtime.py::test_openai_agents_span_metrics_parse_span_artifacts tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 3 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed with Ruff complexity unchanged at 56 and oversized modules unchanged
+  at 58. `run_live_openai_agents_cleanup.py` dropped from 3024 to 2944 lines;
+  the helper module grew from 477 to 563 lines, so the total touched-line count
+  grew slightly while moving metrics ownership out of the live runner.
+- 2026-06-15: Continued under `$intuitive-flow` by moving OpenAI Agents context,
+  cache, and context-growth metrics from
+  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` into the existing
+  `scripts/molmo_cleanup/openai_agents_metrics.py` ownership module. The live
+  timing payload keys `context_metrics`, `cache_metrics`, and
+  `context_growth_metrics` remain unchanged; runner tests keep importing the
+  same private aliases through the runner module. Evidence:
+  `ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py tests/unit/agents/test_live_runtime.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py`
+  passed; `ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/openai_agents_metrics.py tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_openai_agents_context_metrics_parse_response_span_usage tests/unit/agents/test_live_runtime.py::test_openai_agents_context_metrics_missing_usage_is_unavailable tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed with 3 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed with Ruff complexity unchanged at 56 and oversized modules unchanged
+  at 58. This slice kept the touched metrics/runner files line-neutral while
+  dropping `run_live_openai_agents_cleanup.py` from 2944 to 2714 lines and
+  keeping `openai_agents_metrics.py` below the 800-line ratchet threshold at
+  793 lines.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/unit/agents/test_live_runtime.py::test_openai_agents_perf_profiles_resolve_known_defaults`
+  into focused OpenAI Agents perf-profile tests with shared base-args and
+  expected-payload helpers. The baseline, compact/racing, MiMo/chat, raw-FPV
+  budgeted, custom override, and custom compaction assertions remain covered.
+  Evidence:
+  `ruff check tests/unit/agents/test_live_runtime.py` passed;
+  `ruff format --check tests/unit/agents/test_live_runtime.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 tests/unit/agents/test_live_runtime.py`
+  now reports only the existing unrelated
+  `test_openai_agents_cleanup_runner_invokes_sdk_then_checker` PLR0915; the
+  perf-profile PLR0915 is removed. The 6 split perf-profile tests passed with
+  `./scripts/dev/run_pytest_standalone.sh -q ...`. The quality baseline was
+  refreshed from 56 to 55 Ruff complexity violations with oversized modules
+  unchanged at 58 and `test_live_runtime.py` held at 4570 lines. Because the
+  main worktree currently has unrelated staged `eval-harness` renames, the
+  ratchet write/ok proof was run in a temporary clean worktree containing only
+  this test split patch; the refreshed baseline intentionally keeps the old
+  `skills/agent-validation-matrix/...` path until that rename slice lands.
+- 2026-06-15: Continued under `$intuitive-flow` by extracting
+  `tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  timing/profile and timeline/checker assertions into focused helpers while
+  reusing the shared OpenAI Agents model-racing expected payload. The runner
+  behavior, fake SDK result, live timing keys, checker command assertions, and
+  status payload expectations remain unchanged. Evidence:
+  `ruff check tests/unit/agents/test_live_runtime.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 tests/unit/agents/test_live_runtime.py`
+  passed with no violations; `ruff format --check tests/unit/agents/test_live_runtime.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py::test_openai_agents_cleanup_runner_invokes_sdk_then_checker`
+  passed. The quality baseline was refreshed from 55 to 54 Ruff complexity
+  violations with oversized modules unchanged at 58, and `test_live_runtime.py`
+  dropped from 4570 to 4566 lines. As with the prior test split, the ratchet
+  write/ok proof used a temporary clean worktree containing only this patch so
+  the unrelated staged `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py::main(...)` into
+  selected-entry, preflight-status, failed-preflight-status, and entry-loop
+  helpers. The CLI flags, dry-run behavior, preflight order, manifest writing,
+  continue-on-error behavior, live command shape, and published status payloads
+  remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py`
+  passed; `ruff format --check scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py::test_dry_run_matrix_writes_status_and_manifest tests/unit/molmo_cleanup/test_ci_live_reports.py::test_dry_run_camera_raw_entry_uses_entry_profile tests/unit/molmo_cleanup/test_ci_live_reports.py::test_dry_run_camera_raw_generated_mess_count_override tests/unit/molmo_cleanup/test_ci_live_reports.py::test_ci_live_matrix_preserves_provider_timing_proxy_escape_hatch tests/unit/molmo_cleanup/test_ci_live_reports.py::test_failed_live_entry_publishes_partial_seed_diagnostics`
+  passed with 5 tests. The quality baseline was refreshed from 54 to 53 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof again used a temporary clean worktree containing only this
+  patch so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/summarize_live_run.py::_print_timing(...)` into
+  runner, MCP, model API, profile, report-performance, and skipped-work
+  printing helpers. The single-run summary text, comparison-manifest behavior,
+  timing labels, and report-performance fields remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/summarize_live_run.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/summarize_live_run.py`
+  passed; `ruff format --check scripts/molmo_cleanup/summarize_live_run.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_summarize_live_run.py`
+  passed with 6 tests. The quality baseline was refreshed from 53 to 52 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this patch so
+  the unrelated staged `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/generate_raw_fpv_private_labels.py::_label_full_trace(...)`
+  into observe-response labeling and replay-action helpers. Full-trace replay
+  still observes raw-FPV frames in order, applies the max-observation cap,
+  replays pick/navigate/place actions through placement bindings, and preserves
+  generated-target versus visible-movable label scope. Evidence:
+  `ruff check scripts/molmo_cleanup/generate_raw_fpv_private_labels.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`
+  passed; `ruff format --check scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py::test_raw_fpv_probe_keeps_private_labels_out_of_prompt_inputs tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py::test_raw_fpv_probe_scores_live_like_top_candidate_and_duplicates`
+  passed with 2 tests. The quality baseline was refreshed from 52 to 50 Ruff
+  complexity violations with oversized modules unchanged at 58. This is a
+  static/unit-covered replay-labeler cleanup; it does not claim a real
+  MolmoSpaces full-trace relabeling run.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py::parse_args()`
+  into core, evidence, planner, Isaac, and robot-camera argument registration
+  helpers. All CLI flag names, defaults, help text, and checker behavior remain
+  unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  passed; `ruff format scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
+  passed with 112 tests. The quality baseline was refreshed from 50 to 49 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this checker
+  patch so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/unit/agents/test_provider_timing_proxy.py::_proxy_streaming_case(...)`
+  into streaming-upstream setup, proxy config, streamed-response readback, and
+  metric/privacy assertion helpers. The proxy behavior under test is unchanged:
+  streamed chunks still pass through, request/response byte counts are recorded,
+  upstream auth/body forwarding is verified, and privacy findings remain empty.
+  Evidence: `ruff check tests/unit/agents/test_provider_timing_proxy.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 tests/unit/agents/test_provider_timing_proxy.py`
+  passed; `ruff format tests/unit/agents/test_provider_timing_proxy.py` left
+  the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_timing_proxy.py`
+  passed with 2 tests. The quality baseline was refreshed from 49 to 48 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this test
+  split patch so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/reports/live_performance.py::_estimate_model_work_s(...)` into
+  unavailable-estimate packet, calibration source/limitations, coefficient
+  value/missing-field, image-estimation, and final-estimate helpers. The report
+  performance packet shape and normalized model-work estimate behavior remain
+  unchanged. Evidence: `ruff check roboclaws/reports/live_performance.py tests/unit/reports/test_live_performance.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/reports/live_performance.py tests/unit/reports/test_live_performance.py`
+  passed; `ruff format roboclaws/reports/live_performance.py` left the file
+  unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/reports/test_live_performance.py`
+  passed with 16 tests. The quality baseline was refreshed from 48 to 47 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this report
+  helper split so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/dev/probe_mify_v25_image.py::main(...)` into image input, per-API
+  probe, API call, artifact writing, request metadata, and summary-result
+  helpers. The diagnostic script's CLI, request payloads, output file names,
+  summary schema, and exit-code policy remain unchanged. Evidence:
+  `ruff check scripts/dev/probe_mify_v25_image.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 scripts/dev/probe_mify_v25_image.py`
+  passed; `ruff format scripts/dev/probe_mify_v25_image.py` left the file
+  unchanged; `python -m py_compile scripts/dev/probe_mify_v25_image.py` passed;
+  `python scripts/dev/probe_mify_v25_image.py --help` printed the CLI help
+  without making a network request. The quality baseline was refreshed from 47
+  to 46 Ruff complexity violations with oversized modules unchanged at 58. The
+  ratchet write/ok proof used a temporary clean worktree containing only this
+  diagnostic-script split so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py::test_runner_writes_dry_run_manifest_and_report_from_inline_requests(...)`
+  into focused manifest, command, and artifact/report assertion helpers. The
+  dry-run fixture, runner call, manifest expectations, probe command checks,
+  and report text assertions remain unchanged. Evidence:
+  `ruff check tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  passed; `ruff format tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+  passed with 22 tests. The quality baseline was refreshed from 46 to 45 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this test
+  split so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py::validate(...)`
+  into runtime/scene, real-rendering, USD scene, artifact-evidence, and state
+  consistency helper checks. CLI flags, summary schema, and checker error
+  messages remain unchanged. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
+  passed; `ruff format scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_isaac_lab_runtime_smoke_checker.py`
+  passed with 15 tests. The quality baseline was refreshed from 45 to 44 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this checker
+  split so the unrelated staged `eval-harness` rename was not blessed into the
+  baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py::_decision(...)`
+  into decision-feature extraction, first-divergence selection, and evidence
+  assembly helpers. The comparison schema, divergent-layer keys,
+  root-cause classifications, next-action strings, and evidence strings remain
+  unchanged. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+  passed; `ruff format --check scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_isaac_segmentation_aov_compare.py`
+  passed with 2 tests. The quality baseline was refreshed from 44 to 43 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this AOV
+  comparison patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  probe request validation, full-scene rewrites, summary assembly, summary
+  writing, and texture-scale value rewriting into focused helpers. The CLI
+  flags, comparison-only summary schema, material-block rewrite behavior,
+  texture-scale modes, and targeted diffuse-texture injection behavior remain
+  unchanged. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py tests/unit/molmo_cleanup/test_molmospaces_material_response_probe_usd.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py tests/unit/molmo_cleanup/test_molmospaces_material_response_probe_usd.py`
+  passed; `ruff format scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  left the file unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmospaces_material_response_probe_usd.py`
+  passed with 6 tests. The quality baseline was refreshed from 43 to 41 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this material
+  response probe patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting the
+  `roboclaws.household.cleanup_routine.run_cleanup_routine(...)` required
+  transport phase loop into `_run_required_transport_phases(...)` and
+  `_required_transport_phase_specs(...)`. The public cleanup routine schema,
+  MCP tool order, request payloads, recovery retry path, and failure response
+  shape remain unchanged. Evidence:
+  `ruff check roboclaws/household/cleanup_routine.py tests/contract/skills/test_molmo_realworld_cleanup_skill.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/cleanup_routine.py tests/contract/skills/test_molmo_realworld_cleanup_skill.py`
+  passed; `ruff format roboclaws/household/cleanup_routine.py` left the file
+  unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/skills/test_molmo_realworld_cleanup_skill.py`
+  passed with 4 tests. The quality baseline was refreshed from 41 to 40 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this cleanup
+  routine patch so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/openclaw/tail-openclaw-chat.py` content-part rendering and tail
+  setup into focused helpers. The pretty transcript output, tool-call/tool-result
+  summaries, image summaries, default latest-run chat log, relative
+  `latest-chat.log` symlink behavior, and Docker tail command remain unchanged.
+  Evidence:
+  `ruff check scripts/openclaw/tail-openclaw-chat.py tests/contract/openclaw/test_tail_openclaw_chat.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/openclaw/tail-openclaw-chat.py tests/contract/openclaw/test_tail_openclaw_chat.py`
+  passed; `ruff format scripts/openclaw/tail-openclaw-chat.py` left the file
+  unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/openclaw/test_tail_openclaw_chat.py`
+  passed with 12 tests. The quality baseline was refreshed from 40 to 38 Ruff
+  complexity violations with oversized modules unchanged at 58. The ratchet
+  write/ok proof used a temporary clean worktree containing only this OpenClaw
+  chat-tail patch so the unrelated staged `eval-harness` rename was not blessed
+  into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by moving
+  `scripts/operator_console/render_scene_previews.py::_render_semantic_map_preview(...)`
+  into `scripts/operator_console/semantic_map_preview.py` with focused room,
+  waypoint, receptacle, object, trajectory, and legend drawing helpers. The
+  operator-console preview image size, scene alignment, semantic-map preview
+  purpose, and metadata behavior remain unchanged. A direct smoke test now
+  covers that the semantic-map preview renders a non-blank image. Evidence:
+  `ruff check scripts/operator_console/render_scene_previews.py scripts/operator_console/semantic_map_preview.py tests/unit/operator_console/test_render_scene_previews.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/operator_console/render_scene_previews.py scripts/operator_console/semantic_map_preview.py tests/unit/operator_console/test_render_scene_previews.py`
+  passed; `ruff format scripts/operator_console/render_scene_previews.py scripts/operator_console/semantic_map_preview.py tests/unit/operator_console/test_render_scene_previews.py`
+  left all three files unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_render_scene_previews.py`
+  passed with 5 tests. The quality baseline was refreshed from 38 to 37 Ruff
+  complexity violations and from 58 to 57 oversized modules. The ratchet
+  write/ok proof used a temporary clean worktree containing only this preview
+  rendering patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py::_parse_urdf_tree(...)`
+  into focused URDF link-name, visual, child-parent, and transform helpers. A
+  new parser unit test covers link transform composition, visual mesh path
+  extraction, visual origin matrices, and child-to-parent mapping without
+  importing Isaac or `pxr`. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  passed; `ruff format scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  left both files unchanged; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_import_rby1m_robot_usd.py`
+  passed with 1 test. The quality baseline was refreshed from 37 to 36 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this RBY1M
+  importer parser patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_cleanup.py::_maybe_clean_visible_object(...)`
+  around a private visible-object candidate state and visual-scan confirmation
+  helpers. The visible-object cleanup path keeps the same inspection refresh,
+  source waypoint confirmation, camera adjustment, raw-FPV attachment,
+  failed-attempt reasons, already-on-inferred-fixture note, and cleanup
+  scratchpad fields. Evidence:
+  `ruff check roboclaws/household/realworld_cleanup.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/realworld_cleanup.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_camera_model_policy_mode`
+  passed with 2 tests. The quality baseline was refreshed from 36 to 35 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this direct
+  cleanup orchestration patch so the unrelated staged `eval-harness` rename was
+  not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py::_install_grasp_collision_diagnostics(...)`
+  into grasp-load and noncolliding-mask diagnostic hook installers. The
+  monkeypatch targets, `__roboclaws_original__` guard, hook names,
+  `grasp_load_attempts`, `grasp_collision_checks`, elapsed timing, exception
+  re-raise behavior, and task-sampler failure diagnostic refresh timing remain
+  unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py::test_runner_records_grasp_collision_diagnostics`
+  passed with 1 test. The quality baseline was refreshed from 35 to 34 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this planner
+  manipulation probe diagnostic patch so the unrelated staged `eval-harness`
+  rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py::_configure_exact_cleanup_task(...)`
+  into exact scene override and planner alias override helpers. The exact
+  cleanup task config schema, missing-scene blocker, scene dataset/data split
+  override, sampler task limits, planner object alias, planner target alias,
+  and stale preset clearing remain unchanged. Evidence:
+  `ruff check scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py::test_runner_configures_exact_cleanup_task_scene_and_aliases`
+  passed with 1 test. The quality baseline was refreshed from 34 to 33 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this exact
+  cleanup task config patch so the unrelated staged `eval-harness` rename was
+  not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/agibot_contract_rehearsal.py::_run_cleanup_action_rehearsal(...)`
+  into cleanup-action target selection, sweep navigation, sweep observation,
+  and target-payload helpers. The simulated Agibot cleanup-action rehearsal
+  keeps the same waypoint sweep, policy observation snapshots, trace events,
+  policy events, robot-view capture hooks, selected target fields, semantic
+  cleanup loop call, and public/private simulated evidence boundary. Evidence:
+  `ruff check roboclaws/household/agibot_contract_rehearsal.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py`
+  passed; `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/agibot_contract_rehearsal.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps`
+  passed with 1 test. The quality baseline was refreshed from 33 to 32 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this Agibot
+  cleanup-action rehearsal patch so the unrelated staged `eval-harness` rename
+  was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_contract.py::_inspection_waypoints_from_bundle_projection(...)`
+  into fixture-projection index and waypoint hydration helpers. The selected
+  Nav2/map-bundle public inspection waypoint projection keeps the same
+  preferred waypoint ids, room fixture fallback, sorted fixture ids, frame-id
+  defaulting, and unvisited marker behavior. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals`
+  passed with 1 test. The quality baseline was refreshed from 32 to 31 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  realworld-contract waypoint projection patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_contract.py::_runtime_public_semantic_anchors(...)`
+  into generated-waypoint, fixture, and prior-anchor append helpers. The
+  Runtime Metric Map public semantic anchor ordering, de-duplication,
+  forbidden-key guard, generated room/waypoint anchors, fixture anchors, and
+  prior-anchor inclusion remain unchanged. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates`
+  passed with 1 test. The quality baseline was refreshed from 31 to 30 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  realworld-contract public semantic anchor patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/realworld_contract.py::declare_visual_candidates(...)`
+  into visual-candidate input resolution, camera-label producer provenance,
+  failed-grounding response, candidate registration, invalid-candidate response,
+  and final declaration payload helpers. The RAW-FPV empty-declare error,
+  manual declaration pipeline summary, simulated camera-model provenance,
+  external visual-grounding failure evidence, invalid candidate recovery
+  payload, policy event recording, and public/private guard remain unchanged.
+  Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/realworld_contract.py`
+  passed; `ruff check roboclaws/household/realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_raw_empty_declare_does_not_fall_back_to_sim_labels tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_model_policy_records_sim_pipeline_provenance tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_camera_labels_http_success_uses_destination_resolver tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_realworld_rejects_malformed_model_declared_candidate`
+  passed with 5 tests. The quality baseline was refreshed from 30 to 29 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  realworld-contract visual-candidate declaration patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `roboclaws/household/physical_nav2_pilot.py::run_physical_nav2_cleanup_pilot(...)`
+  into map-bundle input loading, inspection waypoint sweep, fixture preferred
+  waypoint sweep, and blocked-manipulation recording helpers. The physical
+  Nav2 pilot still validates and snapshots the map bundle, enforces the robot
+  profile file, records metric-map and fixture-hint trace entries, observes
+  reached waypoints, blocks manipulation tools, writes `trace.jsonl` and
+  `run_result.json`, and renders the cleanup report with the same public
+  readiness payload. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 roboclaws/household/physical_nav2_pilot.py`
+  passed; `ruff check roboclaws/household/physical_nav2_pilot.py tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`
+  passed with 1 test. The quality baseline was refreshed from 29 to 28 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this physical
+  Nav2 pilot patch so the unrelated staged `eval-harness` rename was not
+  blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/contract/dev_tools/test_code_just_recipes.py::test_pinned_coding_agent_docker_toolchain_is_the_ci_source(...)`
+  into focused assertions for `code.just` wrapper routing, Dockerfile/toolchain
+  pin consistency, Docker isolation guarantees, and CI wiring. The pinned
+  Codex/Claude package versions, Node image digest, wrapper install route,
+  isolated workspace/Codex-home checks, provider env checks, and CI no-NPM
+  assertions remain unchanged. Evidence:
+  `ruff check --select C901,PLR0912,PLR0915 tests/contract/dev_tools/test_code_just_recipes.py`
+  passed; `ruff check tests/contract/dev_tools/test_code_just_recipes.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_code_just_recipes.py::test_pinned_coding_agent_docker_toolchain_is_the_ci_source`
+  passed with 1 test. The quality baseline was refreshed from 28 to 27 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this
+  coding-agent Docker toolchain test patch so the unrelated staged
+  `eval-harness` rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_writes_public_private_artifacts(...)`
+  into cleanup-result contract, public/private artifact, and report/trace
+  assertion helpers. The deterministic cleanup status, public/private
+  separation, semantic substep phase checks, planner proof request artifacts,
+  Nav2 map bundle snapshot checks, advisory evaluation checks, report text,
+  and trace event assertions remain unchanged. Evidence:
+  `ruff check tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_writes_public_private_artifacts`
+  passed with 1 test. The quality baseline was refreshed from 27 to 26 Ruff
+  complexity violations with oversized modules unchanged at 57. The ratchet
+  write/ok proof used a temporary clean worktree containing only this public/
+  private artifact contract test patch so the unrelated staged `eval-harness`
+  rename was not blessed into the baseline.
+- 2026-06-15: Continued under `$intuitive-flow` by splitting
+  `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(...)`
+  into focused fake-backend result, scene-index, semantic-pose/robot-view,
+  report, and checker-contract helpers. The fake IsaacLab runtime mode,
+  semantic pose provenance, scene-index privacy boundary, segmentation blocked
+  capability, robot-view metadata, report diagnostics, and checker positive/
+  negative proof requirements remain unchanged. Evidence in a temporary clean
+  worktree containing only this test patch: `ruff check
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` passed;
+  `ruff check --select C901,PLR0912,PLR0915
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py` passed;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend`
+  passed with 1 test. The same pytest command in the dirty main worktree is
+  currently blocked before this test's assertions by unrelated uncommitted API
+  drift (`RealWorldRunArtifactInputs.__init__()` rejects `cleanup_profile`).
+  The quality baseline was refreshed from 26 to 25 Ruff complexity violations
+  with oversized modules unchanged at 57, using a temporary clean worktree so
+  unrelated staged `eval-harness` and provider changes were not blessed.

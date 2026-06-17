@@ -127,10 +127,7 @@ def _result_assert_options(overrides: dict[str, Any]) -> _ResultOptions:
     return opts
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Validate ADR-0003 real-world-style Molmo cleanup artifacts."
-    )
+def _add_core_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("path", type=Path, help="run_result.json or a directory of seed-* runs")
     parser.add_argument("--expect-task")
     parser.add_argument("--expect-task-name")
@@ -150,6 +147,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-openclaw-minimum", action="store_true")
     parser.add_argument("--require-robot-views", action="store_true")
     parser.add_argument("--require-advisory-scoring", action="store_true")
+
+
+def _add_evidence_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-camera-model-policy", action="store_true")
     parser.add_argument("--require-runtime-metric-map", action="store_true")
@@ -181,6 +181,9 @@ def parse_args() -> argparse.Namespace:
             "for adaptive proof runs."
         ),
     )
+
+
+def _add_planner_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--require-planner-proof-quality", action="store_true")
     parser.add_argument(
@@ -214,6 +217,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     parser.add_argument("--require-waypoint-honesty", action="store_true")
     parser.add_argument("--require-real-robot-alignment", action="store_true")
+
+
+def _add_isaac_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-isaac-runtime", action="store_true")
     parser.add_argument("--require-isaac-real-runtime", action="store_true")
     parser.add_argument("--require-isaac-scene-loaded", action="store_true")
@@ -231,6 +237,9 @@ def parse_args() -> argparse.Namespace:
             "generated from the loaded scene instead of a stale prebuilt map bundle."
         ),
     )
+
+
+def _add_robot_camera_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--require-canonical-robot-view-camera-control",
         action="store_true",
@@ -247,6 +256,17 @@ def parse_args() -> argparse.Namespace:
             "head camera or an explicit backend head-camera-equivalent contract."
         ),
     )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Validate ADR-0003 real-world-style Molmo cleanup artifacts."
+    )
+    _add_core_checker_args(parser)
+    _add_evidence_checker_args(parser)
+    _add_planner_checker_args(parser)
+    _add_isaac_checker_args(parser)
+    _add_robot_camera_checker_args(parser)
     return parser.parse_args()
 
 
