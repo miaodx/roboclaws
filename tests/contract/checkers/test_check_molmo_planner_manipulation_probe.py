@@ -22,6 +22,22 @@ CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_planner_ma
 RUNNER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_planner_manipulation_probe.py"
 
 
+_REPORT_FLAG_LINES = {
+    "blocked": "Capability Blockers\n",
+    "diagnostics": "Runtime Diagnostics\n",
+    "cleanup_binding": "Planner Probe Cleanup Binding\n",
+    "proof_quality": "Planner Proof Quality\nProof Quality\nmulti_step_motion\n",
+    "cleanup_config_blockers": "Exact task config blockers\ncleanup_scene_xml_missing\n",
+    "worker_stages": "Worker Stage Timeline\n",
+    "curobo_cache": "CuRobo Extension Cache\n",
+    "warp_compatibility": "Warp Compatibility\n",
+    "cuda_memory": "CUDA Memory Headroom\n",
+    "curobo_memory_profile": "CuRobo Memory Profile\n",
+    "task_sampler_robot_placement_profile": "Task Sampler Robot Placement Profile\nrelaxed\n50\n",
+    "rby1m_gate": "RBY1M CuRobo Gate\n",
+}
+
+
 def _load_checker_module():
     spec = importlib.util.spec_from_file_location(
         "check_molmo_planner_manipulation_probe", CHECKER_PATH
@@ -42,6 +58,46 @@ def _load_runner_module():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _planner_report_policy_exception_fragment() -> str:
+    return (
+        "Policy Exception Diagnostics\n"
+        "curobo_no_planned_trajectory\n"
+        "execute_policy_run\n"
+        "ValueError\n"
+        "PickAndPlacePrimitive\n"
+        "pre_grasp\n"
+    )
+
+
+def _planner_report_placement_scene_diagnostics_fragment() -> str:
+    return (
+        "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
+        "Planner Probe Diagnostic Views\nPlacement Scene Diagnostics\nbook/body\n12\n0.012\n"
+    )
+
+
+def _planner_report_post_placement_rejections_fragment() -> str:
+    return (
+        "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
+        "Planner Probe Diagnostic Views\nPost-Placement Candidate Rejections\n"
+        "Post-Placement Rejection Views\nbook/body\n3\n"
+    )
+
+
+def _planner_report_body(flags: dict[str, bool]) -> str:
+    body = "Planner-Backed Manipulation Probe\nManipulation Provenance\n"
+    for flag, fragment in _REPORT_FLAG_LINES.items():
+        if flags[flag]:
+            body += fragment
+    if flags["policy_exception"]:
+        body += _planner_report_policy_exception_fragment()
+    if flags["placement_scene_diagnostics"]:
+        body += _planner_report_placement_scene_diagnostics_fragment()
+    if flags["post_placement_rejections"]:
+        body += _planner_report_post_placement_rejections_fragment()
+    return body
 
 
 def _write_report_files(
@@ -68,51 +124,25 @@ def _write_report_files(
     report = tmp_path / "report.html"
     stdout.write_text("{}", encoding="utf-8")
     stderr.write_text("", encoding="utf-8")
-    body = "Planner-Backed Manipulation Probe\nManipulation Provenance\n"
-    if blocked:
-        body += "Capability Blockers\n"
-    if diagnostics:
-        body += "Runtime Diagnostics\n"
-    if cleanup_binding:
-        body += "Planner Probe Cleanup Binding\n"
-    if proof_quality:
-        body += "Planner Proof Quality\nProof Quality\nmulti_step_motion\n"
-    if cleanup_config_blockers:
-        body += "Exact task config blockers\ncleanup_scene_xml_missing\n"
-    if worker_stages:
-        body += "Worker Stage Timeline\n"
-    if curobo_cache:
-        body += "CuRobo Extension Cache\n"
-    if warp_compatibility:
-        body += "Warp Compatibility\n"
-    if cuda_memory:
-        body += "CUDA Memory Headroom\n"
-    if curobo_memory_profile:
-        body += "CuRobo Memory Profile\n"
-    if policy_exception:
-        body += (
-            "Policy Exception Diagnostics\n"
-            "curobo_no_planned_trajectory\n"
-            "execute_policy_run\n"
-            "ValueError\n"
-            "PickAndPlacePrimitive\n"
-            "pre_grasp\n"
-        )
-    if task_sampler_robot_placement_profile:
-        body += "Task Sampler Robot Placement Profile\nrelaxed\n50\n"
-    if placement_scene_diagnostics:
-        body += (
-            "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
-            "Planner Probe Diagnostic Views\nPlacement Scene Diagnostics\nbook/body\n12\n0.012\n"
-        )
-    if post_placement_rejections:
-        body += (
-            "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
-            "Planner Probe Diagnostic Views\nPost-Placement Candidate Rejections\n"
-            "Post-Placement Rejection Views\nbook/body\n3\n"
-        )
-    if rby1m_gate:
-        body += "RBY1M CuRobo Gate\n"
+    body = _planner_report_body(
+        {
+            "blocked": blocked,
+            "diagnostics": diagnostics,
+            "cleanup_binding": cleanup_binding,
+            "rby1m_gate": rby1m_gate,
+            "worker_stages": worker_stages,
+            "curobo_cache": curobo_cache,
+            "warp_compatibility": warp_compatibility,
+            "cuda_memory": cuda_memory,
+            "curobo_memory_profile": curobo_memory_profile,
+            "policy_exception": policy_exception,
+            "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
+            "placement_scene_diagnostics": placement_scene_diagnostics,
+            "post_placement_rejections": post_placement_rejections,
+            "cleanup_config_blockers": cleanup_config_blockers,
+            "proof_quality": proof_quality,
+        }
+    )
     report.write_text(body, encoding="utf-8")
     return {"stdout": str(stdout), "stderr": str(stderr), "report": str(report)}
 

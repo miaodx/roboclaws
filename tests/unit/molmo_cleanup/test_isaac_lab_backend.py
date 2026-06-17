@@ -33,7 +33,22 @@ def test_isaac_lab_backend_reports_missing_runtime(tmp_path: Path) -> None:
 def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     tmp_path: Path,
 ) -> None:
-    backend = IsaacLabSubprocessBackend(
+    backend = _fake_isaac_backend(tmp_path)
+
+    _assert_fake_isaac_runtime_metadata(backend)
+    _assert_fake_isaac_scene_bindings(backend)
+    _assert_fake_isaac_scene_index_payload(backend)
+    _assert_fake_isaac_mess_diagnostics(backend)
+    _assert_fake_isaac_snapshot(backend, tmp_path)
+    _assert_fake_isaac_robot_views(backend, tmp_path)
+    object_id, receptacle_id, place, done = _exercise_fake_isaac_semantic_pose_actions(backend)
+    _assert_fake_isaac_action_results(place, done, object_id, receptacle_id)
+    _assert_fake_isaac_semantic_pose_state(backend, object_id, receptacle_id)
+    _assert_fake_isaac_robot_import(backend)
+
+
+def _fake_isaac_backend(tmp_path: Path) -> IsaacLabSubprocessBackend:
+    return IsaacLabSubprocessBackend(
         run_dir=tmp_path,
         python_executable=Path(sys.executable),
         runtime_mode="fake",
@@ -41,6 +56,8 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         generated_mess_count=1,
     )
 
+
+def _assert_fake_isaac_runtime_metadata(backend: IsaacLabSubprocessBackend) -> None:
     assert backend.backend == ISAACLAB_SUBPROCESS_BACKEND
     assert backend.runtime["runtime_mode"] == "fake"
     assert backend.runtime["renderer_mode"] == "fake_isaac_protocol"
@@ -62,6 +79,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.object_index
     assert backend.receptacle_index
     assert backend.scenario_source == "default_cleanup_scenario"
+
+
+def _assert_fake_isaac_scene_bindings(backend: IsaacLabSubprocessBackend) -> None:
     assert backend.scene_binding_diagnostics["schema"] == "isaac_public_scene_bindings_v1"
     assert backend.scene_binding_diagnostics["status"] == "placeholder_mapping"
     assert backend.scene_binding_diagnostics["source"] == "scenario_fixture"
@@ -78,6 +98,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert any(item["area"] == "camera_capture" for item in backend.mapping_gaps)
     assert any(item["status"] == "placeholder_visuals" for item in backend.mapping_gaps)
     assert any(item["area"] == "public_scene_bindings" for item in backend.mapping_gaps)
+
+
+def _assert_fake_isaac_scene_index_payload(backend: IsaacLabSubprocessBackend) -> None:
     scene_index_payload = backend.scene_index_artifact_payload()
     assert scene_index_payload["schema"] == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA
     assert scene_index_payload["backend"] == ISAACLAB_SUBPROCESS_BACKEND
@@ -91,6 +114,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert scene_index_payload["receptacle_index_count"] == len(
         scene_index_payload["receptacle_index"]
     )
+
+
+def _assert_fake_isaac_mess_diagnostics(backend: IsaacLabSubprocessBackend) -> None:
     assert len(backend.mess_placement_diagnostics) == 1
     mess_diagnostic = backend.mess_placement_diagnostics[0]
     assert mess_diagnostic["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
@@ -101,6 +127,8 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         "semantic_contained_in_receptacle",
     }
 
+
+def _assert_fake_isaac_snapshot(backend: IsaacLabSubprocessBackend, tmp_path: Path) -> None:
     snapshot_path = tmp_path / "snapshot.png"
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
     assert snapshot_path.is_file()
@@ -115,6 +143,11 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         == "placeholder_protocol_image"
     )
 
+
+def _assert_fake_isaac_robot_views(
+    backend: IsaacLabSubprocessBackend,
+    tmp_path: Path,
+) -> None:
     views = backend.write_robot_views(
         tmp_path / "robot_views",
         label="0001_pick",
@@ -129,6 +162,10 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     for path in views["views"].values():
         assert Path(path).is_file()
 
+
+def _exercise_fake_isaac_semantic_pose_actions(
+    backend: IsaacLabSubprocessBackend,
+) -> tuple[str, str, dict[str, object], dict[str, object]]:
     object_id = backend.scenario.objects[0].object_id
     receptacle_id = backend.scenario.private_manifest.targets[0].valid_receptacle_ids[0]
     nav = backend.navigate_to_object(object_id)
@@ -144,6 +181,15 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         assert response["physical_robot"] is False
         assert response["semantic_pose_event"]["rendered_to_usd"] is False
         assert response["semantic_pose_event"]["state_source"] == ISAAC_SEMANTIC_POSE_STATE_SOURCE
+    return object_id, receptacle_id, place, done
+
+
+def _assert_fake_isaac_action_results(
+    place: dict[str, object],
+    done: dict[str, object],
+    object_id: str,
+    receptacle_id: str,
+) -> None:
     assert done["final_locations"][object_id] == receptacle_id
     assert place["placement_diagnostic"]["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
     assert place["placement_diagnostic"]["diagnostic_source"] == "cleanup_place"
@@ -151,6 +197,13 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         place["placement_support_status"]
         == place["placement_diagnostic"]["placement_support_status"]
     )
+
+
+def _assert_fake_isaac_semantic_pose_state(
+    backend: IsaacLabSubprocessBackend,
+    object_id: str,
+    receptacle_id: str,
+) -> None:
     semantic_pose_state = backend.semantic_pose_state
     assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
     assert semantic_pose_state["primitive_provenance"] == ISAAC_SEMANTIC_POSE_PROVENANCE
@@ -168,6 +221,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         "navigate_to_receptacle",
         "place",
     ]
+
+
+def _assert_fake_isaac_robot_import(backend: IsaacLabSubprocessBackend) -> None:
     if backend.robot_import["status"] == "imported":
         assert backend.robot["embodiment"] == "rby1m"
         assert backend.robot["robot_mounted_head_camera"] is True
@@ -742,55 +798,54 @@ def test_isaac_rby1m_chase_camera_matches_mujoco_follower_pitch() -> None:
     assert math.degrees(math.atan2(vertical_drop, horizontal_distance)) == pytest.approx(45.0)
 
 
-def test_isaac_scene_camera_capture_applies_color_profile(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import numpy as np
+class _FakeSceneCameraSim:
+    device = "cpu"
 
-    class _FakeSim:
-        device = "cpu"
+    def __init__(self) -> None:
+        self.steps = 0
 
-        def __init__(self) -> None:
-            self.steps = 0
+    def reset(self) -> None:
+        self.steps = 0
 
-        def reset(self) -> None:
-            self.steps = 0
+    def step(self) -> None:
+        self.steps += 1
 
-        def step(self) -> None:
-            self.steps += 1
+    def get_physics_dt(self) -> float:
+        return 1 / 60
 
-        def get_physics_dt(self) -> float:
-            return 1 / 60
 
-    class _FakeSimUtils:
-        @staticmethod
-        def create_prim(*_args: object, **_kwargs: object) -> None:
-            return None
+class _FakeSceneCameraSimUtils:
+    @staticmethod
+    def create_prim(*_args: object, **_kwargs: object) -> None:
+        return None
 
-        class PinholeCameraCfg:
-            def __init__(self, **kwargs: object) -> None:
-                self.kwargs = kwargs
-
-    class _FakeCameraCfg:
+    class PinholeCameraCfg:
         def __init__(self, **kwargs: object) -> None:
             self.kwargs = kwargs
 
-    class _FakeTensor:
-        def __init__(self, array: np.ndarray) -> None:
-            self._array = array
 
-        def detach(self) -> "_FakeTensor":
-            return self
+class _FakeSceneCameraCfg:
+    def __init__(self, **kwargs: object) -> None:
+        self.kwargs = kwargs
 
-        def cpu(self) -> "_FakeTensor":
-            return self
 
-        def numpy(self) -> np.ndarray:
-            return self._array
+class _FakeSceneCameraTensor:
+    def __init__(self, array: object) -> None:
+        self._array = array
 
+    def detach(self) -> "_FakeSceneCameraTensor":
+        return self
+
+    def cpu(self) -> "_FakeSceneCameraTensor":
+        return self
+
+    def numpy(self) -> object:
+        return self._array
+
+
+def _fake_scene_camera_type(np: object) -> type:
     class _FakeCamera:
-        def __init__(self, cfg: _FakeCameraCfg) -> None:
+        def __init__(self, cfg: _FakeSceneCameraCfg) -> None:
             self.cfg = cfg
             self.data = SimpleNamespace(output={})
 
@@ -801,14 +856,37 @@ def test_isaac_scene_camera_capture_applies_color_profile(
             del dt
             frame = np.full((1, 4, 6, 3), 250, dtype=np.uint8)
             frame[:, 0, 0, :] = 230
-            self.data.output["rgb"] = _FakeTensor(frame)
+            self.data.output["rgb"] = _FakeSceneCameraTensor(frame)
 
-    class _FakeTorch:
-        float32 = "float32"
+    return _FakeCamera
 
-        @staticmethod
-        def tensor(value: object, **_kwargs: object) -> object:
-            return value
+
+class _FakeSceneCameraTorch:
+    float32 = "float32"
+
+    @staticmethod
+    def tensor(value: object, **_kwargs: object) -> object:
+        return value
+
+
+def _unit_scene_camera_request() -> dict[str, object]:
+    return {
+        "camera_model": "canonical_eye_target_camera_v1",
+        "views": [
+            {
+                "view_id": "fpv",
+                "eye": [0.0, 0.0, 1.0],
+                "target": [1.0, 0.0, 1.0],
+            }
+        ],
+    }
+
+
+def test_isaac_scene_camera_capture_applies_color_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
 
     monkeypatch.setattr(
         isaac_lab_backend_worker,
@@ -817,25 +895,16 @@ def test_isaac_scene_camera_capture_applies_color_profile(
     )
 
     result = isaac_lab_backend_worker._capture_scene_camera_request_with_existing_sim(
-        camera_request={
-            "camera_model": "canonical_eye_target_camera_v1",
-            "views": [
-                {
-                    "view_id": "fpv",
-                    "eye": [0.0, 0.0, 1.0],
-                    "target": [1.0, 0.0, 1.0],
-                }
-            ],
-        },
+        camera_request=_unit_scene_camera_request(),
         output_dir=tmp_path,
         width=6,
         height=4,
-        sim=_FakeSim(),
-        sim_utils=_FakeSimUtils,
+        sim=_FakeSceneCameraSim(),
+        sim_utils=_FakeSceneCameraSimUtils,
         stage_utils=SimpleNamespace(),
-        camera_type=_FakeCamera,
-        camera_cfg_type=_FakeCameraCfg,
-        torch=_FakeTorch,
+        camera_type=_fake_scene_camera_type(np),
+        camera_cfg_type=_FakeSceneCameraCfg,
+        torch=_FakeSceneCameraTorch,
         np=np,
         scene_bounds={},
     )
@@ -1850,27 +1919,49 @@ def test_isaac_robot_view_focus_prefers_object_pose() -> None:
     assert focus["visibility"]["status"] == "segmentation_unavailable"
 
 
-def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    translations: list[object] = []
-    rotations: list[object] = []
-    camera_transforms: list[tuple[str, object]] = []
+class _FakeRobotPosePrim:
+    def __init__(self, path: str) -> None:
+        self.path = path
 
-    class _FakePrim:
-        def __init__(self, path: str) -> None:
-            self.path = path
+    def IsValid(self) -> bool:
+        return True
 
-        def IsValid(self) -> bool:
-            return True
 
-    class _FakeStage:
-        def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path in {"/World/robot_0", "/World/robot_0/head_camera"}
-            return _FakePrim(path)
+class _FakeRobotPoseStage:
+    def GetPrimAtPath(self, path: str) -> _FakeRobotPosePrim:
+        assert path in {"/World/robot_0", "/World/robot_0/head_camera"}
+        return _FakeRobotPosePrim(path)
 
+
+class _RecordingHeadCameraOp:
+    def __init__(self, name: str, camera_transforms: list[tuple[str, object]]) -> None:
+        self.name = name
+        self.camera_transforms = camera_transforms
+
+    def Set(self, value: object) -> None:
+        self.camera_transforms.append((self.name, value))
+
+
+class _FakeRobotPoseGf:
+    @staticmethod
+    def Vec3d(*values: float) -> tuple[float, float, float]:
+        return (float(values[0]), float(values[1]), float(values[2]))
+
+    @staticmethod
+    def Vec3f(*values: float) -> tuple[float, float, float]:
+        return (float(values[0]), float(values[1]), float(values[2]))
+
+    @staticmethod
+    def Quatf(real: float, imaginary: object) -> tuple[float, object]:
+        return (float(real), imaginary)
+
+
+def _robot_pose_xform_common_api_type(
+    translations: list[object],
+    rotations: list[object],
+) -> type:
     class _FakeXformCommonAPI:
-        def __init__(self, prim: _FakePrim) -> None:
+        def __init__(self, prim: _FakeRobotPosePrim) -> None:
             self.prim = prim
 
         def SetTranslate(self, value: object) -> None:
@@ -1879,67 +1970,73 @@ def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
         def SetRotate(self, value: object) -> None:
             rotations.append(value)
 
-    class _FakeOp:
-        def __init__(self, name: str) -> None:
-            self.name = name
+    return _FakeXformCommonAPI
 
-        def Set(self, value: object) -> None:
-            camera_transforms.append((self.name, value))
 
+def _head_camera_xformable_type(camera_transforms: list[tuple[str, object]]) -> type:
     class _FakeXformable:
-        def __init__(self, prim: _FakePrim) -> None:
+        def __init__(self, prim: _FakeRobotPosePrim) -> None:
             self.prim = prim
 
         def ClearXformOpOrder(self) -> None:
             camera_transforms.append(("clear", self.prim.path))
 
-        def AddTranslateOp(self) -> _FakeOp:
-            return _FakeOp("translate")
+        def AddTranslateOp(self) -> _RecordingHeadCameraOp:
+            return _RecordingHeadCameraOp("translate", camera_transforms)
 
-        def AddOrientOp(self) -> _FakeOp:
-            return _FakeOp("orient")
+        def AddOrientOp(self) -> _RecordingHeadCameraOp:
+            return _RecordingHeadCameraOp("orient", camera_transforms)
 
-        def AddScaleOp(self) -> _FakeOp:
-            return _FakeOp("scale")
+        def AddScaleOp(self) -> _RecordingHeadCameraOp:
+            return _RecordingHeadCameraOp("scale", camera_transforms)
 
-    class _FakeGf:
-        @staticmethod
-        def Vec3d(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
+    return _FakeXformable
 
-        @staticmethod
-        def Vec3f(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
 
-        @staticmethod
-        def Quatf(real: float, imaginary: object) -> tuple[float, object]:
-            return (float(real), imaginary)
-
+def _install_robot_pose_pxr(
+    monkeypatch: pytest.MonkeyPatch,
+    translations: list[object],
+    rotations: list[object],
+    camera_transforms: list[tuple[str, object]],
+) -> None:
     fake_pxr = types.SimpleNamespace(
-        Gf=_FakeGf,
+        Gf=_FakeRobotPoseGf,
         UsdGeom=types.SimpleNamespace(
-            XformCommonAPI=_FakeXformCommonAPI,
-            Xformable=_FakeXformable,
+            XformCommonAPI=_robot_pose_xform_common_api_type(translations, rotations),
+            Xformable=_head_camera_xformable_type(camera_transforms),
         ),
     )
     monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
-    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeRobotPoseGf)
     monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
 
+
+def _shared_robot_pose_state() -> dict[str, object]:
+    return {
+        "robot_pose": {
+            "x": 6.37057,
+            "y": 8.8752,
+            "z": 0.0,
+            "theta": math.pi / 2.0,
+            "head_pitch": 0.653613,
+            "head_pitch_source": "target_framing_head_pitch",
+            "pose_source": "roboclaws_shared_scene_frame_support_pose",
+        }
+    }
+
+
+def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+    rotations: list[object] = []
+    camera_transforms: list[tuple[str, object]] = []
+    _install_robot_pose_pxr(monkeypatch, translations, rotations, camera_transforms)
+
     result = isaac_lab_backend_worker._position_robot_for_head_camera_view(
-        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeRobotPoseStage()),
         scene_bounds=None,
-        semantic_pose_state={
-            "robot_pose": {
-                "x": 6.37057,
-                "y": 8.8752,
-                "z": 0.0,
-                "theta": math.pi / 2.0,
-                "head_pitch": 0.653613,
-                "head_pitch_source": "target_framing_head_pitch",
-                "pose_source": "roboclaws_shared_scene_frame_support_pose",
-            }
-        },
+        semantic_pose_state=_shared_robot_pose_state(),
     )
 
     assert translations == [pytest.approx((6.37057, 8.8752, 0.0))]
@@ -2022,84 +2119,173 @@ def test_isaac_semantic_pose_stage_application_uses_exact_pose(
     assert result["applied_objects"][0]["target_position"] == [9.0, 8.0, 7.0]
 
 
+class _FakeSemanticPoseParent:
+    def __bool__(self) -> bool:
+        return True
+
+
+class _FakeSemanticPosePrim:
+    def __init__(self) -> None:
+        self.parent = _FakeSemanticPoseParent()
+
+    def IsValid(self) -> bool:
+        return True
+
+    def GetParent(self) -> _FakeSemanticPoseParent:
+        return self.parent
+
+
+class _FakeSinglePrimStage:
+    def __init__(self, expected_path: str) -> None:
+        self.expected_path = expected_path
+        self.prim = _FakeSemanticPosePrim()
+
+    def GetPrimAtPath(self, path: str) -> _FakeSemanticPosePrim:
+        assert path == self.expected_path
+        return self.prim
+
+
+class _OffsetParentWorldTransform:
+    def __init__(self, offset: tuple[float, float, float]) -> None:
+        self.offset = offset
+
+    def GetInverse(self) -> "_OffsetParentWorldTransform":
+        return self
+
+    def Transform(self, value: object) -> tuple[float, float, float]:
+        x, y, z = value
+        offset_x, offset_y, offset_z = self.offset
+        return (float(x) - offset_x, float(y) - offset_y, float(z) - offset_z)
+
+
+class _FakeSemanticPoseGf:
+    @staticmethod
+    def Vec3d(*values: float) -> tuple[float, float, float]:
+        return (float(values[0]), float(values[1]), float(values[2]))
+
+
+class _FakeSemanticPoseOrientOp:
+    def GetOpName(self) -> str:
+        return "xformOp:orient"
+
+
+class _RecordingTranslateOp:
+    def __init__(self, translations: list[object]) -> None:
+        self.translations = translations
+
+    def GetOpName(self) -> str:
+        return "xformOp:translate"
+
+    def Set(self, value: object) -> bool:
+        self.translations.append(value)
+        return True
+
+
+def _offset_parent_xformable_type(offset: tuple[float, float, float]) -> type:
+    class _FakeXformable:
+        def __init__(self, parent: _FakeSemanticPoseParent) -> None:
+            self.parent = parent
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> _OffsetParentWorldTransform:
+            assert time_code == 0.0
+            return _OffsetParentWorldTransform(offset)
+
+    return _FakeXformable
+
+
+def _existing_translate_xformable_type(
+    translations: list[object],
+    offset: tuple[float, float, float],
+) -> type:
+    class _FakeXformable:
+        def __init__(self, prim: object) -> None:
+            self.prim = prim
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> _OffsetParentWorldTransform:
+            assert time_code == 0.0
+            return _OffsetParentWorldTransform(offset)
+
+        def GetOrderedXformOps(self) -> list[object]:
+            assert isinstance(self.prim, _FakeSemanticPosePrim)
+            return [_RecordingTranslateOp(translations), _FakeSemanticPoseOrientOp()]
+
+    return _FakeXformable
+
+
+def _recording_xform_common_api_type(
+    translations: list[object],
+    *,
+    failure_message: str | None = None,
+) -> type:
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakeSemanticPosePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            if failure_message is not None:
+                raise AssertionError(failure_message)
+            translations.append(value)
+
+    return _FakeXformCommonAPI
+
+
+def _install_semantic_pose_stage_pxr(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    xform_common_api: type,
+    xformable: type,
+) -> None:
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeSemanticPoseGf,
+        UsdGeom=types.SimpleNamespace(
+            XformCommonAPI=xform_common_api,
+            Xformable=xformable,
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeSemanticPoseGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+
+def _semantic_pose_stage_state(
+    *,
+    object_id: str,
+    usd_prim_path: str,
+    position: list[float],
+    support_receptacle_id: str,
+) -> dict[str, object]:
+    return {
+        "object_poses": {
+            object_id: {
+                "usd_prim_path": usd_prim_path,
+                "support_receptacle_id": support_receptacle_id,
+                "position": position,
+            }
+        },
+        "receptacle_index": {},
+    }
+
+
 def test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     translations: list[object] = []
-
-    class _FakeParent:
-        def __bool__(self) -> bool:
-            return True
-
-    class _FakePrim:
-        def __init__(self) -> None:
-            self.parent = _FakeParent()
-
-        def IsValid(self) -> bool:
-            return True
-
-        def GetParent(self) -> _FakeParent:
-            return self.parent
-
-    class _FakeStage:
-        def __init__(self) -> None:
-            self.prim = _FakePrim()
-
-        def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path == "/World/Room/Objects/mug_01"
-            return self.prim
-
-    class _FakeParentWorldTransform:
-        def GetInverse(self) -> "_FakeParentWorldTransform":
-            return self
-
-        def Transform(self, value: object) -> tuple[float, float, float]:
-            x, y, z = value
-            return (float(x) - 10.0, float(y) - 20.0, float(z) - 0.5)
-
-    class _FakeXformable:
-        def __init__(self, parent: _FakeParent) -> None:
-            self.parent = parent
-
-        def ComputeLocalToWorldTransform(self, time_code: float) -> _FakeParentWorldTransform:
-            assert time_code == 0.0
-            return _FakeParentWorldTransform()
-
-    class _FakeXformCommonAPI:
-        def __init__(self, prim: _FakePrim) -> None:
-            self.prim = prim
-
-        def SetTranslate(self, value: object) -> None:
-            translations.append(value)
-
-    class _FakeGf:
-        @staticmethod
-        def Vec3d(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
-
-    fake_pxr = types.SimpleNamespace(
-        Gf=_FakeGf,
-        UsdGeom=types.SimpleNamespace(
-            XformCommonAPI=_FakeXformCommonAPI,
-            Xformable=_FakeXformable,
-        ),
+    _install_semantic_pose_stage_pxr(
+        monkeypatch,
+        xform_common_api=_recording_xform_common_api_type(translations),
+        xformable=_offset_parent_xformable_type((10.0, 20.0, 0.5)),
     )
-    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
-    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
-    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
 
     result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
-        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
-        semantic_pose_state={
-            "object_poses": {
-                "mug_01": {
-                    "usd_prim_path": "/World/Room/Objects/mug_01",
-                    "support_receptacle_id": "sink_01",
-                    "position": [12.0, 23.0, 4.5],
-                }
-            },
-            "receptacle_index": {},
-        },
+        stage_utils=SimpleNamespace(
+            get_current_stage=lambda: _FakeSinglePrimStage("/World/Room/Objects/mug_01")
+        ),
+        semantic_pose_state=_semantic_pose_stage_state(
+            object_id="mug_01",
+            usd_prim_path="/World/Room/Objects/mug_01",
+            position=[12.0, 23.0, 4.5],
+            support_receptacle_id="sink_01",
+        ),
     )
 
     assert result["status"] == "applied"
@@ -2113,96 +2299,25 @@ def test_isaac_semantic_pose_stage_application_updates_existing_translate_op(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     translations: list[object] = []
-
-    class _FakeParent:
-        def __bool__(self) -> bool:
-            return True
-
-    class _FakePrim:
-        def __init__(self) -> None:
-            self.parent = _FakeParent()
-
-        def IsValid(self) -> bool:
-            return True
-
-        def GetParent(self) -> _FakeParent:
-            return self.parent
-
-    class _FakeStage:
-        def __init__(self) -> None:
-            self.prim = _FakePrim()
-
-        def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path == "/World/Geometry/teddy"
-            return self.prim
-
-    class _FakeParentWorldTransform:
-        def GetInverse(self) -> "_FakeParentWorldTransform":
-            return self
-
-        def Transform(self, value: object) -> tuple[float, float, float]:
-            x, y, z = value
-            return (float(x) - 3.0, float(y) - 4.0, float(z) - 5.0)
-
-    class _FakeTranslateOp:
-        def GetOpName(self) -> str:
-            return "xformOp:translate"
-
-        def Set(self, value: object) -> bool:
-            translations.append(value)
-            return True
-
-    class _FakeOrientOp:
-        def GetOpName(self) -> str:
-            return "xformOp:orient"
-
-    class _FakeXformable:
-        def __init__(self, prim: object) -> None:
-            self.prim = prim
-
-        def ComputeLocalToWorldTransform(self, time_code: float) -> _FakeParentWorldTransform:
-            assert time_code == 0.0
-            return _FakeParentWorldTransform()
-
-        def GetOrderedXformOps(self) -> list[object]:
-            assert isinstance(self.prim, _FakePrim)
-            return [_FakeTranslateOp(), _FakeOrientOp()]
-
-    class _FakeXformCommonAPI:
-        def __init__(self, prim: _FakePrim) -> None:
-            self.prim = prim
-
-        def SetTranslate(self, value: object) -> None:
-            raise AssertionError("existing translate op should be authored directly")
-
-    class _FakeGf:
-        @staticmethod
-        def Vec3d(*values: float) -> tuple[float, float, float]:
-            return (float(values[0]), float(values[1]), float(values[2]))
-
-    fake_pxr = types.SimpleNamespace(
-        Gf=_FakeGf,
-        UsdGeom=types.SimpleNamespace(
-            XformCommonAPI=_FakeXformCommonAPI,
-            Xformable=_FakeXformable,
+    _install_semantic_pose_stage_pxr(
+        monkeypatch,
+        xform_common_api=_recording_xform_common_api_type(
+            translations,
+            failure_message="existing translate op should be authored directly",
         ),
+        xformable=_existing_translate_xformable_type(translations, (3.0, 4.0, 5.0)),
     )
-    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
-    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
-    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
 
     result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
-        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
-        semantic_pose_state={
-            "object_poses": {
-                "teddy": {
-                    "usd_prim_path": "/World/Geometry/teddy",
-                    "support_receptacle_id": "desk",
-                    "position": [8.0, 10.0, 12.0],
-                }
-            },
-            "receptacle_index": {},
-        },
+        stage_utils=SimpleNamespace(
+            get_current_stage=lambda: _FakeSinglePrimStage("/World/Geometry/teddy")
+        ),
+        semantic_pose_state=_semantic_pose_stage_state(
+            object_id="teddy",
+            usd_prim_path="/World/Geometry/teddy",
+            position=[8.0, 10.0, 12.0],
+            support_receptacle_id="desk",
+        ),
     )
 
     assert result["status"] == "applied"
@@ -3613,6 +3728,21 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    context = _setup_semantic_pose_recapture_runtime(monkeypatch, tmp_path)
+    _patch_semantic_pose_recapture_captures(monkeypatch, context)
+    _init_real_worker_with_scene_usd(context)
+    _navigate_real_worker_to_receptacle(context)
+    result = _write_semantic_pose_robot_views(context)
+
+    _assert_semantic_pose_recapture_result(result)
+    state = isaac_lab_backend_worker.read_state(context.state_path)
+    _assert_semantic_pose_recapture_state(state)
+
+
+def _setup_semantic_pose_recapture_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> SimpleNamespace:
     run_dir = tmp_path / "run"
     state_path = tmp_path / "state.json"
     image_path = run_dir / "isaac_runtime_smoke.png"
@@ -3630,6 +3760,13 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         isaac_lab_backend_worker,
         "ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH",
         tmp_path / "missing_rby1m_holobase_isaac.import_summary.json",
+    )
+    context = SimpleNamespace(
+        run_dir=run_dir,
+        state_path=state_path,
+        image_path=image_path,
+        robot_view_images=robot_view_images,
+        scene_usd=scene_usd,
     )
 
     def fake_real_runtime_smoke(
@@ -3666,6 +3803,18 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             "receptacle_index": _unit_isaac_receptacle_index(),
         }
 
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "real_runtime_smoke",
+        fake_real_runtime_smoke,
+    )
+    return context
+
+
+def _patch_semantic_pose_recapture_captures(
+    monkeypatch: pytest.MonkeyPatch,
+    context: SimpleNamespace,
+) -> None:
     def fake_capture_semantic_pose_robot_views(
         *,
         state: dict[str, object],
@@ -3678,7 +3827,7 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         focus_receptacle_id: str | None = None,
     ) -> dict[str, object]:
         del focus_object_id, focus_receptacle_id
-        assert scene_usd == run_dir / "scene.usda"
+        assert scene_usd == context.scene_usd
         assert width == 64
         assert height == 48
         assert render_settle_frames == 16
@@ -3727,7 +3876,7 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         simulation_app: object,
         semantic_pose_state: dict[str, object] | None = None,
     ) -> dict[str, object]:
-        assert scene_usd == run_dir / "scene.usda"
+        assert scene_usd == context.scene_usd
         assert simulation_app == "unit-simulation-app"
         assert semantic_pose_state is not None
         assert camera_request["api_name"] == "roboclaws.camera_control.render_views"
@@ -3756,11 +3905,6 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
 
     monkeypatch.setattr(
         isaac_lab_backend_worker,
-        "real_runtime_smoke",
-        fake_real_runtime_smoke,
-    )
-    monkeypatch.setattr(
-        isaac_lab_backend_worker,
         "capture_semantic_pose_robot_views",
         fake_capture_semantic_pose_robot_views,
     )
@@ -3769,25 +3913,31 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         "_capture_isaac_lab_scene_camera_views",
         fake_capture_scene_camera_views,
     )
+
+
+def _init_real_worker_with_scene_usd(context: SimpleNamespace) -> None:
     init_args = isaac_lab_backend_worker.parse_args(
         [
             "--state-path",
-            str(state_path),
+            str(context.state_path),
             "init",
             "--run-dir",
-            str(run_dir),
+            str(context.run_dir),
             "--runtime-mode",
             "real",
             "--include-robot",
             "--scene-usd-path",
-            str(scene_usd),
+            str(context.scene_usd),
         ]
     )
     isaac_lab_backend_worker.init_state(init_args)
+
+
+def _navigate_real_worker_to_receptacle(context: SimpleNamespace) -> None:
     nav_args = isaac_lab_backend_worker.parse_args(
         [
             "--state-path",
-            str(state_path),
+            str(context.state_path),
             "navigate_to_receptacle",
             "--receptacle-id",
             "sink_01",
@@ -3795,18 +3945,21 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     )
     nav_result = isaac_lab_backend_worker.navigate_to_receptacle(
         nav_args,
-        isaac_lab_backend_worker.read_state(state_path),
+        isaac_lab_backend_worker.read_state(context.state_path),
     )
     assert nav_result["ok"] is True
     assert nav_result["robot_pose"]["pose_source"] == "roboclaws_shared_scene_frame_support_pose"
+
+
+def _write_semantic_pose_robot_views(context: SimpleNamespace) -> dict[str, object]:
     result = isaac_lab_backend_worker.write_robot_views(
         isaac_lab_backend_worker.parse_args(
             [
                 "--state-path",
-                str(state_path),
+                str(context.state_path),
                 "robot_views",
                 "--output-dir",
-                str(run_dir / "robot_views"),
+                str(context.run_dir / "robot_views"),
                 "--label",
                 "0001_semantic_pose",
                 "--render-width",
@@ -3817,9 +3970,13 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
                 "16",
             ]
         ),
-        isaac_lab_backend_worker.read_state(state_path),
+        isaac_lab_backend_worker.read_state(context.state_path),
     )
+    assert isinstance(result, dict)
+    return result
 
+
+def _assert_semantic_pose_recapture_result(result: dict[str, object]) -> None:
     assert result["ok"] is True
     assert result["view_provenance"]["semantic_pose_state_refreshed"] is True
     assert result["view_provenance"]["canonical_camera_control"] is False
@@ -3841,7 +3998,9 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         "eye_target_scene_camera"
     )
     assert "isaac_lab_camera_rgb_head_camera_equivalent" in json.dumps(result["view_provenance"])
-    state = isaac_lab_backend_worker.read_state(state_path)
+
+
+def _assert_semantic_pose_recapture_state(state: dict[str, object]) -> None:
     assert state["semantic_pose_state"]["rendered_to_usd"] is True
     assert state["robot_view_provenance"]["semantic_pose_state_refreshed"] is True
     assert state["robot_view_provenance"]["canonical_camera_control"] is False

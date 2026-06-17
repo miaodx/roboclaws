@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from roboclaws.launch.scene_sampler import (
+    READINESS_READY,
     legacy_molmospaces_world_ids,
     parse_molmospaces_world_id,
     sampler_rows,
@@ -81,6 +82,10 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         row.world_id: _molmospaces_world_spec(row)
         for row in sampler_rows()
         if row.scene_index is not None
+        and (
+            row.readiness_status == READINESS_READY
+            or row.world_id in MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS
+        )
     },
     "agibot-g2/map-12": WorldSpec(
         id="agibot-g2/map-12",

@@ -4037,6 +4037,273 @@ def _isaac_scene_index_room() -> dict[str, object]:
     }
 
 
+def _write_isaac_robot_view_images(
+    base: Path,
+    *,
+    blank_key: str,
+) -> tuple[Path, dict[str, str]]:
+    view_dir = base / "isaac_robot_views"
+    view_dir.mkdir(parents=True, exist_ok=True)
+    views: dict[str, str] = {}
+    for key in ("fpv", "chase", "map", "verify"):
+        path = view_dir / f"step.{key}.png"
+        if key == blank_key:
+            _write_blank_png(path)
+        else:
+            _write_nonblank_png(path)
+        views[key] = str(path.relative_to(base))
+    return view_dir, views
+
+
+def _ensure_isaac_robot_view_report(base: Path) -> Path:
+    report = base / "report.html"
+    if report.is_file():
+        _insert_robot_timeline_before_score(report)
+    else:
+        report.write_text("<h2>Robot View Timeline</h2>", encoding="utf-8")
+    return report
+
+
+def _isaac_robot_view_pose() -> dict[str, object]:
+    return {
+        "schema": "cleanup_robot_pose_result_v1",
+        "pose_source": "roboclaws_shared_scene_frame_support_pose",
+        "x": 1.0,
+        "y": 2.0,
+        "z": 0.0,
+        "theta": 0.0,
+        "pose_request": {
+            "schema": "cleanup_robot_pose_request_v1",
+            "resolver": "roboclaws.cleanup_robot_pose.near_target_v1",
+        },
+    }
+
+
+def _base_isaac_robot_view_steps(views: dict[str, str]) -> list[dict[str, object]]:
+    return [
+        {
+            "action": "observe mug_01",
+            "room_outline_count": 1,
+            "views": views,
+        },
+        {
+            "action": "observe sink_01",
+            "room_outline_count": 1,
+            "views": views,
+        },
+    ]
+
+
+def _isaac_robot_view_provenance(
+    views: dict[str, str],
+    *,
+    capture_method: str,
+    semantic_pose_state_refreshed: bool,
+    canonical_camera_control: bool,
+    mounted_head_camera: bool,
+    head_camera_equivalent: bool,
+) -> dict[str, object]:
+    provenance: dict[str, object] = {key: f"{capture_method}:{key}" for key in views}
+    if canonical_camera_control:
+        provenance["fpv"] = "isaac_lab_camera_rgb_canonical_robot_view:fpv"
+        provenance["verify"] = "isaac_lab_camera_rgb_canonical_robot_view:verify"
+    if mounted_head_camera:
+        provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
+    if head_camera_equivalent:
+        provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
+    provenance["semantic_pose_state_refreshed"] = semantic_pose_state_refreshed
+    provenance["canonical_camera_control"] = canonical_camera_control
+    provenance["robot_mounted_head_camera"] = mounted_head_camera
+    provenance["head_camera_equivalent"] = head_camera_equivalent
+    return provenance
+
+
+def _mounted_head_camera_contract(
+    robot_pose: dict[str, object],
+    provenance: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "schema": "robot_view_camera_control_contract_v1",
+        "backend": "isaaclab_subprocess",
+        "status": "robot_mounted_head_camera_robot_view",
+        "camera_control_api": None,
+        "camera_model": "robot_mounted_head_camera_v1",
+        "same_pose_api": False,
+        "camera_prim_path": "/World/robot_0/head_camera",
+        "robot_pose": robot_pose,
+        "agent_facing_fpv": {
+            "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
+            "canonical_camera_control": False,
+            "robot_mounted": True,
+            "head_camera_equivalent": False,
+            "camera_prim_path": "/World/robot_0/head_camera",
+        },
+        "report_verify_view": {
+            "source": provenance["verify"],
+            "canonical_camera_control": False,
+        },
+    }
+
+
+def _head_camera_equivalent_contract(
+    robot_pose: dict[str, object],
+    provenance: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "schema": "robot_view_camera_control_contract_v1",
+        "backend": "isaaclab_subprocess",
+        "status": "robot_head_camera_equivalent_robot_view",
+        "camera_control_api": None,
+        "camera_model": "robot_head_camera_equivalent_v1",
+        "same_pose_api": False,
+        "robot_pose": robot_pose,
+        "agent_facing_fpv": {
+            "source": "isaac_lab_camera_rgb_head_camera_equivalent:fpv",
+            "canonical_camera_control": False,
+            "head_camera_equivalent": True,
+        },
+        "report_verify_view": {
+            "source": provenance["verify"],
+            "canonical_camera_control": False,
+        },
+    }
+
+
+def _canonical_camera_control_contract(robot_pose: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema": "robot_view_camera_control_contract_v1",
+        "backend": "isaaclab_subprocess",
+        "status": "canonical_camera_control_robot_view",
+        "camera_control_api": "roboclaws.camera_control.render_views",
+        "camera_model": "canonical_eye_target_camera_v1",
+        "same_pose_api": True,
+        "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+        "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
+        "robot_pose": robot_pose,
+        "agent_facing_fpv": {
+            "source": "canonical_eye_target_robot_pose",
+            "canonical_camera_control": True,
+            "eye": [1.0, 2.0, 1.55],
+            "target": [2.5, 5.5, 0.6],
+        },
+        "report_verify_view": {
+            "source": "canonical_eye_target_robot_verify",
+            "canonical_camera_control": True,
+            "eye": [1.2, 2.4, 2.3],
+            "target": [2.5, 5.5, 0.6],
+        },
+    }
+
+
+def _backend_local_camera_control_contract(provenance: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema": "robot_view_camera_control_contract_v1",
+        "backend": "isaaclab_subprocess",
+        "status": "backend_local_scene_bounds_camera",
+        "camera_control_api": None,
+        "camera_model": "backend_local_robot_view",
+        "same_pose_api": False,
+        "agent_facing_fpv": {
+            "source": provenance["fpv"],
+            "canonical_camera_control": False,
+        },
+        "report_verify_view": {
+            "source": provenance["verify"],
+            "canonical_camera_control": False,
+        },
+    }
+
+
+def _isaac_robot_view_camera_control_contract(
+    robot_pose: dict[str, object],
+    provenance: dict[str, object],
+    *,
+    canonical_camera_control: bool,
+    mounted_head_camera: bool,
+    head_camera_equivalent: bool,
+) -> dict[str, object]:
+    if mounted_head_camera:
+        return _mounted_head_camera_contract(robot_pose, provenance)
+    if head_camera_equivalent:
+        return _head_camera_equivalent_contract(robot_pose, provenance)
+    if canonical_camera_control:
+        return _canonical_camera_control_contract(robot_pose)
+    return _backend_local_camera_control_contract(provenance)
+
+
+def _apply_isaac_robot_view_step_metadata(
+    step: dict[str, object],
+    views: dict[str, str],
+    *,
+    capture_method: str,
+    semantic_pose_state_refreshed: bool,
+    canonical_camera_control: bool,
+    mounted_head_camera: bool,
+    head_camera_equivalent: bool,
+) -> None:
+    provenance = _isaac_robot_view_provenance(
+        views,
+        capture_method=capture_method,
+        semantic_pose_state_refreshed=semantic_pose_state_refreshed,
+        canonical_camera_control=canonical_camera_control,
+        mounted_head_camera=mounted_head_camera,
+        head_camera_equivalent=head_camera_equivalent,
+    )
+    robot_pose = _isaac_robot_view_pose()
+    step["robot_pose"] = robot_pose
+    step["view_provenance"] = provenance
+    step["camera_control_contract"] = _isaac_robot_view_camera_control_contract(
+        robot_pose,
+        provenance,
+        canonical_camera_control=canonical_camera_control,
+        mounted_head_camera=mounted_head_camera,
+        head_camera_equivalent=head_camera_equivalent,
+    )
+
+
+def _isaac_robot_view_camera_control_summary(
+    step_count: int,
+    *,
+    canonical_camera_control: bool,
+    head_camera_equivalent: bool,
+) -> dict[str, object]:
+    if head_camera_equivalent:
+        return {
+            "schema": "robot_view_camera_control_summary_v1",
+            "status": "all_robot_views_use_head_camera_fpv",
+            "same_pose_api": False,
+            "head_camera_fpv": True,
+            "step_count": step_count,
+            "contract_count": step_count,
+            "canonical_contract_count": 0,
+            "head_camera_contract_count": step_count,
+            "backend_local_contract_count": step_count,
+        }
+    if canonical_camera_control:
+        return {
+            "schema": "robot_view_camera_control_summary_v1",
+            "status": "all_robot_views_use_canonical_camera_control",
+            "same_pose_api": True,
+            "head_camera_fpv": False,
+            "step_count": step_count,
+            "contract_count": step_count,
+            "canonical_contract_count": step_count,
+            "head_camera_contract_count": 0,
+            "backend_local_contract_count": 0,
+        }
+    return {
+        "schema": "robot_view_camera_control_summary_v1",
+        "status": "mixed_or_backend_local_robot_views",
+        "same_pose_api": False,
+        "head_camera_fpv": False,
+        "step_count": step_count,
+        "contract_count": step_count,
+        "canonical_contract_count": 0,
+        "head_camera_contract_count": 0,
+        "backend_local_contract_count": step_count,
+    }
+
+
 def _add_isaac_robot_view_step(
     data: dict[str, object],
     base: Path,
@@ -4048,189 +4315,30 @@ def _add_isaac_robot_view_step(
     mounted_head_camera: bool = False,
     head_camera_equivalent: bool = False,
 ) -> None:
-    view_dir = base / "isaac_robot_views"
-    view_dir.mkdir(parents=True, exist_ok=True)
-    views: dict[str, str] = {}
-    for key in ("fpv", "chase", "map", "verify"):
-        path = view_dir / f"step.{key}.png"
-        if key == blank_key:
-            _write_blank_png(path)
-        else:
-            _write_nonblank_png(path)
-        views[key] = str(path.relative_to(base))
-    report = base / "report.html"
-    if report.is_file():
-        _insert_robot_timeline_before_score(report)
-    else:
-        report.write_text("<h2>Robot View Timeline</h2>", encoding="utf-8")
+    view_dir, views = _write_isaac_robot_view_images(base, blank_key=blank_key)
+    report = _ensure_isaac_robot_view_report(base)
     artifacts = data.setdefault("artifacts", {})
     assert isinstance(artifacts, dict)
     artifacts["robot_views"] = str(view_dir.relative_to(base))
     artifacts["report"] = str(report.relative_to(base))
     data["view_variant"] = "isaaclab-fpv-map-chase-verify"
-    data["robot_view_steps"] = [
-        {
-            "action": "observe mug_01",
-            "room_outline_count": 1,
-            "view_provenance": {
-                key: f"isaac_lab_camera_rgb_static_robot_views:{key}" for key in views
-            },
-            "views": views,
-        },
-        {
-            "action": "observe sink_01",
-            "room_outline_count": 1,
-            "view_provenance": {
-                key: f"isaac_lab_camera_rgb_static_robot_views:{key}" for key in views
-            },
-            "views": views,
-        },
-    ]
-    for step in data["robot_view_steps"]:
-        provenance = {key: f"{capture_method}:{key}" for key in views}
-        robot_pose = {
-            "schema": "cleanup_robot_pose_result_v1",
-            "pose_source": "roboclaws_shared_scene_frame_support_pose",
-            "x": 1.0,
-            "y": 2.0,
-            "z": 0.0,
-            "theta": 0.0,
-            "pose_request": {
-                "schema": "cleanup_robot_pose_request_v1",
-                "resolver": "roboclaws.cleanup_robot_pose.near_target_v1",
-            },
-        }
-        step["robot_pose"] = robot_pose
-        if canonical_camera_control:
-            provenance["fpv"] = "isaac_lab_camera_rgb_canonical_robot_view:fpv"
-            provenance["verify"] = "isaac_lab_camera_rgb_canonical_robot_view:verify"
-        if mounted_head_camera:
-            provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
-        if head_camera_equivalent:
-            provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
-        provenance["semantic_pose_state_refreshed"] = semantic_pose_state_refreshed
-        provenance["canonical_camera_control"] = canonical_camera_control
-        provenance["robot_mounted_head_camera"] = mounted_head_camera
-        provenance["head_camera_equivalent"] = head_camera_equivalent
-        step["view_provenance"] = provenance
-        if mounted_head_camera:
-            step["camera_control_contract"] = {
-                "schema": "robot_view_camera_control_contract_v1",
-                "backend": "isaaclab_subprocess",
-                "status": "robot_mounted_head_camera_robot_view",
-                "camera_control_api": None,
-                "camera_model": "robot_mounted_head_camera_v1",
-                "same_pose_api": False,
-                "camera_prim_path": "/World/robot_0/head_camera",
-                "robot_pose": robot_pose,
-                "agent_facing_fpv": {
-                    "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
-                    "canonical_camera_control": False,
-                    "robot_mounted": True,
-                    "head_camera_equivalent": False,
-                    "camera_prim_path": "/World/robot_0/head_camera",
-                },
-                "report_verify_view": {
-                    "source": provenance["verify"],
-                    "canonical_camera_control": False,
-                },
-            }
-        elif head_camera_equivalent:
-            step["camera_control_contract"] = {
-                "schema": "robot_view_camera_control_contract_v1",
-                "backend": "isaaclab_subprocess",
-                "status": "robot_head_camera_equivalent_robot_view",
-                "camera_control_api": None,
-                "camera_model": "robot_head_camera_equivalent_v1",
-                "same_pose_api": False,
-                "robot_pose": robot_pose,
-                "agent_facing_fpv": {
-                    "source": "isaac_lab_camera_rgb_head_camera_equivalent:fpv",
-                    "canonical_camera_control": False,
-                    "head_camera_equivalent": True,
-                },
-                "report_verify_view": {
-                    "source": provenance["verify"],
-                    "canonical_camera_control": False,
-                },
-            }
-        elif canonical_camera_control:
-            step["camera_control_contract"] = {
-                "schema": "robot_view_camera_control_contract_v1",
-                "backend": "isaaclab_subprocess",
-                "status": "canonical_camera_control_robot_view",
-                "camera_control_api": "roboclaws.camera_control.render_views",
-                "camera_model": "canonical_eye_target_camera_v1",
-                "same_pose_api": True,
-                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
-                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
-                "robot_pose": robot_pose,
-                "agent_facing_fpv": {
-                    "source": "canonical_eye_target_robot_pose",
-                    "canonical_camera_control": True,
-                    "eye": [1.0, 2.0, 1.55],
-                    "target": [2.5, 5.5, 0.6],
-                },
-                "report_verify_view": {
-                    "source": "canonical_eye_target_robot_verify",
-                    "canonical_camera_control": True,
-                    "eye": [1.2, 2.4, 2.3],
-                    "target": [2.5, 5.5, 0.6],
-                },
-            }
-        else:
-            step["camera_control_contract"] = {
-                "schema": "robot_view_camera_control_contract_v1",
-                "backend": "isaaclab_subprocess",
-                "status": "backend_local_scene_bounds_camera",
-                "camera_control_api": None,
-                "camera_model": "backend_local_robot_view",
-                "same_pose_api": False,
-                "agent_facing_fpv": {
-                    "source": provenance["fpv"],
-                    "canonical_camera_control": False,
-                },
-                "report_verify_view": {
-                    "source": provenance["verify"],
-                    "canonical_camera_control": False,
-                },
-            }
-    if head_camera_equivalent:
-        data["robot_view_camera_control"] = {
-            "schema": "robot_view_camera_control_summary_v1",
-            "status": "all_robot_views_use_head_camera_fpv",
-            "same_pose_api": False,
-            "head_camera_fpv": True,
-            "step_count": len(data["robot_view_steps"]),
-            "contract_count": len(data["robot_view_steps"]),
-            "canonical_contract_count": 0,
-            "head_camera_contract_count": len(data["robot_view_steps"]),
-            "backend_local_contract_count": len(data["robot_view_steps"]),
-        }
-    elif canonical_camera_control:
-        data["robot_view_camera_control"] = {
-            "schema": "robot_view_camera_control_summary_v1",
-            "status": "all_robot_views_use_canonical_camera_control",
-            "same_pose_api": True,
-            "head_camera_fpv": False,
-            "step_count": len(data["robot_view_steps"]),
-            "contract_count": len(data["robot_view_steps"]),
-            "canonical_contract_count": len(data["robot_view_steps"]),
-            "head_camera_contract_count": 0,
-            "backend_local_contract_count": 0,
-        }
-    else:
-        data["robot_view_camera_control"] = {
-            "schema": "robot_view_camera_control_summary_v1",
-            "status": "mixed_or_backend_local_robot_views",
-            "same_pose_api": False,
-            "head_camera_fpv": False,
-            "step_count": len(data["robot_view_steps"]),
-            "contract_count": len(data["robot_view_steps"]),
-            "canonical_contract_count": 0,
-            "head_camera_contract_count": 0,
-            "backend_local_contract_count": len(data["robot_view_steps"]),
-        }
+    steps = _base_isaac_robot_view_steps(views)
+    for step in steps:
+        _apply_isaac_robot_view_step_metadata(
+            step,
+            views,
+            capture_method=capture_method,
+            semantic_pose_state_refreshed=semantic_pose_state_refreshed,
+            canonical_camera_control=canonical_camera_control,
+            mounted_head_camera=mounted_head_camera,
+            head_camera_equivalent=head_camera_equivalent,
+        )
+    data["robot_view_steps"] = steps
+    data["robot_view_camera_control"] = _isaac_robot_view_camera_control_summary(
+        len(steps),
+        canonical_camera_control=canonical_camera_control,
+        head_camera_equivalent=head_camera_equivalent,
+    )
 
 
 def _add_isaac_snapshot_artifacts(

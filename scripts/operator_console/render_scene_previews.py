@@ -840,7 +840,7 @@ def _map_canvas(base_image: Image.Image, *, width: int, height: int) -> Image.Im
     return image.filter(ImageFilter.UnsharpMask(radius=1.2, percent=80, threshold=4))
 
 
-def _map_transform(semantics: dict[str, Any], *, width: int, height: int):
+def _map_transform_points(semantics: dict[str, Any]) -> list[tuple[float, float]]:
     points: list[tuple[float, float]] = []
     for room in semantics.get("rooms") or []:
         if isinstance(room, dict):
@@ -855,18 +855,28 @@ def _map_transform(semantics: dict[str, Any], *, width: int, height: int):
             point = _xy(fixture["pose"])
             if point is not None:
                 points.append(point)
-    if not points:
-        points = [(-1.0, -1.0), (1.0, 1.0)]
+    return points or [(-1.0, -1.0), (1.0, 1.0)]
+
+
+def _padded_map_bounds(points: list[tuple[float, float]]) -> tuple[float, float, float, float]:
     min_x = min(x for x, _ in points)
     max_x = max(x for x, _ in points)
     min_y = min(y for _, y in points)
     max_y = max(y for _, y in points)
     pad_x = max((max_x - min_x) * 0.12, 0.5)
     pad_y = max((max_y - min_y) * 0.12, 0.5)
-    min_x -= pad_x
-    max_x += pad_x
-    min_y -= pad_y
-    max_y += pad_y
+    return min_x - pad_x, max_x + pad_x, min_y - pad_y, max_y + pad_y
+
+
+def _map_plot_geometry(
+    *,
+    min_x: float,
+    max_x: float,
+    min_y: float,
+    max_y: float,
+    width: int,
+    height: int,
+) -> tuple[float, float, float, float, float]:
     span_x = max(max_x - min_x, 1.0)
     span_y = max(max_y - min_y, 1.0)
     plot_left = width * 0.08
@@ -876,6 +886,19 @@ def _map_transform(semantics: dict[str, Any], *, width: int, height: int):
     scale = min((plot_right - plot_left) / span_x, (plot_bottom - plot_top) / span_y)
     offset_x = (width - span_x * scale) / 2.0
     offset_y = plot_top + ((plot_bottom - plot_top) - span_y * scale) / 2.0
+    return scale, offset_x, offset_y, min_x, max_y
+
+
+def _map_transform(semantics: dict[str, Any], *, width: int, height: int):
+    min_x, max_x, min_y, max_y = _padded_map_bounds(_map_transform_points(semantics))
+    scale, offset_x, offset_y, min_x, max_y = _map_plot_geometry(
+        min_x=min_x,
+        max_x=max_x,
+        min_y=min_y,
+        max_y=max_y,
+        width=width,
+        height=height,
+    )
 
     def transform(x: float, y: float) -> tuple[float, float]:
         return (

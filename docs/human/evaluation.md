@@ -82,14 +82,16 @@ conditions separately from agent behavior when the selected live route cannot
 finish.
 
 `scene_sampler_stress` is the static eval projection for source-aware
-MolmoSpaces scene sampling. It currently admits prepared `procthor-10k-val`
-map-build samples and records partial or blocked metadata for scene sources
-that do not yet have ten eval-ready samples. Its `sampler_admission` grader
-checks the sampler metadata carried by each sample: split-qualified
-`scene_source`, scene index, readiness status, room/navigation-area count,
-waypoint count, room-category provenance, selected reason, generator version,
-and blocked/partial projection metadata. The grader is deterministic and must
-not call live providers.
+MolmoSpaces scene sampling. It currently admits ten prepared `procthor-10k-val`
+map-build samples and ten prepared `procthor-objaverse-val` map-build samples.
+`ithor` and `holodeck-objaverse-val` remain in the projection as rejected
+exhausted source metadata because their candidate evidence fails the current
+public-room/actionability gates. Its `sampler_admission` grader checks the
+sampler metadata carried by each sample: split-qualified `scene_source`, scene
+index, readiness status, room/navigation-area count, waypoint count,
+room-category provenance, selected reason, generator version, and
+blocked/rejected projection metadata. The grader is deterministic and must not
+call live providers.
 
 Blocked live-agent packets include either `roboclaws_live_eval_preflight_v1`
 runner metadata, or a live product-route failure classified separately from
