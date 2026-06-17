@@ -602,28 +602,14 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         if [[ "$profile" == "camera-raw-fpv" ]]; then
           prompt_cleanup_count="$generated_mess_success_threshold"
         fi
-        prompt_mode="${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-full}"
         prompt_raw_fpv_candidate_budget="${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET:-24}"
         prompt_max_observe_per_waypoint="${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT:-1}"
         prompt_done_retry_budget="${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET:-1}"
-        if [[ "$driver" != "openai-agents-live" ]]; then
-          prompt_mode="full"
-        elif [[ -z "${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-}" ]]; then
-          case "${ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE:-}" in
-            gpt_compact_v1|mimo_compact_v1)
-              prompt_mode="compact"
-              ;;
-            raw_fpv_budgeted_v1)
-              prompt_mode="raw_fpv_compact"
-              ;;
-          esac
-        fi
         prompt_args=(
           --profile "$profile"
           --intent "$task_intent"
           --task "$task"
           --target-cleanup-count "$prompt_cleanup_count"
-          --prompt-mode "$prompt_mode"
           --raw-fpv-candidate-budget "$prompt_raw_fpv_candidate_budget"
           --max-observe-per-waypoint "$prompt_max_observe_per_waypoint"
           --done-retry-budget "$prompt_done_retry_budget"
@@ -873,7 +859,6 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --model "$openai_agents_model"
             --mcp-client-session-timeout-s "${ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S:-30}"
             --agent-sdk-perf-profile "${ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE:-}"
-            --prompt-mode "${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-}"
             --continuation-mode "${ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE:-}"
             --model-thinking-mode "${ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE:-default}"
             --server-startup-timeout-s "$server_startup_timeout_s"

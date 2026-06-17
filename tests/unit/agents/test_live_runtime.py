@@ -1960,7 +1960,6 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -2001,7 +2000,6 @@ def _assert_baseline_openai_agents_timing(timing: dict[str, object]) -> None:
     assert timing["mcp_client_session_timeout_s"] == 30.0
     assert timing["agent_sdk_perf_profile"]["schema"] == "agent_sdk_perf_profile_v1"
     assert timing["agent_sdk_perf_profile"]["profile_id"] == "baseline"
-    assert timing["agent_sdk_perf_profile"]["prompt_mode"] == "full"
     assert timing["agent_sdk_perf_profile"]["continuation_mode"] == "repeat_full_prompt"
     assert timing["agent_sdk_perf_profile"]["max_turns"] == 128
     assert timing["agent_sdk_perf_profile"]["model_service_retry_attempts"] == 1
@@ -2141,7 +2139,6 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="mimo_compact_v1",
-        prompt_mode="",
         continuation_mode="",
         model_input_compaction=None,
         model_input_compaction_min_chars=None,
@@ -2256,7 +2253,6 @@ def test_openai_agents_robot_view_capture_policy_adds_private_server_flag(
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="mimo_compact_v1",
-        prompt_mode="",
         continuation_mode="",
         model_input_compaction=None,
         model_input_compaction_min_chars=None,
@@ -2296,7 +2292,7 @@ def test_openai_agents_robot_view_capture_policy_adds_private_server_flag(
 
 
 def test_openai_agents_camera_grounded_composite_rerenders_stale_two_step_prompt() -> None:
-    stale_prompt = render_kickoff_prompt("camera-grounded-labels", prompt_mode="compact")
+    stale_prompt = render_kickoff_prompt("camera-grounded-labels")
     args = Namespace(
         kickoff_prompt=stale_prompt,
         profile="camera-grounded-labels",
@@ -2305,7 +2301,6 @@ def test_openai_agents_camera_grounded_composite_rerenders_stale_two_step_prompt
         min_generated_mess_count="5",
     )
     profile = {
-        "prompt_mode": "compact",
         "raw_fpv_candidate_budget": 24,
         "max_observe_per_waypoint": 1,
         "done_retry_budget": 1,
@@ -2320,7 +2315,7 @@ def test_openai_agents_camera_grounded_composite_rerenders_stale_two_step_prompt
     assert "declare_visual_candidates with observation_id only" in stale_prompt
     assert "observe_camera_grounded_candidates instead of a separate observe" in prompt
     assert "declare_visual_candidates with observation_id only" not in prompt
-    assert _kickoff_prompt_source(args, profile) == "profile-rendered-compact"
+    assert _kickoff_prompt_source(args, profile) == "profile-rendered-lane-default"
 
 
 def test_openai_agents_camera_grounded_composite_runner_rerenders_stale_two_step_prompt(
@@ -2388,7 +2383,7 @@ def test_openai_agents_camera_grounded_composite_runner_rerenders_stale_two_step
         "scripts.molmo_cleanup.run_live_openai_agents_cleanup._run_and_tee",
         fake_run_and_tee,
     )
-    stale_prompt = render_kickoff_prompt("camera-grounded-labels", prompt_mode="compact")
+    stale_prompt = render_kickoff_prompt("camera-grounded-labels")
     args = Namespace(
         run_dir=run_dir,
         repo_root=_isolated_repo_root(tmp_path),
@@ -2402,7 +2397,6 @@ def test_openai_agents_camera_grounded_composite_runner_rerenders_stale_two_step
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="mimo_compact_v1",
-        prompt_mode="",
         continuation_mode="",
         model_input_compaction=None,
         model_input_compaction_min_chars=None,
@@ -2434,7 +2428,7 @@ def test_openai_agents_camera_grounded_composite_runner_rerenders_stale_two_step
     assert "observe_camera_grounded_candidates instead of a separate observe" in prompts[0]
     assert "declare_visual_candidates with observation_id only" not in prompts[0]
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
-    assert timing["kickoff_prompt_source"] == "profile-rendered-compact"
+    assert timing["kickoff_prompt_source"] == "profile-rendered-lane-default"
 
 
 def test_openai_agents_cleanup_runner_loads_canonical_skill_context(
@@ -2541,7 +2535,6 @@ def test_openai_agents_cleanup_runner_loads_canonical_skill_context(
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -2690,7 +2683,6 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -2848,7 +2840,6 @@ def test_openai_agents_cleanup_runner_compact_continuation_excludes_full_prompt(
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="gpt_compact_v1",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -2997,7 +2988,6 @@ def test_openai_agents_cleanup_runner_compact_continuation_preserves_composite_c
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="mimo_compact_v1",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -3110,7 +3100,6 @@ def test_openai_agents_cleanup_runner_uses_profiled_compact_kickoff_prompt(
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="gpt_compact_v1",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -3139,7 +3128,7 @@ def test_openai_agents_cleanup_runner_uses_profiled_compact_kickoff_prompt(
     assert "Compact action cadence for world-public-labels" in prompts[0]
     assert "pending_cleanup_candidates" in prompts[0]
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
-    assert timing["kickoff_prompt_source"] == "profile-rendered-compact"
+    assert timing["kickoff_prompt_source"] == "profile-rendered-lane-default"
 
 
 def test_incomplete_turn_recovery_compacts_after_context_soft_limit(tmp_path: Path) -> None:
@@ -3451,7 +3440,6 @@ def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
         incomplete_turn_continuation_attempts=1,
         mcp_client_session_timeout_s=30.0,
         agent_sdk_perf_profile="",
-        prompt_mode="",
         continuation_mode="",
         context_soft_limit_tokens=None,
         context_hard_limit_tokens=None,
@@ -3507,7 +3495,6 @@ def _openai_agents_perf_profile_base_args(**overrides) -> Namespace:
         provider_profile="codex-env",
         model="gpt-5.5",
         agent_sdk_perf_profile="",
-        prompt_mode="",
         continuation_mode="",
         model_thinking_mode="default",
         cache_tools_list=True,
@@ -3564,7 +3551,6 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     assert baseline["wire_api"] == "responses"
     assert baseline["model_family"] == "gpt"
     assert baseline["model_thinking_mode"] == "default"
-    assert baseline["prompt_mode"] == "full"
     assert baseline["continuation_mode"] == "repeat_full_prompt"
     assert baseline["max_turns"] == 128
     assert baseline["max_continuations"] == 2
@@ -3601,7 +3587,6 @@ def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeyp
     )
 
     assert gpt["source"] == "cli"
-    assert gpt["prompt_mode"] == "compact"
     assert gpt["continuation_mode"] == "state_summary_only"
     assert gpt["max_turns"] == 128
     assert gpt["max_continuations"] == 1
@@ -3689,7 +3674,6 @@ def test_openai_agents_perf_profile_resolves_raw_fpv_budget_defaults(monkeypatch
         _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="raw_fpv_budgeted_v1")
     )
 
-    assert raw["prompt_mode"] == "raw_fpv_compact"
     assert raw["max_turns"] == 40
     assert raw["max_continuations"] == 1
     assert raw["raw_fpv_candidate_budget"] == 24
@@ -3706,7 +3690,6 @@ def test_openai_agents_perf_profile_resolves_custom_overrides(monkeypatch) -> No
     custom = _resolve_agent_sdk_perf_profile(
         _openai_agents_perf_profile_base_args(
             agent_sdk_perf_profile="custom",
-            prompt_mode="compact",
             continuation_mode="state_summary_only",
             max_turns=9,
             incomplete_turn_continuation_attempts=3,
@@ -3723,7 +3706,6 @@ def test_openai_agents_perf_profile_resolves_custom_overrides(monkeypatch) -> No
     )
 
     assert custom["profile_id"] == "custom"
-    assert custom["prompt_mode"] == "compact"
     assert custom["max_turns"] == 9
     assert custom["max_continuations"] == 3
     assert custom["context_soft_limit_tokens"] == 12

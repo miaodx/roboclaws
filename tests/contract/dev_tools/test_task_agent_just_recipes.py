@@ -1826,44 +1826,38 @@ def test_household_cleanup_prompt_override_does_not_imply_openclaw_open_ended_in
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     prompt = render_kickoff_prompt("camera-raw-fpv")
 
-    assert "exact waypoint checklist" in prompt
-    assert "metric_map.inspection_waypoints" in prompt
-    assert "mark a waypoint complete only after" in prompt
+    assert "exact inspection_waypoints checklist" in prompt
+    assert "sweep public waypoints with navigate_to_waypoint then observe" in prompt
     assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
     assert "namespace cleanup" in prompt
     assert "server named cleanup" not in prompt
-    assert "compare the checklist before done" in prompt
+    assert "Call done only after every public waypoint has an observe response" in prompt
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
-    assert "visit any missing waypoint_id" in prompt
-    assert "trace-preserving camera-raw-fpv skill lane" in prompt
-    assert "at most one fresh high-confidence cleanup object" in prompt
-    assert "skip tiny slivers" in prompt
-    assert "already cleaned or already tried from that same source observation" in prompt
+    assert "use at most 1 observe response(s)" in prompt
+    assert "Compact action cadence for camera-raw-fpv" in prompt
+    assert "at most one fresh high-confidence cleanup candidate" in prompt
+    assert "source_observation_id/category/region" in prompt
     assert "Use the exact visual class when the image makes it clear" in prompt
     assert "Use broader cleanup categories" in prompt
     assert "only when the exact object class is uncertain" in prompt
     assert "use image_region={type:bbox,value:[x,y,width,height]}" in prompt
-    assert "plain verbal_region" in prompt
-    assert "Do not retry the same source_observation_id/category/region combination" in prompt
-    assert "fresh source_observation_id and a tighter bbox" in prompt
+    assert "Never retry the same source_observation_id/category/region" in prompt
     assert "Omit source_fixture_id with Base Navigation Map context" in prompt
     assert "Never send bbox_normalized" in prompt
     assert 'target_fixture_id=""' in prompt
     assert 'target_fixture_id="None"' in prompt
     assert "target_fixture_id=null" in prompt
     assert "bare x/y/width/height fields" in prompt
-    assert "at least 7 grounded cleanup chains have succeeded" in prompt
+    assert "Clean up to 7 grounded visual candidates when possible" in prompt
     assert "place/place_inside" in prompt
-    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
+    assert "Use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
 
 
 def test_molmo_camera_raw_prompt_scales_to_requested_cleanup_count() -> None:
     prompt = render_kickoff_prompt("camera-raw-fpv", target_cleanup_count=5)
 
-    assert "successful cleanup count is still below 5" in prompt
-    assert "Clean at least 5 grounded visual candidates" in prompt
-    assert "at least 5 grounded cleanup chains have succeeded" in prompt
+    assert "Clean up to 5 grounded visual candidates when possible" in prompt
     assert "at least seven grounded cleanup chains have succeeded" not in prompt
 
 
@@ -2172,32 +2166,22 @@ def test_molmo_cleanup_live_prompt_uses_cleanup_intent_without_open_ended_intent
     assert "Use the bundled molmo-realworld-cleanup skill instructions" in prompt
 
 
-def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
+def test_molmo_world_labels_prompt_uses_single_lane_default() -> None:
     prompt = render_kickoff_prompt("world-public-labels")
 
-    assert "perfect structured detections without cleanup destination oracle fields" in prompt
-    assert "do not wait for or rely on cleanup_recommended" in prompt
-    assert "destination_policy_status is policy_required" in prompt
-    assert "destination_policy.preferred_fixture_categories" in prompt
-    assert "destination_policy.placement_tool_by_fixture_category" in prompt
-    assert "instead of skipping the object" in prompt
-    assert "If no matching public anchor or destination_options entry is available yet" in prompt
-    assert "continue the waypoint sweep rather than inventing fixture ids" in prompt
-    assert "do not re-clean observed handles" in prompt
-    assert "Treat public tool responses as authoritative" in prompt
+    assert "Compact action cadence for world-public-labels" in prompt
+    assert "exact inspection_waypoints checklist" in prompt
+    assert "navigate_to_waypoint then observe" in prompt
     assert "pending_cleanup_candidates" in prompt
-    assert "candidate_fixture_id or destination_options" in prompt
     assert "required_tool" in prompt
-    assert "runtime_metric_map.public_semantic_anchors" in prompt
-    assert "tool recovery hints" in prompt
-    assert "exact waypoint checklist" in prompt
-    assert "metric_map.inspection_waypoints" in prompt
+    assert "destination_options" in prompt
+    assert "cleanup_recommended" not in prompt
     assert "first complete an anchor discovery sweep" not in prompt
 
 
-def test_molmo_compact_label_prompts_keep_public_done_boundary() -> None:
-    world_prompt = render_kickoff_prompt("world-public-labels", prompt_mode="compact")
-    camera_prompt = render_kickoff_prompt("camera-grounded-labels", prompt_mode="compact")
+def test_molmo_label_prompts_keep_public_done_boundary() -> None:
+    world_prompt = render_kickoff_prompt("world-public-labels")
+    camera_prompt = render_kickoff_prompt("camera-grounded-labels")
 
     assert "Compact action cadence for world-public-labels" in world_prompt
     assert "observe -> candidate decision" in world_prompt
@@ -2213,7 +2197,6 @@ def test_molmo_compact_label_prompts_keep_public_done_boundary() -> None:
 def test_molmo_compact_camera_prompt_can_prefer_composite_observe_tool() -> None:
     prompt = render_kickoff_prompt(
         "camera-grounded-labels",
-        prompt_mode="compact",
         camera_grounded_composite_tools=True,
     )
 
@@ -2247,7 +2230,6 @@ def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     prompt = render_kickoff_prompt(
         "camera-raw-fpv",
         target_cleanup_count=5,
-        prompt_mode="raw_fpv_compact",
         raw_fpv_candidate_budget=3,
         max_observe_per_waypoint=2,
         done_retry_budget=1,
@@ -2261,15 +2243,11 @@ def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     assert "only MCP done producing run_result.json counts" in prompt
 
 
-def test_molmo_live_openai_agents_profile_controls_prompt_mode() -> None:
+def test_molmo_live_openai_agents_uses_single_lane_default_prompt() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert 'prompt_mode="${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-full}"' in text
-    assert "gpt_compact_v1|mimo_compact_v1)" in text
-    assert 'prompt_mode="compact"' in text
-    assert "raw_fpv_budgeted_v1)" in text
-    assert 'prompt_mode="raw_fpv_compact"' in text
-    assert '--prompt-mode "$prompt_mode"' in text
+    assert "ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE" not in text
+    assert "--prompt-mode" not in text
     assert '--raw-fpv-candidate-budget "$prompt_raw_fpv_candidate_budget"' in text
     assert '--max-observe-per-waypoint "$prompt_max_observe_per_waypoint"' in text
     assert '--done-retry-budget "$prompt_done_retry_budget"' in text

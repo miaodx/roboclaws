@@ -211,10 +211,10 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
     assert payload["operator_prompt"] == "只收拾桌面上的杯子"
     assert payload["source"] == "household-cleanup"
     assert payload["intent"] == "cleanup"
-    assert payload["prompt_mode"] == "full"
+    assert "prompt_mode" not in payload
     assert "This run is surface=household-world intent=cleanup" in payload["agent_kickoff_prompt"]
     assert "只收拾桌面上的杯子" in payload["agent_kickoff_prompt"]
-    assert "metric_map.inspection_waypoints" in payload["agent_kickoff_prompt"]
+    assert "exact inspection_waypoints checklist" in payload["agent_kickoff_prompt"]
     assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
 
 
