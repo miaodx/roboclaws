@@ -47,23 +47,27 @@ tables, historical launch/profile narratives, and implementation/proof detail
 that makes humans or future agents rediscover old routes.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
-compaction owner split. Treat this as the planning snapshot for the next slice;
-refresh before executing again.
+--summary --top 40` on 2026-06-17 after the visual-parity summary owner split.
+Treat this as the planning snapshot for the next slice; refresh before executing
+again.
 
-- 11 Ruff complexity violations and 70 oversized modules remain. The oversized
-  count increased by one because the new model-input compaction owner is now
-  counted above the default 800-line target.
+- 14 Ruff complexity violations and 74 oversized modules remain.
 - Largest P1 production hard-ceiling files are
-  `roboclaws/household/realworld_contract.py` at 2836,
+  `roboclaws/household/realworld_contract.py` at 2846,
   `roboclaws/household/scene_camera_comparison.py` at 2830,
-  `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` at 2808,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711,
-  and `roboclaws/household/report.py` at 2108.
-- `roboclaws/agents/drivers/openai_agents_live.py` is down to 1994 lines and is
+  and `roboclaws/household/report.py` at 2175.
+- `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` is down to
+  1976 lines and is no longer a hard-ceiling P1. Keep it below 2000; reopen it
+  only if the summarizer starts rebuilding HTML report rendering,
+  object/capture-quality payload compaction, or manifest-ranking summaries
+  inline again.
+- `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is down to 1981
+  lines and is no longer a hard-ceiling P1. Keep it below 2000; reopen it only
+  if runner-side profile/default/config ownership grows again.
+- `roboclaws/agents/drivers/openai_agents_live.py` is down to 1825 lines and is
   no longer a hard-ceiling P1. Keep it below 2000; reopen it only if SDK driver
-  request/session/provider orchestration grows again or rebuilds model-input
-  compaction inline.
+  request/session/provider orchestration grows again or rebuilds model-input or
+  span compaction inline.
 - `roboclaws/agents/drivers/openai_agents_model_input.py` is 972 lines and owns
   OpenAI Agents SDK model-input compaction. Keep it as a justified cohesive
   800-1200-line owner unless a second real owner emerges inside it.
@@ -88,7 +92,7 @@ refresh before executing again.
   unless a later scan finds a second real owner inside it.
 - Backend workers remain below the hard ceiling:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1994 lines and
-  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1841 lines.
+  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1846 lines.
 - The apple object-parity owner files are now below the 800-line target:
   `robot_camera_apple2apple_object_parity.py` is 689 lines,
   `robot_camera_apple2apple_rgb_evidence.py` is 402 lines, and
@@ -100,7 +104,7 @@ refresh before executing again.
   FPV pose/lens deltas, compact camera metadata, robot-pose delta, Isaac robot
   import diagnostics, head-articulation diagnostics, and chase-contract
   diagnostics.
-- `roboclaws/launch/scene_sampler.py` is 1965 lines and stays cleared from P1
+- `roboclaws/launch/scene_sampler.py` is 1941 lines and stays cleared from P1
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
@@ -120,7 +124,9 @@ Current closure snapshot:
   payload/declaration/lifecycle, camera-label producer declaration inputs, and
   proof-bundle result rendering. Reopen only with fresh facade-private or
   report-section drift.
-- Candidate B closed boundaries: scene-camera report rendering; apple Object
+- Candidate B closed boundaries: scene-camera report rendering; visual-parity
+  HTML report rendering; visual-parity object/capture-quality payload summaries;
+  apple Object
   Gate / Render Gate; capture-quality; material/probe primitives; native-render
   diagnostics; image-metric artifacts; object-parity audit assembly; selected
   RGB/focus evidence; visual-state contract evidence; and apple camera-contract
@@ -149,10 +155,10 @@ implementation should choose the remaining P1 by fresh call-site evidence.
 Candidate D runner-side Agent SDK performance-profile/default resolution is now
 the clearest known default; timing/timeline summary ownership is a separate D
 follow-up and should not ride along in the same slice. Candidate B remains
-active through scene-camera comparison and visual-parity summary hard-ceiling
-files; Candidate A needs a new facade-private/report ownership seam; Candidate
-C stays parked unless it crosses the hard ceiling again. The remaining ponytail
-small cuts are P2 inputs only: empty camera-labeler identity maps,
+active through `scene_camera_comparison.py`; the visual-parity summary is now
+below the hard ceiling. Candidate A needs a new facade-private/report ownership
+seam; Candidate C stays parked unless it crosses the hard ceiling again. The
+remaining ponytail small cuts are P2 inputs only: empty camera-labeler identity maps,
 `_task_prefix_legacy`, the reachable legacy checker flag, and duplicated
 lane/workflow wording.
 
@@ -223,6 +229,24 @@ the OpenAI Agents SDK driver. Proof passed with focused OpenAI Agents
 span/retry/runtime tests, ruff, format check, py_compile, and ratchet. Do not
 reopen SDK span ownership unless the driver starts rebuilding sanitized span
 packets or span capture limitations inline again.
+
+Implementation refresh on 2026-06-17 completed the Candidate B visual-parity
+summary owner split. HTML report rendering now lives in
+`robot_camera_visual_parity_report.py`; object visual-parity audit compaction,
+best-audit selection, category status summaries, native Isaac render
+diagnostic compaction, capture-quality probe/settings summaries, metric scene
+signatures, capture-quality probe classification, and status-count helpers now
+live in `robot_camera_visual_parity_payloads.py`. The visual-parity summarizer
+keeps CLI orchestration, manifest reads, gate/check assembly, probe matrix
+ranking, visual-sample collection, and artifact writes. Metric:
+`summarize_robot_camera_visual_parity.py` is down to 1976 lines and no longer a
+hard-ceiling P1; the new report owner is 517 lines and the new payload owner is
+349 lines. The ratchet remains 14 complexity rows and 74 oversized modules,
+now led by `realworld_contract.py`, `scene_camera_comparison.py`, and
+`report.py` among production hard-ceiling files. Proof passed with focused
+visual-parity unit tests, ruff, format check, py_compile, and ratchet. Do not
+reopen visual-parity summary ownership unless the summarizer starts rebuilding
+report rendering or payload compaction inline again.
 
 ## Operating Rules
 

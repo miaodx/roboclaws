@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-17: Robot-camera visual-parity summary ownership split into focused
+  report and payload owners. HTML report rendering now lives in
+  `robot_camera_visual_parity_report.py`; object/capture-quality payload
+  compaction, native Isaac render diagnostic summaries, metric scene
+  signatures, capture-quality probe classification, and status-count helpers
+  now live in `robot_camera_visual_parity_payloads.py`. The summarizer keeps
+  CLI orchestration, manifest loading, gate/check assembly, probe matrix
+  ranking, visual-sample collection, and artifact writes. Metric:
+  `summarize_robot_camera_visual_parity.py` 2808 -> 1976 lines, clearing the
+  hard ceiling; new owners are 517 and 349 lines; ratchet reports 14
+  complexity rows and 74 oversized modules. Owning layer: Artifacts, reports,
+  and eval suites. Behavior-change class: internal owner split. Proof: focused
+  visual-parity unit tests, ruff, format check, py_compile, and ratchet.
+
 - 2026-06-17: OpenAI Agents SDK perf-profile source ambiguity now fails
   aloud. `--agent-sdk-perf-profile` and `ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE`
   may both be present only when they name the same profile; conflicting values
