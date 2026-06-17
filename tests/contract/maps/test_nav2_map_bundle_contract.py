@@ -183,6 +183,34 @@ def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
     assert result.failure_type == "goal_occupied"
 
 
+def test_route_validation_rejects_invalid_metric_map_width() -> None:
+    agent_view = _wide_room_only_agent_view()
+    metric_map = dict(agent_view["metric_map"])
+    metric_map["width"] = "wide"
+    waypoints = metric_map["inspection_waypoints"]
+
+    with pytest.raises(ValueError, match="metric_map.width must be an integer"):
+        validate_metric_map_route(
+            metric_map,
+            agent_view["static_fixture_projection"],
+            start_waypoint_id=str(waypoints[0]["waypoint_id"]),
+            goal_waypoint_id=str(waypoints[-1]["waypoint_id"]),
+        )
+
+
+def test_nav2_bundle_writer_rejects_missing_metric_map_height(tmp_path: Path) -> None:
+    agent_view = _agent_view()
+    metric_map = dict(agent_view["metric_map"])
+    metric_map.pop("height")
+
+    with pytest.raises(ValueError, match="metric_map.height is required"):
+        write_nav2_map_bundle(
+            tmp_path / "bundle",
+            metric_map=metric_map,
+            static_fixture_projection=agent_view["static_fixture_projection"],
+        )
+
+
 def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),

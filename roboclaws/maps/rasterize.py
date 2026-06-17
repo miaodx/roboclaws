@@ -39,8 +39,8 @@ def occupancy_grid_from_metric_map(
     origin = metric_map.get("origin") if isinstance(metric_map.get("origin"), dict) else {}
     origin_x = float(origin.get("x") or 0.0)
     origin_y = float(origin.get("y") or 0.0)
-    width = _bounded_int(metric_map.get("width"), default=240, lower=16, upper=4096)
-    height = _bounded_int(metric_map.get("height"), default=180, lower=16, upper=4096)
+    width = _metric_map_dimension(metric_map, "width")
+    height = _metric_map_dimension(metric_map, "height")
     width, height = _expand_dimensions_for_public_geometry(
         metric_map,
         static_fixture_projection,
@@ -194,12 +194,34 @@ def _pgm_tokens(text: str):
         yield from line.split()
 
 
-def _bounded_int(value: Any, *, default: int, lower: int, upper: int) -> int:
+def _metric_map_dimension(
+    metric_map: dict[str, Any], key: str, *, lower: int = 16, upper: int = 4096
+) -> int:
+    raw = metric_map.get(key)
+    if raw is None:
+        raise ValueError(f"metric_map.{key} is required for occupancy grid projection")
+    value = _dimension_int(raw, field=f"metric_map.{key}", lower=lower, upper=upper)
+    if not lower <= value <= upper:
+        raise ValueError(
+            f"metric_map.{key} must be an integer between {lower} and {upper}, got {raw!r}"
+        )
+    return value
+
+
+def _dimension_int(value: Any, *, field: str, lower: int, upper: int) -> int:
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
-    return max(lower, min(parsed, upper))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{field} must be an integer between {lower} and {upper}, got {value!r}"
+        ) from exc
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{field} must be an integer between {lower} and {upper}, got {value!r}")
+    return parsed
+
+
+def _clamped_dimension(value: int, *, lower: int, upper: int) -> int:
+    return max(lower, min(value, upper))
 
 
 def _expand_dimensions_for_public_geometry(
@@ -221,8 +243,8 @@ def _expand_dimensions_for_public_geometry(
     required_width = int(math.ceil((max_x + margin_m - origin_x) / resolution_m)) + 1
     required_height = int(math.ceil((max_y + margin_m - origin_y) / resolution_m)) + 1
     return (
-        _bounded_int(required_width, default=width, lower=width, upper=4096),
-        _bounded_int(required_height, default=height, lower=height, upper=4096),
+        _clamped_dimension(required_width, lower=width, upper=4096),
+        _clamped_dimension(required_height, lower=height, upper=4096),
     )
 
 

@@ -72,6 +72,15 @@ again.
   The ratchet remains 0 complexity rows and 79 oversized modules;
   `openai_agents_perf_profile.py` is 800 lines and stays below the oversized
   threshold.
+- Follow-up implementation refresh on 2026-06-18 closed one metric-map
+  rasterization false-green. `occupancy_grid_from_metric_map()` now requires
+  declared `metric_map.width` and `metric_map.height` values to be present,
+  integer, and within the existing 16..4096 projection bounds instead of
+  silently fabricating the default 240x180 grid for malformed map evidence.
+  Behavior-change class: fail-aloud source-map/costmap projection; valid
+  metric-map projection, public launch axes, Nav2 bundle artifact schemas, and
+  computed geometry expansion clamping are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules; `rasterize.py` is 268 lines.
 - Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
   runner-side MCP client-session timeout default/env validation into
   `openai_agents_perf_profile.py`. Malformed

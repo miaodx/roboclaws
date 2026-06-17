@@ -49,6 +49,18 @@ logs before choosing the next slice.
   touched-file ruff and format check, py_compile, `git diff --check`, and
   ratchet.
 
+- 2026-06-18: Metric-map rasterization now fails aloud when declared
+  projection dimensions are absent or malformed. `occupancy_grid_from_metric_map()`
+  requires `metric_map.width` and `metric_map.height` to be present, integer,
+  and within the existing 16..4096 bounds instead of silently fabricating the
+  default 240x180 grid for invalid map evidence. Behavior-change class:
+  fail-aloud source-map/costmap projection; valid metric-map projection, public
+  launch axes, Nav2 bundle artifact schemas, and computed geometry expansion
+  clamping are unchanged. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules; `rasterize.py` is 268 lines. Proof: focused Nav2
+  map-bundle contract tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
   default/env validation moved into `openai_agents_perf_profile.py`. Malformed
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct
