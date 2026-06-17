@@ -34,7 +34,7 @@ def capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
         default_width=saved_resolution["width"],
         default_height=saved_resolution["height"],
     )
-    render_settle_frames = max(0, int(getattr(args, "render_settle_frames", 0) or 0))
+    render_settle_frames = int(getattr(args, "render_settle_frames", 0) or 0)
     saved_mode = (
         "direct_capture"
         if saved_resolution == render_resolution

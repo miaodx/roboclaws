@@ -94,6 +94,22 @@ logs before choosing the next slice.
   Proof: focused robot-camera apple-to-apple unit tests, touched-file ruff and
   format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: Robot-camera apple-to-apple capture-quality settle frames now
+  fail aloud. The comparison CLI rejects negative `--render-settle-frames` at
+  argument parsing time instead of clamping it to zero in capture-quality
+  configuration. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud comparison capture-quality configuration;
+  default zero settle frames, explicit zero-as-no-extra-settle behavior,
+  positive settle-frame forwarding, render dimensions, target-count validation,
+  manifest/report schemas, and renderer subprocess routing are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `run_robot_camera_apple2apple_comparison.py` is 1825 lines,
+  `robot_camera_apple2apple_capture_quality.py` is 226 lines, and
+  `test_robot_camera_apple2apple_comparison.py` is 3097 lines. The test file
+  is already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera apple-to-apple unit tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 scene topdown and operator preview render dimensions now fail
   aloud. The Gaussian topdown, scene topdown diagnostic, and operator-console
   scene preview CLIs reject non-positive `--width` / `--height` values at

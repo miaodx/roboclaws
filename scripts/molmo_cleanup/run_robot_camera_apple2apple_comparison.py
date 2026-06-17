@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--render-settle-frames",
-        type=int,
+        type=_non_negative_int_arg,
         default=0,
         help=(
             "Extra Isaac render frames to advance after first nonblank RGB before saving. "
@@ -1799,6 +1799,18 @@ def _positive_int_arg(value: str) -> int:
         raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
     if parsed <= 0:
         raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
+
+
+def _non_negative_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a non-negative integer; got {value!r}"
+        ) from None
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"expected a non-negative integer; got {value!r}")
     return parsed
 
 

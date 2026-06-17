@@ -109,6 +109,20 @@ again.
   `run_robot_camera_apple2apple_comparison.py` is 1813 lines and
   `test_robot_camera_apple2apple_comparison.py` is 3043 lines. Do not prune or
   split tests outside an `$intuitive-tests` pass.
+- Follow-up implementation refresh on 2026-06-18 closed the adjacent
+  robot-camera apple-to-apple capture-quality settle-frame false-green. The
+  comparison CLI now rejects negative `--render-settle-frames` at argument
+  parsing time instead of clamping it to zero in capture-quality configuration.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud comparison capture-quality configuration; default zero settle
+  frames, explicit zero-as-no-extra-settle behavior, positive settle-frame
+  forwarding, render dimensions, target-count validation, manifest/report
+  schemas, and renderer subprocess routing are unchanged. The ratchet remains
+  0 complexity rows and 79 oversized modules;
+  `run_robot_camera_apple2apple_comparison.py` is 1825 lines,
+  `robot_camera_apple2apple_capture_quality.py` is 226 lines, and
+  `test_robot_camera_apple2apple_comparison.py` is 3097 lines. Do not prune or
+  split tests outside an `$intuitive-tests` pass.
 - Follow-up implementation refresh on 2026-06-18 closed one B1 scene topdown
   and operator-preview render-dimension false-green. The Gaussian topdown,
   scene topdown diagnostic, and operator-console scene preview CLIs now reject
