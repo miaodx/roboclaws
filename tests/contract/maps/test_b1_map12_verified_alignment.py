@@ -19,6 +19,9 @@ from scripts.maps.fit_b1_map12_scene_alignment import (
     validate_alignment_residual_artifact,
     validate_correspondence_manifest,
 )
+from scripts.maps.promote_b1_map12_manual_draft_for_verification import (
+    build_verification_manifest,
+)
 from scripts.maps.render_b1_map12_correspondence_review import (
     build_review_packet,
     render_review_report,
@@ -440,6 +443,31 @@ def test_review_packet_keeps_proposed_anchor_pending(tmp_path: Path) -> None:
     assert packet["anchors"][0]["review_action"] == (
         "pick explicit map_xy and scene_xyz, then mark accepted after operator review"
     )
+
+
+def test_manual_draft_promotion_is_explicit_verification_only() -> None:
+    draft = correspondence_manifest(
+        anchors=[
+            {
+                "anchor_id": "manual_draft_anchor",
+                "anchor_type": "operator_correspondence",
+                "navigation_area_id": "",
+                "asset_partition_id": "",
+                "map_xy": [1.0, 2.0],
+                "scene_xyz": [3.0, 4.0, 0.0],
+                "review_status": "proposed",
+                "evidence": {"source": "two_map_anchor_picker"},
+            }
+        ]
+    )
+
+    payload = build_verification_manifest(draft)
+
+    assert payload["verification_only"] is True
+    assert payload["anchors"][0]["review_status"] == "accepted"
+    assert payload["anchors"][0]["navigation_area_id"] == "manual_draft_area_1"
+    assert payload["anchors"][0]["asset_partition_id"] == "manual_draft_region_1"
+    assert "not final room semantics" in payload["anchors"][0]["evidence"]["verification_note"]
 
 
 def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
