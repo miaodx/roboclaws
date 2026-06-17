@@ -1,14 +1,14 @@
 ---
-name: actionable-semantic-map-conversion
-description: Convert robot map artifacts and scene-engine room assets into Actionable Semantic Map Snapshot or public room semantic overlay artifacts.
+name: runtime-map-prior-conversion
+description: Convert robot map artifacts and scene-engine room assets into Runtime Map Prior Snapshot or public room semantic overlay artifacts.
 ---
 
-# Actionable Semantic Map Conversion
+# Runtime Map Prior Conversion
 
-Use this skill when downstream household tasks need public semantic map
-artifacts from offline inputs:
+Use this skill when downstream household tasks need a public runtime-map prior
+from offline inputs:
 
-- an offline robot semantic-memory folder such as
+- an offline robot navigation-memory folder such as
   `vendors/agibot_sdk/artifacts/maps/<map>/navigation_memory.json`; or
 - a scene-engine / Gaussian asset folder whose room partitions need public
   room labels before a Base Navigation Map is handed to an agent.
@@ -21,7 +21,7 @@ This skill works at the map-artifact boundary:
   `agibot/occupancy.pgm`, `agibot/source.json`, and optional raw map provenance.
 - Input: public scene-engine asset partitions such as
   `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/*/scene_gs.usda`.
-- Output: `actionable_semantic_map_snapshot_v1` or a
+- Output: `runtime_map_prior_snapshot_v1` or a
   `scene_room_semantic_overlay_v1` review-evidence artifact.
 - Consumer path: pass the snapshot to cleanup or open household tasks through
   `runtime_map_prior=...`. For B1 / Map 12, compile raw Map12 plus
@@ -64,16 +64,16 @@ not become a static fixture or receptacle candidate.
 Convert an Agibot navigation memory folder:
 
 ```bash
-python skills/actionable-semantic-map-conversion/scripts/convert_navigation_memory.py \
+python skills/runtime-map-prior-conversion/scripts/convert_navigation_memory.py \
   vendors/agibot_sdk/artifacts/maps/robot_map_12 \
-  --output output/maps/robot_map_12/actionable_semantic_map_snapshot.json \
+  --output output/maps/robot_map_12/runtime_map_prior_snapshot.json \
   --summary-json output/maps/robot_map_12/materialized_targets.json
 ```
 
 Generate a public room semantic overlay from the rebuilt B1 scene-engine asset:
 
 ```bash
-python skills/actionable-semantic-map-conversion/scripts/generate_scene_room_overlay.py \
+python skills/runtime-map-prior-conversion/scripts/generate_scene_room_overlay.py \
   data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --source-bundle-dir assets/maps/agibot-robot-map-12 \
   --output output/maps/b1-map12/scene_room_semantic_overlay.json
@@ -103,7 +103,7 @@ For the current B1 Map12 rebuilt asset, start from
 knowledge that one partition is an open kitchen and the reception partition is
 the main hall / living area.
 
-Review the summary before handing the snapshot to a task:
+Review the summary before handing the prior snapshot to a task:
 
 - actionable anchors have materialized `inspection_waypoints`;
 - fixture/receptacle/surface anchors have materialized fixture candidates;
@@ -122,7 +122,7 @@ Run the map contract tests after changing this skill, the converter, or the
 snapshot contract:
 
 ```bash
-./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_actionable_semantic_map_snapshot.py -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_runtime_map_prior_snapshot.py -q
 ```
 
 For scene room semantic overlays, run:
@@ -137,5 +137,5 @@ For a downstream consumer proof, run a cleanup task with the generated snapshot:
 just run::surface surface=household-world world=agibot-g2/map-12 \
   backend=agibot-gdk intent=cleanup agent_engine=direct-runner \
   evidence_lane=world-public-labels \
-  seed=7 runtime_map_prior=output/maps/robot_map_12/actionable_semantic_map_snapshot.json
+  seed=7 runtime_map_prior=output/maps/robot_map_12/runtime_map_prior_snapshot.json
 ```

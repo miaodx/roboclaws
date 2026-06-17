@@ -39,8 +39,8 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   rows from plan, diff, or explicit axis signals.
 - `raw-fpv-visual-labeler`: perception-only RAW-FPV frame-group labeling
   contract for visible cleanup-relevant movable objects.
-- `actionable-semantic-map-conversion`: offline robot semantic-memory conversion
-  into `actionable_semantic_map_snapshot_v1` for downstream household tasks.
+- `runtime-map-prior-conversion`: offline robot navigation-memory conversion
+  into `runtime_map_prior_snapshot_v1` for downstream household tasks.
 - `scene-gaussian-map-alignment`: scene-specific alignment workflow for
   Gaussian/splat, USD/mesh, and robot semantic-map assets, with explicit evidence
   tiers and honest B1/Map12-style report labels.

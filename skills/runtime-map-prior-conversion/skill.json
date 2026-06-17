@@ -1,7 +1,7 @@
 {
   "schema": "roboclaws_skill_manifest_v1",
-  "name": "actionable-semantic-map-conversion",
-  "summary": "Convert offline robot semantic memory and scene-engine room partitions into public actionable semantic map artifacts.",
+  "name": "runtime-map-prior-conversion",
+  "summary": "Convert offline robot navigation memory and scene-engine room partitions into Runtime Map Prior Snapshot or room-overlay artifacts.",
   "abstraction_level": "agent_skill",
   "role": "map_artifact_conversion",
   "status": "active",
@@ -21,7 +21,7 @@
     {
       "path": "scripts/convert_navigation_memory.py",
       "kind": "converter",
-      "summary": "Skill-owned wrapper around scripts/maps/convert_agibot_navigation_memory.py; deterministically parses navigation_memory.json, Nav2 YAML, occupancy grid, and source metadata into actionable_semantic_map_snapshot_v1."
+      "summary": "Skill-owned wrapper around scripts/maps/convert_agibot_navigation_memory.py; deterministically parses navigation_memory.json, Nav2 YAML, occupancy grid, and source metadata into runtime_map_prior_snapshot_v1."
     },
     {
       "path": "scripts/generate_scene_room_overlay.py",
@@ -30,7 +30,7 @@
     }
   ],
   "evidence_outputs": [
-    "actionable_semantic_map_snapshot.json",
+    "runtime_map_prior_snapshot.json",
     "materialized_targets.json",
     "room_semantic_overlay.json"
   ],

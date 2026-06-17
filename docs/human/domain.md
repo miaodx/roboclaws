@@ -123,8 +123,8 @@ public semantic anchors, map-update candidates, and provenance without mutating
 the source navigation map.
 _Avoid_: Private target map, source map rewrite
 
-**Actionable Semantic Map Snapshot**:
-The canonical downstream semantic-map artifact. Online
+**Runtime Map Prior Snapshot**:
+The canonical downstream runtime-map prior artifact. Online
 `surface=household-world preset=map-build` Runtime Metric Map output and
 offline Agibot `navigation_memory.json` conversion both produce this shape:
 source map reference, runtime map payload, public anchors, materialized
@@ -247,14 +247,14 @@ _Avoid_: assuming object assets imply usable cached grasps
 - A **Correspondence Anchor** can promote map-scene alignment only after
   residuals are recorded and accepted; unreviewed suggestions and bbox seeds do
   not count as accepted anchors.
-- A **Runtime Metric Map** may be wrapped as an **Actionable Semantic Map
-  Snapshot** for downstream cleanup or open household tasks.
+- A **Runtime Metric Map** may be wrapped as a **Runtime Map Prior Snapshot**
+  for downstream cleanup or open household tasks.
 - Offline Agibot `navigation_memory.json` conversion produces an
-  **Actionable Semantic Map Snapshot** at the map-artifact boundary; cleanup
+  **Runtime Map Prior Snapshot** at the map-artifact boundary; cleanup
   should consume the canonical snapshot, not a special Agibot-only branch.
 - Small movable objects should be discovered through **Observed Object
   Handles**, not pre-run global object IDs.
-- Prior movable objects in an **Actionable Semantic Map Snapshot** are
+- Prior movable objects in a **Runtime Map Prior Snapshot** are
   non-actionable until current-run evidence confirms them.
 - Reports must separate **Agent View** from **Private Evaluation**.
 - `api_semantic` cleanup artifacts can be useful evidence, but they must not

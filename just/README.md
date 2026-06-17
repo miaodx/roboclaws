@@ -94,7 +94,7 @@ These lanes do not choose online/offline map behavior. Base Navigation Map is
 the current start-of-run map context: occupancy geometry, generated exploration
 candidates, and public room-category hints when available. Use
 `runtime_map_prior=...` when a cleanup run should consume a prebuilt Runtime
-Metric Map snapshot or canonical Actionable Semantic Map Snapshot. Historical
+Metric Map snapshot or canonical Runtime Map Prior Snapshot. Historical
 `minimal` / `rich` map artifacts may remain readable, but they are not current
 product choices for operators or agents.
 

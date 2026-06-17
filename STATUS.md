@@ -41,9 +41,9 @@ the `surface=planner-proof` confidence route.
 
 The sim household map surface simplification is implemented. Current sim
 reports and operator-console map slots distinguish the Base Navigation Map
-preview from Runtime Metric Map evidence, keep Actionable Semantic Map Snapshot
+preview from Runtime Metric Map evidence, keep Runtime Map Prior Snapshot
 as a prior wrapper, and no longer publish generated `semantic_map.png` /
-`map_overlay.json` previews as current semantic-map proof.
+`map_overlay.json` previews as current map proof.
 
 The active visual-grounding sidecar contract is now detector-only: hosted VLM
 refiner/direct-producer camera labelers are retired from active code, command

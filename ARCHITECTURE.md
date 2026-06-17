@@ -115,11 +115,11 @@ Key pieces:
 - `roboclaws/household/realworld_contract.py` owns the public/private
   household contract.
 - `roboclaws/household/realworld_cleanup.py` owns the direct deterministic
-  cleanup and semantic-map sweep CLI used by `just` and harness recipes.
+  cleanup and map-build sweep CLI used by `just` and harness recipes.
 - `roboclaws/household/semantic_cleanup_loop.py` owns the direct semantic
   cleanup flow.
 - `roboclaws/maps/` owns reusable navigation map artifacts, projections, and
-  Actionable Semantic Map Snapshot conversion.
+  Runtime Map Prior Snapshot conversion.
 - `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
   capability surface for coding agents and future higher-level MCP clients.
 - `roboclaws/cli/household_agent_server.py` and
@@ -141,17 +141,17 @@ Key pieces:
 The clean-slate direction is:
 
 - `surface=household-world preset=map-build` produces Runtime Metric Map
-  snapshots, which can be wrapped as an Actionable Semantic Map Snapshot for
+  snapshots, which can be wrapped as a Runtime Map Prior Snapshot for
   downstream task consumption.
 - `surface=household-world preset=cleanup` runs cleanup.
 - `surface=household-world prompt=...` runs the no-preset household open-task
   contract with agent-declared completion and public evidence.
 - The canonical map flow is minimal-first: start from occupancy/free-space
   navigation context, run `preset=map-build`, then feed the resulting
-  `runtime_metric_map.json` or `actionable_semantic_map_snapshot.json` to
+  `runtime_metric_map.json` or `runtime_map_prior_snapshot.json` to
   cleanup with `runtime_map_prior=...` when a prior sweep is useful.
 - Offline Agibot `navigation_memory.json` conversion happens at the map-artifact
-  boundary and produces the same Actionable Semantic Map Snapshot contract;
+  boundary and produces the same Runtime Map Prior Snapshot contract;
   cleanup and open household tasks should not add Agibot-only loading branches.
 - `household_world` is the reusable world-understanding capability profile.
 - Manipulation capability should be composed as a separate requirement when a
@@ -193,13 +193,13 @@ Cleanup lanes do not select online/offline map behavior. The default
 start-of-run map context is the Base Navigation Map: occupancy geometry,
 generated exploration candidates, and public room-category hints when
 available. Use `runtime_map_prior=...` to consume a raw runtime map or canonical
-Actionable Semantic Map Snapshot prior. Historical `minimal` / `rich` map
+Runtime Map Prior Snapshot prior. Historical `minimal` / `rich` map
 artifacts may still be readable, but current product docs should not ask
 operators or agents to choose those modes.
 
 The clean-slate household public shape is `surface=household-world` plus a
 natural-language prompt or an optional preset. `preset=map-build` produces Runtime Metric Map evidence,
-`actionable_semantic_map_snapshot_v1` is the canonical downstream artifact
+`runtime_map_prior_snapshot_v1` is the canonical downstream artifact
 contract, and `preset=cleanup` consumes household-world evidence for cleanup.
 Older task/profile names such as `semantic-map-build`, `household-cleanup`,
 and Molmo-specific profile names are historical/report-only terms, not the
@@ -310,7 +310,7 @@ Every serious run should produce reviewable evidence:
   reports and checkers.
 - `runtime_metric_map.json` when a run builds or updates household world
   evidence.
-- `actionable_semantic_map_snapshot.json` when online runtime-map output or
+- `runtime_map_prior_snapshot.json` when online runtime-map output or
   offline Agibot navigation memory is packaged for downstream household tasks.
 - `report.html` for human review.
 - Optional planner-proof bundles when cleanup substeps are checked against
