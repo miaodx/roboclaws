@@ -130,7 +130,7 @@ def test_map_build_change_selects_map_build_suite_and_cleanup_consumer_prior(
 ) -> None:
     manifest = selector.build_eval_harness(
         budget="focused",
-        changed_files=["roboclaws/maps/actionable_semantic_map.py"],
+        changed_files=["roboclaws/maps/runtime_prior_snapshot.py"],
         output_dir=tmp_path,
     )
 
@@ -213,7 +213,7 @@ def test_explicit_planner_proof_intent_selects_planner_proof_row(tmp_path: Path)
 def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path) -> None:
     manifest = selector.build_eval_harness(
         budget="focused",
-        changed_files=["roboclaws/maps/actionable_semantic_map.py"],
+        changed_files=["roboclaws/maps/runtime_prior_snapshot.py"],
         output_dir=tmp_path,
     )
     rows = _selected_rows(manifest)

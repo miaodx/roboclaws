@@ -1,6 +1,6 @@
 ---
 name: scene-gaussian-map-alignment
-description: Align scene Gaussian/splat, USD/mesh, and robot semantic-map assets into an honest digital-twin evidence workflow. Use when a new Gaussian scene arrives, when B1/Map12-style assets need to be connected, when semantic map anchors are being projected into a 3D scene, or when an agent must decide whether an alignment is candidate, verified, runtime-proven, or planner-backed.
+description: Align scene Gaussian/splat, USD/mesh, and robot map assets into an honest digital-twin evidence workflow. Use when a new Gaussian scene arrives, when B1/Map12-style assets need to be connected, when map anchors are being projected into a 3D scene, or when an agent must decide whether an alignment is candidate, verified, runtime-proven, or planner-backed.
 ---
 
 # Scene Gaussian Map Alignment

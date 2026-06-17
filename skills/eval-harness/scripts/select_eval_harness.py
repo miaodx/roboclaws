@@ -114,11 +114,12 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "map_build",
-        "label": "Semantic map, runtime map, or actionability",
+        "label": "Runtime map or actionability",
         "patterns": (
             r"semantic[-_]map",
             r"map-build",
             r"runtime_metric_map",
+            r"runtime[_-]prior",
             r"runtime map",
             r"actionability",
             r"target_query",

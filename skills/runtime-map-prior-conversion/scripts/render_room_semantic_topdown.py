@@ -30,7 +30,7 @@ _LEGEND_MARGIN = 24
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Render a top-down confirmation image for room semantic map bundles."
+        description="Render a top-down confirmation image for room semantic overlay bundles."
     )
     parser.add_argument("bundle_dir", type=Path)
     parser.add_argument("--output", type=Path, required=True)
