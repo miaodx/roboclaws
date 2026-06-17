@@ -4,6 +4,7 @@ const state = {
   combinations: [],
   evidenceLanes: [],
   readiness: {},
+  runtime: { tasks: [], summary: {} },
   selectedWorld: null,
   selectedRoute: null,
   activeRunId: null,
@@ -12,6 +13,7 @@ const state = {
   operatorMode: "goal",
   pollTimer: null,
   readinessTimer: null,
+  taskPollTimer: null,
   activeView: "overview",
   selectedIntent: "",
   setupSelectionKey: "",
@@ -101,6 +103,12 @@ const els = {
   imageDialogTitle: document.getElementById("image-dialog-title"),
   imageDialogPath: document.getElementById("image-dialog-path"),
   imageDialogImg: document.getElementById("image-dialog-img"),
+  refreshTasksButton: document.getElementById("refresh-tasks-button"),
+  taskStatusFilter: document.getElementById("task-status-filter"),
+  taskOwnerFilter: document.getElementById("task-owner-filter"),
+  taskSearchInput: document.getElementById("task-search-input"),
+  backgroundTaskSummary: document.getElementById("background-task-summary"),
+  backgroundTaskList: document.getElementById("background-task-list"),
 };
 
 async function boot() {
@@ -110,6 +118,7 @@ async function boot() {
   state.routes = state.combinations;
   state.worlds = orderedVisibleWorlds(payload.worlds || []);
   state.readiness = payload.readiness || {};
+  state.runtime = payload.runtime || { tasks: [], summary: {} };
   state.selectedWorld = state.worlds[0] || null;
   state.selectedRoute =
     combinationsForWorld(state.selectedWorld && state.selectedWorld.id).find((route) => route.enabled) ||
@@ -123,6 +132,7 @@ async function boot() {
   }
   renderRoutes();
   renderSelection();
+  renderBackgroundTasks();
   bindEvents();
   renderViewModes();
 }
@@ -197,6 +207,11 @@ function bindEvents() {
   els.startButton.addEventListener("click", handleStartAction);
   els.messupButton.addEventListener("click", previewMessup);
   els.latestResultButton.addEventListener("click", attachLatestResult);
+  els.refreshTasksButton.addEventListener("click", refreshRuntimeTasks);
+  [els.taskStatusFilter, els.taskOwnerFilter, els.taskSearchInput].forEach((input) => {
+    input.addEventListener("input", renderBackgroundTasks);
+    input.addEventListener("change", renderBackgroundTasks);
+  });
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
     confirmAction({
@@ -229,6 +244,9 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
       renderViewModes();
+      if (state.activeView === "tasks") {
+        refreshRuntimeTasks();
+      }
     });
   });
 }
@@ -797,6 +815,7 @@ function routeStatusDisplay(route, readiness) {
     return { label: "ATTACH", className: "running" };
   }
   if (kind === "locked") return { label: "LOCKED", className: "blocked" };
+  if (kind === "background_task") return { label: "TASK RUNNING", className: "blocked" };
   if (kind === "mcp_port_in_use") return { label: "PORT IN USE", className: "blocked" };
   if (kind === "needs_provider") return { label: "NEEDS PROVIDER", className: "needs_action" };
   if (kind === "needs_real_movement_gate") {
@@ -824,6 +843,7 @@ function gateBadgeDisplay(gate) {
 function renderSelectedRouteSummary(route, readiness) {
   const status = routeStatusDisplay(route, readiness);
   const interpretation = launchInterpretation(route);
+  const blockerHtml = backgroundBlockerSummaryHtml(readiness);
   els.selectedRouteSummary.innerHTML = `
     <div class="route-card-title">
       <span>${escapeHtml(route.label)}</span>
@@ -834,6 +854,38 @@ function renderSelectedRouteSummary(route, readiness) {
     <div class="field-help">${escapeHtml(interpretation.intentLabel)} / ${escapeHtml(
       interpretation.goalScope
     )}</div>
+    ${blockerHtml}
+  `;
+  const taskLink = els.selectedRouteSummary.querySelector("[data-open-background-tasks]");
+  if (taskLink) {
+    taskLink.addEventListener("click", () => {
+      state.activeView = "tasks";
+      renderViewModes();
+      refreshRuntimeTasks();
+    });
+  }
+}
+
+function backgroundBlockerSummaryHtml(readiness) {
+  const blockers = readiness.background_blockers || [];
+  if (!blockers.length) {
+    return "";
+  }
+  const first = blockers[0];
+  const resources = (first.resources || [])
+    .map((resource) => resource.label || resource.kind)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" and ");
+  const label = first.label || first.id || "background task";
+  const text = resources
+    ? `${label} is using ${resources}.`
+    : `${label} is active for this route.`;
+  return `
+    <div class="background-blocker">
+      <span>${escapeHtml(text)}</span>
+      <button type="button" class="secondary mini-button" data-open-background-tasks>View</button>
+    </div>
   `;
 }
 
@@ -1162,9 +1214,26 @@ function renderStartAction(route, readiness) {
   const attachableRun = readiness.attachable_run || null;
   els.startButton.textContent = attachableRun ? "Attach Existing Run" : "Start Agent Run";
   els.startButton.disabled = !route.enabled || (readiness.can_start === false && !attachableRun);
+  const backgroundBlockerText = backgroundBlockerHelp(readiness);
   els.startHelp.textContent = attachableRun
     ? `Existing run ${attachableRun.run_id} is using this backend. Attach to watch it.`
-    : readiness.blocker || route.disabled_reason || "";
+    : backgroundBlockerText || readiness.blocker || route.disabled_reason || "";
+}
+
+function backgroundBlockerHelp(readiness) {
+  const blockers = readiness.background_blockers || [];
+  if (!blockers.length) {
+    return "";
+  }
+  const first = blockers[0];
+  const resources = (first.resources || [])
+    .map((resource) => resource.label || resource.kind)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" and ");
+  return resources
+    ? `Background task ${first.id} is using ${resources}. Open Background Tasks for attach, tail, and artifact actions.`
+    : `Background task ${first.id} is active. Open Background Tasks for details.`;
 }
 
 function steerHelp(controls) {
@@ -1269,6 +1338,20 @@ async function refreshSelectedRouteReadiness() {
   state.readiness[route.id] = readiness;
   renderRoutes();
   renderSelection();
+  if (state.activeView === "tasks") {
+    refreshRuntimeTasks();
+  }
+}
+
+async function refreshRuntimeTasks() {
+  const port = els.portInput.value || "18788";
+  const payload = await fetchJson(`/api/runtime/tasks?port=${encodeURIComponent(port)}`);
+  if (payload.error) {
+    els.backgroundTaskSummary.textContent = payload.error;
+    return;
+  }
+  state.runtime = payload;
+  renderBackgroundTasks();
 }
 
 function confirmLaunch() {
@@ -1527,6 +1610,14 @@ function startPolling() {
   }
   pollState();
   state.pollTimer = setInterval(pollState, 2000);
+  startTaskPolling();
+}
+
+function startTaskPolling() {
+  if (state.taskPollTimer) {
+    clearInterval(state.taskPollTimer);
+  }
+  state.taskPollTimer = setInterval(refreshRuntimeTasks, 5000);
 }
 
 async function pollState() {
@@ -1696,6 +1787,150 @@ function renderArtifacts(items) {
   }
 }
 
+function renderBackgroundTasks() {
+  const tasks = ((state.runtime && state.runtime.tasks) || []).filter(taskMatchesFilters);
+  renderTaskOwnerFilter();
+  const summary = (state.runtime && state.runtime.summary) || {};
+  els.backgroundTaskSummary.textContent =
+    `${summary.active || 0} active / ${summary.total || 0} total repo-relevant task` +
+    `${summary.total === 1 ? "" : "s"}.`;
+  els.backgroundTaskList.innerHTML = "";
+  if (!tasks.length) {
+    els.backgroundTaskList.textContent = "No matching background tasks.";
+    return;
+  }
+  for (const task of tasks) {
+    const row = document.createElement("article");
+    row.className = "task-row";
+    row.innerHTML = `
+      <div>
+        <div class="task-title">
+          <span>${escapeHtml(task.label || task.id)}</span>
+          <span class="badge ${statusClass(task.status)}">${escapeHtml(task.status || "unknown")}</span>
+        </div>
+        <div class="meta-label">${escapeHtml(task.owner || "unknown")} / ${escapeHtml(task.resource || "resource")}</div>
+        <div class="field-help">${escapeHtml(task.row_id || task.run_id || task.route_id || task.id || "")}</div>
+        <div class="task-resource-list">${taskResourcesHtml(task.resources || [])}</div>
+      </div>
+      <div class="task-actions">${taskActionsHtml(task)}</div>
+    `;
+    bindTaskActions(row, task);
+    els.backgroundTaskList.appendChild(row);
+  }
+}
+
+function renderTaskOwnerFilter() {
+  const previous = els.taskOwnerFilter.value;
+  const owners = [
+    ...new Set(((state.runtime && state.runtime.tasks) || []).map((task) => task.owner).filter(Boolean)),
+  ].sort();
+  els.taskOwnerFilter.innerHTML = '<option value="">All</option>';
+  for (const owner of owners) {
+    const option = document.createElement("option");
+    option.value = owner;
+    option.textContent = owner;
+    option.selected = owner === previous;
+    els.taskOwnerFilter.appendChild(option);
+  }
+}
+
+function taskMatchesFilters(task) {
+  const status = els.taskStatusFilter.value;
+  const owner = els.taskOwnerFilter.value;
+  const query = (els.taskSearchInput.value || "").trim().toLowerCase();
+  if (status && task.status !== status) {
+    return false;
+  }
+  if (owner && task.owner !== owner) {
+    return false;
+  }
+  if (!query) {
+    return true;
+  }
+  return JSON.stringify(task).toLowerCase().includes(query);
+}
+
+function taskResourcesHtml(resources) {
+  if (!resources.length) {
+    return '<span class="field-help">No resource details.</span>';
+  }
+  return resources
+    .map((resource) => `<span class="badge">${escapeHtml(resource.label || resource.kind)}</span>`)
+    .join("");
+}
+
+function taskActionsHtml(task) {
+  const actions = task.actions || [];
+  const artifactLinks = (task.artifacts || [])
+    .filter((artifact) => artifact.href)
+    .slice(0, 4)
+    .map(
+      (artifact) =>
+        `<a href="${escapeHtml(artifact.href)}" target="_blank" rel="noreferrer">${escapeHtml(
+          artifact.label
+        )}</a>`
+    )
+    .join("");
+  const actionButtons = actions
+    .map((action, index) => {
+      if (action.type === "link") {
+        return `<a href="${escapeHtml(action.href)}" target="_blank" rel="noreferrer">${escapeHtml(
+          action.label
+        )}</a>`;
+      }
+      return `<button type="button" class="secondary mini-button" data-task-action="${index}">${escapeHtml(
+        action.label
+      )}</button>`;
+    })
+    .join("");
+  return `${actionButtons}${artifactLinks}`;
+}
+
+function bindTaskActions(row, task) {
+  row.querySelectorAll("[data-task-action]").forEach((button) => {
+    const action = (task.actions || [])[Number(button.dataset.taskAction)];
+    if (!action) {
+      return;
+    }
+    button.addEventListener("click", () => runTaskAction(task, action));
+  });
+}
+
+async function runTaskAction(task, action) {
+  if (action.type === "api_post" && action.href) {
+    confirmAction({
+      title: action.label,
+      cta: action.label,
+      body: `Apply ${action.label} to ${task.label || task.id}?`,
+      onConfirm: async () => {
+        const result = await fetchJson(action.href, { method: action.method || "POST" });
+        els.eventList.textContent =
+          result.error || result.terminal_reason || result.phase || "Action complete.";
+        await refreshRuntimeTasks();
+        await refreshSelectedRouteReadiness();
+      },
+    });
+    return;
+  }
+  if (action.type === "copy_command" && action.command) {
+    await copyText(action.command);
+    els.eventList.textContent = `Copied: ${action.command}`;
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+}
+
 function renderViews(assets, route = state.selectedRoute) {
   setImageSlot("fpv", assets.fpv, "No frame yet. Waiting for the first observation artifact.");
   setImageSlot("map", assets.map, "Semantic map artifact has not been written yet.");
@@ -1829,6 +2064,7 @@ function ensureActiveViewAvailable(route = state.selectedRoute) {
 function routeViewModes(route) {
   const modes = new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
   modes.add("topdown");
+  modes.add("tasks");
   return modes;
 }
 
@@ -1876,6 +2112,9 @@ function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "outputs") {
     return new Set(["outputs"]);
   }
+  if (view === "tasks") {
+    return new Set(["tasks"]);
+  }
   return new Set([view]);
 }
 
@@ -1896,6 +2135,7 @@ async function postRunAction(action) {
   if (["stop", "emergency-stop"].includes(action)) {
     detachRunAfterStop(result);
     await refreshSelectedRouteReadiness();
+    await refreshRuntimeTasks();
     return;
   }
   pollState();

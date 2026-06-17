@@ -312,6 +312,64 @@ def test_execute_preserves_provider_timing_proxy_escape_hatch(
     assert "defaulted_provider_timing_proxy" not in rows["codex-cleanup-live-eval"]
 
 
+def test_detached_live_product_row_waits_for_terminal_artifact(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
+    clock = {"now": 0.0, "sleeps": 0}
+
+    def fake_run(command, **_kwargs):
+        output_arg = next(item for item in command if str(item).startswith("output_dir="))
+        output_dir = Path(str(output_arg).split("=", 1)[1])
+        run_dir = output_dir / "0615_1225" / "seed-7"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "live_status.json").write_text('{"phase":"queued"}\n', encoding="utf-8")
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    def fake_sleep(_seconds: float) -> None:
+        clock["sleeps"] += 1
+        run_dir = (
+            tmp_path
+            / "rows"
+            / "codex-cleanup-camera-raw-fpv-live-product"
+            / "run"
+            / "0615_1225"
+            / "seed-7"
+        )
+        (run_dir / "run_result.json").write_text('{"cleanup_success":true}\n', encoding="utf-8")
+        (run_dir / "report.html").write_text("<html></html>\n", encoding="utf-8")
+
+    def fake_monotonic() -> float:
+        clock["now"] += 0.1
+        return clock["now"]
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner.time, "sleep", fake_sleep)
+    monkeypatch.setattr(runner.time, "monotonic", fake_monotonic)
+    manifest = selector.build_eval_harness(
+        mode="execute",
+        budget="focused",
+        changed_files=["roboclaws/household/raw_fpv_guidance.py"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_harness(manifest)
+
+    row = _selected_rows(manifest)["codex-cleanup-camera-raw-fpv-live-product"]
+    assert clock["sleeps"] == 1
+    assert row["status"] == "ran"
+    assert row["outcome"] == "passed"
+    assert row["detached_live_run_dir"].endswith("0615_1225/seed-7")
+    assert any(path.endswith("run_result.json") for path in row["output_artifacts"])
+
+
 def test_failed_live_row_with_busy_mcp_port_is_classified_as_blocked() -> None:
     for stderr in (
         (

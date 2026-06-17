@@ -24,7 +24,7 @@ def test_molmo_cleanup_rejects_unknown_backend_from_catalog() -> None:
     result = subprocess.run(
         [
             just_bin(),
-            "molmo::household-cleanup-impl",
+            "molmo::household-world-impl",
             "direct",
             "world-oracle-labels",
             "7",

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
+from roboclaws.operator_console.runtime_inventory import port_owner_task
 
 DEFAULT_MCP_HOST = "127.0.0.1"
 DEFAULT_MCP_PORT = 18788
@@ -30,13 +31,14 @@ def route_gate_rows(
     override_map: dict[str, str],
     gate_map: dict[str, bool],
     provider_status: dict[str, Any],
+    runtime_tasks: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], str, str]:
     rows: list[dict[str, Any]] = []
     blocker = ""
     blocker_kind = ""
     for gate in route.gates:
         evaluation = _evaluate_route_gate(
-            root, route, gate, override_map, gate_map, provider_status
+            root, route, gate, override_map, gate_map, provider_status, runtime_tasks
         )
         if not evaluation.ok and evaluation.blocks_start and not blocker:
             blocker = evaluation.message
@@ -52,6 +54,7 @@ def _evaluate_route_gate(
     override_map: dict[str, str],
     gate_map: dict[str, bool],
     provider_status: dict[str, Any],
+    runtime_tasks: list[dict[str, Any]] | None,
 ) -> GateEvaluation:
     evaluators = {
         "provider_key": _provider_key_gate,
@@ -62,7 +65,7 @@ def _evaluate_route_gate(
     evaluator = evaluators.get(gate.kind)
     if evaluator is None:
         return GateEvaluation(severity=gate.severity, blocks_start=gate.required)
-    return evaluator(root, route, gate, override_map, gate_map, provider_status)
+    return evaluator(root, route, gate, override_map, gate_map, provider_status, runtime_tasks)
 
 
 def _provider_key_gate(
@@ -72,8 +75,9 @@ def _provider_key_gate(
     override_map: dict[str, str],
     gate_map: dict[str, bool],
     provider_status: dict[str, Any],
+    runtime_tasks: list[dict[str, Any]] | None,
 ) -> GateEvaluation:
-    del root, override_map, gate_map
+    del root, override_map, gate_map, runtime_tasks
     if not provider_status["ok"]:
         label = route.to_payload().get("agent_engine_label") or route.agent_engine_id
         return GateEvaluation(
@@ -101,6 +105,7 @@ def _mcp_port_gate(
     override_map: dict[str, str],
     gate_map: dict[str, bool],
     provider_status: dict[str, Any],
+    runtime_tasks: list[dict[str, Any]] | None,
 ) -> GateEvaluation:
     del root, route, gate_map, provider_status
     host = _override_host(override_map)
@@ -108,11 +113,16 @@ def _mcp_port_gate(
     evidence = f"{host}:{port}"
     if _tcp_port_free(host, port):
         return GateEvaluation(evidence=evidence, severity=gate.severity, blocks_start=gate.required)
+    owner = port_owner_task(runtime_tasks or [], host=host, port=port)
+    owner_text = ""
+    if owner:
+        owner_text = f" Owner: {owner.get('label') or owner.get('id')}."
     return GateEvaluation(
         ok=False,
         message=(
             f"MCP port {host}:{port} is already accepting connections. "
             "Pick another port or stop the existing server."
+            f"{owner_text}"
         ),
         evidence=evidence,
         kind="mcp_port_in_use",
@@ -128,8 +138,9 @@ def _request_field_gate(
     override_map: dict[str, str],
     gate_map: dict[str, bool],
     provider_status: dict[str, Any],
+    runtime_tasks: list[dict[str, Any]] | None,
 ) -> GateEvaluation:
-    del route, gate_map, provider_status
+    del route, gate_map, provider_status, runtime_tasks
     raw_path = str(override_map.get(gate.id) or "").strip()
     if not raw_path:
         return GateEvaluation(
@@ -174,8 +185,9 @@ def _operator_gate(
     override_map: dict[str, str],
     gate_map: dict[str, bool],
     provider_status: dict[str, Any],
+    runtime_tasks: list[dict[str, Any]] | None,
 ) -> GateEvaluation:
-    del root, route, provider_status
+    del root, route, provider_status, runtime_tasks
     real_movement_enabled = _truthy_override(override_map.get("real_movement_enabled"))
     blocks_start = real_movement_enabled
     if gate_map.get(gate.id) is True:

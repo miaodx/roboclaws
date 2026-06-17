@@ -44,8 +44,10 @@ roboclaws_provider_registry() {
   MM_BASE_URL="${MM_BASE_URL:-}" \
   MM_API_KEY="${MM_API_KEY:-}" \
   MIMO_OPENAI_BASE_URL="${MIMO_OPENAI_BASE_URL:-}" \
+  MIMO_ANTHROPIC_BASE_URL="${MIMO_ANTHROPIC_BASE_URL:-}" \
   MIMO_TP_KEY="${MIMO_TP_KEY:-}" \
   KIMI_OPENAI_BASE_URL="${KIMI_OPENAI_BASE_URL:-}" \
+  KIMI_ANTHROPIC_BASE_URL="${KIMI_ANTHROPIC_BASE_URL:-}" \
   KIMI_API_KEY="${KIMI_API_KEY:-}" \
   $python_cmd -m roboclaws.agents.provider_registry "$@"
 }
