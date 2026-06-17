@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from html import escape
 from pathlib import Path
@@ -100,7 +101,7 @@ def build_review_packet(
     ready = [row for row in accepted if row["fit_ready"]]
     validation_errors = validate_correspondence_manifest(manifest)
     source_map = source_map_review_context(Path(map_bundle), output_dir=output_dir)
-    scene_diagnostic = scene_diagnostic_context(scene_diagnostic_path)
+    scene_diagnostic = scene_diagnostic_context(scene_diagnostic_path, output_dir=output_dir)
     review_status = (
         "ready_for_fit" if len(ready) >= 6 and not validation_errors else "review_pending"
     )
@@ -238,7 +239,9 @@ def browser_ready_map_image(source_image_path: Path, *, output_dir: Path | None)
     return output_path
 
 
-def scene_diagnostic_context(scene_diagnostic_path: Path | None) -> dict[str, Any]:
+def scene_diagnostic_context(
+    scene_diagnostic_path: Path | None, *, output_dir: Path | None = None
+) -> dict[str, Any]:
     if scene_diagnostic_path is None or not Path(scene_diagnostic_path).is_file():
         return {
             "status": "missing",
@@ -259,13 +262,15 @@ def scene_diagnostic_context(scene_diagnostic_path: Path | None) -> dict[str, An
             },
         }
     packet = json.loads(Path(scene_diagnostic_path).read_text(encoding="utf-8"))
-    image_path = Path(str(packet.get("topdown_image") or ""))
-    size = image_size(image_path)
+    source_image_path = Path(str(packet.get("topdown_image") or ""))
+    image_path = local_review_image(source_image_path, output_dir=output_dir)
+    size = image_size(source_image_path)
     geometry_status = str(packet.get("geometry_status") or "")
     return {
         "status": "available" if image_path.is_file() else "image_missing",
         "path": str(scene_diagnostic_path),
         "image": str(image_path) if image_path.is_file() else "",
+        "source_image": str(source_image_path) if source_image_path.is_file() else "",
         "width_px": size[0],
         "height_px": size[1],
         "geometry_status": geometry_status,
@@ -289,6 +294,17 @@ def scene_diagnostic_context(scene_diagnostic_path: Path | None) -> dict[str, An
             ),
         },
     }
+
+
+def local_review_image(source_image_path: Path, *, output_dir: Path | None) -> Path:
+    if not source_image_path.is_file() or output_dir is None:
+        return source_image_path
+    output_path = Path(output_dir) / source_image_path.name
+    if source_image_path.resolve() == output_path.resolve():
+        return output_path
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_image_path, output_path)
+    return output_path
 
 
 def export_manifest_template(manifest: dict[str, Any]) -> dict[str, Any]:

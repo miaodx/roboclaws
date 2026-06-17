@@ -440,6 +440,9 @@ def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
     assert packet["source_map"]["height_px"] > 0
     assert packet["source_map"]["pixel_to_map_xy"]["origin_x"] == pytest.approx(-35.1000022888)
     assert packet["scene_diagnostic"]["status"] == "available"
+    assert packet["scene_diagnostic"]["source_image"] == str(scene_image)
+    assert packet["scene_diagnostic"]["image"].endswith("scene_topdown.png")
+    assert Path(packet["scene_diagnostic"]["image"]).is_file()
     assert packet["scene_diagnostic"]["geometry_status"] == "label_inventory_only"
     assert packet["scene_diagnostic"]["pixel_to_scene_xyz"]["status"] == "non_metric"
     assert packet["scene_diagnostic"]["pixel_to_scene_xyz"]["up_axis"] == "z"
@@ -484,6 +487,7 @@ def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Pat
 
     assert 'id="two-map-anchor-picker"' in html
     assert "map12_source_map.png" in html
+    assert "scene_topdown.png" in html
     assert 'id="mapImage"' in html
     assert 'id="sceneImage"' in html
     assert "function mapPixelToMapXY" in html
