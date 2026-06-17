@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console provider/evidence-lane compatibility lookup
+  drift now fails aloud during readiness. `_with_evidence_lane_compatibility()`
+  no longer swallows `KeyError` / `ValueError`; lookup failures mark the
+  provider packet `ok=false` and block start through the existing
+  `needs_provider` gate with the agent engine, provider profile, evidence lane,
+  and lookup error visible to the operator. Behavior-change class: fail-aloud
+  readiness only; provider route semantics, launch args, model defaults, and
+  supported evidence-lane policy are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused operator-console
+  provider/readiness tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Real-world contract public map/projection construction moved from
   `realworld_contract.py` to `realworld_contract_projection.py`; top-level
   agent-view/policy evidence, visible-detection sanitization, camera-model

@@ -674,6 +674,31 @@ def test_provider_gate_blocks_raw_fpv_when_route_image_transport_unknown(tmp_pat
     assert "image_transport=unknown" in readiness["blocker"]
 
 
+def test_provider_gate_blocks_when_evidence_lane_provider_lookup_fails(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::open-task::codex-cli::camera-raw-fpv"
+    )
+
+    with patch(
+        "roboclaws.operator_console.launcher.evidence_lane_compatibility",
+        side_effect=KeyError("missing-provider"),
+    ):
+        readiness = route_readiness(
+            tmp_path,
+            route,
+            env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+            overrides={"port": _free_port()},
+        )
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "needs_provider"
+    assert readiness["provider"]["ok"] is False
+    assert "provider/evidence-lane compatibility lookup failed" in readiness["blocker"]
+    assert "missing-provider" in readiness["blocker"]
+
+
 def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_OPENAI_AGENTS_OPEN_TASK)
 

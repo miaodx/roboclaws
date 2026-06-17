@@ -698,6 +698,17 @@ and launch-state/child-env consistency. Proof passed with focused
 operator-console provider-profile tests, ruff, format check, py_compile,
 `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 closed an operator-console
+provider/evidence-lane compatibility false-green. Readiness no longer swallows
+`KeyError` / `ValueError` raised while enriching provider status with
+evidence-lane compatibility; lookup drift now marks the provider packet
+`ok=false` and blocks start through the existing `needs_provider` gate with the
+agent engine, provider profile, evidence lane, and lookup error in the message.
+Behavior-change class: fail-aloud readiness only; provider route semantics,
+launch args, model defaults, and supported evidence-lane policy are unchanged.
+Proof passed with focused operator-console provider/readiness tests, ruff,
+format check, py_compile, `git diff --check`, and ratchet.
+
 Implementation refresh on 2026-06-18 closed the parked operator-console
 route-fixture drift that followed the provider-env slice. The operator-console
 route registry now tracks the current source-aware MolmoSpaces catalog:

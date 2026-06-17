@@ -597,8 +597,14 @@ def _with_evidence_lane_compatibility(
             provider_profile=provider,
             model_id=model,
         )
-    except (KeyError, ValueError):
-        return status
+    except (KeyError, ValueError) as exc:
+        blocked = dict(status)
+        blocked["ok"] = False
+        blocked["message"] = (
+            "provider/evidence-lane compatibility lookup failed for "
+            f"{selection.agent_engine_id}+{provider} on {selection.evidence_lane}: {exc}"
+        )
+        return blocked
     enriched = dict(status)
     enriched["evidence_lane_compatible"] = compatibility.allowed
     if not compatibility.allowed:
