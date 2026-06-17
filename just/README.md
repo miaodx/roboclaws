@@ -57,8 +57,8 @@ Agent engines:
 - `direct-runner`
 
 Provider profiles are selected only for agent engines that need a model/key
-route. Examples include `codex-env`, `mify`, `kimi-anthropic`,
-`mimo-anthropic`, and `mify-anthropic`. Deterministic engines such as
+route. Examples include `codex-router-responses`, `mimo-mify-responses`, `kimi-anthropic`,
+`mimo-tp-anthropic`, and `mimo-mify-anthropic`. Deterministic engines such as
 `direct-runner` do not accept `provider_profile`.
 
 Validation-required maintainer engines, such as `openclaw-gateway`, stay out of
@@ -138,10 +138,10 @@ behavior.
 
 ```bash
 cp .env.example .env
-# Fill CODEX_BASE_URL and CODEX_API_KEY for the default Codex codex-env route.
+# Fill CODEX_BASE_URL and CODEX_API_KEY for the default Codex router Responses route.
 # Fill MIMO_TP_KEY, KIMI_API_KEY, or XM_LLM_API_KEY for Claude Code routes.
-# Optional: set ROBOCLAWS_CODEX_PROVIDER=mify explicitly to use XM_LLM_API_KEY for Codex.
-# Optional: set ROBOCLAWS_CODEX_PROVIDER=minimax explicitly to use MM_API_KEY for Codex.
+# Optional: set ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses explicitly to use XM_LLM_API_KEY for Codex.
+# Optional: set ROBOCLAWS_PROVIDER_PROFILE=minimax-responses explicitly to use MM_API_KEY for Codex.
 # Optional: fill MIMO_BASE_URL and MIMO_API_KEY for MiMo inside benchmark/SDK probes.
 ```
 
@@ -151,13 +151,13 @@ exported in the invoking shell at launch time. They also source repo-local
 
 Run `just code::codex-provider-smoke` locally before long Codex visual runs to
 verify the `.env`-configured Responses-compatible endpoint works with the pinned
-Docker-backed Codex CLI. Codex defaults to `codex-env` (`CODEX_BASE_URL` plus
+Docker-backed Codex CLI. Codex defaults to `codex-router-responses` (`CODEX_BASE_URL` plus
 `CODEX_API_KEY`, Responses API, default model `gpt-5.5`). To use the internal
-multi-model aggregator, set `ROBOCLAWS_CODEX_PROVIDER=mify` explicitly with
+multi-model aggregator, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` explicitly with
 `XM_LLM_API_KEY`; that profile uses `xiaomi/mimo-v2.5` and disables web search
 because the gateway phase does not support Codex's web search tool. To use
 MiniMax's Responses-compatible token-plan route, set
-`ROBOCLAWS_CODEX_PROVIDER=minimax` with `MM_API_KEY`; the default model is
+`ROBOCLAWS_PROVIDER_PROFILE=minimax-responses` with `MM_API_KEY`; the default model is
 `MiniMax-M3`. M3 is the default because it is the multimodal/image-capable row
 and the local paired cleanup evidence did not show a speed win for
 `MiniMax-M2.7-highspeed`; `ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed`
@@ -187,7 +187,7 @@ the narrative audit remains in `docs/human/model-matrix.md`.
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just run::surface surface=household-world agent_engine=claude-code provider_profile=mimo-anthropic preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=claude-code provider_profile=mimo-tp-anthropic preset=cleanup evidence_lane=world-public-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
@@ -200,7 +200,7 @@ Codex runs use repo-local `.env` credentials in the pinned container. Host
 `~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-just run::surface surface=household-world agent_engine=codex-cli provider_profile=codex-env preset=cleanup evidence_lane=world-public-labels
+just run::surface surface=household-world agent_engine=codex-cli provider_profile=codex-router-responses preset=cleanup evidence_lane=world-public-labels
 ```
 
 Docker-backed coding-agent tasks use an isolated generated workspace owned by
@@ -238,8 +238,8 @@ namespaces such as `mcp__<server>__`.
 
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels runtime_map_prior=output/map/runtime_metric_map.json
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
@@ -333,9 +333,9 @@ Prompt mappings for agents:
 | Prompt | Command |
 |---|---|
 | "run the semantic map build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
-| "run the semantic map build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
-| "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels` |
-| "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"` |
+| "run the semantic map build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino` |
+| "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels` |
+| "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="我渴了，帮我找些解渴的东西"` |
 | "run the household cleanup camera raw lane" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv` |
 | "run the planner proof dry run" | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` |
 

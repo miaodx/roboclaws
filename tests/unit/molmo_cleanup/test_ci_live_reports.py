@@ -52,7 +52,7 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
     } == {
         "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-public-labels"),
         "mimo-v2.5": (
-            "mimo-anthropic",
+            "mimo-tp-anthropic",
             "mimo-v2.5",
             "MIMO_TP_KEY",
             "world-public-labels",
@@ -64,7 +64,7 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
             "camera-raw-fpv",
         ),
         "mimo-v2.5-camera-raw-fpv": (
-            "mimo-anthropic",
+            "mimo-tp-anthropic",
             "mimo-v2.5",
             "MIMO_TP_KEY",
             "camera-raw-fpv",
@@ -96,7 +96,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     assert payload["status"] == "dry_run"
     assert payload["env"] == {
         "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
-        "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
+        "ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic",
         "ROBOCLAWS_PROVIDER_TIMING_PROXY": "1",
     }
     assert payload["profile"] == "world-public-labels"
@@ -113,7 +113,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "evidence_lane=world-public-labels",
     ]
     assert payload["rerun_command"].startswith(
-        "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
+        "ROBOCLAWS_PROVIDER_PROFILE=kimi-anthropic "
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
         "ROBOCLAWS_PROVIDER_TIMING_PROXY=1 "
         "just run::surface surface=household-world world=molmospaces/val_0 "
@@ -228,7 +228,7 @@ def test_ci_live_matrix_preserves_provider_timing_proxy_escape_hatch(
     )
     assert payload["env"]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
     assert payload["rerun_command"].startswith(
-        "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
+        "ROBOCLAWS_PROVIDER_PROFILE=kimi-anthropic "
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
         "ROBOCLAWS_PROVIDER_TIMING_PROXY=0 "
     )
@@ -357,7 +357,7 @@ def test_live_claude_writes_live_timing_and_model_call_metrics(tmp_path: Path) -
         port=18788,
         lock_path=tmp_path / "runner.lock",
         claude_bin="claude",
-        claude_provider_summary="mimo-anthropic",
+        claude_provider_summary="mimo-tp-anthropic",
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
         policy="claude_agent",
@@ -443,7 +443,7 @@ def test_live_claude_provider_timing_proxy_rewrites_anthropic_base_url(
         port=18788,
         lock_path=tmp_path / "runner.lock",
         claude_bin="claude",
-        claude_provider_summary="mimo-anthropic model=mimo-v2.5",
+        claude_provider_summary="mimo-tp-anthropic model=mimo-v2.5",
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
         policy="claude_agent",
@@ -483,7 +483,7 @@ def test_live_claude_provider_timing_proxy_rewrites_anthropic_base_url(
         "https://provider.example.test/anthropic"
     )
     assert runner.live_timing["provider_timing_proxy"]["enabled"] is True
-    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "mimo-anthropic"
+    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "mimo-tp-anthropic"
     assert runner.live_timing["provider_timing_proxy"]["metrics_path"].endswith(
         "provider_request_metrics.jsonl"
     )
@@ -816,7 +816,7 @@ def test_live_codex_explicit_operator_handoff_pauses_without_killing_server(
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
         codex_model="gpt-5.5",
-        codex_provider_summary="codex-env model=gpt-5.5",
+        codex_provider_summary="codex-router-responses model=gpt-5.5",
         codex_turn_idle_timeout_s=3.0,
         kickoff_prompt=("到达第一个 waypoint 点，等待，不要推出，我计划手动调整下位置"),
         codex_model_arg=[],
@@ -894,7 +894,7 @@ def test_live_codex_no_done_without_operator_handoff_still_fails(
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
         codex_model="gpt-5.5",
-        codex_provider_summary="codex-env model=gpt-5.5",
+        codex_provider_summary="codex-router-responses model=gpt-5.5",
         kickoff_prompt="找到一瓶水",
         codex_model_arg=[],
         backend="molmospaces_subprocess",
@@ -954,17 +954,17 @@ def test_live_codex_provider_timing_proxy_rewrites_provider_base_url(
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
         codex_model="gpt-5.5",
-        codex_provider_summary="codex-env model=gpt-5.5",
+        codex_provider_summary="codex-router-responses model=gpt-5.5",
         kickoff_prompt="clean",
         codex_model_arg=[
             "-c",
             'model="gpt-5.5"',
             "-c",
-            'model_provider="codex-env"',
+            'model_provider="codex-router-responses"',
             "-c",
-            'model_providers.codex-env.base_url="https://provider.example.test/v1"',
+            'model_providers.codex-router-responses.base_url="https://provider.example.test/v1"',
             "-c",
-            'model_providers.codex-env.wire_api="responses"',
+            'model_providers.codex-router-responses.wire_api="responses"',
         ],
         backend="molmospaces_subprocess",
         policy="codex_agent",
@@ -990,13 +990,13 @@ def test_live_codex_provider_timing_proxy_rewrites_provider_base_url(
 
     runner._configure_provider_timing_proxy(env)
 
-    assert 'model_providers.codex-env.base_url="http://127.0.0.1:18888/v1"' in (
+    assert 'model_providers.codex-router-responses.base_url="http://127.0.0.1:18888/v1"' in (
         runner.args.codex_model_arg
     )
     assert env["ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL"] == "https://provider.example.test/v1"
     assert env["ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS"] == "1"
     assert runner.live_timing["provider_timing_proxy"]["enabled"] is True
-    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "codex-env"
+    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "codex-router-responses"
     assert runner.live_timing["provider_timing_proxy"]["responses_websockets_disabled"] is True
 
 

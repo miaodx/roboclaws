@@ -95,11 +95,11 @@ def build_agent_sdk_probes(
 ) -> list[ProbeSpec]:
     probes: list[ProbeSpec] = []
     for route_id in (
-        "codex-env",
-        "mify",
-        "minimax",
-        "mimo-openai-chat",
-        "mimo-inside",
+        "codex-router-responses",
+        "mimo-mify-responses",
+        "minimax-responses",
+        "mimo-tp-openai-chat",
+        "mimo-inside-openai-chat",
         "kimi-openai-chat",
     ):
         route = provider_route_spec(route_id)
@@ -125,29 +125,29 @@ def build_direct_probes(
     responses_max_tokens: int = DEFAULT_RESPONSES_MAX_OUTPUT_TOKENS,
     chat_max_tokens: int = DEFAULT_CHAT_MAX_TOKENS,
 ) -> list[ProbeSpec]:
-    codex = provider_route_spec("codex-env")
-    mify = provider_route_spec("mify")
-    minimax = provider_route_spec("minimax")
-    mimo = provider_route_spec("mimo-openai-chat")
-    mimo_inside = provider_route_spec("mimo-inside")
+    codex = provider_route_spec("codex-router-responses")
+    mify_route = provider_route_spec("mimo-mify-responses")
+    minimax_route = provider_route_spec("minimax-responses")
+    mimo = provider_route_spec("mimo-tp-openai-chat")
+    mimo_inside = provider_route_spec("mimo-inside-openai-chat")
 
     return [
-        _direct_from_route("codex-env", codex, max_tokens=responses_max_tokens),
-        _direct_from_route("mify", mify, max_tokens=responses_max_tokens),
-        _direct_from_route("minimax-m3", minimax, max_tokens=responses_max_tokens),
+        _direct_from_route("codex-router-responses", codex, max_tokens=responses_max_tokens),
+        _direct_from_route("mimo-mify-responses", mify_route, max_tokens=responses_max_tokens),
+        _direct_from_route("minimax-responses-m3", minimax_route, max_tokens=responses_max_tokens),
         ProbeSpec(
-            probe_id="direct:minimax-m27",
+            probe_id="direct:minimax-responses-m27",
             mode="direct",
-            route_id="minimax",
+            route_id="minimax-responses",
             wire_api=WIRE_RESPONSES,
             model="MiniMax-M2.7-highspeed",
-            api_key_env=minimax.api_key_env or "",
-            base_url=route_base_url(minimax),
+            api_key_env=minimax_route.api_key_env or "",
+            base_url=route_base_url(minimax_route),
             max_tokens=responses_max_tokens,
             provider_note="MiniMax highspeed can spend early tokens on reasoning.",
         ),
-        _direct_from_route("mimo-chat", mimo, max_tokens=chat_max_tokens),
-        _direct_from_route("mimo-inside", mimo_inside, max_tokens=chat_max_tokens),
+        _direct_from_route("mimo-tp-openai-chat", mimo, max_tokens=chat_max_tokens),
+        _direct_from_route("mimo-inside-openai-chat", mimo_inside, max_tokens=chat_max_tokens),
         ProbeSpec(
             probe_id="direct:kimi-coding-chat",
             mode="direct",

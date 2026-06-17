@@ -542,9 +542,9 @@ def live_surface_env(kwargs: dict[str, Any], *, base_env: Any) -> dict[str, str]
     provider_profile = str(kwargs.get("provider_profile") or "")
     if provider_profile:
         if kwargs["agent_engine"] in {"codex-cli", "openai-agents-sdk"}:
-            env["ROBOCLAWS_CODEX_PROVIDER"] = provider_profile
+            env["ROBOCLAWS_PROVIDER_PROFILE"] = provider_profile
         elif kwargs["agent_engine"] == "claude-code":
-            env["ROBOCLAWS_CLAUDE_PROVIDER"] = provider_profile
+            env["ROBOCLAWS_PROVIDER_PROFILE"] = provider_profile
     model = str(kwargs.get("model") or "")
     if model:
         if kwargs["agent_engine"] in {"codex-cli", "openai-agents-sdk"}:

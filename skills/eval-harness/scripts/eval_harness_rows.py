@@ -8,8 +8,8 @@ ROW_SCHEMA = "roboclaws_eval_harness_row_v1"
 DEFAULT_WORLD = "molmospaces/val_0"
 DEFAULT_BACKEND = "mujoco"
 DEFAULT_SEED = "7"
-DEFAULT_PROVIDER_PROFILE = "codex-env"
-DEFAULT_AGENT_SDK_PROVIDER_PROFILE = "minimax"
+DEFAULT_PROVIDER_PROFILE = "codex-router-responses"
+DEFAULT_AGENT_SDK_PROVIDER_PROFILE = "minimax-responses"
 
 
 def candidate_rows(
@@ -330,13 +330,13 @@ def candidate_rows(
             row_dir=row_dir,
         ),
         _row(
-            row_id="openai-agents-sdk-codex-env-availability",
+            row_id="openai-agents-sdk-codex-router-responses-availability",
             row_kind="live_agent_eval",
             command=_eval_suite_command(
                 suite="open_ended_goals",
                 budget="smoke",
                 output_root=eval_output_root,
-                stamp="openai-agents-sdk-codex-env-availability",
+                stamp="openai-agents-sdk-codex-router-responses-availability",
                 agent_engine="openai-agents-sdk",
                 provider_profile=DEFAULT_PROVIDER_PROFILE,
                 live_execution="run",
@@ -351,7 +351,7 @@ def candidate_rows(
                 "world": DEFAULT_WORLD,
             },
             reason=(
-                "Agent SDK codex-env remains provider availability evidence while "
+                "Agent SDK codex-router-responses remains provider availability evidence while "
                 "provider-side 502/upstream-unavailable responses persist."
             ),
             rule_ids=("agent_sdk_codex_env_availability",),

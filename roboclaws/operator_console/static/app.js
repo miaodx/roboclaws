@@ -789,7 +789,7 @@ function renderProviderProfileOptions(route) {
     : route.provider_profile || route.default_provider_profile || profiles[0] || "";
   renderSelectOptions(
     els.providerProfileInput,
-    profiles.map((profile) => ({ value: profile, label: profile })),
+    profiles.map((profile) => ({ value: profile, label: providerProfileLabel(profile, route) })),
     selected
   );
   const providerRoute = selectedProviderRoute(route);
@@ -1649,12 +1649,12 @@ function launchOverrides(route = state.selectedRoute) {
 function launchEnvOverrides(route = state.selectedRoute) {
   if (route.agent_engine_id === "codex-cli" || route.agent_engine_id === "openai-agents-sdk") {
     return {
-      ROBOCLAWS_CODEX_PROVIDER: selectedProviderProfile(),
+      ROBOCLAWS_PROVIDER_PROFILE: selectedProviderProfile(),
     };
   }
   if (route.agent_engine_id === "claude-code") {
     return {
-      ROBOCLAWS_CLAUDE_PROVIDER: selectedProviderProfile(),
+      ROBOCLAWS_PROVIDER_PROFILE: selectedProviderProfile(),
     };
   }
   return {};
@@ -2326,11 +2326,11 @@ function isAgibotRoute(route) {
 }
 
 function selectedCodexProvider() {
-  return selectedProviderProfile() || els.codexProviderInput.value || "codex-env";
+  return selectedProviderProfile() || els.codexProviderInput.value || "codex-router-responses";
 }
 
 function selectedClaudeProvider() {
-  return selectedProviderProfile() || els.claudeProviderInput.value || "mimo-anthropic";
+  return selectedProviderProfile() || els.claudeProviderInput.value || "mimo-tp-anthropic";
 }
 
 function selectedProviderProfile() {
@@ -2343,6 +2343,14 @@ function selectedProviderRoute(route = state.selectedRoute) {
     return null;
   }
   return route.provider_routes.find((item) => item.provider_profile === providerProfile) || null;
+}
+
+function providerProfileLabel(profile, route = state.selectedRoute) {
+  if (!route || !Array.isArray(route.provider_routes)) {
+    return profile;
+  }
+  const providerRoute = route.provider_routes.find((item) => item.provider_profile === profile);
+  return providerRoute ? `${providerRoute.label} (${profile})` : profile;
 }
 
 function selectedClaudeProviderLabel() {

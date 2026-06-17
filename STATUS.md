@@ -88,10 +88,10 @@ not active implementation blockers.
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
 this host, and `open_ended_goals` passed with `agent_engine=codex-cli`,
-`provider_profile=codex-env`, and `live_execution=run` on 2026-06-16. The same
+`provider_profile=codex-router-responses`, and `live_execution=run` on 2026-06-16. The same
 suite also passed with `agent_engine=openai-agents-sdk`,
-`provider_profile=minimax`, and `live_execution=run` on 2026-06-16. The
-`openai-agents-sdk` / `codex-env` route was exercised live but blocked on an
+`provider_profile=minimax-responses`, and `live_execution=run` on 2026-06-16. The
+`openai-agents-sdk` / `codex-router-responses` route was exercised live but blocked on an
 upstream 502 provider response, so it is not counted as a behavioral pass.
 Default non-direct eval requests remain blocked identity/preflight packets
 unless live execution is explicitly requested. Remaining validation blockers are

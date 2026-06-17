@@ -191,7 +191,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "cleanup",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -199,7 +199,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "cleanup",
             "claude-code",
-            "mimo-anthropic",
+            "mimo-tp-anthropic",
             "world-public-labels",
         ),
         (
@@ -207,7 +207,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "cleanup",
             "openai-agents-sdk",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -215,7 +215,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "map-build",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -223,7 +223,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "open-ended",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -231,7 +231,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "mujoco",
             "open-ended",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
         (
@@ -239,7 +239,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "agibot-gdk",
             "map-build",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "camera-grounded-labels",
         ),
         (
@@ -247,7 +247,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "isaaclab",
             "open-ended",
             "codex-cli",
-            "codex-env",
+            "codex-router-responses",
             "world-public-labels",
         ),
     }
@@ -260,19 +260,21 @@ def test_openai_agents_route_payload_lists_provider_profiles() -> None:
     )
     payload = route.to_payload()
 
-    assert payload["provider_profile"] == "codex-env"
+    assert payload["provider_profile"] == "codex-router-responses"
     assert payload["supported_provider_profiles"] == [
-        "codex-env",
-        "mify",
-        "minimax",
-        "mimo-openai-chat",
-        "mimo-inside",
+        "codex-router-responses",
+        "mimo-mify-responses",
+        "minimax-responses",
+        "mimo-tp-openai-chat",
+        "mimo-inside-openai-chat",
         "kimi-openai-chat",
     ]
     route_by_profile = {route["provider_profile"]: route for route in payload["provider_routes"]}
-    assert route_by_profile["mify"]["route_status"] == "provisional"
-    assert route_by_profile["mimo-openai-chat"]["wire_api"] == "chat-completions"
-    assert route_by_profile["minimax"]["route_capabilities"]["image_transport"] == "unknown"
+    assert route_by_profile["mimo-mify-responses"]["route_status"] == "provisional"
+    assert route_by_profile["mimo-tp-openai-chat"]["wire_api"] == "chat-completions"
+    assert route_by_profile["minimax-responses"]["route_capabilities"]["image_transport"] == (
+        "unknown"
+    )
 
 
 def test_openclaw_agent_engine_marks_validation_required() -> None:
@@ -419,7 +421,7 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert mujoco["world_id"] == "molmospaces/val_0"
     assert mujoco["backend_id"] == "mujoco"
     assert mujoco["agent_engine_id"] == "codex-cli"
-    assert mujoco["provider_profile"] == "codex-env"
+    assert mujoco["provider_profile"] == "codex-router-responses"
     assert mujoco["scenario_setup"] == "relocate-cleanup-related-objects"
     assert "agent_engine=codex-cli" in mujoco["argv_preview"]
     assert "scenario_setup=relocate-cleanup-related-objects" in mujoco["argv_preview"]
@@ -468,7 +470,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         "agent_engine=codex-cli",
     ]
     assert "evidence_lane=world-public-labels" in argv
-    assert "provider_profile=codex-env" in argv
+    assert "provider_profile=codex-router-responses" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
 

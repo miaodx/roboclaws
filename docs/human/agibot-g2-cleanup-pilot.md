@@ -119,7 +119,7 @@ map-build intent + Codex CLI engine 组合。可以自动验证 gate 和 launche
 Codex 或机器人：
 
 ```bash
-ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/example/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -296,7 +296,7 @@ missing-sidecar / adapter-unavailable 证据，而不是伪造候选：
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -319,7 +319,7 @@ dry run 不能称为 hardware evidence。
 只有 operator 确认 run-level gate 后，才启用 movement：
 
 ```bash
-just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
   policy=codex_agibot_semantic_map_build_pilot \

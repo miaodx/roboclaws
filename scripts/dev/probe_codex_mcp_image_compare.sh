@@ -5,7 +5,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE' >&2
-usage: scripts/dev/probe_codex_mcp_image_compare.sh <fpv_png[,fpv_png...]> [both|mify|codex-env] [output_dir]
+usage: scripts/dev/probe_codex_mcp_image_compare.sh <fpv_png[,fpv_png...]> [both|mimo-mify-responses|codex-router-responses] [output_dir]
 
 Environment:
   PORT                  MCP server port (default: 18891)
@@ -33,10 +33,10 @@ port="${PORT:-18891}"
 timeout_s="${CODEX_TIMEOUT_S:-420}"
 
 case "$provider_filter" in
-  both|mify|codex-env)
+  both|mimo-mify-responses|codex-router-responses)
     ;;
   *)
-    echo "error: unsupported provider filter '$provider_filter' (expected both|mify|codex-env)" >&2
+    echo "error: unsupported provider filter '$provider_filter' (expected both|mimo-mify-responses|codex-router-responses)" >&2
     exit 2
     ;;
 esac
@@ -100,13 +100,13 @@ fi
 
 run_provider() {
   local provider="$1"
-  export ROBOCLAWS_CODEX_PROVIDER="$provider"
+  export ROBOCLAWS_PROVIDER_PROFILE="$provider"
 
   roboclaws_assert_codex_network_allowed "Codex MCP image compare ${provider}"
   local codex_model_args=()
   roboclaws_codex_provider_args codex_model_args
   local summary
-  summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
+  summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses)"
 
   local out_dir="$output_root/$provider"
   mkdir -p "$out_dir"
@@ -156,8 +156,8 @@ run_provider() {
 
 case "$provider_filter" in
   both)
-    run_provider mify
-    run_provider codex-env
+    run_provider mimo-mify-responses
+    run_provider codex-router-responses
     ;;
   *)
     run_provider "$provider_filter"

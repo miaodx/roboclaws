@@ -42,8 +42,8 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         label="Codex API router",
         driver="codex",
         agent_engine="codex-cli",
-        provider_profile="codex-env",
-        env={"ROBOCLAWS_CODEX_PROVIDER": "codex-env"},
+        provider_profile="codex-router-responses",
+        env={"ROBOCLAWS_PROVIDER_PROFILE": "codex-router-responses"},
         required_env=("CODEX_BASE_URL", "CODEX_API_KEY"),
     ),
     AgentRoute(
@@ -53,7 +53,7 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         agent_engine="claude-code",
         provider_profile="kimi-anthropic",
         env={
-            "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
+            "ROBOCLAWS_PROVIDER_PROFILE": "kimi-anthropic",
             "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
         },
         required_env=("KIMI_API_KEY",),
@@ -63,9 +63,9 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         label="Claude Code MiMo v2.5",
         driver="claude",
         agent_engine="claude-code",
-        provider_profile="mimo-anthropic",
+        provider_profile="mimo-tp-anthropic",
         env={
-            "ROBOCLAWS_CLAUDE_PROVIDER": "mimo-anthropic",
+            "ROBOCLAWS_PROVIDER_PROFILE": "mimo-tp-anthropic",
             "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2.5",
         },
         required_env=("MIMO_TP_KEY",),

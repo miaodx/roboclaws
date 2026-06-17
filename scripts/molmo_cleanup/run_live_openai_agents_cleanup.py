@@ -149,7 +149,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     add_household_cleanup_live_runner_args(parser, policy_default="openai_agents_agent")
-    parser.add_argument("--provider-profile", default="codex-env")
+    parser.add_argument("--provider-profile", default="codex-router-responses")
     parser.add_argument("--model", default="")
     parser.add_argument(
         "--max-turns",
@@ -1513,9 +1513,9 @@ def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
     }
     if wire_api == "responses":
         settings["store"] = False
-        if provider_profile != "codex-env":
+        if provider_profile != "codex-router-responses":
             settings["truncation"] = "auto"
-        if provider_profile == "codex-env" and profile_id != "baseline":
+        if provider_profile == "codex-router-responses" and profile_id != "baseline":
             settings["prompt_cache_retention"] = "in_memory"
     elif wire_api == "chat-completions":
         settings["include_usage"] = True
@@ -1530,7 +1530,7 @@ def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normal_provider_profile(provider_profile: str) -> str:
-    return normalize_provider_route(provider_profile, default="codex-env")
+    return normalize_provider_route(provider_profile, default="codex-router-responses")
 
 
 def _wire_api_for_provider_profile(provider_profile: str) -> str:

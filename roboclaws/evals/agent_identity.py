@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from roboclaws.agents.provider_registry import provider_readiness
+from roboclaws.agents.provider_registry import normalize_provider_route, provider_readiness
 from roboclaws.evals.models import (
     MISSING_NOT_APPLICABLE,
     MISSING_SENTINELS,
@@ -34,7 +34,10 @@ def eval_provider_profile(*, agent_engine: str, provider_profile: str | None) ->
         if provider_profile:
             raise ValueError(f"agent_engine {agent_engine!r} does not accept provider_profile")
         return MISSING_NOT_APPLICABLE
-    selected = str(provider_profile or engine.default_provider_profile or "").strip()
+    selected = normalize_provider_route(
+        provider_profile,
+        default=engine.default_provider_profile or "",
+    )
     if selected not in engine.supported_provider_profiles:
         expected = "|".join(engine.supported_provider_profiles)
         raise ValueError(

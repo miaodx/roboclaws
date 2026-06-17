@@ -46,9 +46,7 @@ AGIBOT_MAP_BUILD_CODEX_RUNNER = (
 HOUSEHOLD_LIVE_DRIVER = REPO_ROOT / "roboclaws" / "agents" / "drivers" / "household_live.py"
 HOUSEHOLD_AGENT_SERVER_MODULE = "roboclaws.cli.agent_server"
 CODE_AGENT_ENV_VARS = (
-    "ROBOCLAWS_CODE_AGENT_PROVIDER",
-    "ROBOCLAWS_CODEX_PROVIDER",
-    "ROBOCLAWS_CLAUDE_PROVIDER",
+    "ROBOCLAWS_PROVIDER_PROFILE",
     "ROBOCLAWS_CODE_AGENT_MODEL",
     "ROBOCLAWS_CODEX_MODEL",
     "ROBOCLAWS_CLAUDE_MODEL",
@@ -735,7 +733,7 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     assert plan.backend == "mujoco"
     assert plan.implementation_backend == "molmospaces_subprocess"
     assert plan.agent_engine == "codex-cli"
-    assert plan.provider_profile == "codex-env"
+    assert plan.provider_profile == "codex-router-responses"
     assert plan.intent == "map-build"
     assert plan.preset == "map-build"
     assert plan.skill_name == "household-open-task"
@@ -995,7 +993,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     assert resolved.world == "molmospaces/val_0"
     assert resolved.backend == "mujoco"
     assert resolved.agent_engine == "codex-cli"
-    assert resolved.provider_profile == "codex-env"
+    assert resolved.provider_profile == "codex-router-responses"
     assert resolved.mode == "smoke"
 
     with pytest.raises(CommandError, match="unsupported surface 'molmospace-cleanup'"):
@@ -1130,7 +1128,7 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
         "preset=cleanup",
         "agent_engine=codex-cli",
     ]
-    assert "provider_profile=codex-env" in plan_trace
+    assert "provider_profile=codex-router-responses" in plan_trace
     assert "skill=molmo-realworld-cleanup" in plan_trace
     assert "dispatch_runner=codex" in plan_trace
     assert "dispatch_target=household-world.cleanup" in plan_trace
@@ -1934,7 +1932,7 @@ def test_live_runners_cleanup_checker_policy_uses_checker_profile(
             ),
             "LiveOpenAIAgentsCleanupRunner",
             {
-                "provider_profile": "codex-env",
+                "provider_profile": "codex-router-responses",
                 "model": "gpt-5.5",
                 "max_turns": 128,
                 "incomplete_turn_continuation_attempts": 0,
@@ -2026,7 +2024,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
             ),
             "LiveOpenAIAgentsCleanupRunner",
             {
-                "provider_profile": "codex-env",
+                "provider_profile": "codex-router-responses",
                 "model": "gpt-5.5",
                 "max_turns": 128,
                 "incomplete_turn_continuation_attempts": 0,
@@ -2459,7 +2457,7 @@ def test_coding_agent_provider_helper_defaults_codex_to_codex_env_without_args()
             claude_model_args=()
             claude_env_args=()
             roboclaws_claude_provider_args claude_model_args claude_env_args
-            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE
             printf 'claude_model_args=%s\n' "${#claude_model_args[@]}"
             printf 'claude_env_args=%s\n' "${#claude_env_args[@]}"
             """,
@@ -2471,7 +2469,7 @@ def test_coding_agent_provider_helper_defaults_codex_to_codex_env_without_args()
         text=True,
     )
 
-    assert result.stdout.splitlines() == ["codex-env", "claude_model_args=0", "claude_env_args=0"]
+    assert result.stdout.splitlines() == ["codex-router-responses", "claude_model_args=0", "claude_env_args=0"]
 
 
 def test_coding_agent_codex_default_ignores_xm_key_and_requires_codex_env() -> None:
@@ -2485,7 +2483,7 @@ def test_coding_agent_codex_default_ignores_xm_key_and_requires_codex_env() -> N
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
             XM_LLM_API_KEY=fake-xm-key
-            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE
             args=()
             roboclaws_codex_provider_args args
             """,
@@ -2498,8 +2496,8 @@ def test_coding_agent_codex_default_ignores_xm_key_and_requires_codex_env() -> N
     )
 
     assert result.returncode == 2
-    assert result.stdout.splitlines() == ["codex-env"]
-    assert "codex-env requires CODEX_BASE_URL" in result.stderr
+    assert result.stdout.splitlines() == ["codex-router-responses"]
+    assert "codex-router-responses requires CODEX_BASE_URL" in result.stderr
 
 
 def test_coding_agent_codex_default_prefers_codex_env_even_when_xm_key_is_available() -> None:
@@ -2516,7 +2514,7 @@ def test_coding_agent_codex_default_prefers_codex_env_even_when_xm_key_is_availa
             XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
             CODEX_BASE_URL=https://api-router.evad.mioffice.cn/v1
             CODEX_API_KEY=fake-codex-key
-            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE
             args=()
             roboclaws_codex_provider_args args
             printf '%s\n' "${args[@]}"
@@ -2530,19 +2528,19 @@ def test_coding_agent_codex_default_prefers_codex_env_even_when_xm_key_is_availa
     )
 
     assert result.stdout.splitlines() == [
-        "codex-env",
+        "codex-router-responses",
         "-c",
         'model="gpt-5.5"',
         "-c",
-        'model_provider="codex-env"',
+        'model_provider="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.name="codex-env"',
+        'model_providers.codex-router-responses.name="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.base_url="https://api-router.evad.mioffice.cn/v1"',
+        'model_providers.codex-router-responses.base_url="https://api-router.evad.mioffice.cn/v1"',
         "-c",
-        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        'model_providers.codex-router-responses.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.codex-env.wire_api="responses"',
+        'model_providers.codex-router-responses.wire_api="responses"',
     ]
 
 
@@ -2556,10 +2554,10 @@ def test_coding_agent_codex_explicit_mify_profile_uses_xm_key() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=mify
+            ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses
             XM_LLM_API_KEY=fake-xm-key
             XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
-            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE
             args=()
             roboclaws_codex_provider_args args
             printf '%s\n' "${args[@]}"
@@ -2573,21 +2571,21 @@ def test_coding_agent_codex_explicit_mify_profile_uses_xm_key() -> None:
     )
 
     assert result.stdout.splitlines() == [
-        "mify",
+        "mimo-mify-responses",
         "-c",
         'model="xiaomi/mimo-v2.5"',
         "-c",
-        'model_provider="mify"',
+        'model_provider="mimo-mify-responses"',
         "-c",
-        'model_providers.mify.name="mify"',
+        'model_providers.mimo-mify-responses.name="mimo-mify-responses"',
         "-c",
-        'model_providers.mify.base_url="https://api.llm.mioffice.cn/v1"',
+        'model_providers.mimo-mify-responses.base_url="https://api.llm.mioffice.cn/v1"',
         "-c",
-        'model_providers.mify.env_key="XM_LLM_API_KEY"',
+        'model_providers.mimo-mify-responses.env_key="XM_LLM_API_KEY"',
         "-c",
-        'model_providers.mify.wire_api="responses"',
+        'model_providers.mimo-mify-responses.wire_api="responses"',
         "-c",
-        "model_providers.mify.supports_parallel_tool_calls=false",
+        "model_providers.mimo-mify-responses.supports_parallel_tool_calls=false",
         "-c",
         'web_search="disabled"',
     ]
@@ -2603,10 +2601,10 @@ def test_coding_agent_codex_explicit_minimax_profile_uses_mm_key() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=minimax
+            ROBOCLAWS_PROVIDER_PROFILE=minimax-responses
             MM_API_KEY=fake-mm-key
             MM_BASE_URL=https://api.minimaxi.com/v1
-            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE
             args=()
             roboclaws_codex_provider_args args
             printf '%s\n' "${args[@]}"
@@ -2620,19 +2618,19 @@ def test_coding_agent_codex_explicit_minimax_profile_uses_mm_key() -> None:
     )
 
     assert result.stdout.splitlines() == [
-        "minimax",
+        "minimax-responses",
         "-c",
         'model="MiniMax-M3"',
         "-c",
-        'model_provider="minimax"',
+        'model_provider="minimax-responses"',
         "-c",
-        'model_providers.minimax.name="minimax"',
+        'model_providers.minimax-responses.name="minimax-responses"',
         "-c",
-        'model_providers.minimax.base_url="https://api.minimaxi.com/v1"',
+        'model_providers.minimax-responses.base_url="https://api.minimaxi.com/v1"',
         "-c",
-        'model_providers.minimax.env_key="MM_API_KEY"',
+        'model_providers.minimax-responses.env_key="MM_API_KEY"',
         "-c",
-        'model_providers.minimax.wire_api="responses"',
+        'model_providers.minimax-responses.wire_api="responses"',
     ]
 
 
@@ -2646,9 +2644,9 @@ def test_coding_agent_env_shell_profile_facts_match_python_registry() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            roboclaws_code_agent_profile_default_model minimax
-            roboclaws_code_agent_profile_wire_api mimo-openai-chat
-            roboclaws_code_agent_profile_key_env codex-env
+            roboclaws_code_agent_profile_default_model minimax-responses
+            roboclaws_code_agent_profile_wire_api mimo-tp-openai-chat
+            roboclaws_code_agent_profile_key_env codex-router-responses
             """,
         ],
         cwd=REPO_ROOT,
@@ -2663,7 +2661,7 @@ def test_coding_agent_env_shell_profile_facts_match_python_registry() -> None:
             "-m",
             "roboclaws.agents.provider_registry",
             "default-model",
-            "minimax",
+            "minimax-responses",
         ],
         cwd=REPO_ROOT,
         check=True,
@@ -2688,7 +2686,7 @@ def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=minimax
+            ROBOCLAWS_PROVIDER_PROFILE=minimax-responses
             ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed
             MM_API_KEY=fake-mm-key
             args=()
@@ -2704,7 +2702,7 @@ def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
     )
 
     assert 'model="MiniMax-M2.7-highspeed"' in result.stdout.splitlines()
-    assert 'model_providers.minimax.wire_api="responses"' in result.stdout.splitlines()
+    assert 'model_providers.minimax-responses.wire_api="responses"' in result.stdout.splitlines()
 
 
 def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> None:
@@ -2717,12 +2715,12 @@ def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> 
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=mimo-openai-chat
+            ROBOCLAWS_PROVIDER_PROFILE=mimo-tp-openai-chat
             MIMO_TP_KEY=fake-mimo-key
-            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
-            ROBOCLAWS_CODEX_PROVIDER=kimi-openai-chat
+            roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
+            ROBOCLAWS_PROVIDER_PROFILE=kimi-openai-chat
             KIMI_API_KEY=fake-kimi-key
-            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
             """,
         ],
         cwd=REPO_ROOT,
@@ -2734,7 +2732,7 @@ def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> 
 
     assert result.stdout.splitlines() == [
         (
-            "mimo-openai-chat model=mimo-v2.5 "
+            "mimo-tp-openai-chat model=mimo-v2.5 "
             "base_url=https://token-plan-cn.xiaomimimo.com/v1 "
             "key_env=MIMO_TP_KEY protocol=chat-completions"
         ),
@@ -2756,7 +2754,7 @@ def test_coding_agent_codex_provider_args_reject_openai_agents_chat_profile() ->
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=mimo-openai-chat
+            ROBOCLAWS_PROVIDER_PROFILE=mimo-tp-openai-chat
             MIMO_TP_KEY=fake-mimo-key
             args=()
             roboclaws_codex_provider_args args
@@ -2770,7 +2768,7 @@ def test_coding_agent_codex_provider_args_reject_openai_agents_chat_profile() ->
     )
 
     assert result.returncode == 2
-    assert "unsupported Codex provider 'mimo-openai-chat'" in result.stderr
+    assert "unsupported Codex provider 'mimo-tp-openai-chat'" in result.stderr
 
 
 def test_coding_agent_codex_can_disable_responses_websockets() -> None:
@@ -2802,15 +2800,15 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
         "-c",
         'model="gpt-5.5"',
         "-c",
-        'model_provider="codex-env"',
+        'model_provider="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.name="codex-env"',
+        'model_providers.codex-router-responses.name="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.base_url="https://codex.example.test/v1"',
+        'model_providers.codex-router-responses.base_url="https://codex.example.test/v1"',
         "-c",
-        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        'model_providers.codex-router-responses.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.codex-env.wire_api="responses"',
+        'model_providers.codex-router-responses.wire_api="responses"',
         "--disable",
         "responses_websockets",
         "--disable",
@@ -2845,7 +2843,7 @@ def test_coding_agent_codex_provider_timing_proxy_disables_responses_websockets(
 
     assert "--disable" in result.stdout.splitlines()
     assert "responses_websockets" in result.stdout.splitlines()
-    assert 'model_providers.codex-env.wire_api="responses"' in result.stdout.splitlines()
+    assert 'model_providers.codex-router-responses.wire_api="responses"' in result.stdout.splitlines()
 
 
 def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
@@ -2876,15 +2874,15 @@ def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
         "-c",
         'model="gpt-5.5"',
         "-c",
-        'model_provider="codex-env"',
+        'model_provider="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.name="codex-env"',
+        'model_providers.codex-router-responses.name="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.base_url="https://codex.example.test/v1"',
+        'model_providers.codex-router-responses.base_url="https://codex.example.test/v1"',
         "-c",
-        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        'model_providers.codex-router-responses.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.codex-env.wire_api="responses"',
+        'model_providers.codex-router-responses.wire_api="responses"',
     ]
 
 
@@ -2916,15 +2914,15 @@ def test_coding_agent_codex_official_openai_uses_same_key_contract() -> None:
         "-c",
         'model="gpt-5.5"',
         "-c",
-        'model_provider="codex-env"',
+        'model_provider="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.name="codex-env"',
+        'model_providers.codex-router-responses.name="codex-router-responses"',
         "-c",
-        'model_providers.codex-env.base_url="https://api.openai.com/v1"',
+        'model_providers.codex-router-responses.base_url="https://api.openai.com/v1"',
         "-c",
-        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        'model_providers.codex-router-responses.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.codex-env.wire_api="responses"',
+        'model_providers.codex-router-responses.wire_api="responses"',
     ]
 
 
@@ -2951,7 +2949,7 @@ def test_coding_agent_codex_env_profile_requires_base_url() -> None:
     )
 
     assert result.returncode == 2
-    assert "codex-env requires CODEX_BASE_URL" in result.stderr
+    assert "codex-router-responses requires CODEX_BASE_URL" in result.stderr
     assert "sk-" not in result.stderr
 
 
@@ -2978,7 +2976,7 @@ def test_coding_agent_codex_env_profile_requires_api_key_without_printing_secret
     )
 
     assert result.returncode == 2
-    assert "codex-env requires CODEX_API_KEY" in result.stderr
+    assert "codex-router-responses requires CODEX_API_KEY" in result.stderr
     assert "fake" not in result.stderr
 
 
@@ -3026,7 +3024,7 @@ def test_coding_agent_claude_mify_anthropic_profile_builds_scoped_env() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CLAUDE_PROVIDER=mify-anthropic
+            ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-anthropic
             XM_LLM_API_KEY=fake-xm-key
             XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
             model_args=()
@@ -3128,9 +3126,9 @@ def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^codex-provider-smoke ", code_text, re.MULTILINE)
-    assert "codex-env is the default" in code_text
-    assert "ROBOCLAWS_CODEX_PROVIDER=mify" in code_text
-    assert "minimax with MM_API_KEY" in code_text
+    assert "codex-router-responses is the default" in code_text
+    assert "ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses" in code_text
+    assert "minimax-responses with MM_API_KEY" in code_text
     assert "--sandbox read-only" in code_text
     assert "--ephemeral" in code_text
     assert "--ignore-user-config" in code_text

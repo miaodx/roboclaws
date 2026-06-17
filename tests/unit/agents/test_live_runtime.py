@@ -84,7 +84,7 @@ def test_live_agent_request_keeps_one_turn_policy_explicit(tmp_path: Path) -> No
 
 def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -> None:
     responses = _default_sdk_model_settings_payload(
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         wire_api="responses",
         profile_id="baseline",
     )
@@ -94,7 +94,7 @@ def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -
         profile_id="baseline",
     )
     disabled_chat = _default_sdk_model_settings_payload(
-        provider_profile="mimo-openai-chat",
+        provider_profile="mimo-tp-openai-chat",
         wire_api="chat-completions",
         profile_id="baseline",
         thinking_mode="disabled",
@@ -260,7 +260,7 @@ def test_openai_agents_runtime_classifies_model_service_retryability() -> None:
 
     non_retryable_messages = [
         "invalid api key 401",
-        "codex-env requires CODEX_API_KEY",
+        "codex-router-responses requires CODEX_API_KEY",
         "Your input exceeds the context window",
         "tool failed while calling cleanup MCP",
     ]
@@ -309,7 +309,7 @@ def test_openai_agents_retrying_model_retries_transient_once(tmp_path: Path) -> 
         spans_path=spans_path,
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "codex-env",
+            "provider_profile": "codex-router-responses",
             "wire_api": "responses",
             "model": "gpt-5.5",
         },
@@ -393,7 +393,7 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
         spans_path=spans_path,
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "mify",
+            "provider_profile": "mimo-mify-responses",
             "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
         },
@@ -424,7 +424,7 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
     assert metrics["failure_classes"] == {"provider_transient_failure": 2}
     assert metrics["provider_reasons"] == {"upstream_unavailable": 2}
     assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
-    assert metrics["attempted_provider_profiles"] == ["mify"]
+    assert metrics["attempted_provider_profiles"] == ["mimo-mify-responses"]
     assert metrics["attempted_wire_apis"] == ["responses"]
     racing_metrics = _model_racing_observability_metrics(tmp_path)
     assert racing_metrics["available"] is True
@@ -480,7 +480,7 @@ def test_openai_agents_retrying_model_zero_retry_still_records_observability(
         spans_path=tmp_path / "openai-agents-spans.jsonl",
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "mify",
+            "provider_profile": "mimo-mify-responses",
             "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
         },
@@ -546,7 +546,7 @@ def test_openai_agents_retrying_model_races_get_response_and_cancels_loser(
         spans_path=spans_path,
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "mify",
+            "provider_profile": "mimo-mify-responses",
             "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
             "model_racing_observability": {
@@ -652,7 +652,7 @@ def test_openai_agents_retrying_model_racing_reports_all_arm_failures(
         spans_path=tmp_path / "openai-agents-spans.jsonl",
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "mify",
+            "provider_profile": "mimo-mify-responses",
             "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
             "model_racing_observability": {
@@ -735,7 +735,7 @@ def test_openai_agents_retrying_model_does_not_race_stream_response(
         spans_path=tmp_path / "openai-agents-spans.jsonl",
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "mify",
+            "provider_profile": "mimo-mify-responses",
             "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
             "model_racing_observability": {
@@ -1042,7 +1042,7 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
         kickoff_prompt="clean the room",
         mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
         run_dir=tmp_path / "run",
-        provider_profile="mimo-openai-chat",
+        provider_profile="mimo-tp-openai-chat",
     )
 
     OpenAIAgentsLiveRuntime().run(request)
@@ -1062,7 +1062,7 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
         json.loads(line)
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
-    assert events[0]["provider_profile"] == "mimo-openai-chat"
+    assert events[0]["provider_profile"] == "mimo-tp-openai-chat"
     assert events[0]["wire_api"] == "chat-completions"
     assert events[0]["sdk_model_settings"]["include_usage"] is True
     assert events[0]["agent_sdk_responses_features"]["available"] is False
@@ -1125,7 +1125,7 @@ def test_openai_agents_runtime_configures_model_input_compaction_filter(
         metadata={
             "agent_sdk_perf_profile": {
                 "profile_id": "custom",
-                "provider_profile": "codex-env",
+                "provider_profile": "codex-router-responses",
                 "wire_api": "responses",
                 "model_input_compaction": {
                     "enabled": True,
@@ -1894,7 +1894,7 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     class FakeRuntime:
         def run(self, request: LiveAgentRequest) -> LiveAgentResult:
             assert request.mcp_server.url == "http://127.0.0.1:18788/mcp"
-            assert request.provider_profile == "codex-env"
+            assert request.provider_profile == "codex-router-responses"
             (request.run_dir / "run_result.json").write_text(
                 json.dumps(
                     {
@@ -1955,7 +1955,7 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
         host="127.0.0.1",
         port=18788,
         lock_path=lock_path,
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
@@ -2134,7 +2134,7 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
@@ -2248,7 +2248,7 @@ def test_openai_agents_robot_view_capture_policy_adds_private_server_flag(
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
@@ -2392,7 +2392,7 @@ def test_openai_agents_camera_grounded_composite_runner_rerenders_stale_two_step
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
@@ -2529,7 +2529,7 @@ def test_openai_agents_cleanup_runner_loads_canonical_skill_context(
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
@@ -2677,7 +2677,7 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
@@ -2834,7 +2834,7 @@ def test_openai_agents_cleanup_runner_compact_continuation_excludes_full_prompt(
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
@@ -2982,7 +2982,7 @@ def test_openai_agents_cleanup_runner_compact_continuation_preserves_composite_c
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="mify",
+        provider_profile="mimo-mify-responses",
         model="mimo-v2.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
@@ -3094,7 +3094,7 @@ def test_openai_agents_cleanup_runner_uses_profiled_compact_kickoff_prompt(
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
@@ -3434,7 +3434,7 @@ def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
         host="127.0.0.1",
         port=18788,
         lock_path=tmp_path / "live.lock",
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=1,
@@ -3492,7 +3492,7 @@ def _openai_agents_perf_profile_base_args(**overrides) -> Namespace:
         None,
     )
     values.update(
-        provider_profile="codex-env",
+        provider_profile="codex-router-responses",
         model="gpt-5.5",
         agent_sdk_perf_profile="",
         continuation_mode="",
@@ -3547,7 +3547,7 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
 
     assert baseline["profile_id"] == "baseline"
     assert baseline["source"] == "default"
-    assert baseline["provider_profile"] == "codex-env"
+    assert baseline["provider_profile"] == "codex-router-responses"
     assert baseline["wire_api"] == "responses"
     assert baseline["model_family"] == "gpt"
     assert baseline["model_thinking_mode"] == "default"
@@ -3630,13 +3630,13 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     mimo = _resolve_agent_sdk_perf_profile(
         _openai_agents_perf_profile_base_args(
-            provider_profile="mify",
+            provider_profile="mimo-mify-responses",
             model="xiaomi/mimo-v2.5",
             agent_sdk_perf_profile="mimo_compact_v1",
         )
     )
 
-    assert mimo["provider_profile"] == "mify"
+    assert mimo["provider_profile"] == "mimo-mify-responses"
     assert mimo["wire_api"] == "responses"
     assert mimo["model_family"] == "mimo"
     assert mimo["max_continuations"] == 1
@@ -3647,7 +3647,7 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     chat = _resolve_agent_sdk_perf_profile(
         _openai_agents_perf_profile_base_args(provider_profile="mimo-chat", model="mimo-v2.5")
     )
-    assert chat["provider_profile"] == "mimo-openai-chat"
+    assert chat["provider_profile"] == "mimo-tp-openai-chat"
     assert chat["wire_api"] == "chat-completions"
     assert chat["model_family"] == "mimo"
     assert chat["sdk_model_settings"] == {
@@ -3863,7 +3863,7 @@ def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
                     {
                         "schema": "openai_agents_model_racing_observability_v1",
                         "event": "model_racing_arm_start",
-                        "provider_profile": "mify",
+                        "provider_profile": "mimo-mify-responses",
                         "wire_api": "responses",
                         "model": "xiaomi/mimo-v2.5",
                         "call_index": 0,
@@ -3879,7 +3879,7 @@ def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
                     {
                         "schema": "openai_agents_model_racing_observability_v1",
                         "event": "model_racing_arm_finish",
-                        "provider_profile": "mify",
+                        "provider_profile": "mimo-mify-responses",
                         "wire_api": "responses",
                         "model": "xiaomi/mimo-v2.5",
                         "call_index": 0,
@@ -3942,7 +3942,7 @@ def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
     assert metrics["racing_modes"] == ["per_arm_observability_v1"]
     assert metrics["final_outcomes"] == {"success": 1}
     assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
-    assert metrics["attempted_provider_profiles"] == ["mify"]
+    assert metrics["attempted_provider_profiles"] == ["mimo-mify-responses"]
     assert metrics["attempted_wire_apis"] == ["responses"]
     assert "Raw prompts" in metrics["privacy_note"]
 
@@ -3953,7 +3953,7 @@ def test_openai_agents_span_recorder_writes_sanitized_span_events(tmp_path: Path
         spans_path,
         runtime_config={
             "runtime": "openai-agents-live",
-            "provider_profile": "codex-env",
+            "provider_profile": "codex-router-responses",
             "model": "gpt-5.5",
         },
     )
@@ -4185,7 +4185,7 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
                     {
                         "schema": "openai_agents_model_input_filter_v1",
                         "event": "model_input_filter",
-                        "provider_profile": "codex-env",
+                        "provider_profile": "codex-router-responses",
                         "wire_api": "responses",
                         "model": "gpt-5.5",
                         "config": {
@@ -4221,7 +4221,7 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
                     {
                         "schema": "openai_agents_model_input_filter_v1",
                         "event": "model_input_filter",
-                        "provider_profile": "codex-env",
+                        "provider_profile": "codex-router-responses",
                         "wire_api": "responses",
                         "model": "gpt-5.5",
                         "config": {
@@ -4255,7 +4255,7 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
     assert metrics["event_count"] == 2
     assert metrics["enabled"] is True
     assert metrics["modes"] == ["public_tool_result_summary_v1"]
-    assert metrics["attempted_provider_profiles"] == ["codex-env"]
+    assert metrics["attempted_provider_profiles"] == ["codex-router-responses"]
     assert metrics["attempted_wire_apis"] == ["responses"]
     assert metrics["compacted_item_count"] == 2
     assert metrics["unchanged_item_count"] == 3
@@ -4290,7 +4290,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "intent": "open-ended",
         "task_name": "household-world.open-ended",
         "runtime": "openai-agents-live",
-        "provider_profile": "codex-env",
+        "provider_profile": "codex-router-responses",
         "wire_api": "responses",
         "model": "gpt-5.5",
         "evidence_lane": "world-public-labels",
@@ -4336,7 +4336,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "failure_classes": {"provider_transient_failure": 1},
             "provider_reasons": {"upstream_unavailable": 1},
             "attempted_models": ["gpt-5.5"],
-            "attempted_provider_profiles": ["codex-env"],
+            "attempted_provider_profiles": ["codex-router-responses"],
             "attempted_wire_apis": ["responses"],
             "retry_delay_s_total": 1.0,
             "retry_delay_count": 1,
@@ -4351,7 +4351,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "enabled": True,
             "modes": ["public_tool_result_summary_v1"],
             "attempted_models": ["gpt-5.5"],
-            "attempted_provider_profiles": ["codex-env"],
+            "attempted_provider_profiles": ["codex-router-responses"],
             "attempted_wire_apis": ["responses"],
             "compacted_item_count": 2,
             "unchanged_item_count": 3,
@@ -4460,7 +4460,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
     assert timeline["intent"] == "open-ended"
     assert timeline["task_name"] == "household-world.open-ended"
     assert timeline["runtime"] == "openai-agents-live"
-    assert timeline["provider_profile"] == "codex-env"
+    assert timeline["provider_profile"] == "codex-router-responses"
     assert timeline["wire_api"] == "responses"
     assert timeline["model"] == "gpt-5.5"
     assert timeline["evidence_lane"] == "world-public-labels"
@@ -4496,7 +4496,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "failure_classes": {"provider_transient_failure": 1},
         "provider_reasons": {"upstream_unavailable": 1},
         "attempted_models": ["gpt-5.5"],
-        "attempted_provider_profiles": ["codex-env"],
+        "attempted_provider_profiles": ["codex-router-responses"],
         "attempted_wire_apis": ["responses"],
         "retry_delay_s_total": 1.0,
         "retry_delay_count": 1,
@@ -4511,7 +4511,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "enabled": True,
         "modes": ["public_tool_result_summary_v1"],
         "attempted_models": ["gpt-5.5"],
-        "attempted_provider_profiles": ["codex-env"],
+        "attempted_provider_profiles": ["codex-router-responses"],
         "attempted_wire_apis": ["responses"],
         "compacted_item_count": 2,
         "unchanged_item_count": 3,

@@ -16,15 +16,15 @@ uv sync --extra dev
 Use `just run::surface` for normal runs:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-public-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=world-public-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-tp-anthropic evidence_lane=world-public-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-router-responses prompt="find something useful to drink"
 ```
 
 For map-only work:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 ```
 
 The launch catalog resolves world, backend, intent, provider profile, goal
@@ -34,17 +34,17 @@ recipes run.
 ## Credentials And Runtime
 
 Copy `.env.example` to `.env`, then fill the keys you have. Codex defaults to
-`codex-env` and requires `CODEX_BASE_URL` plus `CODEX_API_KEY`. To use mify for
-Codex, set `ROBOCLAWS_CODEX_PROVIDER=mify` explicitly with `XM_LLM_API_KEY`.
+`codex-router-responses` and requires `CODEX_BASE_URL` plus `CODEX_API_KEY`. To use mimo-mify-responses for
+Codex, set `ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses` explicitly with `XM_LLM_API_KEY`.
 To use MiniMax's Responses-compatible route, set
-`ROBOCLAWS_CODEX_PROVIDER=minimax` with `MM_API_KEY`; it defaults to
+`ROBOCLAWS_PROVIDER_PROFILE=minimax-responses` with `MM_API_KEY`; it defaults to
 `MiniMax-M3`. M3 is the default MiniMax model because it is the
 multimodal/image-capable row and local paired cleanup evidence did not show a
 speed win for `MiniMax-M2.7-highspeed`. Set
 `ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed` only for explicit comparison
 runs. The highspeed model still emits reasoning tokens on the Responses route,
 so tiny output-token budgets can stop before assistant text is produced. Claude
-Code uses repo-local MiMo, Kimi, or mify Anthropic routes when present.
+Code uses repo-local MiMo, Kimi, or MiMo mify Anthropic routes when present.
 
 Provider/model metadata is centralized in
 `roboclaws/agents/provider_registry.py`. The launch catalog, operator console,

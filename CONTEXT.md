@@ -49,8 +49,8 @@ Claude Code, OpenAI Agents SDK, or a direct deterministic runner.
 _Avoid_: model provider, evidence lane, backend variant
 
 **Provider Profile**:
-The model/provider route used by an Agent Engine, such as `codex-env`, `mify`,
-`kimi-anthropic`, or `mimo-anthropic`. It applies to live model-backed engines;
+The model/provider route used by an Agent Engine, such as `codex-router-responses`, `mify`,
+`kimi-anthropic`, or `mimo-tp-anthropic`. It applies to live model-backed engines;
 deterministic direct runners do not require one.
 _Avoid_: agent engine, task intent, evidence lane
 

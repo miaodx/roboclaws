@@ -44,13 +44,13 @@ codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
 
     source scripts/dev/coding_agent_env.sh
     roboclaws_load_dotenv .env
-    codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
+    codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
     if [[ "$codex_provider" == "system" ]]; then
-      echo "error: unsupported system Codex provider; codex-env is the default and requires CODEX_BASE_URL plus CODEX_API_KEY, or set ROBOCLAWS_CODEX_PROVIDER=mify with XM_LLM_API_KEY or minimax with MM_API_KEY" >&2
+      echo "error: unsupported system Codex provider; codex-router-responses is the default and requires CODEX_BASE_URL plus CODEX_API_KEY, or set ROBOCLAWS_PROVIDER_PROFILE=mimo-mify-responses with XM_LLM_API_KEY or minimax-responses with MM_API_KEY" >&2
       exit 1
     fi
     roboclaws_assert_codex_network_allowed "Codex provider smoke"
-    codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
+    codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses)"
     codex_model_args=()
     roboclaws_codex_provider_args codex_model_args
 

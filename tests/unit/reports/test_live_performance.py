@@ -82,7 +82,7 @@ def test_extract_report_performance_metrics_uses_explicit_calibration(
     assert estimate["sample_count"] == 20
     assert estimate["coefficient_scope"] == {
         "agent_engine": "openai-agents-sdk",
-        "provider_profile": "codex-env",
+        "provider_profile": "codex-router-responses",
         "model": "gpt-5.5",
         "wire_api": "responses",
     }
@@ -162,7 +162,7 @@ def test_calibrate_model_latency_writes_error_statistics(tmp_path: Path) -> None
     assert packet["fit"]["error_stats"]["sample_count"] == 24
     assert packet["fit"]["error_stats"]["mae_s"] >= 0
     assert packet["fit"]["error_stats"]["rmse_s"] >= 0
-    assert packet["coefficient_sets"][0]["provider_profile"] == "codex-env"
+    assert packet["coefficient_sets"][0]["provider_profile"] == "codex-router-responses"
     assert packet["coefficient_sets"][0]["model"] == "gpt-5.5"
     assert packet["validation"]["available"] is False
     assert "holdout_validation_not_requested" in packet["validation"]["limitations"]
@@ -335,7 +335,7 @@ def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetr
     run_dir = tmp_path / "claude"
     run_dir.mkdir()
     (run_dir / "live_timing.json").write_text(
-        json.dumps({"runtime": "claude-code", "provider_profile": "mimo-anthropic"}),
+        json.dumps({"runtime": "claude-code", "provider_profile": "mimo-tp-anthropic"}),
         encoding="utf-8",
     )
     (run_dir / "claude-events.jsonl").write_text('{"type":"result"}\n', encoding="utf-8")
@@ -346,7 +346,7 @@ def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetr
         {
             "schema": MODEL_CALL_METRIC_SCHEMA,
             "agent_engine": "claude-code",
-            "provider_profile": "mimo-anthropic",
+            "provider_profile": "mimo-tp-anthropic",
             "wire_api": "",
             "model": "",
             "attempt_index": 0,
@@ -401,7 +401,7 @@ def test_compare_treats_different_wire_api_as_different_identity(tmp_path: Path)
         restored=5,
         elapsed_s=100,
         gap_s=50,
-        provider_profile="mimo-openai-chat",
+        provider_profile="mimo-tp-openai-chat",
         model="mimo-v2.5",
         wire_api="chat-completions",
     )
@@ -421,7 +421,7 @@ def test_privacy_gate_scans_model_call_metrics(tmp_path: Path) -> None:
             {
                 "schema": MODEL_CALL_METRIC_SCHEMA,
                 "agent_engine": "codex-cli",
-                "provider_profile": "codex-env",
+                "provider_profile": "codex-router-responses",
                 "model": "gpt-5.5",
                 "raw_prompt": "do not persist",
             }
@@ -449,7 +449,7 @@ def test_provider_request_metrics_add_transport_timing_without_model_api_overrid
                 "schema": "roboclaws_provider_request_metric_v1",
                 "proxy_request_id": "req-1",
                 "agent_engine": "codex-cli",
-                "provider_profile": "codex-env",
+                "provider_profile": "codex-router-responses",
                 "method": "POST",
                 "path": "/v1/responses",
                 "started_at_epoch": 1.0,
@@ -536,7 +536,7 @@ def _write_run(
     output_tokens: int = 10,
     reasoning_tokens: int = 0,
     duration_s: float = 5.0,
-    provider_profile: str = "codex-env",
+    provider_profile: str = "codex-router-responses",
     model: str = "gpt-5.5",
     wire_api: str = "responses",
 ) -> Path:
@@ -624,7 +624,7 @@ def _calibration_packet() -> dict[str, object]:
         "coefficient_sets": [
             {
                 "agent_engine": "openai-agents-sdk",
-                "provider_profile": "codex-env",
+                "provider_profile": "codex-router-responses",
                 "model": "gpt-5.5",
                 "wire_api": "responses",
                 "coefficients": {
@@ -660,7 +660,7 @@ def _model_call_metric_row(
     return {
         "schema": MODEL_CALL_METRIC_SCHEMA,
         "agent_engine": "openai-agents-sdk",
-        "provider_profile": "codex-env",
+        "provider_profile": "codex-router-responses",
         "wire_api": "responses",
         "model": "gpt-5.5",
         "attempt_index": 0,

@@ -113,15 +113,15 @@
           <label>
             Codex provider
             <select id="codex-provider-input" name="codex_provider">
-              <option value="codex-env" selected>codex-env</option>
-              <option value="mify">mify</option>
-              <option value="minimax">MiniMax</option>
-              <option value="mimo-openai-chat">MiMo OpenAI Chat</option>
+              <option value="codex-router-responses" selected>codex-router-responses</option>
+              <option value="mimo-mify-responses">mimo-mify-responses</option>
+              <option value="minimax-responses">MiniMax</option>
+              <option value="mimo-tp-openai-chat">MiMo OpenAI Chat</option>
               <option value="kimi-openai-chat">Kimi OpenAI Chat</option>
             </select>
           </label>
           <div class="prompt-copy" id="codex-provider-help">
-            codex-env, mify, and MiniMax use Responses. OpenAI Agents SDK can also
+            codex-router-responses, mimo-mify-responses, and MiniMax use Responses. OpenAI Agents SDK can also
             use MiMo/Kimi OpenAI Chat profiles with MIMO_TP_KEY or KIMI_API_KEY.
           </div>
           </div>
@@ -130,8 +130,8 @@
             Claude provider
             <select id="claude-provider-input" name="claude_provider">
               <option value="kimi-anthropic">Kimi</option>
-              <option value="mimo-anthropic" selected>MiMo token plan</option>
-              <option value="mify-anthropic">MiMo mify</option>
+              <option value="mimo-tp-anthropic" selected>MiMo token plan</option>
+              <option value="mimo-mify-anthropic">MiMo mify</option>
             </select>
           </label>
           <div class="prompt-copy" id="claude-provider-help">

@@ -611,8 +611,8 @@ run dispatch_target agent_engine mode="" *overrides:
             roboclaws_load_dotenv .env
             roboclaws_assert_codex_network_allowed "Codex Agibot household-world.map-build live report"
 
-            codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
-            codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
+            codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_PROVIDER_PROFILE codex-router-responses)"
+            codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses)"
             codex_model_args=()
             roboclaws_codex_provider_args codex_model_args
 
@@ -690,7 +690,7 @@ run dispatch_target agent_engine mode="" *overrides:
                 XM_LLM_API_KEY XM_LLM_BASE_URL MM_API_KEY MM_BASE_URL \
                 HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
                 http_proxy https_proxy all_proxy no_proxy \
-                ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
+                ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL \
                 ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
                 ROBOCLAWS_REPORT_RERUN_COMMAND
               do

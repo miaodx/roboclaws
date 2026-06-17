@@ -13,6 +13,7 @@ from roboclaws.agents.provider_registry import (
     default_enabled_provider_routes,
     model_aliases,
     model_supports_images,
+    normalize_provider_route,
     openclaw_model_id,
     provider_readiness,
     provider_route_spec,
@@ -80,7 +81,7 @@ def test_catalog_returns_openclaw_model_identifier() -> None:
 
 
 def test_registry_marks_mify_codex_degraded_but_supported() -> None:
-    route = provider_route_spec("mify")
+    route = provider_route_spec("mimo-mify-responses")
 
     assert "codex-cli" in route.supported_engines
     assert route.status_for_engine("codex-cli") == ROUTE_DEGRADED
@@ -102,17 +103,27 @@ def test_kimi_openai_chat_defaults_to_current_code_model() -> None:
 
 
 def test_default_enabled_routes_include_requested_api_sources() -> None:
-    route_ids = {route.route_id for route in default_enabled_provider_routes()}
+    routes = default_enabled_provider_routes()
+    route_ids = {route.route_id for route in routes}
+    public_profiles = {route.public_profile for route in routes}
     model_ids = {model.model_id for model in default_enabled_models()}
 
     assert {
-        "codex-env",
-        "mify",
-        "mimo-openai-chat",
-        "mimo-inside",
-        "minimax",
+        "codex-router-responses",
+        "mimo-mify-responses",
+        "mimo-tp-openai-chat",
+        "mimo-inside-openai-chat",
+        "minimax-responses",
         "kimi-openai-chat",
     } <= route_ids
+    assert {
+        "codex-router-responses",
+        "mimo-mify-responses",
+        "mimo-tp-openai-chat",
+        "mimo-inside-openai-chat",
+        "minimax-responses",
+        "kimi-openai-chat",
+    } <= public_profiles
     assert {
         "gpt-5.5",
         "xiaomi/mimo-v2.5",
@@ -125,7 +136,7 @@ def test_default_enabled_routes_include_requested_api_sources() -> None:
 
 
 def test_mimo_inside_is_default_enabled_openai_chat_route() -> None:
-    route = provider_route_spec("mimo-inside")
+    route = provider_route_spec("mimo-inside-openai-chat")
 
     assert route.default_model_id == "mimo-1000"
     assert route.default_use is True
@@ -135,11 +146,19 @@ def test_mimo_inside_is_default_enabled_openai_chat_route() -> None:
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_PROVISIONAL
 
 
+def test_provider_route_aliases_normalize_to_public_profiles() -> None:
+    assert provider_route_spec("mimo-mify-responses").public_profile == "mimo-mify-responses"
+    assert provider_route_spec("mimo-mify-responses").route_id == "mimo-mify-responses"
+    assert provider_route_spec("mimo-inside-openai-chat").route_id == "mimo-inside-openai-chat"
+    assert provider_route_spec("mimo-mify-anthropic").route_id == "mimo-mify-anthropic"
+    assert normalize_provider_route("minimax-responses") == "minimax-responses"
+
+
 def test_provider_routes_accept_adjacent_base_url_env_overrides() -> None:
-    assert provider_route_spec("mimo-anthropic").base_url_env == "MIMO_ANTHROPIC_BASE_URL"
+    assert provider_route_spec("mimo-tp-anthropic").base_url_env == "MIMO_ANTHROPIC_BASE_URL"
     assert (
         route_base_url(
-            provider_route_spec("mimo-anthropic"),
+            provider_route_spec("mimo-tp-anthropic"),
             env={"MIMO_ANTHROPIC_BASE_URL": "https://mimo.example/anthropic"},
         )
         == "https://mimo.example/anthropic"
@@ -155,7 +174,7 @@ def test_provider_routes_accept_adjacent_base_url_env_overrides() -> None:
 
 
 def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None:
-    route = provider_route_spec("minimax")
+    route = provider_route_spec("minimax-responses")
     model = resolve_model("MiniMax-M3")
 
     assert model.supports_image_input is True
@@ -172,10 +191,10 @@ def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None
 def test_provider_readiness_reports_status_and_missing_env() -> None:
     readiness = provider_readiness(
         agent_engine="codex-cli",
-        provider_profile="mify",
+        provider_profile="mimo-mify-responses",
         env={},
     )
 
-    assert readiness["provider"] == "mify"
+    assert readiness["provider"] == "mimo-mify-responses"
     assert readiness["route_status"] == ROUTE_DEGRADED
     assert readiness["missing_env"] == ["XM_LLM_API_KEY"]

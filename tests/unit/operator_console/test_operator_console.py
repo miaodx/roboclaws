@@ -136,7 +136,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     ]
     assert "preset=cleanup" in argv
     assert "evidence_lane=world-public-labels" in argv
-    assert "provider_profile=codex-env" in argv
+    assert "provider_profile=codex-router-responses" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "relocation_count=2" in argv
@@ -192,7 +192,7 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
                     "backend_id": "mujoco",
                     "intent_id": "cleanup",
                     "agent_engine_id": "codex-cli",
-                    "provider_profile": "codex-env",
+                    "provider_profile": "codex-router-responses",
                     "evidence_lane": "world-public-labels",
                     "scenario_setup": "relocate-cleanup-related-objects",
                     "prompt": "只收拾桌面上的杯子",
@@ -238,12 +238,12 @@ def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> Non
     readiness = route_readiness(
         tmp_path,
         route,
-        overrides={"port": _free_port(), "provider_profile": "mify"},
+        overrides={"port": _free_port(), "provider_profile": "mimo-mify-responses"},
         env={"XM_LLM_API_KEY": "key"},
     )
 
     assert readiness["can_start"] is True
-    assert readiness["provider"]["provider"] == "mify"
+    assert readiness["provider"]["provider"] == "mimo-mify-responses"
     assert readiness["provider"]["model"] == "xiaomi/mimo-v2.5"
 
 
