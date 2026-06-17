@@ -34,6 +34,15 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-17: OpenAI Agents SDK perf-profile source ambiguity now fails
+  aloud. `--agent-sdk-perf-profile` and `ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE`
+  may both be present only when they name the same profile; conflicting values
+  raise before live-run startup, and matching duplicate configuration is
+  surfaced as `source=cli+environment`. Owning layers: Agent Engines And
+  Provider Profiles plus Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud runtime configuration cleanup. Proof: focused OpenAI Agents perf
+  profile tests, ruff, format check, py_compile, and ratchet.
+
 - 2026-06-14: Backend facade started. `CleanupBackendSession` gained backend
   id/runtime-artifact attachment, shared backend construction, and common
   direct/MCP metadata attachment. Proof: focused backend/MCP tests and ratchet.

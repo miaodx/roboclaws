@@ -1075,9 +1075,7 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     assert events[0]["agent_sdk_responses_features"]["available"] is False
 
 
-def test_openai_agents_runtime_applies_kimi_coding_user_agent(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_openai_agents_runtime_applies_kimi_coding_user_agent(tmp_path: Path, monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeOpenAIChatCompletionsModel:
@@ -1157,9 +1155,7 @@ def test_openai_agents_runtime_applies_kimi_coding_user_agent(
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
     assert events[0]["provider_profile"] == "kimi-openai-chat"
-    assert events[0]["sdk_model_settings"]["extra_headers"] == {
-        "User-Agent": "claude-code/1.0.0"
-    }
+    assert events[0]["sdk_model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
 
 
 def test_openai_agents_runtime_configures_model_input_compaction_filter(
@@ -3674,6 +3670,26 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     }
 
 
+def test_openai_agents_perf_profile_rejects_conflicting_cli_and_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", "mimo_compact_v1")
+
+    with pytest.raises(ValueError, match="conflicting OpenAI Agents SDK performance profile"):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="gpt_compact_v1")
+        )
+
+
+def test_openai_agents_perf_profile_accepts_matching_cli_and_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", "gpt_compact_v1")
+
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(agent_sdk_perf_profile="gpt_compact_v1")
+    )
+
+    assert profile["profile_id"] == "gpt_compact_v1"
+    assert profile["source"] == "cli+environment"
+
+
 def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     gpt = _resolve_agent_sdk_perf_profile(
@@ -3762,9 +3778,7 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     )
     assert kimi["provider_profile"] == "kimi-openai-chat"
     assert kimi["wire_api"] == "chat-completions"
-    assert kimi["sdk_model_settings"]["extra_headers"] == {
-        "User-Agent": "claude-code/1.0.0"
-    }
+    assert kimi["sdk_model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
 
 
 def test_openai_agents_perf_profile_accepts_thinking_mode_override(monkeypatch) -> None:

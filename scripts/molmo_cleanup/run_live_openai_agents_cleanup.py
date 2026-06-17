@@ -1083,9 +1083,19 @@ def _profile_id_with_source(
     model_family: str,
 ) -> tuple[str, str]:
     cli_value = str(getattr(args, "agent_sdk_perf_profile", "") or "").strip()
-    if cli_value:
-        return _validate_profile_id(cli_value), "cli"
     env_value = os.environ.get(AGENT_SDK_PERF_PROFILE_ENV, "").strip()
+    if cli_value:
+        profile_id = _validate_profile_id(cli_value)
+        if env_value:
+            env_profile_id = _validate_profile_id(env_value)
+            if env_profile_id != profile_id:
+                raise ValueError(
+                    "conflicting OpenAI Agents SDK performance profile: "
+                    f"--agent-sdk-perf-profile={profile_id!r} and "
+                    f"{AGENT_SDK_PERF_PROFILE_ENV}={env_profile_id!r}"
+                )
+            return profile_id, "cli+environment"
+        return profile_id, "cli"
     if env_value:
         return _validate_profile_id(env_value), "environment"
     return _validate_profile_id(_default_profile_id(provider_profile, model_family)), "default"

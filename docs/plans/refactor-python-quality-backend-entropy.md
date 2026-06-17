@@ -156,6 +156,19 @@ small cuts are P2 inputs only: empty camera-labeler identity maps,
 `_task_prefix_legacy`, the reachable legacy checker flag, and duplicated
 lane/workflow wording.
 
+Implementation refresh on 2026-06-17 completed the first fail-aloud runtime
+configuration slice for OpenAI Agents SDK performance-profile selection.
+`--agent-sdk-perf-profile` and `ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE` now
+reject conflicting values instead of silently letting CLI input override the
+environment. Matching duplicate values remain valid and are surfaced as
+`source=cli+environment`. Proof passed with focused OpenAI Agents perf-profile
+tests, ruff, format check, py_compile, and a ratchet refresh. The refreshed
+ratchet reports 14 complexity rows and 74 oversized modules; the larger totals
+reflect current repository drift and this slice's regression tests, not a
+closed hard-ceiling owner split. Continue the dedicated fail-aloud/env cleanup
+stream before returning to Candidate D profile-owner extraction or other
+hard-ceiling splits.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
