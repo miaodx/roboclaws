@@ -37,6 +37,7 @@ from roboclaws.household.realworld_mcp_run_artifacts import (
 from roboclaws.household.report import (
     write_state_snapshot,
 )
+from roboclaws.household.report_semantic_map_artifacts import write_semantic_map_artifacts
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
     camera_offsets_from_raw_fpv_observation,
@@ -262,6 +263,7 @@ class RealWorldMolmoCleanupMCPServer:
             "before.png", title="Before real-world cleanup"
         )
         self._record_robot_view("before", label_suffix="before")
+        self._write_live_public_artifacts(trigger="server_initialized")
         self._mcp = FastMCP("roboclaws", host=host, port=self.port)
         register_realworld_mcp_tools(self)
         self.write_runtime_event(
@@ -302,6 +304,8 @@ class RealWorldMolmoCleanupMCPServer:
         if name == "done" and response.get("ok"):
             return self._finalize_done(str(kwargs.get("reason", "")), response)
         self._record_tool_robot_view(name, request, response)
+        if response.get("ok") and name != "done":
+            self._write_live_public_artifacts(trigger=name)
         return response
 
     def check_operator_messages(self, max_messages: int = 10) -> dict[str, Any]:
@@ -389,6 +393,45 @@ class RealWorldMolmoCleanupMCPServer:
             list(agent_view.get("public_tool_names") or []),
         )
         return agent_view
+
+    def _write_live_public_artifacts(self, *, trigger: str) -> None:
+        """Refresh public map artifacts while a live MCP run is still in progress."""
+
+        try:
+            agent_view = self._agent_view_payload()
+            runtime_metric_map = (
+                agent_view.get("runtime_metric_map")
+                if isinstance(agent_view.get("runtime_metric_map"), dict)
+                else {}
+            )
+            _write_json(self.run_dir / "agent_view.json", agent_view)
+            _write_json(self.run_dir / "runtime_metric_map.json", runtime_metric_map)
+            run_result = {
+                "backend": self.backend_name,
+                "task_surface": self.task_surface,
+                "task_intent": self.task_intent,
+                "task_name": self.task_name,
+                "map_mode": runtime_metric_map.get("map_mode", self.contract.map_mode),
+                "minimal_map_mode": runtime_metric_map.get("minimal_map_mode", False),
+                "agent_view": agent_view,
+                "runtime_metric_map": runtime_metric_map,
+                "artifacts": {
+                    "agent_view": str(self.run_dir / "agent_view.json"),
+                    "runtime_metric_map": str(self.run_dir / "runtime_metric_map.json"),
+                },
+            }
+            write_semantic_map_artifacts(
+                self.run_dir,
+                run_result,
+                self.robot_view_steps,
+                report_asset_src=_live_report_asset_src,
+            )
+        except Exception as exc:
+            self.write_runtime_event(
+                "live_public_artifact_write_failed",
+                trigger=trigger,
+                error=str(exc),
+            )
 
     def _augment_response(
         self,
@@ -1143,6 +1186,24 @@ def _json_safe(value: Any) -> Any:
         if isinstance(value, (list, tuple)):
             return [_json_safe(item) for item in value]
         return str(value)
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(_json_safe(payload), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _live_report_asset_src(path: Any, run_dir: Path | None) -> str:
+    candidate = Path(path)
+    if run_dir is not None:
+        try:
+            return candidate.relative_to(run_dir).as_posix()
+        except ValueError:
+            pass
+    return candidate.as_posix()
 
 
 def _default_agent_driven(policy: str) -> bool:
