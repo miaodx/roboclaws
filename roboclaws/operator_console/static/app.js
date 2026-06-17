@@ -35,6 +35,7 @@ const EVIDENCE_STRIP_MAX_HEIGHT = 620;
 const MAIN_CONTENT_MIN_HEIGHT = 360;
 const MANUAL_CONTROL_STEP_M = 0.25;
 const MANUAL_CONTROL_TURN_DEG = 15;
+const DEFAULT_UI_INTENT = "open-ended";
 
 const els = {
   appShell: document.querySelector(".app-shell"),
@@ -129,8 +130,8 @@ async function boot() {
   state.runtime = payload.runtime || { tasks: [], summary: {} };
   state.selectedWorld = state.worlds[0] || null;
   state.selectedRoute =
-    combinationsForWorld(state.selectedWorld && state.selectedWorld.id).find((route) => route.enabled) ||
-    state.combinations.find((route) => route.enabled) ||
+    preferredDefaultCombination(combinationsForWorld(state.selectedWorld && state.selectedWorld.id)) ||
+    preferredDefaultCombination(state.combinations) ||
     state.combinations[0];
   if (state.selectedRoute) {
     state.selectedWorld =
@@ -510,9 +511,7 @@ function renderRoutes() {
     `;
     button.addEventListener("click", () => {
       state.selectedWorld = world;
-      state.selectedRoute =
-        combinationsForWorld(world.id).find((item) => item.enabled) ||
-        combinationsForWorld(world.id)[0];
+      state.selectedRoute = preferredDefaultCombination(combinationsForWorld(world.id));
       state.selectedIntent = state.selectedRoute ? state.selectedRoute.intent_id : "";
       state.syncAxesFromRoute = true;
       renderRoutes();
@@ -525,6 +524,14 @@ function renderRoutes() {
 
 function combinationsForWorld(worldId) {
   return state.combinations.filter((item) => item.world_id === worldId);
+}
+
+function preferredDefaultCombination(combinations) {
+  return (
+    combinations.find((item) => item.enabled && item.intent_id === DEFAULT_UI_INTENT) ||
+    combinations.find((item) => item.enabled) ||
+    combinations[0]
+  );
 }
 
 function selectedCombinationFromAxes() {

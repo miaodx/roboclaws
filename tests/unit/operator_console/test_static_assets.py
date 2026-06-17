@@ -331,6 +331,9 @@ def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> Non
     assert 'id="intent-preview"' in html
     assert "selectedIntent" in app
     assert "selectedIntentForRoute" in app
+    assert 'const DEFAULT_UI_INTENT = "open-ended";' in app
+    assert "preferredDefaultCombination" in app
+    assert "item.enabled && item.intent_id === DEFAULT_UI_INTENT" in app
     assert "state.selectedIntent = els.intentInput.value;" in app
     assert "state.selectedIntent = selectedIntent();" not in app
     assert "syncAxesFromRoute" in app
