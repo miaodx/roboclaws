@@ -25,9 +25,9 @@ from scripts.maps.render_b1_map12_label_tool import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-MAP_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
-    "robot_map_12"
-) / "agibot"
+MAP_BUNDLE = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
+)
 REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_label_tool.py"
 REMOVED_AUTHORED_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"

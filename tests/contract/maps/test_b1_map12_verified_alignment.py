@@ -19,12 +19,18 @@ from scripts.maps.fit_b1_map12_scene_alignment import (
     validate_alignment_residual_artifact,
     validate_correspondence_manifest,
 )
-from scripts.maps.render_b1_map12_correspondence_review import build_review_packet
+from scripts.maps.render_b1_map12_correspondence_review import (
+    build_review_packet,
+    render_review_report,
+)
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_readiness_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "fit_b1_map12_scene_alignment.py"
 RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
+VENDOR_MAP12_BUNDLE = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
+)
 
 
 def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, object]:
@@ -34,9 +40,9 @@ def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, ob
         "target_scene_frame": "b1_rebuilt_scene_usd_world",
         "bbox_seed_policy": "known_poor_seed_only",
         "scene_projection_policy": {
-            "horizontal_axes": ["x", "z"],
-            "up_axis": "y",
-            "source": "usd_stage_up_axis_and_robot_pose_convention",
+            "horizontal_axes": ["x", "y"],
+            "up_axis": "z",
+            "source": "2rd_floor_seperated_scene_topdown_policy",
         },
         "anchors": anchors,
     }
@@ -45,7 +51,7 @@ def correspondence_manifest(*, anchors: list[dict[str, object]]) -> dict[str, ob
 def accepted_anchor(
     anchor_id: str,
     map_xy: tuple[float, float],
-    scene_xz: tuple[float, float],
+    scene_xy: tuple[float, float],
     *,
     navigation_area_id: str,
     asset_partition_id: str,
@@ -56,7 +62,7 @@ def accepted_anchor(
         "navigation_area_id": navigation_area_id,
         "asset_partition_id": asset_partition_id,
         "map_xy": [map_xy[0], map_xy[1]],
-        "scene_xyz": [scene_xz[0], 0.0, scene_xz[1]],
+        "scene_xyz": [scene_xy[0], scene_xy[1], 0.0],
         "evidence": {
             "map_image": "output/b1-map12/alignment/map_anchor.png",
             "scene_image": "output/b1-map12/alignment/scene_anchor.png",
@@ -120,6 +126,20 @@ def test_manifest_rejects_accepted_anchor_from_known_poor_bbox_seed() -> None:
     assert (
         "accepted anchor bbox_seed_prefill must not use known-poor bbox seed coordinates" in errors
     )
+
+
+def test_manifest_rejects_legacy_y_up_xz_projection_policy() -> None:
+    manifest = correspondence_manifest(anchors=passing_anchors()[:1])
+    manifest["scene_projection_policy"] = {
+        "horizontal_axes": ["x", "z"],
+        "up_axis": "y",
+        "source": "legacy_y_up_policy",
+    }
+
+    errors = validate_correspondence_manifest(manifest)
+
+    assert "scene_projection_policy.horizontal_axes must be ['x', 'y']" in errors
+    assert "scene_projection_policy.up_axis must be z" in errors
 
 
 def test_fitter_keeps_alignment_candidate_without_six_reviewed_anchors(tmp_path: Path) -> None:
@@ -382,6 +402,98 @@ def test_review_packet_keeps_proposed_anchor_pending() -> None:
     assert packet["anchors"][0]["review_action"] == (
         "pick explicit map_xy and scene_xyz, then mark accepted after operator review"
     )
+
+
+def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
+    tmp_path: Path,
+) -> None:
+    scene_image = tmp_path / "scene_topdown.png"
+    scene_image.write_bytes(b"P5\n2 2\n255\n" + bytes([0, 80, 160, 255]))
+    scene_packet_path = tmp_path / "scene_topdown_diagnostic.json"
+    scene_packet_path.write_text(
+        json.dumps(
+            {
+                "topdown_image": str(scene_image),
+                "geometry_status": "label_inventory_only",
+                "up_axis": "z",
+                "horizontal_axes": ["x", "y"],
+                "partition_count": 6,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    packet = build_review_packet(
+        correspondence_manifest(anchors=[]),
+        map_bundle=VENDOR_MAP12_BUNDLE,
+        correspondences_path=REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json",
+        scene_diagnostic_path=scene_packet_path,
+        output_dir=tmp_path,
+    )
+
+    assert packet["source_map"]["map_yaml"].endswith("nav2.yaml")
+    assert packet["source_map"]["source_image"].endswith("occupancy.pgm")
+    assert packet["source_map"]["image"].endswith("map12_source_map.png")
+    assert packet["source_map"]["image_role"] == "browser_ready_picker_preview"
+    assert Path(packet["source_map"]["image"]).is_file()
+    assert packet["source_map"]["width_px"] > 0
+    assert packet["source_map"]["height_px"] > 0
+    assert packet["source_map"]["pixel_to_map_xy"]["origin_x"] == pytest.approx(-35.1000022888)
+    assert packet["scene_diagnostic"]["status"] == "available"
+    assert packet["scene_diagnostic"]["geometry_status"] == "label_inventory_only"
+    assert packet["scene_diagnostic"]["pixel_to_scene_xyz"]["status"] == "non_metric"
+    assert packet["scene_diagnostic"]["pixel_to_scene_xyz"]["up_axis"] == "z"
+    assert packet["export_manifest_template"]["scene_projection_policy"] == {
+        "horizontal_axes": ["x", "y"],
+        "source": "2rd_floor_seperated_scene_topdown_policy",
+        "up_axis": "z",
+    }
+    assert packet["export_manifest_template"]["anchors"] == []
+
+
+def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Path) -> None:
+    scene_image = tmp_path / "scene_topdown.png"
+    scene_image.write_bytes(b"P5\n2 2\n255\n" + bytes([0, 80, 160, 255]))
+    scene_packet_path = tmp_path / "scene_topdown_diagnostic.json"
+    scene_packet_path.write_text(
+        json.dumps(
+            {
+                "topdown_image": str(scene_image),
+                "geometry_status": "label_inventory_only",
+                "up_axis": "z",
+                "horizontal_axes": ["x", "y"],
+                "partition_count": 6,
+            }
+        ),
+        encoding="utf-8",
+    )
+    packet = build_review_packet(
+        correspondence_manifest(anchors=[]),
+        map_bundle=VENDOR_MAP12_BUNDLE,
+        correspondences_path=tmp_path / "b1-map12-scene-correspondences.json",
+        scene_diagnostic_path=scene_packet_path,
+        output_dir=tmp_path,
+    )
+
+    html = render_review_report(
+        packet,
+        output_dir=tmp_path,
+        packet_path=tmp_path / "correspondence_review_packet.json",
+        correspondences_path=tmp_path / "b1-map12-scene-correspondences.json",
+    )
+
+    assert 'id="two-map-anchor-picker"' in html
+    assert "map12_source_map.png" in html
+    assert 'id="mapImage"' in html
+    assert 'id="sceneImage"' in html
+    assert "function mapPixelToMapXY" in html
+    assert "function scenePixelToSceneXYZ" in html
+    assert "function downloadCorrespondenceManifest" in html
+    assert "b1-map12-scene-correspondences.draft.json" in html
+    assert "map_xy" in html
+    assert "scene_xyz" in html
+    assert "scene_pick_policy" in html
+    assert "non_metric" in html
 
 
 def test_review_packet_flags_seed_derived_accepted_anchor_not_fit_ready() -> None:

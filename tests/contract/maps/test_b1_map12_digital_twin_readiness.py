@@ -64,6 +64,8 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
         "robot_navigation_supported": True,
         "robot_navigation_provenance": NAVIGATION_PROVENANCE,
         "navigation_provenance": "kinematic_pose_driven",
+        "alignment_artifact": str(tmp_path / "alignment_residuals.json"),
+        "alignment_transform_source": "reviewed_correspondence_fit",
         "planner_backed": False,
         "physical_robot": False,
         "semantic_source": SEMANTIC_SOURCE,
@@ -75,8 +77,22 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
         "navigation_waypoint_count": 2,
         "robot_view_evidence_status": "available",
         "waypoint_evidence": [
-            {"waypoint_id": "wp_1", "robot_pose": pose_1, "views": {"fpv": str(first)}},
-            {"waypoint_id": "wp_2", "robot_pose": pose_2, "views": {"fpv": str(second)}},
+            {
+                "waypoint_id": "wp_1",
+                "robot_pose": pose_1,
+                "robot_pose_applied": True,
+                "alignment_artifact": str(tmp_path / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "views": {"fpv": str(first)},
+            },
+            {
+                "waypoint_id": "wp_2",
+                "robot_pose": pose_2,
+                "robot_pose_applied": True,
+                "alignment_artifact": str(tmp_path / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "views": {"fpv": str(second)},
+            },
         ],
     }
 
@@ -182,6 +198,25 @@ def test_navigation_artifact_rejects_low_detail_gray_fpv_evidence(tmp_path: Path
 
     assert "waypoint 1 fpv: image has too little visual detail" in errors
     assert "waypoint 1 fpv: image has too few distinct colors" in errors
+
+
+def test_navigation_artifact_rejects_missing_residual_alignment_provenance(
+    tmp_path: Path,
+) -> None:
+    payload = navigation_payload(tmp_path)
+    payload["alignment_artifact"] = ""
+    payload["alignment_transform_source"] = "known_poor_bbox_seed"
+    payload["waypoint_evidence"][0]["robot_pose_applied"] = False
+    payload["waypoint_evidence"][0]["alignment_artifact"] = ""
+    payload["waypoint_evidence"][0]["alignment_transform_source"] = "known_poor_bbox_seed"
+
+    errors = validate_navigation_smoke_artifact(payload, require_files=True)
+
+    assert "navigation artifact requires residual-backed alignment artifact provenance" in errors
+    assert "navigation artifact requires reviewed correspondence transform source" in errors
+    assert "waypoint 1 robot pose must be applied in Isaac" in errors
+    assert "waypoint 1 missing alignment artifact provenance" in errors
+    assert "waypoint 1 requires reviewed correspondence transform source" in errors
 
 
 def test_navigation_artifact_rejects_semantic_usd_or_manipulation_claim(tmp_path: Path) -> None:

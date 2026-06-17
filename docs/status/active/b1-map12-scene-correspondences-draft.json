@@ -6,10 +6,10 @@
   "scene_projection_policy": {
     "horizontal_axes": [
       "x",
-      "z"
+      "y"
     ],
-    "up_axis": "y",
-    "source": "usd_stage_up_axis_and_robot_pose_convention"
+    "up_axis": "z",
+    "source": "2rd_floor_seperated_scene_topdown_policy"
   },
   "review_lifecycle": {
     "draft_location": "docs/status/active/b1-map12-scene-correspondences-draft.json",

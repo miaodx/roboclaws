@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-two-map-alignment-blocker
-status: Active
+status: Partially implemented
 created: 2026-06-17
 last_reviewed: 2026-06-17
 implementation_allowed: true
@@ -412,3 +412,47 @@ Stop after either:
 - the diagnostic proves the scene labels are not self-consistent enough to align.
 
 Do not broaden into semantic-map authoring until this blocker is closed.
+
+## Implementation Status
+
+2026-06-17 partial implementation:
+
+- P0 diagnostic/review/fitter safety is implemented for the pre-anchor state.
+  `scripts/maps/render_b1_scene_topdown_diagnostic.py` emits an honest
+  `2rd_floor_seperated` diagnostic with `up_axis=z`,
+  `horizontal_axes=["x","y"]`, `geometry_status=label_inventory_only`, six
+  partitions, and high-signal label inventory.
+- `scripts/maps/render_b1_map12_correspondence_review.py` now loads the vendor
+  Map12 bundle directly from `nav2.yaml` / `occupancy.pgm`, loads the scene
+  topdown diagnostic, and renders a separate two-map picker/export surface. The
+  HTML picker uses a browser-ready `map12_source_map.png` generated into the
+  review output directory while preserving the vendor `occupancy.pgm` as packet
+  provenance. The exported draft manifest contains paired `map_xy` plus
+  `scene_xyz` picks and labels label-inventory scene picks as non-metric review
+  candidates.
+- The correspondence fitter, tests, and draft/capsule artifacts use the Z-up
+  `x,y` scene projection policy and reject legacy Y-up `x,z` policy for
+  accepted-anchor evidence.
+- B1 static preview generation still publishes only `map` and `topdown` before
+  residual-backed Isaac runtime camera evidence; FPV/Chase promotion remains
+  guarded by same-waypoint, residual-backed, `robot_pose_applied` provenance.
+
+Current gate:
+
+- `assets/maps/b1-map12-scene-correspondences.json` still has zero accepted
+  anchors. This is the correct blocked state until a human/operator reviews at
+  least six anchors across at least three areas/partitions.
+- The residual-backed transform, Isaac waypoint camera proof, and FPV/Chase
+  preview promotion remain unimplemented/unverified until reviewed anchors and
+  local Isaac runtime evidence exist.
+
+Latest deterministic evidence:
+
+```bash
+ruff check scripts/maps/render_b1_scene_topdown_diagnostic.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
+ruff format --check scripts/maps/render_b1_scene_topdown_diagnostic.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q
+python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-diagnostic output/b1-map12/scene-topdown-diagnostic/scene_topdown_diagnostic.json --output-dir output/b1-map12/correspondence-review
+python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
+python scripts/operator_console/render_scene_previews.py --world b1-map12 --output-dir output/b1-map12/static-preview-proof
+```

@@ -289,6 +289,7 @@ def readiness_artifact_with_alignment(
     area_alignment = [
         item for item in alignment.get("area_alignment") or [] if isinstance(item, dict)
     ]
+    selected_transform = _dict(alignment.get("selected_transform"))
     payload["alignment_artifact"] = str(alignment_artifact_path) if alignment_artifact_path else ""
     payload["alignment_validation"] = {
         "status": "passed" if not alignment_errors else "failed",
@@ -308,7 +309,7 @@ def readiness_artifact_with_alignment(
     map12_overlay = payload.setdefault("map12_overlay", {})
     map12_overlay["residual_evidence"] = payload["residual_evidence"]
     map12_overlay["bbox_seed_policy"] = KNOWN_POOR_BBOX_SEED_POLICY
-    map12_overlay["verified_transform"] = alignment.get("selected_transform") or {}
+    map12_overlay["verified_transform"] = selected_transform
     payload["area_alignment"] = area_alignment
     if alignment_errors:
         payload["map12_overlay_status"] = "candidate"
@@ -322,6 +323,14 @@ def readiness_artifact_with_alignment(
         payload["map12_to_b1_usd_transform_status"] = "verified"
         map12_overlay["status"] = "verified"
         map12_overlay["transform_status"] = "verified"
+        map12_overlay["candidate_waypoints"] = residual_backed_candidate_waypoints(
+            payload,
+            selected_transform=selected_transform,
+            alignment_artifact_path=alignment_artifact_path,
+        )
+        payload["candidate_navigation_waypoint_count"] = len(
+            map12_overlay.get("candidate_waypoints") or []
+        )
         payload["readiness_alignment_status"] = "global_verified"
         return payload
     if any(item.get("alignment_status") == "verified" for item in area_alignment):
@@ -813,6 +822,16 @@ def validate_navigation_smoke_artifact(
         errors,
     )
     _require(
+        bool(payload.get("alignment_artifact")),
+        "navigation artifact requires residual-backed alignment artifact provenance",
+        errors,
+    )
+    _require(
+        str(payload.get("alignment_transform_source") or "") == "reviewed_correspondence_fit",
+        "navigation artifact requires reviewed correspondence transform source",
+        errors,
+    )
+    _require(
         payload.get("planner_backed") in {True, False},
         "planner_backed must be explicit",
         errors,
@@ -853,6 +872,21 @@ def validate_navigation_smoke_artifact(
     _require(len(pose_keys) >= 2, "navigation waypoint robot poses must be distinct", errors)
     for index, item in enumerate(waypoints, start=1):
         views = _dict(item.get("views"))
+        _require(
+            item.get("robot_pose_applied") is True,
+            f"waypoint {index} robot pose must be applied in Isaac",
+            errors,
+        )
+        _require(
+            bool(item.get("alignment_artifact")),
+            f"waypoint {index} missing alignment artifact provenance",
+            errors,
+        )
+        _require(
+            str(item.get("alignment_transform_source") or "") == "reviewed_correspondence_fit",
+            f"waypoint {index} requires reviewed correspondence transform source",
+            errors,
+        )
         _require(bool(views.get("fpv")), f"waypoint {index} missing FPV image", errors)
         if require_files:
             for view_name, raw_path in views.items():
@@ -921,6 +955,89 @@ def _candidate_waypoint_from_anchor(
             "pose_source": SEMANTIC_SOURCE,
         },
     }
+
+
+def residual_backed_candidate_waypoints(
+    readiness: dict[str, Any],
+    *,
+    selected_transform: dict[str, Any],
+    alignment_artifact_path: Path | None,
+) -> list[dict[str, Any]]:
+    if str(selected_transform.get("source") or "") != "reviewed_correspondence_fit":
+        return []
+    map12 = _dict(readiness.get("map12"))
+    anchors = [
+        anchor
+        for anchor in map12.get("anchors") or []
+        if isinstance(anchor, dict) and _has_xy(_dict(anchor.get("nav_goal")))
+    ]
+    waypoints = []
+    for anchor in anchors[: min(4, len(anchors))]:
+        waypoint = _residual_backed_waypoint_from_anchor(
+            anchor,
+            transform=selected_transform,
+            alignment_artifact_path=alignment_artifact_path,
+        )
+        if waypoint:
+            waypoints.append(waypoint)
+    return waypoints
+
+
+def _residual_backed_waypoint_from_anchor(
+    anchor: dict[str, Any],
+    *,
+    transform: dict[str, Any],
+    alignment_artifact_path: Path | None,
+) -> dict[str, Any]:
+    nav_goal = _dict(anchor.get("nav_goal"))
+    if not _has_xy(nav_goal):
+        return {}
+    yaw = _optional_float(nav_goal.get("yaw"))
+    yaw_deg = (
+        math.degrees(yaw) if yaw is not None else _optional_float(nav_goal.get("yaw_deg")) or 0.0
+    )
+    scene_xy = _apply_reviewed_scene_transform(
+        [float(nav_goal["x"]), float(nav_goal["y"])], transform
+    )
+    return {
+        "waypoint_id": f"b1_aligned_{anchor['id']}",
+        "source_anchor_id": anchor["id"],
+        "label": anchor.get("label") or anchor["id"],
+        "semantic_source": SEMANTIC_SOURCE,
+        "alignment_artifact": str(alignment_artifact_path) if alignment_artifact_path else "",
+        "alignment_transform_source": "reviewed_correspondence_fit",
+        "selected_transform_type": str(transform.get("type") or ""),
+        "map12_nav_goal": nav_goal,
+        "b1_pose": {
+            "frame": str(transform.get("target_frame") or "b1_rebuilt_scene_usd_world"),
+            "x": round(scene_xy[0], 6),
+            "y": round(scene_xy[1], 6),
+            "z": 0.0,
+            "yaw_deg": round(float(yaw_deg) + float(transform.get("yaw_deg") or 0.0), 6),
+            "pose_source": "reviewed_correspondence_fit",
+        },
+    }
+
+
+def _apply_reviewed_scene_transform(point: list[float], transform: dict[str, Any]) -> list[float]:
+    scale = float(transform.get("scale") or 1.0)
+    rotation = transform.get("rotation_matrix")
+    if not (
+        isinstance(rotation, list)
+        and len(rotation) == 2
+        and all(isinstance(row, list) and len(row) == 2 for row in rotation)
+    ):
+        rotation = [[1.0, 0.0], [0.0, 1.0]]
+    translation = transform.get("translation")
+    if not isinstance(translation, list) or len(translation) != 2:
+        translation = [0.0, 0.0]
+    x = scale * (float(rotation[0][0]) * point[0] + float(rotation[0][1]) * point[1]) + float(
+        translation[0]
+    )
+    y = scale * (float(rotation[1][0]) * point[0] + float(rotation[1][1]) * point[1]) + float(
+        translation[1]
+    )
+    return [x, y]
 
 
 def _anchor_summary(item: Any, index: int) -> dict[str, Any]:
