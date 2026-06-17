@@ -32,6 +32,49 @@ def _require_robot_map_9_artifact() -> None:
         pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
 
 
+def _assert_fixture_hints_artifact_only(run_dir: Path, run_result: dict) -> None:
+    assert [item["stage"] for item in run_result["agibot_sdk_runner"]["subphase_reports"]] == [
+        "agent_view_export",
+        "observe",
+        "navigate_waypoint",
+        "blocked_manipulation",
+    ]
+    assert (run_dir / "preflight" / "fixture_hints.json").is_file()
+    runner_task_input = json.loads(
+        (run_dir / "preflight" / "runner_task_input.json").read_text(encoding="utf-8")
+    )
+    trace_events = [
+        json.loads(line)
+        for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert "fixture_hints" not in runner_task_input["public_tool_sequence"]
+    assert "fixture_hints" not in runner_task_input["stage_mapping"]["agent_view_export"]
+    assert not any(event.get("tool") == "fixture_hints" for event in trace_events)
+
+
+def _assert_contract_rehearsal_artifacts(run_dir: Path) -> None:
+    for relpath in (
+        "preflight/agent_view.json",
+        "preflight/metric_map.json",
+        "preflight/fixture_hints.json",
+        "preflight/scene_identity.json",
+        "preflight/molmospaces_metric_map.png",
+        "preflight/waypoint_sequence.json",
+        "preflight/runner_task_input.json",
+        "runtime/observation.json",
+        "runtime/navigation.json",
+        "runtime/blocked_manipulation.json",
+        "runtime/runtime_export.json",
+        "runtime/policy_observation.png",
+        "subphases/01-agent-view/report.html",
+        "subphases/02-observe/report.html",
+        "subphases/03-navigate-waypoint/report.html",
+        "subphases/04-blocked-manipulation/report.html",
+    ):
+        assert (run_dir / relpath).is_file(), relpath
+
+
 def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
     tmp_path: Path,
 ) -> None:
@@ -74,32 +117,8 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
         item["status"] == "blocked_capability"
         for item in runtime_export["blocked_manipulation_results"]
     )
-    assert [item["stage"] for item in run_result["agibot_sdk_runner"]["subphase_reports"]] == [
-        "agent_view_export",
-        "observe",
-        "navigate_waypoint",
-        "blocked_manipulation",
-    ]
-
-    for relpath in (
-        "preflight/agent_view.json",
-        "preflight/metric_map.json",
-        "preflight/fixture_hints.json",
-        "preflight/scene_identity.json",
-        "preflight/molmospaces_metric_map.png",
-        "preflight/waypoint_sequence.json",
-        "preflight/runner_task_input.json",
-        "runtime/observation.json",
-        "runtime/navigation.json",
-        "runtime/blocked_manipulation.json",
-        "runtime/runtime_export.json",
-        "runtime/policy_observation.png",
-        "subphases/01-agent-view/report.html",
-        "subphases/02-observe/report.html",
-        "subphases/03-navigate-waypoint/report.html",
-        "subphases/04-blocked-manipulation/report.html",
-    ):
-        assert (run_dir / relpath).is_file(), relpath
+    _assert_fixture_hints_artifact_only(run_dir, run_result)
+    _assert_contract_rehearsal_artifacts(run_dir)
 
     assert "MolmoSpaces Agibot Contract Rehearsal" in report_text
     assert "MolmoSpaces Scene &amp; Map" in report_text

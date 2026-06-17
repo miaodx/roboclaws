@@ -8,8 +8,10 @@ from roboclaws.launch.backends import (
     normalize_cleanup_implementation_backend,
     normalize_map_build_codex_implementation_backend,
 )
-from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
+from roboclaws.launch.catalog import SURFACE_SPECS, LaunchError, resolve_surface_launch
 from roboclaws.launch.environment_setup_metadata import ENVIRONMENT_SETUP_METADATA_ENV
+from roboclaws.launch.goals import normalize_goal_contract
+from roboclaws.launch.intents import TASK_INTENT_SPECS
 from roboclaws.launch.runners import export_env_from_overrides
 
 
@@ -118,6 +120,21 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             '"mode":"baseline"'
             in export_env_from_overrides(plan.overrides)[ENVIRONMENT_SETUP_METADATA_ENV]
         )
+
+
+def test_household_goal_contract_tool_plans_do_not_advertise_fixture_hints() -> None:
+    surface = SURFACE_SPECS["household-world"]
+
+    for intent_id in ("cleanup", "map-build", "open-ended"):
+        contract = normalize_goal_contract(
+            surface=surface,
+            intent=TASK_INTENT_SPECS[intent_id],
+            raw_prompt="find something useful to drink" if intent_id == "open-ended" else "",
+        )
+
+        tool_plan_text = " ".join(contract.tool_plan)
+        assert "fixture_hints" not in tool_plan_text
+        assert "metric_map" in tool_plan_text
 
 
 def test_surface_rejects_old_public_generated_mess_count() -> None:

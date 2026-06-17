@@ -43,6 +43,7 @@ CI. Removing them saves little and makes `main` depend on local discipline.
 | Advisory smoke | push to `main` or scheduled | no | OpenClaw/Gateway/provider runs that can timeout or depend on external services |
 | Opt-in expensive gate | manual dispatch or commit tag | no by default | live model matrices, open-ended photo tasks, broad backend comparisons |
 | Local-only proof | developer workstation | no hosted CI | GPU, real robot, Isaac, Agibot GDK, full MolmoSpaces visual proof |
+| Eval suite | scheduled, manual, or release gate | no by default until accepted | versioned samples, repeated trials, graders, aggregate metrics, and regression replay |
 
 ## Command Surface Policy
 
@@ -50,6 +51,7 @@ Use the existing command surfaces directly when they fit:
 
 - `just run::surface ...` for user-facing surface/preset execution.
 - `just agent::verify ...` for confidence gates.
+- `just agent::eval ...` for versioned capability suites.
 - `just dev::test ...` for pytest marker slices.
 - `just harness::*` or lower private modules only for maintainer debugging and
   specialist gates.

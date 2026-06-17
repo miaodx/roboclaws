@@ -26,6 +26,25 @@ Open-ended goal
   -> Artifacts and reports
 ```
 
+Evaluation is a first-class maintainer layer beside product runs, not a
+replacement for the launch surface:
+
+```text
+Product run
+  just run::surface ...
+
+Validation matrix
+  just agent::harness agent-validation ...
+  Selects which gates a plan, diff, or explicit axis set must run.
+
+Eval suite
+  Versioned capability benchmark: samples, trials, graders, aggregate metrics,
+  failure classes, and replayable regression evidence.
+
+Harness recipes
+  Lower-level runners and probes used by product, validation, and eval flows.
+```
+
 - **Runnable Surfaces And Presets** are public run contracts such as
   `surface=household-world prompt=...`,
   `surface=household-world preset=map-build`,
@@ -49,6 +68,10 @@ Open-ended goal
   require profiles; profiles should not be copied into task-specific supersets.
 - **MCP Tools** are the stable public robot interface: observe, navigate, map,
   pick, place, done, and related bounded capabilities.
+- **Eval Suites** are repo-owned benchmarks that run selected product surfaces
+  through versioned samples, deterministic graders, optional advisory graders,
+  aggregate metrics such as `pass@k` / `pass^k`, and failure replay. Their first
+  maintainer facade is `just agent::eval ...`.
 
 The real-robot rule is: physical runs should reuse the same surface, intent,
 skill, profile, and MCP tool layers. They differ by backend variant,
@@ -160,6 +183,31 @@ coding-agent household routes. The console does not expose arbitrary shell
 commands: world, backend, intent, agent engine, provider profile, evidence lane,
 and scenario setup all resolve through the public launch catalog.
 
+## Evaluation Layer
+
+Eval suites answer whether a household or planner-proof capability is improving
+over time. A suite is made of versioned samples; each sample resets an
+environment, runs one or more agent trials, records traces and artifacts, grades
+state/outcome, trajectory, privacy, artifacts, and efficiency, then aggregates
+metrics and failure classes.
+
+Eval suites must preserve the same public/private boundary as product runs.
+Private generated mess sets, acceptable destinations, hidden target lists, and
+scorer truth remain grader inputs or private report evidence; they do not become
+MCP profile metadata, skill instructions, or agent-facing tool responses.
+Cleanup evals should treat a `fixture_hints` MCP call as a trajectory violation
+because current cleanup MCP servers no longer expose that tool. Historical
+`fixture_hints` artifact fields may remain readable for map bundles, reports,
+and compatibility checks.
+
+The first implementation is intentionally repo-native under `evals/` and
+`roboclaws/evals/`. The schema layer defines `eval_suite`, `eval_sample`,
+`eval_trial`, and `eval_result` packets plus direct-runner fixtures; the first
+deterministic runner is exposed as `just agent::eval suite=smoke_regression
+budget=smoke`. Do not add a third-party eval framework until deterministic
+household suites have proven the sample, artifact, grader, privacy, and result
+packet contracts that Roboclaws needs.
+
 ## Capability Profiles
 
 `roboclaws/mcp/profiles.py` defines current MCP capability metadata. The
@@ -209,6 +257,11 @@ Every serious run should produce reviewable evidence:
   report-performance extractor, for maintainer comparisons of quality,
   call-count work, model work, normalized-estimate availability, and residual
   latency.
+- `cleanup_backend_evidence` inside `run_result.json` for normalized backend
+  provenance, runtime-metadata attachment status, diagnostic availability,
+  robot evidence, and artifact keys. Backend-specific legacy sections such as
+  `molmospaces_runtime` and `isaac_runtime` remain available for specialized
+  reports and checkers.
 - `runtime_metric_map.json` when a run builds or updates household world
   evidence.
 - `actionable_semantic_map_snapshot.json` when online runtime-map output or
@@ -216,6 +269,9 @@ Every serious run should produce reviewable evidence:
 - `report.html` for human review.
 - Optional planner-proof bundles when cleanup substeps are checked against
   local RBY1M/CuRobo proof.
+- Future eval-suite outputs under `output/evals/<suite>/<stamp>/`, including
+  `eval_results.json` and an eval report that links back to underlying product
+  run artifacts.
 
 The artifact boundary matters: public agent evidence and private scoring truth
 must remain separate. Reports may display both, but agent inputs and MCP
@@ -241,6 +297,7 @@ task/profile shape, not separate robot-only task taxonomies.
 | --- | --- |
 | What to run | [`README.md`](README.md), [`just/README.md`](just/README.md) |
 | Surface/intent/skill/profile design | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
+| Eval suites and validation boundaries | [`docs/human/evaluation.md`](docs/human/evaluation.md) |
 | MolmoSpaces settings | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
 | Local runtime and keys | [`docs/human/local-runtime.md`](docs/human/local-runtime.md) |
 | Current project focus | [`STATUS.md`](STATUS.md) |

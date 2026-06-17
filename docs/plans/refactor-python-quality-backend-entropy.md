@@ -3154,6 +3154,10 @@ Severity: P2
 
 Entropy source: Agibot/backend proof workflow rediscovery.
 
+Status: in progress. The 2026-06-14 map-context validation/projection slice is
+complete; rehearsal orchestration, MCP tool registration, and planner-proof
+fallback rows remain for later Candidate C slices.
+
 Materiality: real workflow friction and recurring rediscovery.
 `docs/human/agibot-g2-cleanup-pilot.md` uses completed `context_json` and
 `scripts/agibot/generate_metric_map_from_context.py` as live operator steps.
@@ -3161,6 +3165,12 @@ The current grouped rows span `roboclaws/household/agibot_contract_rehearsal.py`
 `roboclaws/household/agibot_map_build_mcp_server.py`,
 `roboclaws/household/planner_proof_requests.py`, and
 `scripts/agibot/generate_metric_map_from_context.py`.
+`scripts/agibot/generate_metric_map_from_context.py` no longer has Ruff
+complexity rows after the validation and coordinate-bounds split. The
+`vendors/agibot_sdk` pointer now includes submodule commit `910a76d` so the SDK
+runner accepts the same minimal map-context contract as the main generator,
+including public room labels while keeping fixtures and authored inspection
+waypoints hidden.
 
 Impact radius: workflow.
 
@@ -3171,6 +3181,7 @@ orchestration, and proof fallback functions before trusting backend evidence.
 Affected paths:
 
 - `scripts/agibot/generate_metric_map_from_context.py`
+- `vendors/agibot_sdk`
 - `roboclaws/household/agibot_contract_rehearsal.py`
 - `roboclaws/household/agibot_map_build_mcp_server.py`
 - `roboclaws/household/planner_proof_requests.py`
@@ -4516,3 +4527,53 @@ Stop this refactor loop when:
   from 91 to 88 Ruff complexity violations, with oversized modules unchanged
   at 59. The RAW-FPV probe scorer no longer appears in the complexity-by-file
   summary.
+- 2026-06-14: Started Candidate C by splitting Agibot map-context validation
+  and coordinate-bound collection inside
+  `scripts/agibot/generate_metric_map_from_context.py`, and by advancing the
+  `vendors/agibot_sdk` submodule to `910a76d` so the standalone SDK runner
+  accepts the same minimal map-context contract as the main generator. Minimal
+  Agibot contexts may carry public room labels and room-category hints while
+  keeping fixtures, authored inspection waypoints, GDK map-source evidence, and
+  navigation-check payloads out of the agent-facing view. Evidence:
+  `ruff check scripts/agibot/generate_metric_map_from_context.py tests/contract/agibot/test_agibot_map_context_scripts.py`
+  passed; `ruff format --check` for the same files passed;
+  `ruff check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` passed in
+  the submodule; `ruff format --check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`
+  passed in the submodule;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`
+  passed with 19 tests; `python scripts/dev/check_python_quality_ratchet.py`
+  passed after a deliberate baseline refresh. The quality baseline was lowered
+  from 88 to 85 Ruff complexity violations, with oversized modules unchanged
+  at 59. `scripts/agibot/generate_metric_map_from_context.py` no longer appears
+  in the complexity-by-file summary. Remaining Candidate C work is limited to
+  Agibot contract rehearsal, Agibot map-build MCP tool registration, and
+  planner-proof fallback rows.
+- 2026-06-15: Continued Candidate C by moving Agibot map-build MCP public tool
+  registration and dispatch into `roboclaws/household/agibot_map_build_mcp_tools.py`.
+  `fixture_hints` is no longer a public Agibot map-build or shared cleanup MCP
+  tool; historical map/report artifacts still carry fixture hints where
+  compatibility needs them. The Agibot cleanup backend marker now implements
+  the shared backend-session optional capability methods used by the MCP server.
+  Evidence:
+  `ruff check roboclaws/household/agibot_map_build_mcp_server.py roboclaws/household/agibot_map_build_mcp_tools.py roboclaws/household/agibot_cleanup_contract.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline was lowered from 85 to
+  83 Ruff complexity violations, with oversized modules unchanged at 59.
+  Remaining Candidate C work is limited to Agibot contract rehearsal and
+  planner-proof fallback rows.
+- 2026-06-15: Continued Candidate C by aligning MolmoSpaces Agibot contract
+  rehearsal with the current MCP boundary: `fixture_hints` remains a preflight
+  artifact/context payload, but is no longer recorded as a public tool event or
+  listed in the simulated runner task input's public tool sequence. Evidence:
+  `ruff check roboclaws/household/agibot_contract_rehearsal.py tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_agibot_contract_rehearsal.py::test_molmospaces_agibot_contract_rehearsal_writes_simulated_report -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed after a
+  deliberate baseline refresh. The quality baseline stayed at 83 Ruff
+  complexity violations and 59 oversized modules, while
+  `run_molmospaces_agibot_contract_rehearsal` dropped from 96 to 95 statements
+  and the module dropped from 2359 to 2357 lines. Remaining Candidate C work is
+  limited to broader Agibot contract rehearsal complexity and planner-proof
+  fallback rows.

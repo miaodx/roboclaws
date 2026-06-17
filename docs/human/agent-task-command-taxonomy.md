@@ -61,6 +61,20 @@ Lower modules such as `molmo::*`, `harness::*`, `verify::*`, `mcp::*`,
 They remain runnable for debugging, but they are hidden from `just --summary`
 and should not be the first response to natural-language run requests.
 
+## Validation And Eval Layers
+
+These layers are maintainer surfaces, not ordinary product-run axes:
+
+| Layer | Command Shape | Use |
+| --- | --- | --- |
+| Validation matrix | `just agent::harness agent-validation recommend|execute ...` | Selects and records gates for a plan, diff, or explicit axis set. |
+| Eval suite | `just agent::eval suite=<suite> ...` | Runs versioned samples, trials, graders, aggregate metrics, and failure replay. |
+| Harness recipe | `harness::*` or lower private modules | Executes specialist proofs used by product, validation, or eval flows. |
+
+The validation matrix answers "what should this change validate?" Eval suites
+answer "is this capability improving across a stable benchmark?" Harness
+recipes answer "how do we execute this low-level proof?"
+
 ## Evidence Lanes
 
 Household cleanup/map-build routes use `evidence_lane` to describe what the

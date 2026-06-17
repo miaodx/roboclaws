@@ -76,10 +76,7 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
 )
-from roboclaws.launch.goals import (
-    goal_contract_from_file,
-    goal_contract_from_json,
-)
+from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
 from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 
@@ -330,6 +327,7 @@ def run_realworld_cleanup(
         runtime_map_prior=runtime_map_prior,
         map_mode=map_mode,
         cleanup_profile=cleanup_profile,
+        public_acceptance_config=(goal_contract and {"task_intent": goal_contract.intent}),
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:

@@ -62,6 +62,7 @@ run dispatch_target agent_engine mode="" *overrides:
         implementation_task_name="$dispatch_target"
         ;;
     esac
+
     case "$agent_engine" in
       codex-cli)
         driver="codex"
@@ -757,11 +758,21 @@ run dispatch_target agent_engine mode="" *overrides:
           "$min_generated_mess_count" "$generated_mess_object_ids" "$implementation_task_name"
           "$operator_messages_path"
         )
+        task_intent_mode_was_appended=0
         if [[ "$implementation_task_name" == "household-cleanup" || "$resolved_task_intent" == "open-ended" ]]; then
           molmo_args+=("$task_intent_mode")
+          task_intent_mode_was_appended=1
+        fi
+        run_dir_override="$(get run_dir "")"
+        if [[ -n "$run_dir_override" ]]; then
+          if [[ "$task_intent_mode_was_appended" != "1" ]]; then
+            molmo_args+=("")
+          fi
+          molmo_args+=("" "" "" "$run_dir_override")
         fi
         ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \
           ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \
+          ROBOCLAWS_MOLMO_RUN_DIR_OVERRIDE="$run_dir_override" \
           ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \
           ROBOCLAWS_TASK_PRESET="${kv[task_preset]:-}" \
           ROBOCLAWS_TASK_SKILL="$skill_name" \
@@ -957,3 +968,27 @@ gateway action="up" token_file=".openclaw-token" provider="kimi" agents="2":
         exit 1
         ;;
     esac
+
+# Run a repo-native eval suite.
+eval *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x .venv/bin/python ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
+    fi
+    if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
+      printf 'cmd\t%s\t-m\troboclaws.cli.main\teval' "$python_bin"
+      for arg in "$@"; do
+        printf '\t%s' "$arg"
+      done
+      printf '\n'
+      exit 0
+    fi
+    exec "$python_bin" -m roboclaws.cli.main eval "$@"

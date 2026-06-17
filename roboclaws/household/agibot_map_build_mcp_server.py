@@ -9,6 +9,11 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from roboclaws.household.agibot_map_build_mcp_tools import (
+    AGIBOT_SEMANTIC_MAP_BUILD_TOOLS,
+    dispatch_agibot_semantic_map_build_tool,
+    register_agibot_semantic_map_build_tools,
+)
 from roboclaws.household.agibot_sdk_runner import (
     AGIBOT_GDK_BACKEND_VARIANT,
     AGIBOT_SDK_RUNNER_BACKEND,
@@ -55,19 +60,6 @@ AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 DEFAULT_TASK_PROMPT = "Build a semantic map from Agibot G2 public navigation and camera evidence."
 AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(cleanup_profile_names())
-AGIBOT_SEMANTIC_MAP_BUILD_TOOLS = (
-    "metric_map",
-    "fixture_hints",
-    "navigate_to_room",
-    "navigate_to_waypoint",
-    "navigate_to_receptacle",
-    "navigate_to_object",
-    "navigate_to_visual_candidate",
-    "observe",
-    "adjust_camera",
-    *BLOCKED_MANIPULATION_TOOLS,
-    "done",
-)
 
 
 def make_agibot_semantic_map_build_mcp(
@@ -180,7 +172,7 @@ class AgibotSemanticMapBuildMCPServer:
             self.run_dir / "before.png",
             title="Before Agibot semantic map build",
         )
-        self._register_tools()
+        register_agibot_semantic_map_build_tools(self)
         self.write_runtime_event(
             "agibot_semantic_map_build_mcp_initialized",
             contract=REALWORLD_CONTRACT,
@@ -192,108 +184,6 @@ class AgibotSemanticMapBuildMCPServer:
             perception_mode=self.perception_mode,
             visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
         )
-
-    def _register_tools(self) -> None:
-        @self._mcp.tool()
-        def metric_map() -> dict:
-            """Return the backend-agnostic Agibot metric map projection."""
-            return self.call_tool("metric_map")
-
-        @self._mcp.tool()
-        def fixture_hints() -> dict:
-            """Return public fixture hints derived from Agibot map context."""
-            return self.call_tool("fixture_hints")
-
-        @self._mcp.tool()
-        def navigate_to_room(room_id: str) -> dict:
-            """Navigate to a verified public waypoint for a room."""
-            return self.call_tool("navigate_to_room", room_id=room_id)
-
-        @self._mcp.tool()
-        def navigate_to_waypoint(waypoint_id: str) -> dict:
-            """Navigate to a verified public Agibot waypoint."""
-            return self.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
-
-        @self._mcp.tool()
-        def navigate_to_receptacle(fixture_id: str) -> dict:
-            """Navigate to a fixture-preferred waypoint without claiming manipulation."""
-            return self.call_tool("navigate_to_receptacle", fixture_id=fixture_id)
-
-        @self._mcp.tool()
-        def navigate_to_object(
-            object_id: str,
-            waypoint_id: str = "",
-            fixture_id: str = "",
-        ) -> dict:
-            """Navigate to a public waypoint associated with an object when available."""
-            return self.call_tool(
-                "navigate_to_object",
-                object_id=object_id,
-                waypoint_id=waypoint_id,
-                fixture_id=fixture_id,
-            )
-
-        @self._mcp.tool()
-        def navigate_to_visual_candidate(
-            source_observation_id: str,
-            candidate_id: str = "",
-            waypoint_id: str = "",
-            fixture_id: str = "",
-            target_fixture_id: str = "",
-        ) -> dict:
-            """Navigate to a grounded visual candidate when a public waypoint resolves."""
-            return self.call_tool(
-                "navigate_to_visual_candidate",
-                source_observation_id=source_observation_id,
-                candidate_id=candidate_id,
-                waypoint_id=waypoint_id,
-                fixture_id=fixture_id,
-                target_fixture_id=target_fixture_id,
-            )
-
-        @self._mcp.tool()
-        def observe() -> dict:
-            """Capture or rehearse robot-local head_color policy observation."""
-            return self.call_tool("observe")
-
-        @self._mcp.tool()
-        def adjust_camera(yaw_delta_deg: float = 0.0, pitch_delta_deg: float = 0.0) -> dict:
-            """Report bounded camera adjustment as blocked until G2 control is proven."""
-            return self.call_tool(
-                "adjust_camera",
-                yaw_delta_deg=yaw_delta_deg,
-                pitch_delta_deg=pitch_delta_deg,
-            )
-
-        @self._mcp.tool()
-        def pick(object_id: str = "") -> dict:
-            """Blocked during Agibot intent=map-build pilot."""
-            return self.call_tool("pick", object_id=object_id)
-
-        @self._mcp.tool()
-        def place(fixture_id: str = "") -> dict:
-            """Blocked during Agibot intent=map-build pilot."""
-            return self.call_tool("place", fixture_id=fixture_id)
-
-        @self._mcp.tool()
-        def place_inside(fixture_id: str = "") -> dict:
-            """Blocked during Agibot intent=map-build pilot."""
-            return self.call_tool("place_inside", fixture_id=fixture_id)
-
-        @self._mcp.tool()
-        def open_receptacle(fixture_id: str = "") -> dict:
-            """Blocked during Agibot intent=map-build pilot."""
-            return self.call_tool("open_receptacle", fixture_id=fixture_id)
-
-        @self._mcp.tool()
-        def close_receptacle(fixture_id: str = "") -> dict:
-            """Blocked during Agibot intent=map-build pilot."""
-            return self.call_tool("close_receptacle", fixture_id=fixture_id)
-
-        @self._mcp.tool()
-        def done(reason: str) -> dict:
-            """Finish the Agibot intent=map-build pilot and write report artifacts."""
-            return self.call_tool("done", reason=reason)
 
     @property
     def registered_tool_names(self) -> tuple[str, ...]:
@@ -307,7 +197,7 @@ class AgibotSemanticMapBuildMCPServer:
         request = _json_safe(kwargs)
         self._write_trace(tool=name, event="request", arguments=request)
         try:
-            response = self._dispatch_tool(name, request)
+            response = dispatch_agibot_semantic_map_build_tool(self, name, request)
         except Exception as exc:  # noqa: BLE001
             response = {
                 "ok": False,
@@ -321,57 +211,6 @@ class AgibotSemanticMapBuildMCPServer:
         if name == "done" and response.get("ok"):
             self.done_event.set()
         return response
-
-    def _dispatch_tool(self, name: str, request: dict[str, Any]) -> dict[str, Any]:
-        if name == "metric_map":
-            response = dict(self.adapter.metric_map())
-            response["instruction"] = (
-                "Use only public inspection_waypoints. Navigate to each selected waypoint, "
-                "then call observe. Do not invent coordinates or read Agibot map source."
-            )
-            return response
-        if name == "fixture_hints":
-            return dict(self.adapter.fixture_hints())
-        if name == "navigate_to_room":
-            return self.adapter.navigate_to_room(room_id=str(request.get("room_id") or ""))
-        if name == "navigate_to_waypoint":
-            return self.adapter.navigate_to_waypoint(
-                waypoint_id=str(request.get("waypoint_id") or "")
-            )
-        if name == "navigate_to_receptacle":
-            return self.adapter.navigate_to_fixture_preferred_waypoint(
-                fixture_id=str(request.get("fixture_id") or "")
-            )
-        if name == "navigate_to_object":
-            return self.adapter.navigate_to_object(
-                object_id=str(request.get("object_id") or ""),
-                waypoint_id=str(request.get("waypoint_id") or ""),
-                fixture_id=str(request.get("fixture_id") or ""),
-            )
-        if name == "navigate_to_visual_candidate":
-            return self.adapter.navigate_to_visual_candidate(
-                source_observation_id=str(request.get("source_observation_id") or ""),
-                candidate_id=str(request.get("candidate_id") or ""),
-                waypoint_id=str(request.get("waypoint_id") or ""),
-                fixture_id=str(request.get("fixture_id") or ""),
-                target_fixture_id=str(request.get("target_fixture_id") or ""),
-            )
-        if name == "observe":
-            return self.adapter.observe(label=f"semantic_map_build_{self._observe_count() + 1}")
-        if name == "adjust_camera":
-            return _blocked_response(
-                "adjust_camera",
-                "agibot_camera_motion_unproven",
-                (
-                    "Agibot G2 camera adjustment is intentionally blocked until "
-                    "bounded control is proven."
-                ),
-            )
-        if name in BLOCKED_MANIPULATION_TOOLS:
-            return self.adapter.blocked_manipulation(tool=name)
-        if name == "done":
-            return self._finalize_done(reason=str(request.get("reason") or ""))
-        raise AssertionError(f"unhandled Agibot intent=map-build tool {name!r}")
 
     def _finalize_done(self, *, reason: str) -> dict[str, Any]:
         if self._done_result is not None:
@@ -635,22 +474,6 @@ class AgibotSemanticMapBuildMCPServer:
         return events
 
 
-def _blocked_response(tool: str, failure_type: str, message: str) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "tool": tool,
-        "status": "blocked_capability",
-        "contract": REALWORLD_CONTRACT,
-        "primitive_provenance": BLOCKED_CAPABILITY_PROVENANCE,
-        "error_reason": "blocked_capability",
-        "failure_type": failure_type,
-        "backend_error_summary": message,
-        "physical_navigation_pilot": True,
-        "physical_cleanup_ready": False,
-        "manipulation_ready": False,
-    }
-
-
 def _policy_events_from_trace(
     trace_events: list[dict[str, Any]],
     metric_map: dict[str, Any],
@@ -702,7 +525,6 @@ def _policy_events_from_trace(
 def _policy_event(index: int, tool: str, response: dict[str, Any]) -> dict[str, Any]:
     decision = {
         "metric_map": "inspect_public_metric_map",
-        "fixture_hints": "inspect_public_fixture_hints",
         "navigate_to_room": "visit_public_waypoint",
         "navigate_to_waypoint": "visit_public_waypoint",
         "navigate_to_receptacle": "visit_public_waypoint",
@@ -759,8 +581,6 @@ def _policy_progress(tool: str, response: dict[str, Any]) -> str:
 def _policy_reason(tool: str, response: dict[str, Any]) -> str:
     if tool == "metric_map":
         return "Metric map is the backend-agnostic public navigation context."
-    if tool == "fixture_hints":
-        return "Fixture hints are public map context, not private cleanup target truth."
     if tool == "observe":
         return "Agibot G2 semantic map building uses robot-local head_color evidence."
     if tool.startswith("navigate"):

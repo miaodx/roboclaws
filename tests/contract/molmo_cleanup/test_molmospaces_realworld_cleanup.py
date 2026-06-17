@@ -30,6 +30,9 @@ from roboclaws.household.semantic_timeline import (
     PLACE_CLEANUP_PHASES,
     SEMANTIC_LOOP_VARIANT,
 )
+from roboclaws.household.tasks import HOUSEHOLD_TASK_SPECS
+from roboclaws.launch.goals import normalize_goal_contract
+from roboclaws.launch.intents import TASK_INTENT_SPECS
 from scripts.molmo_cleanup import isaac_runtime_checker
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -162,6 +165,35 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert any('"tool": "metric_map"' in line for line in trace_lines)
     assert any('"tool": "observe"' in line for line in trace_lines)
     assert not any('"tool": "scene_objects"' in line for line in trace_lines)
+
+
+def test_realworld_cleanup_demo_writes_open_ended_goal_status(
+    tmp_path: Path,
+) -> None:
+    demo = _load_demo_module()
+    prompt = "我渴了，帮我找些解渴的东西"
+    goal_contract = normalize_goal_contract(
+        surface=HOUSEHOLD_TASK_SPECS["household-world"],
+        intent=TASK_INTENT_SPECS["open-ended"],
+        raw_prompt=prompt,
+    )
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        task_prompt=prompt,
+        goal_contract_json=goal_contract.to_json(),
+        generated_mess_count=1,
+    )
+    run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
+    goal_artifact = json.loads((tmp_path / "goal_contract.json").read_text(encoding="utf-8"))
+
+    assert result["task_intent"] == "open-ended"
+    assert run_result["goal_contract"]["intent"] == "open-ended"
+    assert goal_artifact["normalized_goal"] == prompt
+    assert result["agent_completion_claim"]["completion_summary"]
+    assert result["intent_status"] == result["goal_status"] == result["final_status"] == "success"
+    assert result["cleanup_status_role"] == "advisory"
 
 
 def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
