@@ -31,9 +31,9 @@ def main(argv: list[str] | None = None) -> int:
 
         return household_main(args)
     if raw_server == HOUSEHOLD_MAP_BUILD_TARGET:
-        from roboclaws.cli.agibot_map_build_agent_server import main as semantic_map_main
+        from roboclaws.cli.agibot_map_build_agent_server import main as map_build_main
 
-        return semantic_map_main(args)
+        return map_build_main(args)
 
     print(
         f"error: unsupported server {raw_server!r} (expected {_expected_server_text()})",

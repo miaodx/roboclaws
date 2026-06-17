@@ -878,7 +878,7 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "ok",
         "success",
         "cleanup_success",
-        "semantic_map_success",
+        "runtime_map_success",
         "intent_status",
         "goal_status",
         "cleanup_status",
