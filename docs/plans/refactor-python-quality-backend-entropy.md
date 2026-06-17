@@ -756,6 +756,17 @@ product callers that already validate selected bundles are unchanged. Proof
 passed with focused Nav2 map-bundle contract tests, touched-file ruff and
 format check, py_compile, `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 closed one operator-console
+runtime-artifact discovery false-green. `_latest_view_assets()` now treats only
+`visual_grounding/overlays/**` images as current grounding overlays; report-only
+`*.bbox*`, `*.detection*`, or loose `*grounding*` images elsewhere in the run
+directory no longer replace the FPV slot or appear as live grounding evidence.
+Behavior-change class: fail-aloud runtime artifact/status honesty; real
+visual-grounding overlays still surface as both `grounding` and FPV display
+source, while report-rendered bbox evidence remains available through report
+artifacts. Proof passed with focused operator-console state tests, touched-file
+ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 Implementation refresh on 2026-06-18 closed the parked operator-console
 route-fixture drift that followed the provider-env slice. The operator-console
 route registry now tracks the current source-aware MolmoSpaces catalog:

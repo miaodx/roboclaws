@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console runtime artifact discovery now fails honest for
+  grounding overlays. `_latest_view_assets()` only treats
+  `visual_grounding/overlays/**` images as current grounding overlays;
+  report-only `*.bbox*`, `*.detection*`, or loose `*grounding*` images elsewhere
+  in the run directory no longer replace the FPV slot or appear as live
+  grounding evidence. Behavior-change class: fail-aloud runtime artifact/status
+  honesty; real visual-grounding overlays still surface as both `grounding` and
+  FPV display source, while report-rendered bbox evidence remains available
+  through report artifacts. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules. Proof: focused operator-console state tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Nav2 map-bundle projection now fails aloud before emitting
   projected map evidence from invalid source bundles. `metric_map_from_bundle()`
   and `static_fixture_projection_from_bundle()` call the existing Nav2 bundle

@@ -663,6 +663,39 @@ def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
     assert state["latest_view_assets"]["fpv"]["display_source"] == "visual_grounding_overlay"
 
 
+def test_state_does_not_promote_report_bbox_images_as_grounding_overlay(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
+    robot_views = run_dir / "robot_views"
+    report_assets = run_dir / "report_assets"
+    robot_views.mkdir(parents=True)
+    report_assets.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "running",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    raw_fpv = robot_views / "raw_fpv_001.fpv.png"
+    report_bbox = report_assets / "raw_fpv_001.bbox.png"
+    raw_fpv.write_bytes(b"raw fpv")
+    report_bbox.write_bytes(b"report bbox")
+    os.utime(raw_fpv, (1, 1))
+    os.utime(report_bbox, (3, 3))
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["latest_view_assets"]["fpv"]["path"] == str(raw_fpv.resolve())
+    assert "display_source" not in state["latest_view_assets"]["fpv"]
+    assert "grounding" not in state["latest_view_assets"]
+
+
 def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0608_1921" / "seed-7"
