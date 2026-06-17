@@ -13,6 +13,7 @@ from roboclaws.launch.scene_sampler import (
     READINESS_REJECTED,
     UI_LANE,
     MolmoSpacesSceneRef,
+    candidate_profile_report,
     candidate_readiness_report,
     eval_projection_metadata,
     eval_sample_id,
@@ -41,6 +42,239 @@ from roboclaws.launch.worlds import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {
+    401,
+    402,
+    403,
+    404,
+    405,
+    406,
+    407,
+    408,
+    409,
+    410,
+    411,
+    412,
+}
+ITHOR_REJECTED_INDICES = {
+    *range(1, 13),
+    *range(201, 213),
+    301,
+    302,
+    303,
+    304,
+    305,
+    306,
+    307,
+    308,
+    309,
+    310,
+    311,
+    312,
+    *ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES,
+}
+HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES = {107, 171, 268}
+HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES = {261, 381, 403}
+HOLODECK_REJECTED_INDICES = {
+    *range(20),
+    22,
+    25,
+    26,
+    27,
+    29,
+    30,
+    33,
+    36,
+    38,
+    39,
+    44,
+    47,
+    48,
+    52,
+    53,
+    62,
+    63,
+    67,
+    71,
+    76,
+    77,
+    81,
+    87,
+    94,
+    95,
+    99,
+    101,
+    106,
+    108,
+    110,
+    111,
+    113,
+    114,
+    115,
+    116,
+    124,
+    127,
+    132,
+    138,
+    139,
+    143,
+    145,
+    146,
+    148,
+    150,
+    151,
+    157,
+    162,
+    167,
+    170,
+    173,
+    175,
+    176,
+    179,
+    180,
+    181,
+    182,
+    183,
+    186,
+    188,
+    191,
+    195,
+    197,
+    198,
+    199,
+    201,
+    207,
+    209,
+    212,
+    215,
+    216,
+    221,
+    225,
+    228,
+    230,
+    237,
+    238,
+    243,
+    246,
+    247,
+    248,
+    253,
+    256,
+    258,
+    263,
+    266,
+    272,
+    273,
+    274,
+    275,
+    279,
+    280,
+    285,
+    290,
+    291,
+    292,
+    296,
+    299,
+    300,
+    301,
+    302,
+    305,
+    307,
+    313,
+    314,
+    317,
+    318,
+    322,
+    323,
+    325,
+    330,
+    333,
+    335,
+    337,
+    338,
+    340,
+    345,
+    349,
+    350,
+    354,
+    356,
+    358,
+    360,
+    362,
+    363,
+    365,
+    367,
+    371,
+    374,
+    377,
+    385,
+    386,
+    387,
+    390,
+    391,
+    395,
+    396,
+    397,
+    398,
+    399,
+    400,
+    401,
+    406,
+    418,
+    421,
+    422,
+    424,
+    425,
+    428,
+    431,
+    436,
+    438,
+    440,
+    442,
+    443,
+    444,
+    447,
+    449,
+    450,
+    451,
+    452,
+    456,
+    459,
+    460,
+    464,
+    466,
+    468,
+    474,
+    476,
+    477,
+    483,
+    486,
+    489,
+    *HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES,
+    *HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES,
+}
+PROCTHOR_10K_REJECTED_COUNT = 3
+PROCTHOR_OBJAVERSE_REJECTED_COUNT = 5
+TOTAL_REJECTED_ROW_COUNT = (
+    PROCTHOR_10K_REJECTED_COUNT
+    + PROCTHOR_OBJAVERSE_REJECTED_COUNT
+    + len(ITHOR_REJECTED_INDICES)
+    + len(HOLODECK_REJECTED_INDICES)
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_scene_sampler_scanner_artifacts(monkeypatch, tmp_path) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    scanner_root = tmp_path / "scene-sampler-scanner"
+    monkeypatch.setattr(scene_sampler, "_SCANNER_OUTPUT_ROOT", scanner_root)
+    monkeypatch.setattr(scene_sampler, "_SCANNER_PREVIEW_ROOT", scanner_root / "previews")
+    monkeypatch.setattr(
+        scene_sampler,
+        "_SCANNER_PRODUCT_SMOKE_ROOT",
+        scanner_root / "product-smoke",
+    )
 
 
 def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
@@ -49,10 +283,10 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     assert ui_molmospaces_world_ids() == (
         "molmospaces/val_0",
         "molmospaces/val_2",
-        "molmospaces/val_9",
+        "molmospaces/val_5",
         "molmospaces/procthor-objaverse-val/0",
         "molmospaces/procthor-objaverse-val/1",
-        "molmospaces/procthor-objaverse-val/4",
+        "molmospaces/procthor-objaverse-val/10",
     )
     assert MOLMOSPACES_CONSOLE_WORLD_IDS == ui_molmospaces_world_ids()
     assert MOLMOSPACES_LAUNCH_ALIAS_WORLD_IDS == legacy_molmospaces_world_ids()
@@ -72,10 +306,10 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     assert [(row.scene_source, row.scene_index) for row in ui_rows] == [
         ("procthor-10k-val", 0),
         ("procthor-10k-val", 2),
-        ("procthor-10k-val", 9),
+        ("procthor-10k-val", 5),
         ("procthor-objaverse-val", 0),
         ("procthor-objaverse-val", 1),
-        ("procthor-objaverse-val", 4),
+        ("procthor-objaverse-val", 10),
     ]
     assert [(row.scene_source, row.scene_index) for row in eval_rows] == [
         ("procthor-10k-val", 0),
@@ -102,12 +336,31 @@ def test_scene_sampler_manifest_separates_ui_eval_and_alias_worlds() -> None:
     assert all(UI_LANE in row.lanes for row in ui_rows)
     assert all(EVAL_STRESS_LANE in row.lanes for row in eval_rows)
 
-    hidden_alias = WORLD_SPECS["molmospaces/val_5"]
+    hidden_alias = WORLD_SPECS["molmospaces/val_9"]
     assert hidden_alias.availability == "hidden"
     assert hidden_alias.sampler_metadata
     assert hidden_alias.sampler_metadata["lanes"] == [EVAL_STRESS_LANE]
     assert WORLD_SPECS["molmospaces/val_4"].availability == "hidden"
     assert WORLD_SPECS["molmospaces/val_4"].sampler_metadata["lanes"] == []
+
+
+def test_scene_sampler_ui_selection_is_seeded_and_room_diverse() -> None:
+    manifest = sampler_manifest()
+    policy = manifest["selection_policy"]
+
+    assert policy["schema"] == "molmospaces_scene_sampler_selection_policy_v1"
+    assert policy["selection_seed"] == "2026-06-16.source-diverse-selection-v1"
+    assert policy["selection_strategy"] == (
+        "deterministic_seeded_random_order_with_room_count_diversity_first"
+    )
+    assert policy["sources"]["procthor-10k-val"]["ui"]["selected_indices"] == [2, 5, 0]
+    assert policy["sources"]["procthor-10k-val"]["ui"]["selected_room_counts"] == [10, 4, 7]
+    assert policy["sources"]["procthor-objaverse-val"]["ui"]["selected_indices"] == [10, 0, 1]
+    assert policy["sources"]["procthor-objaverse-val"]["ui"]["selected_room_counts"] == [
+        5,
+        4,
+        7,
+    ]
 
 
 def test_legacy_molmospaces_alias_worlds_remain_launchable() -> None:
@@ -205,8 +458,8 @@ def _assert_scene_sampler_projection_summary(projection: dict[str, object]) -> N
         "blocked_source_count": 0,
         "complete_source_count": 2,
         "blocked_row_count": 0,
-        "rejected_row_count": 40,
-        "blocked_or_rejected_row_count": 40,
+        "rejected_row_count": TOTAL_REJECTED_ROW_COUNT,
+        "blocked_or_rejected_row_count": TOTAL_REJECTED_ROW_COUNT,
         "remaining_sample_count": 20,
     }
 
@@ -247,17 +500,25 @@ def _assert_rejected_ithor_projection_source(source_projection: dict[str, object
     assert source_projection["partial_gap_count"] == 10
     assert source_projection["needed_count"] == 10
     assert source_projection["blocked_count"] == 0
-    assert source_projection["rejected_count"] == 12
-    assert source_projection["blocked_or_rejected_row_count"] == 12
+    assert source_projection["rejected_count"] == len(ITHOR_REJECTED_INDICES)
+    assert source_projection["blocked_or_rejected_row_count"] == len(ITHOR_REJECTED_INDICES)
     assert source_projection["support_status"] == "rejected"
     assert source_projection["status"] == "rejected"
-    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == set(range(1, 13))
+    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == (
+        ITHOR_REJECTED_INDICES
+    )
     assert all(
         row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
     )
+    assert {
+        row["scene_index"]
+        for row in source_projection["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     assert all(
         row["failure_class"] == "map_actionability_failure"
         for row in source_projection["blocked_rows"]
+        if row["scene_index"] not in ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     )
 
 
@@ -266,18 +527,31 @@ def _assert_rejected_holodeck_projection_source(source_projection: dict[str, obj
     assert source_projection["partial_gap_count"] == 10
     assert source_projection["needed_count"] == 10
     assert source_projection["blocked_count"] == 0
-    assert source_projection["rejected_count"] == 20
-    assert source_projection["blocked_or_rejected_row_count"] == 20
+    assert source_projection["rejected_count"] == len(HOLODECK_REJECTED_INDICES)
+    assert source_projection["blocked_or_rejected_row_count"] == len(HOLODECK_REJECTED_INDICES)
     assert source_projection["support_status"] == "rejected"
     assert source_projection["status"] == "rejected"
-    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == set(range(20))
+    assert {row["scene_index"] for row in source_projection["blocked_rows"]} == (
+        HOLODECK_REJECTED_INDICES
+    )
     assert all(
         row["readiness_status"] == READINESS_REJECTED for row in source_projection["blocked_rows"]
     )
+    assert {
+        row["scene_index"]
+        for row in source_projection["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     assert all(
         row["failure_class"] == "map_actionability_failure"
         for row in source_projection["blocked_rows"]
+        if row["scene_index"] not in HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     )
+    assert {
+        row["scene_index"]
+        for row in source_projection["blocked_rows"]
+        if row["blocked_reason"] == "preview_not_reviewable"
+    } == HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
 
 
 def test_scene_sampler_eval_suite_payload_matches_committed_fixture() -> None:
@@ -374,18 +648,34 @@ def test_scene_sampler_readiness_report_is_per_source() -> None:
     assert ithor["ui_ready_count"] == 0
     assert ithor["eval_status"] == "partial_or_blocked"
     assert ithor["eval_ready_count"] == 0
-    assert {row["scene_index"] for row in ithor["blocked_rows"]} == set(range(1, 13))
-    assert all(row["failure_class"] == "map_actionability_failure" for row in ithor["blocked_rows"])
+    assert {row["scene_index"] for row in ithor["blocked_rows"]} == ITHOR_REJECTED_INDICES
+    assert {
+        row["scene_index"]
+        for row in ithor["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == ITHOR_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["ui_status"] == "not_visible"
     assert holodeck["ui_ready_count"] == 0
     assert holodeck["eval_status"] == "partial_or_blocked"
     assert holodeck["eval_ready_count"] == 0
-    assert {row["scene_index"] for row in holodeck["blocked_rows"]} == set(range(20))
+    assert {row["scene_index"] for row in holodeck["blocked_rows"]} == (HOLODECK_REJECTED_INDICES)
+    assert {
+        row["scene_index"]
+        for row in holodeck["blocked_rows"]
+        if row["failure_class"] == "environment_blocked"
+    } == HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     assert all(
-        row["failure_class"] == "map_actionability_failure" for row in holodeck["blocked_rows"]
+        row["failure_class"] == "map_actionability_failure"
+        for row in holodeck["blocked_rows"]
+        if row["scene_index"] not in HOLODECK_MISSING_PUBLIC_WAYPOINT_REJECTED_INDICES
     )
+    assert {
+        row["scene_index"]
+        for row in holodeck["blocked_rows"]
+        if row["blocked_reason"] == "preview_not_reviewable"
+    } == HOLODECK_PREVIEW_NOT_REVIEWABLE_REJECTED_INDICES
 
 
 def test_scene_sampler_source_availability_reports_missing_molmospaces_module(
@@ -442,10 +732,10 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
     assert report["schema"] == "molmospaces_scene_sampler_candidate_readiness_v1"
     assert report["summary"] == {
         "source_count": 4,
-        "candidate_count": 61,
+        "candidate_count": 20 + TOTAL_REJECTED_ROW_COUNT + 1,
         "ready_candidate_count": 20,
         "blocked_candidate_count": 1,
-        "rejected_candidate_count": 40,
+        "rejected_candidate_count": TOTAL_REJECTED_ROW_COUNT,
         "ui_ready_count": 6,
         "ui_needed_count": 6,
         "eval_ready_count": 20,
@@ -478,23 +768,23 @@ def test_scene_sampler_candidate_readiness_keeps_ready_rejected_and_blocked_rows
 
     ithor = report["sources"]["ithor"]
     assert ithor["blocked_candidate_count"] == 1
-    assert ithor["rejected_candidate_count"] == 12
+    assert ithor["rejected_candidate_count"] == len(ITHOR_REJECTED_INDICES)
     assert ithor["candidates"][0]["world_id"] == "molmospaces/ithor/0"
     assert ithor["candidates"][0]["failure_class"] == "environment_blocked"
     assert {
         item["scene_index"]
         for item in ithor["candidates"]
         if item["readiness_status"] == READINESS_REJECTED
-    } == set(range(1, 13))
+    } == ITHOR_REJECTED_INDICES
 
     holodeck = report["sources"]["holodeck-objaverse-val"]
     assert holodeck["blocked_candidate_count"] == 0
-    assert holodeck["rejected_candidate_count"] == 20
+    assert holodeck["rejected_candidate_count"] == len(HOLODECK_REJECTED_INDICES)
     assert {
         item["scene_index"]
         for item in holodeck["candidates"]
         if item["readiness_status"] == READINESS_REJECTED
-    } == set(range(20))
+    } == HOLODECK_REJECTED_INDICES
 
 
 def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
@@ -563,7 +853,7 @@ def test_scene_sampler_selection_gap_report_prioritizes_missing_samples(
     assert holodeck["next_action"] == "do_not_scan_without_new_human_curation"
     assert holodeck["next_ui_scan_world_ids"] == []
     assert holodeck["next_eval_scan_world_ids"] == []
-    assert holodeck["rejected_candidate_indices"] == list(range(20))
+    assert holodeck["rejected_candidate_indices"] == sorted(HOLODECK_REJECTED_INDICES)
 
 
 def test_scene_sampler_selection_gap_report_records_expanded_range_capacity(
@@ -605,12 +895,78 @@ def test_scene_sampler_selection_gap_marks_ithor_rejected_when_assets_are_visibl
     assert ithor["next_action"] == "do_not_scan_without_new_human_curation"
     assert ithor["next_ui_scan_world_ids"] == []
     assert ithor["next_eval_scan_world_ids"] == []
-    assert ithor["rejected_candidate_indices"] == list(range(1, 13))
+    rejected_ithor = set(ithor["rejected_candidate_indices"])
+    assert set(range(1, 13)).issubset(rejected_ithor)
+    assert {209, 210, 211, 303, 305}.issubset(rejected_ithor)
+    assert {404, 406, 408, 411}.issubset(rejected_ithor)
 
     prep = source_prep_report(candidate_indices=tuple(range(13)))
     assert prep["sources"]["ithor"]["prep_status"] == "rejected_exhausted"
     assert prep["sources"]["ithor"]["install_candidates"] == []
-    assert prep["sources"]["ithor"]["missing_resources"] == []
+
+
+def test_scene_sampler_candidate_profile_lists_metadata_first_worklists() -> None:
+    report = candidate_profile_report(candidate_indices=tuple(range(10)))
+
+    assert report["schema"] == "molmospaces_scene_sampler_candidate_profile_v1"
+    assert report["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert report["download_policy"] == "manual_operator_only"
+    assert report["summary"]["source_count"] == 4
+    assert report["summary"]["metadata_worklist_source_count"] == 1
+    assert report["summary"]["metadata_worklist_candidate_count"] == 10
+    assert report["summary"]["next_actions"] == {
+        "choose_new_candidate_indices_or_gate_change": 1,
+        "metadata_first_human_curation": 1,
+    }
+    assert report["sources"]["procthor-10k-val"]["profile_status"] == "complete"
+    assert report["sources"]["procthor-objaverse-val"]["profile_status"] == "complete"
+
+    ithor = report["sources"]["ithor"]
+    assert ithor["profile_status"] == "known_rejected_exhausted"
+    assert ithor["next_action"] == "choose_new_candidate_indices_or_gate_change"
+    assert set(range(1, 13)).issubset(ithor["known_rejected_indices"])
+    assert {201, 208, 209, 210, 211, 303, 304, 305, 307, 309}.issubset(
+        ithor["known_rejected_indices"]
+    )
+    assert {404, 406, 408, 409, 411}.issubset(ithor["known_rejected_indices"])
+    assert ithor["metadata_worklist_candidate_count"] == 0
+    assert ithor["metadata_worklist_world_ids"] == []
+    assert ithor["metadata_worklist_candidates"] == []
+
+    holodeck = report["sources"]["holodeck-objaverse-val"]
+    assert holodeck["profile_status"] == "metadata_worklist_ready"
+    assert holodeck["next_action"] == "metadata_first_human_curation"
+    assert set(range(20)).issubset(holodeck["known_rejected_indices"])
+    assert {71, 106, 157, 173, 280, 292, 323, 349, 360, 396}.issubset(
+        holodeck["known_rejected_indices"]
+    )
+    assert holodeck["metadata_worklist_candidate_count"] == 10
+    assert all(
+        index not in holodeck["known_rejected_indices"]
+        for index in holodeck["metadata_worklist_indices"]
+    )
+    assert holodeck["metadata_worklist_world_ids"][0].startswith(
+        "molmospaces/holodeck-objaverse-val/"
+    )
+
+
+def test_scene_sampler_candidate_profile_does_not_reoffer_failed_preview_candidates() -> None:
+    report = candidate_profile_report(candidate_indices=(404, 406, 408, 411))
+
+    ithor = report["sources"]["ithor"]
+    assert {404, 406, 408, 411}.issubset(ithor["known_rejected_indices"])
+    assert {404, 406, 408, 411}.isdisjoint(ithor["metadata_worklist_indices"])
+
+    failed = {
+        candidate["scene_index"]: candidate
+        for candidate in ithor["candidates"]
+        if candidate["scene_index"] in {404, 406, 408, 411}
+    }
+    assert failed[404]["known_blocked_reason"] == "missing_public_inspection_waypoints"
+    assert all(
+        candidate["next_action"] == "do_not_scan_without_gate_change_or_new_curation"
+        for candidate in failed.values()
+    )
 
 
 def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -> None:
@@ -635,9 +991,8 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
         "rejected_exhausted": 2,
     }
     assert report["summary"]["worklist"][0]["scene_source"] == "ithor"
-    assert report["summary"]["worklist"][0]["next_action"] == (
-        "do_not_scan_without_new_human_curation"
-    )
+    assert report["summary"]["worklist"][0]["next_action"] == "metadata_first_human_curation"
+    assert report["summary"]["worklist"][0]["metadata_worklist_candidate_count"] == 10
     assert report["summary"]["worklist"][0]["install_candidate_count"] == 0
 
     procthor = report["sources"]["procthor-10k-val"]
@@ -659,6 +1014,9 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     ithor = report["sources"]["ithor"]
     assert ithor["molmospaces_get_scenes_call"] == 'get_scenes("ithor", "train")'
     assert ithor["prep_status"] == "rejected_exhausted"
+    assert ithor["candidate_profile_status"] == "metadata_worklist_ready"
+    assert ithor["candidate_profile_next_action"] == "metadata_first_human_curation"
+    assert ithor["metadata_worklist_candidate_count"] == 10
     assert ithor["next_scan_world_ids"] == []
     assert ithor["install_candidates"] == []
     assert any(
@@ -669,6 +1027,356 @@ def test_scene_sampler_source_prep_report_lists_manual_prep_steps(monkeypatch) -
     assert holodeck["prep_status"] == "rejected_exhausted"
     assert holodeck["install_candidates"] == []
     assert holodeck["missing_resources"] == []
+
+
+def test_scene_sampler_source_prep_promotes_metadata_worklist_when_assets_exist(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    candidate_path = tmp_path / "val_22.xml"
+    candidate_path.write_text("<mujoco />", encoding="utf-8")
+    monkeypatch.setattr(
+        scene_sampler,
+        "source_availability_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "scene_source": source,
+                    "status": "available",
+                    "module_available": True,
+                    "scene_root_available": True,
+                    "scene_index_map_status": "available",
+                    "molmospaces_scene_version": "test",
+                    "scene_index_map_reason": "",
+                    "scene_index_map_stdout": "",
+                    "source_dir": str(tmp_path),
+                    "source_dir_available": True,
+                    "candidate_files": [
+                        {
+                            "scene_source": source,
+                            "scene_index": 22,
+                            "path": str(candidate_path),
+                            "exists": True,
+                            "status": "available",
+                            "source": "molmospaces_get_scenes",
+                            "raw_ref_type": "dict",
+                            "paths": [
+                                {
+                                    "role": "base",
+                                    "path": str(candidate_path),
+                                    "exists": True,
+                                }
+                            ],
+                            "missing_paths": [],
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "selection_gap_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "scene_source": source,
+                    "status": "incomplete",
+                    "selection_capacity_status": (
+                        "rejected_exhausted" if source == "holodeck-objaverse-val" else "complete"
+                    ),
+                    "ui_needed_count": 3 if source == "holodeck-objaverse-val" else 0,
+                    "eval_needed_count": 10 if source == "holodeck-objaverse-val" else 0,
+                    "next_scan_candidates": [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "candidate_profile_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "profile_status": (
+                        "metadata_worklist_ready"
+                        if source == "holodeck-objaverse-val"
+                        else "complete"
+                    ),
+                    "next_action": (
+                        "metadata_first_human_curation"
+                        if source == "holodeck-objaverse-val"
+                        else "none"
+                    ),
+                    "metadata_worklist_indices": [22] if source == "holodeck-objaverse-val" else [],
+                    "metadata_worklist_world_ids": ["molmospaces/holodeck-objaverse-val/22"]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                    "metadata_worklist_candidate_count": 1
+                    if source == "holodeck-objaverse-val"
+                    else 0,
+                    "metadata_worklist_candidates": [
+                        {
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "known_failure_class": "environment_blocked",
+                            "known_blocked_reason": "map build product smoke pending",
+                            "candidate_file": {
+                                "scene_source": "holodeck-objaverse-val",
+                                "scene_index": 22,
+                                "path": str(candidate_path),
+                                "exists": True,
+                                "status": "available",
+                                "source": "molmospaces_get_scenes",
+                                "paths": [
+                                    {
+                                        "role": "base",
+                                        "path": str(candidate_path),
+                                        "exists": True,
+                                    }
+                                ],
+                                "missing_paths": [],
+                            },
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    prep = source_prep_report(candidate_indices=tuple(range(40)))
+    holodeck = prep["sources"]["holodeck-objaverse-val"]
+
+    assert holodeck["prep_status"] == "ready_for_scanner"
+    assert holodeck["metadata_worklist_scan_world_ids"] == ["molmospaces/holodeck-objaverse-val/22"]
+    assert holodeck["install_candidates"][0]["world_id"] == (
+        "molmospaces/holodeck-objaverse-val/22"
+    )
+    assert holodeck["install_candidates"][0]["primary_path"] == str(candidate_path)
+
+
+def test_scene_sampler_scanner_execution_plan_runs_metadata_worklist_candidates(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    candidate_path = tmp_path / "val_22.xml"
+    candidate_path.write_text("<mujoco />", encoding="utf-8")
+    monkeypatch.setattr(
+        scene_sampler,
+        "source_prep_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "prep_status": (
+                        "ready_for_scanner" if source == "holodeck-objaverse-val" else "complete"
+                    ),
+                    "install_candidates": [
+                        {
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "primary_path": str(candidate_path),
+                            "path_status": "available",
+                            "paths": [
+                                {
+                                    "role": "base",
+                                    "path": str(candidate_path),
+                                    "exists": True,
+                                }
+                            ],
+                            "missing_paths": [],
+                            "install_command": "",
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "scanner_admission_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "admission_rows": [
+                        {
+                            "scene_family": "holodeck-objaverse",
+                            "scene_split": "val",
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "readiness_status": READINESS_BLOCKED,
+                            "admission_status": "blocked",
+                            "lanes": [],
+                            "failure_class": "environment_blocked",
+                            "blocked_reason": "map build product smoke pending",
+                            "selected_reason": "scanner_evidence_incomplete_for_source_sampler",
+                            "room_count": 1,
+                            "waypoint_count": 2,
+                            "category_provenance": "unavailable",
+                            "preview_statuses": {
+                                "fpv": "reviewable",
+                                "map": "reviewable",
+                                "chase": "reviewable",
+                                "topdown": "reviewable",
+                            },
+                            "passed_gates": ["source_asset_available", "preview_metadata"],
+                            "required_gates": [
+                                "source_asset_available",
+                                "preview_metadata",
+                                "public_room_count",
+                                "public_waypoints",
+                                "trusted_category_provenance",
+                                "map_build_artifacts",
+                            ],
+                            "missing_gates": [
+                                "public_room_count",
+                                "public_waypoints",
+                                "trusted_category_provenance",
+                                "map_build_artifacts",
+                            ],
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    plan = scanner_execution_plan(candidate_indices=tuple(range(40)))
+    holodeck = plan["sources"]["holodeck-objaverse-val"]
+
+    assert 22 in plan["candidate_indices"]
+    assert plan["summary"]["candidate_count"] == 1
+    assert plan["summary"]["ready_for_product_smoke_count"] == 1
+    assert holodeck["prep_status"] == "ready_for_scanner"
+    assert holodeck["candidates"][0]["scanner_status"] == "ready_for_product_smoke"
+    assert holodeck["candidates"][0]["world_id"] == "molmospaces/holodeck-objaverse-val/22"
+    assert (
+        "render_scene_previews.py --world molmospaces/holodeck-objaverse-val/22"
+        in (holodeck["candidates"][0]["preview_command"])
+    )
+    assert (
+        "world=molmospaces/holodeck-objaverse-val/22"
+        in (holodeck["candidates"][0]["map_build_product_smoke_command"])
+    )
+
+
+def test_scene_sampler_scanner_execution_plan_does_not_rerun_rejected_metadata_candidates(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    candidate_path = tmp_path / "val_22.xml"
+    candidate_path.write_text("<mujoco />", encoding="utf-8")
+    monkeypatch.setattr(
+        scene_sampler,
+        "source_prep_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "prep_status": (
+                        "ready_for_scanner" if source == "holodeck-objaverse-val" else "complete"
+                    ),
+                    "install_candidates": [
+                        {
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "primary_path": str(candidate_path),
+                            "path_status": "available",
+                            "paths": [
+                                {
+                                    "role": "base",
+                                    "path": str(candidate_path),
+                                    "exists": True,
+                                }
+                            ],
+                            "missing_paths": [],
+                            "install_command": "",
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+    monkeypatch.setattr(
+        scene_sampler,
+        "scanner_admission_report",
+        lambda *, candidate_indices: {
+            "sources": {
+                source: {
+                    "admission_rows": [
+                        {
+                            "scene_family": "holodeck-objaverse",
+                            "scene_split": "val",
+                            "scene_source": "holodeck-objaverse-val",
+                            "scene_index": 22,
+                            "world_id": "molmospaces/holodeck-objaverse-val/22",
+                            "readiness_status": READINESS_REJECTED,
+                            "admission_status": "rejected",
+                            "lanes": [],
+                            "failure_class": "map_actionability_failure",
+                            "blocked_reason": "fewer_than_three_public_navigation_areas",
+                            "selected_reason": "fewer_than_three_public_navigation_areas",
+                            "room_count": 1,
+                            "waypoint_count": 2,
+                            "category_provenance": "source_metadata",
+                            "preview_statuses": {
+                                "fpv": "reviewable",
+                                "map": "reviewable",
+                                "chase": "reviewable",
+                                "topdown": "reviewable",
+                            },
+                            "passed_gates": [],
+                            "required_gates": [
+                                "source_asset_available",
+                                "preview_metadata",
+                                "public_room_count",
+                                "public_waypoints",
+                                "trusted_category_provenance",
+                                "map_build_artifacts",
+                            ],
+                            "missing_gates": [],
+                        }
+                    ]
+                    if source == "holodeck-objaverse-val"
+                    else [],
+                }
+                for source in scene_sampler.SUPPORTED_SCENE_SOURCES
+            }
+        },
+    )
+
+    plan = scanner_execution_plan(candidate_indices=tuple(range(40)))
+    holodeck = plan["sources"]["holodeck-objaverse-val"]
+
+    assert plan["summary"]["candidate_count"] == 1
+    assert plan["summary"]["ready_for_product_smoke_count"] == 0
+    assert plan["summary"]["blocked_count"] == 1
+    assert holodeck["candidates"][0]["scanner_status"] == "rejected_by_admission"
+    assert holodeck["candidates"][0]["next_action"] == ("do_not_scan_without_new_human_curation")
 
 
 def test_scene_sampler_source_prep_install_command_resolves_dict_scene_refs() -> None:
@@ -702,7 +1410,7 @@ def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatc
     assert report["probe_mode"] == "no_download_no_backend_no_vlm"
     assert report["summary"]["admitted_count"] == 20
     assert report["summary"]["blocked_count"] == 3
-    assert report["summary"]["rejected_count"] == 40
+    assert report["summary"]["rejected_count"] == TOTAL_REJECTED_ROW_COUNT
     assert report["summary"]["missing_gate_counts"]["source_asset_available"] == 3
     assert report["summary"]["missing_gate_counts"]["preview_metadata"] == 3
     procthor = report["sources"]["procthor-10k-val"]

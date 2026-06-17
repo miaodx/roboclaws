@@ -38,11 +38,13 @@ Copy `.env.example` to `.env`, then fill the keys you have. Codex defaults to
 Codex, set `ROBOCLAWS_CODEX_PROVIDER=mify` explicitly with `XM_LLM_API_KEY`.
 To use MiniMax's Responses-compatible route, set
 `ROBOCLAWS_CODEX_PROVIDER=minimax` with `MM_API_KEY`; it defaults to
-`MiniMax-M3`, and `ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed` selects the
-faster text-only model. The highspeed model still emits reasoning tokens on
-the Responses route, so tiny output-token budgets can stop before assistant
-text is produced. Claude Code uses repo-local MiMo, Kimi, or mify Anthropic
-routes when present.
+`MiniMax-M3`. M3 is the default MiniMax model because it is the
+multimodal/image-capable row and local paired cleanup evidence did not show a
+speed win for `MiniMax-M2.7-highspeed`. Set
+`ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed` only for explicit comparison
+runs. The highspeed model still emits reasoning tokens on the Responses route,
+so tiny output-token budgets can stop before assistant text is produced. Claude
+Code uses repo-local MiMo, Kimi, or mify Anthropic routes when present.
 
 Provider/model metadata is centralized in
 `roboclaws/agents/provider_registry.py`. The launch catalog, operator console,
@@ -51,7 +53,13 @@ models, required env keys, wire API, route health, and route capabilities.
 Evidence-lane gating stays separate from provider metadata: `camera-raw-fpv`
 requires model image input plus verified runtime image transport, while
 structured lanes such as `world-oracle-labels` and `camera-grounded-labels`
-can use text-only routes. Live route verdicts are recorded in
+can use text-only routes. MiMo inside `mimo-1000` is default-enabled for
+on-demand benchmark and explicit OpenAI-Agents-SDK text experiments, not a
+product cleanup default. Kimi OpenAI Chat defaults to `kimi-k2.7-code`;
+OpenAI Agents SDK routes use
+`ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=default|enabled|disabled`. Responses
+routes map this to the OpenAI `reasoning` body, while Chat-compatible routes
+map it to the `thinking` body. Live route verdicts are recorded in
 `docs/human/model-route-verdicts.yaml`.
 
 Before long Codex runs, verify the selected endpoint:

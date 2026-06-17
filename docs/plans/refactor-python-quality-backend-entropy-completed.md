@@ -703,6 +703,42 @@ logs before choosing the next slice.
   oversized modules stayed at 62. Proof: full realworld-contract test file,
   ruff, format check, py_compile, and ratchet.
 
+- 2026-06-16: Nav2 map bundle report rendering moved into
+  `report_sections_nav2_map.py`, and semantic-map overlay/artifact generation
+  moved into `report_semantic_map_artifacts.py`. Metric: `report.py` 4880 ->
+  4051 lines; Ruff complexity stayed at 0 and oversized modules stayed at 62.
+  Proof: full cleanup report contract test file, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-16: Raw-FPV, model-declared observation, camera-labeler, advisory,
+  and private-evaluation report sections moved into `report_sections_agent.py`.
+  Metric: `report.py` 4051 -> 3820 lines while `report_sections_agent.py`
+  remains under the 800-line target; Ruff complexity stayed at 0 and oversized
+  modules stayed at 62. Proof: full cleanup report contract test file, ruff,
+  format check, py_compile, and ratchet.
+
+- 2026-06-16: Scene-sampler typed row/ref contracts and readiness lane
+  constants moved into `scene_sampler_types.py`, clearing the hard-ceiling drift
+  introduced by the diverse-selection sampler update. Metric:
+  `scene_sampler.py` 2077 -> 1996 lines; Ruff complexity stayed at 0 and
+  oversized modules stayed at 62. Proof: full scene-sampler unit test file,
+  ruff, format check, py_compile, and ratchet.
+
+- 2026-06-16: MolmoSpaces Agibot rehearsal private-evaluation,
+  manipulation-evidence, and readiness payload helpers moved into
+  `agibot_contract_rehearsal_evidence.py`. Metric:
+  `agibot_contract_rehearsal.py` 2140 -> 1949 lines, clearing that hard-ceiling
+  row; Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
+  focused Agibot contract rehearsal test file, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-16: Realworld cleanup done-readiness blocker and policy helpers
+  moved into `realworld_done_readiness.py`, keeping `RealWorldCleanupContract`
+  as the public facade. Metric: `realworld_contract.py` 5095 -> 4930 lines;
+  Ruff complexity stayed at 0 and oversized modules stayed at 62. Proof:
+  realworld contract and MCP server contract test files, ruff, format check,
+  py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

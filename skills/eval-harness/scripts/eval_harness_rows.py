@@ -9,6 +9,7 @@ DEFAULT_WORLD = "molmospaces/val_0"
 DEFAULT_BACKEND = "mujoco"
 DEFAULT_SEED = "7"
 DEFAULT_PROVIDER_PROFILE = "codex-env"
+DEFAULT_AGENT_SDK_PROVIDER_PROFILE = "minimax"
 
 
 def candidate_rows(
@@ -16,6 +17,10 @@ def candidate_rows(
 ) -> list[dict[str, Any]]:
     provider_profiles = explicit_axes.get("provider_profile") or [DEFAULT_PROVIDER_PROFILE]
     codex_provider = provider_profiles[0]
+    agent_sdk_provider = next(
+        (profile for profile in provider_profiles if profile != DEFAULT_PROVIDER_PROFILE),
+        DEFAULT_AGENT_SDK_PROVIDER_PROFILE,
+    )
     row_dir = output_dir / "rows"
     eval_output_root = output_dir / "evals"
     return [
@@ -152,8 +157,30 @@ def candidate_rows(
                 stamp="map-build-consumer-eval-suite",
             ),
             axes={"intent": "eval-suite", "suite": "map_build_consumer"},
-            reason="Map-build, actionability, or open-ended changes need the map consumer suite.",
-            rule_ids=("map_build", "open_ended"),
+            reason=(
+                "Map-build and actionability changes need the map consumer suite and "
+                "runtime-map-prior flow."
+            ),
+            rule_ids=("map_build",),
+            requirements=("just", "python_env"),
+            expense="deterministic",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="open-ended-goals-eval-suite",
+            row_kind="eval_suite",
+            command=_eval_suite_command(
+                suite="open_ended_goals",
+                budget="smoke",
+                output_root=eval_output_root,
+                stamp="open-ended-goals-eval-suite",
+            ),
+            axes={"intent": "eval-suite", "suite": "open_ended_goals"},
+            reason=(
+                "Open-ended household goal changes need the dedicated no-preset "
+                "open-task capability suite."
+            ),
+            rule_ids=("open_ended",),
             requirements=("just", "python_env"),
             expense="deterministic",
             row_dir=row_dir,
@@ -197,7 +224,7 @@ def candidate_rows(
             row_id="codex-open-task-live-eval",
             row_kind="live_agent_eval",
             command=_eval_suite_command(
-                suite="map_build_consumer",
+                suite="open_ended_goals",
                 budget="smoke",
                 output_root=eval_output_root,
                 stamp="codex-open-task-live-eval",
@@ -276,17 +303,17 @@ def candidate_rows(
             row_id="openai-agents-sdk-open-task-live-eval",
             row_kind="live_agent_eval",
             command=_eval_suite_command(
-                suite="cleanup_capability",
+                suite="open_ended_goals",
                 budget="smoke",
                 output_root=eval_output_root,
                 stamp="openai-agents-sdk-open-task-live-eval",
                 agent_engine="openai-agents-sdk",
-                provider_profile=codex_provider,
+                provider_profile=agent_sdk_provider,
                 live_execution="run",
             ),
             axes={
                 "agent_engine": "openai-agents-sdk",
-                "provider_profile": codex_provider,
+                "provider_profile": agent_sdk_provider,
                 "intent": "open-ended",
                 "preset": "",
                 "evidence_lane": "world-oracle-labels",
@@ -300,6 +327,66 @@ def candidate_rows(
             rule_ids=("agent_sdk", "open_ended"),
             requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
             expense="live-agent",
+            row_dir=row_dir,
+        ),
+        _row(
+            row_id="openai-agents-sdk-codex-env-availability",
+            row_kind="live_agent_eval",
+            command=_eval_suite_command(
+                suite="open_ended_goals",
+                budget="smoke",
+                output_root=eval_output_root,
+                stamp="openai-agents-sdk-codex-env-availability",
+                agent_engine="openai-agents-sdk",
+                provider_profile=DEFAULT_PROVIDER_PROFILE,
+                live_execution="run",
+            ),
+            axes={
+                "agent_engine": "openai-agents-sdk",
+                "provider_profile": DEFAULT_PROVIDER_PROFILE,
+                "intent": "open-ended",
+                "preset": "",
+                "evidence_lane": "world-oracle-labels",
+                "backend": DEFAULT_BACKEND,
+                "world": DEFAULT_WORLD,
+            },
+            reason=(
+                "Agent SDK codex-env remains provider availability evidence while "
+                "provider-side 502/upstream-unavailable responses persist."
+            ),
+            rule_ids=("agent_sdk_codex_env_availability",),
+            requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
+            expense="live-agent",
+            row_dir=row_dir,
+            requirement="optional",
+        ),
+        _row(
+            row_id="planner-proof-dry-run-product",
+            row_kind="product_run",
+            command=[
+                "just",
+                "run::surface",
+                "surface=planner-proof",
+                "world=planner-proof/default",
+                f"backend={DEFAULT_BACKEND}",
+                "intent=planner-proof",
+                "agent_engine=direct-runner",
+                "mode=dry-run",
+                f"output_dir={row_dir / 'planner-proof-dry-run-product' / 'run'}",
+            ],
+            axes={
+                "agent_engine": "direct-runner",
+                "intent": "planner-proof",
+                "backend": DEFAULT_BACKEND,
+                "world": "planner-proof/default",
+            },
+            reason=(
+                "Planner-proof changes need the current public planner-proof dry-run "
+                "proof row; lower-level harness recipes remain private mechanics."
+            ),
+            rule_ids=("planner_proof",),
+            requirements=("just", "python_env"),
+            expense="local-sim",
             row_dir=row_dir,
         ),
         _row(
@@ -502,6 +589,7 @@ def _row(
     requirements: tuple[str, ...],
     expense: str,
     row_dir: Path,
+    requirement: str = "required",
 ) -> dict[str, Any]:
     return {
         "schema": ROW_SCHEMA,
@@ -514,7 +602,7 @@ def _row(
         "selection_rule_ids": list(rule_ids),
         "source_signals": [],
         "selected": False,
-        "requirement": "required",
+        "requirement": requirement,
         "expense": expense,
         "requires": list(requirements),
         "status": "skipped_irrelevant",

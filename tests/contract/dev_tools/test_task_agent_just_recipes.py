@@ -844,6 +844,8 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
     assert 'policy="openai_agents_agent"' in molmo_text
     assert "--agent-sdk-perf-profile" in molmo_text
     assert "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE" in molmo_text
+    assert "--model-thinking-mode" in molmo_text
+    assert "ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE" in molmo_text
     assert "--context-soft-limit-tokens" in molmo_text
     assert "openai-agents-live" not in trace_household_cleanup_run("codex")
 
@@ -1971,6 +1973,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
             task="我渴了，帮我找些解渴的东西",
             min_generated_mess_count="5",
             profile="camera-raw-fpv",
+            checker_profile="world-oracle-labels",
             server_arg=[],
             checker_visual_arg=[
                 "--require-robot-views",
@@ -1997,6 +2000,9 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
         checker_command = captured_commands[0]
         assert "--allow-partial-cleanup" in checker_command
         assert checker_command.count("--allow-partial-cleanup") == 1
+        assert checker_command[checker_command.index("--expect-profile") + 1] == (
+            "world-oracle-labels"
+        )
         assert "--require-robot-views" in checker_command
         assert "--require-raw-fpv-observations" in checker_command
         assert "--require-clean-agent-run" not in checker_command

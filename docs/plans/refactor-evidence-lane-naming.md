@@ -1,7 +1,15 @@
 # Evidence Lane Naming Refactor
 
-**Status:** Draft
+**Status:** Partially superseded
 **Created:** 2026-06-06
+**Last reviewed:** 2026-06-16
+**Superseded by:** ADR-0143 and
+`docs/plans/2026-06-16-drop-world-oracle-labels.md` for the
+`world-oracle-labels` lane.
+**Current implementation contract:** the two-axis model remains
+`evidence_lane` plus `camera_labeler`, but active evidence lanes no longer
+include `world-oracle-labels`. Current lanes are `world-public-labels`,
+`camera-grounded-labels`, and `camera-raw-fpv`.
 **Source:** 2026-06-06 naming discussion around RAW-FPV, camera-labels, and
 visual grounding.
 

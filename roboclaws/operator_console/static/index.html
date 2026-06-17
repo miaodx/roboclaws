@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Agent Operator Console</title>
-    <link rel="stylesheet" href="/styles.css?v=header-layout-20260615" />
+    <link rel="stylesheet" href="/styles.css?v=prompt-preview-20260616" />
   </head>
   <body>
     <div class="app-shell">
@@ -19,6 +19,7 @@
           </div>
         </div>
         <div class="global-controls">
+          <button class="secondary view-mode" data-view="tasks">Background Tasks</button>
           <button id="latest-result-button" class="secondary">Latest Result</button>
           <button id="pause-button" class="secondary" disabled hidden>Pause Agent</button>
           <button id="stop-button" class="danger" disabled>Stop Run</button>
@@ -179,6 +180,13 @@
           </section>
           <div class="prompt-copy" id="prompt-copy">Empty goal uses the route default.</div>
           <div class="char-count" id="char-count">0 / 2000</div>
+          <details id="prompt-preview-panel" class="prompt-preview-panel">
+            <summary>Agent Prompt</summary>
+            <div id="prompt-preview-summary" class="field-help">
+              Prompt preview updates after route and goal changes.
+            </div>
+            <pre id="prompt-preview-text" class="prompt-preview-text"></pre>
+          </details>
           <div id="gate-list" class="gate-list"></div>
           <pre id="command-preview" class="command-preview"></pre>
           <button id="start-button" class="primary">Start Agent Run</button>
@@ -195,7 +203,6 @@
           <button class="view-mode" data-view="grounding">Grounding</button>
           <button class="view-mode" data-view="chase">Chase</button>
           <button class="view-mode" data-view="outputs">Outputs</button>
-          <button class="view-mode" data-view="tasks">Background Tasks</button>
         </nav>
         <section id="visual-grid" class="view-grid mode-overview">
           <article class="image-panel" data-panel="fpv">
@@ -258,6 +265,12 @@
           <div id="decision-state" class="evidence-box">No decision yet. The agent has not called a robot tool.</div>
         </section>
         <section>
+          <h2>Agent Prompt</h2>
+          <div id="agent-prompt-state" class="evidence-box">
+            No launch prompt yet. Start or attach a run to inspect the agent prompt.
+          </div>
+        </section>
+        <section>
           <h2>Tools</h2>
           <div id="tool-state" class="evidence-box">No tool calls yet.</div>
         </section>
@@ -313,6 +326,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=header-layout-20260615"></script>
+    <script src="/app.js?v=prompt-preview-20260616"></script>
   </body>
 </html>

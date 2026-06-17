@@ -36,23 +36,23 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     assert "molmospaces/val_6" not in worlds
     assert "molmospaces/val_8" not in worlds
     assert worlds["molmospaces/val_0"]["available_backends"] == ["mujoco"]
-    assert worlds["molmospaces/val_9"]["available_backends"] == ["mujoco"]
-    assert worlds["molmospaces/val_9"]["preview_assets"] == {
+    assert worlds["molmospaces/val_5"]["available_backends"] == ["mujoco"]
+    assert worlds["molmospaces/val_5"]["preview_assets"] == {
         "fpv": {
-            "path": "/previews/molmospaces-val_9-fpv.png",
-            "href": "/previews/molmospaces-val_9-fpv.png",
+            "path": "/previews/molmospaces-val_5-fpv.png",
+            "href": "/previews/molmospaces-val_5-fpv.png",
         },
         "map": {
-            "path": "/previews/molmospaces-val_9-map.png",
-            "href": "/previews/molmospaces-val_9-map.png",
+            "path": "/previews/molmospaces-val_5-map.png",
+            "href": "/previews/molmospaces-val_5-map.png",
         },
         "chase": {
-            "path": "/previews/molmospaces-val_9-chase.png",
-            "href": "/previews/molmospaces-val_9-chase.png",
+            "path": "/previews/molmospaces-val_5-chase.png",
+            "href": "/previews/molmospaces-val_5-chase.png",
         },
         "topdown": {
-            "path": "/previews/molmospaces-val_9-topdown.png",
-            "href": "/previews/molmospaces-val_9-topdown.png",
+            "path": "/previews/molmospaces-val_5-topdown.png",
+            "href": "/previews/molmospaces-val_5-topdown.png",
         },
     }
     assert "topdown" not in worlds["agibot-g2/map-12"]["preview_assets"]
@@ -153,12 +153,12 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert metadata["views"]["fpv"]["view"] == "digital_twin_room_overview"
-    assert metadata["views"]["fpv"]["camera_semantics"] == "overview_slot_not_live_robot_camera"
+    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["views"]["fpv"]["view"] == "raw_fpv"
+    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["chase"]["view"] == "chase_camera"
+    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
     assert metadata["views"]["map"]["view"] == "source_map_preview"
-    assert metadata["views"]["chase"]["view"] == "digital_twin_scene_evidence_overview"
-    assert metadata["views"]["chase"]["correspondence_count"] >= 1
     assert metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
     assert metadata["views"]["topdown"]["room_count"] >= 1
     assert metadata["views"]["topdown"]["inspection_waypoint_count"] >= 1
@@ -309,20 +309,20 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
         assert f"{world_id}::mujoco::cleanup::codex-cli::world-oracle-labels" in enabled_ids
 
     val0 = get_selection(MUJOCO_CODEX_CLEANUP)
-    val9 = get_selection("molmospaces/val_9::mujoco::cleanup::codex-cli::world-oracle-labels")
+    val5 = get_selection("molmospaces/val_5::mujoco::cleanup::codex-cli::world-oracle-labels")
 
     assert "scene_index=0" in val0.launch_default_overrides
     assert "map_bundle=none" not in val0.launch_default_overrides
-    assert "scene_index=9" in val9.launch_default_overrides
-    assert "map_bundle=none" in val9.launch_default_overrides
-    assert val9.to_payload()["preview_assets"]["fpv"]["href"] == (
-        "/previews/molmospaces-val_9-fpv.png"
+    assert "scene_index=5" in val5.launch_default_overrides
+    assert "map_bundle=none" in val5.launch_default_overrides
+    assert val5.to_payload()["preview_assets"]["fpv"]["href"] == (
+        "/previews/molmospaces-val_5-fpv.png"
     )
 
-    argv = build_launch_argv(val9, root=tmp_path, run_id="run-val-9")
-    assert "world=molmospaces/val_9" in argv
+    argv = build_launch_argv(val5, root=tmp_path, run_id="run-val-5")
+    assert "world=molmospaces/val_5" in argv
     assert "scene_source=procthor-10k-val" in argv
-    assert "scene_index=9" in argv
+    assert "scene_index=5" in argv
     assert "map_bundle=none" in argv
 
 

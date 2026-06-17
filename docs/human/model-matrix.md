@@ -62,7 +62,9 @@ table for coding-agent routes. The current MiniMax state is:
 - **OpenAI Agents SDK + MiniMax Responses**: works for structured cleanup.
   Local paired runs on 2026-06-12 completed cleanup successfully for both
   `MiniMax-M3` and `MiniMax-M2.7-highspeed` with `score.status=success` and
-  `mess_restoration_rate=1.0`.
+  `mess_restoration_rate=1.0`. MiniMax M3 is the default MiniMax model now:
+  it is the multimodal row with image support, and the single paired cleanup
+  comparison did not show a speed win for `MiniMax-M2.7-highspeed`.
 - **Codex CLI + MiniMax Responses**: blocked for MCP-driven cleanup today.
   The provider Responses route connects, but MiniMax emits MCP tool calls in
   a flattened name shape such as `mcp__cleanup__metric_map`,
@@ -79,6 +81,79 @@ table for coding-agent routes. The current MiniMax state is:
   `MiniMax-M2.7-highspeed`: M3 finished in about 262.9 s wall time, while
   M2.7-highspeed finished in about 269.1 s. That is only one run, so use it as
   cautionary evidence, not a benchmark conclusion.
+
+Current default-enabled API sources:
+
+- `codex-env`: default model `gpt-5.5`, the strongest current Codex route.
+- `mify`: default model `xiaomi/mimo-v2.5`.
+- `mimo-openai-chat` / token plan: default model `mimo-v2.5`.
+- `mimo-inside`: default-enabled on-demand route, default model `mimo-1000`.
+  It is allowed for benchmark and explicit text-agent experiments, but it is
+  not promoted as a product cleanup default until a separate route decision
+  proves tool/runtime behavior.
+- `minimax`: default model `MiniMax-M3`; `MiniMax-M2.7-highspeed` remains an
+  explicit non-default variant.
+- `kimi-openai-chat`: default model `kimi-k2.7-code`. Kimi K2.7 Code runs with
+  Thinking On for the new code-model behavior. Roboclaws exposes a normalized
+  `model_thinking_mode=default|enabled|disabled` switch and maps it to each
+  provider wire API instead of assuming one schema fits every model.
+
+Kimi K2.7 Code thinking check, 2026-06-16:
+
+- Official Kimi Code docs say Kimi K2.7 Code launched on 2026-06-12 and the new
+  model only takes effect with Thinking On:
+  <https://www.kimi.com/code/docs/kimi-code/whats-new.html#kimi-k2-7-code-2026-%E5%B9%B4-6-%E6%9C%88-12-%E6%97%A5>.
+- Live OpenAI Chat probes against `https://api.kimi.com/coding/v1` with
+  `model=kimi-k2.7-code` all returned HTTP success. Omitting `thinking`,
+  sending `thinking={"type":"enabled"}`, and sending
+  `thinking={"type":"enabled","keep":"all"}` returned non-empty
+  `reasoning_content`. Sending `thinking={"type":"disabled"}` also succeeded
+  but returned no `reasoning_content`.
+- Interpretation: `thinking=disabled` is a valid diagnostic contrast, not a
+  transport error, but it disables the behavior Kimi documents as required for
+  K2.7 Code. Default product/probe payloads therefore use Thinking On where the
+  route supports it.
+
+MiMo/Kimi Chat thinking checks, 2026-06-16:
+
+- The OpenAI Chat-compatible MiMo token-plan route (`mimo-v2.5`) and MiMo inside
+  route (`mimo-1000`) both accepted `thinking={"type":"enabled","keep":"all"}`
+  and returned non-empty `reasoning_content`.
+- The same routes accepted `thinking={"type":"disabled"}` and returned no
+  `reasoning_content`.
+- Responses-compatible routes `codex-env`, `mify`, and `minimax` accepted the
+  OpenAI Responses `reasoning={"effort":"medium"}` shape.
+
+Thinking / reasoning flags by current route:
+
+| Route | Wire API | Roboclaws default flag | Notes |
+| --- | --- | --- | --- |
+| `kimi-openai-chat` / `kimi-k2.7-code` | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` in request body | Required for K2.7 Code behavior. `thinking=disabled` is accepted but disables `reasoning_content`. |
+| `codex-env` / `gpt-5.5` | OpenAI Responses | `reasoning={"effort":"medium"}` | Uses the OpenAI Responses reasoning schema, not Kimi's `thinking` body. `model_thinking_mode=disabled` maps to `reasoning={"effort":"none"}`. |
+| `minimax` / `MiniMax-M3` | OpenAI Responses | `reasoning={"effort":"medium"}` | M3 is the default MiniMax model. M2.7-highspeed can emit reasoning tokens, so probes keep larger token budgets. |
+| `mify` / `xiaomi/mimo-v2.5` | OpenAI Responses | `reasoning={"effort":"medium"}` | Responses gateway accepted the OpenAI reasoning body in 2026-06-16 probes. |
+| `mimo-openai-chat` / token plan | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` | Chat route accepted Kimi-style thinking body in 2026-06-16 probes. |
+| `mimo-inside` / `mimo-1000` | OpenAI Chat | `thinking={"type":"enabled","keep":"all"}` | On-demand benchmark/text route; disabled mode removes `reasoning_content` in probes. |
+| `mimo-anthropic`, `mify-anthropic`, `kimi-anthropic` | Anthropic-compatible routes | none in Roboclaws launch payloads | OpenClaw bootstrap model catalog marks its older Kimi/MiMo entries with `reasoning:false`; that is Gateway catalog metadata, not the OpenAI Chat `thinking` request field. |
+
+Open-ended thinking A/B:
+
+```bash
+ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=enabled \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco \
+  agent_engine=openai-agents-sdk provider_profile=kimi-openai-chat \
+  evidence_lane=world-oracle-labels prompt="find something useful to drink"
+
+ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE=disabled \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco \
+  agent_engine=openai-agents-sdk provider_profile=kimi-openai-chat \
+  evidence_lane=world-oracle-labels prompt="find something useful to drink"
+```
+
+Compare `run_result.json`, `openai-agents-trace.json`, model-call usage,
+reasoning tokens/`reasoning_content` availability, wall time, and open-ended
+grader outcome. Keep the same provider profile, world, evidence lane, prompt,
+seed, and scenario setup when comparing enabled vs disabled.
 
 ## Periodic Model Benchmarks
 
@@ -153,11 +228,12 @@ That MiMo-focused benchmark includes:
 - MiMo mify: `xiaomi/mimo-v2.5`, `xiaomi/mimo-v2.5-pro`
 - MiMo inside: `mimo-v2.5`, `mimo-v2.5-pro`, `mimo-1000`
 
-`mimo-1000` is the current benchmark-only label for the MiMo inside
-MiMo V2.5 Pro UltraSpeed route. Xiaomi's 2026-06-08 UltraSpeed note describes
-the route as a 1T MiMo V2.5 Pro variant focused on 1000+ TPS generation:
-<https://mimo.xiaomi.com/blog/mimo-tilert-1000tps>. Keep it out of active
-product cleanup routes until a separate provider-route decision promotes it.
+`mimo-1000` is the current default-enabled MiMo inside label for on-demand
+benchmark and explicit text-agent use. Xiaomi's 2026-06-08 UltraSpeed note
+describes the route as a 1T MiMo V2.5 Pro variant focused on 1000+ TPS
+generation: <https://mimo.xiaomi.com/blog/mimo-tilert-1000tps>. Keep it out of
+active product cleanup defaults until a separate provider-route decision
+promotes it.
 Use `--layer stream-throughput` on OpenAI Chat cases when you need a decode-rate
 style measurement that excludes first-content latency from the TPS denominator.
 

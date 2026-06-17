@@ -1,0 +1,68 @@
+{
+  "schema": "roboclaws_eval_sample_v1",
+  "sample_id": "open_ended.living_waypoint_seed7",
+  "version": "2026-06-16",
+  "surface": "household-world",
+  "intent": "open-ended",
+  "preset": "not_applicable",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "evidence_lane": "world-oracle-labels",
+  "camera_labeler": "not_applicable",
+  "scenario_setup": "baseline",
+  "seed": 7,
+  "prompt": "请找到 Generated exploration candidate 5，并报告你到达的位置。",
+  "goal_contract_hash": "unavailable",
+  "allowed_agent_engines": [
+    "direct-runner",
+    "codex-cli",
+    "openai-agents-sdk"
+  ],
+  "provider_profiles": [
+    "not_applicable",
+    "codex-env",
+    "minimax"
+  ],
+  "trial_count": 1,
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "open_ended"
+  ],
+  "private_goal_reference": {
+    "schema": "household_eval_private_goal_reference_v1",
+    "private_truth_scope": "grader_only",
+    "open_ended_category": "positive_observable",
+    "expected_goal_outcome": "public_target_observed",
+    "public_evidence_basis": {
+      "anchor_id": "anchor_waypoint_generated_exploration_005",
+      "waypoint_id": "generated_exploration_005",
+      "source": "runtime_metric_map.public_semantic_anchors"
+    }
+  },
+  "grader_config": {
+    "open_ended_category": "positive_observable",
+    "expected_goal_outcome": "public_target_observed",
+    "semantic_satisfaction_authoritative": false,
+    "success_predicate": {
+      "predicate_id": "waypoint_or_area_visited",
+      "authoritative": true,
+      "anchor_id": "anchor_waypoint_generated_exploration_005",
+      "waypoint_id": "generated_exploration_005"
+    },
+    "tags": [
+      "open-ended",
+      "positive-observable",
+      "public-waypoint",
+      "coding-agent",
+      "agent-sdk"
+    ]
+  },
+  "launch_overrides": {
+    "agent_engine": "direct-runner",
+    "evidence_lane": "world-oracle-labels",
+    "seed": 7,
+    "scenario_setup": "baseline"
+  }
+}

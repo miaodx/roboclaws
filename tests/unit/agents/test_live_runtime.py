@@ -12,6 +12,7 @@ import pytest
 from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
     _compact_model_input_items,
+    _default_sdk_model_settings_payload,
     _failure_from_exception,
     _model_input_shape_summary,
     _RetryingModel,
@@ -77,6 +78,30 @@ def test_live_agent_request_keeps_one_turn_policy_explicit(tmp_path: Path) -> No
     assert request.max_turns is None
     assert request.artifact_path("live_status", "live_status.json") == tmp_path / "status.json"
     assert request.artifact_path("events", "events.jsonl") == tmp_path / "run" / "events.jsonl"
+
+
+def test_openai_agents_default_model_settings_apply_provider_thinking_policy() -> None:
+    responses = _default_sdk_model_settings_payload(
+        provider_profile="codex-env",
+        wire_api="responses",
+        profile_id="baseline",
+    )
+    kimi_chat = _default_sdk_model_settings_payload(
+        provider_profile="kimi-openai-chat",
+        wire_api="chat-completions",
+        profile_id="baseline",
+    )
+    disabled_chat = _default_sdk_model_settings_payload(
+        provider_profile="mimo-openai-chat",
+        wire_api="chat-completions",
+        profile_id="baseline",
+        thinking_mode="disabled",
+    )
+
+    assert responses["reasoning"] == {"effort": "medium"}
+    assert "truncation" not in responses
+    assert kimi_chat["extra_body"]["thinking"] == {"type": "enabled", "keep": "all"}
+    assert disabled_chat["extra_body"]["thinking"] == {"type": "disabled"}
 
 
 def test_live_agent_request_rejects_invalid_sdk_turn_budget(tmp_path: Path) -> None:
@@ -841,7 +866,7 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert wrapped_model.base_model is captured["responses_model"]
     assert captured["agent_kwargs"]["model_settings"].tool_choice == "auto"
     assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
-    assert captured["agent_kwargs"]["model_settings"].truncation == "auto"
+    assert not hasattr(captured["agent_kwargs"]["model_settings"], "truncation")
     assert captured["runner_kwargs"]["run_config"].trace_include_sensitive_data is False
     assert captured["runner_kwargs"]["run_config"].workflow_name == "roboclaws-openai-agents-live"
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
@@ -854,6 +879,7 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     ]
     assert events[0]["wire_api"] == "responses"
     assert events[0]["sdk_model_settings"]["store"] is False
+    assert events[0]["sdk_model_settings"]["reasoning"] == {"effort": "medium"}
     assert events[0]["sdk_run_config"]["trace_include_sensitive_data"] is False
     assert events[0]["agent_sdk_responses_features"]["available"] is True
     assert events[0]["agent_sdk_responses_features"]["server_managed_continuation_default"] is False
@@ -1027,6 +1053,9 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     assert wrapped_model.base_model is captured["chat_model"]
     assert captured["agent_kwargs"]["model_settings"].include_usage is True
     assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
+    assert captured["agent_kwargs"]["model_settings"].extra_body == {
+        "thinking": {"type": "enabled", "keep": "all"}
+    }
     events = [
         json.loads(line)
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
@@ -1710,6 +1739,9 @@ def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
     assert captured["agent_kwargs"]["model_settings"].extra_headers == {
         "User-Agent": "claude-code/1.0.0"
     }
+    assert captured["agent_kwargs"]["model_settings"].extra_body == {
+        "thinking": {"type": "enabled", "keep": "all"}
+    }
 
 
 def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
@@ -1976,10 +2008,10 @@ def _assert_baseline_openai_agents_timing(timing: dict[str, object]) -> None:
         _expected_model_racing_observability()
     )
     assert timing["agent_sdk_perf_profile"]["sdk_model_settings"] == {
+        "model_thinking_mode": "default",
         "parallel_tool_calls": False,
         "store": False,
         "tool_choice": "auto",
-        "truncation": "auto",
     }
     assert timing["agent_sdk_perf_profile"]["sdk_run_config"] == {
         "trace_include_sensitive_data": False,
@@ -3465,6 +3497,7 @@ def _openai_agents_perf_profile_base_args(**overrides) -> Namespace:
         raw_fpv_image_memory_retain camera_grounded_history_compaction
         camera_grounded_history_retain camera_grounded_composite_tools
         model_service_retry_attempts model_service_retry_sleep_s
+        model_thinking_mode
         """.split(),
         None,
     )
@@ -3474,6 +3507,7 @@ def _openai_agents_perf_profile_base_args(**overrides) -> Namespace:
         agent_sdk_perf_profile="",
         prompt_mode="",
         continuation_mode="",
+        model_thinking_mode="default",
         cache_tools_list=True,
         mcp_client_session_timeout_s=30.0,
         robot_view_capture_policy="",
@@ -3527,6 +3561,7 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     assert baseline["provider_profile"] == "codex-env"
     assert baseline["wire_api"] == "responses"
     assert baseline["model_family"] == "gpt"
+    assert baseline["model_thinking_mode"] == "default"
     assert baseline["prompt_mode"] == "full"
     assert baseline["continuation_mode"] == "repeat_full_prompt"
     assert baseline["max_turns"] == 128
@@ -3548,7 +3583,7 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     assert baseline["sdk_model_settings"] == {
         "tool_choice": "auto",
         "parallel_tool_calls": False,
-        "truncation": "auto",
+        "model_thinking_mode": "default",
         "store": False,
     }
     assert baseline["sdk_run_config"] == {
@@ -3571,6 +3606,7 @@ def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeyp
     assert gpt["context_soft_limit_tokens"] == 96_000
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
+    assert "truncation" not in gpt["sdk_model_settings"]
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
     assert gpt["model_input_compaction"]["candidate_ids"] == []
     assert gpt["model_input_compaction"]["repeated_metric_map_delta"] is False
@@ -3619,6 +3655,7 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     assert mimo["max_continuations"] == 1
     assert mimo["context_soft_limit_tokens"] == 64_000
     assert mimo["context_hard_limit_tokens"] == 96_000
+    assert mimo["sdk_model_settings"]["truncation"] == "auto"
 
     chat = _resolve_agent_sdk_perf_profile(
         _openai_agents_perf_profile_base_args(provider_profile="mimo-chat", model="mimo-v2.5")
@@ -3629,8 +3666,19 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     assert chat["sdk_model_settings"] == {
         "tool_choice": "auto",
         "parallel_tool_calls": False,
+        "model_thinking_mode": "default",
         "include_usage": True,
     }
+
+
+def test_openai_agents_perf_profile_accepts_thinking_mode_override(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(model_thinking_mode="disabled")
+    )
+
+    assert profile["model_thinking_mode"] == "disabled"
+    assert profile["sdk_model_settings"]["model_thinking_mode"] == "disabled"
 
 
 def test_openai_agents_perf_profile_resolves_raw_fpv_budget_defaults(monkeypatch) -> None:

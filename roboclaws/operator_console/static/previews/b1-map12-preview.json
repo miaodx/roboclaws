@@ -1,85 +1,110 @@
 {
   "backend": "isaaclab",
-  "generated_at": "2026-06-15T11:46:36Z",
+  "camera_preview_artifact": {
+    "accepted_candidate_count": 8,
+    "candidate_count": 8,
+    "path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-oracle-labels/0615_1857/seed-7/run_result.json",
+    "schema": "realworld_cleanup_v1",
+    "selected_action": "observe",
+    "selected_label": "0001_observe",
+    "selected_waypoint_id": "",
+    "source_kind": "run_result_robot_view_step"
+  },
+  "generated_at": "2026-06-16T09:26:21Z",
   "map_bundle": "assets/maps/b1-map12-room-semantics",
   "render_resolution": {
     "height": 560,
     "width": 900
   },
-  "renderer": "static_b1_map12_digital_twin_overview",
+  "renderer": "static_b1_map12_with_isaac_runtime_camera_previews",
   "scene_source": "b1-gaussian-digital-twin",
   "scene_usd_path": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/configuration/scene_base.usd",
   "schema": "operator_console_scene_preview_v1",
   "views": {
     "chase": {
-      "camera_semantics": "overview_slot_not_live_robot_camera",
-      "correspondence_count": 6,
-      "correspondence_schema": "scene_map_correspondence_v1",
+      "action": "observe",
+      "camera": "robot_relative_chase_camera",
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
             0,
-            255
+            228
           ],
           [
             0,
-            255
+            231
           ],
           [
             0,
-            255
+            235
           ]
         ],
+        "edge_fraction_over_16": 0.073688,
+        "edge_fraction_over_8": 0.100062,
         "height": 560,
-        "max_channel_range": 255.0,
-        "max_stddev": 37.294,
+        "max_channel_range": 235.0,
+        "max_stddev": 76.072,
         "mean_rgb": [
-          208.876,
-          210.539,
-          212.463
+          172.22,
+          173.783,
+          175.934
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 1127,
         "visual_status": "reviewable",
         "width": 900
       },
+      "label": "0001_observe",
       "path": "b1-map12-chase.png",
-      "provenance": "b1_map12_scene_map_correspondence_static_overview",
-      "semantic_map_fallback": false,
-      "view": "digital_twin_scene_evidence_overview"
+      "policy_note": "Chase is report evidence, not agent-facing policy input.",
+      "provenance": "isaac_runtime_report_chase_camera",
+      "source": "robot_relative_camera_follower",
+      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-oracle-labels/0615_1857/seed-7/robot_views/0001_observe.chase.png",
+      "view": "chase_camera",
+      "waypoint_id": ""
     },
     "fpv": {
-      "camera_semantics": "overview_slot_not_live_robot_camera",
+      "action": "observe",
+      "camera": "/World/robot_0/head_camera",
+      "head_camera_equivalent": false,
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
-            0,
-            255
+            35,
+            228
           ],
           [
-            0,
-            255
+            35,
+            231
           ],
           [
-            0,
-            255
+            35,
+            235
           ]
         ],
+        "edge_fraction_over_16": 0.0685,
+        "edge_fraction_over_8": 0.079062,
         "height": 560,
-        "max_channel_range": 255.0,
-        "max_stddev": 35.544,
+        "max_channel_range": 200.0,
+        "max_stddev": 60.999,
         "mean_rgb": [
-          216.078,
-          219.119,
-          221.777
+          181.787,
+          184.106,
+          187.78
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 386,
         "visual_status": "reviewable",
         "width": 900
       },
+      "label": "0001_observe",
       "path": "b1-map12-fpv.png",
-      "provenance": "b1_map12_room_semantic_overlay_static_overview",
-      "semantic_map_fallback": false,
-      "view": "digital_twin_room_overview"
+      "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
+      "robot_mounted": true,
+      "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
+      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-oracle-labels/0615_1857/seed-7/robot_views/0001_observe.fpv.png",
+      "view": "raw_fpv",
+      "waypoint_id": ""
     },
     "map": {
       "alignment_status": "candidate",
@@ -99,6 +124,8 @@
             255
           ]
         ],
+        "edge_fraction_over_16": 0.142125,
+        "edge_fraction_over_8": 0.169187,
         "height": 560,
         "max_channel_range": 255.0,
         "max_stddev": 25.491,
@@ -108,6 +135,7 @@
           215.867
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 785,
         "visual_status": "reviewable",
         "width": 900
       },
@@ -133,6 +161,8 @@
             255
           ]
         ],
+        "edge_fraction_over_16": 0.1425,
+        "edge_fraction_over_8": 0.172313,
         "height": 560,
         "max_channel_range": 255.0,
         "max_stddev": 27.789,
@@ -142,6 +172,7 @@
           219.449
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 720,
         "visual_status": "reviewable",
         "width": 900
       },

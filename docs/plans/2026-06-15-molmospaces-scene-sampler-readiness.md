@@ -28,7 +28,7 @@ next_flow_scope:
   - classified ithor as rejected exhausted under current admission gates
   - completed procthor-objaverse-val UI and eval stress projection
   - classified holodeck-objaverse-val as rejected exhausted under current admission gates
-  - leave only new-human-curation follow-up for rejected exhausted sources
+  - added metadata-first curation worklists for rejected-exhausted sources
 next_flow_policy:
   - treat readiness gates, target sources, vertical slices, acceptance criteria, and verification as implementation scope
   - classify every candidate/source as admitted, normalized blocked, or rejected instead of leaving parked notes
@@ -39,24 +39,28 @@ next_flow_policy:
 
 ## Implementation Status
 
-Implemented on 2026-06-15. The sampler readiness work now has explicit source
-outcomes instead of parked source notes:
+Implemented on 2026-06-15 and refreshed on 2026-06-16 for seeded, room-diverse
+source selection. The sampler readiness work now has explicit source outcomes
+instead of parked source notes:
 
 - `procthor-10k-val`: complete. Eval-stress projection admits ten samples
   (`0`, `2`, `3`, `5`, `9`, `10`, `11`, `12`, `13`, `15`) and the operator
-  console keeps exactly three UI rows (`0`, `2`, `9`).
+  console keeps exactly three UI rows (`0`, `2`, `5`) selected by the
+  deterministic source-diverse policy.
 - `procthor-objaverse-val`: complete. Eval-stress projection admits ten samples
   (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`, `13`, `14`) and the operator
-  console exposes three UI rows (`0`, `1`, `4`).
+  console exposes three UI rows (`0`, `1`, `10`) selected by the same policy.
 - `ithor`: rejected exhausted under current admission gates. Candidate evidence
   for indices `1..12` all fails with
-  `fewer_than_three_public_navigation_areas`; next action is
-  `do_not_scan_without_new_human_curation`.
+  `fewer_than_three_public_navigation_areas`. It now has a metadata-first
+  source-scoped worklist for unprofiled candidate ids before any manual
+  download or scanner product-smoke run.
 - `holodeck-objaverse-val`: rejected exhausted under current admission gates.
   Source prep and scanner execution for indices `0..19` completed, but all
   twenty candidates have one public room, two waypoints, coverage `0.1`, and
-  `blocked_reason=fewer_than_three_public_navigation_areas`; next action is
-  `do_not_scan_without_new_human_curation`.
+  `blocked_reason=fewer_than_three_public_navigation_areas`. It now has a
+  metadata-first source-scoped worklist for unprofiled candidate ids before any
+  manual download or scanner product-smoke run.
 
 The top-level readiness summary is now:
 
@@ -73,8 +77,30 @@ product ideas; they are the gate taxonomy required to explain why a source is
 admitted, blocked, or rejected. This implementation converted that taxonomy
 into durable source metadata, readiness artifacts, and next-flow actions. With
 the current evidence, more download permission is not the missing input for
-`ithor` or `holodeck-objaverse-val`; admitting them would require new human
-curation or a deliberate change to the public-room/actionability gate.
+`ithor` or `holodeck-objaverse-val`; admitting them would require either a new
+candidate that passes the current gates or a deliberate change to the
+public-room/actionability gate. The new metadata-first curation artifact narrows
+that search without making any scene ready by itself.
+
+The 2026-06-16 refresh makes the selection layer suitable for all four scene
+groups without pretending that all four groups are ready. `selection_policy`
+metadata is emitted in sampler manifest, eval projection, readiness, candidate,
+selection-gap, source-prep, scanner-admission, scanner-execution, and next-flow
+artifacts. The policy is scoped per `scene_source`, uses seed
+`2026-06-16.source-diverse-selection-v1`, and ranks candidates by deterministic
+random order while preferring different public room counts before filling the
+remaining slots. Future `ithor` or `holodeck-objaverse-val` candidates that pass
+the existing gates can enter UI/eval through the same policy.
+
+The 2026-06-16 metadata-first follow-up adds
+`scene_sampler_candidate_profile.json`. This is a no-download/no-backend/no-VLM
+candidate profile for all four scene groups. Complete sources report
+`profile_status=complete`; rejected-exhausted sources keep their rejected
+evidence but receive a small seeded worklist of unprofiled candidate world ids
+with `next_action=metadata_first_human_curation`. The artifact's
+`admission_effect` is explicitly `none_profile_only`: scanner admission and
+eval readiness still require the normal preview, public-room, waypoint,
+provenance, and map-build gates.
 
 Historical implementation notes follow.
 
@@ -85,7 +111,7 @@ Historical implementation notes follow.
 - Prepared selected-sample room label manifest:
   `data/molmospaces/scene_sampler_room_labels.json`.
 - Operator-console UI projection: `procthor-10k-val` samples `0`, `2`, and
-  `9` are visible by default.
+  `5` are visible by default after seeded room-diverse selection.
 - Preserved launch aliases: existing `molmospaces/val_0`, `val_1`, `val_2`,
   `val_3`, `val_4`, `val_5`, `val_7`, and `val_9` remain launchable as
   explicit `procthor-10k-val` aliases; non-UI aliases are hidden from the
@@ -287,6 +313,13 @@ Historical implementation notes follow.
   scanner dry-run, and scanner execution for ready candidates. The execution
   policy is explicit on each command: install remains `manual_operator_only`,
   while exporter refreshes remain no-download/no-VLM gates.
+- The 2026-06-16 candidate-profile refresh supersedes the earlier "only stop
+  and wait" next-flow shape for `ithor` and `holodeck-objaverse-val`. Their
+  selection/admission rows still say not to rescan already rejected candidates,
+  but `scene_sampler_next_flow_worklist.json` now reports
+  `next_action=metadata_first_human_curation`, ten metadata worklist candidates
+  per rejected-exhausted source, and read-only profile-refresh commands. This
+  keeps the current gates intact while making the next discovery step explicit.
 
 Verification run on 2026-06-15:
 
@@ -409,6 +442,10 @@ Current limits after this Flow:
   blocked. They are rejected exhausted under the current public-room /
   actionability gate and should not be scanned again without new human
   curation.
+- Four source groups now share the same deterministic selection policy, but
+  only sources with admitted candidates become UI/eval-ready. This preserves the
+  gate distinction between "supported by the sampler workflow" and "usable as a
+  ready scene row."
 - The static smoke eval verifies runtime-map artifact readiness and sampler
   admission metadata; full scene-specific runtime output remains a product-run
   or later scanner proof.

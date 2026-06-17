@@ -61,7 +61,7 @@ def aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     )
     pass_at_k = _pass_at_k(samples, max_repetition_count)
     pass_caret_k, pass_caret_k_eligible = _pass_caret_k(samples, max_repetition_count)
-    return {
+    aggregate = {
         "total": total,
         "trial_count": total,
         "sample_count": sample_count,
@@ -76,6 +76,10 @@ def aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         "failure_classes": failure_classes,
         "samples": samples,
     }
+    open_ended = _open_ended_aggregate(results)
+    if open_ended:
+        aggregate["open_ended"] = open_ended
+    return aggregate
 
 
 def render_eval_report(bundle: dict[str, Any]) -> str:
@@ -105,7 +109,11 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
 {sampler_projection}
   <table>
     <thead>
-      <tr><th>Sample</th><th>Trial</th><th>Status</th><th>Failure</th><th>Run</th></tr>
+      <tr>
+        <th>Sample</th><th>Trial</th><th>Engine</th><th>Provider</th>
+        <th>Category</th><th>Outcome</th><th>Status</th><th>Failure</th>
+        <th>Tool calls</th><th>Tool events</th><th>Wall time</th><th>Model attempts</th><th>Run</th>
+      </tr>
     </thead>
     <tbody>
 {rows}
@@ -210,12 +218,32 @@ def _report_row(result: dict[str, Any], *, output_dir: Path) -> str:
         href = html.escape(_report_href(report, output_dir))
         links.append(f'<a href="{href}">report</a>')
     status = str(result.get("status") or "")
+    metrics = result.get("metrics") if isinstance(result.get("metrics"), dict) else {}
+    attempts = (
+        metrics.get("model_attempt_summary")
+        if isinstance(metrics.get("model_attempt_summary"), dict)
+        else {}
+    )
+    open_ended = (
+        result.get("grader_outputs", {}).get("open_ended")
+        if isinstance(result.get("grader_outputs"), dict)
+        and isinstance(result.get("grader_outputs", {}).get("open_ended"), dict)
+        else {}
+    )
     return (
         "      <tr>"
         f"<td>{html.escape(str(identity.get('sample_id') or ''))}</td>"
         f"<td>{html.escape(str(identity.get('trial_id') or ''))}</td>"
+        f"<td>{html.escape(str(identity.get('agent_engine') or ''))}</td>"
+        f"<td>{html.escape(str(identity.get('provider_profile') or ''))}</td>"
+        f"<td>{html.escape(str(open_ended.get('open_ended_category') or ''))}</td>"
+        f"<td>{html.escape(str(open_ended.get('expected_goal_outcome') or ''))}</td>"
         f'<td class="{html.escape(status)}">{html.escape(status)}</td>'
         f"<td>{html.escape(str(result.get('failure_class') or ''))}</td>"
+        f"<td>{html.escape(str(metrics.get('tool_call_count') or ''))}</td>"
+        f"<td>{html.escape(str(metrics.get('tool_event_count') or ''))}</td>"
+        f"<td>{html.escape(str(metrics.get('wall_time_s') or ''))}</td>"
+        f"<td>{html.escape(str(attempts.get('attempt_count') or ''))}</td>"
         f"<td>{' | '.join(links)}</td>"
         "</tr>"
     )
@@ -258,6 +286,137 @@ def _sample_summaries(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]
             "failure_classes": failure_classes,
         }
     return summaries
+
+
+def _open_ended_aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
+    open_results = [
+        result
+        for result in results
+        if (
+            isinstance(result.get("identity"), dict)
+            and str(result["identity"].get("intent") or "") == "open-ended"
+        )
+    ]
+    if not open_results:
+        return {}
+    by_category: dict[str, dict[str, int]] = {}
+    by_outcome: dict[str, dict[str, int]] = {}
+    by_engine_provider: dict[str, dict[str, int]] = {}
+    by_failure_class: dict[str, int] = {}
+    live_statuses: dict[str, int] = {}
+    tool_event_counts: dict[str, int] = {}
+    total_tool_calls = 0
+    total_tool_events = 0
+    wall_times: list[float] = []
+    model_attempt_total = 0
+    model_success_total = 0
+    model_failure_total = 0
+    for result in open_results:
+        status = str(result.get("status") or MISSING_UNAVAILABLE)
+        identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
+        grader_outputs = (
+            result.get("grader_outputs") if isinstance(result.get("grader_outputs"), dict) else {}
+        )
+        open_ended = (
+            grader_outputs.get("open_ended")
+            if isinstance(grader_outputs.get("open_ended"), dict)
+            else {}
+        )
+        metrics = result.get("metrics") if isinstance(result.get("metrics"), dict) else {}
+        _increment_status_bucket(
+            by_category,
+            str(open_ended.get("open_ended_category") or MISSING_UNAVAILABLE),
+            status,
+        )
+        _increment_status_bucket(
+            by_outcome,
+            str(open_ended.get("expected_goal_outcome") or MISSING_UNAVAILABLE),
+            status,
+        )
+        engine_provider = (
+            f"{identity.get('agent_engine') or MISSING_UNAVAILABLE}/"
+            f"{identity.get('provider_profile') or MISSING_UNAVAILABLE}"
+        )
+        _increment_status_bucket(by_engine_provider, engine_provider, status)
+        failure_class = str(result.get("failure_class") or MISSING_UNAVAILABLE)
+        if failure_class != MISSING_NOT_APPLICABLE:
+            by_failure_class[failure_class] = by_failure_class.get(failure_class, 0) + 1
+        total_tool_calls += _int_value(metrics.get("tool_call_count"))
+        total_tool_events += _int_value(metrics.get("tool_event_count"))
+        per_tool = metrics.get("tool_event_counts")
+        if isinstance(per_tool, dict):
+            for name, count in per_tool.items():
+                tool_event_counts[str(name)] = tool_event_counts.get(str(name), 0) + _int_value(
+                    count
+                )
+        wall_time = _float_or_none(metrics.get("wall_time_s"))
+        if wall_time is not None:
+            wall_times.append(wall_time)
+        attempts = (
+            metrics.get("model_attempt_summary")
+            if isinstance(metrics.get("model_attempt_summary"), dict)
+            else {}
+        )
+        model_attempt_total += _int_value(attempts.get("attempt_count"))
+        model_success_total += _int_value(attempts.get("success_count"))
+        model_failure_total += _int_value(attempts.get("failure_count"))
+        live_status = (
+            grader_outputs.get("efficiency", {}).get("live_status")
+            if isinstance(grader_outputs.get("efficiency"), dict)
+            and isinstance(grader_outputs.get("efficiency", {}).get("live_status"), dict)
+            else {}
+        )
+        live_phase = str(live_status.get("phase") or MISSING_UNAVAILABLE)
+        live_statuses[live_phase] = live_statuses.get(live_phase, 0) + 1
+    return {
+        "schema": "roboclaws_open_ended_eval_aggregate_v1",
+        "by_category": by_category,
+        "by_expected_goal_outcome": by_outcome,
+        "by_engine_provider": by_engine_provider,
+        "by_failure_class": by_failure_class,
+        "live_statuses": live_statuses,
+        "telemetry": {
+            "tool_call_count": total_tool_calls,
+            "tool_event_count": total_tool_events,
+            "tool_event_counts": tool_event_counts,
+            "wall_time_s": _wall_time_summary(wall_times),
+            "model_attempt_count": model_attempt_total,
+            "model_success_count": model_success_total,
+            "model_failure_count": model_failure_total,
+        },
+    }
+
+
+def _increment_status_bucket(buckets: dict[str, dict[str, int]], key: str, status: str) -> None:
+    bucket = buckets.setdefault(key, {"passed": 0, "failed": 0, "blocked": 0, "inconclusive": 0})
+    if status not in bucket:
+        bucket[status] = 0
+    bucket[status] += 1
+
+
+def _wall_time_summary(values: list[float]) -> dict[str, Any]:
+    if not values:
+        return {"count": 0, "min": MISSING_UNAVAILABLE, "max": MISSING_UNAVAILABLE}
+    return {
+        "count": len(values),
+        "min": round(min(values), 3),
+        "max": round(max(values), 3),
+        "sum": round(sum(values), 3),
+    }
+
+
+def _int_value(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _pass_at_k(samples: dict[str, dict[str, Any]], max_repetition_count: int) -> dict[str, float]:

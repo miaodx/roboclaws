@@ -10,6 +10,7 @@ from roboclaws.household import (
     realworld_contract_init,
     realworld_contract_payloads,
     realworld_contract_projection,
+    realworld_done_readiness,
     realworld_runtime_map_contract,
     realworld_visual_candidates,
 )
@@ -34,7 +35,6 @@ from roboclaws.household.semantic_acceptability import (
 from roboclaws.household.semantic_timeline import SEMANTIC_LOOP_VARIANT
 from roboclaws.household.target_query import resolve_target_query
 from roboclaws.household.task_intent import (
-    household_intent_is_open_ended,
     normalize_household_intent,
 )
 from roboclaws.household.types import CleanupScenario
@@ -53,7 +53,6 @@ from roboclaws.household.visual_scan_guidance import (
     VISUAL_SCAN_NOOP_ERROR_REASON,
     noop_camera_adjustment_hint,
     visual_evidence_recovery_hint,
-    visual_scan_done_recovery_hint,
     visual_scan_payload,
 )
 from roboclaws.maps.bundle import metric_map_bundle_metadata
@@ -86,8 +85,8 @@ MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
 VISUAL_GROUNDING_EVIDENCE_SCHEMA = realworld_visual_candidates.VISUAL_GROUNDING_EVIDENCE_SCHEMA
 DONE_READINESS_SCHEMA = "done_readiness_v1"
-DONE_READINESS_POLICY_RAW_FPV = "raw_fpv_grounded_cleanup_chains"
-DONE_READINESS_POLICY_EXPLICIT = "explicit_grounded_cleanup_chains"
+DONE_READINESS_POLICY_RAW_FPV = realworld_done_readiness.DONE_READINESS_POLICY_RAW_FPV
+DONE_READINESS_POLICY_EXPLICIT = realworld_done_readiness.DONE_READINESS_POLICY_EXPLICIT
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
 MAIN_CLEANUP_AGENT_PRODUCER = realworld_visual_candidates.MAIN_CLEANUP_AGENT_PRODUCER
 TEST_AGENT_PRODUCER = realworld_visual_candidates.TEST_AGENT_PRODUCER
@@ -1643,219 +1642,55 @@ class RealWorldCleanupContract:
         *,
         semantic_cleanup_evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        blockers: list[dict[str, Any]] = []
-        open_ended_task = self._open_ended_task_intent()
-        pending = (
-            self._held_cleanup_candidates()
-            if open_ended_task
-            else self._pending_cleanup_candidates()
+        return realworld_done_readiness.evaluate_done_readiness(
+            self,
+            semantic_cleanup_evidence=semantic_cleanup_evidence,
+            schema=DONE_READINESS_SCHEMA,
+            raw_fpv_only_mode=RAW_FPV_ONLY_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
         )
-        if pending:
-            required_tool = str(pending[0].get("required_tool") or "navigate_to_object")
-            if any(str(item.get("state") or "") == "held" for item in pending):
-                required_tool = "navigate_to_receptacle"
-            if required_tool == "adjust_camera":
-                recovery_hint = visual_scan_done_recovery_hint()
-            else:
-                recovery_hint = (
-                    "Clean pending observed handles before done. For held objects, select a "
-                    "public destination_options.candidate_fixture_id and call "
-                    "navigate_to_receptacle -> open? -> place/place_inside. For pending "
-                    "objects, call navigate_to_object -> pick first. Use "
-                    "destination_options.recommended_tool when candidate_fixture_id is empty."
-                )
-            blockers.append(
-                {
-                    "type": "pending_cleanup_candidates",
-                    "required_tool": required_tool,
-                    "pending_observed_handles": [str(item["object_id"]) for item in pending],
-                    "pending_cleanup_candidates": pending,
-                    "recovery_hint": recovery_hint,
-                }
-            )
-
-        coverage = self._sweep_coverage()
-        if not open_ended_task and coverage["unvisited_waypoint_ids"]:
-            next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
-            blockers.append(
-                {
-                    "type": "insufficient_sweep_coverage",
-                    "required_tool": "navigate_to_waypoint",
-                    "next_waypoint_id": next_waypoint_id,
-                    "sweep_coverage_rate": coverage["sweep_coverage_rate"],
-                    "observed_waypoint_count": coverage["observed_waypoint_count"],
-                    "total_waypoints": coverage["total_waypoints"],
-                    "unvisited_waypoint_ids": coverage["unvisited_waypoint_ids"],
-                    "recovery_hint": (
-                        "Continue the public sweep before done: call navigate_to_waypoint("
-                        f"{next_waypoint_id}) and observe. Do not use done as a system "
-                        "assessment while static-map inspection waypoints remain unvisited."
-                    ),
-                }
-            )
-
-        if self.perception_mode == RAW_FPV_ONLY_MODE:
-            required_declaration_count = self._required_model_declared_observations()
-            declaration_count = len(self._model_declared_observations)
-            if declaration_count < required_declaration_count:
-                blockers.append(
-                    {
-                        "type": "insufficient_model_declared_observations",
-                        "required_tool": "navigate_to_visual_candidate",
-                        "current": declaration_count,
-                        "required": required_declaration_count,
-                        "model_declared_observations": declaration_count,
-                        "raw_fpv_observations": len(self._raw_fpv_observations),
-                        "required_model_declared_observations": required_declaration_count,
-                        "recovery_hint": (
-                            "Continue sweeping public waypoints and use "
-                            "navigate_to_visual_candidate for plausible cleanup objects "
-                            "seen in raw FPV images before calling done."
-                        ),
-                    }
-                )
-
-        grounded_chain_blocker = self._grounded_cleanup_chain_blocker(semantic_cleanup_evidence)
-        if grounded_chain_blocker is not None:
-            blockers.append(grounded_chain_blocker)
-
-        readiness = {
-            "schema": DONE_READINESS_SCHEMA,
-            "status": "blocked" if blockers else "ready",
-            "blockers": blockers,
-            "policy_uses_private_truth": False,
-            "task_intent": self.task_intent,
-            "public_contract_note": (
-                "Done readiness is evaluated from public Agent View state, public tool "
-                "trace evidence, and public run acceptance configuration. It does not "
-                "use private generated mess membership, hidden destinations, or scorer truth."
-            ),
-        }
-        _assert_no_forbidden_agent_view_keys(readiness)
-        return readiness
 
     def _done_readiness_blocked_response(self, readiness: dict[str, Any]) -> dict[str, Any]:
-        blockers = [dict(item) for item in readiness.get("blockers") or []]
-        first = blockers[0] if blockers else {"type": "done_readiness_blocked"}
-        error_reason = str(first.get("type") or "done_readiness_blocked")
-        payload = {
-            key: value for key, value in first.items() if key not in {"type", "recovery_hint"}
-        }
-        if "recovery_hint" in first:
-            payload["recovery_hint"] = first["recovery_hint"]
-        payload["completion"] = {
-            "schema": readiness.get("schema", DONE_READINESS_SCHEMA),
-            "status": "blocked",
-            "blockers": blockers,
-            "policy_uses_private_truth": False,
-        }
-        return self._error("done", error_reason, status="blocked", **payload)
+        return realworld_done_readiness.done_readiness_blocked_response(
+            readiness,
+            schema=DONE_READINESS_SCHEMA,
+            error_builder=self._error,
+        )
 
     def _required_model_declared_observations(self) -> int:
-        if self._open_ended_task_intent():
-            return 0
-        configured = _positive_int(
-            self.public_acceptance_config.get("required_model_declared_observations")
-        )
-        if configured is not None:
-            return configured
-        requested = _positive_int(self.public_acceptance_config.get("requested_run_size"))
-        if requested is not None:
-            return min(7, requested)
-        return 0
+        return realworld_done_readiness.required_model_declared_observations(self)
 
     def _grounded_cleanup_chain_blocker(
         self,
         semantic_cleanup_evidence: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
-        required_count, policy_id = self._grounded_cleanup_chain_requirement()
-        if required_count <= 0:
-            return None
-        evidence = semantic_cleanup_evidence or {}
-        complete_handles = [
-            str(item)
-            for item in evidence.get("complete_semantic_substep_object_ids") or []
-            if str(item)
-        ]
-        complete_count = _positive_int(evidence.get("complete_semantic_substep_objects"))
-        if complete_count is None:
-            complete_count = len(complete_handles)
-        if complete_count >= required_count:
-            return None
-        required_tool = self._grounded_cleanup_chain_required_tool()
-        blocker = {
-            "type": "insufficient_grounded_cleanup_chains",
-            "policy_id": policy_id,
-            "current": complete_count,
-            "required": required_count,
-            "required_tool": required_tool,
-            "complete_semantic_substep_objects": complete_count,
-            "complete_semantic_substep_object_ids": complete_handles,
-            "required_complete_semantic_substep_objects": required_count,
-            "semantic_substep_count": _nonnegative_int(evidence.get("semantic_substep_count")),
-            "recovery_hint": self._grounded_cleanup_chain_recovery_hint(required_tool),
-        }
-        _assert_no_forbidden_agent_view_keys(blocker)
-        return blocker
+        return realworld_done_readiness.grounded_cleanup_chain_blocker(
+            self,
+            semantic_cleanup_evidence,
+            raw_fpv_only_mode=RAW_FPV_ONLY_MODE,
+            assert_no_forbidden_agent_view_keys=_assert_no_forbidden_agent_view_keys,
+        )
 
     def _grounded_cleanup_chain_requirement(self) -> tuple[int, str]:
-        if self._open_ended_task_intent():
-            return 0, ""
-        explicit_count = _positive_int(
-            self.public_acceptance_config.get("required_grounded_cleanup_chains")
+        return realworld_done_readiness.grounded_cleanup_chain_requirement(
+            self,
+            raw_fpv_only_mode=RAW_FPV_ONLY_MODE,
         )
-        if explicit_count is not None:
-            return explicit_count, str(
-                self.public_acceptance_config.get("done_readiness_policy")
-                or DONE_READINESS_POLICY_EXPLICIT
-            )
-        if self.perception_mode != RAW_FPV_ONLY_MODE:
-            return 0, ""
-        requested = _positive_int(self.public_acceptance_config.get("requested_run_size"))
-        if requested is None:
-            return 0, ""
-        return _public_success_threshold(requested), DONE_READINESS_POLICY_RAW_FPV
 
     def _grounded_cleanup_chain_required_tool(self) -> str:
-        if self.perception_mode == RAW_FPV_ONLY_MODE:
-            return "navigate_to_visual_candidate"
-        return "navigate_to_object"
-
-    def _grounded_cleanup_chain_recovery_hint(self, required_tool: str) -> str:
-        if required_tool == "navigate_to_visual_candidate":
-            return (
-                "Continue the cleanup loop before done. For each plausible object in a "
-                "public observation, call navigate_to_visual_candidate when required; "
-                "when it returns ok=true, call pick, navigate_to_receptacle with the "
-                "public candidate fixture, then the recommended placement tool. Call "
-                "done only after enough grounded cleanup chains have completed."
-            )
-        return (
-            "Continue the cleanup loop before done. For each pending public observed "
-            "handle, call navigate_to_object, pick, navigate_to_receptacle with a public "
-            "candidate fixture, then the recommended placement tool. Call done only after "
-            "enough grounded cleanup chains have completed."
+        return realworld_done_readiness.grounded_cleanup_chain_required_tool(
+            self.perception_mode,
+            raw_fpv_only_mode=RAW_FPV_ONLY_MODE,
         )
 
+    def _grounded_cleanup_chain_recovery_hint(self, required_tool: str) -> str:
+        return realworld_done_readiness.grounded_cleanup_chain_recovery_hint(required_tool)
+
     def _sweep_coverage(self) -> dict[str, Any]:
-        waypoints = self._public_waypoints
-        total_waypoints = len(waypoints)
-        unvisited = [
-            str(item["waypoint_id"])
-            for item in waypoints
-            if str(item["waypoint_id"]) not in self._observed_waypoint_ids
-        ]
-        observed_count = total_waypoints - len(unvisited)
-        rate = observed_count / total_waypoints if total_waypoints else 1.0
-        return {
-            "sweep_coverage_rate": round(rate, 6),
-            "observed_waypoint_count": observed_count,
-            "total_waypoints": total_waypoints,
-            "unvisited_waypoint_ids": unvisited,
-        }
+        return realworld_done_readiness.sweep_coverage(self)
 
     def _open_ended_task_intent(self) -> bool:
-        return household_intent_is_open_ended(self.task_intent)
+        return realworld_done_readiness.open_ended_task_intent(self)
 
     def agent_view_payload(self) -> dict[str, Any]:
         observed_objects = [

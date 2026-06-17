@@ -29,6 +29,7 @@ from roboclaws.launch.intents import TASK_INTENT_SPECS
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ProductRun = Callable[..., dict[str, Any]]
 DEFAULT_DETACHED_LIVE_TIMEOUT_S = 3600.0
+DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S = 30.0
 
 
 @dataclass(frozen=True)
@@ -138,14 +139,35 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             timeout=kwargs.get("live_timeout_s"),
         )
     except subprocess.TimeoutExpired as exc:
+        sample_run_dir = discover_live_surface_run_dir(
+            kwargs,
+            output_dir=sample_run_root,
+            fallback_run_dir=sample_run_dir,
+            stdout=exc.stdout or "",
+        )
+        sample_run_dir = wait_for_timed_out_live_surface_artifact(
+            kwargs,
+            output_dir=sample_run_root,
+            effective_run_dir=sample_run_dir,
+        )
         record.update(
             {
                 "returncode": "timeout",
                 "stdout": exc.stdout or "",
                 "stderr": exc.stderr or "",
                 "timeout_s": kwargs.get("live_timeout_s"),
+                "timeout_completion_grace_s": live_timeout_completion_grace_s(),
+                "effective_run_dir": str(sample_run_dir),
+                "live_status": _load_json(sample_run_dir / "live_status.json"),
             }
         )
+        run_result_path = sample_run_dir / "run_result.json"
+        run_result = _load_json(run_result_path)
+        if run_result:
+            record["returncode"] = "timeout_after_completion"
+            _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
+            run_result["eval_effective_run_dir"] = str(sample_run_dir)
+            return run_result
         _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
         raise TimeoutError(
             f"live eval trial timed out after {kwargs.get('live_timeout_s')}s"
@@ -168,6 +190,20 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
     )
     if completed.returncode != 0:
         _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
+        run_result = _recover_open_ended_run_result_after_nonzero_exit(
+            kwargs,
+            sample_run_dir=sample_run_dir,
+        )
+        if run_result:
+            sample_run_dir = wait_for_live_surface_completion(
+                kwargs,
+                output_dir=sample_run_root,
+                effective_run_dir=sample_run_dir,
+                elapsed_s=time.monotonic() - started,
+                allow_open_ended_checker_failure=True,
+            )
+            run_result["eval_effective_run_dir"] = str(sample_run_dir)
+            return run_result
         message = completed.stderr.strip() or completed.stdout.strip()
         raise RuntimeError(f"live surface run failed with exit {completed.returncode}: {message}")
     sample_run_dir = wait_for_live_surface_completion(
@@ -175,6 +211,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         output_dir=sample_run_root,
         effective_run_dir=sample_run_dir,
         elapsed_s=time.monotonic() - started,
+        allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
     )
     record["effective_run_dir"] = str(sample_run_dir)
     record["live_status"] = _load_json(sample_run_dir / "live_status.json")
@@ -283,13 +320,20 @@ def wait_for_live_surface_completion(
     effective_run_dir: Path,
     elapsed_s: float = 0.0,
     poll_s: float = 1.0,
+    allow_open_ended_checker_failure: bool = False,
 ) -> Path:
     """Wait for a detached live product route to finish when the route returns early."""
 
-    if (effective_run_dir / "run_result.json").is_file():
+    if (
+        (effective_run_dir / "run_result.json").is_file()
+        and not allow_open_ended_checker_failure
+    ):
         return effective_run_dir
-    status = _load_json(effective_run_dir / "live_status.json")
-    _raise_for_terminal_live_status(effective_run_dir, status)
+    if _live_surface_run_is_terminal(
+        effective_run_dir,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+    ):
+        return effective_run_dir
     if not _live_surface_route_can_detach(kwargs):
         return effective_run_dir
 
@@ -305,13 +349,69 @@ def wait_for_live_surface_completion(
             fallback_run_dir=effective_run_dir,
         )
         if (effective_run_dir / "run_result.json").is_file():
+            status = _load_json(effective_run_dir / "live_status.json")
+            if status and status.get("exit_status") in {0}:
+                return effective_run_dir
+            if _live_surface_run_is_terminal(
+                effective_run_dir,
+                allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+            ):
+                return effective_run_dir
+        elif _live_surface_run_is_terminal(
+            effective_run_dir,
+            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        ):
             return effective_run_dir
-        status = _load_json(effective_run_dir / "live_status.json")
-        _raise_for_terminal_live_status(effective_run_dir, status)
         time.sleep(max(poll_s, 0.05))
+    effective_run_dir = wait_for_timed_out_live_surface_artifact(
+        kwargs,
+        output_dir=output_dir,
+        effective_run_dir=effective_run_dir,
+        poll_s=poll_s,
+    )
+    if (effective_run_dir / "run_result.json").is_file():
+        return effective_run_dir
     raise TimeoutError(
         f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
     )
+
+
+def wait_for_timed_out_live_surface_artifact(
+    kwargs: dict[str, Any],
+    *,
+    output_dir: Path,
+    effective_run_dir: Path,
+    poll_s: float = 1.0,
+) -> Path:
+    """Give detached routes a short grace window after subprocess timeout."""
+
+    if not _live_surface_route_can_detach(kwargs):
+        return effective_run_dir
+    deadline = time.monotonic() + live_timeout_completion_grace_s()
+    while time.monotonic() <= deadline:
+        effective_run_dir = discover_live_surface_run_dir(
+            kwargs,
+            output_dir=output_dir,
+            fallback_run_dir=effective_run_dir,
+        )
+        if (effective_run_dir / "run_result.json").is_file():
+            return effective_run_dir
+        time.sleep(max(poll_s, 0.05))
+    return discover_live_surface_run_dir(
+        kwargs,
+        output_dir=output_dir,
+        fallback_run_dir=effective_run_dir,
+    )
+
+
+def live_timeout_completion_grace_s() -> float:
+    raw = str(os.environ.get("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S") or "").strip()
+    if not raw:
+        return DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S
+    try:
+        return max(float(raw), 0.0)
+    except ValueError:
+        return DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S
 
 
 def live_product_run_kwargs(
@@ -495,6 +595,44 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _recover_open_ended_run_result_after_nonzero_exit(
+    kwargs: dict[str, Any],
+    *,
+    sample_run_dir: Path,
+) -> dict[str, Any]:
+    if not _is_open_ended_eval_sample(kwargs):
+        return {}
+    return _load_json(sample_run_dir / "run_result.json")
+
+
+def _is_open_ended_eval_sample(kwargs: dict[str, Any]) -> bool:
+    sample: EvalSample | None = kwargs.get("eval_sample")
+    return sample is not None and sample.intent == "open-ended"
+
+
+def _live_surface_run_is_terminal(
+    run_dir: Path,
+    *,
+    allow_open_ended_checker_failure: bool = False,
+) -> bool:
+    status = _load_json(run_dir / "live_status.json")
+    if not status:
+        return False
+    exit_status = status.get("exit_status")
+    if exit_status == 0:
+        return True
+    if exit_status not in {None, 0}:
+        if allow_open_ended_checker_failure and _is_open_ended_checker_failure(status):
+            return True
+        _raise_for_terminal_live_status(run_dir, status)
+    return False
+
+
+def _is_open_ended_checker_failure(status: dict[str, Any]) -> bool:
+    reason = str(status.get("reason") or "").lower()
+    return "cleanup checker exited with status" in reason
 
 
 def _live_surface_run_dir_has_evidence(path: Path) -> bool:

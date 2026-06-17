@@ -33,8 +33,14 @@ from roboclaws.operator_console.launch_support import (
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.process_status import pid_is_active
+from roboclaws.operator_console.prompt_preview import (
+    PromptPreviewRequest,
+    build_prompt_preview,
+    prompt_preview_env,
+)
 from roboclaws.operator_console.readiness import route_gate_rows
 from roboclaws.operator_console.routes import (
+    DEFAULT_PROMPTS,
     ConsoleLaunchSelection,
     get_selection,
 )
@@ -134,6 +140,7 @@ def build_launch_argv(
     """Build a fixed argv list for a console route."""
 
     selected_intent = str(intent or route.intent_id)
+    selected_prompt = _launch_prompt_for_intent(route, selected_intent, prompt)
     selected_preset = route.preset_id if selected_intent == route.intent_id else ""
     request_overrides = _normalized_launch_overrides(
         route,
@@ -170,12 +177,12 @@ def build_launch_argv(
         if key in route.required_overrides:
             continue
         args.append(f"{key}={request_overrides[key]}")
-    if prompt:
+    if selected_prompt:
         if not route.supports_prompt:
             raise ConsoleLaunchError(
                 "This route cannot accept a custom prompt safely. Use the default task prompt."
             )
-        args.append(f"prompt={prompt}")
+        args.append(f"prompt={selected_prompt}")
 
     try:
         resolve_surface_launch(args)
@@ -238,12 +245,23 @@ def start_console_run(
     run_dir = console_output_root(root) / "runs" / run_id
     if route.supports_operator_steer:
         overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
+    selected_intent = request.intent_id or route.intent_id
+    launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
+    preview = build_prompt_preview(
+        route,
+        PromptPreviewRequest(
+            intent_id=selected_intent,
+            prompt=launch_prompt,
+            overrides=overrides,
+            env_overrides=prompt_preview_env(run_env, env_overrides),
+        ),
+    )
     argv = build_launch_argv(
         route,
         root=root,
         run_id=run_id,
-        intent=request.intent_id,
-        prompt=request.prompt,
+        intent=selected_intent,
+        prompt=launch_prompt,
         overrides=overrides,
     )
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -275,12 +293,15 @@ def start_console_run(
         "operator_session_id": session["operator_session_id"],
         "parent_run_id": request.parent_run_id,
         "next_goal_packet": request.next_goal_packet or {},
+        "prompt_preview": preview,
+        "operator_prompt": preview["operator_prompt"],
+        "agent_kickoff_prompt": preview["agent_kickoff_prompt"],
         "launch_selection": route.to_payload(),
         "route": route.to_payload(),
-        "selected_intent": request.intent_id or route.intent_id,
+        "selected_intent": selected_intent,
         "world_id": route.world_id,
         "backend_id": route.backend_id,
-        "intent_id": request.intent_id or route.intent_id,
+        "intent_id": selected_intent,
         "agent_engine_id": route.agent_engine_id,
         "provider_profile": request.provider_profile or route.provider_profile or "",
         "evidence_lane": route.evidence_lane,
@@ -373,6 +394,17 @@ def route_readiness(
         "provider": provider_status,
         "gates": gate_rows,
     }
+
+
+def _launch_prompt_for_intent(
+    route: ConsoleLaunchSelection,
+    selected_intent: str,
+    prompt: str,
+) -> str:
+    text = str(prompt or "").strip()
+    if text or selected_intent != "open-ended":
+        return text
+    return DEFAULT_PROMPTS.get(selected_intent, route.task_prompt_default)
 
 
 def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dict[str, Any]:

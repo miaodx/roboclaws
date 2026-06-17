@@ -13,6 +13,7 @@ const state = {
   operatorMode: "goal",
   pollTimer: null,
   readinessTimer: null,
+  promptPreviewTimer: null,
   taskPollTimer: null,
   activeView: "overview",
   selectedIntent: "",
@@ -89,7 +90,11 @@ const els = {
   decisionPanel: document.getElementById("decision-state"),
   toolPanel: document.getElementById("tool-state"),
   proofPanel: document.getElementById("proof-state"),
+  agentPromptPanel: document.getElementById("agent-prompt-state"),
   artifactList: document.getElementById("artifact-list"),
+  promptPreviewPanel: document.getElementById("prompt-preview-panel"),
+  promptPreviewSummary: document.getElementById("prompt-preview-summary"),
+  promptPreviewText: document.getElementById("prompt-preview-text"),
   eventList: document.getElementById("event-log"),
   rawEvidence: document.getElementById("raw-evidence"),
   toggleRawButton: document.getElementById("toggle-raw-button"),
@@ -161,10 +166,12 @@ function bindEvents() {
   els.taskPrompt.addEventListener("input", () => {
     els.promptCount.textContent = `${els.taskPrompt.value.length} / 2000`;
     renderSelection();
+    schedulePromptPreviewRefresh();
   });
   els.intentInput.addEventListener("change", () => {
     state.selectedIntent = els.intentInput.value;
     renderSelection();
+    schedulePromptPreviewRefresh();
   });
   [
     els.contextInput,
@@ -183,9 +190,11 @@ function bindEvents() {
     input.addEventListener("input", renderSelection);
     input.addEventListener("input", renderRoutes);
     input.addEventListener("input", scheduleReadinessRefresh);
+    input.addEventListener("input", schedulePromptPreviewRefresh);
     input.addEventListener("change", renderSelection);
     input.addEventListener("change", renderRoutes);
     input.addEventListener("change", refreshSelectedRouteReadiness);
+    input.addEventListener("change", refreshPromptPreview);
   });
   [els.scenarioSetupInput, els.relocationCountInput].forEach((input) => {
     input.addEventListener("input", () => {
@@ -193,12 +202,14 @@ function bindEvents() {
       renderSelection();
       renderRoutes();
       scheduleReadinessRefresh();
+      schedulePromptPreviewRefresh();
     });
     input.addEventListener("change", () => {
       resetMessupStatusForManualSetup();
       renderSelection();
       renderRoutes();
       refreshSelectedRouteReadiness();
+      refreshPromptPreview();
     });
   });
   els.startButton.addEventListener("click", handleStartAction);
@@ -555,6 +566,7 @@ function renderSelection() {
   renderScenarioSetup(route);
   renderOperatorInput(route);
   renderSelectedScenePreview(route);
+  schedulePromptPreviewRefresh();
 
   const gates = readiness.gates || route.gates || [];
   els.gateList.innerHTML = "";
@@ -972,7 +984,7 @@ function commandPreview(route) {
   if (intentIndex >= 0) {
     parts[intentIndex] = `intent=${selected}`;
   }
-  const prompt = launchPromptText();
+  const prompt = effectiveLaunchPromptText(route);
   if (route.supports_prompt && prompt) {
     parts.push(`prompt=${prompt}`);
   }
@@ -1017,6 +1029,17 @@ function launchPromptText() {
     return "";
   }
   return els.taskPrompt.value.trim();
+}
+
+function effectiveLaunchPromptText(route = state.selectedRoute) {
+  const prompt = launchPromptText();
+  if (prompt) {
+    return prompt;
+  }
+  if (route && selectedIntentForRoute(route) === "open-ended") {
+    return route.task_prompt_default || route.default_prompt || "";
+  }
+  return "";
 }
 
 function selectedIntent() {
@@ -1528,9 +1551,8 @@ function markCurrentSetupSelection(route) {
   state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
 }
 
-async function launchRun() {
-  const route = state.selectedRoute;
-  const body = {
+function launchRequestBody(route = state.selectedRoute) {
+  return {
     world_id: route.world_id,
     backend_id: route.backend_id,
     intent_id: selectedIntent(),
@@ -1538,39 +1560,94 @@ async function launchRun() {
     provider_profile: selectedProviderProfile(),
     evidence_lane: route.evidence_lane,
     scenario_setup: selectedScenarioSetup(),
-    prompt: launchPromptText(),
-    overrides: {
-      seed: els.seedInput.value || "7",
-      host: "127.0.0.1",
-      port: els.portInput.value || "18788",
-    },
+    prompt: effectiveLaunchPromptText(route),
+    overrides: launchOverrides(route),
+    env_overrides: launchEnvOverrides(route),
     gates: {
       localization_ready: els.localizationGate.checked,
       run_enabled: els.enablementGate.checked,
       estop_ready: els.estopGate.checked,
     },
   };
-  if (body.scenario_setup !== "baseline" && els.relocationCountInput.value) {
-    body.overrides.relocation_count = els.relocationCountInput.value;
+}
+
+function launchOverrides(route = state.selectedRoute) {
+  const overrides = {
+    seed: els.seedInput.value || "7",
+    host: "127.0.0.1",
+    port: els.portInput.value || "18788",
+  };
+  if (selectedScenarioSetup() !== "baseline" && els.relocationCountInput.value) {
+    overrides.relocation_count = els.relocationCountInput.value;
   }
   if (els.contextInput.value) {
-    body.overrides.context_json = els.contextInput.value;
+    overrides.context_json = els.contextInput.value;
   }
-  if (isAgibotRoute(state.selectedRoute)) {
-    body.overrides.real_movement_enabled = els.realMovementGate.checked ? "true" : "false";
+  if (isAgibotRoute(route)) {
+    overrides.real_movement_enabled = els.realMovementGate.checked ? "true" : "false";
   }
   if (els.isaacSceneInput.value) {
-    body.overrides.isaac_scene_usd_path = els.isaacSceneInput.value;
+    overrides.isaac_scene_usd_path = els.isaacSceneInput.value;
   }
+  return overrides;
+}
+
+function launchEnvOverrides(route = state.selectedRoute) {
   if (route.agent_engine_id === "codex-cli" || route.agent_engine_id === "openai-agents-sdk") {
-    body.env_overrides = {
+    return {
       ROBOCLAWS_CODEX_PROVIDER: selectedProviderProfile(),
     };
-  } else if (route.agent_engine_id === "claude-code") {
-    body.env_overrides = {
+  }
+  if (route.agent_engine_id === "claude-code") {
+    return {
       ROBOCLAWS_CLAUDE_PROVIDER: selectedProviderProfile(),
     };
   }
+  return {};
+}
+
+function schedulePromptPreviewRefresh() {
+  if (state.activeRunId || !state.selectedRoute || !state.selectedRoute.enabled) {
+    return;
+  }
+  if (state.promptPreviewTimer) {
+    clearTimeout(state.promptPreviewTimer);
+  }
+  state.promptPreviewTimer = setTimeout(refreshPromptPreview, 300);
+}
+
+async function refreshPromptPreview() {
+  const route = state.selectedRoute;
+  if (!route || !route.enabled || state.activeRunId || state.operatorMode !== "goal") {
+    return;
+  }
+  els.promptPreviewSummary.textContent = "Rendering agent prompt preview...";
+  const result = await fetchJson("/api/prompt-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(launchRequestBody(route)),
+  });
+  if (result.error) {
+    els.promptPreviewSummary.textContent = result.error;
+    els.promptPreviewText.textContent = "";
+    return;
+  }
+  renderPromptPreview(result);
+}
+
+function renderPromptPreview(preview) {
+  const text = preview.agent_kickoff_prompt || preview.prompt || "";
+  const notes = (preview.wrapper_notes || []).filter(Boolean);
+  const noteText = notes.length ? ` ${notes.join(" ")}` : "";
+  els.promptPreviewSummary.textContent = `${preview.summary || "Agent kickoff prompt"}.${
+    noteText
+  }`;
+  els.promptPreviewText.textContent = text || "No agent prompt preview is available.";
+}
+
+async function launchRun() {
+  const route = state.selectedRoute;
+  const body = launchRequestBody(route);
 
   const result = await fetchJson("/api/runs", {
     method: "POST",
@@ -1666,6 +1743,7 @@ function renderRunState(payload) {
     checkerStatus.checker_log ||
     "Checker has not run yet."
   }`;
+  renderAgentPromptState(payload.prompt_preview || {});
   renderArtifacts(payload.artifact_paths || []);
   renderViews(payload.latest_view_assets || {}, route);
   renderEvents(payload);
@@ -1673,6 +1751,29 @@ function renderRunState(payload) {
   renderOperatorInput(state.selectedRoute);
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   renderOperatorMode(payload);
+}
+
+function renderAgentPromptState(preview) {
+  const prompt = preview.agent_kickoff_prompt || preview.prompt || "";
+  if (!prompt) {
+    els.agentPromptPanel.textContent =
+      "No launch prompt yet. Start or attach a run to inspect the agent prompt.";
+    return;
+  }
+  const notes = (preview.wrapper_notes || []).filter(Boolean);
+  els.agentPromptPanel.innerHTML = `
+    <div class="field-help">${escapeHtml(preview.summary || preview.source || "Agent kickoff prompt")}</div>
+    ${
+      preview.operator_prompt
+        ? `<p><strong>Operator goal:</strong> ${escapeHtml(preview.operator_prompt)}</p>`
+        : ""
+    }
+    ${notes.map((note) => `<p class="field-help">${escapeHtml(note)}</p>`).join("")}
+    <details>
+      <summary>Full kickoff prompt</summary>
+      <pre class="prompt-preview-text">${escapeHtml(prompt)}</pre>
+    </details>
+  `;
 }
 
 function renderToolPanel(payload) {

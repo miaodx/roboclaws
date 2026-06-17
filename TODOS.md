@@ -140,6 +140,59 @@ Each entry should answer:
   - Try now: Yes for benchmark design; recurring live execution needs provider
     budget and local-network constraints.
 
+- **Cloud-backed eval harness execution scale-out**
+  - Created: 2026-06-16.
+  - Updated: 2026-06-16.
+  - Status: Parked evaluation infrastructure design, awaiting cloud-machine
+    access details.
+  - Why: Local runs and one or two workstation-driven AI automation loops are
+    too slow and narrow to give high confidence in agent-framework behavior.
+    The Evaluation layer should be able to fan out eval harness jobs across
+    cloud machines so local or physical validation can stay focused while the
+    overall sample count, trial count, route coverage, and failure discovery
+    scale become much larger.
+  - Next action: After the cloud-machine usage contract is available, write a
+    design packet for a remote eval-harness executor: worker lifecycle, queue or
+    dispatch model, artifact upload/download, provider key and log redaction,
+    quota/cost controls, deterministic seeds, simulator/runtime prerequisites,
+    retry semantics, and aggregate `pass@k` / `pass^k` reporting.
+  - Evidence:
+    `docs/plans/2026-06-14-eval-driven-architecture.md`;
+    `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`;
+    `docs/adr/0141-use-eval-harness-as-maintainer-orchestration-facade.md`;
+    `skills/eval-harness/SKILL.md`;
+    `roboclaws/evals/runner.py`;
+    `roboclaws/evals/live_runtime.py`;
+    `just/README.md`.
+  - Try now: No for implementation. Yes for design once the cloud-machine
+    access model, credentials boundary, and expected worker environment are
+    provided.
+
+- **Real-task thinking / reasoning-effort comparison**
+  - Created: 2026-06-16.
+  - Updated: 2026-06-16.
+  - Status: Parked live-provider comparison.
+  - Why: Roboclaws now defaults supported OpenAI Agents SDK routes to Thinking
+    On through provider-aware payloads, but quick health probes only prove API
+    acceptance. We still need real open-ended household tasks to decide whether
+    `thinking` / `reasoning.effort` levels materially improve completion
+    quality enough to justify added latency, token use, and route-specific
+    quirks.
+  - Next action: Run a bounded open-ended matrix on the same world, seed,
+    evidence lane, prompt, and scenario setup. Compare Chat routes with
+    `model_thinking_mode=enabled` vs `disabled`; compare Responses routes with
+    `none`, `low`, and `medium` first. Escalate to `high` or `xhigh` only for a
+    route/case that fails at `medium` and looks reasoning-limited rather than
+    tool/runtime-limited.
+  - Evidence:
+    `roboclaws/agents/thinking_policy.py`;
+    `docs/human/model-matrix.md`;
+    `scripts/dev/check_model_providers.py`;
+    `tests/unit/agents/test_thinking_policy.py`;
+    `output/dev/model-matrix-mimo-compare/20260616_133229/model_matrix_benchmark.json`.
+  - Try now: Yes for one or two same-prompt live A/B runs. Broader cross-route
+    matrices need provider budget and local runtime availability.
+
 - **Periodic Docker-pinned coding-agent CLI updates**
   - Created: 2026-06-12.
   - Updated: 2026-06-12.

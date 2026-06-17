@@ -42,6 +42,7 @@ from roboclaws.agents.provider_registry import (
     provider_route_spec,
     route_capabilities_for_engine,
 )
+from roboclaws.agents.thinking_policy import THINKING_MODES, normalize_thinking_mode
 from roboclaws.household.realworld_mcp_server import (
     ROBOT_VIEW_CAPTURE_POLICIES,
     ROBOT_VIEW_CAPTURE_POLICY_FULL,
@@ -111,6 +112,7 @@ CAMERA_GROUNDED_HISTORY_COMPACTION_ENV = (
 CAMERA_GROUNDED_HISTORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN"
 CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
 ROBOT_VIEW_CAPTURE_POLICY_ENV = "ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY"
+MODEL_THINKING_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
@@ -201,6 +203,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--prompt-mode", default="")
     parser.add_argument("--continuation-mode", default="")
+    parser.add_argument(
+        "--model-thinking-mode",
+        choices=THINKING_MODES,
+        default=os.environ.get(MODEL_THINKING_MODE_ENV, "default"),
+        help=(
+            "Provider-aware model thinking policy. default enables supported OpenAI "
+            "Chat/Responses thinking, enabled forces it, disabled sends the provider-specific "
+            "off switch for A/B runs."
+        ),
+    )
     parser.add_argument(
         "--model-input-compaction",
         action=argparse.BooleanOptionalAction,
@@ -610,6 +622,7 @@ class LiveOpenAIAgentsCleanupRunner:
                 "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
                 "sdk_model_settings": self.agent_sdk_perf_profile["sdk_model_settings"],
                 "sdk_run_config": self.agent_sdk_perf_profile["sdk_run_config"],
+                "model_thinking_mode": self.agent_sdk_perf_profile["model_thinking_mode"],
                 "skill_context": self.skill_context,
                 "surface": "household-world",
                 "intent": _household_intent(self.args),
@@ -637,6 +650,7 @@ class LiveOpenAIAgentsCleanupRunner:
         task_name = _household_run_id(self.args)
         task_intent = _household_intent(self.args)
         open_ended_task = task_intent == "open-ended"
+        checker_profile = str(getattr(self.args, "checker_profile", "") or self.args.profile)
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
             checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
@@ -665,7 +679,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "--expect-policy",
             self.args.policy,
             "--expect-profile",
-            self.args.profile,
+            checker_profile,
             "--expect-mcp-server",
             "molmo_cleanup_realworld",
             "--min-generated-mess-count",
@@ -879,6 +893,10 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
         "route_status_note": route.status_note,
         "route_capabilities": route_capabilities_for_engine(route, "openai-agents-sdk"),
         "model_family": model_family,
+        "model_thinking_mode": normalize_thinking_mode(
+            getattr(args, "model_thinking_mode", "default"),
+            default="default",
+        ),
         "prompt_mode": _string_setting(
             args,
             "prompt_mode",
@@ -1505,14 +1523,12 @@ def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
     settings: dict[str, Any] = {
         "tool_choice": "auto",
         "parallel_tool_calls": False,
+        "model_thinking_mode": str(profile.get("model_thinking_mode") or "default"),
     }
     if wire_api == "responses":
-        settings.update(
-            {
-                "truncation": "auto",
-                "store": False,
-            }
-        )
+        settings["store"] = False
+        if provider_profile != "codex-env":
+            settings["truncation"] = "auto"
         if provider_profile == "codex-env" and profile_id != "baseline":
             settings["prompt_cache_retention"] = "in_memory"
     elif wire_api == "chat-completions":
