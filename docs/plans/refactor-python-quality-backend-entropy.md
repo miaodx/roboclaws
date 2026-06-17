@@ -36,6 +36,16 @@ layout-first: remove, merge, or reclassify low-signal unit tests that assert
 implementation shape, copied constants, private-call choreography, file/path
 trivia, or registration metadata without caller-visible behavior.
 
+Planning update on 2026-06-17: documentation cleanup is in scope as a bounded
+parallel stream, but it must run through `$intuitive-doc` and keep the repo's
+human surface small. Human-facing truth is `README.md`, `ARCHITECTURE.md`,
+`STATUS.md`, and `docs/human/**`; planning logs, generated evidence,
+retrospectives, active status scratchpads, and ADR detail stay as process or
+evidence surfaces unless a human doc deliberately promotes them. Doc cleanup
+should remove or relocate stale current-looking guidance, duplicate command
+tables, historical launch/profile narratives, and implementation/proof detail
+that makes humans or future agents rediscover old routes.
+
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
 --summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
 compaction owner split. Treat this as the planning snapshot for the next slice;
@@ -265,6 +275,26 @@ Run only focused collection/tests for the accepted domain plus git diff check;
 do not broaden into production refactors or unrelated test layout churn.
 ```
 
+Dedicated `$intuitive-doc` prompt for the next documentation cleanup run:
+
+```text
+Audit Roboclaws documentation for stale or misplaced human-facing truth before
+rewriting anything. Selected mode: Cleanup, with an audit pass first. Treat
+`README.md`, `ARCHITECTURE.md`, `STATUS.md`, and `docs/human/**` as the curated
+human surface. Treat `.planning/**`, `docs/plans/**`, `docs/status/active/**`,
+`docs/retrospectives/**`, ADR detail, output artifacts, and generated reports as
+process/evidence surfaces unless a curated human doc intentionally points there
+as current truth. Find stale current-looking command examples, launch-axis or
+profile names, duplicated run matrices, old OpenClaw/AI2-THOR/direct-VLM
+guidance, over-detailed local harness notes, and doc-only compatibility
+narratives that conflict with the active launch architecture. Classify each
+candidate as keep/rewrite, move to `docs/agents/**`, move to process/history,
+or remove. For any rewrite/removal, update path consumers and prove with `rg`
+that old paths or stale claims are gone from the human surface. Do not edit
+AGENTS.md or CLAUDE.md unless the cleanup would otherwise leave stale pointers;
+route broad agent-guidance refresh through `$intuitive-init`.
+```
+
 Recommended next slice claim:
 
 - Slice: choose one owner-boundary P1. Default order after this slice is:
@@ -273,15 +303,15 @@ Recommended next slice claim:
   summary only as a separate follow-up if D remains the best frontier,
   Candidate B scene-camera / visual-parity summary ownership, then Candidate A
   only with new facade-private/report evidence. Candidate T unit-test pruning
-  is a valid separate P2 slice when production P1 work is paused or when the
-  selected production slice leaves duplicated/low-signal tests directly in its
-  touched scope. Choose by fresh call-site and test-value evidence, not file
-  size alone.
+  and Candidate U documentation cleanup are valid separate P2 slices when
+  production P1 work is paused or when the selected production slice leaves
+  duplicated/low-signal tests or stale docs directly in its touched scope. Choose
+  by fresh call-site, test-value, and doc-truth evidence, not file size alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
   Profiles plus Thin Runtime / Server Adapters for Candidate D and provider/env
-  cleanup; Runnable Surfaces And Presets when env vars are acting as hidden
-  launch-axis overrides.
+  cleanup; Runnable Surfaces And Presets when env vars or docs are acting as
+  hidden launch-axis overrides; human documentation surface for Candidate U.
 - Current friction: the hard-ceiling frontier is now
   `realworld_contract.py` at 2836, `scene_camera_comparison.py` is 2830,
   `summarize_robot_camera_visual_parity.py` is 2808,
@@ -486,6 +516,70 @@ test domain, and the smallest behavior/contract test command that proves the
 remaining coverage. Use `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
 Report kept/merged/deleted/reclassified counts in the slice summary. Do not
 claim product behavior proof from pruning tests alone.
+
+### U: Human Documentation Surface Cleanup
+
+Severity: P2 by default; P1 only when human-facing docs create false confidence
+for a public route, advertise retired launch/profile/provider paths as current,
+hide current blockers, or make agent/human startup follow stale setup commands.
+Route through `$intuitive-doc`, selected mode Cleanup with an audit pass first.
+This is documentation cleanup, not a third cleanup plan: record the accepted
+slice and completed result in this plan/ledger pair only.
+
+Human-authoritative scope:
+
+- `README.md` for project orientation and what can be run now.
+- `ARCHITECTURE.md` for current layers, contracts, extension points, and proof
+  boundaries.
+- `STATUS.md` for current focus, next action, blockers, and current source
+  links.
+- `docs/human/**` for human runbooks and detail that would bloat root docs.
+
+Evidence/process scope:
+
+- `.planning/**`, `docs/plans/**`, `docs/status/active/**`,
+  `docs/retrospectives/**`, ADR detail, `output/**`, generated reports, and
+  screenshots are evidence or process unless intentionally linked as current
+  truth from the human surface.
+- `AGENTS.md` and `CLAUDE.md` are agent-operational pointers. Update them only
+  when a doc cleanup would otherwise leave stale links or conflicts; route broad
+  agent guidance cleanup through `$intuitive-init`.
+
+Audit prompts for the implementation slice:
+
+- Inventory the curated human surface and classify linked docs as
+  human-authoritative, agent-operational, process/evidence, or historical.
+- Search for stale current-looking commands and names: `task::run`,
+  one-axis cleanup `profile=...`, old `molmo::cleanup` public surfaces,
+  retired AI2-THOR/direct-VLM/Genesis/OpenClaw-as-public wording, old
+  `minimal`/`rich` map-mode guidance, and duplicated run matrices.
+- Search for process leakage in human docs: phase logs, proof-output tables,
+  raw implementation checklists, generated reports, old local run transcripts,
+  and long harness notes that belong in `docs/agents/**`, `docs/plans/**`,
+  `docs/retrospectives/**`, or `docs/status/active/**`.
+- Classify each candidate as keep/rewrite, move to `docs/agents/**`, move to
+  process/history/evidence, or remove.
+- Preserve current public launch axes, provider/runtime guardrails, artifact
+  contracts, privacy boundaries, and active blockers. Prefer deleting stale
+  compatibility narratives over relabeling them as current.
+
+Good first families:
+
+- Human docs that still show historical command grammar, profile names, or
+  retired route names as copyable current commands.
+- `docs/human/**` pages that duplicate README/ARCHITECTURE/STATUS tables but
+  lag behind the active launch architecture.
+- Agent-only local harness or skill routing notes that have leaked into
+  human-facing docs and should move to `docs/agents/**`.
+- Old proof/evidence detail in human docs where a short current-truth summary
+  plus a link to process/evidence is enough.
+
+Proof should include `git diff --check`, `rg` searches for removed stale claims
+or paths across the curated human surface and known consumers, plus any focused
+command/test validation for runbook commands changed by the slice. For docs-only
+cleanup, do not run product tests unless a runbook command or generated-doc
+contract changed. Report kept/rewritten/moved/removed counts and list any
+human docs intentionally left unchanged.
 
 ### A: Contract And Report Hard-Ceiling Split
 
@@ -770,6 +864,11 @@ be claimed without an explicit local run.
 - Unit-test pruning changes: run focused collection and the selected domain's
   remaining behavior/contract tests; include a short keep/merge/delete/
   reclassify report. Deleting tests is not proof that behavior still works.
+- Documentation cleanup changes: use `$intuitive-doc` audit/cleanup rules,
+  verify stale claims and path consumers with `rg`, and run command/doc build
+  checks only when the changed human runbook makes testable command claims.
+  Report kept/rewritten/moved/removed counts. Do not claim code behavior proof
+  from docs-only cleanup.
 - Changed-code review: after implementation, run `$intuitive-refactor`
   changed-code review on the changed scope before final verification when the
   slice is not docs-only.
@@ -800,5 +899,10 @@ Stop this cleanup stream when:
   knobs are documented, duplicate aliases are removed or explicitly blocked,
   precedence is tested, and missing/conflicting provider keys, base URLs, or
   model/profile settings fail before launch readiness.
+- The curated human documentation surface is small and current: README,
+  ARCHITECTURE, STATUS, and `docs/human/**` describe only active project truth;
+  stale commands/routes/profile names are gone or historical outside the human
+  surface; agent-only runbooks and execution evidence live in agent/process
+  surfaces with current links.
 - A fresh reduce-entropy round finds no P0/P1 or material P2 candidate in this
   code-size/backend-complexity class.
