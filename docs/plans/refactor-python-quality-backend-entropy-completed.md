@@ -50,6 +50,20 @@ logs before choosing the next slice.
   worker-routing tests, `test_isaac_lab_backend.py`, touched-file ruff and
   format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: B1 / Map 12 navigation-smoke render dimensions now fail aloud.
+  The navigation-smoke CLI rejects non-positive `--render-width` /
+  `--render-height` values at argument parsing time instead of passing invalid
+  dimensions into waypoint capture requests and child render subprocesses.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change class:
+  fail-aloud B1 navigation-smoke render configuration; default dimensions,
+  valid positive dimensions, readiness artifact loading/building, waypoint
+  selection, smoke artifact schema, and child capture command routing are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `run_b1_map12_navigation_smoke.py` is 342 lines and
+  `test_b1_map12_navigation_report.py` is 98 lines. Proof: focused B1
+  navigation-smoke contract tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Robot-camera apple-to-apple comparison target count now fails
   aloud. The comparison CLI rejects non-positive `--location-count` at argument
   parsing time instead of clamping zero or negative values to one target before

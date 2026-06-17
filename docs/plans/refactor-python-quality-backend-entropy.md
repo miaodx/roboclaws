@@ -73,6 +73,17 @@ again.
   79 oversized modules; `isaac_worker_cli.py` is 269 lines,
   `isaac_worker_outputs.py` is 429 lines, and
   `test_relative_navigation_worker_routing.py` is 247 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one B1 / Map 12
+  navigation-smoke render-dimension false-green. The navigation-smoke CLI now
+  rejects non-positive `--render-width` / `--render-height` values at argument
+  parsing time instead of passing invalid dimensions into waypoint capture
+  requests and child render subprocesses. Owner layer: Backend Runtime /
+  Environment Primitive. Behavior-change class: fail-aloud B1 navigation-smoke
+  render configuration; default dimensions, valid positive dimensions,
+  readiness artifact loading/building, waypoint selection, smoke artifact
+  schema, and child capture command routing are unchanged. The ratchet remains
+  0 complexity rows and 79 oversized modules; `run_b1_map12_navigation_smoke.py`
+  is 342 lines and `test_b1_map12_navigation_report.py` is 98 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one robot-camera
   apple-to-apple comparison target-count false-green. The comparison CLI now
   rejects non-positive `--location-count` at argument parsing time instead of
