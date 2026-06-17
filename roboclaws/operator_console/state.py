@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -74,7 +73,6 @@ def derive_operator_state(
     )
     trace_path = _latest_existing(display_run_dir, ("trace.jsonl",))
     latest_trace = _last_robot_tool_jsonl(trace_path) or _last_jsonl(trace_path)
-    latest_robot_pose = _latest_robot_pose_jsonl(trace_path)
     camera_state = _camera_angle_summary(trace_path)
     phase = str(
         live_status.get("phase")
@@ -104,14 +102,7 @@ def derive_operator_state(
     terminal_reason = _terminal_reason(terminal_status, live_status, run_result)
     artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
     artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
-    latest_view_assets = _latest_view_assets(
-        root,
-        display_run_dir,
-        route=route,
-        run_result=run_result,
-        latest_trace=latest_trace,
-        latest_robot_pose=latest_robot_pose,
-    )
+    latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
     latest_agent_message = _latest_agent_message(display_run_dir)
     prompt_preview = _prompt_preview(status, live_status, run_result, display_run_dir)
@@ -398,29 +389,6 @@ def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
     return {}
 
 
-def _latest_robot_pose_jsonl(path: Path) -> dict[str, float]:
-    if not path.exists():
-        return {}
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-    for line in reversed(lines):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
-        response = payload.get("response") if isinstance(payload.get("response"), dict) else {}
-        pose = _current_robot_pose({}, {"response": response})
-        if pose:
-            return pose
-    return {}
-
-
 def _camera_angle_summary(path: Path) -> dict[str, Any]:
     return camera_angle_summary(path)
 
@@ -624,15 +592,7 @@ def _wrapper_artifact_links(run_dir: Path) -> list[ArtifactLink]:
     return links
 
 
-def _latest_view_assets(
-    root: Path,
-    run_dir: Path,
-    *,
-    route: ConsoleLaunchSelection | None = None,
-    run_result: dict[str, Any] | None = None,
-    latest_trace: dict[str, Any] | None = None,
-    latest_robot_pose: dict[str, float] | None = None,
-) -> dict[str, dict[str, Any]]:
+def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
     patterns = {
         "fpv": ("*.fpv*.png", "*.fpv*.jpg", "*fpv*.png", "*fpv*.jpg"),
         "chase": ("*.chase*.png", "*.chase*.jpg", "*chase*.png", "*chase*.jpg"),
@@ -685,143 +645,12 @@ def _latest_view_assets(
             "href": _artifact_href(root, path),
             "mtime": str(path.stat().st_mtime),
         }
-    if "topdown" not in output:
-        fallback = _route_topdown_preview_asset(
-            route,
-            run_result=run_result or {},
-            latest_trace=latest_trace or {},
-            latest_robot_pose=latest_robot_pose or {},
-        )
-        if fallback:
-            output["topdown"] = fallback
     if "grounding" in output:
         output["fpv"] = {
             **output["grounding"],
             "display_source": "visual_grounding_overlay",
         }
     return output
-
-
-def _route_topdown_preview_asset(
-    route: ConsoleLaunchSelection | None,
-    *,
-    run_result: dict[str, Any],
-    latest_trace: dict[str, Any],
-    latest_robot_pose: dict[str, float],
-) -> dict[str, Any]:
-    if route is None:
-        return {}
-    preview = (route.to_payload().get("preview_assets") or {}).get("topdown") or {}
-    if not isinstance(preview, dict) or not preview.get("path"):
-        return {}
-    asset = {
-        "path": str(preview.get("path") or ""),
-        "href": str(preview.get("href") or preview.get("path") or ""),
-        "display_source": "scene_preview_topdown",
-    }
-    pose = latest_robot_pose or _current_robot_pose(run_result, latest_trace)
-    overlay = _robot_pose_overlay(asset["path"], pose)
-    if overlay:
-        asset["robot_pose_overlay"] = overlay
-    return asset
-
-
-def _current_robot_pose(
-    run_result: dict[str, Any],
-    latest_trace: dict[str, Any],
-) -> dict[str, float]:
-    response = (
-        latest_trace.get("response") if isinstance(latest_trace.get("response"), dict) else {}
-    )
-    agent_view = (
-        run_result.get("agent_view") if isinstance(run_result.get("agent_view"), dict) else {}
-    )
-    candidates = (
-        (response.get("backend_pose_mutation") or {}).get("robot_pose")
-        if isinstance(response.get("backend_pose_mutation"), dict)
-        else {},
-        response.get("robot_pose"),
-        latest_trace.get("robot_pose"),
-        (agent_view.get("metric_map") or {}).get("robot_pose")
-        if isinstance(agent_view.get("metric_map"), dict)
-        else {},
-        (agent_view.get("runtime_metric_map") or {}).get("robot_pose")
-        if isinstance(agent_view.get("runtime_metric_map"), dict)
-        else {},
-        run_result.get("robot_pose"),
-    )
-    for candidate in candidates:
-        pose = _robot_pose_xy_yaw(candidate)
-        if pose:
-            return pose
-    return {}
-
-
-def _robot_pose_xy_yaw(payload: Any) -> dict[str, float]:
-    if not isinstance(payload, dict):
-        return {}
-    try:
-        pose = {"x": float(payload.get("x")), "y": float(payload.get("y"))}
-    except (TypeError, ValueError):
-        return {}
-    yaw_deg = payload.get("yaw_deg")
-    if yaw_deg is None and payload.get("theta") is not None:
-        try:
-            yaw_deg = math.degrees(float(payload["theta"]))
-        except (TypeError, ValueError):
-            yaw_deg = None
-    if yaw_deg is None:
-        yaw_deg = payload.get("yaw", 0.0)
-    try:
-        pose["yaw_deg"] = float(yaw_deg)
-    except (TypeError, ValueError):
-        pose["yaw_deg"] = 0.0
-    return pose
-
-
-def _robot_pose_overlay(preview_path: str, pose: dict[str, float]) -> dict[str, Any]:
-    if not pose:
-        return {}
-    metadata = _topdown_preview_metadata(preview_path)
-    topdown = (metadata.get("views") or {}).get("topdown") if metadata else {}
-    alignment = topdown.get("scene_alignment") if isinstance(topdown, dict) else {}
-    bounds = alignment.get("bounds") if isinstance(alignment, dict) else {}
-    try:
-        min_x = float(bounds["min_x"])
-        max_x = float(bounds["max_x"])
-        min_y = float(bounds["min_y"])
-        max_y = float(bounds["max_y"])
-    except (KeyError, TypeError, ValueError):
-        return {}
-    if max_x == min_x or max_y == min_y:
-        return {}
-    x_pct = _clamp_pct(((pose["x"] - min_x) / (max_x - min_x)) * 100.0)
-    y_pct = _clamp_pct(((max_y - pose["y"]) / (max_y - min_y)) * 100.0)
-    return {
-        "schema": "operator_console_robot_pose_overlay_v1",
-        "x_pct": round(x_pct, 2),
-        "y_pct": round(y_pct, 2),
-        "yaw_deg": round(float(pose.get("yaw_deg", 0.0)), 2),
-        "x": round(float(pose["x"]), 3),
-        "y": round(float(pose["y"]), 3),
-        "source": "current_robot_pose_on_scene_preview",
-    }
-
-
-def _topdown_preview_metadata(preview_path: str) -> dict[str, Any]:
-    if not preview_path.startswith("/previews/") or not preview_path.endswith(".png"):
-        return {}
-    metadata_path = (
-        Path(__file__).resolve().parent
-        / "static"
-        / "previews"
-        / f"{Path(preview_path).stem.rsplit('-', 1)[0]}-preview.json"
-    )
-    return _read_json(metadata_path)
-
-
-def _clamp_pct(value: float) -> float:
-    return min(100.0, max(0.0, value))
 
 
 def _artifact_href(root: Path, path: Path) -> str:

@@ -549,19 +549,7 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
     assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
-    assert state["latest_view_assets"]["topdown"]["path"] == (
-        "/previews/molmospaces-val_0-topdown.png"
-    )
-    assert state["latest_view_assets"]["topdown"]["display_source"] == "scene_preview_topdown"
-    assert state["latest_view_assets"]["topdown"]["robot_pose_overlay"] == {
-        "schema": "operator_console_robot_pose_overlay_v1",
-        "x_pct": 50.0,
-        "y_pct": 50.0,
-        "yaw_deg": 90.0,
-        "x": 8.544,
-        "y": 6.408,
-        "source": "current_robot_pose_on_scene_preview",
-    }
+    assert "topdown" not in state["latest_view_assets"]
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
@@ -588,13 +576,10 @@ def test_state_does_not_use_map_artifacts_as_top_down_scene_view(
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_MAP_BUILD))
 
     assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
-    assert state["latest_view_assets"]["topdown"]["path"] == (
-        "/previews/molmospaces-val_0-topdown.png"
-    )
-    assert "robot_pose_overlay" not in state["latest_view_assets"]["topdown"]
+    assert "topdown" not in state["latest_view_assets"]
 
 
-def test_state_keeps_latest_robot_pose_overlay_after_non_pose_trace(
+def test_state_does_not_synthesize_topdown_from_pose_trace(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
@@ -630,7 +615,7 @@ def test_state_keeps_latest_robot_pose_overlay_after_non_pose_trace(
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
-    assert state["latest_view_assets"]["topdown"]["robot_pose_overlay"]["yaw_deg"] == 90.0
+    assert "topdown" not in state["latest_view_assets"]
 
 
 def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
