@@ -120,7 +120,7 @@ def _operator_prompt(route: ConsoleLaunchSelection, intent_id: str, prompt: str)
 
 def _default_prompt_for_intent(intent_id: str) -> str:
     if intent_id == "map-build":
-        return "帮我建立这个房间的语义地图"
+        return "帮我建立这个房间的 Runtime Metric Map"
     if intent_id == "open-ended":
         return "在这个场景中完成开放性导航任务，并报告你看到的证据。"
     return "帮我收拾这个房间"

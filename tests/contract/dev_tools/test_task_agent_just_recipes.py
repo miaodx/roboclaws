@@ -1395,7 +1395,7 @@ def test_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
         "world-public-labels",
         "7",
         "output/household/household-world/map-build/codex-world-public-labels",
-        "帮我建立这个房间的语义地图",
+        "帮我建立这个房间的 Runtime Metric Map",
     ]
     assert route[15] == "on"
     assert route[17] == "molmospaces_subprocess"
@@ -1762,7 +1762,7 @@ def test_prompt_mapping_map_build_direct_enables_sweep() -> None:
         "7",
         "output/household/household-world/map-build/direct-smoke",
     ]
-    assert route[6] == "帮我建立这个房间的语义地图"
+    assert route[6] == "帮我建立这个房间的 Runtime Metric Map"
     assert route[15] == "on"
 
 
@@ -2253,12 +2253,12 @@ def test_molmo_live_openai_agents_uses_single_lane_default_prompt() -> None:
 def test_map_build_live_prompt_disables_cleanup_actions() -> None:
     prompt = render_map_build_prompt(
         "camera-grounded-labels",
-        "帮我建立这个房间的语义地图",
+        "帮我建立这个房间的 Runtime Metric Map",
     )
 
     assert "This run is surface=household-world intent=map-build" in prompt
     assert "This is not a cleanup run" in prompt
-    assert "User task: 帮我建立这个房间的语义地图" in prompt
+    assert "User task: 帮我建立这个房间的 Runtime Metric Map" in prompt
     assert "Use the bundled household-open-task skill instructions" in prompt
     assert "Use the bundled molmo-realworld-cleanup skill instructions" not in prompt
     assert "Do not pick, place, place_inside" in prompt

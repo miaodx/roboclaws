@@ -177,8 +177,8 @@ run dispatch_target agent_engine mode="" *overrides:
       fi
     }
 
-    semantic_map_prompt() {
-      local default_prompt="帮我建立这个房间的语义地图"
+    map_build_prompt() {
+      local default_prompt="帮我建立这个房间的 Runtime Metric Map"
       if [[ -v "kv[prompt]" && -n "${kv[prompt]}" ]]; then
         printf '%s\n' "${kv[prompt]}"
       elif [[ -v "kv[task]" && -n "${kv[task]}" ]]; then
@@ -327,7 +327,7 @@ run dispatch_target agent_engine mode="" *overrides:
         seeds="$(get seeds "$(get seed "$default_seeds")")"
         output_dir="$(get output_dir "$default_output_dir")"
         if [[ "$dispatch_intent" == "map-build" ]]; then
-          prompt="$(semantic_map_prompt)"
+          prompt="$(map_build_prompt)"
         else
           prompt="$(cleanup_prompt)"
         fi

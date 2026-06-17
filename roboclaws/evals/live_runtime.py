@@ -500,7 +500,7 @@ def task_prompt(sample: EvalSample) -> str:
     if sample.prompt not in {"", MISSING_NOT_APPLICABLE, MISSING_UNAVAILABLE}:
         return sample.prompt
     if sample.intent == "map-build":
-        return "帮我建立这个房间的语义地图"
+        return "帮我建立这个房间的 Runtime Metric Map"
     return "帮我收拾这个房间"
 
 
