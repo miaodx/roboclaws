@@ -27,6 +27,7 @@ from roboclaws.launch.scene_sampler import (  # noqa: E402
     sampler_manifest,
     scanner_admission_report,
     scanner_execution_plan,
+    scene_only_prefilter_report,
     selection_gap_report,
     source_availability_report,
     source_prep_report,
@@ -43,6 +44,7 @@ class _ReadinessPayloads:
     readiness: dict[str, Any]
     selection: dict[str, Any]
     candidate_profile: dict[str, Any] | None
+    scene_prefilter: dict[str, Any] | None
     availability: dict[str, Any] | None
     candidates: dict[str, Any] | None
     source_prep: dict[str, Any] | None
@@ -67,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         write_candidate_readiness=not args.no_candidate_readiness,
         write_selection_gaps=not args.no_selection_gaps,
         write_candidate_profile=not args.no_candidate_profile,
+        write_scene_prefilter=not args.no_scene_prefilter,
         write_source_prep=not args.no_source_prep,
         write_scanner_admission=not args.no_scanner_admission,
         write_scanner_execution_plan=not args.no_scanner_execution_plan,
@@ -97,6 +100,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-candidate-readiness", action="store_true")
     parser.add_argument("--no-selection-gaps", action="store_true")
     parser.add_argument("--no-candidate-profile", action="store_true")
+    parser.add_argument("--no-scene-prefilter", action="store_true")
     parser.add_argument("--no-source-prep", action="store_true")
     parser.add_argument("--no-scanner-admission", action="store_true")
     parser.add_argument("--no-scanner-execution-plan", action="store_true")
@@ -183,6 +187,7 @@ def export_readiness_artifacts(
     write_candidate_readiness: bool = True,
     write_selection_gaps: bool = True,
     write_candidate_profile: bool = True,
+    write_scene_prefilter: bool = True,
     write_source_prep: bool = True,
     write_scanner_admission: bool = True,
     write_scanner_execution_plan: bool = True,
@@ -201,6 +206,7 @@ def export_readiness_artifacts(
         write_source_availability=write_source_availability,
         write_candidate_readiness=write_candidate_readiness,
         write_candidate_profile=write_candidate_profile,
+        write_scene_prefilter=write_scene_prefilter,
         write_source_prep=write_source_prep,
         write_scanner_admission=write_scanner_admission,
         write_scanner_execution_plan=write_scanner_execution_plan,
@@ -218,6 +224,7 @@ def export_readiness_artifacts(
         write_candidate_readiness=write_candidate_readiness,
         write_selection_gaps=write_selection_gaps,
         write_candidate_profile=write_candidate_profile,
+        write_scene_prefilter=write_scene_prefilter,
         write_source_prep=write_source_prep,
         write_scanner_admission=write_scanner_admission,
         write_scanner_execution_plan=write_scanner_execution_plan,
@@ -251,6 +258,7 @@ def _build_readiness_payloads(
     write_source_availability: bool,
     write_candidate_readiness: bool,
     write_candidate_profile: bool,
+    write_scene_prefilter: bool,
     write_source_prep: bool,
     write_scanner_admission: bool,
     write_scanner_execution_plan: bool,
@@ -277,6 +285,11 @@ def _build_readiness_payloads(
         if write_candidate_profile
         else None
     )
+    scene_prefilter = (
+        scene_only_prefilter_report(candidate_indices=candidate_indices)
+        if write_scene_prefilter
+        else None
+    )
     source_prep = (
         source_prep_report(candidate_indices=candidate_indices) if write_source_prep else None
     )
@@ -299,6 +312,7 @@ def _build_readiness_payloads(
         readiness=readiness,
         selection=selection,
         candidate_profile=candidate_profile,
+        scene_prefilter=scene_prefilter,
         availability=availability,
         candidates=candidates,
         source_prep=source_prep,
@@ -319,6 +333,7 @@ def _write_requested_artifacts(
     write_candidate_readiness: bool,
     write_selection_gaps: bool,
     write_candidate_profile: bool,
+    write_scene_prefilter: bool,
     write_source_prep: bool,
     write_scanner_admission: bool,
     write_scanner_execution_plan: bool,
@@ -364,6 +379,12 @@ def _write_requested_artifacts(
                 write_candidate_profile,
                 "scene_sampler_candidate_profile.json",
                 payloads.candidate_profile,
+            ),
+            (
+                "scene_prefilter",
+                write_scene_prefilter,
+                "scene_sampler_scene_prefilter.json",
+                payloads.scene_prefilter,
             ),
             (
                 "source_prep",
@@ -444,6 +465,7 @@ def _export_summary(payloads: _ReadinessPayloads) -> dict[str, Any]:
         "candidate_readiness": (payloads.candidates or {}).get("summary", {}),
         "selection_gaps": (payloads.selection or {}).get("summary", {}),
         "candidate_profile": (payloads.candidate_profile or {}).get("summary", {}),
+        "scene_prefilter": (payloads.scene_prefilter or {}).get("summary", {}),
         "source_prep": (payloads.source_prep or {}).get("summary", {}),
         "scanner_admission": (payloads.scanner_admission or {}).get("summary", {}),
         "scanner_execution": (payloads.scanner_execution or {}).get("summary", {}),

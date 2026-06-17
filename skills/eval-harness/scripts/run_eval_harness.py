@@ -21,12 +21,17 @@ SELECTOR_PATH = SCRIPT_DIR / "select_eval_harness.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
 DETACHED_LIVE_PRODUCT_TIMEOUT_S = 3600.0
+DINO_SIDECAR_AUTOSTART_ENV = "ROBOCLAWS_EVAL_HARNESS_AUTOSTART_DINO_SIDECAR"
+DINO_SIDECAR_STARTUP_TIMEOUT_S = 15.0
 
 spec = importlib.util.spec_from_file_location("eval_harness_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
     raise RuntimeError(f"could not load selector at {SELECTOR_PATH}")
 selector = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(selector)
+
+
+_MANAGED_DINO_SIDECARS: list[dict[str, Any]] = []
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -76,18 +81,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _execute_harness(manifest: dict[str, Any]) -> None:
-    for row in manifest["rows"]:
-        if not row.get("selected"):
-            continue
-        if row.get("status") == "skipped_by_budget":
-            continue
-        blockers = _row_blockers(row, manifest)
-        if blockers:
-            row["status"] = "blocked"
-            row["blocker_category"] = blockers[0]["category"]
-            row["blockers"] = blockers
-            continue
-        _run_row(row, manifest)
+    try:
+        for row in manifest["rows"]:
+            if not row.get("selected"):
+                continue
+            if row.get("status") == "skipped_by_budget":
+                continue
+            blockers = _row_blockers(row, manifest)
+            if blockers:
+                row["status"] = "blocked"
+                row["blocker_category"] = blockers[0]["category"]
+                row["blockers"] = blockers
+                continue
+            _run_row(row, manifest)
+    finally:
+        _stop_managed_dino_sidecars()
 
 
 def _row_blockers(row: dict[str, Any], manifest: dict[str, Any]) -> list[dict[str, str]]:
@@ -97,10 +105,10 @@ def _row_blockers(row: dict[str, Any], manifest: dict[str, Any]) -> list[dict[st
     priority = {
         "codex_provider": 0,
         "openai_agents_package": 1,
-        "dino_sidecar": 2,
-        "runtime_map_prior": 3,
-        "just": 4,
-        "python_env": 5,
+        "just": 2,
+        "python_env": 3,
+        "dino_sidecar": 4,
+        "runtime_map_prior": 5,
         "docker": 6,
     }
     for requirement in sorted(requirements, key=lambda item: priority.get(str(item), 100)):
@@ -122,10 +130,13 @@ def _row_blockers(row: dict[str, Any], manifest: dict[str, Any]) -> list[dict[st
             )
         elif requirement == "openai_agents_package" and not _has_module("agents"):
             blockers.append(_environment_blocker("openai-agents package is not installed"))
-        elif requirement == "dino_sidecar" and not _dino_sidecar_available():
-            blockers.append(
-                _environment_blocker("Grounding DINO visual-grounding sidecar is not reachable")
-            )
+        elif requirement == "dino_sidecar":
+            if blockers:
+                continue
+            if not _ensure_dino_sidecar(manifest):
+                blockers.append(
+                    _environment_blocker("Grounding DINO visual-grounding sidecar is not reachable")
+                )
         elif requirement == "runtime_map_prior" and not _runtime_prior_available(manifest):
             blockers.append(
                 _environment_blocker(
@@ -434,7 +445,7 @@ def _has_module(module_name: str) -> bool:
 
 
 def _dino_sidecar_available() -> bool:
-    base_url = os.environ.get("VISUAL_GROUNDING_BASE_URL", DEFAULT_VISUAL_GROUNDING_BASE_URL)
+    base_url = _visual_grounding_base_url()
     parsed = urllib.parse.urlparse(base_url)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -443,6 +454,114 @@ def _dino_sidecar_available() -> bool:
             return True
     except OSError:
         return False
+
+
+def _ensure_dino_sidecar(manifest: dict[str, Any]) -> bool:
+    if _dino_sidecar_available():
+        return True
+    if not _dino_sidecar_autostart_enabled():
+        return False
+    return _start_managed_dino_sidecar(manifest)
+
+
+def _visual_grounding_base_url() -> str:
+    return os.environ.get("VISUAL_GROUNDING_BASE_URL", DEFAULT_VISUAL_GROUNDING_BASE_URL)
+
+
+def _dino_sidecar_autostart_enabled() -> bool:
+    value = os.environ.get(DINO_SIDECAR_AUTOSTART_ENV, "1").strip().lower()
+    return value not in {"0", "false", "no", "off"}
+
+
+def _start_managed_dino_sidecar(manifest: dict[str, Any]) -> bool:
+    base_url = _visual_grounding_base_url()
+    parsed = urllib.parse.urlparse(base_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if parsed.scheme not in {"", "http"} or host not in {"127.0.0.1", "localhost", "::1"}:
+        return False
+
+    python_bin, sidecar_args = _dino_sidecar_start_command(host=host, port=port)
+    if not python_bin.exists():
+        return False
+
+    sidecar_dir = Path(manifest["output_dir"]) / "sidecars" / "visual-grounding"
+    sidecar_dir.mkdir(parents=True, exist_ok=True)
+    stdout = (sidecar_dir / "stdout.log").open("a", encoding="utf-8")
+    stderr = (sidecar_dir / "stderr.log").open("a", encoding="utf-8")
+    command = [str(python_bin), *sidecar_args]
+    process = subprocess.Popen(
+        command,
+        cwd=REPO_ROOT,
+        stdout=stdout,
+        stderr=stderr,
+        text=True,
+        env=os.environ.copy(),
+    )
+    _MANAGED_DINO_SIDECARS.append(
+        {"process": process, "stdout": stdout, "stderr": stderr, "base_url": base_url}
+    )
+    manifest["dino_sidecar_autostart"] = {
+        "base_url": base_url,
+        "command": command,
+        "stdout": _display_path(sidecar_dir / "stdout.log"),
+        "stderr": _display_path(sidecar_dir / "stderr.log"),
+    }
+    return _wait_for_dino_sidecar(process, timeout_s=DINO_SIDECAR_STARTUP_TIMEOUT_S)
+
+
+def _dino_sidecar_start_command(*, host: str, port: int) -> tuple[Path, list[str]]:
+    dedicated_python = REPO_ROOT / ".venv-visual-grounding" / "bin" / "python"
+    script = "scripts/visual_grounding/serve_visual_grounding_service.py"
+    if dedicated_python.exists():
+        return dedicated_python, [
+            script,
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--pipeline",
+            "real-router",
+            "--adapter-mode",
+            "real",
+        ]
+    return REPO_ROOT / ".venv" / "bin" / "python", [
+        script,
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--pipeline",
+        "grounding-dino",
+    ]
+
+
+def _wait_for_dino_sidecar(process: subprocess.Popen[Any], *, timeout_s: float) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() <= deadline:
+        if _dino_sidecar_available():
+            return True
+        if process.poll() is not None:
+            return False
+        time.sleep(0.2)
+    return False
+
+
+def _stop_managed_dino_sidecars() -> None:
+    while _MANAGED_DINO_SIDECARS:
+        managed = _MANAGED_DINO_SIDECARS.pop()
+        try:
+            process = managed["process"]
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5.0)
+        finally:
+            managed["stdout"].close()
+            managed["stderr"].close()
 
 
 def _runtime_prior_available(manifest: dict[str, Any]) -> bool:

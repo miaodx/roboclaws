@@ -425,6 +425,10 @@ def source_prep_install_candidates(
                 "path_status": candidate_file.get("status", ""),
                 "paths": candidate_file.get("paths", []),
                 "missing_paths": candidate_file.get("missing_paths", []),
+                "prefilter_status": candidate.get("prefilter_status", ""),
+                "prefilter_reason": candidate.get("prefilter_reason", ""),
+                "prefilter_score": int(candidate.get("prefilter_score") or 0),
+                "cheap_room_count": int(candidate.get("cheap_room_count") or 0),
                 "install_command": install_candidate_command(
                     dataset_name=dataset_name,
                     split=split,
@@ -522,8 +526,12 @@ def _source_prep_next_action(prep_status: str) -> str:
         return "none"
     if prep_status == "rejected_exhausted":
         return "do_not_scan_without_new_human_curation"
+    if prep_status == "gate_mismatch":
+        return "do_not_scan_without_gate_change"
     if prep_status == "ready_for_scanner":
         return "run_scanner_admission"
+    if prep_status == "blocked_prefilter_inconclusive":
+        return "run_scene_only_prefilter_or_stop"
     if prep_status == "blocked_molmospaces_module":
         return "install_repo_dev_runtime"
     if prep_status == "blocked_scene_root":

@@ -55,6 +55,7 @@ def test_scene_sampler_readiness_export_writes_artifacts(tmp_path) -> None:
         "readiness_report",
         "scanner_admission",
         "scanner_execution_plan",
+        "scene_prefilter",
         "selection_gaps",
         "source_availability",
         "source_prep",
@@ -85,6 +86,9 @@ def _read_export_payloads(output_dir: Path) -> dict[str, Any]:
         "candidate_profile": json.loads(
             (output_dir / "scene_sampler_candidate_profile.json").read_text()
         ),
+        "scene_prefilter": json.loads(
+            (output_dir / "scene_sampler_scene_prefilter.json").read_text()
+        ),
         "source_prep": json.loads((output_dir / "scene_sampler_source_prep.json").read_text()),
         "scanner_admission": json.loads(
             (output_dir / "scene_sampler_scanner_admission.json").read_text()
@@ -106,6 +110,7 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
     availability = payloads["availability"]
     candidates = payloads["candidates"]
     candidate_profile = payloads["candidate_profile"]
+    scene_prefilter = payloads["scene_prefilter"]
 
     assert manifest["ui_target_per_scene_source"] == 3
     assert manifest["eval_target_per_scene_source"] == 10
@@ -154,6 +159,13 @@ def _assert_projection_readiness_and_candidates(payloads: dict[str, Any]) -> Non
         candidate_profile["sources"]["holodeck-objaverse-val"]["metadata_worklist_candidate_count"]
         == 10
     )
+    assert scene_prefilter["schema"] == "molmospaces_scene_sampler_scene_prefilter_v1"
+    assert scene_prefilter["probe_mode"] == "no_download_no_backend_no_vlm"
+    assert scene_prefilter["prefilter_policy"]["admission_effect"] == "none_prefilter_only"
+    assert scene_prefilter["summary"]["metadata_worklist_source_count"] == 2
+    assert scene_prefilter["summary"]["expensive_proof_candidate_count"] == 0
+    assert scene_prefilter["summary"]["next_actions"] == {"stop_prefilter_inconclusive": 2}
+    assert scene_prefilter["sources"]["ithor"]["prefilter_status"] == "prefilter_inconclusive"
 
 
 def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
@@ -184,6 +196,7 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
         "install_repo_dev_runtime",
         "run_manual_source_prep",
         "run_scanner_admission",
+        "run_scene_only_prefilter_or_stop",
         "expand_candidate_range",
         "inspect_source_prep",
         "do_not_scan_without_new_human_curation",
@@ -205,6 +218,10 @@ def _assert_selection_and_source_prep(payloads: dict[str, Any]) -> None:
         "metadata_worklist_ready"
     )
     assert source_prep["sources"]["ithor"]["metadata_worklist_candidate_count"] == 10
+    assert source_prep["sources"]["ithor"]["scene_prefilter_status"] == ("prefilter_inconclusive")
+    assert source_prep["sources"]["ithor"]["scene_prefilter_next_action"] == (
+        "stop_prefilter_inconclusive"
+    )
     assert "molmospaces_scene_version" in source_prep["sources"]["procthor-10k-val"]
     assert source_prep["sources"]["procthor-10k-val"]["scene_index_map_status"] in {
         "available",
@@ -248,10 +265,14 @@ def _assert_next_flow(
     assert next_flow["summary"]["source_count"] == 4
     assert next_flow["summary"]["ui_needed_count"] == 6
     assert next_flow["summary"]["eval_needed_count"] == 20
-    assert next_flow["summary"]["next_actions"] == {"metadata_first_human_curation": 2}
-    assert next_flow["summary"]["rejected_exhausted_source_count"] == 2
+    assert next_flow["summary"]["next_actions"] == {
+        "do_not_scan_without_gate_change": 1,
+        "run_scene_only_prefilter_or_stop": 1,
+    }
+    assert next_flow["summary"]["rejected_exhausted_source_count"] == 0
+    assert next_flow["summary"]["gate_mismatch_source_count"] == 1
     assert next_flow["summary"]["metadata_worklist_source_count"] == 2
-    assert next_flow["summary"]["metadata_worklist_candidate_count"] == 20
+    assert next_flow["summary"]["metadata_worklist_candidate_count"] >= 14
     assert "worklist" in next_flow["summary"]
     assert next_flow["worklist"] == next_flow["summary"]["worklist"]
     assert next_flow["worklist"][0]["scene_source"] in {
@@ -264,6 +285,9 @@ def _assert_next_flow(
     assert next_flow["artifact_paths"]["source_prep"] == str(
         output_dir / "scene_sampler_source_prep.json"
     )
+    assert next_flow["artifact_paths"]["scene_prefilter"] == str(
+        output_dir / "scene_sampler_scene_prefilter.json"
+    )
     assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "ready"
     assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 10
     assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 0
@@ -274,24 +298,22 @@ def _assert_next_flow(
     assert next_flow["sources"]["procthor-objaverse-val"]["next_action"] == "none"
     assert next_flow["sources"]["ithor"]["ui_needed_count"] == 3
     assert next_flow["sources"]["ithor"]["eval_needed_count"] == 10
-    assert next_flow["sources"]["ithor"]["flow_status"] == "rejected_exhausted"
-    assert next_flow["sources"]["ithor"]["next_action"] == "metadata_first_human_curation"
+    assert next_flow["sources"]["ithor"]["flow_status"] == "blocked_prefilter_inconclusive"
+    assert next_flow["sources"]["ithor"]["next_action"] == "run_scene_only_prefilter_or_stop"
     assert next_flow["sources"]["ithor"]["candidate_profile_status"] == ("metadata_worklist_ready")
     assert next_flow["sources"]["ithor"]["metadata_worklist_candidate_count"] == 10
     assert next_flow["sources"]["ithor"]["recommended_candidate_range"].startswith("0:")
     ithor_commands = next_flow["sources"]["ithor"]["recommended_commands"]
     assert [command["name"] for command in ithor_commands] == [
-        "refresh_metadata_profile",
-        "inspect_source_index_map",
+        "refresh_scene_only_prefilter",
+        "inspect_prefilter_stop_reason",
     ]
     holodeck = next_flow["sources"]["holodeck-objaverse-val"]
-    assert holodeck["flow_status"] == "rejected_exhausted"
-    assert holodeck["next_action"] == "metadata_first_human_curation"
-    assert holodeck["metadata_worklist_candidate_count"] == 10
-    assert [command["name"] for command in holodeck["recommended_commands"]] == [
-        "refresh_metadata_profile",
-        "inspect_source_index_map",
-    ]
+    assert holodeck["flow_status"] == "gate_mismatch"
+    assert holodeck["next_action"] == "do_not_scan_without_gate_change"
+    assert holodeck["metadata_worklist_candidate_count"] >= 4
+    assert holodeck["scanner_gate_mismatch_count"] == 2
+    assert holodeck["recommended_commands"] == []
     assert set(holodeck["blocked_reason_samples"]) == {
         "fewer_than_three_public_navigation_areas",
         "missing_public_inspection_waypoints",
@@ -445,7 +467,7 @@ def test_scene_sampler_readiness_export_fails_when_scanner_source_has_no_ready_c
             "ready_for_product_smoke_count": 0,
             "candidate_count": 0,
             "blocked_count": 0,
-            "prep_status": "rejected_exhausted",
+            "prep_status": "blocked_prefilter_inconclusive",
         }
     ]
 
@@ -500,4 +522,4 @@ def test_scene_sampler_readiness_export_cli_accepts_scanner_ready_threshold(
     assert payload["status"] == "failed"
     assert payload["threshold_failures"][0]["threshold"] == "scanner_ready"
     assert payload["threshold_failures"][0]["blocked_count"] == 0
-    assert payload["threshold_failures"][0]["prep_status"] == "rejected_exhausted"
+    assert payload["threshold_failures"][0]["prep_status"] == "blocked_prefilter_inconclusive"

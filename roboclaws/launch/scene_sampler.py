@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,7 @@ from roboclaws.launch.scene_sampler_scanner import (
     scanner_candidate_packet,
     scanner_execution_candidate,
     scanner_execution_summary,
+    scanner_gate_mismatch_count,
     scanner_missing_gates,
     scanner_next_action,
     scanner_preview_assets,
@@ -114,6 +116,9 @@ CANDIDATE_PROFILE_WORKLIST_TARGET_PER_SCENE_SOURCE = 10
 CANDIDATE_PROFILE_POOL_SIZE_PER_SCENE_SOURCE = 40
 CANDIDATE_PROFILE_SOURCE_MAP_SCAN_LIMIT_PER_SCENE_SOURCE = 500
 CANDIDATE_PROFILE_LANE = "metadata_profile"
+SCENE_PREFILTER_EXPENSIVE_PROOF_TARGET_PER_SOURCE = 5
+SCENE_PREFILTER_LANE = "scene_only_prefilter"
+SCENE_PREFILTER_MIN_HIGH_CONFIDENCE_ROOMS = 3
 
 SUPPORTED_SCENE_SOURCES: tuple[str, ...] = (
     "procthor-10k-val",
@@ -382,7 +387,7 @@ def eval_sample_payload(row: SceneSamplerRow) -> dict[str, Any]:
         "preset": "map-build",
         "world": row.world_id,
         "backend": row.backend,
-        "evidence_lane": "world-oracle-labels",
+        "evidence_lane": "world-public-labels",
         "camera_labeler": "not_applicable",
         "scenario_setup": "baseline",
         "seed": 7,
@@ -871,6 +876,95 @@ def candidate_profile_report(
     }
 
 
+def scene_only_prefilter_report(
+    *,
+    candidate_indices: tuple[int, ...] = tuple(range(10)),
+) -> dict[str, Any]:
+    """Return no-download scene-only ranking before expensive source prep.
+
+    The prefilter never admits a scene. It only narrows metadata worklists to a
+    capped subset that is worth object/grasp installation plus scanner proof.
+    """
+
+    candidate_profile = candidate_profile_report(candidate_indices=candidate_indices)
+    sources: dict[str, dict[str, Any]] = {}
+    for source in SUPPORTED_SCENE_SOURCES:
+        source_profile = candidate_profile["sources"][source]
+        rows = [
+            _scene_prefilter_row(row)
+            for row in source_profile.get("metadata_worklist_candidates") or []
+            if isinstance(row, dict)
+        ]
+        high_confidence = _rank_scene_prefilter_rows(source=source, rows=rows)
+        expensive_rows = high_confidence[:SCENE_PREFILTER_EXPENSIVE_PROOF_TARGET_PER_SOURCE]
+        expensive_ids = {
+            int(row["scene_index"]) for row in expensive_rows if row.get("scene_index") is not None
+        }
+        candidates = [
+            {
+                **row,
+                "expensive_proof_selected": (
+                    row.get("prefilter_status") == "high_confidence"
+                    and int(row.get("scene_index") or -1) in expensive_ids
+                ),
+                "next_action": (
+                    "run_expensive_proof"
+                    if (
+                        row.get("prefilter_status") == "high_confidence"
+                        and int(row.get("scene_index") or -1) in expensive_ids
+                    )
+                    else _scene_prefilter_row_next_action(row)
+                ),
+            }
+            for row in rows
+        ]
+        sources[source] = {
+            "scene_source": source,
+            "scene_family": source_profile.get("scene_family", ""),
+            "scene_split": source_profile.get("scene_split", ""),
+            "candidate_profile_status": source_profile.get("profile_status", ""),
+            "metadata_worklist_candidate_count": int(
+                source_profile.get("metadata_worklist_candidate_count") or 0
+            ),
+            "prefilter_status": _scene_prefilter_source_status(
+                source_profile=source_profile,
+                candidates=candidates,
+            ),
+            "next_action": _scene_prefilter_source_next_action(
+                source_profile=source_profile,
+                candidates=candidates,
+            ),
+            "candidate_count": len(candidates),
+            "high_confidence_candidate_count": sum(
+                1 for row in candidates if row.get("prefilter_status") == "high_confidence"
+            ),
+            "expensive_proof_candidate_count": sum(
+                1 for row in candidates if row.get("expensive_proof_selected")
+            ),
+            "expensive_proof_world_ids": [
+                row["world_id"] for row in candidates if row.get("expensive_proof_selected")
+            ],
+            "inconclusive_candidate_count": sum(
+                1 for row in candidates if row.get("prefilter_status") == "inconclusive"
+            ),
+            "low_confidence_candidate_count": sum(
+                1 for row in candidates if row.get("prefilter_status") == "low_confidence"
+            ),
+            "candidates": candidates,
+        }
+    return {
+        "schema": "molmospaces_scene_sampler_scene_prefilter_v1",
+        "generator_version": SAMPLER_GENERATOR_VERSION,
+        "probe_mode": "no_download_no_backend_no_vlm",
+        "download_policy": "manual_operator_only",
+        "prefilter_policy": _scene_prefilter_policy(),
+        "candidate_indices": list(candidate_indices),
+        "selection_policy": _sampler_selection_policy(),
+        "summary": _scene_prefilter_summary(sources),
+        "sources": sources,
+    }
+
+
 def source_prep_report(
     *,
     candidate_indices: tuple[int, ...] = tuple(range(10)),
@@ -880,12 +974,15 @@ def source_prep_report(
     availability = source_availability_report(candidate_indices=candidate_indices)
     selection = selection_gap_report(candidate_indices=candidate_indices)
     candidate_profile = candidate_profile_report(candidate_indices=candidate_indices)
+    scene_prefilter = scene_only_prefilter_report(candidate_indices=candidate_indices)
     max_candidate_index = max(candidate_indices) if candidate_indices else -1
     sources: dict[str, dict[str, Any]] = {}
     for source in SUPPORTED_SCENE_SOURCES:
         source_availability = availability["sources"][source]
         source_selection = selection["sources"][source]
         source_candidate_profile = candidate_profile["sources"][source]
+        source_prefilter = scene_prefilter["sources"][source]
+        gate_mismatch_rows = _source_gate_mismatch_profile_rows(source_candidate_profile)
         dataset_name, split = _molmospaces_get_scenes_args(source)
         candidate_scene_refs = [
             _candidate_scene_ref_from_availability(item)
@@ -893,10 +990,12 @@ def source_prep_report(
             if isinstance(item, dict)
         ]
         source_complete = source_selection.get("status") == "complete"
-        metadata_worklist_candidates = _scanner_candidate_profile_worklist_candidates(
-            source_candidate_profile
+        metadata_worklist_candidate_count = int(
+            source_candidate_profile.get("metadata_worklist_candidate_count") or 0
         )
-        metadata_worklist_candidate_count = len(metadata_worklist_candidates)
+        expensive_prefilter_candidates = _scene_prefilter_expensive_proof_candidates(
+            source_prefilter
+        )
         source_rejected_exhausted = (
             source_selection.get("selection_capacity_status") == "rejected_exhausted"
             and metadata_worklist_candidate_count == 0
@@ -917,7 +1016,10 @@ def source_prep_report(
             else source_selection.get("next_scan_candidates") or []
         )
         install_candidates = _unique_candidates(
-            [*next_scan_candidates, *metadata_worklist_candidates]
+            [*next_scan_candidates, *expensive_prefilter_candidates]
+        )
+        no_expensive_prefilter_candidates = (
+            metadata_worklist_candidate_count > 0 and not expensive_prefilter_candidates
         )
         prep_source_availability = _source_availability_for_candidates(
             source_availability=source_availability,
@@ -930,23 +1032,28 @@ def source_prep_report(
         ]
         missing_resources = (
             []
-            if source_complete or source_rejected_exhausted
+            if source_complete or source_rejected_exhausted or no_expensive_prefilter_candidates
             else _missing_source_resources(
                 source=source,
                 source_availability=prep_source_availability,
                 candidate_scene_refs=prep_candidate_scene_refs,
             )
         )
+        prep_status = _source_prep_status(
+            source_availability=source_availability,
+            source_selection=source_selection,
+            missing_resources=missing_resources,
+            metadata_worklist_candidate_count=metadata_worklist_candidate_count,
+        )
+        if gate_mismatch_rows and no_expensive_prefilter_candidates:
+            prep_status = "gate_mismatch"
+        elif no_expensive_prefilter_candidates:
+            prep_status = "blocked_prefilter_inconclusive"
         sources[source] = {
             "scene_source": source,
             "scene_family": _family_split(source)[0],
             "scene_split": _family_split(source)[1],
-            "prep_status": _source_prep_status(
-                source_availability=source_availability,
-                source_selection=source_selection,
-                missing_resources=missing_resources,
-                metadata_worklist_candidate_count=metadata_worklist_candidate_count,
-            ),
+            "prep_status": prep_status,
             "download_policy": "manual_operator_only",
             "molmospaces_scene_source": source,
             "molmospaces_dataset_name": dataset_name,
@@ -969,6 +1076,20 @@ def source_prep_report(
             "metadata_worklist_candidate_count": int(
                 source_candidate_profile.get("metadata_worklist_candidate_count") or 0
             ),
+            "scene_prefilter_status": source_prefilter.get("prefilter_status", ""),
+            "scene_prefilter_next_action": source_prefilter.get("next_action", ""),
+            "scene_prefilter_candidate_count": int(source_prefilter.get("candidate_count") or 0),
+            "scene_prefilter_high_confidence_candidate_count": int(
+                source_prefilter.get("high_confidence_candidate_count") or 0
+            ),
+            "scene_prefilter_expensive_proof_candidate_count": int(
+                source_prefilter.get("expensive_proof_candidate_count") or 0
+            ),
+            "scene_prefilter_expensive_proof_world_ids": source_prefilter.get(
+                "expensive_proof_world_ids", []
+            ),
+            "gate_mismatch_candidate_count": len(gate_mismatch_rows),
+            "gate_mismatch_world_ids": [row.get("world_id") for row in gate_mismatch_rows],
             "candidate_scene_refs": [
                 item
                 for item in candidate_scene_refs
@@ -979,7 +1100,7 @@ def source_prep_report(
             "missing_resources": missing_resources,
             "next_scan_world_ids": [item.get("world_id") for item in next_scan_candidates],
             "metadata_worklist_scan_world_ids": [
-                item.get("world_id") for item in metadata_worklist_candidates
+                item.get("world_id") for item in expensive_prefilter_candidates
             ],
             "install_candidates": []
             if source_complete
@@ -1062,6 +1183,7 @@ def scanner_execution_plan(
                     admission=admission,
                 )
             )
+        gate_mismatch_count = int(prep_source.get("gate_mismatch_candidate_count") or 0)
         sources[source] = {
             "scene_source": source,
             "prep_status": prep_source.get("prep_status", ""),
@@ -1075,6 +1197,9 @@ def scanner_execution_plan(
                 for item in candidates
                 if item["scanner_status"].startswith("blocked_")
                 or item["scanner_status"] == "rejected_by_admission"
+            ),
+            "gate_mismatch_count": gate_mismatch_count + scanner_gate_mismatch_count(
+                {"candidates": candidates}
             ),
             "candidates": candidates,
         }
@@ -1121,6 +1246,7 @@ def next_flow_worklist_report(
             and item.get("scanner_status") == "ready_for_product_smoke"
             and item.get("world_id")
         ]
+        scanner_gate_mismatch_count = int(source_execution.get("gate_mismatch_count") or 0)
         missing_gate_counts = next_flow_missing_gate_counts(source_admission)
         next_action = next_flow_next_action(
             readiness_source=source_readiness,
@@ -1159,12 +1285,29 @@ def next_flow_worklist_report(
             "metadata_worklist_candidate_count": int(
                 source_candidate_profile.get("metadata_worklist_candidate_count") or 0
             ),
+            "scene_prefilter_status": source_prep_payload.get("scene_prefilter_status", ""),
+            "scene_prefilter_next_action": source_prep_payload.get(
+                "scene_prefilter_next_action", ""
+            ),
+            "scene_prefilter_candidate_count": int(
+                source_prep_payload.get("scene_prefilter_candidate_count") or 0
+            ),
+            "scene_prefilter_high_confidence_candidate_count": int(
+                source_prep_payload.get("scene_prefilter_high_confidence_candidate_count") or 0
+            ),
+            "scene_prefilter_expensive_proof_candidate_count": int(
+                source_prep_payload.get("scene_prefilter_expensive_proof_candidate_count") or 0
+            ),
+            "scene_prefilter_expensive_proof_world_ids": source_prep_payload.get(
+                "scene_prefilter_expensive_proof_world_ids", []
+            ),
             "source_availability_status": source_selection.get("source_availability_status", ""),
             "prep_status": source_prep_payload.get("prep_status", ""),
             "scanner_candidate_count": int(source_execution.get("candidate_count") or 0),
             "scanner_ready_candidate_count": int(
                 source_execution.get("ready_for_product_smoke_count") or 0
             ),
+            "scanner_gate_mismatch_count": scanner_gate_mismatch_count,
             "scanner_blocked_candidate_count": int(source_execution.get("blocked_count") or 0),
             "scanner_ready_world_ids": scanner_ready_world_ids,
             "next_scan_world_ids": next_flow_scan_world_ids(source_selection),
@@ -1357,7 +1500,7 @@ def _ready_row(*, source: str, scene_index: int) -> SceneSamplerRow:
 def _eval_sample_launch_overrides(row: SceneSamplerRow) -> dict[str, Any]:
     overrides: dict[str, Any] = {
         "agent_engine": "direct-runner",
-        "evidence_lane": "world-oracle-labels",
+        "evidence_lane": "world-public-labels",
         "seed": 7,
         "scenario_setup": "baseline",
         "scene_source": row.scene_source,
@@ -1421,6 +1564,14 @@ def _preview_metadata(scene_index: int) -> dict[str, Any]:
     if payload.get("backend") != PRIMARY_MOLMOSPACES_BACKEND:
         raise ValueError(f"preview {path} is not for backend={PRIMARY_MOLMOSPACES_BACKEND}")
     return payload
+
+
+def _read_json_if_exists(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _ready_row_preview_metadata(*, source: str, scene_index: int) -> dict[str, Any]:
@@ -1819,6 +1970,11 @@ def _candidate_profile_row(
         "known_waypoint_count": int(candidate.get("waypoint_count") or 0),
         "known_failure_class": candidate.get("failure_class", ""),
         "known_blocked_reason": blocked_reason,
+        "known_source_outcome": candidate.get("source_outcome", ""),
+        "known_prefilter_status": candidate.get("prefilter_status", ""),
+        "known_prefilter_reason": candidate.get("prefilter_reason", ""),
+        "known_cheap_room_count": int(candidate.get("cheap_room_count") or 0),
+        "known_product_smoke_run_dir": candidate.get("product_smoke_run_dir", ""),
         "candidate_file_status": (candidate.get("candidate_file") or {}).get("status", ""),
         "candidate_file_exists": bool((candidate.get("candidate_file") or {}).get("exists")),
         "candidate_file": candidate.get("candidate_file") or {},
@@ -1864,6 +2020,16 @@ def _source_availability_for_candidates(
         **source_availability,
         "candidate_files": candidate_files,
     }
+
+
+def _source_gate_mismatch_profile_rows(
+    source_candidate_profile: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in source_candidate_profile.get("candidates") or []
+        if isinstance(row, dict) and row.get("known_source_outcome") == "gate_mismatch"
+    ]
 
 
 def _scanner_execution_candidate_indices(
@@ -1912,6 +2078,400 @@ def _scanner_candidate_profile_worklist_candidates(
             }
         )
     return candidates
+
+
+def _scene_prefilter_policy() -> dict[str, Any]:
+    return {
+        "schema": "molmospaces_scene_sampler_scene_prefilter_policy_v1",
+        "selection_seed": SCENE_SAMPLER_SELECTION_SEED,
+        "selection_strategy": (
+            "cheap_scene_metadata_room_count_desc_then_deterministic_seeded_tiebreak"
+        ),
+        "lane": SCENE_PREFILTER_LANE,
+        "min_high_confidence_room_count": SCENE_PREFILTER_MIN_HIGH_CONFIDENCE_ROOMS,
+        "expensive_proof_target_per_scene_source": (
+            SCENE_PREFILTER_EXPENSIVE_PROOF_TARGET_PER_SOURCE
+        ),
+        "probe_mode": "no_download_no_backend_no_vlm",
+        "download_policy": "manual_operator_only",
+        "admission_effect": "none_prefilter_only",
+        "allowed_evidence": [
+            "already_available_scene_descriptor_json",
+            "already_available_scene_metadata_json",
+            "already_available_scene_xml_header_or_mesh_names",
+            "source_index_references",
+        ],
+        "forbidden_side_effects": [
+            "install_scene_with_objects_and_grasps_from_path",
+            "preview_render",
+            "map_build_product_smoke",
+        ],
+    }
+
+
+def _scene_prefilter_row(row: dict[str, Any]) -> dict[str, Any]:
+    candidate_file = row.get("candidate_file")
+    if not isinstance(candidate_file, dict):
+        candidate_file = {}
+    evidence = _scene_prefilter_evidence(candidate_file)
+    cheap_room_count = int(evidence.get("cheap_room_count") or 0)
+    observed_paths = [
+        str(item.get("path") or "")
+        for item in evidence.get("field_provenance") or []
+        if isinstance(item, dict) and item.get("path")
+    ]
+    status, reason = _scene_prefilter_candidate_status(
+        cheap_room_count=cheap_room_count,
+        observed_paths=observed_paths,
+        candidate_file=candidate_file,
+    )
+    return {
+        **row,
+        "prefilter_status": status,
+        "prefilter_reason": reason,
+        "prefilter_score": cheap_room_count,
+        "cheap_room_count": cheap_room_count,
+        "scene_descriptor_room_count": int(evidence.get("scene_descriptor_room_count") or 0),
+        "scene_metadata_room_count": int(evidence.get("scene_metadata_room_count") or 0),
+        "xml_room_mesh_count": int(evidence.get("xml_room_mesh_count") or 0),
+        "scene_descriptor_path": evidence.get("scene_descriptor_path", ""),
+        "scene_metadata_path": evidence.get("scene_metadata_path", ""),
+        "xml_path": evidence.get("xml_path", ""),
+        "field_provenance": evidence.get("field_provenance", []),
+        "download_policy": "manual_operator_only",
+        "admission_effect": "none_prefilter_only",
+    }
+
+
+def _scene_prefilter_candidate_status(
+    *,
+    cheap_room_count: int,
+    observed_paths: list[str],
+    candidate_file: dict[str, Any],
+) -> tuple[str, str]:
+    if cheap_room_count >= SCENE_PREFILTER_MIN_HIGH_CONFIDENCE_ROOMS:
+        return "high_confidence", "likely_multi_area"
+    if cheap_room_count > 0:
+        return "low_confidence", "single_room_likely"
+    if observed_paths:
+        return "inconclusive", "prefilter_inconclusive"
+    if (
+        candidate_file.get("path")
+        or candidate_file.get("paths")
+        or candidate_file.get("missing_paths")
+    ):
+        return "inconclusive", "descriptor_missing"
+    return "inconclusive", "source_index_reference_missing"
+
+
+def _scene_prefilter_evidence(candidate_file: dict[str, Any]) -> dict[str, Any]:
+    primary_path = Path(str(candidate_file.get("path") or ""))
+    candidate_paths = _scene_prefilter_candidate_paths(candidate_file, primary_path=primary_path)
+    descriptor_counts: list[int] = []
+    metadata_counts: list[int] = []
+    xml_counts: list[int] = []
+    descriptor_path = ""
+    metadata_path = ""
+    xml_path = ""
+    provenance: list[dict[str, Any]] = []
+    for path in candidate_paths:
+        suffix = path.suffix.lower()
+        name = path.name.lower()
+        if suffix == ".xml":
+            count = _scene_prefilter_room_count_from_xml(path)
+            if count > 0 and not xml_path:
+                xml_path = str(path)
+            if count > 0:
+                xml_counts.append(count)
+                provenance.append({"field": "xml_room_mesh_count", "path": str(path)})
+            continue
+        if suffix != ".json":
+            continue
+        payload = _read_json_if_exists(path)
+        if not payload:
+            continue
+        count = _scene_prefilter_room_count_from_json(payload)
+        if count <= 0:
+            continue
+        if name.endswith("_metadata.json"):
+            metadata_counts.append(count)
+            metadata_path = metadata_path or str(path)
+            provenance.append({"field": "scene_metadata_room_count", "path": str(path)})
+        else:
+            descriptor_counts.append(count)
+            descriptor_path = descriptor_path or str(path)
+            provenance.append({"field": "scene_descriptor_room_count", "path": str(path)})
+    descriptor_count = max(descriptor_counts, default=0)
+    metadata_count = max(metadata_counts, default=0)
+    xml_count = max(xml_counts, default=0)
+    return {
+        "scene_descriptor_room_count": descriptor_count,
+        "scene_metadata_room_count": metadata_count,
+        "xml_room_mesh_count": xml_count,
+        "cheap_room_count": max(descriptor_count, metadata_count, xml_count),
+        "scene_descriptor_path": descriptor_path,
+        "scene_metadata_path": metadata_path,
+        "xml_path": xml_path,
+        "field_provenance": provenance,
+    }
+
+
+def _scene_prefilter_candidate_paths(
+    candidate_file: dict[str, Any],
+    *,
+    primary_path: Path,
+) -> list[Path]:
+    paths: list[Path] = []
+    if primary_path.as_posix() not in {"", "."}:
+        paths.append(primary_path)
+        paths.extend(
+            [
+                primary_path.with_suffix(".json"),
+                primary_path.with_name(f"{primary_path.stem}_metadata.json"),
+            ]
+        )
+    for entry in candidate_file.get("paths") or []:
+        if not isinstance(entry, dict) or not entry.get("path"):
+            continue
+        path = Path(str(entry["path"]))
+        paths.append(path)
+        if path.suffix.lower() == ".xml":
+            paths.extend([path.with_suffix(".json"), path.with_name(f"{path.stem}_metadata.json")])
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path)
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(path)
+    return deduped
+
+
+def _scene_prefilter_room_count_from_json(payload: Any) -> int:
+    if not isinstance(payload, dict):
+        return 0
+    candidates = [
+        payload.get("rooms"),
+        payload.get("roomSpec"),
+        payload.get("room_spec"),
+        payload.get("proceduralParameters", {}).get("rooms")
+        if isinstance(payload.get("proceduralParameters"), dict)
+        else None,
+    ]
+    house = payload.get("house")
+    if isinstance(house, dict):
+        candidates.extend([house.get("rooms"), house.get("roomSpec"), house.get("room_spec")])
+    counts = [_room_collection_count(item) for item in candidates]
+    return max(counts, default=0)
+
+
+def _room_collection_count(value: Any) -> int:
+    if isinstance(value, list):
+        return len(value)
+    if isinstance(value, dict):
+        for key in ("rooms", "roomTypes", "room_types"):
+            nested = value.get(key)
+            if isinstance(nested, (list, dict)):
+                return _room_collection_count(nested)
+        if value:
+            return len(value)
+    return 0
+
+
+def _scene_prefilter_room_count_from_xml(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return 0
+    names = {
+        match.group(1)
+        for match in re.finditer(r'\bname=["\']([^"\']*room[^"\']*)["\']', text, re.IGNORECASE)
+    }
+    if names:
+        indexed_rooms = {
+            match.group(1)
+            for name in names
+            for match in [re.search(r"\broom[_-]?(\d+)\b", name, re.IGNORECASE)]
+            if match
+        }
+        return len(indexed_rooms) if indexed_rooms else len(names)
+    indexed_mentions = set(re.findall(r"\broom[_-]?(\d+)\b", text, re.IGNORECASE))
+    return len(indexed_mentions)
+
+
+def _rank_scene_prefilter_rows(
+    *,
+    source: str,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    high_confidence = [row for row in rows if row.get("prefilter_status") == "high_confidence"]
+    if not high_confidence:
+        return []
+    metadata = source_selection_metadata(
+        source=source,
+        lane=SCENE_PREFILTER_LANE,
+        target_count=len(high_confidence),
+        candidates=tuple(
+            int(row.get("scene_index") or 0)
+            for row in high_confidence
+            if row.get("scene_index") is not None
+        ),
+    )
+    seeded_rank = {
+        int(index): offset for offset, index in enumerate(metadata.get("selected_indices") or [])
+    }
+    ranked = sorted(
+        high_confidence,
+        key=lambda row: (
+            seeded_rank.get(int(row.get("scene_index") or 0), len(seeded_rank)),
+            int(row.get("scene_index") or 0),
+        ),
+    )
+    first_by_room_count: list[dict[str, Any]] = []
+    remaining: list[dict[str, Any]] = []
+    seen_room_counts: set[int] = set()
+    for row in ranked:
+        room_count = int(row.get("cheap_room_count") or 0)
+        if room_count not in seen_room_counts:
+            seen_room_counts.add(room_count)
+            first_by_room_count.append(row)
+        else:
+            remaining.append(row)
+    return [
+        *sorted(first_by_room_count, key=lambda row: -int(row.get("cheap_room_count") or 0)),
+        *remaining,
+    ]
+
+
+def _scene_prefilter_row_next_action(row: dict[str, Any]) -> str:
+    status = str(row.get("prefilter_status") or "")
+    if status == "high_confidence":
+        return "skip_expensive_proof_batch_cap"
+    if status == "low_confidence":
+        return "do_not_run_expensive_proof_without_gate_change"
+    return "inspect_scene_descriptor_or_choose_curated_source"
+
+
+def _scene_prefilter_source_status(
+    *,
+    source_profile: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> str:
+    if source_profile.get("profile_status") == "complete":
+        return "complete"
+    if not candidates:
+        return "no_metadata_worklist"
+    if any(row.get("expensive_proof_selected") for row in candidates):
+        return "high_confidence_ready"
+    if any(row.get("prefilter_status") == "high_confidence" for row in candidates):
+        return "high_confidence_batch_capped"
+    if any(row.get("prefilter_status") == "low_confidence" for row in candidates):
+        return "low_confidence_only"
+    return "prefilter_inconclusive"
+
+
+def _scene_prefilter_source_next_action(
+    *,
+    source_profile: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> str:
+    status = _scene_prefilter_source_status(source_profile=source_profile, candidates=candidates)
+    if status == "complete":
+        return "none"
+    if status in {"high_confidence_ready", "high_confidence_batch_capped"}:
+        return "run_expensive_proof_for_prefiltered_candidates"
+    if status == "no_metadata_worklist":
+        return str(source_profile.get("next_action") or "inspect_candidate_profile")
+    return "stop_prefilter_inconclusive"
+
+
+def _scene_prefilter_expensive_proof_candidates(
+    source_prefilter: dict[str, Any],
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for row in source_prefilter.get("candidates") or []:
+        if not isinstance(row, dict) or not row.get("expensive_proof_selected"):
+            continue
+        candidate_file = row.get("candidate_file")
+        if not isinstance(candidate_file, dict):
+            candidate_file = {}
+        has_concrete_scene_ref = bool(
+            candidate_file.get("path")
+            or candidate_file.get("paths")
+            or candidate_file.get("missing_paths")
+        )
+        if not has_concrete_scene_ref:
+            continue
+        candidates.append(
+            {
+                "scene_source": row.get("scene_source", ""),
+                "scene_index": row.get("scene_index"),
+                "world_id": row.get("world_id", ""),
+                "readiness_status": READINESS_BLOCKED,
+                "failure_class": row.get("known_failure_class", "") or "environment_blocked",
+                "blocked_reason": row.get("known_blocked_reason", ""),
+                "source_availability_status": "",
+                "candidate_file": candidate_file,
+                "prefilter_status": row.get("prefilter_status", ""),
+                "prefilter_reason": row.get("prefilter_reason", ""),
+                "prefilter_score": int(row.get("prefilter_score") or 0),
+                "cheap_room_count": int(row.get("cheap_room_count") or 0),
+            }
+        )
+    return candidates
+
+
+def _scene_prefilter_summary(sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    worklist = [
+        _scene_prefilter_worklist_item(source)
+        for source in sources.values()
+        if source.get("next_action") != "none"
+    ]
+    return {
+        "source_count": len(sources),
+        "complete_source_count": sum(
+            1 for source in sources.values() if source.get("prefilter_status") == "complete"
+        ),
+        "metadata_worklist_source_count": sum(
+            1
+            for source in sources.values()
+            if int(source.get("metadata_worklist_candidate_count") or 0) > 0
+        ),
+        "candidate_count": sum(
+            int(source.get("candidate_count") or 0) for source in sources.values()
+        ),
+        "high_confidence_candidate_count": sum(
+            int(source.get("high_confidence_candidate_count") or 0) for source in sources.values()
+        ),
+        "expensive_proof_candidate_count": sum(
+            int(source.get("expensive_proof_candidate_count") or 0) for source in sources.values()
+        ),
+        "inconclusive_candidate_count": sum(
+            int(source.get("inconclusive_candidate_count") or 0) for source in sources.values()
+        ),
+        "low_confidence_candidate_count": sum(
+            int(source.get("low_confidence_candidate_count") or 0) for source in sources.values()
+        ),
+        "next_actions": _selection_action_counts(worklist),
+        "worklist": worklist,
+    }
+
+
+def _scene_prefilter_worklist_item(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "scene_source": source.get("scene_source", ""),
+        "prefilter_status": source.get("prefilter_status", ""),
+        "next_action": source.get("next_action", ""),
+        "metadata_worklist_candidate_count": int(
+            source.get("metadata_worklist_candidate_count") or 0
+        ),
+        "candidate_count": int(source.get("candidate_count") or 0),
+        "high_confidence_candidate_count": int(source.get("high_confidence_candidate_count") or 0),
+        "expensive_proof_candidate_count": int(source.get("expensive_proof_candidate_count") or 0),
+        "expensive_proof_world_ids": source.get("expensive_proof_world_ids") or [],
+    }
 
 
 def _candidate_known_profile_status(candidate: dict[str, Any]) -> str:
@@ -2105,6 +2665,11 @@ def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
         preview_statuses = _view_statuses(
             _ready_row_preview_metadata(source=row.scene_source, scene_index=row.scene_index)
         )
+    metadata = (
+        scanner_metadata(source=row.scene_source, scene_index=row.scene_index)
+        if row.scene_index is not None
+        else {}
+    )
     return {
         "scene_family": row.scene_family,
         "scene_split": row.scene_split,
@@ -2127,6 +2692,11 @@ def _candidate_packet_from_sampler_row(row: SceneSamplerRow) -> dict[str, Any]:
         "failure_class": row.failure_class,
         "quality_score": row.quality_score,
         "coverage_score": row.coverage_score,
+        "source_outcome": str(metadata.get("source_outcome") or ""),
+        "prefilter_status": str(metadata.get("prefilter_status") or ""),
+        "prefilter_reason": str(metadata.get("prefilter_reason") or ""),
+        "cheap_room_count": int(metadata.get("cheap_room_count") or 0),
+        "product_smoke_run_dir": str(metadata.get("product_smoke_run_dir") or ""),
     }
 
 

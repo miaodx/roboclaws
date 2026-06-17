@@ -124,7 +124,7 @@ def _candidate(*, scanner_status: str = "blocked_missing_resources") -> dict[str
         "map_build_product_smoke_command": (
             "just run::surface surface=household-world world=molmospaces/ithor/1 "
             "backend=mujoco preset=map-build agent_engine=direct-runner "
-            "evidence_lane=world-oracle-labels"
+            "evidence_lane=world-public-labels"
         ),
     }
 

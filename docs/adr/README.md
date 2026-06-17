@@ -36,6 +36,7 @@ guidance:
 | [0140](0140-use-eval-suites-as-first-class-architecture-layer.md) | Use Eval Suites As First-Class Architecture Layer | Separates product runs, validation matrices, eval suites, and harness recipes. |
 | [0141](0141-use-eval-harness-as-maintainer-orchestration-facade.md) | Use Eval Harness As Maintainer Orchestration Facade | Maintained validation/eval orchestration facade. |
 | [0142](0142-scope-isaac-to-digital-twin-and-retire-molmospaces-isaac.md) | Scope Isaac To Digital Twin And Retire MolmoSpaces Isaac | Keeps B1 Isaac current while retiring MolmoSpaces Isaac support. |
+| [0144](0144-use-relative-pose-navigation-as-public-mcp-capability.md) | Use Relative Pose Navigation As Public MCP Capability | Distinguishes robot-local movement from waypoint navigation and preserves operator attribution. |
 
 ## Archived Superseded ADRs
 

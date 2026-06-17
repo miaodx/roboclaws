@@ -116,6 +116,7 @@ aid, not a source of truth for current priority.
 ### Launch, Console, And Agent Runtime
 
 - [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
+- [Operator Relative Navigation Control](2026-06-16-operator-relative-navigation-control.md)
 - [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
 - [Eval Harness Skill Entrypoint](2026-06-15-eval-harness-skill-entrypoint.md)
 - [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md) (historical)
