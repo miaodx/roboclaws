@@ -13,6 +13,7 @@ from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
     _default_sdk_model_settings_payload,
     _failure_from_exception,
+    _mcp_client_session_timeout_seconds,
     _RetryingModel,
     _should_retry_model_service_failure,
 )
@@ -1392,6 +1393,65 @@ def test_openai_agents_runtime_rejects_invalid_direct_retry_sleep_s(tmp_path: Pa
     assert payload["reason"] == "provider_config_failure"
     assert "OpenAI Agents SDK setting model_service_retry_sleep_s" in payload["detail"]
     assert "must be a non-negative number, got 'later'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_mcp_client_timeout_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S" in payload["detail"]
+    assert "must be a non-negative number, got 'eventually'" in payload["detail"]
+
+
+def test_openai_agents_runtime_rejects_invalid_direct_mcp_client_timeout(
+    tmp_path: Path,
+) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"mcp_client_session_timeout_s": -1},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting mcp_client_session_timeout_s" in payload["detail"]
+    assert "must be a non-negative number, got -1" in payload["detail"]
+
+
+def test_openai_agents_runtime_preserves_zero_mcp_client_timeout_disable(
+    tmp_path: Path,
+) -> None:
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"mcp_client_session_timeout_s": 0},
+    )
+
+    assert _mcp_client_session_timeout_seconds(request) == (True, None)
 
 
 def test_model_input_shape_summary_is_aggregate_only() -> None:

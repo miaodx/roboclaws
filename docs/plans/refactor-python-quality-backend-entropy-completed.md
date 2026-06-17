@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK MCP client-session timeout config now fails
+  aloud for malformed runtime settings. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S` values and negative
+  direct `mcp_client_session_timeout_s` metadata produce normalized
+  `provider_config_failure` live-status packets instead of being treated as
+  absent or disabled timeout configuration. Behavior-change class: fail-aloud
+  SDK runtime configuration; omitted values, valid positive timeout values, and
+  explicit zero-as-disable behavior are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules. Proof: focused OpenAI Agents live
+  runtime tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK retry config now fails aloud for malformed
   numeric runtime settings. Invalid
   `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS` values and invalid

@@ -580,17 +580,29 @@ def _cache_tools_list(request: LiveAgentRequest) -> bool:
 
 def _mcp_client_session_timeout_seconds(request: LiveAgentRequest) -> tuple[bool, float | None]:
     configured = None
+    source = "mcp_client_session_timeout_s"
     if isinstance(request.metadata, dict):
         configured = request.metadata.get("mcp_client_session_timeout_s")
     if configured is None:
-        configured = os.environ.get(MCP_CLIENT_SESSION_TIMEOUT_ENV)
+        raw_env = os.environ.get(MCP_CLIENT_SESSION_TIMEOUT_ENV)
+        if raw_env is not None:
+            configured = raw_env
+            source = MCP_CLIENT_SESSION_TIMEOUT_ENV
     if configured is None or str(configured).strip() == "":
         return False, None
     try:
         value = float(configured)
-    except (TypeError, ValueError):
-        return False, None
-    if value <= 0:
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s "
+            f"({source}) must be a non-negative number, got {configured!r}"
+        ) from exc
+    if value < 0:
+        raise ValueError(
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s "
+            f"({source}) must be a non-negative number, got {configured!r}"
+        )
+    if value == 0:
         return True, None
     return True, round(value, 3)
 

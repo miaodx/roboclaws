@@ -61,6 +61,15 @@ Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
 - Follow-up implementation refresh on 2026-06-18 closed an OpenAI Agents SDK
+  MCP client-session timeout config false-green. Invalid
+  `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S` values and negative
+  direct `mcp_client_session_timeout_s` metadata now fail as normalized
+  `provider_config_failure` live-status packets instead of being treated as
+  absent or disabled timeout configuration. Behavior-change class: fail-aloud
+  SDK runtime configuration; omitted values, valid positive timeout values,
+  and explicit zero-as-disable behavior are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules.
+- Follow-up implementation refresh on 2026-06-18 closed an OpenAI Agents SDK
   retry config false-green. Invalid
   `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS` values and invalid
   direct `model_service_retry_sleep_s` metadata now fail as normalized
@@ -203,7 +212,7 @@ again.
 - `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is down to 1981
   lines and is no longer a hard-ceiling P1. Keep it below 2000; reopen it only
   if runner-side profile/default/config ownership grows again.
-- `roboclaws/agents/drivers/openai_agents_live.py` is 1861 lines and is
+- `roboclaws/agents/drivers/openai_agents_live.py` is 1873 lines and is
   no longer a hard-ceiling P1. Keep it below 2000; reopen it only if SDK driver
   request/session/provider orchestration grows again or rebuilds model-input or
   span compaction inline.
