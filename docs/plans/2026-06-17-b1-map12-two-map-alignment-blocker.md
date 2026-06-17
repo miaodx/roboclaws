@@ -251,9 +251,15 @@ P2:
 Before anchors exist, expected status is blocked, not green:
 
 ```bash
+python scripts/maps/render_b1_scene_gaussian_topdown.py \
+  --scene-xy-bounds=-22.7833251953125,-13.112351417541504,8.074257850646973,7.298900469562338 \
+  --output-dir output/b1-map12/scene-gaussian-topdown \
+  --capture
+
 python scripts/maps/render_b1_map12_correspondence_review.py \
   --correspondences assets/maps/b1-map12-scene-correspondences.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json \
   --output-dir output/b1-map12/correspondence-review
 # expected before review: manifest_needs_fix or review_pending, accepted_anchor_count=0
 ```
@@ -266,6 +272,7 @@ python scripts/maps/check_robot_map12_consistency.py vendors/agibot_sdk/artifact
 python scripts/maps/render_b1_map12_correspondence_review.py \
   --correspondences assets/maps/b1-map12-scene-correspondences.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json \
   --output-dir output/b1-map12/correspondence-review
 
 python scripts/maps/fit_b1_map12_scene_alignment.py \
@@ -415,23 +422,23 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 
 ## Implementation Status
 
-2026-06-17 partial implementation:
+2026-06-17 update:
 
-- P0 diagnostic/review/fitter safety is implemented for the pre-anchor state.
-  `scripts/maps/render_b1_scene_topdown_diagnostic.py` emits an honest
-  `2rd_floor_seperated` diagnostic with `up_axis=z`,
-  `horizontal_axes=["x","y"]`, `geometry_status=label_inventory_only`, six
-  partitions, and high-signal label inventory. This is not a Gaussian asset
-  topdown and cannot verify map-scene alignment by itself.
+- P0 review/fitter safety is implemented for the pre-anchor state.
+  `scripts/maps/render_b1_scene_gaussian_topdown.py` writes the required
+  `scene_gaussian_topdown.json` contract and, with `--capture`, renders the B1
+  rebuilt Gaussian scene `top2down.png` through the Isaac scene-camera path. It
+  requires explicit scene XY bounds and records camera height/FOV plus
+  ray-plane `scene_xyz` mapping; it does not infer bounds or fall back to label
+  inventory.
 - `scripts/maps/render_b1_map12_correspondence_review.py` now loads the vendor
-  Map12 bundle directly from `nav2.yaml` / `occupancy.pgm`, loads the scene
-  label-inventory diagnostic, and renders a separate two-map picker/export
-  surface. The HTML picker uses a browser-ready `map12_source_map.png`
-  generated into the review output directory while preserving the vendor
-  `occupancy.pgm` as packet provenance. The exported draft manifest contains
-  paired `map_xy` plus `scene_xyz` candidates and labels label-inventory scene
-  picks as non-metric review candidates that must remain proposed until
-  replaced with reviewed metric scene coordinates.
+  Map12 bundle directly from `nav2.yaml` / `occupancy.pgm`, requires the
+  rendered Gaussian top-down packet through `--scene-topdown-render`, and
+  rejects label-inventory diagnostics. The HTML picker uses a browser-ready
+  `map12_source_map.png` generated into the review output directory while
+  preserving the vendor `occupancy.pgm` as packet provenance. The exported
+  draft manifest contains paired `map_xy` plus ray-plane `scene_xyz` candidates
+  from the rendered top-down packet.
 - The correspondence fitter, tests, and draft/capsule artifacts use the Z-up
   `x,y` scene projection policy and reject legacy Y-up `x,z` policy for
   accepted-anchor evidence.
@@ -451,10 +458,10 @@ Current gate:
 Latest deterministic evidence:
 
 ```bash
-ruff check scripts/maps/render_b1_scene_topdown_diagnostic.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
-ruff format --check scripts/maps/render_b1_scene_topdown_diagnostic.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
-./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q
-python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-diagnostic output/b1-map12/scene-topdown-diagnostic/scene_topdown_diagnostic.json --output-dir output/b1-map12/correspondence-review
+ruff check scripts/maps/render_b1_scene_gaussian_topdown.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
+ruff format --check scripts/maps/render_b1_scene_gaussian_topdown.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q
+python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
 python scripts/operator_console/render_scene_previews.py --world b1-map12 --output-dir output/b1-map12/static-preview-proof
 ```

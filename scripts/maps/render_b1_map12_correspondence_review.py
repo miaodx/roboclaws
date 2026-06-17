@@ -23,12 +23,10 @@ from scripts.maps.fit_b1_map12_scene_alignment import (
     valid_xyz,
     validate_correspondence_manifest,
 )
+from scripts.maps.render_b1_scene_gaussian_topdown import TOPDOWN_RENDER_SCHEMA
 
 REVIEW_PACKET_SCHEMA = "b1_map12_correspondence_review_packet_v1"
-NON_METRIC_SCENE_PICK_SOURCE = "scene_topdown_diagnostic_pixel_pick_label_inventory_only"
-DEFAULT_SCENE_DIAGNOSTIC = Path(
-    "output/b1-map12/scene-topdown-diagnostic/scene_topdown_diagnostic.json"
-)
+SCENE_TOPDOWN_PICK_SOURCE = "rendered_gaussian_scene_topdown_ray_plane_pick"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -39,12 +37,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--map-bundle", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
-        "--scene-diagnostic",
+        "--scene-topdown-render",
         type=Path,
-        default=DEFAULT_SCENE_DIAGNOSTIC,
+        required=True,
         help=(
-            "Optional scene diagnostic packet. Label-inventory diagnostics are shown beside "
-            "Map12 only as non-metric review context."
+            "Required scene_gaussian_topdown.json from render_b1_scene_gaussian_topdown.py. "
+            "Label-inventory diagnostics are rejected."
         ),
     )
     return parser.parse_args(argv)
@@ -57,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest,
         map_bundle=args.map_bundle,
         correspondences_path=args.correspondences,
-        scene_diagnostic_path=args.scene_diagnostic,
+        scene_topdown_render_path=args.scene_topdown_render,
         output_dir=args.output_dir,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -91,8 +89,8 @@ def build_review_packet(
     manifest: dict[str, Any],
     *,
     map_bundle: Path,
+    scene_topdown_render_path: Path,
     correspondences_path: Path | None = None,
-    scene_diagnostic_path: Path | None = None,
     output_dir: Path | None = None,
 ) -> dict[str, Any]:
     anchors = [item for item in manifest.get("anchors") or [] if isinstance(item, dict)]
@@ -101,7 +99,7 @@ def build_review_packet(
     ready = [row for row in accepted if row["fit_ready"]]
     validation_errors = validate_correspondence_manifest(manifest)
     source_map = source_map_review_context(Path(map_bundle), output_dir=output_dir)
-    scene_diagnostic = scene_diagnostic_context(scene_diagnostic_path, output_dir=output_dir)
+    scene_topdown = scene_topdown_render_context(scene_topdown_render_path, output_dir=output_dir)
     review_status = (
         "ready_for_fit" if len(ready) >= 6 and not validation_errors else "review_pending"
     )
@@ -114,7 +112,7 @@ def build_review_packet(
         "map_bundle": str(map_bundle),
         "map_preview": source_map.get("image") or "",
         "source_map": source_map,
-        "scene_diagnostic": scene_diagnostic,
+        "scene_topdown": scene_topdown,
         "source_map_frame": str(manifest.get("source_map_frame") or ""),
         "target_scene_frame": str(manifest.get("target_scene_frame") or ""),
         "bbox_seed_policy": str(manifest.get("bbox_seed_policy") or ""),
@@ -239,67 +237,52 @@ def browser_ready_map_image(source_image_path: Path, *, output_dir: Path | None)
     return output_path
 
 
-def scene_diagnostic_context(
-    scene_diagnostic_path: Path | None, *, output_dir: Path | None = None
+def scene_topdown_render_context(
+    scene_topdown_render_path: Path, *, output_dir: Path | None = None
 ) -> dict[str, Any]:
-    if scene_diagnostic_path is None or not Path(scene_diagnostic_path).is_file():
-        return {
-            "status": "missing",
-            "path": str(scene_diagnostic_path or ""),
-            "image": "",
-            "width_px": 0,
-            "height_px": 0,
-            "geometry_status": "missing",
-            "display_role": "missing_scene_geometry",
-            "up_axis": "z",
-            "horizontal_axes": ["x", "y"],
-            "pixel_to_scene_xyz": {
-                "status": "missing",
-                "source": "",
-                "horizontal_axes": ["x", "y"],
-                "up_axis": "z",
-                "z_default": 0.0,
-                "note": "No scene diagnostic image is available for scene picks.",
-            },
-        }
-    packet = json.loads(Path(scene_diagnostic_path).read_text(encoding="utf-8"))
+    if not Path(scene_topdown_render_path).is_file():
+        raise FileNotFoundError(
+            f"required scene top-down render missing: {scene_topdown_render_path}"
+        )
+    packet = json.loads(Path(scene_topdown_render_path).read_text(encoding="utf-8"))
+    if packet.get("schema") != TOPDOWN_RENDER_SCHEMA:
+        raise ValueError(
+            f"scene top-down render must use schema {TOPDOWN_RENDER_SCHEMA}; "
+            f"got {packet.get('schema')!r}"
+        )
+    geometry_status = str(packet.get("geometry_status") or "")
+    if geometry_status != "rendered_gaussian_scene_topdown":
+        raise ValueError(
+            "scene top-down render must have geometry_status=rendered_gaussian_scene_topdown; "
+            f"got {geometry_status!r}"
+        )
     source_image_path = Path(str(packet.get("topdown_image") or ""))
+    if not source_image_path.is_file():
+        raise FileNotFoundError(f"scene top-down render image missing: {source_image_path}")
+    pixel_to_scene = packet.get("pixel_to_scene_xyz")
+    if not isinstance(pixel_to_scene, dict):
+        raise ValueError("scene top-down render missing pixel_to_scene_xyz")
+    if pixel_to_scene.get("source") != SCENE_TOPDOWN_PICK_SOURCE:
+        raise ValueError(
+            "scene top-down render must map pixels with "
+            f"{SCENE_TOPDOWN_PICK_SOURCE}; got {pixel_to_scene.get('source')!r}"
+        )
     image_path = local_review_image(source_image_path, output_dir=output_dir)
     size = image_size(source_image_path)
-    geometry_status = str(packet.get("geometry_status") or "")
-    is_label_inventory = geometry_status == "label_inventory_only"
     return {
-        "status": "available" if image_path.is_file() else "image_missing",
-        "path": str(scene_diagnostic_path),
+        "status": "available",
+        "path": str(scene_topdown_render_path),
         "image": str(image_path) if image_path.is_file() else "",
-        "source_image": str(source_image_path) if source_image_path.is_file() else "",
+        "source_image": str(source_image_path),
         "width_px": size[0],
         "height_px": size[1],
         "geometry_status": geometry_status,
-        "display_role": "label_inventory_not_scene_topdown"
-        if is_label_inventory
-        else "metric_scene_diagnostic",
+        "display_role": "rendered_gaussian_scene_topdown",
         "up_axis": str(packet.get("up_axis") or "z"),
         "horizontal_axes": list(packet.get("horizontal_axes") or ["x", "y"]),
-        "partition_count": int(packet.get("partition_count") or 0),
-        "pixel_to_scene_xyz": {
-            "status": "non_metric" if is_label_inventory else "pixel_xy",
-            "source": (
-                NON_METRIC_SCENE_PICK_SOURCE
-                if is_label_inventory
-                else "scene_topdown_diagnostic_pixel_pick"
-            ),
-            "horizontal_axes": list(packet.get("horizontal_axes") or ["x", "y"]),
-            "up_axis": str(packet.get("up_axis") or "z"),
-            "z_default": 0.0,
-            "note": (
-                "The right panel is label inventory only, not a Gaussian asset topdown "
-                "or metric scene projection. Do not mark exported anchors accepted until "
-                "scene_xyz is replaced with reviewed metric scene coordinates."
-                if is_label_inventory
-                else "Scene clicks export diagnostic image x/y as scene_xyz=[x,y,0]."
-            ),
-        },
+        "scene_xy_bounds": packet.get("scene_xy_bounds") if isinstance(packet, dict) else {},
+        "camera": packet.get("camera") if isinstance(packet.get("camera"), dict) else {},
+        "pixel_to_scene_xyz": dict(pixel_to_scene),
     }
 
 
@@ -578,15 +561,12 @@ def render_review_report(
 
 def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
     source_map = packet.get("source_map") if isinstance(packet.get("source_map"), dict) else {}
-    scene = (
-        packet.get("scene_diagnostic") if isinstance(packet.get("scene_diagnostic"), dict) else {}
-    )
+    scene = packet.get("scene_topdown") if isinstance(packet.get("scene_topdown"), dict) else {}
     map_image = str(source_map.get("image") or "")
     scene_image = str(scene.get("image") or "")
     scene_policy = (
         scene.get("pixel_to_scene_xyz") if isinstance(scene.get("pixel_to_scene_xyz"), dict) else {}
     )
-    is_non_metric_scene = scene_policy.get("status") == "non_metric"
     map_img = picker_image_html(
         output_dir=output_dir,
         image=map_image,
@@ -597,17 +577,11 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
         output_dir=output_dir,
         image=scene_image,
         image_id="sceneImage",
-        alt="B1 scene label inventory diagnostic",
-    )
-    accepted_option = "" if is_non_metric_scene else '<option value="accepted">accepted</option>'
-    status_help = (
-        "Label-inventory scene picks stay proposed until metric scene coordinates are reviewed."
-        if is_non_metric_scene
-        else "Metric scene picks may be accepted after operator review."
+        alt="B1 Gaussian scene top-down render",
     )
     return f"""
   <p>
-    Pick one point on Map12 and one corresponding point on the scene context image,
+    Pick one point on Map12 and one corresponding point on the rendered Gaussian scene top-down,
     then export a draft manifest. Draft anchors default to proposed review status.
   </p>
   <div class="notice">{escape(str(scene_policy.get("note") or ""))}</div>
@@ -621,12 +595,12 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
       <div class="pick-readout" id="mapReadout">No map pick.</div>
     </section>
     <section class="picker-panel">
-      <h3>2rd_floor_seperated Label Inventory</h3>
+      <h3>B1 Gaussian Scene Top-Down</h3>
       <div class="image-stage" id="sceneStage">
         {scene_img}
         <span id="sceneMarker" class="pick-marker scene" hidden></span>
       </div>
-      <div class="pick-readout" id="sceneReadout">No scene-context pick.</div>
+      <div class="pick-readout" id="sceneReadout">No scene top-down pick.</div>
     </section>
   </div>
   <div class="pick-form">
@@ -637,7 +611,7 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
     <label>Status
       <select id="reviewStatus">
         <option value="proposed" selected>proposed</option>
-        {accepted_option}
+        <option value="accepted">accepted</option>
       </select>
     </label>
     <label class="wide">
@@ -649,7 +623,9 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
       <button type="button" id="resetButton">Reset Draft</button>
     </div>
   </div>
-  <div class="pick-readout">{escape(status_help)}</div>
+  <div class="pick-readout">
+    Rendered Gaussian scene picks may be accepted after operator review.
+  </div>
   <textarea class="draft-output" id="draftOutput" readonly></textarea>
   <script id="reviewPacketData" type="application/json">{script_json(packet)}</script>
   <script>
@@ -720,7 +696,59 @@ function mapPixelToMapXY(pixel) {
 }
 
 function scenePixelToSceneXYZ(pixel) {
-  return [round6(pixel.x), round6(pixel.y), 0.0];
+  const policy = (packet.scene_topdown || {}).pixel_to_scene_xyz || {};
+  const eye = vector3(policy.eye);
+  const target = vector3(policy.target);
+  const width = Number(policy.width_px);
+  const height = Number(policy.height_px);
+  const fov = Number(policy.vertical_fov_deg);
+  const zPlane = Number(policy.z_plane || 0);
+  if (!eye || !target || ![width, height, fov, zPlane].every(Number.isFinite)) {
+    throw new Error("Scene top-down packet is missing ray-plane transform.");
+  }
+  const forward = normalize([
+    target[0] - eye[0],
+    target[1] - eye[1],
+    target[2] - eye[2],
+  ]);
+  const worldUp = [0, 0, 1];
+  let right = normalize(cross(forward, worldUp));
+  if (!right) right = [1, 0, 0];
+  const up = normalize(cross(right, forward));
+  const aspect = width / height;
+  const tanY = Math.tan((fov * Math.PI / 180) / 2);
+  const ndcX = ((pixel.x + 0.5) / width) * 2 - 1;
+  const ndcY = 1 - ((pixel.y + 0.5) / height) * 2;
+  const direction = normalize([
+    forward[0] + right[0] * ndcX * aspect * tanY + up[0] * ndcY * tanY,
+    forward[1] + right[1] * ndcX * aspect * tanY + up[1] * ndcY * tanY,
+    forward[2] + right[2] * ndcX * aspect * tanY + up[2] * ndcY * tanY,
+  ]);
+  if (!direction || Math.abs(direction[2]) < 1e-9) {
+    throw new Error("Scene top-down ray does not intersect z plane.");
+  }
+  const t = (zPlane - eye[2]) / direction[2];
+  return [round6(eye[0] + direction[0] * t), round6(eye[1] + direction[1] * t), round6(zPlane)];
+}
+
+function vector3(value) {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const parsed = [Number(value[0]), Number(value[1]), Number(value[2])];
+  return parsed.every(Number.isFinite) ? parsed : null;
+}
+
+function cross(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function normalize(value) {
+  const length = Math.hypot(value[0], value[1], value[2]);
+  if (!Number.isFinite(length) || length <= 1e-9) return null;
+  return [value[0] / length, value[1] / length, value[2] / length];
 }
 
 function round6(value) {
@@ -756,7 +784,7 @@ function addDraftAnchor() {
     alert("Pick both a Map12 point and a scene diagnostic point before adding an anchor.");
     return;
   }
-  const scenePolicy = (packet.scene_diagnostic || {}).pixel_to_scene_xyz || {};
+  const scenePolicy = (packet.scene_topdown || {}).pixel_to_scene_xyz || {};
   const anchor = {
     anchor_id: document.getElementById("anchorId").value || nextAnchorId(),
     anchor_type: document.getElementById("anchorType").value || "operator_correspondence",
@@ -764,12 +792,10 @@ function addDraftAnchor() {
     asset_partition_id: document.getElementById("assetPartitionId").value || "",
     map_xy: currentMapPick.map_xy,
     scene_xyz: currentScenePick.scene_xyz,
-    review_status: scenePolicy.status === "non_metric"
-      ? "proposed"
-      : document.getElementById("reviewStatus").value || "proposed",
+    review_status: document.getElementById("reviewStatus").value || "proposed",
     confidence: null,
     map_coordinate_source: "operator_map_pick",
-    scene_coordinate_source: scenePolicy.source || "scene_topdown_diagnostic_pixel_pick",
+    scene_coordinate_source: scenePolicy.source || "rendered_gaussian_scene_topdown_ray_plane_pick",
     evidence: {
       source: "two_map_anchor_picker",
       scene_pick_policy: scenePolicy.status || "unknown",
