@@ -32,7 +32,7 @@ from roboclaws.launch.intents import TASK_INTENT_SPECS, TaskIntentSpec
 from roboclaws.launch.plans import LaunchPlan
 from roboclaws.launch.runners import build_agent_run_argv
 from roboclaws.launch.task_specs import TaskPresetSpec, TaskSurfaceSpec
-from roboclaws.launch.worlds import DEFAULT_WORLD_BY_SURFACE, WORLD_SPECS, WorldSpec
+from roboclaws.launch.worlds import DEFAULT_WORLD_BY_SURFACE, WorldSpec, world_spec
 
 CANONICAL_SURFACES: set[str] = {
     "household-world",
@@ -219,6 +219,7 @@ def _resolve_launch(
     )
     dispatch_overrides = (
         *_without_launch_only_overrides(plan_overrides),
+        *((f"world={world.id}",) if backend.implementation_backend == "isaaclab_subprocess" else ()),
         f"backend={backend.implementation_backend}",
         *dispatch_setup_overrides,
     )
@@ -310,8 +311,9 @@ def _normalize_surface(value: str) -> str:
 
 def _normalize_world(value: str | None, *, surface_id: str) -> WorldSpec:
     world_id = _strip_named(value, "world") if value else DEFAULT_WORLD_BY_SURFACE[surface_id]
-    spec = WORLD_SPECS.get(world_id)
-    if spec is None:
+    try:
+        spec = world_spec(world_id)
+    except (KeyError, ValueError):
         raise LaunchError(f"unsupported world '{world_id}'")
     if spec.surface_id != surface_id:
         raise LaunchError(

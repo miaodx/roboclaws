@@ -26,6 +26,9 @@ def results_bundle(
 ) -> dict[str, Any]:
     result_payloads = [result.to_dict() for result in results]
     aggregate = aggregate_results(result_payloads)
+    sampler_projection = _sampler_projection_aggregate(suite)
+    if sampler_projection:
+        aggregate["sampler_projection"] = sampler_projection
     return {
         "schema": RESULTS_BUNDLE_SCHEMA,
         "suite": suite.to_dict(),
@@ -81,6 +84,7 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
     output_dir = Path(str(artifacts.get("output_dir") or "."))
     rows = "\n".join(_report_row(result, output_dir=output_dir) for result in bundle["results"])
     aggregate = bundle["aggregate"]
+    sampler_projection = _sampler_projection_section(aggregate)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -98,6 +102,7 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
 <body>
   <h1>{html.escape(str(suite["suite_id"]))}</h1>
   <p>Pass@1: {aggregate["pass_at_1"]} ({aggregate["passed"]}/{aggregate["total"]} trials)</p>
+{sampler_projection}
   <table>
     <thead>
       <tr><th>Sample</th><th>Trial</th><th>Status</th><th>Failure</th><th>Run</th></tr>
@@ -109,6 +114,87 @@ def render_eval_report(bundle: dict[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _sampler_projection_aggregate(suite: EvalSuite) -> dict[str, Any]:
+    metadata = suite.metadata if isinstance(suite.metadata, dict) else {}
+    projection = metadata.get("sampler_projection")
+    if not isinstance(projection, dict):
+        return {}
+    scene_sources = projection.get("scene_sources")
+    if not isinstance(scene_sources, dict):
+        scene_sources = {}
+    compact_sources = {}
+    for source, payload in sorted(scene_sources.items()):
+        if not isinstance(payload, dict):
+            continue
+        compact_sources[str(source)] = {
+            "support_status": payload.get("support_status", ""),
+            "status": payload.get("status", ""),
+            "target_count": int(payload.get("target_count") or 0),
+            "ready_count": int(payload.get("ready_count") or 0),
+            "needed_count": int(payload.get("needed_count") or 0),
+            "blocked_count": int(payload.get("blocked_count") or 0),
+            "rejected_count": int(payload.get("rejected_count") or 0),
+            "sample_ids": list(payload.get("sample_ids") or []),
+        }
+    return {
+        "schema": projection.get("schema", ""),
+        "projection": projection.get("projection", ""),
+        "generator_version": projection.get("generator_version", ""),
+        "summary": dict(projection.get("summary") or {}),
+        "scene_sources": compact_sources,
+    }
+
+
+def _sampler_projection_section(aggregate: dict[str, Any]) -> str:
+    sampler_projection = aggregate.get("sampler_projection")
+    if not isinstance(sampler_projection, dict):
+        return ""
+    summary = sampler_projection.get("summary")
+    if not isinstance(summary, dict):
+        return ""
+    rows = "\n".join(
+        _sampler_projection_source_row(source, payload)
+        for source, payload in (
+            sampler_projection.get("scene_sources") or {}
+        ).items()
+        if isinstance(payload, dict)
+    )
+    return f"""  <section>
+    <h2>Scene Sampler Projection</h2>
+    <p>Ready samples: {html.escape(str(summary.get("ready_sample_count", 0)))} /
+    {html.escape(str(summary.get("target_sample_count", 0)))}; remaining:
+    {html.escape(str(summary.get("remaining_sample_count", 0)))}; partial sources:
+    {html.escape(str(summary.get("partial_source_count", 0)))}; blocked sources:
+    {html.escape(str(summary.get("blocked_source_count", 0)))}.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Scene source</th><th>Status</th><th>Ready</th>
+          <th>Needed</th><th>Blocked</th><th>Rejected</th>
+        </tr>
+      </thead>
+      <tbody>
+{rows}
+      </tbody>
+    </table>
+  </section>
+"""
+
+
+def _sampler_projection_source_row(source: str, payload: dict[str, Any]) -> str:
+    return (
+        "        <tr>"
+        f"<td>{html.escape(str(source))}</td>"
+        f"<td>{html.escape(str(payload.get('support_status') or ''))}</td>"
+        f"<td>{html.escape(str(payload.get('ready_count') or 0))}/"
+        f"{html.escape(str(payload.get('target_count') or 0))}</td>"
+        f"<td>{html.escape(str(payload.get('needed_count') or 0))}</td>"
+        f"<td>{html.escape(str(payload.get('blocked_count') or 0))}</td>"
+        f"<td>{html.escape(str(payload.get('rejected_count') or 0))}</td>"
+        "</tr>"
+    )
 
 
 def _report_row(result: dict[str, Any], *, output_dir: Path) -> str:

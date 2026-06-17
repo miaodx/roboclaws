@@ -1,12 +1,15 @@
 # MuJoCo Isaac Visual Parity Convergence
 
-**Status:** Planned
+**Status:** Superseded by
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142. This file is historical MolmoSpaces Isaac visual-parity planning,
+not a current execution contract.
 **Created:** 2026-06-03
 **Source:** MuJoCo/Isaac FPV, chase camera, object-state, and Isaac exposure
 discussion after `seed=6`/`0008` visual review.
-**Workflow:** Pre-GSD plan. Use this as the zoomed-out execution source; use
+**Historical workflow:** Pre-GSD plan superseded before current execution. Use
 [`mujoco-isaac-object-render-parity-audit.md`](mujoco-isaac-object-render-parity-audit.md)
-as the detailed object/render audit subplan.
+only as historical object/render audit context.
 
 ## Context
 

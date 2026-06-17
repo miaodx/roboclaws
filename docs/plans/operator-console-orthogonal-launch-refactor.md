@@ -50,6 +50,11 @@ will this run happen in?" and the setup panel answers "which backend should run
 it, what should the agent do, which engine should drive it, and what
 evidence/configuration should it use?"
 
+**Supersession note, 2026-06-15:** backend availability is now world-scoped by
+ADR-0142. The completed console refactor shape remains valid, but MolmoSpaces
+worlds expose MuJoCo only; Isaac Lab is current for B1 / Map 12 and generic
+runtime proof.
+
 ## Current Problem
 
 The shipped console route list mixes abstraction levels:
@@ -79,7 +84,7 @@ The route rail becomes a world/scene rail. Initial entries:
 
 | World / Scene | Supported backend(s) | Initial state |
 | --- | --- | --- |
-| MolmoSpaces rooms | `mujoco`, `isaaclab` where available | enabled |
+| MolmoSpaces rooms | `mujoco` | enabled |
 | Agibot G2 map / real robot site | `agibot-gdk` | map-build enabled with context/safety gates; cleanup blocked |
 | B1 / Gaussian digital-twin scenes | `isaaclab` today | enabled or experimental for open-ended navigation when a runnable action exists |
 | Genesis / visual-only scene-camera scenes | preview/report backend only | hidden unless there is a concrete preview/report/run action |

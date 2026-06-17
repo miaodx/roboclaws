@@ -13,6 +13,8 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from PIL import Image, ImageStat
+
 from roboclaws.maps.bundle import parse_map_yaml
 from roboclaws.maps.rasterize import load_pgm
 
@@ -27,6 +29,8 @@ DEFAULT_B1_SCENE_BASE_USD = Path("storey_1/configuration/scene_base.usd")
 DEFAULT_MAP12_NAV2 = Path("agibot/nav2.yaml")
 DEFAULT_MAP12_OCCUPANCY = Path("agibot/occupancy.pgm")
 DEFAULT_MAP12_MEMORY = Path("navigation_memory.json")
+MIN_REVIEWABLE_IMAGE_STDDEV = 5.0
+MIN_REVIEWABLE_IMAGE_COLOR_COUNT = 128
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -139,6 +143,7 @@ def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:
             "gaussian_scene_usd": primary_scene,
             "full_floor_usd": mesh_scene,
             "full_floor_default_usd": scene_base,
+            "renderable_robot_view_usd": scene_base,
             "scene_engine_layout": scene_layout,
             "scene_partitions": scene_layout["partitions"],
             "usd_scene_files": usd_scene_files,
@@ -666,6 +671,32 @@ def validate_navigation_smoke_artifact(
                     f"waypoint {index} view {view_name} missing: {path}",
                     errors,
                 )
+                if view_name in {"fpv", "chase"}:
+                    errors.extend(
+                        f"waypoint {index} {view_name}: {error}"
+                        for error in reviewable_image_errors(path)
+                    )
+    return errors
+
+
+def reviewable_image_errors(path: Path) -> list[str]:
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            stat = ImageStat.Stat(rgb)
+            extrema = rgb.getextrema()
+            colors = rgb.getcolors(maxcolors=1_000_000)
+    except Exception as exc:
+        return [f"image is unreadable: {exc}"]
+    errors: list[str] = []
+    if all(high <= low for low, high in extrema):
+        errors.append("image appears blank")
+    if max(stat.stddev or [0.0]) < MIN_REVIEWABLE_IMAGE_STDDEV:
+        errors.append("image has too little visual detail")
+    if colors is not None and len(colors) < MIN_REVIEWABLE_IMAGE_COLOR_COUNT:
+        errors.append("image has too few distinct colors")
     return errors
 
 

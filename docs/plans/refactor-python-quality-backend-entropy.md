@@ -17,13 +17,16 @@ PAUSED. Code execution is paused while the repo has many parallel changes.
 This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
-Current quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 30` on 2026-06-15:
+Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
+--summary --top 30` on 2026-06-15, before later parallel repo changes:
 
 - 19 Ruff complexity violations.
 - 56 oversized modules.
 - Remaining complexity is test-heavy; remaining file-size debt is split between
   large production modules and large behavior tests.
+
+Do not treat these counts as current during execution. Refresh the repo-wide
+summary before selecting or completing a slice.
 
 ## Two-Document Contract
 
@@ -51,6 +54,28 @@ checkpoint, or whenever this active plan grows beyond about 250 lines:
 
 Entry size rule: active candidates should usually fit in 6-8 lines; completed
 ledger entries should usually fit in 2-4 lines.
+
+## Out-of-Plan Drift Guard
+
+Before each implementation slice, and again before marking the slice complete:
+
+1. Run `python scripts/dev/check_python_quality_ratchet.py --summary --top 40`.
+2. Compare the summary against this active plan, not only against touched
+   files.
+3. If new files outside the active candidates cross 2000 lines, gain new Ruff
+   complexity rows, or cause the repo totals to regress, pause execution and
+   update `## Active Candidates` before continuing.
+4. Promote new drift to P1 when it crosses the hard file-size ceiling, adds
+   production/shared complexity, or hides a false-green gate. Promote to P2
+   when it is test-only or local workflow friction with clear ownership.
+5. If the drift belongs to another active plan, reference that plan in one line
+   here instead of duplicating detail.
+6. If no new material drift appears, record only the refreshed totals in the
+   completed ledger during the next compaction.
+
+This guard is intentionally repo-wide. A slice that improves one planned file
+should not finish while newly changed, plan-external files quietly become the
+largest quality debt.
 
 ## Quality Standard
 

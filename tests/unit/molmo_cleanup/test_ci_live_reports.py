@@ -498,7 +498,7 @@ def test_live_claude_workspace_exposes_skill_at_task_relative_path(
 
     prepared_workspace, task_dir = run_claude._prepare_agent_workspace(
         repo_root=REPO_ROOT,
-        task_name="household-cleanup",
+        run_id="household-world.cleanup",
         skill_name="molmo-realworld-cleanup",
     )
 
@@ -524,7 +524,7 @@ def test_live_codex_normalizes_relative_docker_workspace(tmp_path: Path, monkeyp
 
     prepared_workspace, task_dir = run_codex._prepare_agent_workspace(
         repo_root=repo_root,
-        task_name="household-cleanup",
+        run_id="household-world.cleanup",
         skill_name="molmo-realworld-cleanup",
     )
 
@@ -749,8 +749,19 @@ def test_live_codex_idle_turn_fails_without_continuation(tmp_path: Path, monkeyp
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
     calls: list[tuple[list[str], float | None]] = []
+    workspace_kwargs: dict[str, object] = {}
 
-    def fake_prepare_agent_workspace(**_kwargs):
+    def fake_prepare_agent_workspace(
+        *, repo_root: Path, run_id: str, skill_name: str, workspace: Path | None = None
+    ):
+        workspace_kwargs.update(
+            {
+                "repo_root": repo_root,
+                "run_id": run_id,
+                "skill_name": skill_name,
+                "workspace": workspace,
+            }
+        )
         return agent_dir, agent_dir
 
     def fake_subprocess_run(*_args, **_kwargs):
@@ -784,6 +795,7 @@ def test_live_codex_idle_turn_fails_without_continuation(tmp_path: Path, monkeyp
         raise AssertionError("expected idle timeout to fail the live run")
 
     assert len(calls) == 1
+    assert workspace_kwargs["run_id"] == "household-world.cleanup"
     assert calls[0][1] == 3.0
     assert "Continue the same active cleanup MCP session" not in calls[0][0][-1]
     assert "codex_recoverable_errors" not in runner.live_timing
@@ -872,7 +884,9 @@ def test_live_codex_tool_binding_failure_is_non_retryable(tmp_path: Path, monkey
     runner.server_proc = SimpleNamespace(poll=lambda: None)
     calls: list[list[str]] = []
 
-    def fake_prepare_agent_workspace(**_kwargs):
+    def fake_prepare_agent_workspace(
+        *, repo_root: Path, run_id: str, skill_name: str, workspace: Path | None = None
+    ):
         return agent_dir, agent_dir
 
     def fake_subprocess_run(*_args, **_kwargs):
@@ -941,7 +955,9 @@ def test_live_codex_provider_transient_failure_is_retryable(tmp_path: Path, monk
     runner.server_proc = SimpleNamespace(poll=lambda: None)
     calls: list[list[str]] = []
 
-    def fake_prepare_agent_workspace(**_kwargs):
+    def fake_prepare_agent_workspace(
+        *, repo_root: Path, run_id: str, skill_name: str, workspace: Path | None = None
+    ):
         return agent_dir, agent_dir
 
     def fake_subprocess_run(*_args, **_kwargs):
@@ -1106,7 +1122,7 @@ def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
         run_dir=run_dir,
         status_path=tmp_path / "status.json",
         repo_root=REPO_ROOT,
-        task_name="semantic-map-build",
+        intent="map-build",
         task="帮我建立这个房间的语义地图",
         backend="molmospaces_subprocess",
         policy="codex_agent",

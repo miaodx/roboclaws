@@ -58,8 +58,10 @@ Harness recipes
 - **Worlds / Scenes** are operator-facing rooms, maps, or digital twins such as
   `world=molmospaces/val_0`, `world=agibot-g2/map-12`,
   `world=b1-map12`, or `world=planner-proof/default`.
-- **Backend Runtimes** are swappable execution environments such as
-  `backend=mujoco`, `backend=isaaclab`, or `backend=agibot-gdk`.
+- **Backend Runtimes** are execution adapter ids such as `backend=mujoco`,
+  `backend=isaaclab`, or `backend=agibot-gdk`. Product support is
+  world-scoped: MolmoSpaces household scenes use MuJoCo, B1 / Map 12 uses
+  Isaac Lab, and Agibot map runs use Agibot GDK.
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
@@ -126,7 +128,7 @@ Key pieces:
   `python -m roboclaws.cli.agent_server ...`.
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
-  request schema used by MuJoCo and Isaac scene probes.
+  request schema used by MuJoCo product runs and B1/generic Isaac probes.
 - `roboclaws/household/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.
@@ -172,6 +174,10 @@ just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 just console::run
 ```
+
+Backend availability is validated against the selected world. MolmoSpaces
+household worlds expose `backend=mujoco`; `backend=isaaclab` is current for
+`world=b1-map12`, not as a MolmoSpaces alternative.
 
 For household runs, callers pass the cleanup input/evidence lane explicitly as
 `evidence_lane=...`.

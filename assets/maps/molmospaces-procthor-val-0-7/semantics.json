@@ -1,4 +1,5 @@
 {
+  "display_frame": null,
   "driveable_ways": [
     {
       "from_room_id": "room_2",
@@ -620,7 +621,9 @@
   },
   "rooms": [
     {
+      "alignment_status": "native",
       "fixture_count": 4,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 0.0,
@@ -639,11 +642,20 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_2",
-      "room_label": "room 2"
+      "room_label": "room 2",
+      "source_map_frame_id": "map"
     },
     {
+      "alignment_status": "native",
       "fixture_count": 3,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 3.0,
@@ -662,11 +674,20 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_3",
-      "room_label": "room 3"
+      "room_label": "room 3",
+      "source_map_frame_id": "map"
     },
     {
+      "alignment_status": "native",
       "fixture_count": 2,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 6.0,
@@ -685,11 +706,20 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_4",
-      "room_label": "room 4"
+      "room_label": "room 4",
+      "source_map_frame_id": "map"
     },
     {
+      "alignment_status": "native",
       "fixture_count": 1,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 9.0,
@@ -708,11 +738,20 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_5",
-      "room_label": "room 5"
+      "room_label": "room 5",
+      "source_map_frame_id": "map"
     },
     {
+      "alignment_status": "native",
       "fixture_count": 2,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 12.0,
@@ -731,11 +770,20 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_6",
-      "room_label": "room 6"
+      "room_label": "room 6",
+      "source_map_frame_id": "map"
     },
     {
+      "alignment_status": "native",
       "fixture_count": 2,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 15.0,
@@ -754,11 +802,20 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_7",
-      "room_label": "room 7"
+      "room_label": "room 7",
+      "source_map_frame_id": "map"
     },
     {
+      "alignment_status": "native",
       "fixture_count": 2,
+      "geometry_source": "operator_authored_navigation_zone",
       "polygon": [
         {
           "x": 18.0,
@@ -777,9 +834,28 @@
           "y": 2.0
         }
       ],
+      "polygon_role": "navigation_area",
+      "polygon_usage": {
+        "navigation": true,
+        "review": true,
+        "semantic_labeling": "native"
+      },
       "room_id": "room_8",
-      "room_label": "room 8"
+      "room_label": "room 8",
+      "source_map_frame_id": "map"
     }
   ],
-  "schema": "nav2_cleanup_semantics_v1"
+  "schema": "nav2_cleanup_semantics_v1",
+  "spatial_contract": {
+    "alignment_status": "native",
+    "display_frame_status": "absent_first_slice_raw_source_map_frame_only",
+    "public_contract_note": "Semantic geometry is authored in the source map frame. This first slice intentionally has no rectified display frame.",
+    "schema": "map_spatial_contract_v1",
+    "semantic_geometry_frame": "source_map_frame",
+    "source_map_frame": {
+      "frame_id": "map",
+      "spatial_truth": true,
+      "units": "meters"
+    }
+  }
 }

@@ -1,9 +1,9 @@
 ---
 plan_scope: cross-environment-semantic-map-parity
-status: Preflighted draft
+status: Implemented
 created: 2026-06-15
 last_reviewed: 2026-06-15
-implementation_allowed: false
+implementation_allowed: true
 source:
   - user request to make real robot, digital twin, and simulator map overlays more consistent
   - intuitive-reduce-entropy selection scan on Map 12 overlay mismatch
@@ -21,16 +21,18 @@ related_context:
 
 ## Status
 
-Status: Preflighted draft
+Status: Implemented
 Last reviewed: 2026-06-15
 Current decision: Use an additive first slice that keeps `rooms` readable while
 requiring polygon role, geometry source, source-frame metadata, explicit
 `display_frame` absence, and alignment status. All semantic geometry is
 source-frame-first; rectified UI views are parked for a later display-only
 slice. The first UI slice shows the raw/source map view and rotates semantic
-overlays into that same frame.
-Next step: Approve or revise the preflight contract, then execute via
-`$intuitive-flow`.
+overlays into that same frame. The first slice is implemented in the map
+artifact layer, report rendering, static map bundles, and contract tests.
+Next step: Pick a later display-only rectification or true room-boundary tracing
+slice only after a new plan; no implementation blocker remains for the first
+slice.
 Open questions: None before execution. The exact serialized field locations and
 test fixture edits are implementation details inside the approved contract.
 Parked: Full B1 object/receptacle USD segmentation and manipulation parity.
@@ -540,8 +542,8 @@ Verification:
   `.venv/bin/python scripts/maps/check_bundle.py assets/maps/agibot-robot-map-12`,
   `.venv/bin/python scripts/maps/check_bundle.py assets/maps/b1-map12-room-semantics`,
   `.venv/bin/python scripts/maps/check_bundle.py assets/maps/molmospaces-procthor-val-0-7`,
-  `just agent::eval recommend plan=docs/plans/2026-06-15-cross-environment-semantic-map-parity.md budget=focused`,
-  `just agent::eval execute since=<base-ref> budget=focused`.
+  `just agent::harness agent-validation recommend plan=docs/plans/2026-06-15-cross-environment-semantic-map-parity.md budget=focused`,
+  `just agent::harness agent-validation execute plan=docs/plans/2026-06-15-cross-environment-semantic-map-parity.md budget=focused`.
 - product-run:
   `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline`.
 - local-live-manual:
@@ -561,13 +563,56 @@ Execution:
   workers if useful.
 - worker-goal: none.
 
-To execute: `/goal execute docs/plans/2026-06-15-cross-environment-semantic-map-parity.md with intuitive-flow`
-Optional tracking: none
-Approval: `LGTM`, `approve`, or `go ahead` approves this execution contract;
-edits request revision.
+## Implementation Closeout
+
+Status: Implemented on 2026-06-15.
+
+Shipped contract:
+
+- `roboclaws/maps/spatial_contract.py` defines `map_spatial_contract_v1`,
+  source-frame-only display absence, polygon role, geometry source, alignment
+  status, source-map frame id, and polygon usage validation.
+- Static bundles for Agibot Map 12, B1 / Map 12 room semantics, and
+  MolmoSpaces Procthor val 0 seed 7 declare `display_frame: null`, source-frame
+  spatial contract metadata, and `navigation_area` polygons instead of
+  room-boundary claims. `assets/maps/molmo-cleanup-default-7` was normalized
+  because existing contract tests use it as a fixture.
+- B1 scene partition binding uses explicit `scene_map_correspondence_v1`
+  records instead of implicit list order.
+- Report and bundle previews render raw/source map orientation and label that
+  no rectified display frame is substituted.
+- Runtime Metric Map and Actionable Semantic Map Snapshot consumers read the
+  same compatible room/navigation-area metadata without Agibot-only or B1-only
+  consumer branches.
+
+Verification evidence:
+
+- `ruff check roboclaws/maps roboclaws/household/agibot_map_bundle.py roboclaws/household/report.py scripts/maps scripts/operator_console tests/contract/maps`
+- `ruff format --check roboclaws/maps roboclaws/household/agibot_map_bundle.py roboclaws/household/report.py scripts/maps scripts/operator_console tests/contract/maps`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/maps/test_actionable_semantic_map_snapshot.py tests/contract/maps/test_agibot_map_bundle_export.py tests/contract/maps/test_scene_room_semantic_overlay.py tests/contract/maps/test_cross_environment_semantic_map_parity.py -q`
+- `.venv/bin/python scripts/maps/check_bundle.py assets/maps/agibot-robot-map-12`
+- `.venv/bin/python scripts/maps/check_bundle.py assets/maps/b1-map12-room-semantics`
+- `.venv/bin/python scripts/maps/check_bundle.py assets/maps/molmospaces-procthor-val-0-7`
+- `just agent::harness agent-validation execute changed_file=roboclaws/maps/spatial_contract.py changed_file=roboclaws/maps/bundle.py changed_file=roboclaws/maps/bundle_validation.py changed_file=roboclaws/maps/project.py changed_file=roboclaws/maps/room_semantics.py changed_file=roboclaws/maps/actionable_snapshot.py changed_file=roboclaws/household/agibot_map_bundle.py changed_file=roboclaws/household/report.py changed_file=tests/contract/maps/test_cross_environment_semantic_map_parity.py budget=focused output_dir=output/agent-validation-matrix/20260615T-map-parity-changed-files-execute`
+  passed and produced
+  `output/agent-validation-matrix/20260615T-map-parity-changed-files-execute/validation_matrix.html`.
+- `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline`
+  produced `output/household/semantic-map-build/direct-report/0615_1536/seed-7/report.html`.
+- A broader plan-text validation-matrix run produced
+  `output/agent-validation-matrix/20260615T075158Z/validation_matrix.html` and
+  blocked only on the selected live Codex cleanup gate because this shell did
+  not have `CODEX_BASE_URL` / `CODEX_API_KEY`. Live Codex proof is outside this
+  first-slice acceptance contract.
+
+Remaining parked follow-ups:
+
+- Rectified / prettier display-frame rendering as a later display-only slice.
+- True Map 12 room-boundary tracing from occupancy or other stronger evidence.
+- B1 object/receptacle USD segmentation and manipulation parity.
+- Live Agibot GDK, Isaac Lab, real robot, provider, Docker, or Codex CLI proof
+  beyond the deterministic first-slice gates.
 
 ## Recommended Next Action
 
-Approve or revise the preflight contract.
-
-Shortcut: reply `LGTM` to execute with `$intuitive-flow`.
+Pick a later parked slice only if product needs it. The first-slice parity
+contract is implemented.

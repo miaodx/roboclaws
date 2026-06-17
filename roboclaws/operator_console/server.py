@@ -15,7 +15,6 @@ from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.interactions import (
     InteractionError,
-    append_ask_why,
     append_next_goal_request,
     append_steer_message,
     create_operator_session,
@@ -39,6 +38,8 @@ from roboclaws.operator_console.routes import (
 )
 from roboclaws.operator_console.runtime_inventory import (
     requested_mcp_endpoint,
+    runtime_blockers_from_inventory,
+    runtime_blockers_payload,
     runtime_inventory_payload,
 )
 from roboclaws.operator_console.state import derive_operator_state, redacted_artifact_text
@@ -272,7 +273,6 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             return False
         run_id, action = run_action
         handlers = {
-            "ask-why": self._serve_ask_why,
             "messages": self._serve_steer_message,
             "next-goal": self._serve_next_goal,
             "pause": self._serve_pause_post,
@@ -332,7 +332,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 )
                 for selection in list_console_combinations(include_disabled=False)
             },
-            "runtime": inventory,
+            "runtime": runtime_blockers_from_inventory(inventory),
         }
 
     def _serve_runtime_tasks(self, query_string: str) -> None:
@@ -343,7 +343,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 ports.append(int(value))
             except ValueError:
                 continue
-        self._json(runtime_inventory_payload(self.repo_root, ports=ports))
+        self._json(runtime_blockers_payload(self.repo_root, ports=ports))
 
     def _serve_route_readiness(self, query_string: str) -> None:
         try:
@@ -444,12 +444,6 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     def _serve_run_start(self, payload: dict[str, object]) -> None:
         request = _launch_request_from_payload(payload)
         self._json(start_console_run(self.repo_root, request), status=201)
-
-    def _serve_ask_why(self, run_id: str, payload: dict[str, object]) -> None:
-        self._json(
-            append_ask_why(self.repo_root, run_id, str(payload.get("question") or "")),
-            status=201,
-        )
 
     def _serve_steer_message(self, run_id: str, payload: dict[str, object]) -> None:
         self._json(
@@ -575,7 +569,7 @@ def _parse_run_action_path(path: str) -> tuple[str, str] | None:
     if not path.startswith(prefix):
         return None
     remainder = path.removeprefix(prefix)
-    for action in ("emergency-stop", "next-goal", "ask-why", "messages", "pause", "stop"):
+    for action in ("emergency-stop", "next-goal", "messages", "pause", "stop"):
         suffix = f"/{action}"
         if remainder.endswith(suffix):
             return unquote(remainder[: -len(suffix)]), action

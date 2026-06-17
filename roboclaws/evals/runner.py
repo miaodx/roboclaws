@@ -323,6 +323,7 @@ def _grade_trial(
         "privacy": _privacy_grader(run_result),
         "trajectory": _trajectory_grader(sample=sample, run_dir=run_dir, run_result=run_result),
         "outcome": _outcome_grader(sample=sample, run_dir=run_dir, run_result=run_result),
+        "sampler_admission": _sampler_admission_grader(sample=sample),
         "open_ended": _open_ended_grader(sample=sample, run_dir=run_dir, run_result=run_result),
         "efficiency": _efficiency_grader(run_result),
     }
@@ -471,6 +472,45 @@ def _outcome_grader(
     }
 
 
+def _sampler_admission_grader(*, sample: EvalSample) -> dict[str, Any]:
+    config = sample.grader_config or {}
+    admission = config.get("sampler_admission")
+    if not isinstance(admission, dict):
+        return {"status": "not_applicable"}
+    room_count = _int_value(admission.get("room_count"))
+    waypoint_count = _int_value(admission.get("waypoint_count"))
+    category_provenance = str(admission.get("category_provenance") or "")
+    forbidden_provenance = {
+        "heuristic_room_label",
+        "heuristic_room_count",
+        "room_area_fallback",
+    }
+    failures: list[str] = []
+    if room_count < 3:
+        failures.append("fewer_than_three_public_rooms")
+    if waypoint_count < room_count:
+        failures.append("missing_room_waypoints")
+    if category_provenance in forbidden_provenance or category_provenance not in {
+        "source_metadata",
+        "prepared_visual_label_manifest",
+    }:
+        failures.append("untrusted_room_category_provenance")
+    return {
+        "status": "failed" if failures else "passed",
+        "failure_class": "map_actionability_failure" if failures else MISSING_NOT_APPLICABLE,
+        "failures": failures,
+        "scene_family": str(admission.get("scene_family") or ""),
+        "scene_split": str(admission.get("scene_split") or ""),
+        "scene_source": str(admission.get("scene_source") or ""),
+        "scene_index": admission.get("scene_index", MISSING_UNAVAILABLE),
+        "room_count": room_count,
+        "waypoint_count": waypoint_count,
+        "category_provenance": category_provenance,
+        "category_manifest": str(admission.get("category_manifest") or ""),
+        "generator_version": str(admission.get("generator_version") or ""),
+    }
+
+
 def _efficiency_grader(run_result: dict[str, Any]) -> dict[str, Any]:
     tool_counts = (
         run_result.get("tool_event_counts")
@@ -524,6 +564,7 @@ def _status_from_graders(grader_outputs: dict[str, Any]) -> tuple[str, str]:
         ("artifacts", "artifact_missing"),
         ("privacy", "private_truth_leak"),
         ("trajectory", "trajectory_policy_violation"),
+        ("sampler_admission", "map_actionability_failure"),
         ("open_ended", "agent_no_completion_claim"),
         ("outcome", "private_goal_not_satisfied"),
     )

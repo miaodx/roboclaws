@@ -125,6 +125,15 @@ def test_scene_room_overlay_can_materialize_b1_baseline_map_bundle(tmp_path: Pat
         SCENE_ROOT,
         source_bundle_dir=MAP12_BUNDLE,
         overrides={
+            "scene_map_correspondence_v1": [
+                {
+                    "asset_partition_id": "meeting_room_b",
+                    "navigation_area_id": "central_floor",
+                    "alignment_status": "candidate",
+                    "transform_source": "operator_review",
+                    "evidence_artifacts": [],
+                }
+            ],
             "rooms": [
                 {
                     "asset_partition_id": "meeting_room_b",
@@ -134,7 +143,7 @@ def test_scene_room_overlay_can_materialize_b1_baseline_map_bundle(tmp_path: Pat
                     "semantic_source": "operator_authored_room_overlay",
                     "review_status": "accepted",
                 }
-            ]
+            ],
         },
     )
     bundle_dir = tmp_path / "b1-map12-room-semantics"

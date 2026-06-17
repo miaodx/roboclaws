@@ -56,6 +56,58 @@ def test_launch_backend_catalog_normalizes_command_layer_backend_values() -> Non
         )
 
 
+def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
+    molmo = resolve_surface_launch(
+        [
+            "surface=household-world",
+            "world=molmospaces/val_0",
+            "backend=mujoco",
+            "intent=map-build",
+            "agent_engine=direct-runner",
+            "evidence_lane=world-oracle-labels",
+        ]
+    )
+    b1 = resolve_surface_launch(
+        [
+            "surface=household-world",
+            "world=b1-map12",
+            "backend=isaaclab",
+            "agent_engine=codex-cli",
+            "prompt=inspect the digital twin",
+            "evidence_lane=world-oracle-labels",
+        ]
+    )
+
+    assert molmo.world == "molmospaces/val_0"
+    assert molmo.backend == "mujoco"
+    assert molmo.implementation_backend == "molmospaces_subprocess"
+    assert b1.world == "b1-map12"
+    assert b1.backend == "isaaclab"
+    assert b1.implementation_backend == "isaaclab_subprocess"
+    assert "map_bundle=b1-map12-room-semantics" in b1.overrides
+    assert "world=b1-map12" in b1.argv
+    assert "backend=isaaclab_subprocess" in b1.argv
+
+
+def test_molmospaces_world_rejects_public_isaac_backend() -> None:
+    with pytest.raises(
+        LaunchError,
+        match="backend 'isaaclab' cannot run world 'molmospaces/val_0'",
+    ) as exc:
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=isaaclab",
+                "intent=map-build",
+                "agent_engine=direct-runner",
+                "evidence_lane=world-oracle-labels",
+            ]
+        )
+
+    assert exc.value.hint == "expected mujoco"
+
+
 def test_cleanup_surface_exposes_setup_overrides_but_dispatches_private_count() -> None:
     plan = resolve_surface_launch(
         [

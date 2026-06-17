@@ -1,7 +1,18 @@
 <!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260527-231144.md -->
 # Isaac Lab MolmoSpaces Backend Support
 
-**Status:** CI-safe fake backend scaffold plus local runtime preflight,
+**Status:** Superseded by
+[`2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md`](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+and ADR-0142. This file is historical MolmoSpaces Isaac evidence, not a current
+execution contract.
+
+**Supersession note, 2026-06-15:** active `molmo-isaac-*` harness recipes and
+MolmoSpaces `backend=isaaclab_subprocess` shortcuts have been removed. Keep
+using B1 / Map 12 `backend=isaaclab` and generic `isaac-runtime-*` probes for
+current Isaac work. Commands below are historical evidence unless they use the
+current generic recipe names explicitly.
+
+**Historical implementation evidence:** CI-safe fake backend scaffold plus local runtime preflight,
 local GPU real-mode Phase A smoke proof, Phase B static robot-view evidence
 path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
 gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
@@ -25,8 +36,9 @@ explicitly `isaac_semantic_pose`, not planner-backed.
 **Last updated:** 2026-05-29
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
-**Workflow:** Pre-GSD plan reviewed through `intuitive-flow` autoplan intake;
-use this file as the canonical implementation source and closeout ledger.
+**Historical workflow:** Pre-GSD plan reviewed through `intuitive-flow`
+autoplan intake. Do not use this file as a current implementation source; use
+the superseding digital-twin Isaac / MolmoSpaces mainline separation plan.
 
 ## Problem
 
@@ -915,6 +927,7 @@ Do not add a new public task name. Add a backend selector to the existing
 household cleanup run shape, for local-dev only at first:
 
 ```bash
+# Historical command shape removed by ADR-0142:
 just task::run household-cleanup direct world-labels \
   backend=isaaclab_subprocess \
   seed=7 \
@@ -924,6 +937,7 @@ just task::run household-cleanup direct world-labels \
 Renderer comparison can use an explicit maintainer or harness command instead:
 
 ```bash
+# Historical command shape removed by ADR-0142:
 just agent::harness molmo-isaac-renderer-comparison \
   scene=procthor-val-0 \
   resolution=1280x720
@@ -940,6 +954,7 @@ The preferred cleanup command now prepares the flattened semantic USD, checks
 segmentation evidence and head-camera FPV robot-view provenance:
 
 ```bash
+# Historical command shape removed by ADR-0142:
 just agent::harness molmo-isaac-prepared-cleanup-smoke \
   scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda \
   scene_index=1
@@ -1057,7 +1072,7 @@ For lower-level diagnosis, the two steps remain available separately:
   --output-usd-path output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
   --summary-output output/isaaclab/flattened-semantic-usd/val_1/summary.json
 
-just agent::harness molmo-isaac-runtime-smoke \
+just agent::harness isaac-runtime-smoke \
   scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
   require_local_scene_usd=true \
   enable_segmentation=true \
@@ -1065,6 +1080,7 @@ just agent::harness molmo-isaac-runtime-smoke \
   segmentation_data_types=semantic_segmentation \
   segmentation_semantic_filter=usd_prim_path
 
+# Historical command shape removed by ADR-0142:
 just agent::harness molmo-isaac-cleanup-smoke \
   scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
   require_local_scene_usd=true \

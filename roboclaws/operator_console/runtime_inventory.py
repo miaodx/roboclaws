@@ -66,6 +66,31 @@ def runtime_inventory_payload(
     }
 
 
+def runtime_blockers_payload(
+    root: Path,
+    *,
+    ports: list[int] | None = None,
+) -> dict[str, Any]:
+    """Return only background resources that matter to console/UI E2E startup."""
+
+    inventory = runtime_inventory_payload(root, ports=ports, include_recent_terminal=False)
+    return runtime_blockers_from_inventory(inventory)
+
+
+def runtime_blockers_from_inventory(inventory: dict[str, Any]) -> dict[str, Any]:
+    tasks = [
+        task
+        for task in inventory.get("tasks") or []
+        if isinstance(task, dict) and _task_can_block(task) and _has_ui_e2e_blocking_resource(task)
+    ]
+    return {
+        "schema": "roboclaws_operator_console_runtime_blockers_v1",
+        "generated_at_epoch": inventory.get("generated_at_epoch", time.time()),
+        "tasks": tasks,
+        "summary": _summary(tasks),
+    }
+
+
 def requested_mcp_endpoint(overrides: dict[str, str] | None = None) -> tuple[str, int]:
     overrides = overrides or {}
     host = str(overrides.get("host") or DEFAULT_MCP_HOST).strip() or DEFAULT_MCP_HOST
@@ -276,10 +301,21 @@ def _eval_row_task(root: Path, row: dict[str, Any], manifest_path: Path) -> dict
         _artifact(root, row_dir / "stderr.log", "Stderr", kind="log"),
         *_run_artifacts(root, row_dir, display_run_dir),
     ]
-    actions = _run_actions(root, owner="eval-harness", display_run_dir=display_run_dir)
+    status = _status_from_phase(
+        phase,
+        pid=pid,
+        tmux_session=session,
+        has_live_resource=_has_active_resource(resources),
+    )
+    actions = _run_actions(
+        root,
+        owner="eval-harness",
+        display_run_dir=display_run_dir,
+        require_live_tmux=True,
+    )
     return _task(
         task_id=f"eval-row:{row.get('row_id')}",
-        status=_status_from_phase(phase, pid=pid, tmux_session=session),
+        status=status,
         owner="eval-harness",
         label=f"Eval harness row {row.get('row_id')}",
         resource=_primary_resource(resources),
@@ -338,7 +374,12 @@ def _visual_slot_tasks(root: Path) -> list[dict[str, Any]]:
                     _artifact(root, slot.path, "Visual slot JSON", kind="status"),
                     _artifact(root, Path(slot.status_path), "Live status", kind="status"),
                 ],
-                actions=_run_actions(root, owner="molmo-live", display_run_dir=run_dir),
+                actions=_run_actions(
+                    root,
+                    owner="molmo-live",
+                    display_run_dir=run_dir,
+                    require_live_tmux=True,
+                ),
             )
         )
     return tasks
@@ -453,13 +494,14 @@ def _run_dir_resources(display_run_dir: Path | None) -> list[dict[str, Any]]:
     resources: list[dict[str, Any]] = []
     session = _tmux_session_name(display_run_dir)
     if session:
+        session_active = _tmux_session_exists(session)
         resources.append(
             _resource(
                 "tmux_session",
                 session,
                 path=display_run_dir / "tmux_session.txt",
                 session_id=session,
-                active=_tmux_session_exists(session),
+                active=session_active,
             )
         )
     server_pid = _server_pid(display_run_dir)
@@ -483,7 +525,7 @@ def _run_dir_resources(display_run_dir: Path | None) -> list[dict[str, Any]]:
                 path=Path(str(slot.get("path") or "")),
                 slot_id=slot_id,
                 port=slot.get("port"),
-                active=bool(slot_id),
+                active=_visual_slot_payload_active(slot),
             )
         )
     live_status = _read_json(display_run_dir / "live_status.json")
@@ -496,7 +538,7 @@ def _run_dir_resources(display_run_dir: Path | None) -> list[dict[str, Any]]:
                 path=Path(str(status_slot.get("path") or "")),
                 slot_id=status_slot.get("slot_id"),
                 port=status_slot.get("port"),
-                active=bool(status_slot.get("slot_id")),
+                active=_visual_slot_payload_active(status_slot),
             )
         )
     for payload in (slot, status_slot if isinstance(status_slot, dict) else {}):
@@ -538,6 +580,7 @@ def _run_actions(
     run_id: str = "",
     display_run_dir: Path | None,
     stop_available: bool = False,
+    require_live_tmux: bool = False,
 ) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     if owner == "operator-console" and run_id and stop_available:
@@ -550,7 +593,7 @@ def _run_actions(
             }
         )
     session = _tmux_session_name(display_run_dir) if display_run_dir else ""
-    if session:
+    if session and (not require_live_tmux or _tmux_session_exists(session)):
         actions.append(_command_action("Attach", f"tmux attach -t {session}"))
         actions.append(_command_action("Copy Stop Command", f"tmux kill-session -t {session}"))
     driver_log = display_run_dir / "driver.log" if display_run_dir else None
@@ -651,6 +694,7 @@ def _status_from_phase(
     pid: int | None,
     tmux_session: str,
     has_child_evidence: bool = True,
+    has_live_resource: bool | None = None,
 ) -> str:
     normalized = str(phase or "").strip().lower()
     if normalized in TERMINAL_PHASES:
@@ -658,6 +702,10 @@ def _status_from_phase(
     if tmux_session and _tmux_session_exists(tmux_session):
         return "running"
     if pid and pid_is_active(pid):
+        return "running"
+    if has_live_resource is False and normalized:
+        return "stale"
+    if has_live_resource is True:
         return "running"
     if pid and normalized in {"queued", "starting", "launched"} and not has_child_evidence:
         return "stale"
@@ -668,16 +716,57 @@ def _status_from_phase(
     return "unknown"
 
 
+def _has_active_resource(resources: list[dict[str, Any]]) -> bool:
+    return any(resource.get("active") is True for resource in resources)
+
+
+def _visual_slot_payload_active(payload: dict[str, Any]) -> bool:
+    if not payload.get("slot_id") or payload.get("stale"):
+        return False
+    path = Path(str(payload.get("path") or ""))
+    current_payload = _read_json(path) if path.is_file() else payload
+    current_run_id = str(current_payload.get("run_id") or "")
+    payload_run_id = str(payload.get("run_id") or "")
+    if current_run_id and payload_run_id and current_run_id != payload_run_id:
+        return False
+    current_pid = _int_or_none(current_payload.get("pid")) or _int_or_none(payload.get("pid"))
+    if current_pid:
+        return pid_is_active(current_pid)
+    port = _int_or_none(current_payload.get("port")) or _int_or_none(payload.get("port"))
+    if port and _tcp_port_free(DEFAULT_MCP_HOST, port):
+        return False
+    return bool(current_pid or port or current_payload)
+
+
 def _include_task(task: dict[str, Any], *, include_recent_terminal: bool) -> bool:
     if task.get("status") != "terminal":
         return True
     if not include_recent_terminal:
         return False
-    return _recent_epoch(task.get("started_at_epoch"), window_s=24 * 60 * 60)
+    return _recent_epoch(task.get("started_at_epoch"), window_s=24 * 60 * 60) or _recent_epoch(
+        _mtime_for_task(task),
+        window_s=24 * 60 * 60,
+    )
 
 
 def _task_can_block(task: dict[str, Any]) -> bool:
     return str(task.get("status") or "") in ACTIVE_STATUSES
+
+
+def _has_ui_e2e_blocking_resource(task: dict[str, Any]) -> bool:
+    blocking_kinds = {
+        "backend_lock",
+        "mcp_port",
+        "visual_slot",
+        "tmux_session",
+        "docker_container",
+    }
+    for resource in task.get("resources") or []:
+        if resource.get("active") is False:
+            continue
+        if resource.get("kind") in blocking_kinds:
+            return True
+    return False
 
 
 def _task_blocks_route(

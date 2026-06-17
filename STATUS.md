@@ -39,6 +39,13 @@ examples, tests, and benchmark promotion. OpenClaw remains available only as a
 guarded validation-required maintainer route until an off-work-network Gateway
 proof runs.
 
+The first-slice cross-environment semantic map parity contract is implemented.
+Real-robot, B1 digital-twin, and simulator static map bundles now declare
+source-frame spatial metadata, explicit `display_frame` absence, polygon role,
+geometry source, and alignment status. B1 scene partition labels bind through
+`scene_map_correspondence_v1` instead of list order, and reports label
+raw/source-map aligned previews.
+
 The active source of truth is
 `docs/plans/2026-06-14-eval-driven-architecture.md`, backed by ADR-0140. The
 implemented household launch contract is
@@ -85,6 +92,8 @@ called healthy.
   `docs/adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md`
 - Active detector-only sidecar ADR:
   `docs/adr/0138-use-detector-only-visual-grounding-sidecar.md`
+- Implemented cross-environment semantic map parity plan:
+  `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`
 - Implemented VLM-sidecar/OpenClaw status cleanup:
   `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Implemented AI2-THOR/direct-VLM retirement record:

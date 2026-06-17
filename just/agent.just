@@ -155,7 +155,7 @@ run dispatch_target agent_engine mode="" *overrides:
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
-        scene_index|scene_source|seed|seeds|semantic_sweep|task|timeout_s|\
+        scene_index|scene_source|seed|seeds|semantic_sweep|task|timeout_s|world|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
@@ -421,6 +421,7 @@ run dispatch_target agent_engine mode="" *overrides:
         backend="$(get backend auto)"
         min_generated_mess_count="$(get min_generated_mess_count auto)"
         generated_mess_object_ids="$(get generated_mess_object_ids "")"
+        world_id="$(get world "")"
         scene_source="$(get scene_source procthor-10k-val)"
         scene_index="$(get scene_index 0)"
         isaac_scene_usd_path="$(get isaac_scene_usd_path "")"
@@ -429,6 +430,10 @@ run dispatch_target agent_engine mode="" *overrides:
         fi
         if [[ "$dispatch_intent" == "map-build" && "$driver" == "codex" ]]; then
           backend="$(.venv/bin/python -m roboclaws.launch.backends map-build-codex-implementation-backend "$backend" --context "household-world.map-build codex-cli")"
+        fi
+        if [[ "$backend" == "isaaclab_subprocess" && "$world_id" != "b1-map12" ]]; then
+          echo "error: backend=isaaclab_subprocess is scoped to world=b1-map12; MolmoSpaces household routes use backend=molmospaces_subprocess" >&2
+          exit 1
         fi
         if [[ "$backend" == "agibot_molmospaces_sim" ]]; then
           if [[ "$driver" != "direct" ]]; then
@@ -767,6 +772,7 @@ run dispatch_target agent_engine mode="" *overrides:
         fi
         ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \
           ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \
+          ROBOCLAWS_LAUNCH_WORLD_ID="$world_id" \
           ROBOCLAWS_MOLMO_RUN_DIR_OVERRIDE="$run_dir_override" \
           ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \
           ROBOCLAWS_TASK_PRESET="${kv[task_preset]:-}" \
@@ -876,9 +882,7 @@ harness target *args:
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\
       molmo-planner-proof-bundle-runner|molmo-planner-proof-bundle-execute-rerun|\
       molmo-planner-manipulation-probe|molmo-visual-grounding-benchmark|\
-      molmo-isaac-runtime-preflight|molmo-isaac-usd-references|\
-      molmo-isaac-runtime-smoke|molmo-isaac-cleanup-smoke|\
-      molmo-isaac-prepared-cleanup-smoke|\
+      isaac-runtime-preflight|isaac-runtime-smoke|\
       b1-map12-navigation-smoke)
         trace_or_exec harness::"$target" "${rest[@]}"
         ;;

@@ -159,6 +159,25 @@ def candidate_rows(
             row_dir=row_dir,
         ),
         _row(
+            row_id="scene-sampler-stress-eval-suite",
+            row_kind="eval_suite",
+            command=_eval_suite_command(
+                suite="scene_sampler_stress",
+                budget="smoke",
+                output_root=eval_output_root,
+                stamp="scene-sampler-stress-eval-suite",
+            ),
+            axes={"intent": "eval-suite", "suite": "scene_sampler_stress"},
+            reason=(
+                "MolmoSpaces scene-source sampling changes need the static sampler stress "
+                "projection with partial/blocked source metadata."
+            ),
+            rule_ids=("scene_sampler", "launch_catalog", "eval_harness"),
+            requirements=("just", "python_env"),
+            expense="deterministic",
+            row_dir=row_dir,
+        ),
+        _row(
             row_id="cleanup-capability-eval-suite",
             row_kind="eval_suite",
             command=_eval_suite_command(

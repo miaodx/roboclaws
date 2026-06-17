@@ -15,6 +15,8 @@ SCHEMA = "roboclaws_isaac_lab_runtime_smoke_check_v1"
 SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 ISAACLAB_ROBOT_VIEW_VARIANT = "isaaclab-fpv-map-chase-verify"
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
+MIN_REVIEWABLE_IMAGE_STDDEV = 5.0
+MIN_REVIEWABLE_IMAGE_COLOR_COUNT = 128
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -640,14 +642,20 @@ def _image_errors(path: Path) -> list[str]:
         with Image.open(path) as image:
             image.verify()
         with Image.open(path) as image:
-            stat = ImageStat.Stat(image.convert("RGB"))
-            extrema = image.convert("RGB").getextrema()
+            rgb = image.convert("RGB")
+            stat = ImageStat.Stat(rgb)
+            extrema = rgb.getextrema()
+            colors = rgb.getcolors(maxcolors=1_000_000)
     except Exception as exc:
         return [f"smoke image is unreadable: {exc}"]
     if all(high <= low for low, high in extrema):
         errors.append("smoke image appears blank")
     if max(stat.stddev or [0.0]) <= 0.0:
         errors.append("smoke image has no pixel variance")
+    if max(stat.stddev or [0.0]) < MIN_REVIEWABLE_IMAGE_STDDEV:
+        errors.append("smoke image has too little visual detail")
+    if colors is not None and len(colors) < MIN_REVIEWABLE_IMAGE_COLOR_COUNT:
+        errors.append("smoke image has too few distinct colors")
     return errors
 
 

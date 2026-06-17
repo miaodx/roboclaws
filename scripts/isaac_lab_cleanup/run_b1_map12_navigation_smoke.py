@@ -89,8 +89,14 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         write_artifact(artifact_path, artifact)
         return 2
 
+    b1_geometry = dict(readiness.get("b1_geometry") or {})
     scene_usd = Path(
-        str(readiness.get("b1_geometry", {}).get("local_geometry", {}).get("path") or "")
+        str(
+            dict(b1_geometry.get("renderable_robot_view_usd") or {}).get("path")
+            or dict(b1_geometry.get("full_floor_default_usd") or {}).get("path")
+            or dict(b1_geometry.get("local_geometry") or {}).get("path")
+            or ""
+        )
     )
     if not scene_usd.is_file():
         artifact = blocked_artifact(
@@ -153,9 +159,10 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         result = json.loads(result_path.read_text(encoding="utf-8"))
         waypoint_evidence.append(result)
 
+    provisional_passed = len(waypoint_evidence) >= 2 and not child_failures
     artifact = {
         "schema": NAVIGATION_SMOKE_SCHEMA,
-        "status": "passed" if len(waypoint_evidence) >= 2 and not child_failures else "blocked",
+        "status": "passed" if provisional_passed else "blocked",
         "readiness_schema": readiness.get("schema"),
         "b1_scene_usd": str(scene_usd),
         "semantic_source": SEMANTIC_SOURCE,
@@ -164,28 +171,29 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         "usd_object_index_ready": False,
         "usd_receptacle_index_ready": False,
         "manipulation_supported": False,
-        "robot_navigation_supported": len(waypoint_evidence) >= 2 and not child_failures,
+        "robot_navigation_supported": provisional_passed,
         "robot_navigation_provenance": NAVIGATION_PROVENANCE
-        if len(waypoint_evidence) >= 2 and not child_failures
+        if provisional_passed
         else "blocked_local_isaac_b1_map12_navigation_smoke",
-        "navigation_provenance": "kinematic_pose_driven"
-        if len(waypoint_evidence) >= 2 and not child_failures
-        else "blocked",
+        "navigation_provenance": "kinematic_pose_driven" if provisional_passed else "blocked",
         "planner_backed": False,
         "physical_robot": False,
         "navigation_waypoint_count": len(waypoint_evidence),
-        "robot_view_evidence_status": "available"
-        if len(waypoint_evidence) >= 2 and not child_failures
-        else "blocked",
+        "robot_view_evidence_status": "available" if provisional_passed else "blocked",
         "waypoint_evidence": waypoint_evidence,
         "child_failures": child_failures,
         "robot_import": robot_import,
     }
+    validation_errors = validate_navigation_smoke_artifact(artifact, require_files=True)
+    if validation_errors:
+        artifact["status"] = "blocked"
+        artifact["robot_navigation_supported"] = False
+        artifact["robot_navigation_provenance"] = "blocked_local_isaac_b1_map12_navigation_smoke"
+        artifact["navigation_provenance"] = "blocked"
+        artifact["robot_view_evidence_status"] = "blocked"
     artifact["validation"] = {
-        "status": "passed"
-        if not validate_navigation_smoke_artifact(artifact, require_files=True)
-        else "failed",
-        "errors": validate_navigation_smoke_artifact(artifact, require_files=True),
+        "status": "passed" if not validation_errors else "failed",
+        "errors": validation_errors,
     }
     write_artifact(artifact_path, artifact)
     return 0 if artifact["validation"]["status"] == "passed" else 2

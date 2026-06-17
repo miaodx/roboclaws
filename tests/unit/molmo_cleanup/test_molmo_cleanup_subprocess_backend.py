@@ -352,6 +352,71 @@ def test_worker_model_data_cache_reuses_loaded_scene(
     assert calls == [scene_xml]
 
 
+def test_worker_resolves_procthor_scene_from_get_scenes_base_ref(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+    scenes_root = tmp_path / "scenes"
+    scene_xml = scenes_root / "procthor-10k-val" / "val_4.xml"
+
+    def fake_get_scenes(dataset_name: str, split: str):
+        assert dataset_name == "procthor-10k"
+        assert split == "val"
+        return {
+            "val": {
+                4: {
+                    "base": scene_xml,
+                    "ceiling": scenes_root / "procthor-10k-val" / "val_4_ceiling.xml",
+                    "map": scenes_root / "procthor-10k-val" / "val_4_map.png",
+                }
+            }
+        }
+
+    resolved, resolution = worker._resolve_molmospaces_scene_xml(
+        scene_source="procthor-10k-val",
+        scene_index=4,
+        get_scenes=fake_get_scenes,
+        scenes_root=scenes_root,
+    )
+
+    assert resolved == scene_xml
+    assert resolution["dataset_name"] == "procthor-10k"
+    assert resolution["split"] == "val"
+    assert resolution["selected_ref_role"] == "base"
+
+
+def test_worker_resolves_ithor_scene_from_get_scenes_path_ref(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+    scenes_root = tmp_path / "scenes"
+
+    def fake_get_scenes(dataset_name: str, split: str):
+        assert dataset_name == "ithor"
+        assert split == "train"
+        return {"train": {1: "ithor/FloorPlan1_physics.xml"}}
+
+    resolved, resolution = worker._resolve_molmospaces_scene_xml(
+        scene_source="ithor",
+        scene_index=1,
+        get_scenes=fake_get_scenes,
+        scenes_root=scenes_root,
+    )
+
+    assert resolved == scenes_root / "ithor" / "FloorPlan1_physics.xml"
+    assert "val_1.xml" not in str(resolved)
+    assert resolution["selected_ref_role"] == "path"
+    assert resolution["path_was_relative"] is True
+
+
+def test_worker_resolve_scene_reports_missing_get_scenes_index(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+
+    with pytest.raises(FileNotFoundError, match="scene index missing"):
+        worker._resolve_molmospaces_scene_xml(
+            scene_source="holodeck-objaverse-val",
+            scene_index=9,
+            get_scenes=lambda _dataset, _split: {"val": {0: {"base": "val_0.xml"}}},
+            scenes_root=tmp_path,
+        )
+
+
 def test_worker_kwargs_parse_render_resolution_args() -> None:
     kwargs = _worker_kwargs_from_args(
         "robot_views",

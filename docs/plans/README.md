@@ -75,7 +75,7 @@ aid, not a source of truth for current priority.
 - [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
-- [Mujoco Isaac Minimal Map Task Parity](mujoco-isaac-minimal-map-task-parity.md)
+- [Mujoco Isaac Minimal Map Task Parity](mujoco-isaac-minimal-map-task-parity.md) (superseded / historical)
 - [Actionable Semantic Map Snapshot](refactor-actionable-semantic-map-snapshot.md)
 - [Minimal-First Semantic Map Pipeline](refactor-reduce-entropy-minimal-semantic-map.md)
 - [Done Readiness Held State](refactor-reduce-entropy-done-readiness-held-state.md)
@@ -101,13 +101,14 @@ aid, not a source of truth for current priority.
 
 ### Rendering, Cameras, And Visual Grounding
 
-- [Isaac Lab MolmoSpaces Backend Support](isaac-lab-molmospaces-backend-support.md)
-- [MuJoCo Isaac Object And Render Parity Audit](mujoco-isaac-object-render-parity-audit.md)
-- [MuJoCo Isaac Render Difference Probe Directions](mujoco-isaac-render-difference-probe-directions.md)
-- [MuJoCo Isaac Visual Parity Convergence](mujoco-isaac-visual-parity-convergence.md)
+- [Digital-Twin Isaac / MolmoSpaces Mainline Separation](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
+- [Isaac Lab MolmoSpaces Backend Support](isaac-lab-molmospaces-backend-support.md) (superseded / historical)
+- [MuJoCo Isaac Object And Render Parity Audit](mujoco-isaac-object-render-parity-audit.md) (superseded / historical)
+- [MuJoCo Isaac Render Difference Probe Directions](mujoco-isaac-render-difference-probe-directions.md) (superseded / historical)
+- [MuJoCo Isaac Visual Parity Convergence](mujoco-isaac-visual-parity-convergence.md) (superseded / historical)
 - [Runtime Render State Parity](refactor-runtime-render-state-parity.md)
 - [Scene Camera Material Vs Light Diagnostic](scene-camera-material-vs-light-diagnostic.md)
-- [Genesis Scene-Camera Backend Lane](genesis-scene-camera-backend-lane.md)
+- [Genesis Scene-Camera Backend Lane](genesis-scene-camera-backend-lane.md) (retired / historical)
 - [MolmoSpaces HTTP Visual Grounding Service](molmospaces-http-visual-grounding-service.md)
 - [Visual Grounding GPU Sidecar Benchmark](visual-grounding-gpu-sidecar-benchmark.md)
 - [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)

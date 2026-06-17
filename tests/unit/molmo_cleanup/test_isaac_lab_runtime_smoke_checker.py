@@ -13,8 +13,19 @@ CHECKER = REPO_ROOT / "scripts" / "isaac_lab_cleanup" / "check_isaac_lab_runtime
 
 def write_smoke_image(path: Path) -> None:
     image = Image.new("RGB", (64, 48), color=(20, 40, 60))
+    pixels = image.load()
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels[x, y] = ((x * 5) % 256, (y * 7) % 256, ((x + y) * 3) % 256)
     draw = ImageDraw.Draw(image)
     draw.rectangle((8, 8, 56, 40), outline=(220, 180, 40), width=3)
+    image.save(path)
+
+
+def write_low_detail_gray_image(path: Path) -> None:
+    image = Image.new("RGB", (64, 48), color=(73, 73, 73))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((24, 18, 40, 30), outline=(76, 76, 76), width=1)
     image.save(path)
 
 
@@ -719,6 +730,44 @@ def test_isaac_runtime_smoke_checker_rejects_placeholder_robot_views(
     assert completed.returncode == 1
     summary = json.loads(completed.stdout)
     assert "robot view provenance still reports placeholder visuals" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_low_detail_gray_robot_views(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+    robot_views = write_robot_views_result(tmp_path)
+    write_low_detail_gray_image(Path(str(robot_views["views"]["fpv"])))
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-real-rendering",
+        "--require-robot-view-images",
+        robot_views=robot_views,
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "fpv robot view has too little visual detail" in summary["errors"]
+    assert "fpv robot view has too few distinct colors" in summary["errors"]
 
 
 def write_robot_views_result(tmp_path: Path) -> dict[str, object]:

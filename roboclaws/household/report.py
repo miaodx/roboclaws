@@ -4073,7 +4073,8 @@ def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         '<figure class="nav2-preview">'
         f"{_review_image(preview, map_contract_label)}"
         f"<figcaption><strong>{html.escape(map_contract_label)}</strong>"
-        "<span>Readable public semantic map: navigation points, fixtures, and robot pose.</span>"
+        "<span>Raw/source-map aligned view: semantic polygons, navigation points, "
+        "fixtures, and robot pose share the map frame.</span>"
         "</figcaption>"
         "</figure>"
         if preview
@@ -4131,8 +4132,9 @@ def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         f"<span>Nav2 Map Bundle / {html.escape(_map_contract_subtitle(bundle))}</span></h2>"
         '<p class="note">The Nav2 Map Bundle files are the map package a Nav2-style robot '
         "would consume: occupancy grid, semantic fixture map, robot footprint, costmap "
-        "parameters, and report views. The readable semantic map view is rendered from "
-        "public map/runtime evidence; the raw occupancy artifact remains linked below. This "
+        "parameters, and report views. The first-slice semantic map view is rendered in "
+        "the raw/source map orientation; no rectified display frame is substituted. The "
+        "raw occupancy artifact remains linked below. This "
         "is not live ROS/Nav2 execution.</p>"
         f'<p class="note">{html.escape(map_contract_note)}</p>'
         f"{metrics}"
@@ -4229,6 +4231,9 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
     image = Image.new("RGB", (1100, 360), (248, 250, 252))
     draw = ImageDraw.Draw(image)
     draw.text((28, 22), _map_contract_label(bundle), fill=(30, 34, 42))
+    draw.text(
+        (28, 44), "Source-frame fallback view; no rectified display frame.", fill=(86, 95, 112)
+    )
     transform = _nav2_preview_transform(rooms, waypoints, fixture_rooms)
     room_labels: list[tuple[int, int, str]] = []
 
@@ -4435,6 +4440,10 @@ def _semantic_map_rooms(metric_map: dict[str, Any]) -> list[dict[str, Any]]:
             {
                 "room_id": str(room.get("room_id") or ""),
                 "label": str(room.get("room_label") or room.get("room_id") or ""),
+                "polygon_role": str(room.get("polygon_role") or ""),
+                "geometry_source": str(room.get("geometry_source") or ""),
+                "alignment_status": str(room.get("alignment_status") or ""),
+                "source_map_frame_id": str(room.get("source_map_frame_id") or ""),
                 "polygon": points,
             }
         )
@@ -4525,7 +4534,7 @@ def _scene_overlay_provenance(
         "top_down_scene_label": "Top-down Scene View",
         "backend": backend,
         "map_view_provenance": map_view_provenance,
-        "alignment_status": "candidate_unverified" if is_gaussian_like else "same_backend_runtime",
+        "alignment_status": "candidate" if is_gaussian_like else "native",
         "note": (
             "Top-down scene imagery is rendered from the backend scene and may use a "
             "candidate transform; semantic-map data remains the authoritative public map."
@@ -4558,7 +4567,7 @@ def _draw_semantic_map_preview(payload: dict[str, Any], output_path: Path) -> No
     draw.text((28, 22), "Semantic Map", fill=(30, 34, 42))
     draw.text(
         (28, 44),
-        "Public navigation points, robot pose, trajectory, and semantic anchors.",
+        "Raw/source-map aligned public view; no rectified display frame.",
         fill=(86, 95, 112),
     )
     transform = _semantic_map_transform(payload, width=width, height=height)
@@ -4761,6 +4770,11 @@ def _write_nav2_occupancy_navigation_preview(
         row = image.height - 1 - int(round((y - float(origin[1])) / resolution))
         return col, row
 
+    draw.rectangle((10, 10, 565, 46), fill=(255, 255, 255, 225), outline=(213, 220, 230, 230))
+    draw.text(
+        (18, 17), "Raw/source-map aligned view; no rectified display frame", fill=(30, 41, 59, 255)
+    )
+
     for room in metric_map.get("rooms") or []:
         points = [
             transform(float(point.get("x", 0.0)), float(point.get("y", 0.0)))
@@ -4862,7 +4876,7 @@ def _nav2_preview_transform(
 
 def _nav2_preview_legend() -> str:
     items = [
-        ("room", "Pale rectangles", "static room / traversable region"),
+        ("room", "Pale polygons", "navigation_area unless marked as a room_boundary"),
         ("fixture", "Gray blocks", "static fixture or obstacle footprint"),
         ("waypoint", "Green dots", "inspection waypoints the agent may visit"),
         ("robot", "Blue dot", "current robot pose on the public map"),
@@ -4876,8 +4890,8 @@ def _nav2_preview_legend() -> str:
     return (
         '<aside class="nav2-legend"><h3>Legend</h3><ul>'
         + "".join(rows)
-        + "</ul><p>This is the robot's static navigation map, not a camera image and "
-        "not private mess truth.</p></aside>"
+        + "</ul><p>This is the robot's raw/source static navigation map, not a camera "
+        "image, not a rectified display frame, and not private mess truth.</p></aside>"
     )
 
 

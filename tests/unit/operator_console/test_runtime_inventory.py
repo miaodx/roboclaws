@@ -7,7 +7,10 @@ from pathlib import Path
 from roboclaws.operator_console.launcher import route_readiness
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import get_selection
-from roboclaws.operator_console.runtime_inventory import runtime_inventory_payload
+from roboclaws.operator_console.runtime_inventory import (
+    runtime_blockers_payload,
+    runtime_inventory_payload,
+)
 
 CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
@@ -40,7 +43,7 @@ def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) 
             {
                 "slot_id": 1,
                 "path": str(tmp_path / "output" / "molmo" / "visual-backend-slots" / "slot-1.json"),
-                "port": 18788,
+                "pid": os.getpid(),
             }
         ),
         encoding="utf-8",
@@ -86,10 +89,136 @@ def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) 
     assert task["route_id"] == "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-raw-fpv"
     assert any(resource["kind"] == "tmux_session" for resource in task["resources"])
     assert any(resource["kind"] == "visual_slot" for resource in task["resources"])
-    assert any(action["label"] == "Attach" for action in task["actions"])
+    assert not any(action["label"] == "Attach" for action in task["actions"])
     assert not any(action["type"] == "api_post" for action in task["actions"])
     assert "SECRET_TOKEN_VALUE" not in json.dumps(task)
     assert "secret-key-value" not in json.dumps(task)
+
+
+def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None:
+    active_row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "active-live"
+    active_run_dir = active_row_dir / "run" / "0615_1225" / "seed-7"
+    active_run_dir.mkdir(parents=True)
+    (active_run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (active_run_dir / "visual_backend_slot.json").write_text(
+        json.dumps({"slot_id": 1, "pid": os.getpid()}),
+        encoding="utf-8",
+    )
+
+    terminal_row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "terminal-live"
+    terminal_run_dir = terminal_row_dir / "run" / "0615_1226" / "seed-7"
+    terminal_run_dir.mkdir(parents=True)
+    (terminal_run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished"}),
+        encoding="utf-8",
+    )
+    (terminal_run_dir / "run_result.json").write_text(
+        json.dumps({"status": "passed"}),
+        encoding="utf-8",
+    )
+
+    (tmp_path / "output" / "eval-harness" / "focused" / "eval_harness.json").write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "row_id": "active-live",
+                        "row_kind": "live_agent_eval",
+                        "row_dir": str(active_row_dir),
+                        "status": "ran",
+                        "axes": {
+                            "world": "molmospaces/val_0",
+                            "backend": "mujoco",
+                            "intent": "cleanup",
+                            "preset": "cleanup",
+                            "agent_engine": "codex-cli",
+                            "evidence_lane": "world-oracle-labels",
+                        },
+                    },
+                    {
+                        "row_id": "terminal-live",
+                        "row_kind": "live_agent_eval",
+                        "row_dir": str(terminal_row_dir),
+                        "status": "ran",
+                        "outcome": "passed",
+                        "axes": {
+                            "world": "molmospaces/val_0",
+                            "backend": "mujoco",
+                            "intent": "cleanup",
+                            "preset": "cleanup",
+                            "agent_engine": "codex-cli",
+                            "evidence_lane": "world-oracle-labels",
+                        },
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    inventory = runtime_inventory_payload(tmp_path, ports=[18788])
+    blockers = runtime_blockers_payload(tmp_path, ports=[18788])
+
+    assert {task["id"] for task in inventory["tasks"]} >= {
+        "eval-row:active-live",
+        "eval-row:terminal-live",
+    }
+    assert [task["id"] for task in blockers["tasks"]] == ["eval-row:active-live"]
+    assert blockers["summary"]["active"] == 1
+    assert blockers["summary"]["total"] == 1
+
+
+def test_runtime_inventory_marks_dead_eval_harness_live_row_stale(tmp_path: Path) -> None:
+    row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "codex-cleanup-live"
+    run_dir = row_dir / "run" / "0615_1225" / "seed-7"
+    run_dir.mkdir(parents=True)
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (run_dir / "tmux_session.txt").write_text("roboclaws-molmo-codex-dead\n", encoding="utf-8")
+    (run_dir / "server.pid").write_text("99999999\n", encoding="utf-8")
+    (run_dir / "visual_backend_slot.json").write_text(
+        json.dumps({"slot_id": 1, "pid": 99999999, "port": 18788}),
+        encoding="utf-8",
+    )
+    (tmp_path / "output" / "eval-harness" / "focused" / "eval_harness.json").write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {
+                        "row_id": "codex-cleanup-live",
+                        "row_kind": "live_agent_eval",
+                        "row_dir": str(row_dir),
+                        "status": "ran",
+                        "axes": {
+                            "world": "molmospaces/val_0",
+                            "backend": "mujoco",
+                            "intent": "cleanup",
+                            "preset": "cleanup",
+                            "agent_engine": "codex-cli",
+                            "evidence_lane": "world-oracle-labels",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = runtime_inventory_payload(tmp_path, ports=[18788])
+
+    task = next(item for item in payload["tasks"] if item["id"] == "eval-row:codex-cleanup-live")
+    assert task["status"] == "stale"
+    assert payload["summary"]["active"] == 0
+    assert all(resource.get("active") is False for resource in task["resources"])
+    assert not any(
+        action["label"] in {"Attach", "Copy Stop Command"}
+        for action in task.get("actions", [])
+    )
 
 
 def test_runtime_inventory_exposes_direct_stop_only_for_operator_runs(tmp_path: Path) -> None:
@@ -131,7 +260,7 @@ def test_readiness_names_background_eval_owner_before_start(tmp_path: Path) -> N
         encoding="utf-8",
     )
     (run_dir / "visual_backend_slot.json").write_text(
-        json.dumps({"slot_id": 1, "port": 18788}),
+        json.dumps({"slot_id": 1, "pid": os.getpid()}),
         encoding="utf-8",
     )
     (tmp_path / "output" / "eval-harness" / "focused" / "eval_harness.json").write_text(

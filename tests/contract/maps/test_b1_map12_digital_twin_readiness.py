@@ -28,6 +28,12 @@ def static_readiness_payload() -> dict[str, object]:
         "usd_receptacle_index_ready": False,
         "map12_overlay_status": "candidate",
         "map12_to_b1_usd_transform_status": "unverified",
+        "b1_geometry": {
+            "renderable_robot_view_usd": {
+                "path": "data/robot-data-lab/scene-engine/data/"
+                "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+            }
+        },
         "semantic_source": SEMANTIC_SOURCE,
         "semantic_usd_binding_status": SEMANTIC_USD_BLOCKED,
         "semantic_anchors_are_usd_truth": False,
@@ -42,8 +48,8 @@ def static_readiness_payload() -> dict[str, object]:
 def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, object]:
     first = tmp_path / "first.fpv.png"
     second = tmp_path / "second.fpv.png"
-    Image.new("RGB", (12, 8), color=(10, 40, 90)).save(first)
-    Image.new("RGB", (12, 8), color=(90, 40, 10)).save(second)
+    _write_reviewable_image(first, offset=0)
+    _write_reviewable_image(second, offset=40)
     pose_1 = {
         "frame": "b1_rebuilt_scene_usd_world_candidate",
         "x": -4.0,
@@ -73,6 +79,23 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
             {"waypoint_id": "wp_2", "robot_pose": pose_2, "views": {"fpv": str(second)}},
         ],
     }
+
+
+def _write_reviewable_image(path: Path, *, offset: int) -> None:
+    image = Image.new("RGB", (32, 24))
+    pixels = image.load()
+    for y in range(image.height):
+        for x in range(image.width):
+            pixels[x, y] = (
+                (x * 7 + offset) % 256,
+                (y * 11 + offset * 2) % 256,
+                ((x + y) * 5 + offset * 3) % 256,
+            )
+    image.save(path)
+
+
+def _write_low_detail_gray_image(path: Path) -> None:
+    Image.new("RGB", (32, 24), color=(73, 73, 73)).save(path)
 
 
 def test_static_readiness_does_not_claim_navigation_or_manipulation() -> None:
@@ -149,6 +172,16 @@ def test_navigation_artifact_rejects_same_pose_evidence(tmp_path: Path) -> None:
     errors = validate_navigation_smoke_artifact(payload, require_files=True)
 
     assert "navigation waypoint robot poses must be distinct" in errors
+
+
+def test_navigation_artifact_rejects_low_detail_gray_fpv_evidence(tmp_path: Path) -> None:
+    payload = navigation_payload(tmp_path)
+    _write_low_detail_gray_image(Path(payload["waypoint_evidence"][0]["views"]["fpv"]))
+
+    errors = validate_navigation_smoke_artifact(payload, require_files=True)
+
+    assert "waypoint 1 fpv: image has too little visual detail" in errors
+    assert "waypoint 1 fpv: image has too few distinct colors" in errors
 
 
 def test_navigation_artifact_rejects_semantic_usd_or_manipulation_claim(tmp_path: Path) -> None:

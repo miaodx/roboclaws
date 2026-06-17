@@ -223,6 +223,7 @@ def _semantic_pose_view_capture_payload(
         "rendered_to_usd": True,
         "render_steps": int(capture.get("render_steps") or 0),
         "render_settle_frames": int(capture.get("render_settle_frames") or 0),
+        "scene_bounds": _dict(capture.get("scene_bounds")),
         "canonical_camera_control": False,
         "robot_mounted_head_camera": mounted_head_camera,
         "head_camera_equivalent": not mounted_head_camera,
@@ -240,6 +241,7 @@ def _semantic_pose_view_capture_payload(
 
 
 def _copy_capture_state_fields(state: dict[str, Any], capture: dict[str, Any]) -> None:
+    state["scene_bounds"] = _dict(capture.get("scene_bounds")) or None
     state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
     state["robot_view_color_management"] = _dict(capture.get("color_management"))
     state["robot_view_camera_diagnostics"] = _dict(capture.get("camera_diagnostics"))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 
@@ -205,6 +206,14 @@ def _add_action_parsers(
         item = subparsers.add_parser(command)
         item.add_argument("--receptacle-id", required=True)
 
+    waypoint = subparsers.add_parser("navigate_to_waypoint")
+    waypoint.add_argument(
+        "--waypoint-json",
+        type=_parse_json_object,
+        required=True,
+        help="Public waypoint payload from the cleanup map contract.",
+    )
+
     done = subparsers.add_parser("done")
     done.add_argument("--reason", default="")
 
@@ -221,3 +230,13 @@ def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
     if any(item <= 0.0 for item in gain):
         raise argparse.ArgumentTypeError("RGB gain values must be positive")
     return gain
+
+
+def _parse_json_object(value: str) -> dict[str, object]:
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError("value must be a JSON object") from exc
+    if not isinstance(payload, dict):
+        raise argparse.ArgumentTypeError("value must be a JSON object")
+    return payload
