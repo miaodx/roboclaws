@@ -256,7 +256,7 @@ def _base_run_result(
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
         "planner_proof_cleanup_executor_enabled": (inputs.use_planner_proof_for_cleanup_primitives),
-        "fixture_hint_mode": inputs.contract.fixture_hint_mode,
+        "static_fixture_projection_mode": inputs.contract.static_fixture_projection_mode,
         "perception_mode": inputs.perception_mode,
         "map_mode": inputs.map_mode,
         "semantic_sweep_mode": inputs.semantic_sweep,

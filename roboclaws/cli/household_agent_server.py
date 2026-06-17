@@ -589,7 +589,7 @@ def run_molmo_realworld_cleanup_agent_server(
         task_surface=task_surface,
         task_intent=normalized_task_intent,
         task_prompt=task_prompt,
-        fixture_hint_mode="room_only",
+        static_fixture_projection_mode="room_only",
         perception_mode=backend_setup.perception_mode,
         map_bundle_dir=backend_setup.selected_bundle_dir,
         record_robot_views=record_robot_views,

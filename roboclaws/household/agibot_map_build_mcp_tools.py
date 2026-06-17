@@ -161,7 +161,7 @@ def _dispatch_metric_map(server: Any) -> dict[str, Any]:
     response["instruction"] = (
         "Use only public inspection_waypoints. Navigate to each selected waypoint, "
         "then call observe. Use public_semantic_anchors and waypoint metadata for "
-        "map evidence instead of a fixture_hints-first tool habit. Do not invent "
+        "map evidence instead of a static_fixture_projection-first tool habit. Do not invent "
         "coordinates or read Agibot map source."
     )
     return response

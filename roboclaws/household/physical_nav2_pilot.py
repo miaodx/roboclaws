@@ -19,7 +19,7 @@ from roboclaws.household.report import render_cleanup_report, write_state_snapsh
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
 from roboclaws.maps.bundle import copy_nav2_map_bundle_snapshot, validate_nav2_map_bundle
-from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
+from roboclaws.maps.project import metric_map_from_bundle, static_fixture_projection_from_bundle
 
 PHYSICAL_NAV2_PILOT_SCHEMA = "physical_nav2_cleanup_pilot_v1"
 PHYSICAL_NAV2_PILOT_POLICY = "physical_nav2_navigation_perception_pilot"
@@ -114,7 +114,7 @@ def run_physical_nav2_cleanup_pilot(
     )
     nav2_map_bundle = pilot_inputs["nav2_map_bundle"]
     metric_map = pilot_inputs["metric_map"]
-    fixture_hints = pilot_inputs["fixture_hints"]
+    static_fixture_projection = pilot_inputs["static_fixture_projection"]
     observer = pilot_inputs["observer"]
     scenario = pilot_inputs["scenario"]
 
@@ -145,7 +145,7 @@ def run_physical_nav2_cleanup_pilot(
     }
 
     _record(trace_events, started_at, "metric_map", {}, metric_map)
-    _record(trace_events, started_at, "fixture_hints", {}, fixture_hints)
+    _record(trace_events, started_at, "static_fixture_projection", {}, static_fixture_projection)
 
     current_pose = _run_physical_inspection_sweep(
         adapter=adapter,
@@ -161,7 +161,7 @@ def run_physical_nav2_cleanup_pilot(
     _run_physical_fixture_sweep(
         adapter=adapter,
         observer=observer,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         waypoints_by_id=waypoints_by_id,
         current_pose=current_pose,
         trace_events=trace_events,
@@ -186,7 +186,7 @@ def run_physical_nav2_cleanup_pilot(
 
     readiness = _readiness_payload(
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         inspection_attempts=inspection_attempts,
         fixture_attempts=fixture_attempts,
         observations=observations,
@@ -223,7 +223,7 @@ def run_physical_nav2_cleanup_pilot(
         },
         "agent_view": {
             "metric_map": metric_map,
-            "fixture_hints": fixture_hints,
+            "static_fixture_projection": static_fixture_projection,
             "observed_objects": [],
             "raw_fpv_observations": [],
             "perception_mode": "camera_labels",
@@ -331,7 +331,7 @@ def _load_physical_nav2_pilot_inputs(
     return {
         "nav2_map_bundle": nav2_map_bundle,
         "metric_map": metric_map_from_bundle(bundle_dir),
-        "fixture_hints": fixture_hints_from_bundle(bundle_dir),
+        "static_fixture_projection": static_fixture_projection_from_bundle(bundle_dir),
         "observer": observer or CameraLabelObservationProvider(),
         "scenario": scenario or build_cleanup_scenario(seed=7),
     }
@@ -381,7 +381,7 @@ def _run_physical_fixture_sweep(
     *,
     adapter: DirectNav2Adapter,
     observer: PhysicalObservationProvider,
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     waypoints_by_id: dict[str, dict[str, Any]],
     current_pose: dict[str, Any],
     trace_events: list[dict[str, Any]],
@@ -390,7 +390,7 @@ def _run_physical_fixture_sweep(
     fixture_attempts: list[dict[str, Any]],
     started_at: float,
 ) -> None:
-    for fixture in _fixtures(fixture_hints):
+    for fixture in _fixtures(static_fixture_projection):
         fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
         navigation = adapter.navigate_to_fixture_preferred_waypoint(
             fixture_id=fixture_id,
@@ -435,10 +435,10 @@ def _record_blocked_manipulation_tools(
         _record(trace_events, started_at, tool, {}, result)
 
 
-def _fixtures(fixture_hints: dict[str, Any]) -> list[dict[str, Any]]:
+def _fixtures(static_fixture_projection: dict[str, Any]) -> list[dict[str, Any]]:
     fixtures: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         for fixture in room.get("fixtures") or []:
             if not isinstance(fixture, dict):
                 continue
@@ -455,7 +455,7 @@ def _fixtures(fixture_hints: dict[str, Any]) -> list[dict[str, Any]]:
 def _readiness_payload(
     *,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     inspection_attempts: list[dict[str, Any]],
     fixture_attempts: list[dict[str, Any]],
     observations: list[dict[str, Any]],
@@ -474,7 +474,7 @@ def _readiness_payload(
     observed_reached_rate = len(observations) / len(reached) if reached else 0.0
     complete = bool(
         inspection_attempts
-        and len(fixture_attempts) == len(_fixtures(fixture_hints))
+        and len(fixture_attempts) == len(_fixtures(static_fixture_projection))
         and all(item.get("ok") for item in navigation_attempts)
         and len(observations) >= len(reached)
         and all_manipulation_blocked
@@ -489,9 +489,9 @@ def _readiness_payload(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": _map_bundle_fields_present(metric_map),
         "pose_stamped_waypoints": _pose_stamped_waypoints_present(metric_map),
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
-            and fixture_hints.get("contains_runtime_observations") is False
+        "static_fixture_projection": (
+            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
+            and static_fixture_projection.get("contains_runtime_observations") is False
         ),
         "policy_view_chase_excluded": True,
         "report_only_simulation_view_count": 0,
@@ -505,7 +505,7 @@ def _readiness_payload(
         "inspection_waypoint_attempt_count": len(inspection_attempts),
         "inspection_waypoint_total": len(metric_map.get("inspection_waypoints") or []),
         "fixture_preferred_waypoint_attempt_count": len(fixture_attempts),
-        "fixture_total": len(_fixtures(fixture_hints)),
+        "fixture_total": len(_fixtures(static_fixture_projection)),
         "reached_waypoint_count": len(reached),
         "observed_reached_waypoint_count": len(observations),
         "observed_reached_waypoint_rate": observed_reached_rate,

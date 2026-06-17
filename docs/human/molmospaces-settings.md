@@ -15,7 +15,7 @@ perception_mode=visible_object_detections
 include_robot=true
 record_robot_views=true
 robot_name=rby1m
-fixture_hint_mode=room_only
+static_fixture_projection_mode=room_only
 primitive_provenance=api_semantic
 ```
 
@@ -48,8 +48,8 @@ for fast contract checks, but it has no robot camera timeline.
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
 | Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup lanes. |
 | Map bundle | `map_bundle=<path-or-assets-id>` | Operator override for a prepared environment bundle. | Fails before cleanup startup if missing or invalid. |
-| Fixture hints | `room_only` | Public room-level fixture hints. | Preferred ADR-0003 setting. |
-| Fixture hints | `exact_fixtures` | Easier exact fixture hints. | Fallback/debug only. |
+| Static fixture projection | `room_only` | Public room-level static fixture projection. | Preferred ADR-0003 setting. |
+| Static fixture projection | `exact_fixtures` | Easier exact static fixture projection. | Fallback/debug only. |
 | Provenance | `api_semantic` | Cleanup tools mutate simulator semantic state. | Current normal cleanup loop. |
 | Provenance | `planner_backed` | Cleanup subphase has matching RBY1M/CuRobo proof. | Future strict manipulation target. |
 
@@ -301,7 +301,7 @@ from multiple scene indices:
 That builder actively creates MolmoSpaces scenes, focuses the robot FPV camera
 on generated cleanup targets, and writes MuJoCo segmentation bbox truth as
 private benchmark labels. Public requests still contain only the image, category
-hints, fixture hints, and non-target capture provenance. Use `--scene-indices 0
+hints, static fixture projection, and non-target capture provenance. Use `--scene-indices 0
 --targets-per-scene 2` for a cheap local smoke before a 10x10 run.
 
 That builder copies the referenced RAW_FPV images next to the generated corpus

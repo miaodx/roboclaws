@@ -43,7 +43,7 @@ def private_evaluation(
         "object_results": list(score.get("object_results") or []),
         "public_contract_note": (
             "Private scoring is report/evaluation evidence only. Cleanup-action "
-            "target selection used public observations and fixture hints."
+            "target selection used public observations and static fixture projection."
         ),
     }
 
@@ -93,7 +93,7 @@ def blocked_manipulation_evidence(
 def readiness_payload(
     *,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     observation: dict[str, Any],
     navigation: dict[str, Any],
     manipulation_results: list[dict[str, Any]],
@@ -140,9 +140,9 @@ def readiness_payload(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": _map_fields_present(metric_map),
         "pose_stamped_waypoints": _pose_stamped_waypoints_present(metric_map),
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
-            and fixture_hints.get("contains_runtime_observations") is False
+        "static_fixture_projection": (
+            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
+            and static_fixture_projection.get("contains_runtime_observations") is False
         ),
         "policy_view_chase_excluded": True,
         "report_only_simulation_view_count": max(1, len(robot_view_steps)),
@@ -160,7 +160,7 @@ def readiness_payload(
         ),
         "inspection_waypoint_total": len(metric_map.get("inspection_waypoints") or []),
         "fixture_preferred_waypoint_attempt_count": 0,
-        "fixture_total": len(_fixtures(fixture_hints)),
+        "fixture_total": len(_fixtures(static_fixture_projection)),
         "reached_waypoint_count": max(
             1 if navigation.get("ok") else 0,
             int(cleanup_actions.get("navigation_attempt_count") or 0),
@@ -215,9 +215,9 @@ def _pose_stamped_waypoints_present(metric_map: dict[str, Any]) -> bool:
     )
 
 
-def _fixtures(fixture_hints: dict[str, Any]) -> list[dict[str, Any]]:
+def _fixtures(static_fixture_projection: dict[str, Any]) -> list[dict[str, Any]]:
     fixtures: list[dict[str, Any]] = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         for fixture in room.get("fixtures") or []:
             if isinstance(fixture, dict):
                 fixtures.append(fixture)

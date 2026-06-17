@@ -8,8 +8,7 @@ from roboclaws.household.agibot_map_build_mcp_server import (
     AGIBOT_SEMANTIC_MAP_BUILD_POLICY,
     AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
 )
-from roboclaws.household.profiles import CAMERA_GROUNDED_LABELS_LANE
-from roboclaws.household.profiles import PHYSICAL_ROBOT_EVIDENCE_LANE
+from roboclaws.household.profiles import CAMERA_GROUNDED_LABELS_LANE, PHYSICAL_ROBOT_EVIDENCE_LANE
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
@@ -147,7 +146,7 @@ def _assert_agibot_policy_trace(data: dict[str, Any]) -> None:
     assert trace.get("cleanup_action_count") == 0, trace
     decisions = {str(item.get("decision") or "") for item in trace.get("events") or []}
     assert "inspect_public_metric_map" in decisions, trace
-    assert "inspect_public_fixture_hints" not in decisions, trace
+    assert "inspect_public_static_fixture_projection" not in decisions, trace
     assert "observe_head_color" in decisions, trace
 
 
@@ -198,8 +197,10 @@ def _assert_agibot_report_text(
 def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> None:
     assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
     assert "metric_map" in agent_view, agent_view
-    assert "fixture_hints" in agent_view, agent_view
-    assert "fixture_hints" not in (agent_view.get("public_tool_names") or []), agent_view
+    assert "static_fixture_projection" in agent_view, agent_view
+    assert "static_fixture_projection" not in (agent_view.get("public_tool_names") or []), (
+        agent_view
+    )
     assert agent_view.get("observed_objects") == [], agent_view
     policy_view = agent_view.get("policy_view") or {}
     assert policy_view.get("policy_observation_camera") == "head_color", policy_view
@@ -222,7 +223,7 @@ def _assert_agibot_semantic_map_build_runtime_map(
     assert runtime_metric_map.get("schema") == RUNTIME_METRIC_MAP_SCHEMA, runtime_metric_map
     assert runtime_metric_map.get("source") == "agibot_semantic_map_build_mcp", runtime_metric_map
     assert "metric_map" in runtime_metric_map, runtime_metric_map
-    assert "fixture_hints" in runtime_metric_map, runtime_metric_map
+    assert "static_fixture_projection" in runtime_metric_map, runtime_metric_map
     assert isinstance(runtime_metric_map.get("observed_objects") or [], list), runtime_metric_map
     assert isinstance(runtime_metric_map.get("visited_waypoint_ids") or [], list), (
         runtime_metric_map

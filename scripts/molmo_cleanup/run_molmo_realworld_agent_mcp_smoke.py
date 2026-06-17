@@ -159,7 +159,7 @@ def run_smoke(
         policy=policy,
         agent_driven=True,
         task_prompt=task,
-        fixture_hint_mode="room_only",
+        static_fixture_projection_mode="room_only",
         perception_mode=perception_mode,
         map_bundle_dir=selected_bundle_dir,
         record_robot_views=record_robot_views,

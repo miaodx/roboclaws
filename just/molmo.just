@@ -1049,7 +1049,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
-            --fixture-hint-mode room_only \
+            --static-fixture-projection-mode room_only \
             --perception-mode "$perception_mode" \
             --evidence-lane "$implementation_evidence_lane" \
             "${map_bundle_args[@]}" \

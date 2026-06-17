@@ -42,7 +42,7 @@ def _assert_smoke_run_result(run_result: dict[str, Any]) -> None:
     assert run_result["generated_mess_count"] == 5
     assert run_result["semantic_substeps"]
     assert run_result["tool_event_counts"]["metric_map:request"] == 1
-    assert "fixture_hints:request" not in run_result["tool_event_counts"]
+    assert "static_fixture_projection:request" not in run_result["tool_event_counts"]
     assert run_result["tool_event_counts"]["observe:request"] >= 1
     assert run_result["agent_diagnostics"]["premature_done"] is False
     assert run_result["agent_diagnostics"]["premature_done_source"] == "sweep_coverage_rate"

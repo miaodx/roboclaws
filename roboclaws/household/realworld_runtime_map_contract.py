@@ -80,13 +80,13 @@ def synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
 def runtime_static_map_payload(
     *,
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     map_mode: str,
     minimal_map_mode: str,
     assert_no_forbidden_agent_view_keys: Any,
 ) -> dict[str, Any]:
     fixtures = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         room_id = str(room.get("room_id") or "")
         for fixture in room.get("fixtures") or []:
             item = {
@@ -384,7 +384,7 @@ def runtime_map_room_priors_from_snapshot(
 
 def infer_target_fixture_for_detection(
     detection: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     *,
     norm: Any,
     object_category_targets: Any,
@@ -399,7 +399,7 @@ def infer_target_fixture_for_detection(
         return direct_candidate
     fixture_candidates = [
         fixture
-        for room in fixture_hints.get("rooms", [])
+        for room in static_fixture_projection.get("rooms", [])
         for fixture in room.get("fixtures", [])
         if isinstance(fixture, dict)
     ]

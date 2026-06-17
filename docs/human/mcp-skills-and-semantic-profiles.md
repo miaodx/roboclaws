@@ -255,10 +255,10 @@ physical proof exists.
 - `metric_map` is the current map-reading path. The Base Navigation Map exposes
   occupancy/free-space context, generated candidates, and public room-category
   hints when available; Runtime Metric Map evidence adds observed anchors and
-  target candidates during a run. Historical `fixture_hints` artifacts may
+  target candidates during a run. Historical `static_fixture_projection` artifacts may
   still be displayed for old reports, but active skills should discover
   destinations through metric-map evidence and target-query resolution rather
-  than a fixture-hints-first tool habit.
+  than reading static fixture projection first.
 - `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
   `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
   bounded physical navigation actions when enough public grounding is available.

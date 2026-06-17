@@ -38,7 +38,7 @@ def metric_map_from_bundle(
         origin_y=float(origin[1] if len(origin) > 1 else 0.0),
     )
     map_id = str(semantics.get("map_id") or bundle_dir.name)
-    map_version = str(semantics.get("map_version") or "static-fixture-map-v1")
+    map_version = str(semantics.get("map_version") or "base-navigation-map-v1")
     frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
     rooms = normalize_spatial_rooms(
         semantics.get("rooms") or [],
@@ -99,10 +99,10 @@ def metric_map_from_bundle(
     }
 
 
-def fixture_hints_from_bundle(
+def static_fixture_projection_from_bundle(
     bundle_dir: Path,
     *,
-    fixture_hint_mode: str = "room_only",
+    static_fixture_projection_mode: str = "room_only",
     contract: str = REALWORLD_CONTRACT,
 ) -> dict[str, Any]:
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
@@ -124,14 +124,14 @@ def fixture_hints_from_bundle(
         rooms.append(item)
     return {
         "ok": True,
-        "tool": "fixture_hints",
+        "tool": "static_fixture_projection",
         "status": "ok",
         "contract": contract,
-        "schema": "static_fixture_semantic_map_v1",
-        "fixture_hint_mode": fixture_hint_mode,
+        "schema": "static_fixture_projection_v1",
+        "static_fixture_projection_mode": static_fixture_projection_mode,
         "contains_runtime_observations": False,
         "public_contract_note": (
-            "Static fixture hints are projected from the selected Nav2 map bundle."
+            "Static fixture projection is derived from the selected Nav2 map bundle."
         ),
         "rooms": rooms,
     }

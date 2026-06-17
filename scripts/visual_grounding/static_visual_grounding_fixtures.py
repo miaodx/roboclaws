@@ -213,7 +213,7 @@ def _category_for_request(payload: dict[str, Any]) -> str:
 
 
 def _destination_fixture_for_category(payload: dict[str, Any], category: str) -> str:
-    fixtures = list(payload.get("fixture_hints") or [])
+    fixtures = list(payload.get("static_fixture_projection") or [])
     target_terms = {
         "dish": ("sink",),
         "food": ("fridge", "refrigerator"),
@@ -234,5 +234,5 @@ def _destination_fixture_for_category(payload: dict[str, Any], category: str) ->
 
 
 def _source_fixture_for_request(payload: dict[str, Any]) -> str:
-    fixtures = list(payload.get("fixture_hints") or [])
+    fixtures = list(payload.get("static_fixture_projection") or [])
     return str((fixtures[0] if fixtures else {}).get("fixture_id") or "")

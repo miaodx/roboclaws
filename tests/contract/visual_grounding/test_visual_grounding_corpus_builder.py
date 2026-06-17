@@ -27,7 +27,7 @@ def test_builder_creates_path_backed_corpus_from_cleanup_run(tmp_path: Path) -> 
     run_result = {
         "scenario_id": "scenario-seed-7",
         "agent_view": {
-            "fixture_hints": {
+            "static_fixture_projection": {
                 "rooms": [
                     {
                         "room_id": "room_2",
@@ -90,7 +90,7 @@ def test_builder_creates_path_backed_corpus_from_cleanup_run(tmp_path: Path) -> 
     assert observation["image"]["width"] == 16
     assert observation["image"]["height"] == 12
     assert (output.parent / observation["image"]["path"]).is_file()
-    assert observation["fixture_hints"] == [
+    assert observation["static_fixture_projection"] == [
         {
             "fixture_id": "sink_01",
             "room_id": "room_2",
@@ -122,7 +122,7 @@ def test_builder_prefers_mess_placement_fixture_room_over_object_id_suffix(
     run_result = {
         "scenario_id": "scenario-seed-7",
         "agent_view": {
-            "fixture_hints": {
+            "static_fixture_projection": {
                 "rooms": [
                     {
                         "room_id": "room_2",
@@ -384,7 +384,7 @@ def test_molmospaces_bbox_observation_keeps_private_truth_out_of_public_context(
             "room_area": "room_2",
             "category": "Sink",
         },
-        fixture_hints_by_room={
+        static_fixture_projection_by_room={
             "room_2": [
                 {
                     "fixture_id": "sink_01",
@@ -407,7 +407,7 @@ def test_molmospaces_bbox_observation_keeps_private_truth_out_of_public_context(
             "room_id": observation["room_id"],
             "capture_context": observation["capture_context"],
             "category_hints": observation["category_hints"],
-            "fixture_hints": observation["fixture_hints"],
+            "static_fixture_projection": observation["static_fixture_projection"],
             "image": observation["image"],
         },
         sort_keys=True,
@@ -447,7 +447,7 @@ def _write_raw_fpv_run(
     run_result = {
         "scenario_id": scenario_id,
         "agent_view": {
-            "fixture_hints": {
+            "static_fixture_projection": {
                 "rooms": [
                     {
                         "room_id": room_id,

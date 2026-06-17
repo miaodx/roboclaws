@@ -65,16 +65,16 @@ def _require_robot_map_12_artifact() -> None:
         pytest.skip("Agibot robot_map_12 artifact is unavailable in this checkout")
 
 
-def _assert_fixture_hints_artifact_only(
+def _assert_static_fixture_projection_artifact_only(
     run_result: dict,
     runtime_map: dict,
     trace_events: list[dict],
 ) -> None:
-    assert "fixture_hints" not in AGIBOT_SEMANTIC_MAP_BUILD_TOOLS
-    assert "fixture_hints" not in run_result["agent_view"]["public_tool_names"]
-    assert "fixture_hints" in run_result["agent_view"]
-    assert "fixture_hints" in runtime_map
-    assert not any(event.get("tool") == "fixture_hints" for event in trace_events)
+    assert "static_fixture_projection" not in AGIBOT_SEMANTIC_MAP_BUILD_TOOLS
+    assert "static_fixture_projection" not in run_result["agent_view"]["public_tool_names"]
+    assert "static_fixture_projection" in run_result["agent_view"]
+    assert "static_fixture_projection" in runtime_map
+    assert not any(event.get("tool") == "static_fixture_projection" for event in trace_events)
 
 
 def _assert_camera_grounding_failure_evidence(run_result: dict) -> None:
@@ -422,8 +422,8 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
 
     try:
         metric_map = server.call_tool("metric_map")
-        with pytest.raises(ValueError, match="fixture_hints"):
-            server.call_tool("fixture_hints")
+        with pytest.raises(ValueError, match="static_fixture_projection"):
+            server.call_tool("static_fixture_projection")
         nav = server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
         observe = server.call_tool("observe")
         blocked = server.call_tool("pick", object_id="observed_unknown")
@@ -441,7 +441,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
 
     _assert_agibot_map_build_tool_responses(metric_map, nav, observe, blocked, done)
-    _assert_fixture_hints_artifact_only(run_result, runtime_map, trace_events)
+    _assert_static_fixture_projection_artifact_only(run_result, runtime_map, trace_events)
     _assert_agibot_map_build_run_identity(run_result)
     _assert_camera_grounding_failure_evidence(run_result)
     _assert_agibot_map_build_policy_trace(run_result)
@@ -474,7 +474,7 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
                 "image_artifacts": {"fpv": "subphases/02-observe/head_color.jpg"},
             }
         ],
-        fixture_hints={
+        static_fixture_projection={
             "rooms": [
                 {
                     "room_id": "living_room",
@@ -498,7 +498,7 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
     assert grounding_client.last_request is not None
     assert grounding_client.last_request["observation_id"] == "agibot_observe_001"
     assert grounding_client.last_request["pipeline_request"]["pipeline_id"] == "grounding-dino"
-    assert grounding_client.last_request["fixture_hints"][0]["fixture_id"] == "sofa_01"
+    assert grounding_client.last_request["static_fixture_projection"][0]["fixture_id"] == "sofa_01"
     assert evidence["candidate_count"] == 1
     assert evidence["visual_grounding_failure_count"] == 0
     assert event["candidate_count"] == 1
@@ -538,9 +538,9 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
 
     try:
         metric_map = server.call_tool("metric_map")
-        fixture_hints = contract.fixture_hints()
-        with pytest.raises(ValueError, match="fixture_hints"):
-            server.call_tool("fixture_hints")
+        static_fixture_projection = contract.static_fixture_projection()
+        with pytest.raises(ValueError, match="static_fixture_projection"):
+            server.call_tool("static_fixture_projection")
         nav = server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
         observe = server.call_tool("observe")
         pick = server.call_tool("pick", object_id="observed_unknown")
@@ -553,7 +553,7 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
     trace_text = (run_dir / "trace.jsonl").read_text(encoding="utf-8")
 
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
-    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
+    assert static_fixture_projection["schema"] == "static_fixture_projection_v1"
     assert nav["tool"] == "navigate_to_waypoint"
     assert nav["primitive_provenance"] == "blocked_capability"
     assert observe["raw_fpv_observation"]["camera"] == "head_color"

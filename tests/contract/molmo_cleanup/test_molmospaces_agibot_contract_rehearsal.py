@@ -31,14 +31,14 @@ def _require_robot_map_9_artifact() -> None:
         pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
 
 
-def _assert_fixture_hints_artifact_only(run_dir: Path, run_result: dict) -> None:
+def _assert_static_fixture_projection_artifact_only(run_dir: Path, run_result: dict) -> None:
     assert [item["stage"] for item in run_result["agibot_sdk_runner"]["subphase_reports"]] == [
         "agent_view_export",
         "observe",
         "navigate_waypoint",
         "blocked_manipulation",
     ]
-    assert (run_dir / "preflight" / "fixture_hints.json").is_file()
+    assert (run_dir / "preflight" / "static_fixture_projection.json").is_file()
     runner_task_input = json.loads(
         (run_dir / "preflight" / "runner_task_input.json").read_text(encoding="utf-8")
     )
@@ -47,16 +47,16 @@ def _assert_fixture_hints_artifact_only(run_dir: Path, run_result: dict) -> None
         for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert "fixture_hints" not in runner_task_input["public_tool_sequence"]
-    assert "fixture_hints" not in runner_task_input["stage_mapping"]["agent_view_export"]
-    assert not any(event.get("tool") == "fixture_hints" for event in trace_events)
+    assert "static_fixture_projection" not in runner_task_input["public_tool_sequence"]
+    assert "static_fixture_projection" not in runner_task_input["stage_mapping"]["agent_view_export"]
+    assert not any(event.get("tool") == "static_fixture_projection" for event in trace_events)
 
 
 def _assert_contract_rehearsal_artifacts(run_dir: Path) -> None:
     for relpath in (
         "preflight/agent_view.json",
         "preflight/metric_map.json",
-        "preflight/fixture_hints.json",
+        "preflight/static_fixture_projection.json",
         "preflight/scene_identity.json",
         "preflight/molmospaces_metric_map.png",
         "preflight/waypoint_sequence.json",
@@ -116,7 +116,7 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
         item["status"] == "blocked_capability"
         for item in runtime_export["blocked_manipulation_results"]
     )
-    _assert_fixture_hints_artifact_only(run_dir, run_result)
+    _assert_static_fixture_projection_artifact_only(run_dir, run_result)
     _assert_contract_rehearsal_artifacts(run_dir)
 
     assert "MolmoSpaces Agibot Contract Rehearsal" in report_text

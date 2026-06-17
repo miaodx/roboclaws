@@ -452,7 +452,7 @@ def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
     )
     assert result["agent_view"]["metric_map"]["rooms"]
     assert result["agent_view"]["metric_map"]["room_category_hints"]
-    assert result["agent_view"]["fixture_hints"]["rooms"] == []
+    assert result["agent_view"]["static_fixture_projection"]["rooms"] == []
     assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
     assert result["runtime_metric_map"]["generated_exploration_candidates"]
     anchors = result["runtime_metric_map"]["public_semantic_anchors"]
@@ -1035,12 +1035,12 @@ def test_checker_rejects_stale_prebuilt_map_bundle_for_isaac_scene_index(
     stale_bundle = {
         **data["agent_view"]["metric_map"]["map_bundle"],
         "environment_id": "molmospaces-procthor-val-0-7",
-        "map_id": "molmospaces-procthor-val-0-7_semantic_map",
+        "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
     }
     data["agent_view"]["metric_map"]["map_bundle"] = stale_bundle
     data["runtime_metric_map"]["static_map"]["map_bundle"] = stale_bundle
     data["nav2_map_bundle"]["environment_id"] = "molmospaces-procthor-val-0-7"
-    data["nav2_map_bundle"]["map_id"] = "molmospaces-procthor-val-0-7_semantic_map"
+    data["nav2_map_bundle"]["map_id"] = "molmospaces-procthor-val-0-7_base_navigation_map"
     data["nav2_map_bundle"]["source_bundle_root"] = "assets/maps/molmospaces-procthor-val-0-7"
 
     with pytest.raises(AssertionError):
@@ -2897,7 +2897,7 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
             "contract": checker.REALWORLD_CONTRACT,
             "forbidden_private_fields_absent": True,
             "metric_map": {},
-            "fixture_hints": [],
+            "static_fixture_projection": [],
             "perception_mode": CAMERA_MODEL_POLICY_MODE,
             "structured_detections_available": False,
             "raw_fpv_observations": result["raw_fpv_observations"],
@@ -2942,7 +2942,7 @@ def test_checker_allows_camera_grounded_label_lane_public_provenance() -> None:
             "contract": checker.REALWORLD_CONTRACT,
             "forbidden_private_fields_absent": True,
             "metric_map": {},
-            "fixture_hints": [],
+            "static_fixture_projection": [],
             "perception_mode": CAMERA_MODEL_POLICY_MODE,
             "structured_detections_available": False,
             "raw_fpv_observations": result["raw_fpv_observations"],
@@ -3809,13 +3809,13 @@ def _add_isaac_loaded_scene(
 
 def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> None:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
-    map_id = f"{scenario_id}_semantic_map"
+    map_id = f"{scenario_id}_base_navigation_map"
     map_bundle = {
         "schema": "nav2_map_bundle_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "static-fixture-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "map_version": "base-navigation-map-v1",
+        "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": "rby1m",
         "parameter_hash": "unit-scene-index-map-context",
     }
@@ -3828,8 +3828,8 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
         "schema": "runtime_metric_map_v1",
         "static_map": {"map_bundle": dict(map_bundle), "rooms": [_isaac_scene_index_room()]},
     }
-    fixture_hints = {
-        "schema": "static_fixture_semantic_map_v1",
+    static_fixture_projection = {
+        "schema": "static_fixture_projection_v1",
         "scene_index_fixture_overlay": {
             "enabled": True,
             "source": "isaac_scene_index",
@@ -3842,7 +3842,7 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
     isaac_runtime["scenario_source"] = "isaac_scene_index"
     data["agent_view"] = {
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "runtime_metric_map": runtime_map,
     }
     data["runtime_metric_map"] = runtime_map
@@ -3854,7 +3854,7 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
                 "schema": "nav2_cleanup_semantics_v1",
                 "environment_id": scenario_id,
                 "map_id": map_id,
-                "map_version": "static-fixture-map-v1",
+                "map_version": "base-navigation-map-v1",
                 "rooms": [_isaac_scene_index_room()],
                 "fixtures": [],
                 "inspection_waypoints": [],
@@ -3867,8 +3867,8 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
         "schema": "nav2_map_bundle_snapshot_v1",
         "environment_id": scenario_id,
         "map_id": map_id,
-        "map_version": "static-fixture-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "map_version": "base-navigation-map-v1",
+        "source_provenance": "molmospaces_base_navigation_map",
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         "artifact_hashes": {"semantics_json": "0" * 64},
@@ -3885,7 +3885,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "environment_id": scenario_id,
         "map_id": map_id,
         "map_version": "minimal-navigation-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "source_provenance": "molmospaces_base_navigation_map",
         "robot_profile_id": "rby1m",
         "parameter_hash": "unit-scene-index-minimal-map-context",
     }
@@ -3955,8 +3955,8 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
             }
         ],
     }
-    fixture_hints = {
-        "schema": "static_fixture_semantic_map_v1",
+    static_fixture_projection = {
+        "schema": "static_fixture_projection_v1",
         "mode": "minimal",
         "rooms": [],
     }
@@ -3967,7 +3967,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
     data["map_mode"] = "minimal"
     data["agent_view"] = {
         "metric_map": metric_map,
-        "fixture_hints": fixture_hints,
+        "static_fixture_projection": static_fixture_projection,
         "runtime_metric_map": runtime_map,
     }
     data["runtime_metric_map"] = runtime_map
@@ -3993,7 +3993,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "environment_id": scenario_id,
         "map_id": map_id,
         "map_version": "minimal-navigation-map-v1",
-        "source_provenance": "molmospaces_public_semantic_map",
+        "source_provenance": "molmospaces_base_navigation_map",
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         "artifact_hashes": {"semantics_json": "0" * 64},

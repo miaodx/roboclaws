@@ -126,7 +126,7 @@ def _assert_cleanup_result_contract(
     assert run_result["policy"] == "deterministic_sweep_baseline"
     assert run_result["policy_uses_private_truth"] is False
     assert run_result["planner_uses_private_manifest"] is False
-    assert run_result["fixture_hint_mode"] == "room_only"
+    assert run_result["static_fixture_projection_mode"] == "room_only"
     assert run_result["requested_generated_mess_count"] == 10
     assert run_result["generated_mess_count"] == 5
     assert run_result["mess_restoration_rate"] >= 0.70

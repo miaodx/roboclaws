@@ -573,4 +573,3 @@ def _assert_bound_isaac_binding_rows(
             index_label,
             index_prim_path,
         )
-

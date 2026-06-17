@@ -271,7 +271,7 @@ def _codex_agibot_map_build_prompt(prompt: str) -> str:
         "metric_map.inspection_waypoints and use public_semantic_anchors plus "
         "observation evidence as map context. Visit public waypoint ids only with "
         "navigate_to_waypoint, then call observe. Do not invent coordinates, do not "
-        "call fixture_hints, raw Agibot/GDK/PNC tools, or private files, and do not "
+        "call static_fixture_projection, raw Agibot/GDK/PNC tools, or private files, and do not "
         "use manipulation tools except to verify they remain blocked when needed. "
         "Call done after every selected public waypoint has either been observed or "
         "explicitly left for operator review.\n\n"

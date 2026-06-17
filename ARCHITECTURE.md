@@ -222,9 +222,9 @@ Eval suites must preserve the same public/private boundary as product runs.
 Private generated mess sets, acceptable destinations, hidden target lists, and
 scorer truth remain grader inputs or private report evidence; they do not become
 MCP profile metadata, skill instructions, or agent-facing tool responses.
-Cleanup evals should treat a `fixture_hints` MCP call as a trajectory violation
+Cleanup evals should treat a `static_fixture_projection` MCP call as a trajectory violation
 because current cleanup MCP servers no longer expose that tool. Historical
-`fixture_hints` artifact fields may remain readable for map bundles, reports,
+`static_fixture_projection` artifact fields may remain readable for map bundles, reports,
 and compatibility checks.
 
 The first implementation is intentionally repo-native under `evals/` and

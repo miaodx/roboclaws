@@ -2106,22 +2106,19 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
 
     assert "This run is surface=household-world intent=cleanup" in prompt
     assert "User task: clean up this room" in prompt
-    assert "exact waypoint checklist" in prompt
-    assert "metric_map.inspection_waypoints" in prompt
-    assert "selected Nav2 map bundle" in prompt
-    assert "not raw occupancy images" in prompt
-    assert "mark a waypoint complete only after" in prompt
+    assert "Call metric_map" in prompt
+    assert "exact inspection_waypoints checklist" in prompt
+    assert "for each unchecked waypoint call navigate_to_waypoint then observe" in prompt
+    assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "place/place_inside" in prompt
-    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
+    assert "Use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
     assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
     assert "namespace cleanup" in prompt
     assert "server named cleanup" not in prompt
-    assert "compare the checklist before done" in prompt
+    assert "Call done when every public waypoint has an observe response" in prompt
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
-    assert "visit any missing waypoint_id" in prompt
-    assert "fresh same-handle source FPV observation with a reviewable bbox" in prompt
-    assert "adjust_camera(0, 0) is only a no-op camera command" in prompt
+    assert "Do not call scene_objects" in prompt
 
 
 def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:

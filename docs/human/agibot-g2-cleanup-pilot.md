@@ -228,7 +228,7 @@ real movement 前，`agibot_map_context.completed.json` 必须包含：
 
 - `agent_view.json`
 - `metric_map.json`
-- `fixture_hints.json`
+- `static_fixture_projection.json`
 - `semantic_preview.png`
 
 Agent-facing map 不能暴露 raw Agibot map source、GDK internals 或 PNC verification

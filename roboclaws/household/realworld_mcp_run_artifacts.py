@@ -63,7 +63,7 @@ class RealWorldMCPDoneArtifactInputs:
     policy: str
     agent_driven: bool
     policy_uses_private_truth: bool
-    fixture_hint_mode: str
+    static_fixture_projection_mode: str
     perception_mode: str
     map_bundle_dir: Path | None
     runtime_map_prior_source: str
@@ -266,7 +266,7 @@ def _base_run_result(
         "agent_driven": inputs.agent_driven,
         "policy_uses_private_truth": inputs.policy_uses_private_truth,
         "planner_uses_private_manifest": False,
-        "fixture_hint_mode": inputs.fixture_hint_mode,
+        "static_fixture_projection_mode": inputs.static_fixture_projection_mode,
         "perception_mode": inputs.perception_mode,
         "map_mode": payloads.runtime_metric_map.get("map_mode", inputs.contract.map_mode),
         "minimal_map_mode": payloads.runtime_metric_map.get("minimal_map_mode", False),

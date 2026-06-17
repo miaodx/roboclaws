@@ -574,7 +574,7 @@ def _runtime_semantics_payload(
             alignment_status=ALIGNMENT_STATUS_CANDIDATE,
         ),
         "display_frame": None,
-        "map_id": "agibot-robot-map-12_semantic_map",
+        "map_id": "agibot-robot-map-12_base_navigation_map",
         "map_version": "robot_map_12_vendor_review_v1",
         "resolution_m": float(map_yaml.get("resolution") or 0.05),
         "origin": _origin_payload(map_yaml),

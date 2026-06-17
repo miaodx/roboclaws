@@ -177,7 +177,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
         )
 
 
-def test_household_goal_contract_tool_plans_do_not_advertise_fixture_hints() -> None:
+def test_household_goal_contract_tool_plans_do_not_advertise_static_fixture_projection() -> None:
     surface = SURFACE_SPECS["household-world"]
 
     for intent_id in ("cleanup", "map-build", "open-ended"):
@@ -188,7 +188,7 @@ def test_household_goal_contract_tool_plans_do_not_advertise_fixture_hints() -> 
         )
 
         tool_plan_text = " ".join(contract.tool_plan)
-        assert "fixture_hints" not in tool_plan_text
+        assert "static_fixture_projection" not in tool_plan_text
         assert "metric_map" in tool_plan_text
 
 

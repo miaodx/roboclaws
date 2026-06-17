@@ -221,12 +221,12 @@ class AgibotSemanticMapBuildMCPServer:
         )
         trace_events = self._read_trace_events()
         metric_map = self.adapter.metric_map()
-        fixture_hints = self.adapter.fixture_hints()
+        static_fixture_projection = self.adapter.static_fixture_projection()
         policy_events = _policy_events_from_trace(trace_events, metric_map)
         readiness = _readiness_from_trace(
             trace_events=trace_events,
             metric_map=metric_map,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             real_movement_enabled=self.real_movement_enabled,
         )
         raw_observations = _raw_fpv_observations_from_trace(
@@ -238,7 +238,7 @@ class AgibotSemanticMapBuildMCPServer:
             perception_mode=self.perception_mode,
             visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
             raw_observations=raw_observations,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             run_dir=self.run_dir,
             visual_grounding_client=self.visual_grounding_client,
         )
@@ -281,7 +281,7 @@ class AgibotSemanticMapBuildMCPServer:
             },
             "agent_view": {
                 "metric_map": metric_map,
-                "fixture_hints": fixture_hints,
+                "static_fixture_projection": static_fixture_projection,
                 "observed_objects": [],
                 "raw_fpv_observations": raw_observations,
                 "perception_mode": self.perception_mode,
@@ -298,7 +298,7 @@ class AgibotSemanticMapBuildMCPServer:
                 "schema": "runtime_metric_map_v1",
                 "source": "agibot_semantic_map_build_mcp",
                 "metric_map": metric_map,
-                "fixture_hints": fixture_hints,
+                "static_fixture_projection": static_fixture_projection,
                 "observed_objects": [],
                 "visited_waypoint_ids": readiness["visited_waypoint_ids"],
                 "observed_waypoint_ids": readiness["observed_waypoint_ids"],
@@ -594,7 +594,7 @@ def _readiness_from_trace(
     *,
     trace_events: list[dict[str, Any]],
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     real_movement_enabled: bool,
 ) -> dict[str, Any]:
     responses = [
@@ -630,8 +630,8 @@ def _readiness_from_trace(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": bool(metric_map.get("inspection_waypoints") is not None),
         "pose_stamped_waypoints": True,
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
+        "static_fixture_projection": (
+            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
         ),
         "physical_navigation_pilot": True,
         "physical_cleanup_ready": False,
@@ -756,7 +756,7 @@ def _camera_model_policy_evidence(
     perception_mode: str,
     visual_grounding_pipeline_id: str,
     raw_observations: list[dict[str, Any]],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     run_dir: Path,
     visual_grounding_client: VisualGroundingClient | None,
 ) -> dict[str, Any]:
@@ -778,7 +778,7 @@ def _camera_model_policy_evidence(
             raw,
             trace_events=trace_events,
             visual_grounding_pipeline_id=visual_grounding_pipeline_id,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             run_dir=run_dir,
             visual_grounding_client=visual_grounding_client,
         )
@@ -818,7 +818,7 @@ def _camera_model_policy_event(
     *,
     trace_events: list[dict[str, Any]],
     visual_grounding_pipeline_id: str,
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     run_dir: Path,
     visual_grounding_client: VisualGroundingClient | None,
 ) -> dict[str, Any]:
@@ -851,7 +851,9 @@ def _camera_model_policy_event(
         run_id="agibot_semantic_map_build",
         raw_observation=_visual_grounding_raw_observation(raw_observation),
         category_hints=list(VISUAL_GROUNDING_CATEGORY_HINTS),
-        fixture_hints=_fixture_hints_for_visual_grounding_request(fixture_hints),
+        static_fixture_projection=_static_fixture_projection_for_visual_grounding_request(
+            static_fixture_projection
+        ),
         pipeline_id=visual_grounding_pipeline_id,
         image=image_payload_for_raw_observation(raw_observation, base_dir=run_dir),
     )
@@ -939,11 +941,11 @@ def _visual_grounding_raw_observation(raw_observation: dict[str, Any]) -> dict[s
     return result
 
 
-def _fixture_hints_for_visual_grounding_request(
-    fixture_hints: dict[str, Any],
+def _static_fixture_projection_for_visual_grounding_request(
+    static_fixture_projection: dict[str, Any],
 ) -> list[dict[str, Any]]:
     rows = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         if not isinstance(room, dict):
             continue
         room_id = str(room.get("room_id") or "")

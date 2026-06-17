@@ -65,7 +65,7 @@ def _assert_agent_view_core(agent_view: dict[str, Any]) -> None:
     assert agent_view.get("contract") == REALWORLD_CONTRACT, agent_view
     assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
     assert "metric_map" in agent_view, agent_view
-    assert "fixture_hints" in agent_view, agent_view
+    assert "static_fixture_projection" in agent_view, agent_view
     assert "observed_objects" in agent_view, agent_view
     assert "objects" not in agent_view.get("metric_map", {}), agent_view
 

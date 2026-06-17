@@ -154,7 +154,7 @@ def build_corpus_observations(
                     "source_artifact_status": str(raw.get("artifact_status") or ""),
                 },
                 "category_hints": list(VISUAL_GROUNDING_CATEGORY_HINTS),
-                "fixture_hints": fixtures_by_room.get(room_id, []),
+                "static_fixture_projection": fixtures_by_room.get(room_id, []),
                 "image": {
                     "source": "path",
                     "path": str(image_rel),
@@ -185,15 +185,19 @@ def _raw_fpv_observations(run_result: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _fixtures_by_room(run_result: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     agent_view = run_result.get("agent_view") or {}
-    fixture_hints = agent_view.get("fixture_hints") or run_result.get("fixture_hints") or {}
-    rooms = fixture_hints.get("rooms") or []
+    static_fixture_projection = (
+        agent_view.get("static_fixture_projection")
+        or run_result.get("static_fixture_projection")
+        or {}
+    )
+    rooms = static_fixture_projection.get("rooms") or []
     output: dict[str, list[dict[str, Any]]] = {}
     for room in rooms:
         if not isinstance(room, dict):
             continue
         room_id = str(room.get("room_id") or "")
         output[room_id] = [
-            _public_fixture_hint(fixture)
+            _public_static_fixture_projection(fixture)
             for fixture in room.get("fixtures") or []
             if isinstance(fixture, dict)
         ]
@@ -211,7 +215,7 @@ def _room_by_fixture_id(fixtures_by_room: dict[str, list[dict[str, Any]]]) -> di
     return output
 
 
-def _public_fixture_hint(fixture: dict[str, Any]) -> dict[str, Any]:
+def _public_static_fixture_projection(fixture: dict[str, Any]) -> dict[str, Any]:
     return {
         "fixture_id": str(fixture.get("fixture_id") or ""),
         "room_id": str(fixture.get("room_id") or ""),

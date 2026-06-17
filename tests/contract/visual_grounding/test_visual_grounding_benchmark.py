@@ -157,7 +157,7 @@ def test_visual_grounding_checker_allows_zero_candidate_success_without_candidat
                         "room_id": "room_2",
                         "capture_context": {"discovered_during": "waypoint_observe"},
                         "category_hints": ["dish"],
-                        "fixture_hints": [],
+                        "static_fixture_projection": [],
                         "image": {
                             "source": "synthetic",
                             "width": 32,
@@ -508,7 +508,7 @@ def test_visual_grounding_bbox_metrics_require_iou_not_category_only() -> None:
     observations = {
         "bbox-dish": {
             "observation_id": "bbox-dish",
-            "fixture_hints": [],
+            "static_fixture_projection": [],
             "private_labels": [
                 {
                     "category": "dish",
@@ -520,7 +520,7 @@ def test_visual_grounding_bbox_metrics_require_iou_not_category_only() -> None:
         },
         "bbox-book": {
             "observation_id": "bbox-book",
-            "fixture_hints": [],
+            "static_fixture_projection": [],
             "private_labels": [
                 {
                     "category": "book",

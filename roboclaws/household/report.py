@@ -888,11 +888,11 @@ def _molmospaces_agibot_rehearsal_section(run_dir: Path, run_result: dict[str, A
     scene = run_result.get("molmospaces_scene") or {}
     agent_view = run_result.get("agent_view") or {}
     metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
+    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
     rooms = metric_map.get("rooms") or []
     waypoints = metric_map.get("inspection_waypoints") or []
     fixtures = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         fixtures.extend(room.get("fixtures") or [])
     runtime = str(scene.get("runtime") or rehearsal.get("runtime") or "unknown")
     if runtime == "fixture":

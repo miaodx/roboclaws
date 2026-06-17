@@ -10,7 +10,7 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws has implemented the eval-driven architecture plan and the follow-on
 non-cleanup eval support plan. Eval suites are visible as a first-class
 architecture layer, stale launch-axis documentation is cleaned, current
-cleanup/map-build MCP contracts no longer advertise `fixture_hints` as a
+cleanup/map-build MCP contracts no longer advertise `static_fixture_projection` as a
 callable active tool, and repo-native eval suite/sample/trial/result schema
 packets plus direct-runner household fixtures exist. Deterministic eval suites
 are available through `just agent::eval suite=smoke_regression budget=smoke`,

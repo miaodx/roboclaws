@@ -53,7 +53,7 @@ class VisualCandidateDeclarationContract(Protocol):
 
     def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]: ...
 
-    def fixture_hints(self) -> dict[str, Any]: ...
+    def static_fixture_projection(self) -> dict[str, Any]: ...
 
     def _ok(self, tool: str, **payload: Any) -> dict[str, Any]: ...
 
@@ -383,7 +383,7 @@ def simulated_declaration_inputs_for_waypoint(
         target = realworld_runtime_map_targets.target_fixture_for_detection(
             contract,
             detection,
-            contract.fixture_hints(),
+            contract.static_fixture_projection(),
             minimal_map_mode=MINIMAL_MAP_MODE,
         )
         target_fixture_id = str((target or {}).get("fixture_id") or location_id)
@@ -445,8 +445,8 @@ def camera_label_producer_candidates(
         run_id=contract.visual_grounding_run_id or contract.scenario.scenario_id,
         raw_observation=raw_observation,
         category_hints=list(realworld_visual_candidates.VISUAL_GROUNDING_CATEGORY_HINTS),
-        fixture_hints=realworld_visual_candidates._fixture_hints_for_visual_grounding_request(
-            contract.fixture_hints()
+        static_fixture_projection=realworld_visual_candidates._static_fixture_projection_for_visual_grounding_request(
+            contract.static_fixture_projection()
         ),
         pipeline_id=contract.visual_grounding_pipeline_id,
         image=image_payload_for_raw_observation(
@@ -519,7 +519,7 @@ def _resolved_destination_fixture_id(
     target = realworld_runtime_map_targets.target_fixture_for_detection(
         contract,
         pseudo_detection,
-        contract.fixture_hints(),
+        contract.static_fixture_projection(),
         minimal_map_mode=MINIMAL_MAP_MODE,
     )
     return str((target or {}).get("fixture_id") or "")

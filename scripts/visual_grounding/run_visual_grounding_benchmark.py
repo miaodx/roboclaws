@@ -343,7 +343,7 @@ def _run_pipeline(
                 "artifact_status": "benchmark_fixture",
             },
             category_hints=[str(item) for item in observation.get("category_hints") or []],
-            fixture_hints=list(observation.get("fixture_hints") or []),
+            static_fixture_projection=list(observation.get("static_fixture_projection") or []),
             pipeline_id=pipeline_id,
             image={
                 "mime_type": "image/jpeg",
@@ -388,7 +388,9 @@ def _run_pipeline(
             "capture_context": dict(observation.get("capture_context") or {}),
             "public_context": {
                 "category_hints": list(observation.get("category_hints") or []),
-                "fixture_hint_count": len(observation.get("fixture_hints") or []),
+                "static_fixture_projection_count": len(
+                    observation.get("static_fixture_projection") or []
+                ),
             },
             "raw_fpv_path": str(raw_rel),
             "overlay_path": str(overlay_rel),

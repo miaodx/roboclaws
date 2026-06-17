@@ -153,7 +153,7 @@ verifier=cleanup_success + robot_view_honesty + real_robot_alignment
 
 This is the current "MolmoSpaces cleanup with visual result" behavior. The
 agent receives handles such as `observed_001`, object categories, support
-estimates, public candidate fixture hints, cleanup recommendation flags, and
+estimates, public candidate static fixture projection, cleanup recommendation flags, and
 placement-tool hints. Initial detections are semantic candidates; before
 `navigate_to_object` or `pick`, the agent must run an FPV scan/observe step that
 binds the same handle to a reviewable source-frame bbox and promotes the
@@ -320,11 +320,11 @@ agent declares a candidate only when trying to act on it, through
 normal raw-FPV runs unless future harness evidence shows a clear win.
 
 In minimal-map runs, the cleanup agent must omit `target_fixture_id` when
-calling `navigate_to_visual_candidate`; authored fixture hints are intentionally
+calling `navigate_to_visual_candidate`; authored static fixture projections are intentionally
 hidden. The tool resolves public grounding and returns `candidate_fixture_id`
 and `recommended_tool` for the follow-up pick/place chain. In explicit rich
 legacy/debug runs only, a target fixture may come from non-empty
-`fixture_hints`.
+`static_fixture_projection`.
 
 Explicit registration still belongs to producer-style perception flows:
 `camera-labels` uses `declare_visual_candidates` after an observation, then the

@@ -34,9 +34,9 @@ class DoneReadinessContract(Protocol):
     def cleanup_worklist_payload(
         self,
         *,
-        fixture_hints: dict[str, Any] | None = None,
+        static_fixture_projection: dict[str, Any] | None = None,
     ) -> dict[str, Any]: ...
-    def fixture_hints(self) -> dict[str, Any]: ...
+    def static_fixture_projection(self) -> dict[str, Any]: ...
     def internal_fixture_id_for_public_reference(self, fixture_id: str | None) -> str | None: ...
 
 
@@ -50,7 +50,9 @@ _required_tool_for_candidate_state = realworld_visual_candidates._required_tool_
 
 
 def pending_cleanup_candidates(contract: DoneReadinessContract) -> list[dict[str, Any]]:
-    worklist = contract.cleanup_worklist_payload(fixture_hints=contract.fixture_hints())
+    worklist = contract.cleanup_worklist_payload(
+        static_fixture_projection=contract.static_fixture_projection()
+    )
     pending = []
     for item in worklist.get("objects", []):
         state = str(item.get("state") or "")

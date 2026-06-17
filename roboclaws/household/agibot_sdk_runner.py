@@ -119,9 +119,9 @@ class AgibotSDKRunnerAdapter:
         self.export_agent_view()
         return _load_json(self.agent_view_path)["metric_map"]
 
-    def fixture_hints(self) -> dict[str, Any]:
+    def static_fixture_projection(self) -> dict[str, Any]:
         self.export_agent_view()
-        return _load_json(self.agent_view_path)["fixture_hints"]
+        return _load_json(self.agent_view_path)["static_fixture_projection"]
 
     def observe(self, *, label: str = "observe") -> dict[str, Any]:
         self.export_agent_view()
@@ -194,7 +194,7 @@ class AgibotSDKRunnerAdapter:
         return response
 
     def navigate_to_fixture_preferred_waypoint(self, *, fixture_id: str) -> dict[str, Any]:
-        fixture = _fixture_by_id(self.fixture_hints(), fixture_id)
+        fixture = _fixture_by_id(self.static_fixture_projection(), fixture_id)
         waypoint_id = str(
             (fixture or {}).get("preferred_manipulation_waypoint_id")
             or (fixture or {}).get("preferred_inspection_waypoint_id")
@@ -418,9 +418,9 @@ def run_physical_agibot_cleanup_pilot(
     )
 
     metric_map = adapter.metric_map()
-    fixture_hints = adapter.fixture_hints()
+    static_fixture_projection = adapter.static_fixture_projection()
     _record(trace_events, started_at, "metric_map", {}, metric_map)
-    _record(trace_events, started_at, "fixture_hints", {}, fixture_hints)
+    _record(trace_events, started_at, "static_fixture_projection", {}, static_fixture_projection)
 
     observation = adapter.observe(label="pre_navigation")
     policy_events.append(
@@ -505,7 +505,7 @@ def run_physical_agibot_cleanup_pilot(
     readiness = _readiness_payload(
         context=adapter.context_payload,
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         observation=observation,
         navigation=navigation,
         manipulation_results=manipulation_results,
@@ -557,7 +557,7 @@ def run_physical_agibot_cleanup_pilot(
         },
         "agent_view": {
             "metric_map": metric_map,
-            "fixture_hints": fixture_hints,
+            "static_fixture_projection": static_fixture_projection,
             "observed_objects": [],
             "raw_fpv_observations": [],
             "perception_mode": "robot_policy_camera",
@@ -608,7 +608,7 @@ def run_physical_agibot_cleanup_pilot(
             "gdk_imported_by_roboclaws": False,
             "public_tool_boundary": [
                 "metric_map",
-                "fixture_hints",
+                "static_fixture_projection",
                 "observe",
                 "navigate_to_waypoint",
                 "navigate_to_room",
@@ -680,7 +680,7 @@ def _readiness_payload(
     *,
     context: dict[str, Any],
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     observation: dict[str, Any],
     navigation: dict[str, Any],
     manipulation_results: list[dict[str, Any]],
@@ -710,9 +710,9 @@ def _readiness_payload(
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": _map_fields_present(metric_map),
         "pose_stamped_waypoints": _pose_stamped_waypoints_present(metric_map),
-        "static_fixture_semantic_map": (
-            fixture_hints.get("schema") == "static_fixture_semantic_map_v1"
-            and fixture_hints.get("contains_runtime_observations") is False
+        "static_fixture_projection": (
+            static_fixture_projection.get("schema") == "static_fixture_projection_v1"
+            and static_fixture_projection.get("contains_runtime_observations") is False
         ),
         "policy_view_chase_excluded": True,
         "report_only_simulation_view_count": 0,
@@ -726,7 +726,7 @@ def _readiness_payload(
         "inspection_waypoint_attempt_count": 1,
         "inspection_waypoint_total": len(metric_map.get("inspection_waypoints") or []),
         "fixture_preferred_waypoint_attempt_count": 0,
-        "fixture_total": len(_fixtures(fixture_hints)),
+        "fixture_total": len(_fixtures(static_fixture_projection)),
         "reached_waypoint_count": 1 if navigation_complete else 0,
         "observed_reached_waypoint_count": 1 if observation_complete else 0,
         "observed_reached_waypoint_rate": 1.0 if complete else 0.0,
@@ -886,17 +886,19 @@ def _subphase_reports(results: list[dict[str, Any]], run_dir: Path) -> list[dict
     return reports
 
 
-def _fixtures(fixture_hints: dict[str, Any]) -> list[dict[str, Any]]:
+def _fixtures(static_fixture_projection: dict[str, Any]) -> list[dict[str, Any]]:
     fixtures: list[dict[str, Any]] = []
-    for room in fixture_hints.get("rooms") or []:
+    for room in static_fixture_projection.get("rooms") or []:
         for fixture in room.get("fixtures") or []:
             if isinstance(fixture, dict):
                 fixtures.append(fixture)
     return fixtures
 
 
-def _fixture_by_id(fixture_hints: dict[str, Any], fixture_id: str) -> dict[str, Any] | None:
-    for fixture in _fixtures(fixture_hints):
+def _fixture_by_id(
+    static_fixture_projection: dict[str, Any], fixture_id: str
+) -> dict[str, Any] | None:
+    for fixture in _fixtures(static_fixture_projection):
         if str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "") == fixture_id:
             return fixture
     return None

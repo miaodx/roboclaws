@@ -97,7 +97,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument(
-        "--fixture-hint-mode",
+        "--static-fixture-projection-mode",
         choices=("room_only", "exact_fixtures"),
         default="room_only",
     )
@@ -204,7 +204,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help=(
             "Prebuilt Nav2 map bundle path, or environment id under assets/maps, "
-            "to project metric_map/fixture_hints and snapshot into the run."
+            "to project metric_map/static_fixture_projection and snapshot into the run."
         ),
     )
     parser.add_argument(
@@ -238,7 +238,7 @@ def run_realworld_cleanup(
     seed: int = 1,
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
-    fixture_hint_mode: str = "room_only",
+    static_fixture_projection_mode: str = "room_only",
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
@@ -315,7 +315,7 @@ def run_realworld_cleanup(
     contract = RealWorldCleanupContract(
         base_contract,
         task_prompt=task_prompt,
-        fixture_hint_mode=fixture_hint_mode,
+        static_fixture_projection_mode=static_fixture_projection_mode,
         perception_mode=perception_mode,
         map_bundle_dir=selected_bundle_dir,
         visual_grounding_client=visual_grounding_client_from_env(
@@ -373,8 +373,12 @@ def run_realworld_cleanup(
     )
 
     metric_map = _call_tool(trace_events, started_at, "metric_map", {}, contract.metric_map)
-    fixture_hints = _call_tool(
-        trace_events, started_at, "fixture_hints", {}, contract.fixture_hints
+    static_fixture_projection = _call_tool(
+        trace_events,
+        started_at,
+        "static_fixture_projection",
+        {},
+        contract.static_fixture_projection,
     )
 
     policy_name = direct_cleanup_policy_name(
@@ -388,7 +392,7 @@ def run_realworld_cleanup(
         contract=contract,
         base_contract=base_contract,
         metric_map=metric_map,
-        fixture_hints=fixture_hints,
+        static_fixture_projection=static_fixture_projection,
         robot_view_steps=robot_view_steps,
         output_dir=output_dir,
         view_index=view_index,
@@ -744,7 +748,7 @@ def _maybe_clean_visible_object(
     contract: RealWorldCleanupContract,
     base_contract: CleanupBackendSession,
     detection: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     robot_view_steps: list[dict[str, Any]],
     output_dir: Path,
     view_index: int,
@@ -761,7 +765,7 @@ def _maybe_clean_visible_object(
     live_detection = contract.inspect_visible_object(handle)
     if live_detection.get("ok") and isinstance(live_detection.get("detection"), dict):
         detection = dict(live_detection["detection"])
-    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
     if target_fixture is None:
         agent_scratchpad["failed_attempts"].append(
             {"object_id": handle, "reason": "no_public_fixture_match"}
@@ -780,7 +784,7 @@ def _maybe_clean_visible_object(
             base_contract=base_contract,
             handle=handle,
             candidate=candidate,
-            fixture_hints=fixture_hints,
+            static_fixture_projection=static_fixture_projection,
             robot_view_steps=robot_view_steps,
             output_dir=output_dir,
             view_index=candidate.view_index,
@@ -862,7 +866,7 @@ def _confirm_visual_scan_candidate(
     base_contract: CleanupBackendSession,
     handle: str,
     candidate: _VisibleObjectCandidate,
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     robot_view_steps: list[dict[str, Any]],
     output_dir: Path,
     view_index: int,
@@ -921,7 +925,7 @@ def _confirm_visual_scan_candidate(
         )
         return None, view_index
     detection = dict(confirmed)
-    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = contract.target_fixture_for_detection(detection, static_fixture_projection)
     if target_fixture is None:
         agent_scratchpad["failed_attempts"].append(
             {"object_id": handle, "reason": "no_public_fixture_match_after_visual_scan"}
@@ -949,7 +953,9 @@ def _current_worklist_target_fixture(
     object_id: str,
     source_fixture_id: str,
 ) -> dict[str, Any] | None:
-    worklist = contract.cleanup_worklist_payload(fixture_hints=contract.fixture_hints())
+    worklist = contract.cleanup_worklist_payload(
+        static_fixture_projection=contract.static_fixture_projection()
+    )
     for item in worklist.get("objects", []):
         if str(item.get("object_id") or "") != object_id:
             continue
@@ -1110,7 +1116,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         task_prompt=args.task,
         backend=args.backend,
-        fixture_hint_mode=args.fixture_hint_mode,
+        static_fixture_projection_mode=args.static_fixture_projection_mode,
         perception_mode=args.perception_mode,
         include_robot=args.include_robot,
         robot_name=args.robot_name,

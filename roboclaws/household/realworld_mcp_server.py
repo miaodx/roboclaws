@@ -99,7 +99,7 @@ def make_molmo_realworld_cleanup_mcp(
     task_surface: str = "household-world",
     task_intent: str = "cleanup",
     task_prompt: str = DEFAULT_REALWORLD_TASK,
-    fixture_hint_mode: str = "room_only",
+    static_fixture_projection_mode: str = "room_only",
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
     evidence_lane: str | None = None,
@@ -129,7 +129,7 @@ def make_molmo_realworld_cleanup_mcp(
         task_surface=task_surface,
         task_intent=task_intent,
         task_prompt=task_prompt,
-        fixture_hint_mode=fixture_hint_mode,
+        static_fixture_projection_mode=static_fixture_projection_mode,
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
         evidence_lane=evidence_lane,
@@ -166,7 +166,7 @@ class RealWorldMolmoCleanupMCPServer:
         task_surface: str = "household-world",
         task_intent: str = "cleanup",
         task_prompt: str = DEFAULT_REALWORLD_TASK,
-        fixture_hint_mode: str = "room_only",
+        static_fixture_projection_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
         evidence_lane: str | None = None,
@@ -202,7 +202,7 @@ class RealWorldMolmoCleanupMCPServer:
             scenario=scenario,
             base_contract=base_contract,
             task_prompt=task_prompt,
-            fixture_hint_mode=fixture_hint_mode,
+            static_fixture_projection_mode=static_fixture_projection_mode,
             perception_mode=perception_mode,
             map_bundle_dir=self.map_bundle_dir,
             runtime_map_prior=runtime_map_prior,
@@ -225,7 +225,7 @@ class RealWorldMolmoCleanupMCPServer:
             surface=self.task_surface,
             fallback_intent=self.task_intent,
         )
-        self.fixture_hint_mode = fixture_hint_mode
+        self.static_fixture_projection_mode = static_fixture_projection_mode
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
         self.evidence_lane = evidence_lane
@@ -486,7 +486,7 @@ class RealWorldMolmoCleanupMCPServer:
                 policy=self.policy,
                 agent_driven=self.agent_driven,
                 policy_uses_private_truth=self.policy_uses_private_truth,
-                fixture_hint_mode=self.fixture_hint_mode,
+                static_fixture_projection_mode=self.static_fixture_projection_mode,
                 perception_mode=self.perception_mode,
                 map_bundle_dir=self.map_bundle_dir,
                 runtime_map_prior_source=self.runtime_map_prior_source,
@@ -854,7 +854,7 @@ def _build_realworld_mcp_contract(
     scenario: CleanupScenario | None,
     base_contract: CleanupBackendSession | None,
     task_prompt: str,
-    fixture_hint_mode: str,
+    static_fixture_projection_mode: str,
     perception_mode: str,
     map_bundle_dir: Path | None,
     runtime_map_prior: dict[str, Any] | None,
@@ -876,7 +876,7 @@ def _build_realworld_mcp_contract(
     return RealWorldCleanupContract(
         base_contract,
         task_prompt=task_prompt,
-        fixture_hint_mode=fixture_hint_mode,
+        static_fixture_projection_mode=static_fixture_projection_mode,
         perception_mode=perception_mode,
         map_bundle_dir=map_bundle_dir,
         runtime_map_prior=runtime_map_prior,

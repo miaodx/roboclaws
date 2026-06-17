@@ -36,7 +36,7 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
             {
                 "seed": 7,
                 "backend": "api_semantic_synthetic",
-                "fixture_hint_mode": "room_only",
+                "static_fixture_projection_mode": "room_only",
                 "perception_mode": "visible_object_detections",
                 "requested_generated_mess_count": 10,
                 "planner_proof_requests": _proof_requests(),
@@ -1608,7 +1608,7 @@ def test_runner_records_cleanup_rerun_artifacts_when_rerun_requested(
             {
                 "seed": 7,
                 "backend": "api_semantic_synthetic",
-                "fixture_hint_mode": "room_only",
+                "static_fixture_projection_mode": "room_only",
                 "perception_mode": "visible_object_detections",
                 "requested_generated_mess_count": 10,
                 "planner_proof_requests": _proof_requests(),

@@ -59,7 +59,7 @@ class RuntimeMapTargetContract(Protocol):
     def _public_navigation_waypoints(self) -> list[dict[str, Any]]: ...
     def _waypoint_by_id(self, waypoint_id: str) -> dict[str, Any] | None: ...
     def _waypoint_pose(self, waypoint: dict[str, Any]) -> dict[str, float]: ...
-    def fixture_hints(self) -> dict[str, Any]: ...
+    def static_fixture_projection(self) -> dict[str, Any]: ...
 
 
 def runtime_target_candidates(
@@ -500,7 +500,7 @@ def public_runtime_fixture_candidates(
 def target_fixture_for_detection(
     contract: RuntimeMapTargetContract,
     detection: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     *,
     minimal_map_mode: str = MINIMAL_MAP_MODE,
 ) -> dict[str, Any] | None:
@@ -512,7 +512,7 @@ def target_fixture_for_detection(
         )
     return realworld_runtime_map_contract.infer_target_fixture_for_detection(
         detection,
-        fixture_hints,
+        static_fixture_projection,
         norm=_norm,
         object_category_targets=_OBJECT_CATEGORY_TARGETS,
         first_matching_fixture=_first_matching_fixture,

@@ -554,8 +554,8 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
         {"tool": "<runtime>", "event": "initialized", "wallclock_elapsed": 0.1},
         {"tool": "metric_map", "event": "request", "wallclock_elapsed": 0.2},
         {"tool": "metric_map", "event": "response", "wallclock_elapsed": 0.5},
-        {"tool": "fixture_hints", "event": "request", "wallclock_elapsed": 1.5},
-        {"tool": "fixture_hints", "event": "response", "wallclock_elapsed": 1.7},
+        {"tool": "static_fixture_projection", "event": "request", "wallclock_elapsed": 1.5},
+        {"tool": "static_fixture_projection", "event": "response", "wallclock_elapsed": 1.7},
         {
             "tool": "<runtime>",
             "event": "robot_view_capture",
@@ -607,7 +607,7 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
     assert "1.9s" in html
     assert "Other MCP overhead" in html
     assert "0.2s" in html
-    assert "fixture_hints" in html
+    assert "static_fixture_projection" in html
 
 
 def test_cleanup_report_renders_per_object_timing_cycles(tmp_path: Path) -> None:
@@ -860,8 +860,8 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
             "robot_profile_id": "rby1m",
             "costmap_profile_id": "rby1m_static_global",
             "parameter_hash": "abcdef0123456789",
-            "map_id": "molmospaces-procthor-val-0-7_semantic_map",
-            "source_provenance": "molmospaces_public_semantic_map",
+            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
+            "source_provenance": "molmospaces_base_navigation_map",
             "source_schema": "nav2_cleanup_semantics_v1",
             "source_bundle_root": "assets/maps/molmospaces-procthor-val-0-7",
             "artifact_paths": {
@@ -892,7 +892,7 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
                 "inspection_waypoints": [{"waypoint_id": "room_1_scan_1", "x": 1.0, "y": 1.0}],
                 "robot_pose": {"x": 1.0, "y": 1.0},
             },
-            "fixture_hints": {
+            "static_fixture_projection": {
                 "rooms": [
                     {
                         "room_id": "room_1",
@@ -927,7 +927,7 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     assert "What it proves" in html
     assert "What it does not prove" in html
     assert "Agibot-shaped base navigation map preview" in html
-    assert "molmospaces_public_semantic_map" in html
+    assert "molmospaces_base_navigation_map" in html
     assert "not a real Agibot GDK map" in html
     assert 'src="map_bundle/preview.png"' in html
     assert "semantic_map.png" not in html
@@ -987,8 +987,8 @@ def test_cleanup_report_does_not_generate_schematic_preview_when_occupancy_frame
             "robot_profile_id": "rby1m",
             "costmap_profile_id": "rby1m_static_global",
             "parameter_hash": "abcdef0123456789",
-            "map_id": "molmospaces-procthor-val-0-7_semantic_map",
-            "source_provenance": "molmospaces_public_semantic_map",
+            "map_id": "molmospaces-procthor-val-0-7_base_navigation_map",
+            "source_provenance": "molmospaces_base_navigation_map",
             "artifact_paths": {
                 "map_yaml": "map_bundle/map.yaml",
                 "occupancy_image": "map_bundle/map.pgm",
@@ -1014,7 +1014,7 @@ def test_cleanup_report_does_not_generate_schematic_preview_when_occupancy_frame
                 "inspection_waypoints": [{"waypoint_id": "room_1_scan_1", "x": 1.0, "y": 1.0}],
                 "robot_pose": {"x": 1.0, "y": 1.0},
             },
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
         },
     }
 
@@ -1170,7 +1170,7 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
         "agent_view": {
             "perception_mode": "raw_fpv_only",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [],
             "raw_fpv_observations": [
                 {
@@ -1268,7 +1268,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
         "agent_view": {
             "perception_mode": "raw_fpv_only",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [],
             "raw_fpv_observations": [
                 {
@@ -1468,7 +1468,7 @@ def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
         "agent_view": {
             "perception_mode": "camera_model_policy",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "raw_fpv_observations": [
                 {
                     "observation_id": "raw_fpv_001",
@@ -1614,7 +1614,7 @@ def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) 
         "agent_view": {
             "perception_mode": "camera_model_policy",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [
                 {
                     "object_id": "observed_001",
@@ -1810,7 +1810,7 @@ def test_cleanup_report_renders_planner_proof_requests_before_agent_view(
         "agent_view": {
             "contract": "realworld_cleanup_v1",
             "metric_map": {"rooms": [], "inspection_waypoints": []},
-            "fixture_hints": {"rooms": []},
+            "static_fixture_projection": {"rooms": []},
             "observed_objects": [{"object_id": "observed_001", "category": "dish"}],
         },
         "private_evaluation": {

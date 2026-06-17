@@ -781,7 +781,7 @@ def _static_navigation_preview(
     bundle = write_nav2_map_bundle_snapshot(
         run_dir=run_dir,
         metric_map=contract.metric_map(),
-        fixture_hints=contract.fixture_hints(),
+        static_fixture_projection=contract.static_fixture_projection(),
     )
     preview_path = run_dir / str(
         (bundle.get("artifact_paths") or {}).get("preview_png") or "map_bundle/preview.png"

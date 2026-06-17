@@ -391,7 +391,9 @@ def _trajectory_grader(
         for group in required_groups
         if not response_tools.intersection(group)
     )
-    fixture_hints_count = sum(1 for event in trace_events if event.get("tool") == "fixture_hints")
+    static_fixture_projection_count = sum(
+        1 for event in trace_events if event.get("tool") == "static_fixture_projection"
+    )
     violations = list(missing_tools)
     failed_or_noop_count = _int_value(
         run_result.get("score", {}).get("failed_or_noop_tool_count")
@@ -405,8 +407,8 @@ def _trajectory_grader(
         "missing_required_tools": missing_tools,
         "violation_count": len(violations),
         "violations": violations,
-        "fixture_hints_trace_count": fixture_hints_count,
-        "fixture_hints_policy": (
+        "static_fixture_projection_trace_count": static_fixture_projection_count,
+        "static_fixture_projection_policy": (
             "direct_runner_internal_compatibility"
             if sample.allowed_agent_engines == ("direct-runner",)
             else "trajectory_violation_for_live_mcp"
@@ -538,9 +540,7 @@ def _efficiency_grader(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str
         "status": "passed",
         "tool_event_count": sum(_int_value(value) for value in tool_counts.values()),
         "tool_call_count": sum(
-            _int_value(value)
-            for key, value in tool_counts.items()
-            if str(key).endswith(":request")
+            _int_value(value) for key, value in tool_counts.items() if str(key).endswith(":request")
         ),
         "tool_event_counts": dict(tool_counts),
         "wall_time_s": _first_available_number(
@@ -718,8 +718,10 @@ def _waypoint_or_area_visited_predicate(
         for anchor in anchors
     )
     waypoint_visited = not waypoint_id or waypoint_id in visited_waypoints
-    passed = waypoint_visited and (not room_id or room_id in observed_rooms) and (
-        not anchor_id or anchor_present or waypoint_visited
+    passed = (
+        waypoint_visited
+        and (not room_id or room_id in observed_rooms)
+        and (not anchor_id or anchor_present or waypoint_visited)
     )
     return {
         "predicate_id": "waypoint_or_area_visited",

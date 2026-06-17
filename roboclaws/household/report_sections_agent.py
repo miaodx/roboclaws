@@ -17,16 +17,16 @@ def agent_view_section(run_result: dict[str, Any]) -> str:
     runtime_metric_map = (
         agent_view.get("runtime_metric_map") or run_result.get("runtime_metric_map") or {}
     )
-    fixture_hints = agent_view.get("fixture_hints") or {}
+    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
     observed = agent_view.get("observed_objects") or []
     raw_observations = agent_view.get("raw_fpv_observations") or []
     worklist = agent_view.get("cleanup_worklist") or {}
     scratchpad = run_result.get("agent_scratchpad") or {}
     waypoints = metric_map.get("inspection_waypoints") or []
-    rooms = fixture_hints.get("rooms") or []
+    rooms = static_fixture_projection.get("rooms") or []
     summary = (
         f"{len(metric_map.get('rooms') or [])} public rooms, "
-        f"{len(rooms)} fixture-hint room rows, {len(waypoints)} inspection waypoints, "
+        f"{len(rooms)} static fixture projection room rows, {len(waypoints)} inspection waypoints, "
         f"{len(observed)} observed object handles, "
         f"{len(raw_observations)} raw FPV observations."
     )
@@ -684,7 +684,7 @@ def _real_robot_readiness_badges(readiness: dict[str, Any]) -> str:
         (
             _badge("Map shape", readiness.get("map_bundle_fields_present", False)),
             _badge("PoseStamped waypoints", readiness.get("pose_stamped_waypoints", False)),
-            _badge("Static fixtures only", readiness.get("static_fixture_semantic_map", False)),
+            _badge("Static fixtures only", readiness.get("static_fixture_projection", False)),
             _badge(
                 "Chase excluded from policy",
                 readiness.get("policy_view_chase_excluded", False),

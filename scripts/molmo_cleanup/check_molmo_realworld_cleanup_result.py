@@ -428,7 +428,7 @@ def _assert_core_run_result(data: dict[str, Any], opts: _ResultOptions) -> tuple
     assert data.get("semantic_loop_variant") == SEMANTIC_LOOP_VARIANT, data
     assert data.get("policy_uses_private_truth") is False, data
     assert data.get("planner_uses_private_manifest") is False, data
-    assert data.get("fixture_hint_mode") == "room_only", data
+    assert data.get("static_fixture_projection_mode") == "room_only", data
     assert data.get("generated_mess_count", 0) >= opts["min_generated_mess_count"], data
     raw_contract_only = (
         opts["require_raw_fpv_observations"]
@@ -776,7 +776,7 @@ def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
     public_requests = 0
     for tool in (
         "metric_map",
-        "fixture_hints",
+        "static_fixture_projection",
         "navigate_to_waypoint",
         "observe",
         *SEMANTIC_RESPONSE_PHASES,
@@ -1200,8 +1200,8 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
     static_map = runtime_map.get("static_map") or {}
     nav2_bundle = data.get("nav2_map_bundle") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
-    scene_index_overlay = fixture_hints.get("scene_index_fixture_overlay") or {}
+    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
+    scene_index_overlay = static_fixture_projection.get("scene_index_fixture_overlay") or {}
 
     if scene_index_overlay:
         assert scene_index_overlay.get("enabled") is True, scene_index_overlay
@@ -1209,7 +1209,7 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     else:
         assert isaac.get("scenario_source") == "isaac_scene_index", {
             "isaac_runtime": isaac,
-            "fixture_hints": fixture_hints,
+            "static_fixture_projection": static_fixture_projection,
         }
     _assert_map_bundle_environment(metric_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(static_map.get("map_bundle") or {}, scenario_id)
@@ -1222,7 +1222,7 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
         _assert_isaac_scene_index_room_scale(metric_map)
         _assert_isaac_scene_index_room_scale(static_map)
     assert "source_bundle_root" not in nav2_bundle, nav2_bundle
-    assert nav2_bundle.get("source_provenance") == "molmospaces_public_semantic_map", nav2_bundle
+    assert nav2_bundle.get("source_provenance") == "molmospaces_base_navigation_map", nav2_bundle
 
     artifact_paths = nav2_bundle.get("artifact_paths") or {}
     semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
@@ -1716,7 +1716,7 @@ def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any
 def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:
     agent_view = data.get("agent_view") or {}
     metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
+    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
     assert metric_map.get("schema") == REAL_ROBOT_MAP_BUNDLE_SCHEMA, metric_map
     for key in (
         "frame_id",
@@ -1740,10 +1740,14 @@ def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: 
     for waypoint in waypoints:
         for key in ("frame_id", "x", "y", "yaw", "room_id", "label", "visited", "purpose"):
             assert key in waypoint, waypoint
-    assert fixture_hints.get("schema") == "static_fixture_semantic_map_v1", fixture_hints
-    assert fixture_hints.get("contains_runtime_observations") is False, fixture_hints
-    assert "observations" not in fixture_hints, fixture_hints
-    for room in fixture_hints.get("rooms") or []:
+    assert static_fixture_projection.get("schema") == "static_fixture_projection_v1", (
+        static_fixture_projection
+    )
+    assert static_fixture_projection.get("contains_runtime_observations") is False, (
+        static_fixture_projection
+    )
+    assert "observations" not in static_fixture_projection, static_fixture_projection
+    for room in static_fixture_projection.get("rooms") or []:
         for fixture in room.get("fixtures") or []:
             assert fixture.get("fixture_id"), fixture
             assert fixture.get("affordances"), fixture
@@ -1756,7 +1760,7 @@ def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: 
     assert readiness.get("schema") == REAL_ROBOT_READINESS_SCHEMA, readiness
     assert readiness.get("map_bundle_fields_present") is True, readiness
     assert readiness.get("pose_stamped_waypoints") is True, readiness
-    assert readiness.get("static_fixture_semantic_map") is True, readiness
+    assert readiness.get("static_fixture_projection") is True, readiness
     assert readiness.get("policy_view_chase_excluded") is True, readiness
     assert readiness.get("semantic_navigation_only") is True, readiness
     assert readiness.get("sim_costmap_route_validation") is True, readiness

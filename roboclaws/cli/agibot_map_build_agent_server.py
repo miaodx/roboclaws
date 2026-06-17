@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\nAgent task:")
     print("  Call metric_map first and use public map anchors plus observations.")
     print("  Navigate only to public waypoint ids, observe with head_color, then call done.")
-    print("  Do not call fixture_hints, raw Agibot GDK tools, or invent coordinates.\n")
+    print("  Do not call static_fixture_projection, raw Agibot GDK tools, or invent coordinates.\n")
     sys.stdout.flush()
 
     try:

@@ -8,33 +8,33 @@ from roboclaws.household.realworld_contract import forbidden_agent_view_keys
 def assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
     assert data.get("map_mode") == "minimal", data
     metric_map = agent_view.get("metric_map") or {}
-    fixture_hints = agent_view.get("fixture_hints") or {}
+    static_fixture_projection = agent_view.get("static_fixture_projection") or {}
     runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
     static_map = runtime_map.get("static_map") or {}
-    _assert_minimal_core(metric_map, fixture_hints, runtime_map)
-    _assert_minimal_rooms_and_static_map(metric_map, fixture_hints, static_map)
+    _assert_minimal_core(metric_map, static_fixture_projection, runtime_map)
+    _assert_minimal_rooms_and_static_map(metric_map, static_fixture_projection, static_map)
     _assert_minimal_waypoints(metric_map, runtime_map)
     semantic_sweep = data.get("semantic_sweep")
     if semantic_sweep is not None:
         assert semantic_sweep.get("minimal_map_mode") is True, data
     _assert_no_forbidden_keys(metric_map)
-    _assert_no_forbidden_keys(fixture_hints)
+    _assert_no_forbidden_keys(static_fixture_projection)
 
 
 def _assert_minimal_core(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     runtime_map: dict[str, Any],
 ) -> None:
     assert metric_map.get("mode") == "minimal", metric_map
-    assert fixture_hints.get("mode") == "minimal", fixture_hints
+    assert static_fixture_projection.get("mode") == "minimal", static_fixture_projection
     assert runtime_map.get("map_mode") == "minimal", runtime_map
     assert runtime_map.get("minimal_map_mode") is True, runtime_map
 
 
 def _assert_minimal_rooms_and_static_map(
     metric_map: dict[str, Any],
-    fixture_hints: dict[str, Any],
+    static_fixture_projection: dict[str, Any],
     static_map: dict[str, Any],
 ) -> None:
     rooms = metric_map.get("rooms") or []
@@ -48,7 +48,7 @@ def _assert_minimal_rooms_and_static_map(
         isinstance(hint, dict) and hint.get("anchor_type") == "room_area"
         for hint in room_category_hints
     ), room_category_hints
-    assert fixture_hints.get("rooms") == [], fixture_hints
+    assert static_fixture_projection.get("rooms") == [], static_fixture_projection
     _assert_static_map(static_map)
 
 

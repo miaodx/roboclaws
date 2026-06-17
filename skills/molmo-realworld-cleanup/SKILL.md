@@ -181,7 +181,7 @@ place(candidate_fixture_id)                # for normal surfaces instead of plac
 observe()
 ```
 
-Choose `place_inside` when the observation or fixture hints recommend it, or
+Choose `place_inside` when the observation or static fixture projection recommend it, or
 when the target fixture affordances/category indicate fridge, refrigerator,
 shelf, bookcase, or shelving. Choose `place` for table, sofa, bed, desk, sink,
 counter, stand, hamper, and other surface-like fixtures. If any tool returns
