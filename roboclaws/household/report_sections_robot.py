@@ -61,7 +61,8 @@ def robot_timeline_section(
         '<section class="panel robot-timeline"><h2>Robot View Timeline</h2>'
         f"{_isaac_static_robot_view_notice(static_capture)}"
         '<p class="note">FPV and top-down scene views are the default visual review '
-        "surfaces. Semantic Map is rendered separately from public map/runtime data. "
+        "surfaces. Base Navigation Map preview and Runtime Metric Map evidence are "
+        "rendered separately from scene imagery. "
         "FPV+bbox verification is generated from public visual-grounding boxes when present. "
         "Chase and top-view bbox verification are simulation/report-only evidence, "
         "not policy input and not private scoring truth. Observe role badges distinguish "

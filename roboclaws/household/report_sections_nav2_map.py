@@ -25,24 +25,32 @@ def nav2_map_bundle_section(
         return ""
     artifacts = bundle.get("artifact_paths") or {}
     hashes = bundle.get("artifact_hashes") or {}
+    agent_view = run_result.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
     map_contract_label = _map_contract_label(bundle)
     map_contract_note = _map_contract_note(bundle)
-    static_preview = _write_nav2_static_navigation_preview(
+    preview = _nav2_bundle_preview_asset(
         run_dir,
-        run_result,
+        artifacts,
+        metric_map=metric_map,
+        fixture_hints=fixture_hints,
         report_asset_src=report_asset_src,
-    ) or artifacts.get("preview_png", "")
-    semantic_map_path = run_dir / "semantic_map.png"
-    semantic_preview = (
-        report_asset_src(semantic_map_path, run_dir) if semantic_map_path.is_file() else ""
     )
-    preview = semantic_preview or static_preview
+    fallback_preview = ""
+    if not preview:
+        fallback_preview = _write_nav2_static_navigation_preview(
+            run_dir,
+            run_result,
+            report_asset_src=report_asset_src,
+        )
+        preview = fallback_preview
     preview_figure = (
         '<figure class="nav2-preview">'
         f"{review_image(preview, map_contract_label)}"
         f"<figcaption><strong>{html.escape(map_contract_label)}</strong>"
-        "<span>Raw/source-map aligned view: semantic polygons, navigation points, "
-        "fixtures, and robot pose share the map frame.</span>"
+        "<span>Raw/source-map aligned static navigation preview. Runtime semantic "
+        "evidence is reported from Runtime Metric Map JSON and tables, not this image.</span>"
         "</figcaption>"
         "</figure>"
         if preview
@@ -65,11 +73,11 @@ def nav2_map_bundle_section(
             f"<td><code>{html.escape(str(hashes.get(key, ''))[:16])}</code></td>"
             "</tr>"
         )
-    if static_preview and static_preview != preview:
+    if fallback_preview:
         rows.append(
             "<tr>"
             "<td>report_static_navigation_map.png</td>"
-            f"<td>{html.escape(str(static_preview))}</td>"
+            f"<td>{html.escape(str(fallback_preview))}</td>"
             "<td><code></code></td>"
             "</tr>"
         )
@@ -96,14 +104,14 @@ def nav2_map_bundle_section(
     )
     return (
         '<section class="panel nav2-map-bundle">'
-        "<h2>Semantic Map "
+        "<h2>Base Navigation Map Preview "
         f"<span>Nav2 Map Bundle / {html.escape(_map_contract_subtitle(bundle))}</span></h2>"
         '<p class="note">The Nav2 Map Bundle files are the map package a Nav2-style robot '
-        "would consume: occupancy grid, semantic fixture map, robot footprint, costmap "
-        "parameters, and report views. The first-slice semantic map view is rendered in "
+        "would consume: occupancy grid, static fixture semantics, robot footprint, costmap "
+        "parameters, and report views. The static navigation preview is rendered in "
         "the raw/source map orientation; no rectified display frame is substituted. The "
-        "raw occupancy artifact remains linked below. This "
-        "is not live ROS/Nav2 execution.</p>"
+        "raw occupancy artifact remains linked below. This is not Runtime Metric Map "
+        "evidence and not live ROS/Nav2 execution.</p>"
         f'<p class="note">{html.escape(map_contract_note)}</p>'
         f"{metrics}"
         '<div class="nav2-explainer">'
@@ -124,10 +132,10 @@ def nav2_map_bundle_section(
 def _map_contract_label(bundle: dict[str, Any]) -> str:
     source = str(bundle.get("source_provenance") or "")
     if "agibot" in source.lower():
-        return "Agibot GDK semantic map view"
+        return "Agibot GDK base navigation map preview"
     if "molmospaces" in source.lower():
-        return "Agibot-shaped semantic map view"
-    return "Semantic map preview"
+        return "Agibot-shaped base navigation map preview"
+    return "Static navigation map preview"
 
 
 def _map_contract_subtitle(bundle: dict[str, Any]) -> str:
@@ -149,7 +157,7 @@ def _map_contract_note(bundle: dict[str, Any]) -> str:
     elif "molmospaces" in source.lower():
         prefix = (
             "This map bundle is not a real Agibot GDK map; it is a MolmoSpaces public "
-            "semantic map rendered through the Agibot-shaped household "
+            "static navigation map rendered through the Agibot-shaped household "
             "map contract."
         )
     else:
@@ -160,6 +168,31 @@ def _map_contract_note(bundle: dict[str, Any]) -> str:
     if source_root:
         details += f" Source root: {source_root}."
     return prefix + details
+
+
+def _nav2_bundle_preview_asset(
+    run_dir: Path,
+    artifacts: dict[str, Any],
+    *,
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    report_asset_src: ReportAssetSrcResolver,
+) -> str:
+    preview_path = run_dir / str(artifacts.get("preview_png") or "map_bundle/preview.png")
+    map_pgm = run_dir / str(artifacts.get("occupancy_image") or "map_bundle/map.pgm")
+    map_yaml = run_dir / str(artifacts.get("map_yaml") or "map_bundle/map.yaml")
+    if preview_path.is_file() and (
+        not map_pgm.is_file()
+        or not map_yaml.is_file()
+        or _nav2_occupancy_preview_has_usable_framing(
+            map_pgm=map_pgm,
+            map_yaml=map_yaml,
+            metric_map=metric_map,
+            fixture_hints=fixture_hints,
+        )
+    ):
+        return report_asset_src(preview_path, run_dir)
+    return ""
 
 
 def _write_nav2_static_navigation_preview(

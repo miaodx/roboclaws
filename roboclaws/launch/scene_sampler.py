@@ -1263,22 +1263,15 @@ def _static_scanner_preview_metadata(*, source: str, scene_index: int) -> dict[s
     metadata = scanner_metadata(source=source, scene_index=scene_index)
     room_count = int(metadata["room_count"])
     waypoint_count = int(metadata["waypoint_count"])
-    room_ids = [f"room_{index}" for index in range(room_count)]
-    projected_waypoints = [
-        {"waypoint_id": f"wp_{index}", "room_id": room_ids[index % room_count]}
-        for index in range(waypoint_count)
-    ]
     views = {
         view: {"image_diagnostics": {"visual_status": "reviewable"}} for view in _required_views()
-    }
-    views["map"]["semantic_projection"] = {
-        "rendered_waypoint_count": waypoint_count,
-        "projected_waypoints": projected_waypoints,
     }
     return {
         "scene_source": source,
         "scene_index": scene_index,
         "backend": PRIMARY_MOLMOSPACES_BACKEND,
+        "room_count": room_count,
+        "waypoint_count": waypoint_count,
         "views": views,
     }
 
@@ -1293,29 +1286,12 @@ def _view_statuses(preview: dict[str, Any]) -> dict[str, str]:
 
 
 def _room_ids(preview: dict[str, Any]) -> tuple[str, ...]:
-    semantic_projection = ((preview.get("views") or {}).get("map") or {}).get(
-        "semantic_projection"
-    ) or {}
-    waypoints = semantic_projection.get("projected_waypoints") or []
-    return tuple(
-        sorted(
-            {
-                str(item.get("room_id") or "")
-                for item in waypoints
-                if isinstance(item, dict) and item.get("room_id")
-            }
-        )
-    )
+    count = int(preview.get("room_count") or 0)
+    return tuple(f"room_{index}" for index in range(count))
 
 
 def _waypoint_count(preview: dict[str, Any]) -> int:
-    semantic_projection = ((preview.get("views") or {}).get("map") or {}).get(
-        "semantic_projection"
-    ) or {}
-    return int(
-        semantic_projection.get("rendered_waypoint_count")
-        or len(semantic_projection.get("projected_waypoints") or [])
-    )
+    return int(preview.get("waypoint_count") or 0)
 
 
 def _quality_score(preview: dict[str, Any]) -> float:

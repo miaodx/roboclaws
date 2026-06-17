@@ -89,7 +89,6 @@ from roboclaws.household.report_sections_robot import (
     visual_core_robot_view_steps,
 )
 from roboclaws.household.report_sections_timing import runtime_timing_section
-from roboclaws.household.report_semantic_map_artifacts import write_semantic_map_artifacts
 from roboclaws.household.semantic_timeline import (
     OBJECT_DONE_PHASE,
     PLACE_CLEANUP_PHASES,
@@ -200,12 +199,6 @@ def _cleanup_report_sections(
     """Return the canonical Cleanup Artifact Report section sequence."""
     moves = _extract_moves(trace_events)
     score = run_result["score"]
-    write_semantic_map_artifacts(
-        run_dir,
-        run_result,
-        robot_view_steps,
-        report_asset_src=_report_asset_src,
-    )
     return _present_sections(
         [
             _cleanup_report_tabs(),

@@ -12,9 +12,15 @@ from roboclaws.operator_console.state import (
     resolve_display_run_dir,
 )
 
-MUJOCO_CLAUDE_CLEANUP = "molmospaces/val_0::mujoco::cleanup::claude-code::world-public-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
-MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-public-labels"
+MUJOCO_CLAUDE_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::claude-code::world-public-labels"
+)
+MUJOCO_CODEX_CLEANUP = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::codex-cli::world-public-labels"
+)
+MUJOCO_CODEX_MAP_BUILD = (
+    "molmospaces/procthor-objaverse-val/0::mujoco::map-build::codex-cli::world-public-labels"
+)
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
 
 
@@ -521,12 +527,15 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
     )
     robot_map = robot_views / "0042_observe.map.png"
     report_map = map_bundle / "report_static_navigation_map.png"
+    bundle_preview = map_bundle / "preview.png"
     semantic_map = run_dir / "semantic_map.png"
     robot_map.write_bytes(b"robot map")
     report_map.write_bytes(b"report map")
+    bundle_preview.write_bytes(b"bundle preview")
     semantic_map.write_bytes(b"semantic map")
     os.utime(robot_map, (1, 1))
     os.utime(report_map, (2, 2))
+    os.utime(bundle_preview, (3, 3))
     os.utime(semantic_map, (3, 3))
     (run_dir / "run_result.json").write_text(
         json.dumps(
@@ -548,7 +557,7 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
 
-    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
+    assert state["latest_view_assets"]["map"]["path"] == str(bundle_preview.resolve())
     assert "topdown" not in state["latest_view_assets"]
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
@@ -575,7 +584,7 @@ def test_state_does_not_use_map_artifacts_as_top_down_scene_view(
 
     state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_MAP_BUILD))
 
-    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
+    assert "map" not in state["latest_view_assets"]
     assert "topdown" not in state["latest_view_assets"]
 
 

@@ -37,7 +37,6 @@ from roboclaws.household.realworld_mcp_run_artifacts import (
 from roboclaws.household.report import (
     write_state_snapshot,
 )
-from roboclaws.household.report_semantic_map_artifacts import write_semantic_map_artifacts
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
     camera_offsets_from_raw_fpv_observation,
@@ -406,26 +405,6 @@ class RealWorldMolmoCleanupMCPServer:
             )
             _write_json(self.run_dir / "agent_view.json", agent_view)
             _write_json(self.run_dir / "runtime_metric_map.json", runtime_metric_map)
-            run_result = {
-                "backend": self.backend_name,
-                "task_surface": self.task_surface,
-                "task_intent": self.task_intent,
-                "task_name": self.task_name,
-                "map_mode": runtime_metric_map.get("map_mode", self.contract.map_mode),
-                "minimal_map_mode": runtime_metric_map.get("minimal_map_mode", False),
-                "agent_view": agent_view,
-                "runtime_metric_map": runtime_metric_map,
-                "artifacts": {
-                    "agent_view": str(self.run_dir / "agent_view.json"),
-                    "runtime_metric_map": str(self.run_dir / "runtime_metric_map.json"),
-                },
-            }
-            write_semantic_map_artifacts(
-                self.run_dir,
-                run_result,
-                self.robot_view_steps,
-                report_asset_src=_live_report_asset_src,
-            )
         except Exception as exc:
             self.write_runtime_event(
                 "live_public_artifact_write_failed",

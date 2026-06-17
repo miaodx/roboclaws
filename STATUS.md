@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -39,6 +39,12 @@ The household-world launch contract remains the active product shape:
 contract, with `preset=map-build` and `preset=cleanup` for standard jobs, plus
 the `surface=planner-proof` confidence route.
 
+The sim household map surface simplification is implemented. Current sim
+reports and operator-console map slots distinguish the Base Navigation Map
+preview from Runtime Metric Map evidence, keep Actionable Semantic Map Snapshot
+as a prior wrapper, and no longer publish generated `semantic_map.png` /
+`map_overlay.json` previews as current semantic-map proof.
+
 The active visual-grounding sidecar contract is now detector-only: hosted VLM
 refiner/direct-producer camera labelers are retired from active code, command
 examples, tests, and benchmark promotion. OpenClaw remains available only as a
@@ -67,6 +73,8 @@ open-ended eval matrix expansion is
 `docs/plans/2026-06-16-open-ended-eval-matrix-expansion.md`. The active eval
 architecture source of truth is
 `docs/plans/2026-06-14-eval-driven-architecture.md`, backed by ADR-0140. The
+implemented sim map surface simplification is
+`docs/plans/2026-06-17-sim-map-surface-simplification.md`. The
 implemented household launch contract is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
 ADR-0136. The implemented visual-grounding cleanup is
@@ -78,10 +86,10 @@ thin review/runtime contract is
 
 ## Next Action
 
-Pick the next repo maintenance or product slice. The eval-driven architecture
-and non-cleanup eval support plans are implemented; remaining broader
-live-provider and OpenClaw proofs are environment-dependent validation items,
-not active implementation blockers.
+Pick the next repo maintenance or product slice. The eval-driven architecture,
+non-cleanup eval support, and sim map surface simplification plans are
+implemented; remaining broader live-provider and OpenClaw proofs are
+environment-dependent validation items, not active implementation blockers.
 
 ## Current Blocker
 
@@ -111,6 +119,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-15-non-cleanup-eval-support.md`
 - Implemented open-ended eval matrix expansion:
   `docs/plans/2026-06-16-open-ended-eval-matrix-expansion.md`
+- Implemented sim map surface simplification:
+  `docs/plans/2026-06-17-sim-map-surface-simplification.md`
 - Active eval-suite ADR:
   `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`
 - Implemented household map/launch/open-ended plan:

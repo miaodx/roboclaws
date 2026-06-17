@@ -567,7 +567,7 @@ sections.
 | Shape | Required Settings | Expected Sections |
 |-------|-------------------|-------------------|
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
-| Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, top-down scene view, and verification. Semantic Map is rendered separately from public map/runtime evidence. |
+| Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, top-down scene view, and verification. Base Navigation Map preview and Runtime Metric Map evidence are rendered separately from scene imagery. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
 | Sanitized detector evidence | `evidence_lane=world-public-labels` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation authorization remain policy-required until source-FPV confirmation. |
 | Model-declared camera cleanup | `camera-raw-fpv` or `camera-grounded-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |

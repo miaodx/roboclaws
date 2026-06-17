@@ -29,13 +29,8 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
+from roboclaws.maps.bundle import write_nav2_map_bundle_snapshot  # noqa: E402
 from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle  # noqa: E402
-from scripts.operator_console.semantic_map_preview import (  # noqa: E402
-    render_semantic_map_preview as _render_semantic_map_preview,
-)
-from scripts.operator_console.semantic_map_preview import (  # noqa: E402
-    semantic_map_preview_projection_summary as _semantic_map_preview_projection_summary,
-)
 
 PREVIEW_METADATA_SCHEMA = "operator_console_scene_preview_v1"
 DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
@@ -51,8 +46,7 @@ B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
     "output/operator-console-scene-previews/b1-map12-runtime-map-bundle"
 )
 B1_SCENE_USD_PATH = Path(
-    "data/robot-data-lab/scene-engine/data/"
-    "2rd_floor_seperated/storey_1/scene_gs.usda"
+    "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
 )
 
 
@@ -68,8 +62,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description=(
             "Render operator-console scene previews. MolmoSpaces previews are real "
             "MuJoCo renders: Raw FPV is captured from the first public waypoint, "
-            "Chase is the robot follower camera, and Top-down is a separate scene "
-            "camera render rather than a semantic-map fallback. B1 / Map 12 "
+            "Chase is the robot follower camera, the map preview is static Base "
+            "Navigation Map context, and Top-down is a separate scene camera render. B1 / Map 12 "
             "previews are static map assets generated from the raw map bundle plus "
             "the human review manifest so the console can show the experimental "
             "digital twin before Isaac starts without presenting fake FPV or chase "
@@ -92,8 +86,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--skip-existing",
         action="store_true",
         help=(
-            "Do not render a world when FPV, semantic map, chase, and top-down preview "
-            "files already exist."
+            "Do not render a world when FPV, static map, chase, and top-down preview files "
+            "already exist."
         ),
     )
     parser.add_argument(
@@ -248,20 +242,13 @@ def render_molmospaces_preview(
         state_path = run_dir / "backend" / "molmospaces_backend_state.json"
         state = json.loads(state_path.read_text(encoding="utf-8"))
         scene_alignment = _scene_alignment(state, width=width, height=height)
-        semantic_map = _render_semantic_map_preview(
-            state,
-            metric_map=metric_map,
-            alignment=scene_alignment,
-            world_label=world_id,
+        static_map = _static_navigation_preview(
+            contract=contract,
+            run_dir=run_dir,
             width=width,
             height=height,
         )
-        semantic_map.save(map_path)
-        semantic_projection = _semantic_map_preview_projection_summary(
-            state,
-            metric_map=metric_map,
-            alignment=scene_alignment,
-        )
+        static_map.save(map_path)
 
         topdown_request = _topdown_camera_request(
             state,
@@ -327,7 +314,6 @@ def render_molmospaces_preview(
             chase_selection=chase_selection,
             topdown_path=topdown_path,
             scene_alignment=scene_alignment,
-            semantic_projection=semantic_projection,
         )
         metadata_path.write_text(
             json.dumps(metadata, indent=2, sort_keys=True) + "\n",
@@ -457,9 +443,7 @@ def render_b1_map12_preview(
         }
 
     semantics = json.loads((map_bundle / "semantics.json").read_text(encoding="utf-8"))
-    provenance = json.loads(
-        (map_bundle / "b1_runtime_provenance.json").read_text(encoding="utf-8")
-    )
+    provenance = json.loads((map_bundle / "b1_runtime_provenance.json").read_text(encoding="utf-8"))
     map_image = _fit_preview_image(
         Image.open(map_bundle / "preview.png"), width=width, height=height
     )
@@ -505,8 +489,7 @@ def render_b1_map12_preview(
         metadata["camera_preview_artifact"] = camera_result["artifact"]
     elif preserved_camera is not None:
         metadata["renderer"] = (
-            preserved_camera.get("renderer")
-            or "static_b1_map12_with_isaac_runtime_camera_previews"
+            preserved_camera.get("renderer") or "static_b1_map12_with_isaac_runtime_camera_previews"
         )
         metadata["views"]["fpv"] = preserved_camera["views"]["fpv"]
         metadata["views"]["chase"] = preserved_camera["views"]["chase"]
@@ -795,6 +778,26 @@ def _b1_camera_label_from_view_path(raw_path: Any) -> str:
     return name
 
 
+def _static_navigation_preview(
+    *,
+    contract: RealWorldCleanupContract,
+    run_dir: Path,
+    width: int,
+    height: int,
+) -> Image.Image:
+    bundle = write_nav2_map_bundle_snapshot(
+        run_dir=run_dir,
+        metric_map=contract.metric_map(),
+        fixture_hints=contract.fixture_hints(),
+    )
+    preview_path = run_dir / str(
+        (bundle.get("artifact_paths") or {}).get("preview_png") or "map_bundle/preview.png"
+    )
+    if not preview_path.is_file():
+        raise RuntimeError(f"missing static navigation preview: {preview_path}")
+    return _fit_preview_image(Image.open(preview_path), width=width, height=height)
+
+
 def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path | None:
     if not raw_path:
         return None
@@ -853,7 +856,6 @@ def _preview_metadata(
     chase_selection: dict[str, Any],
     topdown_path: Path,
     scene_alignment: dict[str, Any],
-    semantic_projection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     topdown_view = next(
         (
@@ -888,12 +890,9 @@ def _preview_metadata(
             },
             "map": {
                 "path": map_path.name,
-                "view": "semantic_map_aligned_preview",
-                "provenance": "scene_state_semantic_overlay_shared_bounds",
-                "alignment_status": "aligned_to_topdown_scene_bounds",
-                "semantic_map_fallback": False,
-                "scene_alignment": scene_alignment,
-                "semantic_projection": semantic_projection or {},
+                "view": "base_navigation_map_preview",
+                "provenance": "map_bundle_preview_png",
+                "alignment_status": "source_map_frame_preview",
                 "image_diagnostics": _image_diagnostics(map_path),
             },
             "chase": {
@@ -1085,7 +1084,7 @@ def _topdown_camera_request(
             {
                 "view_id": "topdown_scene",
                 "label": "Top-down Scene View",
-                "camera_basis": "whole_scene_true_topdown_aligned_to_semantic_map",
+                "camera_basis": "whole_scene_true_topdown_aligned_to_scene_bounds",
                 "eye": [center[0], center[1], camera_height],
                 "target": center,
                 "azimuth": 90.0,

@@ -848,6 +848,9 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
         tmp_path / "after.png",
         title="After",
     )
+    map_bundle = tmp_path / "map_bundle"
+    map_bundle.mkdir()
+    Image.new("RGB", (320, 180), (247, 249, 252)).save(map_bundle / "preview.png")
     run_result = {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
@@ -917,26 +920,27 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert "Semantic Map <span>Nav2 Map Bundle / Agibot-shaped static map contract</span>" in html
+    assert (
+        "Base Navigation Map Preview "
+        "<span>Nav2 Map Bundle / Agibot-shaped static map contract</span>"
+    ) in html
     assert "What it proves" in html
     assert "What it does not prove" in html
-    assert "Agibot-shaped semantic map view" in html
+    assert "Agibot-shaped base navigation map preview" in html
     assert "molmospaces_public_semantic_map" in html
     assert "not a real Agibot GDK map" in html
-    assert 'src="semantic_map.png"' in html
-    assert "report_static_navigation_map.png" in html
+    assert 'src="map_bundle/preview.png"' in html
+    assert "semantic_map.png" not in html
+    assert "map_overlay.json" not in html
+    assert "report_static_navigation_map.png" not in html
     assert "Green dots" in html
     assert "Blue dot" in html
     assert "not a camera image" in html
     assert "Map files, hashes, and known gaps" in html
     assert "tf_timing_not_simulated" in html
-    assert (tmp_path / "map_bundle" / "report_static_navigation_map.png").exists()
-    assert (tmp_path / "semantic_map.png").exists()
-    assert (tmp_path / "map_overlay.json").exists()
-    overlay = json.loads((tmp_path / "map_overlay.json").read_text(encoding="utf-8"))
-    assert overlay["schema"] == "roboclaws_map_overlay_v1"
-    assert overlay["semantic_map"]["private_truth_included"] is False
-    assert overlay["waypoints"][0]["waypoint_id"] == "room_1_scan_1"
+    assert not (tmp_path / "map_bundle" / "report_static_navigation_map.png").exists()
+    assert not (tmp_path / "semantic_map.png").exists()
+    assert not (tmp_path / "map_overlay.json").exists()
 
 
 def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerate(

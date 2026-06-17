@@ -54,6 +54,13 @@ _Avoid_: False-positive failure
 A public map of rooms, walls, doors, driveable ways, and robot pose.
 _Avoid_: Semantic object oracle
 
+**Base Navigation Map**:
+The start-of-run agent-facing map context: occupancy/free-space geometry,
+frame metadata, robot pose, public room-category hints when available, and
+generated safe exploration or inspection candidates. Runtime observations and
+semantic enrichment belong in the Runtime Metric Map.
+_Avoid_: rich fixture map, static object oracle, private target map
+
 **Prebuilt Robot Map Bundle**:
 A static operator-prepared map package containing navigation geometry, frame
 metadata, fixture semantics, and inspection waypoints.
@@ -224,6 +231,9 @@ _Avoid_: assuming object assets imply usable cached grasps
   perception data.
 - A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
   fixture semantics before runtime observations begin.
+- A **Base Navigation Map** is the current start-of-run projection of public
+  map context for household tasks; **Runtime Metric Map** evidence enriches it
+  without mutating the source map.
 - **Relative Pose Navigation** starts from the current robot pose and does not
   create or replace **Inspection Waypoints**.
 - Map overlays use the **Source Map Frame** as spatial truth; a **Display

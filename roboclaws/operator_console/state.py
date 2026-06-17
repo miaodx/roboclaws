@@ -91,9 +91,7 @@ def derive_operator_state(
         run_result=run_result,
         phase=phase,
         launch_failure_reason=str(
-            stale_live_failure.get("terminal_reason")
-            or launch_failure.get("terminal_reason")
-            or ""
+            stale_live_failure.get("terminal_reason") or launch_failure.get("terminal_reason") or ""
         ),
     )
     terminal_status = dict(status)
@@ -102,7 +100,10 @@ def derive_operator_state(
     terminal_reason = _terminal_reason(terminal_status, live_status, run_result)
     artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
     artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
-    latest_view_assets = _latest_view_assets(root, display_run_dir)
+    latest_view_assets = _latest_view_assets(
+        root,
+        display_run_dir,
+    )
     public_result = _public_run_result_summary(run_result)
     latest_agent_message = _latest_agent_message(display_run_dir)
     prompt_preview = _prompt_preview(status, live_status, run_result, display_run_dir)
@@ -566,7 +567,7 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Driver Log", "driver.log", "log"),
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
-        ("Actionable Map", "actionable_semantic_map_snapshot.json", "json"),
+        ("Runtime Map Prior", "actionable_semantic_map_snapshot.json", "json"),
     )
     links: list[ArtifactLink] = []
     for label, name, kind in specs:
@@ -597,9 +598,8 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
         "fpv": ("*.fpv*.png", "*.fpv*.jpg", "*fpv*.png", "*fpv*.jpg"),
         "chase": ("*.chase*.png", "*.chase*.jpg", "*chase*.png", "*chase*.jpg"),
         "map": (
-            "semantic_map.png",
-            "map_bundle/report_static_navigation_map.png",
             "map_bundle/preview.png",
+            "map_bundle/report_static_navigation_map.png",
         ),
         "topdown": (
             "*topdown*.png",

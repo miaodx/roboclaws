@@ -1,4 +1,4 @@
-**Status:** Proposed
+**Status:** Implemented
 **Created:** 2026-06-17
 **Last reviewed:** 2026-06-17
 **Current implementation contract:** Sim household map surfaces should expose one static start map, one runtime semantic evidence map, and one optional prior wrapper. Preview images are review assets, not map contracts.
@@ -477,3 +477,41 @@ Was a prior map-build result consumed?
 ```
 
 without reading a generated PNG as semantic truth.
+
+## Implementation Closeout
+
+Implemented on 2026-06-17.
+
+- Current sim report/live artifact paths no longer generate or publish
+  `semantic_map.png` or `map_overlay.json` as map evidence.
+- Report and operator-console map copy now uses Base Navigation Map / Static
+  Navigation Map language and prefers `map_bundle/preview.png`; the
+  `report_static_navigation_map.png` path remains only as the degenerate-frame
+  fallback.
+- `actionable_semantic_map_snapshot.json` remains linked as `Runtime Map Prior`
+  instead of an independent map image slot.
+- The sim operator-console generated
+  `operator_console_semantic_map_projection_v1` preview path was removed,
+  along with its checked-in preview metadata.
+- `docs/human/domain.md` now defines Base Navigation Map as the start-of-run
+  map context.
+
+Verification:
+
+- `python -m py_compile` for touched report, MCP, operator-console, and preview
+  modules: passed.
+- Focused deterministic pytest gate from this plan: passed.
+- `just agent::eval suite=map_build_consumer budget=smoke`: passed all 3
+  samples, result
+  `output/evals/household_world_map_build_consumer/20260617T160839/eval_results.json`.
+- `just agent::eval recommend plan=docs/plans/2026-06-17-sim-map-surface-simplification.md budget=focused`:
+  passed, manifest `output/eval-harness/20260617T080420Z/eval_harness.json`.
+- `just agent::eval execute ...` was intentionally stopped because the harness
+  selected live Codex/provider rows; live-provider validation is a non-goal for
+  this plan.
+
+Remaining proof not required for this slice:
+
+- Direct MolmoSpaces product smoke can still be run locally for extra visual
+  confidence, but paid/live-provider, OpenClaw, hardware, GPU, and broader
+  simulator validation remain outside the required completion gate.
