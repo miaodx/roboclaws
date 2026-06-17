@@ -67,7 +67,8 @@ Product and operator-preview routes compile a generated runtime bundle from
 passing map context to lower-level consumers. No final operator-authored room
 semantic manifest exists yet; manual room labels and residual-backed
 scene-map correspondences still need review before they can be treated as
-accepted semantics.
+accepted semantics. The active blocking plan for making the B1 digital twin
+usable is `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -135,6 +136,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`
 - Implemented B1 / Map 12 thin review/runtime contract:
   `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`
+- Active B1 / Map 12 two-map alignment blocker:
+  `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 - Implemented VLM-sidecar/OpenClaw status cleanup:
   `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Implemented AI2-THOR/direct-VLM retirement record:
