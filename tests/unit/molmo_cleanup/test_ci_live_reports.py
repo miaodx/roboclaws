@@ -1262,7 +1262,7 @@ def test_live_codex_map_build_checker_uses_map_task_identity(
         status_path=tmp_path / "status.json",
         repo_root=REPO_ROOT,
         intent="map-build",
-        task="帮我建立这个房间的语义地图",
+        task="帮我建立这个房间的 Runtime Metric Map",
         backend="molmospaces_subprocess",
         policy="codex_agent",
         profile="world-public-labels",

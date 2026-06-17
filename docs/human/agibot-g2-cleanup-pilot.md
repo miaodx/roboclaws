@@ -2,7 +2,7 @@
 
 这是 Agibot G2 当前唯一的人类操作手册。它的目标不是证明 physical cleanup
 成功，而是证明 **Codex 可以通过 Agibot-backed MCP surface 驱动 G2 完成导航 +
-感知 + 语义地图证据刷新**。
+感知 + Runtime Metric Map 证据刷新**。
 
 当前硬件验收只接受这个组合：
 
@@ -80,11 +80,11 @@ python skills/actionable-semantic-map-conversion/scripts/convert_navigation_memo
 
 ### 3. Sim-first prompt/report rehearsal
 
-这个步骤只验证 prompt、report shape 和 minimal-map 语义地图刷新边界。它不证明真实 G2、
+这个步骤只验证 prompt、report shape 和 minimal-map Runtime Metric Map 刷新边界。它不证明真实 G2、
 PNC、真实相机或 DINO。
 
 ```bash
-OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
+OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有 Runtime Metric Map，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels \
   runtime=fixture \
@@ -121,7 +121,7 @@ Codex 或机器人：
 ```bash
 ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/example/agibot_map_context.completed.json \
-  output_dir=output/agibot/semantic-map-build-hardware \
+  output_dir=output/agibot/map-build-hardware \
   policy=codex_agibot_map_build_pilot \
   camera_labeler=grounding-dino \
   visual_grounding_timeout_s=20 \
@@ -294,11 +294,11 @@ missing-sidecar / adapter-unavailable 证据，而不是伪造候选：
 `agibot_map_build` MCP server：
 
 ```bash
-OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
+OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有 Runtime Metric Map，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
-  output_dir=output/agibot/semantic-map-build-codex-dry-run \
+  output_dir=output/agibot/map-build-codex-dry-run \
   policy=codex_agibot_map_build_pilot \
   prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   camera_labeler=grounding-dino \
@@ -321,7 +321,7 @@ dry run 不能称为 hardware evidence。
 ```bash
 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-router-responses evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
-  output_dir=output/agibot/semantic-map-build-hardware \
+  output_dir=output/agibot/map-build-hardware \
   policy=codex_agibot_map_build_pilot \
   prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   camera_labeler=grounding-dino \
@@ -332,7 +332,7 @@ just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-
 产物应写到：
 
 ```text
-output/agibot/semantic-map-build-hardware/<stamp>/seed-7/
+output/agibot/map-build-hardware/<stamp>/seed-7/
 ```
 
 ## HTML control console
@@ -387,7 +387,7 @@ hardware run 后执行：
 
 ```bash
 .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
-  output/agibot/semantic-map-build-hardware/<stamp>/seed-7/run_result.json \
+  output/agibot/map-build-hardware/<stamp>/seed-7/run_result.json \
   --expect-backend agibot_gdk \
   --expect-mcp-server agibot_map_build \
   --require-agent-driven \
