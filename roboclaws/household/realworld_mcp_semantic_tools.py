@@ -33,6 +33,14 @@ AGENT_SDK_CAMERA_GROUNDED_COMPOSITE_TOOL_NAMES = ("observe_camera_grounded_candi
 
 def register_semantic_cleanup_tools(server: Any) -> None:
     """Register context, navigation, observation, and visual-grounding tools."""
+    _register_map_navigation_tools(server)
+    _register_observation_tools(server)
+    _register_visual_grounding_tools(server)
+    _register_target_resolution_tools(server)
+
+
+def _register_map_navigation_tools(server: Any) -> None:
+    """Register public map and navigation context tools."""
 
     @server._mcp.tool()
     def metric_map() -> dict:
@@ -63,6 +71,10 @@ def register_semantic_cleanup_tools(server: Any) -> None:
             yaw_delta_deg=yaw_delta_deg,
         )
 
+
+def _register_observation_tools(server: Any) -> None:
+    """Register public observation and camera-control tools."""
+
     @server._mcp.tool()
     def observe() -> Any:
         """Observe robot-local visible objects at the current waypoint."""
@@ -76,6 +88,10 @@ def register_semantic_cleanup_tools(server: Any) -> None:
             yaw_delta_deg=yaw_delta_deg,
             pitch_delta_deg=pitch_delta_deg,
         )
+
+
+def _register_visual_grounding_tools(server: Any) -> None:
+    """Register visual-grounding declaration and navigation tools."""
 
     @server._mcp.tool()
     def declare_visual_candidates(
@@ -114,6 +130,10 @@ def register_semantic_cleanup_tools(server: Any) -> None:
             source_fixture_id=source_fixture_id,
             confidence=confidence,
         )
+
+
+def _register_target_resolution_tools(server: Any) -> None:
+    """Register observed-object inspection and runtime-map query tools."""
 
     @server._mcp.tool()
     def inspect_visible_object(object_id: str) -> dict:

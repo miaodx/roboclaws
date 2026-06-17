@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Semantic cleanup MCP registration moved map/navigation,
+  observation, visual-grounding, and target-resolution tool registration out of
+  `register_semantic_cleanup_tools()` into focused capability-local helpers.
+  Behavior-change class: internal cleanup; public tool names, FastMCP schemas,
+  dispatch handlers, and response shapes are unchanged. Metric: ratchet reports
+  4 complexity rows and 77 oversized modules, and
+  `realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools` dropped
+  from the complexity list. Proof: focused MCP server contract tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Operator-console prompt preview goal-contract launch arguments
   moved out of `_goal_contract()` into focused helpers for launch axes, missing
   default overrides, and explicit overrides. Behavior-change class: internal

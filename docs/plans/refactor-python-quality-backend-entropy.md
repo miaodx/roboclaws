@@ -88,8 +88,16 @@ again.
   override precedence, and `LaunchError` recovery are unchanged. The ratchet
   reports 5 complexity rows and 77 oversized modules;
   `prompt_preview.py::_goal_contract` is cleared from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split semantic cleanup MCP
+  registration out of `register_semantic_cleanup_tools()` into map/navigation,
+  observation, visual-grounding, and target-resolution registration helpers.
+  Behavior-change class: internal cleanup; public tool names, FastMCP schemas,
+  dispatch handlers, and response shapes are unchanged. The ratchet reports 4
+  complexity rows and 77 oversized modules;
+  `realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools` is cleared
+  from the complexity list.
 
-- 5 Ruff complexity violations and 77 oversized modules remain.
+- 4 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -149,9 +157,9 @@ again.
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
-  operator-console tests, a cleanup checker helper, and MCP semantic tool
-  registration. They should not hide while a file-size slice improves, but they
-  are not the default next P1 unless the active product focus changes.
+  operator-console tests and a cleanup checker helper. They should not hide
+  while a file-size slice improves, but they are not the default next P1 unless
+  the active product focus changes.
 
 Current closure snapshot:
 
@@ -996,8 +1004,9 @@ be claimed without an explicit local run.
   cleanup-checker fixture lookup remain P2 fixture-builder work. Do not split
   large tests only for line count.
 - MCP/prompt: `realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools`
-  and `prompt_preview.py::_goal_contract` are P2 unless they change an
-  agent-facing contract.
+  and `prompt_preview.py::_goal_contract` are cleared. Reopen only if MCP
+  semantic registration or prompt-preview goal-contract helpers regain direct
+  capability groups or launch-argument assembly complexity.
 - Stale small cuts: legacy checker flag
   `--require-canonical-robot-view-camera-control`, empty camera-labeler maps,
   `_task_prefix_legacy`, duplicated lane prose, and `hybrid-phase-pipeline`
@@ -1055,7 +1064,9 @@ be claimed without an explicit local run.
   post-deadline recovery helpers in `live_runtime.py`; eval-harness requirement
   priority and per-requirement blocker helpers in `run_eval_harness.py`;
   operator-console prompt-preview goal-contract launch-argument helpers in
-  `prompt_preview.py`.
+  `prompt_preview.py`; semantic cleanup MCP map/navigation, observation,
+  visual-grounding, and target-resolution registration helpers in
+  `realworld_mcp_semantic_tools.py`.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad
