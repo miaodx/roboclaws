@@ -32,6 +32,58 @@ def _load_module(path: Path, name: str):
     return module
 
 
+def test_robot_camera_comparison_rejects_invalid_location_count(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_location_count_invalid",
+    )
+
+    try:
+        run_camera.main(
+            [
+                "--output-dir",
+                str(tmp_path),
+                "--refresh-report-only",
+                "--location-count",
+                "0",
+            ]
+        )
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:  # pragma: no cover - argparse should exit for invalid input
+        raise AssertionError("expected invalid location count to fail at parse time")
+
+
+def test_robot_camera_comparison_accepts_positive_location_count(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_location_count_valid",
+    )
+    seen = {}
+
+    def fake_refresh_report_only(output_dir, **_kwargs):
+        seen["output_dir"] = output_dir
+        return {"status": "success"}
+
+    monkeypatch.setattr(run_camera, "refresh_report_only", fake_refresh_report_only)
+
+    status = run_camera.main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--refresh-report-only",
+            "--location-count",
+            "1",
+        ]
+    )
+
+    assert status == 0
+    assert seen["output_dir"] == tmp_path
+
+
 def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     left_path = tmp_path / "mujoco.png"
     right_path = tmp_path / "isaac.png"

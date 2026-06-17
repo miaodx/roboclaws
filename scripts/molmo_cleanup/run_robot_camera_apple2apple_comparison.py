@@ -155,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             "and restores them after capture."
         ),
     )
-    parser.add_argument("--location-count", type=int, default=4)
+    parser.add_argument("--location-count", type=_positive_int_arg, default=4)
     parser.add_argument(
         "--isaac-robot-view-color-profile-path",
         type=Path,
@@ -254,7 +254,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     )
     target_selection = _select_comparison_targets(
         mujoco_state,
-        limit=max(1, int(args.location_count)),
+        limit=int(args.location_count),
         scene_binding_diagnostics=_dict(isaac_state.get("scene_binding_diagnostics")),
         isaac_state=isaac_state,
     )
@@ -1790,6 +1790,16 @@ def _avg(values: Any) -> float | None:
     if not collected:
         return None
     return round(sum(collected) / len(collected), 4)
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 def _write_outputs(manifest: dict[str, Any], output_dir: Path) -> None:

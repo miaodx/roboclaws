@@ -60,6 +60,18 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one robot-camera
+  apple-to-apple comparison target-count false-green. The comparison CLI now
+  rejects non-positive `--location-count` at argument parsing time instead of
+  clamping zero or negative values to one target before selecting render
+  comparison locations. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud comparison artifact configuration; default
+  target count, valid positive counts, refresh-report-only behavior, target
+  selection ordering, manifest/report schemas, and renderer subprocess routing
+  are unchanged. The ratchet remains 0 complexity rows and 79 oversized
+  modules; `run_robot_camera_apple2apple_comparison.py` is 1813 lines and
+  `test_robot_camera_apple2apple_comparison.py` is 2986 lines. Do not prune or
+  split tests outside an `$intuitive-tests` pass.
 - Follow-up implementation refresh on 2026-06-18 closed one B1 scene topdown
   and operator-preview render-dimension false-green. The Gaussian topdown,
   scene topdown diagnostic, and operator-console scene preview CLIs now reject
