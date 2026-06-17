@@ -81,8 +81,15 @@ again.
   runtime-map-prior gating, and execution order are unchanged. The ratchet
   reports 6 complexity rows and 77 oversized modules;
   `run_eval_harness.py::_row_blockers` is cleared from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split operator-console prompt
+  preview goal-contract launch argument building out of `_goal_contract()` into
+  focused helpers for launch axes, missing default overrides, and explicit
+  overrides. Behavior-change class: internal cleanup; prompt text, launch args,
+  override precedence, and `LaunchError` recovery are unchanged. The ratchet
+  reports 5 complexity rows and 77 oversized modules;
+  `prompt_preview.py::_goal_contract` is cleared from the complexity list.
 
-- 6 Ruff complexity violations and 77 oversized modules remain.
+- 5 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -142,10 +149,9 @@ again.
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
-  operator-console tests, a cleanup checker helper, MCP semantic tool
-  registration, and prompt preview. They should not hide while a file-size slice
-  improves, but they are not the default next P1 unless the active product focus
-  changes.
+  operator-console tests, a cleanup checker helper, and MCP semantic tool
+  registration. They should not hide while a file-size slice improves, but they
+  are not the default next P1 unless the active product focus changes.
 
 Current closure snapshot:
 
@@ -1047,7 +1053,9 @@ be claimed without an explicit local run.
   route-text, and supports-engine dispatch helpers in `provider_registry.py`;
   live-eval detached-route early-completion, timeout, poll-completion, and
   post-deadline recovery helpers in `live_runtime.py`; eval-harness requirement
-  priority and per-requirement blocker helpers in `run_eval_harness.py`.
+  priority and per-requirement blocker helpers in `run_eval_harness.py`;
+  operator-console prompt-preview goal-contract launch-argument helpers in
+  `prompt_preview.py`.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad

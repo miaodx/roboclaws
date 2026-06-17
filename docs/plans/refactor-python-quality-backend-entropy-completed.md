@@ -34,6 +34,15 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console prompt preview goal-contract launch arguments
+  moved out of `_goal_contract()` into focused helpers for launch axes, missing
+  default overrides, and explicit overrides. Behavior-change class: internal
+  cleanup; prompt text, launch args, override precedence, and `LaunchError`
+  recovery are unchanged. Metric: ratchet reports 5 complexity rows and 77
+  oversized modules, and `prompt_preview.py::_goal_contract` dropped from the
+  complexity list. Proof: focused operator-console prompt/launcher tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Eval-harness row blocker routing moved requirement priority and
   per-requirement blocker construction out of `_row_blockers()` into focused
   helpers. Behavior-change class: internal cleanup; selected-row schema,
