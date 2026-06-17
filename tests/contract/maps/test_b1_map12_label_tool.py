@@ -26,6 +26,10 @@ from scripts.maps.render_b1_map12_label_tool import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MAP_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
+REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
+VENDOR_MAP_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
+    "robot_map_12"
+) / "agibot"
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_label_tool.py"
 
 
@@ -47,7 +51,10 @@ def test_map12_label_tool_pixel_world_roundtrip() -> None:
 
 
 def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
-    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+    packet = build_label_tool_packet(
+        map_bundle=MAP_BUNDLE,
+        review_manifest_path=REVIEW_MANIFEST,
+    )
 
     assert packet["schema"] == LABEL_TOOL_PACKET_SCHEMA
     assert packet["draft_manifest_schema"] == LABEL_DRAFT_MANIFEST_SCHEMA
@@ -79,6 +86,25 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
     assert manifest["source_map_mutated"] is False
     assert manifest["verified_status_allowed"] is False
     assert all(label["alignment_status"] == "candidate" for label in manifest["labels"])
+
+
+def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> None:
+    packet = build_label_tool_packet(map_bundle=VENDOR_MAP_BUNDLE)
+
+    assert packet["map_bundle"].endswith("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
+    assert packet["source_semantics"].endswith(
+        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/semantics.json"
+    )
+    assert packet["review_manifest"] == ""
+    assert packet["shapes"] == []
+    assert packet["semantic_map_layers"] == {
+        "coordinate_policy": "map_native_layers_use_source_map_frame_coordinates_only",
+        "driveable_ways": [],
+        "fixtures": [],
+        "inspection_waypoints": [],
+    }
+    assert len(packet["navigation_memory_layer"]["items"]) == 9
+    assert packet["initial_draft_manifest"]["labels"] == []
 
 
 def test_label_tool_packet_exposes_map_native_semantic_layers() -> None:
@@ -155,7 +181,10 @@ def test_label_tool_packet_excludes_scene_evidence_by_default() -> None:
 
 
 def test_label_tool_packet_marks_shared_room_polygon_conflicts() -> None:
-    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+    packet = build_label_tool_packet(
+        map_bundle=MAP_BUNDLE,
+        review_manifest_path=REVIEW_MANIFEST,
+    )
     shapes_by_id = {shape["shape_id"]: shape for shape in packet["shapes"]}
     overlapping = [
         shapes_by_id["reception_area_a"],
@@ -242,7 +271,10 @@ def test_label_tool_html_template_is_external_and_supports_shape_moves() -> None
 
 
 def test_label_tool_rotates_polygons_without_rotated_box_schema() -> None:
-    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+    packet = build_label_tool_packet(
+        map_bundle=MAP_BUNDLE,
+        review_manifest_path=REVIEW_MANIFEST,
+    )
     html = render_label_tool_html(packet, image_data_url_value="data:image/png;base64,abc")
 
     assert "function polygonRotateHandle" in html
@@ -356,7 +388,10 @@ def test_label_draft_manifest_keeps_circle_candidate_and_review_only() -> None:
 
 
 def test_label_draft_manifest_rejects_verified_export() -> None:
-    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
+    packet = build_label_tool_packet(
+        map_bundle=MAP_BUNDLE,
+        review_manifest_path=REVIEW_MANIFEST,
+    )
     manifest = json.loads(json.dumps(packet["initial_draft_manifest"]))
     manifest["labels"][0]["alignment_status"] = "verified"
     manifest["labels"][0]["review_status"] = "accepted"
@@ -372,8 +407,6 @@ def test_label_tool_cli_writes_standalone_html_and_packet(tmp_path: Path) -> Non
         [
             sys.executable,
             str(SCRIPT),
-            "--map-bundle",
-            str(MAP_BUNDLE),
             "--output-dir",
             str(tmp_path),
         ],
@@ -391,11 +424,11 @@ def test_label_tool_cli_writes_standalone_html_and_packet(tmp_path: Path) -> Non
 
 def test_label_tool_can_prepare_served_artifacts(tmp_path: Path) -> None:
     artifacts = write_label_tool_artifacts(
-        map_bundle=MAP_BUNDLE,
+        map_bundle=VENDOR_MAP_BUNDLE,
         output_dir=tmp_path,
     )
 
-    assert artifacts["shape_count"] == 6
+    assert artifacts["shape_count"] == 0
     assert artifacts["html_path"] == tmp_path / "label_tool.html"
     assert artifacts["packet_path"] == tmp_path / "label_tool_packet.json"
     assert (tmp_path / "label_tool.html").is_file()

@@ -34,12 +34,10 @@ from roboclaws.maps.spatial_contract import (
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
-DEFAULT_MAP_BUNDLE = Path("assets/maps/agibot-robot-map-12")
-DEFAULT_NAVIGATION_MEMORY = Path(
-    "vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json"
-)
+DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
+DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
+DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
-DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/label-tool")
 TEMPLATE_PATH = Path(__file__).with_name("b1_map12_label_tool_template.html")
 
@@ -66,7 +64,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Include scene/Gaussian evidence in the packet for review-only comparison.",
     )
-    parser.add_argument("--output-review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--output-review-manifest", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--serve",
@@ -109,7 +107,7 @@ def write_label_tool_artifacts(
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
     include_gaussian_scene: bool = False,
-    review_manifest_path: Path | None = DEFAULT_REVIEW_MANIFEST,
+    review_manifest_path: Path | None = None,
     output_dir: Path,
 ) -> dict[str, Any]:
     packet = build_label_tool_packet(
@@ -159,11 +157,12 @@ def build_label_tool_packet(
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
     include_gaussian_scene: bool = False,
-    review_manifest_path: Path | None = DEFAULT_REVIEW_MANIFEST,
+    review_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
-    semantics_path = semantics_path or map_bundle / "semantics.json"
     map_yaml_path = map_bundle / "map.yaml"
+    if not map_yaml_path.is_file():
+        map_yaml_path = map_bundle / "nav2.yaml"
     map_yaml = parse_map_yaml(map_yaml_path.read_text(encoding="utf-8"))
     image_path = map_bundle / str(map_yaml.get("image") or "map.pgm")
     with Image.open(image_path) as image:
@@ -176,7 +175,11 @@ def build_label_tool_packet(
         origin_y=float(_origin(map_yaml)[1]),
         origin_yaw_rad=float(_origin(map_yaml)[2]),
     )
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics_path = semantics_path or map_bundle / "semantics.json"
+    semantics = load_semantics_or_empty(
+        semantics_path,
+        source_json_path=map_bundle / "source.json",
+    )
     frame_id = source_map_frame_id(semantics)
     review_manifest = load_review_manifest(review_manifest_path)
     shapes = seed_shapes_from_review_or_semantics(
@@ -265,6 +268,30 @@ def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | 
     if not path.is_file():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_semantics_or_empty(semantics_path: Path, *, source_json_path: Path) -> dict[str, Any]:
+    path = Path(semantics_path)
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8"))
+    source = {}
+    if source_json_path.is_file():
+        source = json.loads(source_json_path.read_text(encoding="utf-8"))
+    return {
+        "schema": "robot_map12_empty_label_tool_semantics_v1",
+        "environment_id": str(source.get("alias") or "robot_map_12"),
+        "frame_ids": {"map": "map"},
+        "display_frame": None,
+        "rooms": [],
+        "fixtures": [],
+        "inspection_waypoints": [],
+        "driveable_ways": [],
+        "provenance": {
+            "source": "agibot_vendor_map_without_authored_semantics",
+            "contains_private_scoring_truth": False,
+            "contains_runtime_observations": False,
+        },
+    }
 
 
 def seed_shapes_from_review_or_semantics(
