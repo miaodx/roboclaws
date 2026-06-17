@@ -17,6 +17,13 @@ CONTINUE. Continue one verified, non-overlapping slice at a time. This file is
 the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
+Planning update on 2026-06-17: the next cleanup group should prioritize
+fail-aloud-and-early behavior over more silent compatibility cleanup. Silent
+fallbacks that fabricate labels, choose alternate assets, hide missing source
+metadata, normalize invalid launch/profile input without surfacing it, or turn
+real setup failures into plausible defaults are now first-class cleanup targets.
+Execute them as dedicated slices before returning to hard-ceiling owner splits.
+
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
 --summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
 compaction owner split. Treat this as the planning snapshot for the next slice;
@@ -142,6 +149,12 @@ lane/workflow wording.
 - Every slice names its `ARCHITECTURE.md` owner layer, behavior-change class,
   touched files, proof, and non-goals. One verified vertical slice beats broad
   line shaving.
+- Fail-aloud rule: when required runtime/source metadata, route support,
+  provider profile, map bundle inputs, room labels, visual artifacts, or
+  readiness facts are missing or inconsistent, prefer an explicit exception,
+  blocked/unavailable status, or operator-visible validation error over a
+  guessed default. Keep only deliberate, documented defaults that are part of a
+  public contract, and make them visible in artifacts or readiness payloads.
 - Compaction rule: every 3-5 accepted slices, move completed outcomes into the
   ledger and trim this file back to unresolved decisions, current candidates,
   proof gates, and stop conditions.
@@ -166,20 +179,38 @@ lane/workflow wording.
 
 ## Current Target
 
-Current checkpoint: Candidate B's apple camera-contract diagnostics split is
-implemented in the worktree and ready for final verification/commit. Refresh the
-ratchet again before the next implementation, then choose the next P1 from the
-remaining hard-ceiling frontier by owner-boundary evidence.
+Current checkpoint: pause implementation and treat the next execution as a
+dedicated fail-aloud cleanup pass. Refresh the ratchet and run a targeted
+silent-fallback audit before selecting code changes. The first implementation
+should remove one bounded family of silent fallbacks and prove the new explicit
+failure/blocked path with tests before returning to line-count owner splits.
 
-Candidate D is the clearest known next choice, but keep it narrower than the old
-"profile plus timing" wording. The default D slice is runner-side Agent SDK
-performance-profile/default resolution: `_resolve_agent_sdk_perf_profile()`,
-profile id/default selection, profile sub-builders, SDK model/run config
-payloads, provider route normalization, and the setting coercion helpers used by
-those profile builders. Timing/latency/timeline/MCP control-plane summaries are
-a separate D follow-up only if D remains the best frontier after the profile
-owner split. Do not move runner profile construction into the SDK driver and do
-not combine profile defaults with live server lifecycle.
+Dedicated implementation prompt for the next cleanup run:
+
+```text
+Update Roboclaws to fail aloud and early instead of silently falling back. Audit
+the touched area first, then choose one bounded fallback family. Remove fallback
+branches that fabricate missing source truth, silently substitute legacy assets,
+normalize unsupported user input without surfacing the canonical value or error,
+or continue after required runtime evidence is absent. Preserve explicit public
+defaults that are documented launch contracts. For every removed fallback, add or
+update focused tests proving the missing/invalid input now raises a clear
+exception or produces an explicit blocked/unavailable readiness/status packet.
+Do not combine this with hard-ceiling file splitting unless the fallback owner is
+the actual reason for the split.
+```
+
+Candidate D remains a valid follow-up, but it is no longer the default next
+choice while fail-aloud cleanup is active. When D resumes, keep it narrower than
+the old "profile plus timing" wording. The default D slice is runner-side Agent
+SDK performance-profile/default resolution:
+`_resolve_agent_sdk_perf_profile()`, profile id/default selection, profile
+sub-builders, SDK model/run config payloads, provider route normalization, and
+the setting coercion helpers used by those profile builders.
+Timing/latency/timeline/MCP control-plane summaries are a separate D follow-up
+only if D remains the best frontier after the profile owner split. Do not move
+runner profile construction into the SDK driver and do not combine profile
+defaults with live server lifecycle.
 
 Candidate B remains active through `scene_camera_comparison.py` and
 `summarize_robot_camera_visual_parity.py`, but the apple runner is now below the
@@ -193,11 +224,12 @@ evidence.
 Recommended next slice claim:
 
 - Slice: choose one owner-boundary P1. Default order after this slice is:
-  Candidate D runner-side Agent SDK performance-profile/default resolution,
-  Candidate D timing/timeline summary only as a separate follow-up if D remains
-  the best frontier, Candidate B scene-camera / visual-parity summary ownership,
-  then Candidate A only with new facade-private/report evidence. Choose by fresh
-  call-site evidence, not file size alone.
+  fail-aloud silent fallback cleanup, Candidate D runner-side Agent SDK
+  performance-profile/default resolution, Candidate D timing/timeline summary
+  only as a separate follow-up if D remains the best frontier, Candidate B
+  scene-camera / visual-parity summary ownership, then Candidate A only with new
+  facade-private/report evidence. Choose by fresh call-site evidence, not file
+  size alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
   Profiles plus Thin Runtime / Server Adapters for Candidate D.
@@ -259,11 +291,12 @@ checkpoint.
 
 Preflight status: REVIEWED, planning-only rechecked on 2026-06-17. Route:
 `$intuitive-refactor` ratchet mode. Default execution: refresh the ratchet, run
-a short ponytail recheck against current hard-ceiling candidates, and select one
-remaining owner-boundary P1. The default candidate order is D runner-side
-Agent SDK performance-profile/default resolution, D timing/timeline summary only
-as a separate follow-up if D remains best, B scene-camera / visual-parity
-summary ownership, then A only with fresh facade-private/report evidence.
+a targeted silent-fallback audit, and select one bounded fail-aloud cleanup
+family before returning to hard-ceiling owner-boundary P1s. The default
+candidate order is Silent Fallback Cleanup, D runner-side Agent SDK
+performance-profile/default resolution, D timing/timeline summary only as a
+separate follow-up if D remains best, B scene-camera / visual-parity summary
+ownership, then A only with fresh facade-private/report evidence.
 Non-goals: broad repo cleanup, line-count shaving across many files, preserving
 obsolete internal wrappers, lane initialization unless fresh drift appears,
 reopening SDK model-input compaction, mixing SDK driver internals with live
@@ -271,9 +304,65 @@ runner lifecycle, mixing timing/timeline helpers into the profile/default slice,
 and live/provider/simulator proof unless the chosen slice changes that route.
 Re-approve if a slice would change a public launch, artifact schema, report
 shape, agent-facing payload, provider behavior, event/span schema, model-input
-compaction schema, or private/public eval contract.
+compaction schema, private/public eval contract, or a documented public default.
 
 ## Active Candidates
+
+### S: Fail-Aloud Silent Fallback Cleanup
+
+Severity: P1 when a fallback can create false confidence, hide a missing source
+asset, mask unsupported launch/profile input, fabricate room/map/visual
+semantics, or let an operator believe a route is ready when required evidence is
+absent. Severity: P2 when the fallback is local developer convenience with
+clear test coverage and no user-facing claim.
+
+Owning architecture layers depend on the selected family:
+Runnable Surfaces And Presets for launch/profile normalization; Agent Engines
+And Provider Profiles for provider route defaults; Thin Runtime / Server
+Adapters for readiness and status packets; Backend Runtime / Environment
+Primitive for simulator/map/source-asset loading; Artifacts, reports, and eval
+suites for preview/report/evidence generation.
+
+Audit prompts for the implementation slice:
+
+- Search for `or {}`, `or []`, `or ""`, broad `except Exception`, broad
+  `except (KeyError, TypeError, ValueError)`, `fallback`, `default`, `unknown`,
+  `synthetic`, `legacy`, `missing`, and `skip_existing` in the target owner.
+- Classify each hit as explicit public default, explicit blocked/unavailable
+  status, test-only fixture convenience, or silent fallback.
+- Remove or replace only silent fallback rows in the selected family. Do not
+  mechanically delete every default.
+- Make failure actionable: include the missing key/path/route/capability and
+  the operator or developer command that should supply it when the local pattern
+  already has such vocabulary.
+
+Good first families:
+
+- Source map / preview inputs: do not fabricate B1 or Molmo room labels,
+  semantic-map labels, or preview metadata when source manifests are missing.
+- Provider route and launch profile input: accept documented aliases only when
+  the resolved canonical value is surfaced; reject unsupported values instead of
+  silently falling back to `codex-env` or another route.
+- Runtime artifact discovery: when a report/preview claims real camera, map, or
+  robot-view evidence, missing files should produce explicit unavailable status
+  rather than reusing stale or semantic-map substitutes.
+- Worker initialization: missing required source metadata should fail before
+  state write, not create plausible placeholder room/object/receptacle state.
+
+Allowed fallbacks:
+
+- Public launch defaults documented in README/ARCHITECTURE/just docs, such as
+  default `surface=household-world` axes.
+- Explicit operator-console unavailable/blocked readiness states.
+- Test fixtures that intentionally omit optional fields and assert the resulting
+  blocked/error behavior.
+- Historical artifact readers that preserve old reports without relabeling them
+  as current product proof.
+
+Proof should include focused tests for the selected owner plus `ruff` on touched
+files, `git diff --check`, and the ratchet summary. If a selected fallback is
+user-facing launch or status behavior, include a contract test proving the
+message/status is visible.
 
 ### A: Contract And Report Hard-Ceiling Split
 
@@ -552,6 +641,9 @@ be claimed without an explicit local run.
   changed.
 - Focused tests: use `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
 - Contract/report changes: include the relevant contract or report tests.
+- Fail-aloud cleanup changes: include at least one regression test where the
+  old path would silently fabricate or substitute data, and the new path raises
+  a clear error or returns an explicit blocked/unavailable packet.
 - Changed-code review: after implementation, run `$intuitive-refactor`
   changed-code review on the changed scope before final verification when the
   slice is not docs-only.
@@ -572,5 +664,8 @@ Stop this cleanup stream when:
   one-off long test bodies.
 - Backend id, runtime metadata, artifacts, and evidence attachments use common
   surfaces instead of repeated concrete-class or `backend == ...` branching.
+- Silent fallback families that can create false confidence are either removed,
+  converted to explicit blocked/unavailable status, or documented as deliberate
+  public defaults with tests.
 - A fresh reduce-entropy round finds no P0/P1 or material P2 candidate in this
   code-size/backend-complexity class.
