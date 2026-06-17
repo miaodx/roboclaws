@@ -102,6 +102,16 @@ again.
   default, valid positive timeout values, visual-grounding request/response
   schemas, and public launch axes are unchanged. The ratchet remains 0
   complexity rows and 79 oversized modules; `visual_grounding.py` is 414 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one external
+  visual-grounding raw-evidence false-green. Non-sim camera labelers now report
+  a failed `missing_raw_fpv_image` visual-grounding pipeline before invoking the
+  sidecar when the raw FPV image artifact is absent or unreadable, instead of
+  sending an empty image payload to the detector. Behavior-change class:
+  fail-aloud runtime evidence/source truth; sim camera-model declarations,
+  missing-client status, valid image-backed sidecar requests, visual-grounding
+  schemas, and public launch axes are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules;
+  `realworld_visual_candidate_declarations.py` is 570 lines.
 - Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
   runner-side MCP client-session timeout default/env validation into
   `openai_agents_perf_profile.py`. Malformed

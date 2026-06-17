@@ -87,6 +87,18 @@ logs before choosing the next slice.
   Proof: focused visual-grounding client tests, touched-file ruff and format
   check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: External visual-grounding sidecar calls now require raw image
+  evidence. Non-sim camera labelers report a failed `missing_raw_fpv_image`
+  visual-grounding pipeline before invoking the sidecar when the raw FPV image
+  artifact is absent or unreadable, instead of sending an empty image payload to
+  the detector. Behavior-change class: fail-aloud runtime evidence/source truth;
+  sim camera-model declarations, missing-client status, valid image-backed
+  sidecar requests, visual-grounding schemas, and public launch axes are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `realworld_visual_candidate_declarations.py` is 570 lines. Proof:
+  focused RealWorldCleanupContract visual-grounding tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
   default/env validation moved into `openai_agents_perf_profile.py`. Malformed
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct
