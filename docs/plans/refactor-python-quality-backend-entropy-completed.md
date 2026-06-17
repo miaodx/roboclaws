@@ -60,6 +60,19 @@ logs before choosing the next slice.
   lines. Proof: focused visual-grounding service contract tests, touched-file
   ruff and format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: Shared worker timeout env overrides now fail aloud.
+  `worker_timeout_s()` rejects malformed, non-finite, or non-positive
+  `ROBOCLAWS_MOLMOSPACES_WORKER_TIMEOUT_S` /
+  `ROBOCLAWS_ISAACLAB_WORKER_TIMEOUT_S` style overrides before subprocess
+  launch instead of surfacing raw float conversion failures or passing invalid
+  timeout values to the runner. Behavior-change class: fail-aloud worker
+  runtime configuration; absent env overrides, valid positive overrides,
+  command-specific timeout defaults, MolmoSpaces/Isaac worker commands, public
+  launch axes, and worker response schemas are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules; `worker_runner.py` is
+  130 lines. Proof: focused worker-runner unit tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
   aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
   OmDet-Turbo, and sidecar candidate limits reject malformed,

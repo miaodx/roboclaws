@@ -82,6 +82,16 @@ again.
   public launch axes, and benchmark behavior are unchanged. The ratchet remains
   0 complexity rows and 79 oversized modules;
   `scripts/visual_grounding/serve_visual_grounding_service.py` is 170 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one shared worker
+  timeout env false-green. `worker_timeout_s()` now rejects malformed,
+  non-finite, or non-positive `ROBOCLAWS_MOLMOSPACES_WORKER_TIMEOUT_S` /
+  `ROBOCLAWS_ISAACLAB_WORKER_TIMEOUT_S` style overrides before subprocess
+  launch instead of surfacing raw float conversion failures or passing invalid
+  timeout values to the runner. Behavior-change class: fail-aloud worker
+  runtime configuration; absent env overrides, valid positive overrides,
+  command-specific timeout defaults, MolmoSpaces/Isaac worker commands, public
+  launch axes, and worker response schemas are unchanged. The ratchet remains
+  0 complexity rows and 79 oversized modules; `worker_runner.py` is 130 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
   real-sidecar runtime-parameter false-green. Explicit request/runtime and env
   knobs for Grounding DINO, YOLO, OmDet-Turbo, and sidecar candidate limits now

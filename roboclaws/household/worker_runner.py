@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 from pathlib import Path
@@ -21,8 +22,7 @@ def run_json_worker_once(
 ) -> dict[str, Any]:
     if not python_executable.is_file():
         raise RuntimeError(
-            f"{worker_name} Python runtime is missing: {python_executable}. "
-            f"{missing_runtime_hint}"
+            f"{worker_name} Python runtime is missing: {python_executable}. {missing_runtime_hint}"
         )
     worker_command = worker_command_args(
         python_executable=python_executable,
@@ -98,8 +98,8 @@ def worker_timeout_s(
     default_timeout_s: float,
 ) -> float:
     override = os.environ.get(override_env_var)
-    if override:
-        return float(override)
+    if override not in {None, ""}:
+        return _positive_timeout_value(override, override_env_var)
     return command_timeouts.get(command, default_timeout_s)
 
 
@@ -114,3 +114,17 @@ def worker_env(
     for key, value in (defaults or {}).items():
         env.setdefault(key, value)
     return env
+
+
+def _positive_timeout_value(value: Any, setting_name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
+        )
+    return parsed
