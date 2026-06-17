@@ -16,6 +16,7 @@ from roboclaws.household.manipulation_provenance import (
 from roboclaws.household.rby1m_curobo_gate import (
     rby1m_curobo_gate_from_planner_probe,
 )
+from scripts.molmo_cleanup import planner_probe_task_sampler_diagnostics as probe_sampler
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_planner_manipulation_probe.py"
@@ -176,7 +177,6 @@ def test_runner_preserves_last_worker_stage_from_timeout_stdout() -> None:
 
 
 def test_runner_configures_exact_cleanup_task_scene_and_aliases(tmp_path: Path) -> None:
-    runner = _load_runner_module()
     scene_xml = tmp_path / "scene.xml"
     scene_xml.write_text("<mujoco/>", encoding="utf-8")
     config = SimpleNamespace(
@@ -207,7 +207,7 @@ def test_runner_configures_exact_cleanup_task_scene_and_aliases(tmp_path: Path) 
         cleanup_tools="pick,place",
     )
 
-    result = runner._configure_exact_cleanup_task(config, args)
+    result = probe_sampler.configure_exact_cleanup_task(config, args)
 
     assert result["applied"] is True
     assert config.scene_dataset == str(scene_xml)
@@ -221,8 +221,6 @@ def test_runner_configures_exact_cleanup_task_scene_and_aliases(tmp_path: Path) 
 
 
 def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
-    runner = _load_runner_module()
-
     class FakeObjectManager:
         def get_object_by_name(self, name: str) -> object:
             assert name == "sink/body"
@@ -259,7 +257,7 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     sampler = FakeSampler()
     env = SimpleNamespace(current_batch_index=0, object_managers=[FakeObjectManager()])
 
-    result = runner._apply_exact_cleanup_task_sampler_adapter(
+    result = probe_sampler.apply_exact_cleanup_task_sampler_adapter(
         sampler,
         {
             "planner_object_id": "pickup/body",
@@ -285,8 +283,6 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
 
 
 def test_runner_exact_cleanup_task_sampler_adapter_injects_absent_pickup() -> None:
-    runner = _load_runner_module()
-
     class FakeSampler:
         def reset(self):
             self.candidate_objects = [SimpleNamespace(name="other/body")]
@@ -308,7 +304,7 @@ def test_runner_exact_cleanup_task_sampler_adapter_injects_absent_pickup() -> No
             return True
 
     sampler = FakeSampler()
-    result = runner._apply_exact_cleanup_task_sampler_adapter(
+    result = probe_sampler.apply_exact_cleanup_task_sampler_adapter(
         sampler,
         {
             "planner_object_id": "pickup/body",
@@ -373,8 +369,6 @@ def test_runner_worker_exception_context_preserves_sampler_adapter(tmp_path: Pat
 
 
 def test_runner_task_sampler_failure_diagnostics_records_robot_placement() -> None:
-    runner = _load_runner_module()
-
     class FakeTaskConfig:
         pickup_obj_name = "book/body"
 
@@ -414,7 +408,7 @@ def test_runner_task_sampler_failure_diagnostics_records_robot_placement() -> No
             return "asset-book"
 
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(sampler)
     env = SimpleNamespace(current_batch_index=0, object_managers=[FakeObjectManager()])
 
     with pytest.raises(RuntimeError, match="placement blocked"):
@@ -465,9 +459,10 @@ def test_runner_task_sampler_failure_diagnostics_captures_post_placement_view(
             return np.full((3, 4, 3), 64, dtype=np.uint8)
 
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(
         sampler,
         output_dir=tmp_path,
+        record_exception_context=runner._record_worker_exception_context,
     )
 
     assert sampler._sample_and_place_robot(FakeEnv()) is True
@@ -480,8 +475,6 @@ def test_runner_task_sampler_failure_diagnostics_captures_post_placement_view(
 
 
 def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_call() -> None:
-    runner = _load_runner_module()
-
     class FakeSamplerConfig:
         base_pose_sampling_radius_range = (0.0, 0.7)
         robot_safety_radius = 0.35
@@ -491,7 +484,7 @@ def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_c
     config = SimpleNamespace(task_sampler_config=FakeSamplerConfig())
     args = SimpleNamespace(task_sampler_robot_placement_profile="relaxed")
 
-    profile = runner._apply_task_sampler_robot_placement_profile(config, args)
+    profile = probe_sampler.apply_task_sampler_robot_placement_profile(config, args)
 
     assert profile["applied"] is True
     assert profile["before"]["robot_safety_radius"] == 0.35
@@ -525,7 +518,7 @@ def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_c
         return True
 
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler, profile)
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(sampler, profile)
     env = SimpleNamespace(
         place_robot_near=place_robot_near, object_managers=[], current_batch_index=0
     )
@@ -544,8 +537,6 @@ def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_c
 
 
 def test_runner_wide_task_sampler_profile_extends_radius_and_max_tries() -> None:
-    runner = _load_runner_module()
-
     class FakeSamplerConfig:
         base_pose_sampling_radius_range = (0.0, 0.7)
         robot_safety_radius = 0.35
@@ -555,7 +546,7 @@ def test_runner_wide_task_sampler_profile_extends_radius_and_max_tries() -> None
     config = SimpleNamespace(task_sampler_config=FakeSamplerConfig())
     args = SimpleNamespace(task_sampler_robot_placement_profile="wide")
 
-    profile = runner._apply_task_sampler_robot_placement_profile(config, args)
+    profile = probe_sampler.apply_task_sampler_robot_placement_profile(config, args)
 
     assert profile["applied"] is True
     assert profile["profile"] == "wide"
@@ -567,8 +558,6 @@ def test_runner_wide_task_sampler_profile_extends_radius_and_max_tries() -> None
 
 def test_runner_records_placement_scene_diagnostics_for_place_robot_near_call() -> None:
     import numpy as np
-
-    runner = _load_runner_module()
 
     class FakeTaskConfig:
         pickup_obj_name = "book/body"
@@ -618,7 +607,7 @@ def test_runner_records_placement_scene_diagnostics_for_place_robot_near_call() 
         current_batch_index=0,
     )
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(sampler)
 
     assert sampler._sample_and_place_robot(env) is False
 
@@ -633,8 +622,6 @@ def test_runner_records_placement_scene_diagnostics_for_place_robot_near_call() 
 
 
 def test_runner_records_post_placement_grasp_rejections() -> None:
-    runner = _load_runner_module()
-
     class FakeSampler:
         candidate_objects = [SimpleNamespace(name="book/body")]
 
@@ -650,7 +637,7 @@ def test_runner_records_post_placement_grasp_rejections() -> None:
                 self.candidate_objects = []
 
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(sampler)
 
     sampler.report_grasp_failure("book/body", max_failures=2)
     sampler.report_grasp_failure("book/body", max_failures=2)
@@ -664,8 +651,6 @@ def test_runner_records_post_placement_grasp_rejections() -> None:
 
 
 def test_runner_records_ineffective_candidate_removal_calls() -> None:
-    runner = _load_runner_module()
-
     class FakeSampler:
         candidate_objects = [
             SimpleNamespace(name="bread/body"),
@@ -686,7 +671,7 @@ def test_runner_records_ineffective_candidate_removal_calls() -> None:
                 self._remove_candidate_object(obj_name)
 
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(sampler)
 
     sampler.report_grasp_failure("unknown/body", max_failures=0)
 
@@ -701,7 +686,6 @@ def test_runner_records_ineffective_candidate_removal_calls() -> None:
 
 
 def test_runner_records_grasp_collision_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:
-    runner = _load_runner_module()
     module = ModuleType("molmo_spaces.tasks.pick_task_sampler")
 
     def load_grasps_for_object(object_name, num_grasps=50):
@@ -725,7 +709,7 @@ def test_runner_records_grasp_collision_diagnostics(monkeypatch: pytest.MonkeyPa
             return None
 
     sampler = FakeSampler()
-    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    diagnostics = probe_sampler.apply_task_sampler_failure_diagnostics_adapter(sampler)
 
     _, grasps = module.load_grasps_for_object("asset-book", 512)
     module.get_noncolliding_grasp_mask(None, None, grasps, 64)

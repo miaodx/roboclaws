@@ -586,7 +586,9 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
         "output/household/household-world/open-ended/codex-world-public-labels",
     ]
     assert "我渴了，帮我找些解渴的东西" in route
-    assert route[-2:] == ["household-world", "open-ended"]
+    assert route[24:26] == ["household-world", "open-ended"]
+    assert route[26] == ""
+    assert route[27] == "assets/maps/b1-map12-alignment-review.json"
     assert plan_trace[:6] == [
         "launch-plan",
         "surface=household-world",
@@ -1432,19 +1434,22 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
         "7",
         "output/household/household-world/open-ended/codex-world-public-labels",
     ]
-    assert route[10] == "b1-map12-room-semantics"
+    assert route[10] == "agibot-robot-map-12"
     assert route[12] == "on"
     assert route[17] == "isaaclab_subprocess"
     assert route[21] == (
         "data/robot-data-lab/scene-engine/data/"
         "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
     )
-    assert route[-2:] == ["household-world", "open-ended"]
+    assert route[24:26] == ["household-world", "open-ended"]
+    assert route[26] == ""
+    assert route[27] == "assets/maps/b1-map12-alignment-review.json"
     assert "world=b1-map12" in plan_trace
     assert "backend=isaaclab" in plan_trace
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "household-world.open-ended codex-cli world-public-labels" in target_trace
-    assert "map_bundle=b1-map12-room-semantics" in target_trace
+    assert "map_bundle=agibot-robot-map-12" in target_trace
+    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in target_trace
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
         "2rd_floor_seperated/storey_1/configuration/scene_base.usd"

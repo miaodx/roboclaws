@@ -3,19 +3,14 @@ from __future__ import annotations
 import copy
 import json
 import re
-import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from roboclaws.maps.bundle import validate_nav2_map_bundle
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
-    ALIGNMENT_STATUS_NATIVE,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
     POLYGON_ROLE_NAVIGATION_AREA,
-    normalize_spatial_rooms,
-    source_frame_spatial_contract,
 )
 
 ROOM_SEMANTIC_OVERLAY_SCHEMA = "scene_room_semantic_overlay_v1"
@@ -112,76 +107,6 @@ def build_scene_room_semantic_overlay(
         ),
     }
     return overlay
-
-
-def apply_room_semantic_overlay_to_bundle(
-    source_bundle_dir: str | Path,
-    output_bundle_dir: str | Path,
-    overlay: dict[str, Any],
-    *,
-    validate: bool = True,
-) -> dict[str, Any]:
-    source_bundle_dir = Path(source_bundle_dir)
-    output_bundle_dir = Path(output_bundle_dir)
-    if output_bundle_dir.exists():
-        shutil.rmtree(output_bundle_dir)
-    shutil.copytree(source_bundle_dir, output_bundle_dir)
-    semantics_path = output_bundle_dir / "semantics.json"
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
-    frame_id = str((semantics.get("frame_ids") or {}).get("map") or "map")
-    fallback_rooms = normalize_spatial_rooms(
-        semantics.get("rooms") or [],
-        frame_id=frame_id,
-        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
-        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-        alignment_status=ALIGNMENT_STATUS_NATIVE,
-    )
-    rooms = _rooms_for_semantics(overlay, fallback_rooms=fallback_rooms, frame_id=frame_id)
-    room_by_navigation_area = {
-        str(room.get("navigation_area_id") or ""): str(room.get("room_id") or "")
-        for room in rooms
-        if str(room.get("navigation_area_id") or "") and str(room.get("room_id") or "")
-    }
-    waypoints = _retarget_waypoints(
-        semantics.get("inspection_waypoints") or [],
-        room_by_navigation_area=room_by_navigation_area,
-    )
-    semantics["rooms"] = rooms
-    semantics["spatial_contract"] = source_frame_spatial_contract(
-        frame_id=frame_id,
-        alignment_status=ALIGNMENT_STATUS_CANDIDATE,
-    )
-    semantics["display_frame"] = None
-    semantics["room_category_hints"] = _room_category_hints(rooms)
-    semantics["inspection_waypoints"] = waypoints
-    semantics["driveable_ways"] = _driveable_ways(rooms, semantics.get("driveable_ways") or [])
-    provenance = (
-        semantics.get("provenance") if isinstance(semantics.get("provenance"), dict) else {}
-    )
-    semantics["provenance"] = {
-        **provenance,
-        "room_semantic_overlay_schema": overlay.get("schema"),
-        "room_semantic_overlay_source": overlay.get("scene_root", ""),
-        "room_semantic_overlay_producer": (overlay.get("producer") or {}).get("type", ""),
-        "scene_map_correspondence_schema": overlay.get("scene_map_correspondence_schema", ""),
-        "contains_runtime_observations": False,
-        "contains_private_scoring_truth": False,
-    }
-    semantics_path.write_text(
-        json.dumps(semantics, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    validation = validate_nav2_map_bundle(output_bundle_dir)
-    if validate:
-        validation.raise_for_errors()
-    return {
-        "schema": "scene_room_semantic_overlay_bundle_application_v1",
-        "source_bundle_dir": str(source_bundle_dir),
-        "output_bundle_dir": str(output_bundle_dir),
-        "overlay_schema": overlay.get("schema"),
-        "room_count": len(rooms),
-        "validation": validation.as_dict(),
-    }
 
 
 def _scene_partitions(scene_root: Path) -> list[str]:
@@ -447,77 +372,6 @@ def _attach_scene_map_correspondence(
     return output
 
 
-def _rooms_for_semantics(
-    overlay: dict[str, Any],
-    *,
-    fallback_rooms: list[dict[str, Any]],
-    frame_id: str,
-) -> list[dict[str, Any]]:
-    overlay_rooms = [item for item in overlay.get("rooms") or [] if isinstance(item, dict)]
-    fallback_by_id = {str(room.get("room_id") or ""): room for room in fallback_rooms}
-    correspondence_by_partition = {
-        str(item.get("asset_partition_id") or ""): item
-        for item in overlay.get("scene_map_correspondence_v1") or []
-        if isinstance(item, dict)
-    }
-    overlay_navigation_ids = {
-        str(room.get("navigation_area_id") or "")
-        for room in overlay_rooms
-        if str(room.get("navigation_area_id") or "")
-    }
-    rooms = []
-    for item in overlay_rooms:
-        room = dict(item)
-        fallback = fallback_by_id.get(str(room.get("navigation_area_id") or ""))
-        if fallback:
-            room.setdefault("polygon", copy.deepcopy(fallback.get("polygon") or []))
-            room.setdefault("geometry_source", fallback.get("geometry_source"))
-            room.setdefault("source_map_frame_id", fallback.get("source_map_frame_id"))
-        if "map_center" not in room:
-            room["map_center"] = _polygon_center(room.get("polygon") or [])
-        if not room.get("polygon") and not str(room.get("navigation_area_id") or ""):
-            continue
-        if room.get("polygon"):
-            room = normalize_spatial_rooms(
-                [room],
-                frame_id=frame_id,
-                polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
-                geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-                alignment_status=ALIGNMENT_STATUS_CANDIDATE,
-                semantic_label_status=str(
-                    room.get("alignment_status") or ALIGNMENT_STATUS_CANDIDATE
-                ),
-            )[0]
-        match = correspondence_by_partition.get(str(room.get("asset_partition_id") or ""))
-        if match:
-            room.setdefault(
-                "scene_map_correspondence",
-                {
-                    "schema": SCENE_MAP_CORRESPONDENCE_SCHEMA,
-                    "asset_partition_id": str(match.get("asset_partition_id") or ""),
-                    "navigation_area_id": str(match.get("navigation_area_id") or ""),
-                    "alignment_status": str(
-                        match.get("alignment_status")
-                        or room.get("alignment_status")
-                        or ALIGNMENT_STATUS_CANDIDATE
-                    ),
-                    "transform_source": str(match.get("transform_source") or ""),
-                    "evidence_artifacts": list(match.get("evidence_artifacts") or []),
-                    "map_polygon_provided": "map_polygon" in match,
-                },
-            )
-        rooms.append(room)
-    for fallback in fallback_rooms:
-        room_id = str(fallback.get("room_id") or "")
-        if (
-            room_id
-            and room_id not in overlay_navigation_ids
-            and not any(str(room.get("room_id") or "") == room_id for room in rooms)
-        ):
-            rooms.append(dict(fallback))
-    return rooms
-
-
 def _room_category_hints(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
     hints = []
     for room in rooms:
@@ -542,65 +396,6 @@ def _room_category_hints(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return hints
-
-
-def _driveable_ways(
-    rooms: list[dict[str, Any]],
-    existing_ways: list[dict[str, Any]],
-) -> list[dict[str, str]]:
-    nav_to_room = {
-        str(room.get("navigation_area_id") or ""): str(room.get("room_id") or "")
-        for room in rooms
-        if str(room.get("navigation_area_id") or "") and str(room.get("room_id") or "")
-    }
-    ways: list[dict[str, str]] = []
-    for way in existing_ways:
-        start = nav_to_room.get(str(way.get("from_room_id") or ""))
-        goal = nav_to_room.get(str(way.get("to_room_id") or ""))
-        if start and goal and start != goal:
-            ways.append({"from_room_id": start, "to_room_id": goal})
-    if ways:
-        return _dedupe_ways(ways)
-    return _dedupe_ways(
-        [
-            {
-                "from_room_id": str(left.get("room_id") or ""),
-                "to_room_id": str(right.get("room_id") or ""),
-            }
-            for left, right in zip(rooms, rooms[1:], strict=False)
-            if str(left.get("room_id") or "") and str(right.get("room_id") or "")
-        ]
-    )
-
-
-def _dedupe_ways(ways: list[dict[str, str]]) -> list[dict[str, str]]:
-    output = []
-    seen = set()
-    for way in ways:
-        key = (way["from_room_id"], way["to_room_id"])
-        if key not in seen:
-            output.append(way)
-            seen.add(key)
-    return output
-
-
-def _retarget_waypoints(
-    waypoints: list[dict[str, Any]],
-    *,
-    room_by_navigation_area: dict[str, str],
-) -> list[dict[str, Any]]:
-    output = []
-    for waypoint in waypoints:
-        if not isinstance(waypoint, dict):
-            continue
-        item = dict(waypoint)
-        navigation_area_id = str(item.get("room_id") or "")
-        room_id = room_by_navigation_area.get(navigation_area_id)
-        if room_id:
-            item["navigation_area_id"] = navigation_area_id
-            item["room_id"] = room_id
-        output.append(item)
-    return output
 
 
 def _polygon_center(polygon: list[dict[str, Any]]) -> dict[str, float]:

@@ -23,6 +23,9 @@ from roboclaws.household.realworld_mcp_server import (
     ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE,
     make_molmo_realworld_cleanup_mcp,
 )
+from roboclaws.household.realworld_visual_candidate_declarations import (
+    simulated_declaration_inputs_for_waypoint,
+)
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import (
     CleanupReceptacle,
@@ -448,14 +451,13 @@ def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
         assert observed is not None
 
         agent_view = server._agent_view_payload()
-        worklist_item = next(
-            item
+        assert any(
+            item["object_id"] == observed["object_id"]
             for item in agent_view["cleanup_worklist"]["objects"]
-            if item["object_id"] == observed["object_id"]
         )
-        target_anchor_id = _first_destination_option_from_done(
-            server, str(observed["object_id"])
-        )["candidate_fixture_id"]
+        target_anchor_id = _first_destination_option_from_done(server, str(observed["object_id"]))[
+            "candidate_fixture_id"
+        ]
         server.call_tool("navigate_to_object", object_id=observed["object_id"])
         server.call_tool("pick", object_id=observed["object_id"])
         navigation = server.call_tool("navigate_to_receptacle", fixture_id=target_anchor_id)
@@ -775,7 +777,8 @@ def _complete_raw_fpv_cleanup_chains(
         public_waypoint = server.contract._waypoint_by_id(waypoint_id)  # noqa: SLF001
         if public_waypoint is None:
             continue
-        candidate_inputs = server.contract._simulated_declaration_inputs_for_waypoint(  # noqa: SLF001
+        candidate_inputs = simulated_declaration_inputs_for_waypoint(
+            server.contract,
             public_waypoint,
             observation_id=observation_id,
         )

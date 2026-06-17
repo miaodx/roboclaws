@@ -1,9 +1,9 @@
 ---
 plan_scope: b1-map12-thin-review-runtime-contract
-status: Reviewed
+status: Implemented
 created: 2026-06-16
 last_reviewed: 2026-06-17
-implementation_allowed: false
+implementation_allowed: true
 source:
   - user request to remove the thick B1 / Map 12 merged intermediate bundle
   - user concern that raw Map12 and Gaussian/scene inputs are likely acceptable while the merge artifact is not
@@ -28,8 +28,10 @@ related_context:
 ## Status
 
 Reviewed with grill-batch on 2026-06-17. The no-backward-compatibility
-direction and first contract decisions are accepted. Implementation is still
-gated on a concrete preflight contract.
+direction and first contract decisions are accepted. Implemented on 2026-06-17:
+B1 / Map 12 product routes now consume raw Map12 plus a human review manifest,
+compile a generated runtime bundle at launch/preview time, and no longer use
+`assets/maps/b1-map12-room-semantics` as a product input.
 
 This plan supersedes using `assets/maps/b1-map12-room-semantics` as a maintained
 source of truth for B1 / Map 12 room labels. The replacement direction is:
@@ -473,10 +475,25 @@ preflight, not by another discovery loop.
 
 ## Recommended Next Action
 
-Run a preflight on this plan before implementation. The preflight should lock:
+Use the label/correspondence review tools to replace the current seed manifest
+with operator-reviewed geometry and residual anchors. Remaining gates are manual
+or local-runtime validation:
 
-- exact run-directory path and artifact naming for compiled runtime bundles;
-- how B1 launch prep passes the generated bundle to current consumers;
-- which old tests are deleted versus rewritten around the new contract.
+- Product/manual: exercise `label_tool.html` remotely and merge reviewed label
+  edits into `assets/maps/b1-map12-alignment-review.json`.
+- Alignment: add at least six accepted anchors to
+  `assets/maps/b1-map12-scene-correspondences.json` before claiming verified
+  map-scene transform status.
+- Local Isaac/GPU: run a full `world=b1-map12 backend=isaaclab` product route
+  with the generated runtime bundle. This implementation verified launch
+  routing and deterministic bundle compilation, but did not run Isaac itself.
 
-Shortcut: `preflight thin runtime`.
+Closeout evidence from implementation:
+
+```bash
+ruff check scripts/maps/compile_b1_map12_runtime_bundle.py scripts/maps/render_b1_map12_label_tool.py scripts/operator_console/render_scene_previews.py scripts/maps/normalize_semantic_map_spatial_contract.py roboclaws/maps/room_semantics.py tests/contract/maps/test_b1_map12_runtime_bundle.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_scene_room_semantic_overlay.py tests/contract/maps/test_cross_environment_semantic_map_parity.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_routes.py tests/unit/launch/test_environment_setup_catalog.py tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_runtime_bundle.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_scene_room_semantic_overlay.py tests/contract/maps/test_cross_environment_semantic_map_parity.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/unit/launch/test_environment_setup_catalog.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_render_scene_previews.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_b1_public_launch_routes_isaac_backend_to_current_implementation -q
+python scripts/maps/compile_b1_map12_runtime_bundle.py --map-bundle assets/maps/agibot-robot-map-12 --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --review-manifest assets/maps/b1-map12-alignment-review.json --output-dir output/b1-map12/digital-twin-runtime-test
+python scripts/maps/check_bundle.py output/b1-map12/digital-twin-runtime-test
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=b1-map12 backend=isaaclab agent_engine=codex-cli prompt='inspect the digital twin' evidence_lane=world-public-labels
+```

@@ -3,15 +3,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
-
-from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -34,65 +31,20 @@ from scripts.isaac_lab_cleanup.isaac_lab_backend_worker import (
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
 )
+from scripts.molmo_cleanup import robot_camera_apple2apple_camera_contract as camera_contract
+from scripts.molmo_cleanup import robot_camera_apple2apple_capture_quality as capture_quality
+from scripts.molmo_cleanup import robot_camera_apple2apple_image_metrics as image_metrics
 from scripts.molmo_cleanup import robot_camera_apple2apple_materials as material_checks
+from scripts.molmo_cleanup import robot_camera_apple2apple_native_render as native_render
 from scripts.molmo_cleanup import robot_camera_apple2apple_object_gate as object_gate
+from scripts.molmo_cleanup import robot_camera_apple2apple_object_parity as object_parity
 from scripts.molmo_cleanup import robot_camera_apple2apple_report as report_renderer
+from scripts.molmo_cleanup import robot_camera_apple2apple_visual_state as visual_state
 
 SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
-OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
-PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD = 35.0
-PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD = 0.5
-PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD = 40.0
-OBJECT_VISUAL_STATE_REGISTRY = {
-    "box": {
-        "schema": "robot_camera_object_visual_state_registry_entry_v1",
-        "category": "box",
-        "status": "active_category_contract",
-        "protected_by": "prepared_usd_visual_physics_freeze",
-        "policy": (
-            "MuJoCo box flap joints render at MJCF ref/range endpoints. Prepared Isaac "
-            "report USDs must freeze baked visual xforms and remove physics state before "
-            "camera capture so the flaps cannot re-open during static visual comparison."
-        ),
-        "evidence_artifact": (
-            "output/molmo/robot-camera-apple2apple/"
-            "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
-        ),
-        "promotion_rule": (
-            "Keep this category-level contract until corpus evidence shows another "
-            "visual-state category needs its own registry entry."
-        ),
-    }
-}
-OBJECT_VISUAL_STATE_CATEGORIES = set(OBJECT_VISUAL_STATE_REGISTRY)
-VISUAL_PHYSICS_PROTECTION = {
-    "schema": "robot_camera_visual_physics_protection_policy_v1",
-    "protected_by": object_gate.VISUAL_PHYSICS_PROTECTED_BY,
-    "policy": (
-        "Objects with MuJoCo articulated visual joints or preserved Isaac physics are "
-        "visual-physics-sensitive. Stripping PhysX or USD physics is necessary to keep "
-        "Isaac from mutating them, but it is not sufficient proof that the frozen visual "
-        "pose matches MuJoCo. A protected object must have selected nonblank RGB evidence "
-        "from an object-centered robot pose/focus contract before the Object Gate may "
-        "classify it as comparable."
-    ),
-}
-ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
-
-_render_report = report_renderer.render_report
-_render_quick_summary = report_renderer.render_quick_summary
-_render_details_html = report_renderer.render_details_html
-_render_json_details = report_renderer.render_json_details
-_render_generated_mess_manifest = report_renderer.render_generated_mess_manifest
-_render_capture_quality_probe = report_renderer.render_capture_quality_probe
-_quality_status_label = report_renderer.quality_status_label
-_capture_quality_value = report_renderer.capture_quality_value
-_render_native_isaac_render_diagnostics = report_renderer.render_native_isaac_render_diagnostics
-_render_object_render_parity_diagnostics = report_renderer.render_object_render_parity_diagnostics
-_render_object_parity_audit = report_renderer.render_object_parity_audit
 
 
 class _ComparisonRunPaths(NamedTuple):
@@ -196,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--isaac-colorcorr-gain",
-        type=_parse_rgb_gain,
+        type=capture_quality.parse_rgb_gain,
         help=(
             "Optional Isaac /rtx/post/colorcorr gain as R,G,B for an opt-in native color "
             "correction probe. The worker enables color correction, records previous values, "
@@ -287,8 +239,8 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = paths.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     isaac_robot_view_color_profile = _load_optional_json(args.isaac_robot_view_color_profile_path)
-    capture_quality = _capture_quality_probe_config(args)
-    manifest = _initial_comparison_manifest(args, capture_quality=capture_quality)
+    capture_quality_probe = capture_quality.capture_quality_probe_config(args)
+    manifest = _initial_comparison_manifest(args, capture_quality=capture_quality_probe)
 
     lane_states = _initialize_comparison_lanes(args, paths, manifest)
     if lane_states is None:
@@ -386,15 +338,15 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.render_width),
                     "--render-height",
                     str(args.render_height),
-                    *_render_settle_args(capture_quality),
+                    *capture_quality.render_settle_args(capture_quality_probe),
                     *_focus_args(target),
                 ],
                 cwd=Path.cwd(),
             )
-            _prepare_saved_report_images(
+            image_metrics.prepare_saved_report_images(
                 mujoco_views,
                 isaac_views,
-                capture_quality=capture_quality,
+                capture_quality=capture_quality_probe,
             )
             locations.append(
                 _location_result(
@@ -404,7 +356,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     mujoco_views=mujoco_views,
                     isaac_views=isaac_views,
                     output_dir=output_dir,
-                    capture_quality=capture_quality,
+                    capture_quality=capture_quality_probe,
                 )
             )
         except Exception as exc:
@@ -423,9 +375,9 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         if locations and all(item["status"] == "success" for item in locations)
         else "blocked"
     )
-    _refresh_location_camera_contract_diagnostics(locations)
+    camera_contract.refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
-    manifest["summary"]["capture_quality_probe"] = capture_quality
+    manifest["summary"]["capture_quality_probe"] = capture_quality_probe
     manifest["summary"]["target_selection"] = target_selection
     _attach_render_contract_diagnostics(
         manifest,
@@ -478,7 +430,10 @@ def _initial_comparison_manifest(
             "metric_height": capture_quality["metric_resolution"]["height"],
         },
         "capture_quality_probe": capture_quality,
-        "camera_contract": _robot_camera_contract(),
+        "camera_contract": camera_contract.robot_camera_contract(
+            mujoco_lane_id=MUJOCO_LANE_ID,
+            isaac_lane_id=ISAAC_LANE_ID,
+        ),
         "lanes": {},
         "locations": [],
         "artifacts": {
@@ -670,7 +625,10 @@ def refresh_report_only(
     if not manifest_path.is_file():
         raise FileNotFoundError(manifest_path)
     manifest = _read_json(manifest_path)
-    manifest["camera_contract"] = _robot_camera_contract()
+    manifest["camera_contract"] = camera_contract.robot_camera_contract(
+        mujoco_lane_id=MUJOCO_LANE_ID,
+        isaac_lane_id=ISAAC_LANE_ID,
+    )
     mujoco_state = _read_json(output_dir / "mujoco_state.json")
     isaac_state = _read_json(output_dir / "isaac_state.json")
     existing_selection = _dict(manifest.get("target_selection"))
@@ -685,10 +643,10 @@ def refresh_report_only(
     )
     manifest["target_selection"] = target_selection
     locations = list(manifest.get("locations") or [])
-    _refresh_location_camera_contract_diagnostics(locations)
-    capture_quality = _ensure_capture_quality_probe_manifest(manifest)
+    camera_contract.refresh_location_camera_contract_diagnostics(locations)
+    capture_quality_probe = capture_quality.ensure_capture_quality_probe_manifest(manifest)
     manifest["summary"] = _summary(locations)
-    manifest["summary"]["capture_quality_probe"] = capture_quality
+    manifest["summary"]["capture_quality_probe"] = capture_quality_probe
     manifest["summary"]["target_selection"] = target_selection
     _attach_render_contract_diagnostics(
         manifest,
@@ -738,256 +696,6 @@ def _parse_last_json_object(text: str) -> dict[str, Any]:
         if isinstance(value, dict):
             return value
     raise RuntimeError(f"worker output did not end with a JSON object: {text[-1000:]}")
-
-
-def _capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
-    render_resolution = _resolution_dict(args.render_width, args.render_height)
-    saved_resolution = _paired_dimension(
-        args,
-        "saved_report_width",
-        "saved_report_height",
-        default_width=args.render_width,
-        default_height=args.render_height,
-    )
-    metric_resolution = _paired_dimension(
-        args,
-        "metric_width",
-        "metric_height",
-        default_width=saved_resolution["width"],
-        default_height=saved_resolution["height"],
-    )
-    render_settle_frames = max(0, int(getattr(args, "render_settle_frames", 0) or 0))
-    saved_mode = (
-        "direct_capture"
-        if saved_resolution == render_resolution
-        else "downsampled_from_render_capture"
-    )
-    metric_mode = (
-        "direct_capture"
-        if metric_resolution == render_resolution
-        else "downsampled_from_render_capture"
-    )
-    downsample_filter = str(getattr(args, "downsample_filter", "lanczos") or "lanczos")
-    return {
-        "schema": "robot_camera_capture_quality_probe_v1",
-        "status": "capture_quality_probe_configured",
-        "render_resolution_requested": render_resolution,
-        "render_resolution_saved": saved_resolution,
-        "metric_resolution": metric_resolution,
-        "saved_image_mode": saved_mode,
-        "metric_image_mode": metric_mode,
-        "direct_capture_metrics": metric_mode == "direct_capture",
-        "downsampled_metrics": metric_mode != "direct_capture",
-        "downsample_filter": (
-            downsample_filter
-            if saved_mode != "direct_capture" or metric_mode != "direct_capture"
-            else ""
-        ),
-        "render_settle_frames": render_settle_frames,
-        "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
-        "anti_aliasing": _quality_setting_request(
-            "anti_aliasing",
-            value=getattr(args, "isaac_aa_op", None),
-            setting_path="/rtx/post/aa/op",
-        ),
-        "tonemap_operator": _quality_setting_request(
-            "tonemap_operator",
-            value=getattr(args, "isaac_tonemap_op", None),
-            setting_path="/rtx/post/tonemap/op",
-        ),
-        "exposure_bias": _quality_setting_request(
-            "exposure_bias",
-            value=getattr(args, "isaac_exposure_bias", None),
-            setting_path="/rtx/post/tonemap/exposureBias",
-        ),
-        "colorcorr_gain": _quality_setting_request(
-            "colorcorr_gain",
-            value=getattr(args, "isaac_colorcorr_gain", None),
-            setting_path="/rtx/post/colorcorr/gain",
-        ),
-        "denoise": _quality_setting_not_available("denoise"),
-        "taa": _quality_setting_not_available("taa"),
-        "texture_filtering": _quality_setting_not_available("texture_filtering"),
-        "policy_classification": "capture_quality_probe",
-        "default_renderer_promotion": False,
-        "interpretation": (
-            "This records capture-quality probe metadata only. Direct high-resolution "
-            "review images and downsampled apple-to-apple metrics are kept separate, and "
-            "no native renderer default is promoted by this manifest."
-        ),
-    }
-
-
-def _ensure_capture_quality_probe_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
-    existing = _dict(manifest.get("capture_quality_probe"))
-    if existing:
-        return existing
-    scene = _dict(manifest.get("scene"))
-    width = int(scene.get("render_width") or 540)
-    height = int(scene.get("render_height") or 360)
-    saved_width = int(scene.get("saved_report_width") or width)
-    saved_height = int(scene.get("saved_report_height") or height)
-    metric_width = int(scene.get("metric_width") or saved_width)
-    metric_height = int(scene.get("metric_height") or saved_height)
-    probe = {
-        "schema": "robot_camera_capture_quality_probe_v1",
-        "status": "inferred_legacy_manifest",
-        "render_resolution_requested": _resolution_dict(width, height),
-        "render_resolution_saved": _resolution_dict(saved_width, saved_height),
-        "metric_resolution": _resolution_dict(metric_width, metric_height),
-        "saved_image_mode": "direct_capture"
-        if (saved_width, saved_height) == (width, height)
-        else "downsampled_from_render_capture",
-        "metric_image_mode": "direct_capture"
-        if (metric_width, metric_height) == (width, height)
-        else "downsampled_from_render_capture",
-        "direct_capture_metrics": (metric_width, metric_height) == (width, height),
-        "downsampled_metrics": (metric_width, metric_height) != (width, height),
-        "downsample_filter": "",
-        "render_settle_frames": 0,
-        "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
-        "anti_aliasing": _quality_setting_not_available("anti_aliasing"),
-        "tonemap_operator": _quality_setting_not_available("tonemap_operator"),
-        "exposure_bias": _quality_setting_not_available("exposure_bias"),
-        "denoise": _quality_setting_not_available("denoise"),
-        "taa": _quality_setting_not_available("taa"),
-        "texture_filtering": _quality_setting_not_available("texture_filtering"),
-        "policy_classification": "capture_quality_probe",
-        "default_renderer_promotion": False,
-    }
-    manifest["capture_quality_probe"] = probe
-    return probe
-
-
-def _quality_setting_not_available(name: str) -> dict[str, Any]:
-    return {
-        "name": name,
-        "status": "not_available",
-        "value": None,
-        "setting_path": "",
-        "default_render_settings_changed": False,
-    }
-
-
-def _quality_setting_request(
-    name: str,
-    *,
-    value: Any,
-    setting_path: str,
-) -> dict[str, Any]:
-    if value is None:
-        return _quality_setting_not_available(name)
-    return {
-        "name": name,
-        "status": "requested",
-        "value": value,
-        "setting_path": setting_path,
-        "requested_value": value,
-        "default_render_settings_changed": True,
-    }
-
-
-def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
-    parts = [part.strip() for part in str(value).split(",")]
-    if len(parts) != 3:
-        raise argparse.ArgumentTypeError("RGB gain must be three comma-separated floats")
-    try:
-        gain = tuple(float(part) for part in parts)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("RGB gain must contain only floats") from exc
-    if any(item <= 0.0 for item in gain):
-        raise argparse.ArgumentTypeError("RGB gain values must be positive")
-    return gain  # type: ignore[return-value]
-
-
-def _paired_dimension(
-    args: argparse.Namespace,
-    width_attr: str,
-    height_attr: str,
-    *,
-    default_width: int,
-    default_height: int,
-) -> dict[str, int]:
-    width = getattr(args, width_attr, None)
-    height = getattr(args, height_attr, None)
-    if (width is None) != (height is None):
-        raise ValueError(
-            f"--{width_attr.replace('_', '-')} and --{height_attr.replace('_', '-')} "
-            "must be set together"
-        )
-    if width is None:
-        width = default_width
-        height = default_height
-    return _resolution_dict(width, height)
-
-
-def _resolution_dict(width: Any, height: Any) -> dict[str, int]:
-    width_int = int(width)
-    height_int = int(height)
-    if width_int <= 0 or height_int <= 0:
-        raise ValueError(f"resolution must be positive, got {width_int}x{height_int}")
-    return {"width": width_int, "height": height_int}
-
-
-def _render_settle_args(capture_quality: dict[str, Any]) -> list[str]:
-    args: list[str] = []
-    render_settle_frames = max(0, int(capture_quality.get("render_settle_frames") or 0))
-    anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
-    if anti_aliasing.get("status") == "requested" and anti_aliasing.get("value") is not None:
-        args.extend(["--isaac-aa-op", str(int(anti_aliasing["value"]))])
-    tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
-    if tonemap_operator.get("status") == "requested" and tonemap_operator.get("value") is not None:
-        args.extend(["--isaac-tonemap-op", str(int(tonemap_operator["value"]))])
-    exposure_bias = _dict(capture_quality.get("exposure_bias"))
-    if exposure_bias.get("status") == "requested" and exposure_bias.get("value") is not None:
-        args.extend(["--isaac-exposure-bias", str(float(exposure_bias["value"]))])
-    colorcorr_gain = _dict(capture_quality.get("colorcorr_gain"))
-    if colorcorr_gain.get("status") == "requested" and colorcorr_gain.get("value") is not None:
-        values = colorcorr_gain["value"]
-        if isinstance(values, (list, tuple)) and len(values) == 3:
-            args.extend(
-                [
-                    "--isaac-colorcorr-gain",
-                    ",".join(f"{float(value):.6g}" for value in values),
-                ]
-            )
-    if render_settle_frames <= 0:
-        return args
-    args.extend(["--render-settle-frames", str(render_settle_frames)])
-    return args
-
-
-def _prepare_saved_report_images(
-    mujoco_views: dict[str, Any],
-    isaac_views: dict[str, Any],
-    *,
-    capture_quality: dict[str, Any],
-) -> None:
-    for result in (mujoco_views, isaac_views):
-        raw_views = {
-            key: str(path)
-            for key, path in _dict(result.get("views")).items()
-            if key in ROBOT_VIEW_KEYS and path
-        }
-        result["raw_render_views"] = dict(raw_views)
-        if capture_quality.get("saved_image_mode") == "direct_capture":
-            result["saved_report_views"] = dict(raw_views)
-            continue
-        saved: dict[str, str] = {}
-        for view_key, raw_path in raw_views.items():
-            saved_path = _derived_image_path(
-                Path(raw_path),
-                suffix=f"saved_{_resolution_suffix(capture_quality['render_resolution_saved'])}",
-            )
-            _resize_image(
-                Path(raw_path),
-                saved_path,
-                resolution=_dict(capture_quality.get("render_resolution_saved")),
-                filter_name=str(capture_quality.get("downsample_filter") or "lanczos"),
-            )
-            saved[view_key] = str(saved_path)
-        result["views"] = {**_dict(result.get("views")), **saved}
-        result["saved_report_views"] = saved
 
 
 def _canonical_generated_mess_manifest_from_state(
@@ -1171,20 +879,6 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _robot_camera_contract() -> dict[str, Any]:
-    return {
-        "fpv": {
-            MUJOCO_LANE_ID: "robot_0/head_camera",
-            ISAAC_LANE_ID: "/World/robot_0/head_camera",
-        },
-        "chase": {
-            MUJOCO_LANE_ID: "robot_0/camera_follower",
-            ISAAC_LANE_ID: "robot_relative_camera_follower",
-        },
-        "policy_input_note": "FPV is the robot camera. Chase is report evidence only.",
-    }
-
-
 def _comparison_targets(state: dict[str, Any], *, limit: int) -> list[dict[str, str]]:
     targets: list[dict[str, str]] = []
     for receptacle_id in sorted((state.get("receptacles") or {}).keys()):
@@ -1206,7 +900,7 @@ def _select_comparison_targets(
     isaac_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     candidates = _comparison_targets(state, limit=max(1, limit * 4))
-    priority_targets = _visual_physics_sensitive_target_ids(state)
+    priority_targets = visual_state.visual_physics_sensitive_target_ids(state)
     binding_ids = _bound_comparison_target_ids(
         scene_binding_diagnostics or {},
         isaac_state=isaac_state or {},
@@ -1284,32 +978,6 @@ def _prioritize_comparison_targets(
             0 if str(item.get("kind") or "") == "object" else 1,
         ),
     )
-
-
-def _visual_physics_sensitive_target_ids(state: dict[str, Any]) -> set[str]:
-    target_ids: set[str] = set()
-    explicit = _dict(state.get("joint_states"))
-    for target_id, raw_entries in explicit.items():
-        entries: list[dict[str, Any]] = []
-        if isinstance(raw_entries, list):
-            entries = [_dict(item) for item in raw_entries if isinstance(item, dict)]
-        elif isinstance(raw_entries, dict):
-            entries = [_dict(item) for item in raw_entries.values() if isinstance(item, dict)]
-        if any(_mujoco_joint_is_visual_articulation(joint) for joint in entries):
-            target_ids.add(str(target_id))
-    for target_id in _dict(state.get("objects")):
-        category = _object_category_key(_dict(state["objects"].get(target_id)).get("category"))
-        if not category:
-            category = _object_category_key(str(target_id).split("_", 1)[0])
-        if category in OBJECT_VISUAL_STATE_CATEGORIES:
-            target_ids.add(str(target_id))
-    return target_ids
-
-
-def _mujoco_joint_is_visual_articulation(joint: dict[str, Any]) -> bool:
-    joint_type = str(joint.get("joint_type") or joint.get("type") or "").lower()
-    joint_name = str(joint.get("joint_name") or "").lower()
-    return joint_type in {"hinge", "3", "mjjnt_hinge"} or "flap" in joint_name
 
 
 def _bound_comparison_target_ids(
@@ -1428,70 +1096,21 @@ def _location_result(
     output_dir: Path,
     capture_quality: dict[str, Any],
 ) -> dict[str, Any]:
-    comparisons: dict[str, Any] = {}
-    metric_artifacts: dict[str, Any] = {}
-    for view_key in ROBOT_VIEW_KEYS:
-        mujoco_path = Path(
-            str(
-                _dict(mujoco_views.get("raw_render_views")).get(view_key)
-                or mujoco_views["views"][view_key]
-            )
-        )
-        isaac_path = Path(
-            str(
-                _dict(isaac_views.get("raw_render_views")).get(view_key)
-                or isaac_views["views"][view_key]
-            )
-        )
-        metric_paths = _metric_image_paths(
-            mujoco_path,
-            isaac_path,
-            view_key=view_key,
-            capture_quality=capture_quality,
-        )
-        metric_artifacts[view_key] = {
-            "mujoco": output_relpath(metric_paths["mujoco"], output_dir),
-            "isaac": output_relpath(metric_paths["isaac"], output_dir),
-            "mode": capture_quality.get("metric_image_mode"),
-            "resolution": capture_quality.get("metric_resolution"),
-            "downsample_filter": capture_quality.get("downsample_filter"),
-        }
-        comparisons[view_key] = _image_diff(
-            metric_paths["mujoco"],
-            metric_paths["isaac"],
-            capture_quality=capture_quality,
-        )
+    image_artifacts = image_metrics.location_image_artifacts(
+        mujoco_views=mujoco_views,
+        isaac_views=isaac_views,
+        output_dir=output_dir,
+        capture_quality=capture_quality,
+    )
     return {
         "label": label,
         "status": "success",
         "target": target,
         "robot_pose": robot_pose,
         "capture_quality_probe": capture_quality,
-        "views": {
-            "mujoco": {
-                key: output_relpath(Path(str(path)), output_dir)
-                for key, path in dict(mujoco_views.get("views") or {}).items()
-                if key in {"fpv", "chase", "map", "verify"}
-            },
-            "isaac": {
-                key: output_relpath(Path(str(path)), output_dir)
-                for key, path in dict(isaac_views.get("views") or {}).items()
-                if key in {"fpv", "chase", "map", "verify"}
-            },
-        },
-        "raw_render_views": {
-            "mujoco": {
-                key: output_relpath(Path(str(path)), output_dir)
-                for key, path in _dict(mujoco_views.get("raw_render_views")).items()
-                if key in ROBOT_VIEW_KEYS
-            },
-            "isaac": {
-                key: output_relpath(Path(str(path)), output_dir)
-                for key, path in _dict(isaac_views.get("raw_render_views")).items()
-                if key in ROBOT_VIEW_KEYS
-            },
-        },
-        "metric_views": metric_artifacts,
+        "views": image_artifacts["views"],
+        "raw_render_views": image_artifacts["raw_render_views"],
+        "metric_views": image_artifacts["metric_views"],
         "contracts": {
             "mujoco": mujoco_views.get("camera_control_contract", {}),
             "isaac": isaac_views.get("camera_control_contract", {}),
@@ -1504,7 +1123,7 @@ def _location_result(
             "mujoco": mujoco_views.get("camera_diagnostics", {}),
             "isaac": isaac_views.get("camera_diagnostics", {}),
         },
-        "camera_contract_diagnostics": _location_camera_contract_diagnostics(
+        "camera_contract_diagnostics": camera_contract.location_camera_contract_diagnostics(
             {
                 "robot_pose": robot_pose,
                 "contracts": {
@@ -1517,110 +1136,8 @@ def _location_result(
                 },
             }
         ),
-        "image_diffs": comparisons,
+        "image_diffs": image_artifacts["image_diffs"],
     }
-
-
-def _metric_image_paths(
-    mujoco_path: Path,
-    isaac_path: Path,
-    *,
-    view_key: str,
-    capture_quality: dict[str, Any],
-) -> dict[str, Path]:
-    if capture_quality.get("metric_image_mode") == "direct_capture":
-        return {"mujoco": mujoco_path, "isaac": isaac_path}
-    suffix = f"metric_{view_key}_{_resolution_suffix(capture_quality['metric_resolution'])}"
-    metric_mujoco = _derived_image_path(mujoco_path, suffix=suffix)
-    metric_isaac = _derived_image_path(isaac_path, suffix=suffix)
-    _resize_image(
-        mujoco_path,
-        metric_mujoco,
-        resolution=_dict(capture_quality.get("metric_resolution")),
-        filter_name=str(capture_quality.get("downsample_filter") or "lanczos"),
-    )
-    _resize_image(
-        isaac_path,
-        metric_isaac,
-        resolution=_dict(capture_quality.get("metric_resolution")),
-        filter_name=str(capture_quality.get("downsample_filter") or "lanczos"),
-    )
-    return {"mujoco": metric_mujoco, "isaac": metric_isaac}
-
-
-def _derived_image_path(path: Path, *, suffix: str) -> Path:
-    return path.with_name(f"{path.stem}.{suffix}{path.suffix}")
-
-
-def _resolution_suffix(resolution: dict[str, Any]) -> str:
-    return f"{int(resolution['width'])}x{int(resolution['height'])}"
-
-
-def _resize_image(
-    source_path: Path,
-    target_path: Path,
-    *,
-    resolution: dict[str, Any],
-    filter_name: str,
-) -> None:
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    size = (int(resolution["width"]), int(resolution["height"]))
-    with Image.open(source_path) as source:
-        source.convert("RGB").resize(size, _pil_resample_filter(filter_name)).save(target_path)
-
-
-def _pil_resample_filter(filter_name: str) -> int:
-    filters = {
-        "nearest": Image.Resampling.NEAREST,
-        "bilinear": Image.Resampling.BILINEAR,
-        "bicubic": Image.Resampling.BICUBIC,
-        "lanczos": Image.Resampling.LANCZOS,
-    }
-    return int(filters.get(filter_name, Image.Resampling.LANCZOS))
-
-
-def _image_diff(
-    left_path: Path,
-    right_path: Path,
-    *,
-    capture_quality: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    with Image.open(left_path) as left_raw, Image.open(right_path) as right_raw:
-        left = left_raw.convert("RGB")
-        right = right_raw.convert("RGB")
-        if right.size != left.size:
-            right = right.resize(left.size)
-        diff = ImageChops.difference(left, right)
-        stat = ImageStat.Stat(diff)
-        mean_abs = sum(stat.mean) / len(stat.mean)
-        rms = sum(value * value for value in stat.rms) ** 0.5 / len(stat.rms)
-        extrema = diff.getextrema()
-        pixel_count = max(left.size[0] * left.size[1], 1)
-        nonzero = 0
-        diff_gt_40 = 0
-        diff_gt_80 = 0
-        for pixel in diff.getdata():
-            if pixel != (0, 0, 0):
-                nonzero += 1
-            mean_pixel_delta = sum(pixel) / 3.0
-            if mean_pixel_delta > 40.0:
-                diff_gt_40 += 1
-            if mean_pixel_delta > 80.0:
-                diff_gt_80 += 1
-        residual = _render_residual_diagnostics(left, right)
-        return {
-            "left": str(left_path),
-            "right": str(right_path),
-            "size": list(left.size),
-            "mean_abs_rgb": round(float(mean_abs), 4),
-            "rms_rgb": round(float(rms), 4),
-            "max_channel_diff": max(max(channel) for channel in extrema),
-            "nonzero_fraction": round(nonzero / pixel_count, 6),
-            "diff_gt_40_fraction": round(diff_gt_40 / pixel_count, 6),
-            "diff_gt_80_fraction": round(diff_gt_80 / pixel_count, 6),
-            "residual": residual,
-            "capture_quality_probe": _dict(capture_quality),
-        }
 
 
 def _summary(locations: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1634,16 +1151,9 @@ def _summary(locations: list[dict[str, Any]]) -> dict[str, Any]:
         "chase_mean_abs_rgb_avg": _avg(
             _get_float(item, ("image_diffs", "chase", "mean_abs_rgb")) for item in successful
         ),
-        "camera_contract_diagnostics": _camera_contract_diagnostics(successful),
-        "residual_triage": _residual_triage(successful),
+        "camera_contract_diagnostics": camera_contract.camera_contract_diagnostics(successful),
+        "residual_triage": image_metrics.residual_triage(successful),
     }
-
-
-def _refresh_location_camera_contract_diagnostics(locations: list[dict[str, Any]]) -> None:
-    for item in locations:
-        if not isinstance(item, dict) or item.get("status") != "success":
-            continue
-        item["camera_contract_diagnostics"] = _location_camera_contract_diagnostics(item)
 
 
 def _attach_state_artifact_summaries(
@@ -1669,10 +1179,12 @@ def _attach_state_artifact_summaries(
         isaac_lane["scene_binding_summary"] = _scene_binding_summary(
             _dict(isaac_state.get("scene_binding_diagnostics"))
         )
-        native_render = _native_isaac_render_diagnostics_from_state(isaac_state)
-        if native_render:
-            isaac_lane["native_render_diagnostics"] = _compact_native_isaac_render_diagnostics(
-                native_render
+        native_render_diagnostics = native_render.native_isaac_render_diagnostics_from_state(
+            isaac_state
+        )
+        if native_render_diagnostics:
+            isaac_lane["native_render_diagnostics"] = (
+                object_gate.compact_native_isaac_render_diagnostics(native_render_diagnostics)
             )
     artifacts = manifest.setdefault("artifacts", {})
     if isinstance(artifacts, dict):
@@ -1748,35 +1260,35 @@ def _attach_render_contract_diagnostics(
     )
     manifest["render_domain_checks"] = domain_checks
     manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
-    native_render_diagnostics = _native_isaac_render_diagnostics_summary(
+    native_render_diagnostics = native_render.native_isaac_render_diagnostics_summary(
         isaac_state=isaac_state,
         locations=successful_locations,
     )
     manifest["native_isaac_render_diagnostics"] = native_render_diagnostics
     manifest.setdefault("summary", {})["native_isaac_render_diagnostics"] = (
-        _compact_native_isaac_render_diagnostics(native_render_diagnostics)
+        object_gate.compact_native_isaac_render_diagnostics(native_render_diagnostics)
     )
     if skip_object_parity_audit:
-        skipped_audit = _skipped_object_parity_audit()
-        skipped_gate = _skipped_object_render_parity_diagnostics(
+        skipped_audit = object_parity.skipped_object_parity_audit()
+        skipped_gate = object_gate.skipped_object_render_parity_diagnostics(
             render_domain_checks=domain_checks,
             residual_triage=_dict(manifest.get("summary")).get("residual_triage"),
             native_render_diagnostics=native_render_diagnostics,
         )
         manifest["object_parity_audit"] = skipped_audit
         manifest["object_visual_parity_audit"] = skipped_audit
-        manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
-            skipped_audit
+        manifest.setdefault("summary", {})["object_parity_audit"] = (
+            object_parity.compact_object_parity_audit(skipped_audit)
         )
         manifest.setdefault("summary", {})["object_visual_parity_audit"] = (
-            _compact_object_parity_audit(skipped_audit)
+            object_parity.compact_object_parity_audit(skipped_audit)
         )
         manifest["object_render_parity_diagnostics"] = skipped_gate
         manifest.setdefault("summary", {})["object_render_parity_diagnostics"] = (
-            _compact_object_render_parity_diagnostics(skipped_gate)
+            object_gate.compact_object_render_parity_diagnostics(skipped_gate)
         )
         return
-    object_audit = _object_parity_audit(
+    object_audit = object_parity.object_parity_audit(
         mujoco_state=mujoco_state,
         isaac_state=isaac_state,
         mujoco_contract=mujoco_contract,
@@ -1787,13 +1299,13 @@ def _attach_render_contract_diagnostics(
     )
     manifest["object_parity_audit"] = object_audit
     manifest["object_visual_parity_audit"] = object_audit
-    manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
-        object_audit
+    manifest.setdefault("summary", {})["object_parity_audit"] = (
+        object_parity.compact_object_parity_audit(object_audit)
     )
-    manifest.setdefault("summary", {})["object_visual_parity_audit"] = _compact_object_parity_audit(
-        object_audit
+    manifest.setdefault("summary", {})["object_visual_parity_audit"] = (
+        object_parity.compact_object_parity_audit(object_audit)
     )
-    gate_diagnostics = _object_render_parity_diagnostics(
+    gate_diagnostics = object_gate.object_render_parity_diagnostics(
         object_audit=object_audit,
         render_domain_checks=domain_checks,
         residual_triage=_dict(manifest.get("summary")).get("residual_triage"),
@@ -1801,7 +1313,7 @@ def _attach_render_contract_diagnostics(
     )
     manifest["object_render_parity_diagnostics"] = gate_diagnostics
     manifest.setdefault("summary", {})["object_render_parity_diagnostics"] = (
-        _compact_object_render_parity_diagnostics(gate_diagnostics)
+        object_gate.compact_object_render_parity_diagnostics(gate_diagnostics)
     )
 
 
@@ -1820,1685 +1332,6 @@ def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[st
     }
 
 
-def _native_isaac_render_diagnostics_from_state(isaac_state: dict[str, Any]) -> dict[str, Any]:
-    candidates = [
-        _dict(isaac_state.get("native_render_diagnostics")),
-        _dict(
-            _dict(isaac_state.get("robot_view_camera_diagnostics")).get("native_render_diagnostics")
-        ),
-        _dict(
-            _dict(_dict(isaac_state.get("runtime")).get("rendering")).get(
-                "native_render_diagnostics"
-            )
-        ),
-        _dict(_dict(isaac_state.get("real_runtime_smoke")).get("native_render_diagnostics")),
-    ]
-    for candidate in candidates:
-        if candidate.get("schema") == ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA:
-            return candidate
-    for candidate in candidates:
-        if candidate:
-            return candidate
-    return {}
-
-
-def _native_isaac_render_diagnostics_summary(
-    *,
-    isaac_state: dict[str, Any],
-    locations: list[dict[str, Any]],
-) -> dict[str, Any]:
-    state_diagnostics = _native_isaac_render_diagnostics_from_state(isaac_state)
-    location_diagnostics = [
-        _dict(
-            _dict(_dict(item.get("camera_diagnostics")).get("isaac")).get(
-                "native_render_diagnostics"
-            )
-        )
-        for item in locations
-        if isinstance(item, dict)
-    ]
-    location_diagnostics = [
-        item
-        for item in location_diagnostics
-        if item.get("schema") == ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA
-    ]
-    primary = state_diagnostics or (location_diagnostics[0] if location_diagnostics else {})
-    if not primary:
-        status = "missing_native_diagnostics"
-        next_action = (
-            "Record Isaac native RTX/camera settings before treating brightness residuals "
-            "as renderer-domain evidence."
-        )
-    elif primary.get("status") == "fake_protocol":
-        status = "fake_protocol_schema_present"
-        next_action = (
-            "CI fake mode proves the diagnostics schema only; run a local Isaac capture "
-            "to read real native RTX/camera settings."
-        )
-    elif primary.get("settings_api_available") is False:
-        status = "native_settings_api_unavailable"
-        next_action = (
-            "The worker did not read Kit settings in this capture. Confirm Isaac exposes "
-            "carb.settings before promoting a native exposure/tone preset."
-        )
-    else:
-        status = "native_settings_recorded"
-        next_action = (
-            "Native Isaac settings are recorded. Compare held-out FPV and chase residuals "
-            "before changing any default exposure or tone setting."
-        )
-    return {
-        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
-        "status": status,
-        "native_settings_recorded": status == "native_settings_recorded",
-        "primary": primary,
-        "location_diagnostic_count": len(location_diagnostics),
-        "location_status_counts": _status_counts(
-            item.get("status") for item in location_diagnostics
-        ),
-        "renderer_mode": primary.get("renderer_mode"),
-        "capture_method": primary.get("capture_method"),
-        "view_kind": primary.get("view_kind"),
-        "settings_api_available": primary.get("settings_api_available"),
-        "available_setting_count": primary.get("available_setting_count"),
-        "missing_setting_count": primary.get("missing_setting_count"),
-        "tone_mapping": _compact_native_setting_group(_dict(primary.get("tone_mapping"))),
-        "camera_exposure": _compact_native_setting_group(_dict(primary.get("camera_exposure"))),
-        "ocio": _compact_native_setting_group(_dict(primary.get("ocio"))),
-        "color_correction": _compact_native_setting_group(_dict(primary.get("color_correction"))),
-        "color_grading": _compact_native_setting_group(_dict(primary.get("color_grading"))),
-        "renderer": _compact_native_setting_group(_dict(primary.get("renderer"))),
-        "camera_prim_paths": primary.get("camera_prim_paths") or [],
-        "render_product_paths": primary.get("render_product_paths") or [],
-        "render_resolution": primary.get("render_resolution") or {},
-        "isaac_lab_isp_active": primary.get("isaac_lab_isp_active"),
-        "settings_mutation_attempted": primary.get("settings_mutation_attempted") is True,
-        "default_render_settings_changed": primary.get("default_render_settings_changed") is True,
-        "post_render_comparison_profile": primary.get("post_render_comparison_profile") or {},
-        "recommended_next_action": next_action,
-        "interpretation": (
-            "These rows are native Isaac/RTX and camera diagnostics read from the Isaac "
-            "capture path. They are separate from Roboclaws report-side RGB gain or "
-            "color-profile comparison controls and do not change cleanup render defaults."
-        ),
-    }
-
-
-def _compact_native_setting_group(group: dict[str, Any]) -> dict[str, Any]:
-    compact: dict[str, Any] = {}
-    for key, raw in group.items():
-        row = _dict(raw)
-        compact[str(key)] = {
-            "status": row.get("status"),
-            "value": row.get("value"),
-            "setting_path": row.get("setting_path"),
-        }
-    return compact
-
-
-def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
-    primary = _dict(diagnostics.get("primary")) or diagnostics
-    return {
-        "schema": diagnostics.get("schema") or primary.get("schema"),
-        "status": diagnostics.get("status") or primary.get("status"),
-        "native_settings_recorded": diagnostics.get("native_settings_recorded"),
-        "renderer_mode": diagnostics.get("renderer_mode") or primary.get("renderer_mode"),
-        "capture_method": diagnostics.get("capture_method") or primary.get("capture_method"),
-        "view_kind": diagnostics.get("view_kind") or primary.get("view_kind"),
-        "settings_api_available": diagnostics.get("settings_api_available")
-        if "settings_api_available" in diagnostics
-        else primary.get("settings_api_available"),
-        "available_setting_count": diagnostics.get("available_setting_count")
-        if "available_setting_count" in diagnostics
-        else primary.get("available_setting_count"),
-        "missing_setting_count": diagnostics.get("missing_setting_count")
-        if "missing_setting_count" in diagnostics
-        else primary.get("missing_setting_count"),
-        "camera_prim_paths": diagnostics.get("camera_prim_paths")
-        or primary.get("camera_prim_paths")
-        or [],
-        "render_product_paths": diagnostics.get("render_product_paths")
-        or primary.get("render_product_paths")
-        or [],
-        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active")
-        if "isaac_lab_isp_active" in diagnostics
-        else primary.get("isaac_lab_isp_active"),
-        "default_render_settings_changed": diagnostics.get("default_render_settings_changed")
-        if "default_render_settings_changed" in diagnostics
-        else primary.get("default_render_settings_changed"),
-        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile")
-        or primary.get("post_render_comparison_profile")
-        or {},
-        "recommended_next_action": diagnostics.get("recommended_next_action"),
-    }
-
-
-def _object_parity_audit(
-    *,
-    mujoco_state: dict[str, Any],
-    isaac_state: dict[str, Any],
-    mujoco_contract: dict[str, Any],
-    isaac_contract: dict[str, Any],
-    scene_binding_diagnostics: dict[str, Any],
-    locations: list[dict[str, Any]] | None = None,
-    output_dir: Path | None = None,
-) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    object_ids = sorted(
-        set(_dict(mujoco_state.get("objects")))
-        | set(_dict(isaac_state.get("object_index")))
-        | _bound_ids_from_groups(scene_binding_diagnostics, ("object_bindings",))
-    )
-    receptacle_ids = sorted(
-        set(_dict(mujoco_state.get("receptacles")))
-        | set(_dict(isaac_state.get("receptacle_index")))
-        | _bound_ids_from_groups(scene_binding_diagnostics, ("receptacle_bindings",))
-    )
-    for target_id in object_ids:
-        items.append(
-            _object_parity_item(
-                kind="object",
-                target_id=str(target_id),
-                mujoco_state=mujoco_state,
-                isaac_state=isaac_state,
-                mujoco_contract=mujoco_contract,
-                isaac_contract=isaac_contract,
-                scene_binding_diagnostics=scene_binding_diagnostics,
-                locations=locations or [],
-                output_dir=output_dir,
-            )
-        )
-    for target_id in receptacle_ids:
-        items.append(
-            _object_parity_item(
-                kind="receptacle",
-                target_id=str(target_id),
-                mujoco_state=mujoco_state,
-                isaac_state=isaac_state,
-                mujoco_contract=mujoco_contract,
-                isaac_contract=isaac_contract,
-                scene_binding_diagnostics=scene_binding_diagnostics,
-                locations=locations or [],
-                output_dir=output_dir,
-            )
-        )
-    high_priority_statuses = {
-        "missing_isaac_index",
-        "missing_mujoco_state",
-        "isaac_geometry_gap",
-        "missing_usd_prim_path",
-        "category_delta",
-        "pose_delta",
-        "support_metadata_delta",
-        "state_delta",
-        "state_not_rendered_to_usd",
-        "visual_state_articulation_physics_preserved",
-        "visual_state_unverified",
-        "material_or_texture_name_delta",
-        "missing_object_binding_evidence",
-    }
-    high_priority = [
-        item
-        for item in items
-        if any(status in high_priority_statuses for status in _object_parity_item_statuses(item))
-    ]
-    if not items:
-        status = "no_scene_objects"
-        next_action = "No MuJoCo or Isaac scene objects were available for object parity audit."
-    elif high_priority:
-        status = "object_parity_gaps_detected"
-        next_action = (
-            "Inspect high-priority object parity rows before changing camera settings. "
-            "Start with missing bindings, category/pose/support deltas, and USD state "
-            "that is not rendered to geometry."
-        )
-    else:
-        status = "object_parity_index_aligned"
-        next_action = (
-            "Object indices and compact material/state contracts align for this scene; "
-            "remaining residuals are likely renderer response or robot visual import."
-        )
-    return {
-        "schema": "robot_camera_object_parity_audit_v1",
-        "status": status,
-        "item_count": len(items),
-        "object_count": sum(1 for item in items if item.get("kind") == "object"),
-        "receptacle_count": sum(1 for item in items if item.get("kind") == "receptacle"),
-        "high_priority_gap_count": len(high_priority),
-        "binding_status_counts": _status_counts(item.get("binding_status") for item in items),
-        "category_status_counts": _status_counts(item.get("category_status") for item in items),
-        "pose_status_counts": _status_counts(item.get("pose_status") for item in items),
-        "support_status_counts": _status_counts(item.get("support_status") for item in items),
-        "state_status_counts": _status_counts(item.get("state_status") for item in items),
-        "render_contract_status_counts": _status_counts(
-            _dict(item.get("render_contract_delta")).get("status") for item in items
-        ),
-        "category_status_summary": _object_category_status_summary(items),
-        "high_priority_items": high_priority[:20],
-        "items": items,
-        "recommended_next_action": next_action,
-        "interpretation": (
-            "This audit checks scene objects/receptacles beyond the limited image target "
-            "set. It compares MuJoCo state and MJCF render contracts against Isaac USD "
-            "indices, compact USD bounds, parent/support metadata, semantic open state, "
-            "and PreviewSurface material bindings."
-        ),
-    }
-
-
-def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "schema": audit.get("schema"),
-        "status": audit.get("status"),
-        "skip_reason": audit.get("skip_reason"),
-        "item_count": audit.get("item_count"),
-        "object_count": audit.get("object_count"),
-        "receptacle_count": audit.get("receptacle_count"),
-        "high_priority_gap_count": audit.get("high_priority_gap_count"),
-        "binding_status_counts": audit.get("binding_status_counts"),
-        "category_status_counts": audit.get("category_status_counts"),
-        "pose_status_counts": audit.get("pose_status_counts"),
-        "support_status_counts": audit.get("support_status_counts"),
-        "state_status_counts": audit.get("state_status_counts"),
-        "render_contract_status_counts": audit.get("render_contract_status_counts"),
-        "category_status_summary": audit.get("category_status_summary"),
-        "high_priority_items": audit.get("high_priority_items"),
-        "recommended_next_action": audit.get("recommended_next_action"),
-    }
-
-
-def _skipped_object_parity_audit() -> dict[str, Any]:
-    return {
-        "schema": "robot_camera_object_parity_audit_v1",
-        "status": "skipped_for_capture_quality_probe",
-        "skip_reason": (
-            "The full-scene object parity audit was explicitly skipped for a bounded "
-            "capture-quality probe. Use image diffs, render contract diagnostics, and "
-            "native Isaac render diagnostics for this run; rerun without "
-            "--skip-object-parity-audit before making object-level parity claims."
-        ),
-        "item_count": 0,
-        "object_count": 0,
-        "receptacle_count": 0,
-        "high_priority_gap_count": 0,
-        "binding_status_counts": {},
-        "category_status_counts": {},
-        "pose_status_counts": {},
-        "support_status_counts": {},
-        "state_status_counts": {},
-        "render_contract_status_counts": {},
-        "category_status_summary": [],
-        "high_priority_items": [],
-        "items": [],
-        "recommended_next_action": (
-            "Use this artifact only for capture-quality ranking. Rerun without the skip "
-            "flag for object/render gate evidence."
-        ),
-        "interpretation": (
-            "Capture-quality probes can skip the expensive full-scene audit so local "
-            "render evidence remains fast and comparable."
-        ),
-    }
-
-
-def _object_category_status_summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for item in items:
-        mujoco = _dict(item.get("mujoco"))
-        isaac = _dict(item.get("isaac"))
-        category = (
-            _object_category_key(mujoco.get("category"))
-            or _object_category_key(isaac.get("category"))
-            or _object_category_key(isaac.get("usd_category"))
-            or "unknown"
-        )
-        grouped.setdefault(category, []).append(item)
-    rows = []
-    for category, category_items in sorted(grouped.items()):
-        records = [_object_gate_record(item) for item in category_items]
-        rows.append(
-            {
-                "category": category,
-                "item_count": len(category_items),
-                "kind_counts": _status_counts(item.get("kind") for item in category_items),
-                "object_gate_status_counts": _status_counts(
-                    record.get("object_gate_status") for record in records
-                ),
-                "object_gate_classification_counts": _status_counts(
-                    record.get("classification") for record in records
-                ),
-                "binding_status_counts": _status_counts(
-                    item.get("binding_status") for item in category_items
-                ),
-                "category_status_counts": _status_counts(
-                    item.get("category_status") for item in category_items
-                ),
-                "pose_status_counts": _status_counts(
-                    item.get("pose_status") for item in category_items
-                ),
-                "support_status_counts": _status_counts(
-                    item.get("support_status") for item in category_items
-                ),
-                "state_status_counts": _status_counts(
-                    item.get("state_status") for item in category_items
-                ),
-                "rgb_view_evidence_status_counts": _status_counts(
-                    _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
-                ),
-                "target_coverage_status_counts": _status_counts(
-                    _dict(item.get("rgb_view_evidence")).get("target_coverage_status")
-                    for item in category_items
-                ),
-                "target_visual_state_status_counts": _status_counts(
-                    _dict(item.get("rgb_view_evidence")).get("target_visual_state_status")
-                    for item in category_items
-                ),
-                "render_contract_status_counts": _status_counts(
-                    _dict(item.get("render_contract_delta")).get("status")
-                    for item in category_items
-                ),
-            }
-        )
-    return rows
-
-
-def _object_render_parity_diagnostics(
-    *,
-    object_audit: dict[str, Any],
-    render_domain_checks: dict[str, Any],
-    residual_triage: dict[str, Any] | None,
-    native_render_diagnostics: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    items = _list_dicts(object_audit.get("items"))
-    item_records = [_object_gate_record(item) for item in items]
-    object_failures = [
-        item for item in item_records if item.get("object_gate_status") != "comparable"
-    ]
-    comparable = [item for item in item_records if item.get("object_gate_status") == "comparable"]
-    render_gate = _render_gate_diagnostics(
-        comparable_records=comparable,
-        render_domain_checks=render_domain_checks,
-        residual_triage=residual_triage or {},
-        native_render_diagnostics=native_render_diagnostics or {},
-    )
-    object_gate_status = (
-        "no_object_records"
-        if not item_records
-        else "object_gate_failures_detected"
-        if object_failures
-        else "object_gate_comparable"
-    )
-    if object_gate_status == "no_object_records":
-        status = "no_object_records"
-        next_action = "Run a comparison with MuJoCo/Isaac state artifacts before parity claims."
-    elif object_failures:
-        status = "object_gate_failures_detected"
-        next_action = (
-            "Fix or mark non-comparable object bindings, geometry, pose, material, or "
-            "visual-state rows before treating RGB residuals as render-domain evidence."
-        )
-    else:
-        status = render_gate.get("status") or "render_gate_unclassified"
-        next_action = str(
-            render_gate.get("recommended_next_action")
-            or "Comparable object rows are ready for render-domain residual triage."
-        )
-    return {
-        "schema": "robot_camera_object_render_parity_diagnostics_v1",
-        "status": status,
-        "object_gate": {
-            "status": object_gate_status,
-            "item_count": len(item_records),
-            "comparable_count": len(comparable),
-            "failure_count": len(object_failures),
-            "status_counts": _status_counts(
-                item.get("object_gate_status") for item in item_records
-            ),
-            "classification_counts": _status_counts(
-                item.get("classification") for item in item_records
-            ),
-            "failure_records": object_failures[:20],
-            "comparable_records": comparable[:20],
-        },
-        "render_gate": render_gate,
-        "recommended_next_action": next_action,
-        "interpretation": (
-            "The Object Gate decides whether scene objects are present, bound, renderable, "
-            "posed, and in an auditable visual/material state. The Render Gate only "
-            "interprets camera RGB residuals after comparable object rows are separated "
-            "from missing or mismatched objects."
-        ),
-    }
-
-
-def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
-    object_gate = _dict(diagnostics.get("object_gate"))
-    render_gate = _dict(diagnostics.get("render_gate"))
-    return {
-        "schema": diagnostics.get("schema"),
-        "status": diagnostics.get("status"),
-        "skip_reason": diagnostics.get("skip_reason"),
-        "object_gate_status": object_gate.get("status"),
-        "object_gate_item_count": object_gate.get("item_count"),
-        "object_gate_comparable_count": object_gate.get("comparable_count"),
-        "object_gate_failure_count": object_gate.get("failure_count"),
-        "object_gate_status_counts": object_gate.get("status_counts"),
-        "object_gate_classification_counts": object_gate.get("classification_counts"),
-        "render_gate_status": render_gate.get("status"),
-        "render_gate_residual_status": render_gate.get("residual_status"),
-        "render_gate_render_domain_status": render_gate.get("render_domain_status"),
-        "render_gate_native_isaac_status": render_gate.get("native_isaac_status"),
-        "recommended_next_action": diagnostics.get("recommended_next_action"),
-    }
-
-
-def _skipped_object_render_parity_diagnostics(
-    *,
-    render_domain_checks: dict[str, Any],
-    residual_triage: dict[str, Any] | None,
-    native_render_diagnostics: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    render_gate = _render_gate_diagnostics(
-        comparable_records=[],
-        render_domain_checks=render_domain_checks,
-        residual_triage=residual_triage or {},
-        native_render_diagnostics=native_render_diagnostics or {},
-    )
-    return {
-        "schema": "robot_camera_object_render_parity_diagnostics_v1",
-        "status": "skipped_for_capture_quality_probe",
-        "skip_reason": (
-            "The Object Gate was explicitly skipped with --skip-object-parity-audit. "
-            "This run can rank capture-quality candidates, but it is not object-level "
-            "parity evidence."
-        ),
-        "object_gate": {
-            "status": "skipped_for_capture_quality_probe",
-            "item_count": 0,
-            "comparable_count": 0,
-            "failure_count": 0,
-            "status_counts": {},
-            "classification_counts": {},
-            "failure_records": [],
-            "comparable_records": [],
-        },
-        "render_gate": render_gate,
-        "recommended_next_action": (
-            "Compare FPV/chase image metrics for the capture-quality candidate. Rerun "
-            "without --skip-object-parity-audit before treating object rows as comparable."
-        ),
-        "interpretation": (
-            "The Object Gate is intentionally absent in this capture-quality probe."
-        ),
-    }
-
-
-def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
-    statuses = _object_parity_item_statuses(item)
-    classification = _object_gate_classification(item, statuses)
-    blocking_status = _object_gate_blocking_status(item, statuses)
-    object_gate_status = "comparable" if classification == "comparable" else "not_comparable"
-    render_delta = _dict(item.get("render_contract_delta"))
-    visual_state = _dict(item.get("visual_state_contract"))
-    rgb_evidence = _dict(item.get("rgb_view_evidence"))
-    return {
-        "kind": item.get("kind"),
-        "target_id": item.get("target_id"),
-        "object_gate_status": object_gate_status,
-        "classification": classification,
-        "blocking_status": blocking_status,
-        "binding_status": item.get("binding_status"),
-        "category_status": item.get("category_status"),
-        "pose_status": item.get("pose_status"),
-        "support_status": item.get("support_status"),
-        "state_status": item.get("state_status"),
-        "render_contract_status": render_delta.get("status"),
-        "visual_state_status": visual_state.get("status"),
-        "rgb_view_evidence_status": rgb_evidence.get("status"),
-        "target_coverage_status": rgb_evidence.get("target_coverage_status"),
-        "target_visual_state_status": rgb_evidence.get("target_visual_state_status"),
-        "pose_delta_m": item.get("pose_delta_m"),
-        "mujoco_category": _dict(item.get("mujoco")).get("category"),
-        "isaac_category": _dict(item.get("isaac")).get("category")
-        or _dict(item.get("isaac")).get("usd_category"),
-        "isaac_usd_prim_path": _dict(item.get("isaac")).get("usd_prim_path"),
-        "selected_public_target": item.get("selected_public_target"),
-    }
-
-
-def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str:
-    return object_gate.object_gate_classification(item, statuses)
-
-
-def _visual_physics_protected_without_selected_rgb(item: dict[str, Any]) -> bool:
-    return object_gate.visual_physics_protected_without_selected_rgb(item)
-
-
-def _visual_physics_protected_without_target_coverage(item: dict[str, Any]) -> bool:
-    return object_gate.visual_physics_protected_without_target_coverage(item)
-
-
-def _visual_physics_protected_with_target_visual_delta(item: dict[str, Any]) -> bool:
-    return object_gate.visual_physics_protected_with_target_visual_delta(item)
-
-
-def _object_gate_blocking_status(item: dict[str, Any], statuses: set[str]) -> str:
-    if _visual_physics_protected_without_selected_rgb(item):
-        return "visual_state_requires_selected_rgb_evidence"
-    if _visual_physics_protected_without_target_coverage(item):
-        return "visual_state_requires_selected_target_coverage"
-    if _visual_physics_protected_with_target_visual_delta(item):
-        return str(
-            _dict(item.get("rgb_view_evidence")).get("target_visual_state_status")
-            or "selected_object_visual_state_delta"
-        )
-    for value in (
-        item.get("binding_status"),
-        item.get("category_status"),
-        item.get("pose_status"),
-        item.get("support_status"),
-        item.get("state_status"),
-        _dict(item.get("visual_state_contract")).get("status"),
-        _dict(item.get("render_contract_delta")).get("status"),
-    ):
-        status = str(value or "")
-        if (
-            status
-            and status in statuses
-            and status
-            not in {
-                "bound_in_both",
-                "category_aligned",
-                "pose_aligned",
-                "support_metadata_aligned",
-                "support_not_reported",
-                "state_aligned",
-                "not_applicable",
-                "material_texture_names_match",
-            }
-        ):
-            return status
-    return ""
-
-
-def _render_gate_diagnostics(
-    *,
-    comparable_records: list[dict[str, Any]],
-    render_domain_checks: dict[str, Any],
-    residual_triage: dict[str, Any],
-    native_render_diagnostics: dict[str, Any],
-) -> dict[str, Any]:
-    residual_status = str(residual_triage.get("status") or "")
-    render_domain_status = str(render_domain_checks.get("status") or "")
-    native_status = str(native_render_diagnostics.get("status") or "")
-    if not comparable_records:
-        status = "blocked_by_object_gate"
-        next_action = "No comparable object rows are available for render-domain residual claims."
-    elif (
-        render_domain_status
-        in {
-            "render_domain_delta_confirmed",
-            "render_domain_checks_low_priority",
-        }
-        or residual_status
-    ):
-        status = "render_domain_residual"
-        next_action = str(
-            render_domain_checks.get("recommended_next_action")
-            or residual_triage.get("recommended_next_action")
-            or "Continue render-domain triage on comparable object rows."
-        )
-    else:
-        status = "render_gate_unclassified"
-        next_action = "Attach render-domain checks and residual triage before render claims."
-    return {
-        "schema": "robot_camera_render_gate_diagnostics_v1",
-        "status": status,
-        "comparable_object_count": len(comparable_records),
-        "render_domain_status": render_domain_status,
-        "residual_status": residual_status,
-        "native_isaac_status": native_status,
-        "native_isaac_render_diagnostics": _compact_native_isaac_render_diagnostics(
-            native_render_diagnostics
-        )
-        if native_render_diagnostics
-        else {},
-        "residual_triage": residual_triage,
-        "render_domain_check_status_counts": render_domain_checks.get("check_status_counts") or {},
-        "recommended_next_action": next_action,
-    }
-
-
-def _object_parity_item(
-    *,
-    kind: str,
-    target_id: str,
-    mujoco_state: dict[str, Any],
-    isaac_state: dict[str, Any],
-    mujoco_contract: dict[str, Any],
-    isaac_contract: dict[str, Any],
-    scene_binding_diagnostics: dict[str, Any],
-    locations: list[dict[str, Any]],
-    output_dir: Path | None,
-) -> dict[str, Any]:
-    mujoco_entry = _mujoco_state_entry(mujoco_state, kind, target_id)
-    isaac_entry = _isaac_effective_index_entry(isaac_state, kind, target_id)
-    target = {"kind": kind, "target_id": target_id}
-    binding = _target_usd_binding(scene_binding_diagnostics, target)
-    usd_prim_path = str(
-        isaac_entry.get("usd_prim_path")
-        or binding.get("usd_prim_path")
-        or _dict(_dict(isaac_entry.get("usd_world_bounds")).get("prim")).get("path")
-        or ""
-    )
-    mujoco_category = _object_category_key(mujoco_entry.get("category"))
-    isaac_category = _object_category_key(
-        isaac_entry.get("category") or isaac_entry.get("usd_category") or binding.get("category")
-    )
-    mujoco_position = _vec3_or_none(mujoco_entry.get("position"))
-    isaac_position = _isaac_index_position(isaac_entry)
-    pose_delta = (
-        round(_vec_distance(mujoco_position, isaac_position), 6)
-        if mujoco_position is not None and isaac_position is not None
-        else None
-    )
-    mujoco_render = _mujoco_view_render_contract(mujoco_contract, anchor_id=target_id)
-    isaac_render = _isaac_view_render_contract(isaac_contract, usd_prim_path=usd_prim_path)
-    render_delta = _view_render_contract_delta(
-        suspicion="object_material_texture_binding_contract",
-        mujoco=mujoco_render,
-        isaac=isaac_render,
-    )
-    return {
-        "kind": kind,
-        "target_id": target_id,
-        "binding_status": _object_binding_status(mujoco_entry, isaac_entry, usd_prim_path),
-        "selected_public_target": _is_selected_public_target(
-            scene_binding_diagnostics,
-            kind,
-            target_id,
-        ),
-        "mujoco": _compact_mujoco_object_entry(mujoco_entry),
-        "isaac": _compact_isaac_index_entry(isaac_entry, usd_prim_path=usd_prim_path),
-        "category_status": _object_category_status(
-            mujoco_category=mujoco_category,
-            isaac_category=isaac_category,
-            mujoco_entry=mujoco_entry,
-            isaac_entry=isaac_entry,
-        ),
-        "pose_status": _object_pose_status(mujoco_position, isaac_position, pose_delta),
-        "pose_delta_m": pose_delta,
-        "support_status": _object_support_status(mujoco_entry, isaac_entry),
-        "state_status": _object_state_status(
-            target_id=target_id,
-            kind=kind,
-            mujoco_entry=mujoco_entry,
-            isaac_entry=isaac_entry,
-            mujoco_state=mujoco_state,
-            isaac_state=isaac_state,
-            isaac_contract=isaac_contract,
-            usd_prim_path=usd_prim_path,
-        ),
-        "visual_state_contract": _object_visual_state_contract(
-            target_id=target_id,
-            kind=kind,
-            mujoco_entry=mujoco_entry,
-            isaac_entry=isaac_entry,
-            mujoco_state=mujoco_state,
-            isaac_state=isaac_state,
-            isaac_contract=isaac_contract,
-            usd_prim_path=usd_prim_path,
-        ),
-        "rgb_view_evidence": _object_rgb_view_evidence(
-            kind=kind,
-            target_id=target_id,
-            locations=locations,
-            output_dir=output_dir,
-        ),
-        "render_contract_delta": _compact_render_contract_delta(render_delta),
-        "render_contract": {
-            "mujoco_status": mujoco_render.get("status"),
-            "isaac_status": isaac_render.get("status"),
-            "mujoco_visual_geom_count": mujoco_render.get("visual_geom_count"),
-            "isaac_material_binding_count": isaac_render.get("material_binding_count"),
-            "mujoco_materials": mujoco_render.get("materials"),
-            "isaac_materials": isaac_render.get("materials"),
-            "mujoco_texture_basenames": _path_basenames(
-                [str(value) for value in mujoco_render.get("texture_files") or []]
-            ),
-            "isaac_texture_basenames": _path_basenames(
-                [str(value) for value in isaac_render.get("texture_files") or []]
-            ),
-        },
-    }
-
-
-def _mujoco_state_entry(state: dict[str, Any], kind: str, target_id: str) -> dict[str, Any]:
-    group = "receptacles" if kind == "receptacle" else "objects"
-    return _dict(_dict(state.get(group)).get(target_id))
-
-
-def _isaac_index_entry(state: dict[str, Any], kind: str, target_id: str) -> dict[str, Any]:
-    group = "receptacle_index" if kind == "receptacle" else "object_index"
-    return _dict(_dict(state.get(group)).get(target_id))
-
-
-def _isaac_effective_index_entry(
-    state: dict[str, Any],
-    kind: str,
-    target_id: str,
-) -> dict[str, Any]:
-    entry = _isaac_index_entry(state, kind, target_id)
-    if kind != "object":
-        return entry
-    pose = _dict(_dict(_dict(state.get("semantic_pose_state")).get("object_poses")).get(target_id))
-    if not pose:
-        return entry
-    effective = dict(entry)
-    position = _vec3_or_none(pose.get("position"))
-    if position is not None:
-        effective["position"] = [round(float(value), 6) for value in position]
-        effective["position_source"] = str(pose.get("position_source") or "semantic_pose_state")
-        effective["semantic_pose_position_applied"] = (
-            _dict(_dict(state.get("semantic_pose_state")).get("semantic_pose_view_capture")).get(
-                "rendered_to_usd"
-            )
-            is True
-        ) or _dict(state.get("semantic_pose_view_capture")).get("rendered_to_usd") is True
-    if pose.get("support_receptacle_id"):
-        effective["support_receptacle_id"] = str(pose.get("support_receptacle_id"))
-    if pose.get("support_usd_prim_path"):
-        effective["support_usd_prim_path"] = str(pose.get("support_usd_prim_path"))
-    if pose.get("placement_support_status"):
-        effective["placement_support_status"] = str(pose.get("placement_support_status"))
-    if pose.get("placement_resolution_source"):
-        effective["placement_resolution_source"] = str(pose.get("placement_resolution_source"))
-    return effective
-
-
-def _isaac_index_usd_prim_path(entry: dict[str, Any]) -> str:
-    return str(
-        entry.get("usd_prim_path")
-        or _dict(_dict(entry.get("usd_world_bounds")).get("prim")).get("path")
-        or ""
-    )
-
-
-def _isaac_index_position(entry: dict[str, Any]) -> tuple[float, float, float] | None:
-    position = _vec3_or_none(entry.get("position"))
-    if position is not None:
-        return position
-    bounds = _dict(entry.get("usd_world_bounds"))
-    center = _vec3_or_none(bounds.get("center"))
-    if center is not None:
-        return center
-    return None
-
-
-def _object_binding_status(
-    mujoco_entry: dict[str, Any],
-    isaac_entry: dict[str, Any],
-    usd_prim_path: str,
-) -> str:
-    if not mujoco_entry and not isaac_entry:
-        return "missing_both"
-    if not mujoco_entry:
-        return "missing_mujoco_state"
-    if not isaac_entry:
-        return "missing_isaac_index"
-    if not usd_prim_path:
-        return "missing_usd_prim_path"
-    if (
-        isaac_entry.get("geometry_status") == "missing"
-        or isaac_entry.get("valid_stage_prim") is False
-    ):
-        return "isaac_geometry_gap"
-    if isaac_entry.get("has_renderable_geometry") is False:
-        return "isaac_geometry_gap"
-    return "bound_in_both"
-
-
-def _object_category_status(
-    *,
-    mujoco_category: str,
-    isaac_category: str,
-    mujoco_entry: dict[str, Any],
-    isaac_entry: dict[str, Any],
-) -> str:
-    if not mujoco_entry or not isaac_entry:
-        return "missing_entry"
-    if not mujoco_category or not isaac_category:
-        return "missing_category"
-    return "category_aligned" if mujoco_category == isaac_category else "category_delta"
-
-
-def _object_pose_status(
-    mujoco_position: tuple[float, float, float] | None,
-    isaac_position: tuple[float, float, float] | None,
-    pose_delta: float | None,
-) -> str:
-    if mujoco_position is None or isaac_position is None or pose_delta is None:
-        return "pose_missing"
-    if pose_delta <= OBJECT_PARITY_POSE_THRESHOLD_M:
-        return "pose_aligned"
-    return "pose_delta"
-
-
-def _object_support_status(mujoco_entry: dict[str, Any], isaac_entry: dict[str, Any]) -> str:
-    if not mujoco_entry or not isaac_entry:
-        return "missing_entry"
-    mujoco_parent = str(
-        mujoco_entry.get("location_id")
-        or mujoco_entry.get("contained_in")
-        or mujoco_entry.get("parent")
-        or ""
-    )
-    isaac_parent = str(isaac_entry.get("parent") or isaac_entry.get("support_receptacle_id") or "")
-    if not mujoco_parent and not isaac_parent:
-        return "support_not_reported"
-    if not mujoco_parent and isaac_parent:
-        return "support_available_in_isaac_only"
-    if mujoco_parent and not isaac_parent:
-        return "support_available_in_mujoco_only"
-    if mujoco_parent == isaac_parent:
-        return "support_metadata_aligned"
-    return "support_metadata_delta"
-
-
-def _object_rgb_view_evidence(
-    *,
-    kind: str,
-    target_id: str,
-    locations: list[dict[str, Any]],
-    output_dir: Path | None,
-) -> dict[str, Any]:
-    selected = None
-    for item in locations:
-        if not isinstance(item, dict):
-            continue
-        target = _dict(item.get("target"))
-        same_kind = str(target.get("kind") or "") == kind
-        same_target = str(target.get("target_id") or "") == target_id
-        if same_kind and same_target:
-            selected = item
-            break
-    if selected is None:
-        return {
-            "status": "not_captured_in_selected_views",
-            "selected_target": False,
-            "target_coverage_status": "not_captured_in_selected_views",
-            "view_status_counts": {},
-        }
-    views = []
-    for backend_id in ("mujoco", "isaac"):
-        backend_views = _dict(_dict(selected.get("views")).get(backend_id))
-        for view_key in ("fpv", "chase"):
-            image_path = str(backend_views.get(view_key) or "")
-            evidence = _image_nonblank_evidence(image_path=image_path, output_dir=output_dir)
-            views.append(
-                {
-                    "backend": backend_id,
-                    "view": view_key,
-                    "image_path": image_path,
-                    **evidence,
-                }
-            )
-    status_counts = _status_counts(item.get("status") for item in views)
-    if views and all(item.get("status") == "nonblank_rgb" for item in views):
-        status = "selected_views_nonblank"
-    elif any(item.get("status") == "blank_rgb" for item in views):
-        status = "selected_views_blank_rgb"
-    elif any(str(item.get("status") or "").startswith("missing") for item in views):
-        status = "selected_views_missing_image"
-    else:
-        status = "selected_views_unverified"
-    target_coverage = _selected_target_coverage_evidence(
-        kind=kind,
-        target_id=target_id,
-        location=selected,
-    )
-    visual_state_evidence = _selected_target_visual_state_evidence(
-        kind=kind,
-        target_id=target_id,
-        location=selected,
-        output_dir=output_dir,
-    )
-    return {
-        "schema": "robot_camera_object_rgb_view_evidence_v1",
-        "status": status,
-        "selected_target": True,
-        **target_coverage,
-        **visual_state_evidence,
-        "view_status_counts": status_counts,
-        "views": views,
-        "interpretation": (
-            "Selected target FPV/chase image evidence checks whether the rendered RGB "
-            "views are present and nonblank. Target coverage checks whether the selected "
-            "location's robot pose and focus contracts are centered on the same object or "
-            "receptacle. It is not per-pixel shape parity without segmentation/bbox evidence."
-        ),
-    }
-
-
-def _selected_target_visual_state_evidence(
-    *,
-    kind: str,
-    target_id: str,
-    location: dict[str, Any],
-    output_dir: Path | None,
-) -> dict[str, Any]:
-    if kind != "object":
-        return {"target_visual_state_status": "not_applicable"}
-    bbox = _selected_target_mujoco_fpv_bbox(location, target_id=target_id)
-    if bbox is None:
-        return {
-            "target_visual_state_status": "missing_target_bbox",
-            "target_visual_state_bbox_source": "mujoco_fpv_visibility",
-        }
-    views = _dict(location.get("views"))
-    mujoco_fpv = str(_dict(views.get("mujoco")).get("fpv") or "")
-    isaac_fpv = str(_dict(views.get("isaac")).get("fpv") or "")
-    crop_delta = _image_crop_delta(
-        left_image_path=mujoco_fpv,
-        right_image_path=isaac_fpv,
-        bbox=bbox,
-        output_dir=output_dir,
-    )
-    if str(crop_delta.get("status") or "") != "computed":
-        return {
-            "target_visual_state_status": "target_region_unverified",
-            "target_visual_state_bbox": bbox,
-            "target_visual_state_delta": crop_delta,
-        }
-    mean_abs = float(crop_delta.get("mean_abs_rgb") or 0.0)
-    gt40 = float(crop_delta.get("diff_gt_40_fraction") or 0.0)
-    if (
-        mean_abs <= PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD
-        and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
-    ):
-        status = "selected_object_visual_state_aligned"
-        alignment_mode = "strict_raw_rgb"
-    elif (
-        mean_abs <= PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD
-        and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
-    ):
-        status = "selected_object_visual_state_aligned"
-        alignment_mode = "moderate_render_residual"
-    else:
-        status = "selected_object_visual_state_delta"
-        alignment_mode = "raw_rgb_delta"
-    return {
-        "target_visual_state_status": status,
-        "target_visual_state_alignment_mode": alignment_mode,
-        "target_visual_state_bbox": bbox,
-        "target_visual_state_delta": crop_delta,
-        "target_visual_state_thresholds": {
-            "mean_abs_rgb_max": PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD,
-            "diff_gt_40_fraction_max": PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD,
-            "render_residual_mean_abs_rgb_max": (
-                PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD
-            ),
-        },
-    }
-
-
-def _selected_target_mujoco_fpv_bbox(
-    location: dict[str, Any],
-    *,
-    target_id: str,
-) -> list[int] | None:
-    focus = _dict(_dict(_dict(location.get("contracts")).get("mujoco")).get("focus"))
-    if str(focus.get("object_id") or "") != target_id:
-        return None
-    visibility = _dict(focus.get("fpv_visibility"))
-    for raw_box in visibility.get("boxes") or []:
-        box = _dict(raw_box)
-        bbox = box.get("bbox")
-        if isinstance(bbox, list) and len(bbox) == 4:
-            try:
-                return [int(value) for value in bbox]
-            except (TypeError, ValueError):
-                return None
-    return None
-
-
-def _image_crop_delta(
-    *,
-    left_image_path: str,
-    right_image_path: str,
-    bbox: list[int],
-    output_dir: Path | None,
-) -> dict[str, Any]:
-    left_path = _resolve_output_path(left_image_path, output_dir)
-    right_path = _resolve_output_path(right_image_path, output_dir)
-    if left_path is None or right_path is None:
-        return {"status": "missing_image_path"}
-    if not left_path.exists() or not right_path.exists():
-        return {
-            "status": "missing_image_file",
-            "left_exists": left_path.exists(),
-            "right_exists": right_path.exists(),
-        }
-    try:
-        with Image.open(left_path) as left_raw, Image.open(right_path) as right_raw:
-            left = left_raw.convert("RGB")
-            right = right_raw.convert("RGB")
-            if right.size != left.size:
-                right = right.resize(left.size)
-            safe_bbox = _safe_image_bbox(bbox, left.size)
-            if safe_bbox is None:
-                return {"status": "invalid_bbox", "bbox": bbox, "image_size": list(left.size)}
-            left_crop = left.crop(tuple(safe_bbox))
-            right_crop = right.crop(tuple(safe_bbox))
-            diff = ImageChops.difference(left_crop, right_crop)
-            stat = ImageStat.Stat(diff)
-            mean_abs = sum(stat.mean) / len(stat.mean)
-            rms = sum(value * value for value in stat.rms) ** 0.5 / len(stat.rms)
-            pixel_count = max(left_crop.size[0] * left_crop.size[1], 1)
-            nonzero = 0
-            diff_gt_40 = 0
-            diff_gt_80 = 0
-            for pixel in diff.getdata():
-                if pixel != (0, 0, 0):
-                    nonzero += 1
-                mean_pixel_delta = sum(pixel) / 3.0
-                if mean_pixel_delta > 40.0:
-                    diff_gt_40 += 1
-                if mean_pixel_delta > 80.0:
-                    diff_gt_80 += 1
-            return {
-                "status": "computed",
-                "bbox": safe_bbox,
-                "crop_size": list(left_crop.size),
-                "mean_abs_rgb": round(float(mean_abs), 4),
-                "rms_rgb": round(float(rms), 4),
-                "nonzero_fraction": round(nonzero / pixel_count, 6),
-                "diff_gt_40_fraction": round(diff_gt_40 / pixel_count, 6),
-                "diff_gt_80_fraction": round(diff_gt_80 / pixel_count, 6),
-            }
-    except Exception as exc:
-        return {
-            "status": "unreadable_image",
-            "error": type(exc).__name__,
-            "reason": str(exc),
-        }
-
-
-def _resolve_output_path(image_path: str, output_dir: Path | None) -> Path | None:
-    if not image_path:
-        return None
-    path = Path(image_path)
-    if not path.is_absolute() and output_dir is not None:
-        path = output_dir / path
-    return path
-
-
-def _safe_image_bbox(bbox: list[int], size: tuple[int, int]) -> list[int] | None:
-    if len(bbox) != 4:
-        return None
-    width, height = size
-    left = max(0, min(int(bbox[0]), width))
-    top = max(0, min(int(bbox[1]), height))
-    right = max(0, min(int(bbox[2]), width))
-    bottom = max(0, min(int(bbox[3]), height))
-    if right <= left or bottom <= top:
-        return None
-    return [left, top, right, bottom]
-
-
-def _selected_target_coverage_evidence(
-    *,
-    kind: str,
-    target_id: str,
-    location: dict[str, Any],
-) -> dict[str, Any]:
-    robot_pose = _dict(location.get("robot_pose"))
-    pose_request = _dict(robot_pose.get("pose_request"))
-    pose_target_object_id = str(
-        robot_pose.get("target_object_id") or pose_request.get("target_object_id") or ""
-    )
-    pose_target_receptacle_id = str(
-        robot_pose.get("target_receptacle_id") or pose_request.get("target_receptacle_id") or ""
-    )
-    focus_evidence = _selected_target_focus_evidence(
-        kind=kind, target_id=target_id, location=location
-    )
-    pose_status = "missing_robot_pose_target"
-    if kind == "object":
-        pose_status = (
-            "object_centered_pose"
-            if pose_target_object_id == target_id
-            else "support_or_receptacle_centered_pose"
-            if pose_target_receptacle_id
-            else "missing_object_centered_pose"
-        )
-    elif kind == "receptacle":
-        pose_status = (
-            "receptacle_centered_pose"
-            if pose_target_receptacle_id == target_id
-            else "missing_receptacle_centered_pose"
-        )
-    focus_status = str(focus_evidence.get("focus_status") or "")
-    if (
-        kind == "object"
-        and pose_status == "object_centered_pose"
-        and focus_status
-        in {
-            "selected_object_focus",
-            "missing_focus_contract",
-        }
-    ):
-        coverage_status = "selected_object_centered_coverage"
-    elif (
-        kind == "receptacle"
-        and pose_status == "receptacle_centered_pose"
-        and focus_status
-        in {
-            "selected_receptacle_focus",
-            "missing_focus_contract",
-        }
-    ):
-        coverage_status = "selected_receptacle_centered_coverage"
-    else:
-        coverage_status = "selected_target_coverage_gap"
-    return {
-        "target_coverage_status": coverage_status,
-        "robot_pose_target_status": pose_status,
-        "robot_pose_target_object_id": pose_target_object_id,
-        "robot_pose_target_receptacle_id": pose_target_receptacle_id,
-        "robot_pose_target_position": robot_pose.get("target_position")
-        or pose_request.get("target_position"),
-        **focus_evidence,
-    }
-
-
-def _selected_target_focus_evidence(
-    *,
-    kind: str,
-    target_id: str,
-    location: dict[str, Any],
-) -> dict[str, Any]:
-    focus_rows = []
-    for backend_id in ("mujoco", "isaac"):
-        focus = _dict(
-            _dict(_dict(location.get("contracts")).get(backend_id)).get("focus")
-        ) or _dict(_dict(_dict(location.get("provenance")).get(backend_id)).get("focus"))
-        if not focus:
-            continue
-        focus_rows.append(
-            {
-                "backend": backend_id,
-                "object_id": focus.get("object_id"),
-                "receptacle_id": focus.get("receptacle_id"),
-                "focus_mode": focus.get("focus_mode"),
-                "source": focus.get("source") or focus.get("provenance"),
-                "fpv_visibility_status": _dict(focus.get("fpv_visibility")).get("status"),
-                "visibility_status": _dict(focus.get("visibility")).get("status"),
-            }
-        )
-    if not focus_rows:
-        return {
-            "focus_status": "missing_focus_contract",
-            "focus_contracts": [],
-        }
-    if kind == "object":
-        status = (
-            "selected_object_focus"
-            if all(str(row.get("object_id") or "") == target_id for row in focus_rows)
-            else "selected_focus_mismatch"
-        )
-    else:
-        status = (
-            "selected_receptacle_focus"
-            if all(str(row.get("receptacle_id") or "") == target_id for row in focus_rows)
-            else "selected_focus_mismatch"
-        )
-    return {
-        "focus_status": status,
-        "focus_contracts": focus_rows,
-    }
-
-
-def _image_nonblank_evidence(*, image_path: str, output_dir: Path | None) -> dict[str, Any]:
-    if not image_path:
-        return {"status": "missing_image_path"}
-    path = Path(image_path)
-    if not path.is_absolute() and output_dir is not None:
-        path = output_dir / path
-    if not path.exists():
-        return {"status": "missing_image_file"}
-    try:
-        with Image.open(path) as raw:
-            metrics = _image_visual_metrics(raw.convert("RGB"))
-    except OSError as exc:
-        return {"status": "unreadable_image", "error": str(exc)}
-    nonblank = (
-        metrics.get("mean_luminance", 0.0) > 1.0
-        or metrics.get("edge_mean", 0.0) > 0.1
-        or metrics.get("overexposed_fraction", 0.0) > 0.0
-    )
-    return {
-        "status": "nonblank_rgb" if nonblank else "blank_rgb",
-        "mean_luminance": metrics.get("mean_luminance"),
-        "edge_mean": metrics.get("edge_mean"),
-        "overexposed_fraction": metrics.get("overexposed_fraction"),
-        "underexposed_fraction": metrics.get("underexposed_fraction"),
-    }
-
-
-def _object_state_status(
-    *,
-    target_id: str,
-    kind: str,
-    mujoco_entry: dict[str, Any],
-    isaac_entry: dict[str, Any],
-    mujoco_state: dict[str, Any],
-    isaac_state: dict[str, Any],
-    isaac_contract: dict[str, Any],
-    usd_prim_path: str,
-) -> str:
-    articulations = _dict(_dict(isaac_state.get("semantic_pose_state")).get("articulations"))
-    articulation = _dict(articulations.get(target_id))
-    category = _object_category_key(
-        mujoco_entry.get("category")
-        or isaac_entry.get("category")
-        or isaac_entry.get("usd_category")
-    )
-    if kind != "receptacle" and not articulation:
-        visual_contract = _object_visual_state_contract(
-            target_id=target_id,
-            kind=kind,
-            mujoco_entry=mujoco_entry,
-            isaac_entry=isaac_entry,
-            mujoco_state=mujoco_state,
-            isaac_state=isaac_state,
-            isaac_contract=isaac_contract,
-            usd_prim_path=usd_prim_path,
-        )
-        status = str(visual_contract.get("status") or "")
-        if status in {
-            "visual_state_static_ref_baked",
-            "visual_state_articulation_physics_preserved",
-        }:
-            return status
-        if category in OBJECT_VISUAL_STATE_CATEGORIES or status != "not_applicable":
-            return "visual_state_unverified"
-        return "not_applicable"
-    mujoco_open = target_id in {
-        str(value) for value in mujoco_state.get("open_receptacle_ids") or []
-    }
-    isaac_open_ids = {str(value) for value in isaac_state.get("open_receptacle_ids") or []}
-    isaac_open = target_id in isaac_open_ids or articulation.get("open") is True
-    if mujoco_open != isaac_open:
-        return "state_delta"
-    if isaac_open and articulation and articulation.get("rendered_to_usd") is False:
-        return "state_not_rendered_to_usd"
-    return "state_aligned"
-
-
-def _object_visual_state_contract(
-    *,
-    target_id: str,
-    kind: str,
-    mujoco_entry: dict[str, Any],
-    isaac_entry: dict[str, Any],
-    mujoco_state: dict[str, Any],
-    isaac_state: dict[str, Any],
-    isaac_contract: dict[str, Any],
-    usd_prim_path: str,
-) -> dict[str, Any]:
-    category = _object_category_key(
-        mujoco_entry.get("category")
-        or isaac_entry.get("category")
-        or isaac_entry.get("usd_category")
-    )
-    if kind != "object":
-        return {"status": "not_applicable"}
-    registry_entry = dict(OBJECT_VISUAL_STATE_REGISTRY.get(category) or {})
-    mujoco_articulation = _mujoco_ref_endpoint_articulation_contract(
-        target_id=target_id,
-        mujoco_state=mujoco_state,
-    )
-    isaac_articulation = _isaac_usd_articulation_contract(
-        isaac_contract=isaac_contract,
-        usd_prim_path=usd_prim_path,
-    )
-    if (
-        mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
-        and isaac_articulation.get("status") == "isaac_visual_physics_frozen"
-        and isaac_articulation.get("mujoco_visual_joint_endpoint_pose_status")
-        == "mujoco_visual_joint_endpoint_pose_applied"
-    ):
-        status = "visual_state_static_ref_baked"
-        reason = (
-            "MuJoCo renders this object at articulated visual joint endpoints, and the "
-            "prepared Isaac report USD records MuJoCo endpoint pose baking before freezing "
-            "physics state, so PhysX will not mutate those baked joints during camera "
-            "capture. This is necessary physics-control evidence, but selected "
-            "object-centered RGB evidence is still required before the object gate may "
-            "claim visual parity."
-        )
-    elif (
-        mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
-        and isaac_articulation.get("status") == "isaac_visual_physics_frozen"
-    ):
-        status = "visual_state_ref_endpoint_unverified_in_isaac"
-        reason = (
-            "MuJoCo renders this object at articulated visual joint endpoints, and the "
-            "Isaac USD has frozen physics state, but the prepared-scene summary does not "
-            "prove that the MuJoCo endpoint pose was baked before physics was stripped."
-        )
-    elif (
-        mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
-        and isaac_articulation.get("status") == "isaac_articulation_physics_preserved"
-    ):
-        status = "visual_state_articulation_physics_preserved"
-        reason = (
-            "MuJoCo articulated visual qpos is at MJCF ref/range endpoints, but the "
-            "Isaac USD still contains physics joints or rigid-body APIs under the same "
-            "object. Isaac camera capture can re-solve those joints, which can change "
-            "the rendered visual state even when pose, material, and texture names match."
-        )
-    elif mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation":
-        status = "visual_state_ref_endpoint_unverified_in_isaac"
-        reason = (
-            "MuJoCo articulated visual qpos is at MJCF ref/range endpoints, but this "
-            "report lacks enough Isaac USD physics-freeze evidence to control the "
-            "rendered visual state."
-        )
-    else:
-        status = "visual_state_unverified"
-        reason = (
-            "The report does not have enough articulated-state evidence to compare this "
-            "object's visual state."
-        )
-    return {
-        "schema": "robot_camera_object_visual_state_contract_v1",
-        "status": status,
-        "target_id": target_id,
-        "category": category,
-        "registry": registry_entry,
-        "protected_by": registry_entry.get("protected_by")
-        or VISUAL_PHYSICS_PROTECTION["protected_by"],
-        "evidence_artifact": registry_entry.get("evidence_artifact"),
-        "policy": registry_entry.get("policy") or VISUAL_PHYSICS_PROTECTION["policy"],
-        "mujoco": mujoco_articulation,
-        "isaac": isaac_articulation,
-        "reason": reason,
-    }
-
-
-def _mujoco_ref_endpoint_articulation_contract(
-    *,
-    target_id: str,
-    mujoco_state: dict[str, Any],
-) -> dict[str, Any]:
-    joints = _mujoco_joint_state_entries(target_id=target_id, mujoco_state=mujoco_state)
-    hinge_joints = [
-        joint
-        for joint in joints
-        if str(joint.get("joint_type") or joint.get("type") or "").lower()
-        in {"hinge", "3", "mjjnt_hinge"}
-        or "flap" in str(joint.get("joint_name") or "").lower()
-    ]
-    if not hinge_joints:
-        return {
-            "status": "missing_mujoco_articulation_evidence",
-            "joint_count": 0,
-            "endpoint_joint_count": 0,
-            "joints": [],
-        }
-    endpoint_count = sum(
-        1 for joint in hinge_joints if _mujoco_joint_at_ref_or_range_endpoint(joint)
-    )
-    status = (
-        "mujoco_ref_endpoint_articulation"
-        if endpoint_count == len(hinge_joints)
-        else "mujoco_articulation_not_at_ref_endpoint"
-    )
-    return {
-        "status": status,
-        "joint_count": len(hinge_joints),
-        "endpoint_joint_count": endpoint_count,
-        "joints": hinge_joints[:8],
-    }
-
-
-def _mujoco_joint_state_entries(
-    *,
-    target_id: str,
-    mujoco_state: dict[str, Any],
-) -> list[dict[str, Any]]:
-    explicit = _dict(mujoco_state.get("joint_states"))
-    raw_entries = explicit.get(target_id)
-    if isinstance(raw_entries, list):
-        return [_dict(item) for item in raw_entries if isinstance(item, dict)]
-    if isinstance(raw_entries, dict):
-        return [_dict(item) for item in raw_entries.values() if isinstance(item, dict)]
-    scene_xml = str(mujoco_state.get("scene_xml") or "")
-    robot_xml = str(mujoco_state.get("robot_xml") or "")
-    qpos = mujoco_state.get("qpos")
-    if not scene_xml or not isinstance(qpos, list):
-        return []
-    try:
-        import mujoco
-
-        if mujoco_state.get("robot_included") and robot_xml:
-            from scripts.molmo_cleanup.molmospaces_subprocess_worker import _load_robot_model_data
-
-            model, _ = _load_robot_model_data(Path(scene_xml), Path(robot_xml))
-        else:
-            model = mujoco.MjModel.from_xml_path(scene_xml)
-    except Exception:
-        return []
-    entries: list[dict[str, Any]] = []
-    joint_prefixes = _mujoco_joint_target_prefixes(target_id)
-    for joint_id in range(model.njnt):
-        joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id) or ""
-        if not any(joint_name.startswith(prefix) for prefix in joint_prefixes):
-            continue
-        qposadr = int(model.jnt_qposadr[joint_id])
-        qpos_value = float(qpos[qposadr]) if 0 <= qposadr < len(qpos) else None
-        joint_range = [float(value) for value in model.jnt_range[joint_id]]
-        ref_value = _mujoco_joint_ref_from_scene_xml(scene_xml, joint_name)
-        entries.append(
-            {
-                "joint_name": joint_name,
-                "joint_type": str(int(model.jnt_type[joint_id])),
-                "qposadr": qposadr,
-                "qpos": qpos_value,
-                "ref": ref_value,
-                "range": joint_range,
-                "axis": [float(value) for value in model.jnt_axis[joint_id]],
-            }
-        )
-    return entries
-
-
-def _mujoco_joint_target_prefixes(target_id: str) -> tuple[str, ...]:
-    parts = str(target_id or "").split("_")
-    prefixes = [str(target_id or "")]
-    if len(parts) >= 4 and parts[-1].isdigit() and parts[-2].isdigit() and parts[-3].isdigit():
-        prefixes.append("_".join(parts[:-2]) + "_")
-    return tuple(dict.fromkeys(prefix for prefix in prefixes if prefix))
-
-
-def _mujoco_joint_ref_from_scene_xml(scene_xml: str, joint_name: str) -> float | None:
-    try:
-        from xml.etree import ElementTree
-
-        root = ElementTree.parse(scene_xml).getroot()
-    except Exception:
-        return None
-    for joint in root.findall(".//joint"):
-        if str(joint.attrib.get("name") or "") != joint_name:
-            continue
-        raw_ref = joint.attrib.get("ref")
-        if raw_ref is None:
-            return None
-        try:
-            return float(raw_ref)
-        except ValueError:
-            return None
-    return None
-
-
-def _mujoco_joint_at_ref_or_range_endpoint(joint: dict[str, Any]) -> bool:
-    qpos = _float_or_none(joint.get("qpos"))
-    if qpos is None:
-        return False
-    ref = _float_or_none(joint.get("ref"))
-    if ref is not None and abs(qpos - ref) <= 1e-4:
-        return True
-    raw_range = joint.get("range")
-    if isinstance(raw_range, list) and len(raw_range) >= 2:
-        lower = _float_or_none(raw_range[0])
-        upper = _float_or_none(raw_range[1])
-        if lower is not None and abs(qpos - lower) <= 1e-4:
-            return True
-        if upper is not None and abs(qpos - upper) <= 1e-4:
-            return True
-    return False
-
-
-def _isaac_usd_articulation_contract(
-    *,
-    isaac_contract: dict[str, Any],
-    usd_prim_path: str,
-) -> dict[str, Any]:
-    view_contract = _isaac_view_render_contract(isaac_contract, usd_prim_path=usd_prim_path)
-    joint_count = int(view_contract.get("physics_joint_count") or 0)
-    api_count = int(view_contract.get("physics_api_schema_prim_count") or 0)
-    property_count = int(view_contract.get("physics_property_prim_count") or 0)
-    if joint_count or api_count or property_count:
-        status = "isaac_articulation_physics_preserved"
-    else:
-        status = "isaac_visual_physics_frozen"
-    return {
-        "status": status,
-        "usd_prim_path": usd_prim_path,
-        "physics_joint_count": joint_count,
-        "physics_api_schema_prim_count": api_count,
-        "physics_property_prim_count": property_count,
-        "physics_joint_paths": view_contract.get("physics_joint_paths") or [],
-        "physics_api_schema_prim_paths": view_contract.get("physics_api_schema_prim_paths") or [],
-        "physics_property_prim_paths": view_contract.get("physics_property_prim_paths") or [],
-        "visual_physics_status": view_contract.get("visual_physics_status"),
-        "prepared_summary_status": view_contract.get("prepared_summary_status"),
-        "mujoco_visual_joint_endpoint_pose_status": view_contract.get(
-            "mujoco_visual_joint_endpoint_pose_status"
-        ),
-        "mujoco_visual_joint_endpoint_pose_corrected_count": view_contract.get(
-            "mujoco_visual_joint_endpoint_pose_corrected_count"
-        ),
-        "mujoco_visual_joint_endpoint_pose_missing_count": view_contract.get(
-            "mujoco_visual_joint_endpoint_pose_missing_count"
-        ),
-    }
-
-
-def _is_selected_public_target(
-    scene_binding_diagnostics: dict[str, Any],
-    kind: str,
-    target_id: str,
-) -> bool:
-    groups = (
-        ("selected_target_receptacle_bindings",)
-        if kind == "receptacle"
-        else ("selected_object_bindings",)
-    )
-    return any(target_id in _dict(scene_binding_diagnostics.get(group)) for group in groups)
-
-
-def _compact_mujoco_object_entry(entry: dict[str, Any]) -> dict[str, Any]:
-    keys = (
-        "object_id",
-        "receptacle_id",
-        "category",
-        "name",
-        "upstream_object_id",
-        "location_id",
-        "contained_in",
-        "pickupable",
-        "position",
-        "support_top_z",
-    )
-    return {key: entry.get(key) for key in keys if key in entry}
-
-
-def _object_category_key(value: Any) -> str:
-    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
-
-
-def _compact_isaac_index_entry(entry: dict[str, Any], *, usd_prim_path: str) -> dict[str, Any]:
-    keys = (
-        "asset_id",
-        "category",
-        "usd_category",
-        "metadata_object_id",
-        "metadata_handle",
-        "parent",
-        "geometry_status",
-        "has_renderable_geometry",
-        "mesh_descendant_count",
-        "renderable_descendant_count",
-        "missing_referenced_asset_count",
-        "valid_stage_prim",
-        "position",
-        "position_source",
-        "semantic_pose_position_applied",
-        "support_receptacle_id",
-        "placement_support_status",
-    )
-    compact = {key: entry.get(key) for key in keys if key in entry}
-    if usd_prim_path:
-        compact["usd_prim_path"] = usd_prim_path
-    bounds = _dict(entry.get("usd_world_bounds"))
-    if bounds:
-        compact["usd_world_bounds"] = {
-            key: bounds.get(key) for key in ("center", "size", "min", "max") if key in bounds
-        }
-    return compact
-
-
-def _compact_render_contract_delta(delta: dict[str, Any]) -> dict[str, Any]:
-    keys = (
-        "status",
-        "mujoco_status",
-        "isaac_status",
-        "mujoco_material_count",
-        "isaac_material_count",
-        "mujoco_texture_count",
-        "isaac_texture_count",
-        "material_names_only_in_mujoco",
-        "material_names_only_in_isaac",
-        "texture_files_only_in_mujoco",
-        "texture_files_only_in_isaac",
-    )
-    return {key: delta.get(key) for key in keys if key in delta}
-
-
-def _object_parity_item_statuses(item: dict[str, Any]) -> set[str]:
-    return {
-        str(value)
-        for value in (
-            item.get("binding_status"),
-            item.get("category_status"),
-            item.get("pose_status"),
-            item.get("support_status"),
-            item.get("state_status"),
-            _dict(item.get("visual_state_contract")).get("status"),
-            _dict(item.get("render_contract_delta")).get("status"),
-        )
-        if value
-    }
-
-
-def _status_counts(values: Any) -> dict[str, int]:
-    collected = [str(value) for value in values if value]
-    return {name: collected.count(name) for name in sorted(set(collected))}
-
-
 def _location_render_contract_diagnostics(
     item: dict[str, Any],
     *,
@@ -3510,10 +1343,10 @@ def _location_render_contract_diagnostics(
     target = _dict(item.get("target"))
     target_id = str(target.get("target_id") or "")
     target_kind = str(target.get("kind") or "object")
-    target_binding = _target_usd_binding(scene_binding_diagnostics, target)
+    target_binding = object_parity.target_usd_binding(scene_binding_diagnostics, target)
     target_binding_usd_path = str(target_binding.get("usd_prim_path") or "")
-    fallback_entry = _isaac_effective_index_entry(isaac_state, target_kind, target_id)
-    fallback_usd_path = _isaac_index_usd_prim_path(fallback_entry)
+    fallback_entry = object_parity.isaac_effective_index_entry(isaac_state, target_kind, target_id)
+    fallback_usd_path = object_parity.isaac_index_usd_prim_path(fallback_entry)
     usd_prim_path = target_binding_usd_path or fallback_usd_path
     usd_path_source = (
         "scene_binding_diagnostics"
@@ -3535,9 +1368,9 @@ def _location_render_contract_diagnostics(
     return {
         "schema": "robot_camera_location_render_contract_diagnostics_v1",
         "target": target,
-        "target_usd_binding": _compact_target_binding(target_binding),
+        "target_usd_binding": object_parity.compact_target_binding(target_binding),
         "target_usd_path_source": usd_path_source,
-        "target_usd_path_fallback": _compact_isaac_index_entry(
+        "target_usd_path_fallback": object_parity.compact_isaac_index_entry(
             fallback_entry,
             usd_prim_path=fallback_usd_path,
         )
@@ -3566,42 +1399,6 @@ def _location_render_contract_diagnostics(
             "and material models."
         ),
     }
-
-
-def _target_usd_binding(
-    scene_binding_diagnostics: dict[str, Any],
-    target: dict[str, Any],
-) -> dict[str, Any]:
-    target_id = str(target.get("target_id") or "")
-    if not target_id:
-        return {}
-    if target.get("kind") == "receptacle":
-        groups = ("receptacle_bindings", "selected_target_receptacle_bindings")
-    else:
-        groups = ("object_bindings", "selected_object_bindings")
-    for group in groups:
-        bindings = _dict(scene_binding_diagnostics.get(group))
-        binding = _dict(bindings.get(target_id))
-        if binding:
-            return binding
-    return {}
-
-
-def _compact_target_binding(binding: dict[str, Any]) -> dict[str, Any]:
-    keys = (
-        "status",
-        "public_id",
-        "kind",
-        "category",
-        "usd_prim_path",
-        "match_strategy",
-        "geometry_status",
-        "has_renderable_geometry",
-        "mesh_descendant_count",
-        "renderable_descendant_count",
-        "missing_referenced_asset_count",
-    )
-    return {key: binding.get(key) for key in keys if key in binding}
 
 
 def _render_contract_summary(
@@ -3699,8 +1496,8 @@ def _render_domain_checks(
             room_delta=room_delta,
             probe_manifest_paths=light_shadow_probe_manifest_paths,
         ),
-        _texture_colorspace_material_response_check(per_location),
-        _usd_preview_surface_material_model_check(
+        material_checks.texture_colorspace_material_response_check(per_location),
+        material_checks.usd_preview_surface_material_model_check(
             manifest=manifest,
             output_dir=output_dir,
             per_location=per_location,
@@ -3814,7 +1611,7 @@ def _light_shadow_probe_history(
             "probe_count": 0,
             "probes": [],
         }
-    baseline = _probe_manifest_summary(
+    baseline = material_checks.probe_manifest_summary(
         manifest, manifest_path=output_dir / "comparison_manifest.json"
     )
     probes = []
@@ -3824,11 +1621,11 @@ def _light_shadow_probe_history(
     for path in paths:
         probe = _load_light_shadow_probe_manifest(path, output_dir=output_dir)
         if probe.get("status") == "loaded":
-            comparable = _comparison_probe_comparable(baseline, probe)
+            comparable = material_checks.comparison_probe_comparable(baseline, probe)
             probe["comparable_to_current"] = comparable
             if comparable:
                 comparable_count += 1
-            delta = _comparison_probe_delta(baseline, probe)
+            delta = material_checks.comparison_probe_delta(baseline, probe)
             probe["delta_vs_current"] = delta
             if delta.get("fpv_improvement") is True:
                 improved_count += 1
@@ -3873,93 +1670,11 @@ def _load_light_shadow_probe_manifest(path: Path, *, output_dir: Path) -> dict[s
             "path": output_relpath(path, output_dir),
             "error": f"{type(exc).__name__}: {exc}",
         }
-    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
-
-
-def _probe_manifest_summary(
-    payload: dict[str, Any],
-    *,
-    manifest_path: Path,
-    output_dir: Path | None = None,
-) -> dict[str, Any]:
     return material_checks.probe_manifest_summary(
         payload,
-        manifest_path=manifest_path,
+        manifest_path=path,
         output_dir=output_dir,
     )
-
-
-def _comparison_probe_comparable(
-    baseline: dict[str, Any],
-    probe: dict[str, Any],
-) -> bool:
-    return material_checks.comparison_probe_comparable(baseline, probe)
-
-
-def _comparison_probe_delta(
-    baseline: dict[str, Any],
-    probe: dict[str, Any],
-) -> dict[str, Any]:
-    return material_checks.comparison_probe_delta(baseline, probe)
-
-
-def _material_response_probe_history(
-    manifest: dict[str, Any],
-    *,
-    output_dir: Path,
-    probe_manifest_paths: list[Path] | None,
-) -> dict[str, Any]:
-    return material_checks.material_response_probe_history(
-        manifest,
-        output_dir=output_dir,
-        probe_manifest_paths=probe_manifest_paths,
-    )
-
-
-def _tone_color_probe_history(
-    manifest: dict[str, Any],
-    *,
-    output_dir: Path,
-    probe_manifest_paths: list[Path] | None,
-) -> dict[str, Any]:
-    return material_checks.tone_color_probe_history(
-        manifest,
-        output_dir=output_dir,
-        probe_manifest_paths=probe_manifest_paths,
-    )
-
-
-def _texture_colorspace_material_response_check(
-    per_location: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return material_checks.texture_colorspace_material_response_check(per_location)
-
-
-def _texture_material_target_summary(item: dict[str, Any]) -> dict[str, Any]:
-    return material_checks.texture_material_target_summary(item)
-
-
-def _path_basenames(values: list[str]) -> list[str]:
-    return material_checks.path_basenames(values)
-
-
-def _usd_preview_surface_material_model_check(
-    *,
-    manifest: dict[str, Any],
-    output_dir: Path,
-    per_location: list[dict[str, Any]],
-    probe_manifest_paths: list[Path] | None,
-) -> dict[str, Any]:
-    return material_checks.usd_preview_surface_material_model_check(
-        manifest=manifest,
-        output_dir=output_dir,
-        per_location=per_location,
-        probe_manifest_paths=probe_manifest_paths,
-    )
-
-
-def _preview_surface_target_summary(item: dict[str, Any]) -> dict[str, Any]:
-    return material_checks.preview_surface_target_summary(item)
 
 
 def _tone_color_response_check(
@@ -3970,7 +1685,7 @@ def _tone_color_response_check(
     isaac_state: dict[str, Any],
     probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
-    triage = _residual_triage(locations)
+    triage = image_metrics.residual_triage(locations)
     fpv = _dict_path(triage, ("views", "fpv"))
     mean_abs = _float_or_none(fpv.get("mean_abs_rgb_avg"))
     oracle_abs = _float_or_none(fpv.get("rgb_gain_oracle_mean_abs_rgb_avg"))
@@ -3983,7 +1698,7 @@ def _tone_color_response_check(
         color_profile.get("backend_rgb_gain")
     )
     comparison_gain_applied = bool(rgb_gain)
-    probe_history = _tone_color_probe_history(
+    probe_history = material_checks.tone_color_probe_history(
         manifest,
         output_dir=output_dir,
         probe_manifest_paths=probe_manifest_paths,
@@ -4034,820 +1749,6 @@ def _tone_color_response_check(
     }
 
 
-def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, Any]:
-    diagnostics = [
-        _location_camera_contract_diagnostics(item)
-        for item in locations
-        if item.get("status") == "success"
-    ]
-    fpv_head_camera_count = sum(
-        1 for item in diagnostics if item.get("fpv_head_camera_contract") is True
-    )
-    pose_match_count = sum(1 for item in diagnostics if item.get("robot_pose_match") is True)
-    static_import_count = sum(
-        1 for item in diagnostics if _dict(item.get("isaac_robot_import")).get("static_only")
-    )
-    head_pitch_gap_count = sum(
-        1
-        for item in diagnostics
-        if _dict(item.get("head_articulation")).get("status")
-        == "isaac_static_head_pitch_not_applied"
-    )
-    lens_gap_count = sum(
-        1
-        for item in diagnostics
-        if _dict(item.get("fpv_lens_delta")).get("status") == "fpv_lens_contract_delta"
-    )
-    chase_same_camera_count = sum(
-        1 for item in diagnostics if _dict(item.get("chase_contract")).get("same_camera_contract")
-    )
-    if diagnostics and fpv_head_camera_count < len(diagnostics):
-        status = "fpv_head_camera_contract_mismatch"
-        next_action = "Fix FPV source first; both backends must use robot-mounted head camera."
-    elif diagnostics and pose_match_count < len(diagnostics):
-        status = "robot_pose_contract_mismatch"
-        next_action = "Fix shared robot root pose/yaw before changing renderer or assets."
-    elif head_pitch_gap_count:
-        status = "fpv_contract_shared_with_static_head_articulation_gap"
-        next_action = (
-            "FPV uses head cameras and shared root pose, but Isaac static robot import does "
-            "not apply head pitch; test articulated Isaac import or a proven head-link transform."
-        )
-    elif lens_gap_count:
-        status = "fpv_contract_shared_with_lens_gap"
-        next_action = (
-            "FPV uses head cameras and shared root pose, but lens/FOV differs; align Isaac "
-            "head-camera vertical FOV before triaging renderer or material residuals."
-        )
-    elif static_import_count:
-        status = "fpv_contract_shared_with_static_head_camera_pitch_correction"
-        next_action = (
-            "FPV uses head cameras and shared root pose, and Isaac applies a static "
-            "head-camera pitch correction; articulated Isaac import remains the stronger "
-            "long-term parity target."
-        )
-    elif diagnostics:
-        status = "fpv_head_camera_pose_contract_shared"
-        next_action = (
-            "Camera contract is shared enough for this probe; inspect renderer/material residuals."
-        )
-    else:
-        status = "no_successful_camera_contracts"
-        next_action = "Run at least one successful comparison location."
-    chase_note = (
-        "Chase is report evidence only. Current robot-camera parity runs expect both "
-        "backends to use a robot-relative rear/high follower camera, but FPV remains "
-        "the policy/input camera contract."
-    )
-    return {
-        "schema": "robot_camera_contract_diagnostics_v1",
-        "status": status,
-        "location_count": len(diagnostics),
-        "fpv_head_camera_contract_count": fpv_head_camera_count,
-        "robot_pose_match_count": pose_match_count,
-        "isaac_static_import_count": static_import_count,
-        "isaac_static_head_pitch_gap_count": head_pitch_gap_count,
-        "fpv_lens_gap_count": lens_gap_count,
-        "chase_same_camera_contract_count": chase_same_camera_count,
-        "fpv_world_pose_delta_summary": _fpv_world_pose_delta_summary(diagnostics),
-        "fpv_lens_delta_summary": _fpv_lens_delta_summary(diagnostics),
-        "chase_note": chase_note,
-        "recommended_next_action": next_action,
-    }
-
-
-def _fpv_world_pose_delta_summary(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
-    ready = [
-        _dict(item.get("fpv_world_pose_delta"))
-        for item in diagnostics
-        if _dict(item.get("fpv_world_pose_delta")).get("status") == "ready"
-    ]
-    position_deltas = [
-        value
-        for value in (_float_or_none(item.get("position_delta_m")) for item in ready)
-        if value is not None
-    ]
-    forward_angle_deltas = [
-        value
-        for value in (_float_or_none(item.get("forward_angle_delta_deg")) for item in ready)
-        if value is not None
-    ]
-    max_position_delta = max(position_deltas) if position_deltas else None
-    max_forward_angle_delta = max(forward_angle_deltas) if forward_angle_deltas else None
-    if not diagnostics:
-        status = "no_successful_camera_contracts"
-    elif len(ready) < len(diagnostics):
-        status = "missing_fpv_world_pose_metadata"
-    elif (
-        max_position_delta is not None
-        and max_position_delta <= 0.01
-        and (max_forward_angle_delta is None or max_forward_angle_delta <= 0.05)
-    ):
-        status = "fpv_world_pose_aligned"
-    elif (
-        max_position_delta is not None
-        and max_position_delta <= 0.05
-        and (max_forward_angle_delta is None or max_forward_angle_delta <= 0.5)
-    ):
-        status = "fpv_world_pose_near_aligned"
-    else:
-        status = "fpv_world_pose_delta"
-    return {
-        "schema": "robot_camera_fpv_world_pose_delta_summary_v1",
-        "status": status,
-        "ready_count": len(ready),
-        "location_count": len(diagnostics),
-        "position_delta_m_avg": _avg(value for value in position_deltas),
-        "position_delta_m_max": round(float(max_position_delta), 6)
-        if max_position_delta is not None
-        else None,
-        "forward_angle_delta_deg_avg": _avg(value for value in forward_angle_deltas),
-        "forward_angle_delta_deg_max": round(float(max_forward_angle_delta), 6)
-        if max_forward_angle_delta is not None
-        else None,
-        "interpretation": (
-            "Compares MuJoCo robot_0/head_camera and Isaac /World/robot_0/head_camera "
-            "world-space position and forward axis. Small deltas mean remaining image "
-            "differences should be triaged as renderer/material/lighting issues before "
-            "changing FPV camera geometry."
-        ),
-    }
-
-
-def _fpv_lens_delta_summary(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
-    ready = [
-        _dict(item.get("fpv_lens_delta"))
-        for item in diagnostics
-        if _dict(item.get("fpv_lens_delta")).get("status")
-        in {"fpv_lens_aligned", "fpv_lens_near_aligned", "fpv_lens_contract_delta"}
-    ]
-    vertical_fov_deltas = [
-        value
-        for value in (_float_or_none(item.get("vertical_fov_delta_deg")) for item in ready)
-        if value is not None
-    ]
-    max_vertical_fov_delta = max(vertical_fov_deltas) if vertical_fov_deltas else None
-    if not diagnostics:
-        status = "no_successful_camera_contracts"
-    elif len(ready) < len(diagnostics):
-        status = "missing_fpv_lens_metadata"
-    elif max_vertical_fov_delta is not None and max_vertical_fov_delta <= 0.25:
-        status = "fpv_lens_aligned"
-    elif max_vertical_fov_delta is not None and max_vertical_fov_delta <= 1.0:
-        status = "fpv_lens_near_aligned"
-    else:
-        status = "fpv_lens_contract_delta"
-    return {
-        "schema": "robot_camera_fpv_lens_delta_summary_v1",
-        "status": status,
-        "ready_count": len(ready),
-        "location_count": len(diagnostics),
-        "vertical_fov_delta_deg_avg": _avg(value for value in vertical_fov_deltas),
-        "vertical_fov_delta_deg_max": round(float(max_vertical_fov_delta), 6)
-        if max_vertical_fov_delta is not None
-        else None,
-        "interpretation": (
-            "Compares MuJoCo head-camera fovy with Isaac USD head-camera equivalent "
-            "vertical FOV. Small deltas mean apparent zoom/framing differences should "
-            "be triaged as renderer/material/geometry rather than camera intrinsics."
-        ),
-    }
-
-
-def _location_camera_contract_diagnostics(item: dict[str, Any]) -> dict[str, Any]:
-    contracts = _dict(item.get("contracts"))
-    camera_diagnostics = _dict(item.get("camera_diagnostics"))
-    mujoco_contract = _dict(contracts.get("mujoco"))
-    isaac_contract = _dict(contracts.get("isaac"))
-    requested_pose = _dict(item.get("robot_pose"))
-    mujoco_pose_delta = _robot_pose_delta(requested_pose, _dict(mujoco_contract.get("robot_pose")))
-    isaac_pose_delta = _robot_pose_delta(requested_pose, _dict(isaac_contract.get("robot_pose")))
-    mujoco_fpv = _dict(mujoco_contract.get("agent_facing_fpv"))
-    isaac_fpv = _dict(isaac_contract.get("agent_facing_fpv"))
-    fpv_head_camera_contract = _is_head_camera_fpv(mujoco_fpv) and _is_head_camera_fpv(isaac_fpv)
-    robot_pose_match = (
-        mujoco_pose_delta.get("status") == "match" and isaac_pose_delta.get("status") == "match"
-    )
-    isaac_import = _isaac_robot_import_diagnostics(isaac_contract)
-    head_articulation = _head_articulation_diagnostics(
-        requested_pose=requested_pose,
-        mujoco_contract=mujoco_contract,
-        isaac_contract=isaac_contract,
-        isaac_import=isaac_import,
-        isaac_camera_metadata=_compact_camera_metadata(camera_diagnostics, "isaac", "fpv"),
-    )
-    mujoco_fpv_metadata = _compact_camera_metadata(camera_diagnostics, "mujoco", "fpv")
-    isaac_fpv_metadata = _compact_camera_metadata(camera_diagnostics, "isaac", "fpv")
-    return {
-        "schema": "robot_camera_location_contract_diagnostics_v1",
-        "fpv_head_camera_contract": fpv_head_camera_contract,
-        "robot_pose_match": robot_pose_match,
-        "mujoco_pose_delta": mujoco_pose_delta,
-        "isaac_pose_delta": isaac_pose_delta,
-        "fpv_world_pose_delta": _fpv_world_pose_delta(
-            mujoco_fpv_metadata,
-            isaac_fpv_metadata,
-        ),
-        "fpv_lens_delta": _fpv_lens_delta(
-            mujoco_fpv_metadata,
-            isaac_fpv_metadata,
-        ),
-        "mujoco_fpv": {
-            "source": mujoco_fpv.get("source"),
-            "robot_mounted": mujoco_fpv.get("robot_mounted"),
-            "head_camera_equivalent": mujoco_fpv.get("head_camera_equivalent"),
-        },
-        "isaac_fpv": {
-            "source": isaac_fpv.get("source"),
-            "camera_prim_path": isaac_fpv.get("camera_prim_path"),
-            "robot_mounted": isaac_fpv.get("robot_mounted"),
-            "head_camera_equivalent": isaac_fpv.get("head_camera_equivalent"),
-        },
-        "isaac_robot_import": isaac_import,
-        "fpv_camera_metadata": {
-            "mujoco": mujoco_fpv_metadata,
-            "isaac": isaac_fpv_metadata,
-        },
-        "head_articulation": head_articulation,
-        "chase_contract": _chase_contract_diagnostics(mujoco_contract, isaac_contract),
-    }
-
-
-def _is_head_camera_fpv(fpv: dict[str, Any]) -> bool:
-    source = str(fpv.get("source") or "")
-    prim_path = str(fpv.get("camera_prim_path") or "")
-    return bool(fpv.get("robot_mounted")) and (
-        "head_camera" in source or "head_camera" in prim_path
-    )
-
-
-def _compact_camera_metadata(
-    camera_diagnostics: dict[str, Any],
-    lane: str,
-    view_key: str,
-) -> dict[str, Any]:
-    view = _dict(_dict(_dict(camera_diagnostics.get(lane)).get("views")).get(view_key))
-    if not view:
-        return {"status": "missing_camera_metadata"}
-    keys = (
-        "schema",
-        "status",
-        "camera_type",
-        "camera_name",
-        "prim_path",
-        "world_position",
-        "forward_world",
-        "world_matrix_rowmajor",
-        "fovy_deg",
-        "focal_length_mm",
-        "horizontal_aperture_mm",
-        "vertical_aperture_mm",
-        "vertical_fov_deg",
-        "horizontal_fov_deg",
-        "clipping_range",
-        "render_resolution",
-        "lens_application",
-        "robot_pose_stage_application",
-    )
-    return {key: view.get(key) for key in keys if key in view}
-
-
-def _fpv_world_pose_delta(
-    mujoco_metadata: dict[str, Any],
-    isaac_metadata: dict[str, Any],
-) -> dict[str, Any]:
-    mujoco_position = _vec3_or_none(mujoco_metadata.get("world_position"))
-    isaac_position = _vec3_or_none(isaac_metadata.get("world_position"))
-    if isaac_position is None:
-        matrix_position = _matrix_translation_or_none(isaac_metadata.get("world_matrix_rowmajor"))
-        isaac_position = matrix_position
-    if mujoco_position is None or isaac_position is None:
-        return {
-            "schema": "robot_camera_fpv_world_pose_delta_v1",
-            "status": "missing_world_position_metadata",
-        }
-    position_delta = _vec_distance(mujoco_position, isaac_position)
-    mujoco_forward = _vec3_or_none(mujoco_metadata.get("forward_world"))
-    isaac_forward = _vec3_or_none(isaac_metadata.get("forward_world"))
-    if isaac_forward is None:
-        isaac_forward = _matrix_forward_or_none(isaac_metadata.get("world_matrix_rowmajor"))
-    forward_angle_delta = _vec_angle_deg(mujoco_forward, isaac_forward)
-    return {
-        "schema": "robot_camera_fpv_world_pose_delta_v1",
-        "status": "ready",
-        "mujoco_world_position": [round(value, 6) for value in mujoco_position],
-        "isaac_world_position": [round(value, 6) for value in isaac_position],
-        "position_delta_m": round(float(position_delta), 6),
-        "forward_angle_delta_deg": round(float(forward_angle_delta), 6)
-        if forward_angle_delta is not None
-        else None,
-        "note": (
-            "MuJoCo exposes fixed-camera world_position but not always an orientation "
-            "vector in this probe. Isaac orientation is read from world_matrix_rowmajor "
-            "when present."
-        ),
-    }
-
-
-def _fpv_lens_delta(
-    mujoco_metadata: dict[str, Any],
-    isaac_metadata: dict[str, Any],
-) -> dict[str, Any]:
-    mujoco_vertical_fov = _float_or_none(mujoco_metadata.get("fovy_deg"))
-    isaac_vertical_fov = _float_or_none(isaac_metadata.get("vertical_fov_deg"))
-    if isaac_vertical_fov is None:
-        isaac_vertical_fov = _isaac_vertical_fov_from_metadata(isaac_metadata)
-    if mujoco_vertical_fov is None or isaac_vertical_fov is None:
-        return {
-            "schema": "robot_camera_fpv_lens_delta_v1",
-            "status": "missing_fpv_lens_metadata",
-        }
-    vertical_fov_delta = abs(float(mujoco_vertical_fov) - float(isaac_vertical_fov))
-    if vertical_fov_delta <= 0.25:
-        status = "fpv_lens_aligned"
-    elif vertical_fov_delta <= 1.0:
-        status = "fpv_lens_near_aligned"
-    else:
-        status = "fpv_lens_contract_delta"
-    return {
-        "schema": "robot_camera_fpv_lens_delta_v1",
-        "status": status,
-        "mujoco_vertical_fov_deg": round(float(mujoco_vertical_fov), 6),
-        "isaac_vertical_fov_deg": round(float(isaac_vertical_fov), 6),
-        "vertical_fov_delta_deg": round(float(vertical_fov_delta), 6),
-        "isaac_focal_length_mm": _float_or_none(isaac_metadata.get("focal_length_mm")),
-        "isaac_horizontal_aperture_mm": _float_or_none(
-            isaac_metadata.get("horizontal_aperture_mm")
-        ),
-        "note": (
-            "MuJoCo fixed camera fovy is vertical FOV. Isaac USD camera stores focal "
-            "length and horizontal aperture, so this derives equivalent vertical FOV "
-            "from the render aspect ratio when diagnostics do not provide it directly."
-        ),
-    }
-
-
-def _isaac_vertical_fov_from_metadata(metadata: dict[str, Any]) -> float | None:
-    focal_length = _float_or_none(metadata.get("focal_length_mm"))
-    horizontal_aperture = _float_or_none(metadata.get("horizontal_aperture_mm"))
-    resolution = _dict(metadata.get("render_resolution"))
-    width = _float_or_none(resolution.get("width"))
-    height = _float_or_none(resolution.get("height"))
-    if (
-        focal_length is None
-        or horizontal_aperture is None
-        or width is None
-        or height is None
-        or focal_length <= 0.0
-        or width <= 0.0
-        or height <= 0.0
-    ):
-        return None
-    vertical_aperture = float(horizontal_aperture) * float(height) / float(width)
-    return math.degrees(2.0 * math.atan(vertical_aperture / (2.0 * float(focal_length))))
-
-
-def _vec3_or_none(value: Any) -> tuple[float, float, float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return None
-    try:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    except (TypeError, ValueError):
-        return None
-
-
-def _matrix_translation_or_none(value: Any) -> tuple[float, float, float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) != 16:
-        return None
-    try:
-        return (float(value[12]), float(value[13]), float(value[14]))
-    except (TypeError, ValueError):
-        return None
-
-
-def _matrix_forward_or_none(value: Any) -> tuple[float, float, float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) != 16:
-        return None
-    try:
-        return (float(-value[8]), float(-value[9]), float(-value[10]))
-    except (TypeError, ValueError):
-        return None
-
-
-def _vec_distance(left: tuple[float, float, float], right: tuple[float, float, float]) -> float:
-    return math.sqrt(sum((left[index] - right[index]) ** 2 for index in range(3)))
-
-
-def _vec_angle_deg(
-    left: tuple[float, float, float] | None,
-    right: tuple[float, float, float] | None,
-) -> float | None:
-    if left is None or right is None:
-        return None
-    left_norm = math.sqrt(sum(value * value for value in left))
-    right_norm = math.sqrt(sum(value * value for value in right))
-    if left_norm <= 0.0 or right_norm <= 0.0:
-        return None
-    dot = sum(left[index] * right[index] for index in range(3)) / (left_norm * right_norm)
-    dot = max(-1.0, min(1.0, dot))
-    return math.degrees(math.acos(dot))
-
-
-def _robot_pose_delta(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
-    expected_x = _float_or_none(expected.get("x"))
-    expected_y = _float_or_none(expected.get("y"))
-    actual_x = _float_or_none(actual.get("x"))
-    actual_y = _float_or_none(actual.get("y"))
-    if None in {expected_x, expected_y, actual_x, actual_y}:
-        return {"status": "missing_pose"}
-    xy_error = ((expected_x - actual_x) ** 2 + (expected_y - actual_y) ** 2) ** 0.5
-    expected_yaw = _pose_yaw_deg(expected)
-    actual_yaw = _pose_yaw_deg(actual)
-    yaw_error = _angle_delta_deg(expected_yaw, actual_yaw)
-    expected_head_pitch = _float_or_none(expected.get("head_pitch"))
-    actual_head_pitch = _float_or_none(actual.get("head_pitch"))
-    head_pitch_error = (
-        abs(expected_head_pitch - actual_head_pitch)
-        if expected_head_pitch is not None and actual_head_pitch is not None
-        else None
-    )
-    yaw_match = yaw_error is None or yaw_error <= 0.001
-    head_pitch_match = head_pitch_error is None or head_pitch_error <= 0.0001
-    status = "match" if xy_error <= 0.0001 and yaw_match and head_pitch_match else "mismatch"
-    return {
-        "status": status,
-        "xy_error_m": round(float(xy_error), 6),
-        "yaw_error_deg": round(float(yaw_error), 6) if yaw_error is not None else None,
-        "head_pitch_error_rad": round(float(head_pitch_error), 6)
-        if head_pitch_error is not None
-        else None,
-    }
-
-
-def _pose_yaw_deg(pose: dict[str, Any]) -> float | None:
-    yaw = _float_or_none(pose.get("yaw_deg"))
-    if yaw is not None:
-        return yaw
-    theta = _float_or_none(pose.get("theta"))
-    if theta is None:
-        return None
-    return theta * 180.0 / 3.141592653589793
-
-
-def _angle_delta_deg(left: float | None, right: float | None) -> float | None:
-    if left is None or right is None:
-        return None
-    return abs((left - right + 180.0) % 360.0 - 180.0)
-
-
-def _isaac_robot_import_diagnostics(isaac_contract: dict[str, Any]) -> dict[str, Any]:
-    robot_asset = _dict(isaac_contract.get("robot_asset"))
-    import_summary = _dict(robot_asset.get("import_summary"))
-    converter = _dict(import_summary.get("converter"))
-    fallback = _dict(converter.get("fallback"))
-    static_only = bool(import_summary.get("static_only")) or (
-        fallback.get("status") == "ready"
-        and str(import_summary.get("import_method") or "").endswith("static_visual_usd_fallback")
-    )
-    return {
-        "status": robot_asset.get("status"),
-        "import_method": import_summary.get("import_method") or robot_asset.get("import_method"),
-        "static_only": static_only,
-        "head_camera_mounted": robot_asset.get("head_camera_mounted"),
-        "head_camera_equivalent": robot_asset.get("head_camera_equivalent"),
-        "head_camera_prim_path": robot_asset.get("head_camera_prim_path")
-        or isaac_contract.get("camera_prim_path"),
-        "head_link_name": robot_asset.get("head_link_name"),
-        "required_joints": robot_asset.get("required_joints")
-        or _dict(import_summary.get("urdf")).get("required_joints")
-        or [],
-        "missing_mesh_count": fallback.get("missing_mesh_count"),
-        "unsupported_mesh_count": fallback.get("unsupported_mesh_count"),
-    }
-
-
-def _head_articulation_diagnostics(
-    *,
-    requested_pose: dict[str, Any],
-    mujoco_contract: dict[str, Any],
-    isaac_contract: dict[str, Any],
-    isaac_import: dict[str, Any],
-    isaac_camera_metadata: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    requested_head_pitch = _float_or_none(requested_pose.get("head_pitch"))
-    mujoco_head_pitch = _float_or_none(_dict(mujoco_contract.get("robot_pose")).get("head_pitch"))
-    isaac_head_pitch = _float_or_none(_dict(isaac_contract.get("robot_pose")).get("head_pitch"))
-    if requested_head_pitch is None:
-        status = "head_pitch_not_requested"
-    elif _isaac_head_pitch_applied(isaac_contract, isaac_camera_metadata):
-        status = "isaac_static_head_pitch_applied_to_head_camera"
-    elif isaac_import.get("static_only"):
-        status = "isaac_static_head_pitch_not_applied"
-    else:
-        status = "head_pitch_application_not_reported"
-    return {
-        "status": status,
-        "requested_head_pitch_rad": requested_head_pitch,
-        "mujoco_contract_head_pitch_rad": mujoco_head_pitch,
-        "isaac_contract_head_pitch_rad": isaac_head_pitch,
-        "isaac_static_only": bool(isaac_import.get("static_only")),
-        "isaac_head_pitch_applied": _isaac_head_pitch_applied(
-            isaac_contract, isaac_camera_metadata
-        ),
-        "evidence_note": (
-            "MuJoCo robot views use qpos-backed robot joints. Isaac is still a static visual "
-            "robot import unless an articulated import succeeds, but it may apply a static "
-            "head-camera transform correction that records head_pitch_applied=true."
-        ),
-    }
-
-
-def _isaac_head_pitch_applied(
-    isaac_contract: dict[str, Any],
-    isaac_camera_metadata: dict[str, Any] | None = None,
-) -> bool:
-    metadata_application = _dict(_dict(isaac_camera_metadata).get("robot_pose_stage_application"))
-    if metadata_application.get("head_pitch_applied") is True:
-        return True
-    capture = _dict(
-        _dict(_dict(isaac_contract.get("robot_asset")).get("semantic_pose_view_capture")).get(
-            "robot_pose_stage_application"
-        )
-    )
-    if capture.get("head_pitch_applied") is True:
-        return True
-    return (
-        _dict(_dict(isaac_contract.get("robot_pose_stage_application"))).get("head_pitch_applied")
-        is True
-    )
-
-
-def _chase_contract_diagnostics(
-    mujoco_contract: dict[str, Any],
-    isaac_contract: dict[str, Any],
-) -> dict[str, Any]:
-    mujoco_source = str(_dict(mujoco_contract.get("report_verify_view")).get("source") or "")
-    isaac_source = str(_dict(isaac_contract.get("report_verify_view")).get("source") or "")
-    same_camera_contract = (
-        str(_dict(mujoco_contract.get("report_chase_view")).get("source") or "")
-        == "robot_0/camera_follower"
-        and str(_dict(isaac_contract.get("report_chase_view")).get("source") or "")
-        == "robot_relative_camera_follower"
-    )
-    return {
-        "same_camera_contract": same_camera_contract,
-        "mujoco_source": "robot_0/camera_follower",
-        "isaac_source": "robot_relative_camera_follower"
-        if same_camera_contract
-        else "external rear/high report camera",
-        "mujoco_verify_source": mujoco_source,
-        "isaac_verify_source": isaac_source,
-        "evidence_note": (
-            "Chase now uses a robot-relative rear/high report camera in both backends."
-            if same_camera_contract
-            else "Chase is auxiliary report evidence; FPV is the policy/input camera contract."
-        ),
-    }
-
-
-def _render_residual_diagnostics(left: Image.Image, right: Image.Image) -> dict[str, Any]:
-    left = left.convert("RGB")
-    right = right.convert("RGB")
-    if right.size != left.size:
-        right = right.resize(left.size)
-    left_metrics = _image_visual_metrics(left)
-    right_metrics = _image_visual_metrics(right)
-    luma_gain, luma_gain_diff = _luminance_gain_oracle(left, right)
-    rgb_gain, rgb_gain_diff = _rgb_gain_oracle(left, right)
-    left_edge = _edge_image(left)
-    right_edge = _edge_image(right)
-    edge_abs_diff = _mean_abs_grayscale_diff(left_edge, right_edge)
-    residual_class = _residual_class(
-        mean_abs_rgb=_mean_abs_rgb(left, right),
-        left_metrics=left_metrics,
-        right_metrics=right_metrics,
-        edge_abs_diff=edge_abs_diff,
-        rgb_gain_diff=rgb_gain_diff,
-    )
-    return {
-        "schema": "robot_camera_render_residual_diagnostics_v1",
-        "left_metrics": left_metrics,
-        "right_metrics": right_metrics,
-        "luminance_gain_oracle": {
-            "gain": round(luma_gain, 6),
-            "mean_abs_rgb_after_gain": round(luma_gain_diff, 4),
-            "interpretation": (
-                "Per-view oracle only; this is diagnostic evidence, not a runtime "
-                "color-calibration contract."
-            ),
-        },
-        "rgb_gain_oracle": {
-            "gain": [round(value, 6) for value in rgb_gain],
-            "mean_abs_rgb_after_gain": round(rgb_gain_diff, 4),
-            "interpretation": (
-                "Per-view RGB oracle only; use it to classify residuals, not as "
-                "backend output post-processing."
-            ),
-        },
-        "edge_abs_diff": round(edge_abs_diff, 4),
-        "residual_class": residual_class,
-        "recommended_next_action": _residual_next_action(residual_class),
-    }
-
-
-def _image_visual_metrics(image: Image.Image) -> dict[str, float]:
-    rgb = image.convert("RGB")
-    pixels = list(rgb.getdata())
-    if not pixels:
-        return {
-            "mean_luminance": 0.0,
-            "overexposed_fraction": 0.0,
-            "underexposed_fraction": 0.0,
-            "edge_mean": 0.0,
-        }
-    luminance = [_luminance(pixel) for pixel in pixels]
-    edge = _edge_image(rgb)
-    return {
-        "mean_luminance": round(sum(luminance) / len(luminance), 4),
-        "overexposed_fraction": round(
-            sum(1 for value in luminance if value >= 245.0) / len(luminance),
-            6,
-        ),
-        "underexposed_fraction": round(
-            sum(1 for value in luminance if value <= 10.0) / len(luminance),
-            6,
-        ),
-        "edge_mean": round(float(ImageStat.Stat(edge).mean[0]), 4),
-    }
-
-
-def _edge_image(image: Image.Image) -> Image.Image:
-    edge = image.convert("L").filter(ImageFilter.FIND_EDGES)
-    width, height = edge.size
-    if width > 2 and height > 2:
-        return edge.crop((1, 1, width - 1, height - 1))
-    return edge
-
-
-def _luminance(pixel: tuple[int, int, int]) -> float:
-    return float(pixel[0]) * 0.2126 + float(pixel[1]) * 0.7152 + float(pixel[2]) * 0.0722
-
-
-def _luminance_gain_oracle(left: Image.Image, right: Image.Image) -> tuple[float, float]:
-    left_pixels = list(left.convert("RGB").getdata())
-    right_pixels = list(right.convert("RGB").getdata())
-    numerator = 0.0
-    denominator = 0.0
-    for left_pixel, right_pixel in zip(left_pixels, right_pixels, strict=True):
-        left_luma = _luminance(left_pixel)
-        right_luma = _luminance(right_pixel)
-        numerator += left_luma * right_luma
-        denominator += right_luma * right_luma
-    gain = numerator / denominator if denominator > 0.0 else 1.0
-    return gain, _mean_abs_rgb_after_gain(left_pixels, right_pixels, (gain, gain, gain))
-
-
-def _rgb_gain_oracle(
-    left: Image.Image, right: Image.Image
-) -> tuple[tuple[float, float, float], float]:
-    left_pixels = list(left.convert("RGB").getdata())
-    right_pixels = list(right.convert("RGB").getdata())
-    gains = []
-    for channel in range(3):
-        numerator = 0.0
-        denominator = 0.0
-        for left_pixel, right_pixel in zip(left_pixels, right_pixels, strict=True):
-            numerator += float(left_pixel[channel]) * float(right_pixel[channel])
-            denominator += float(right_pixel[channel]) * float(right_pixel[channel])
-        gains.append(numerator / denominator if denominator > 0.0 else 1.0)
-    gain_tuple = (float(gains[0]), float(gains[1]), float(gains[2]))
-    return gain_tuple, _mean_abs_rgb_after_gain(left_pixels, right_pixels, gain_tuple)
-
-
-def _mean_abs_rgb_after_gain(
-    left_pixels: list[tuple[int, int, int]],
-    right_pixels: list[tuple[int, int, int]],
-    gain: tuple[float, float, float],
-) -> float:
-    if not left_pixels:
-        return 0.0
-    total = 0.0
-    for left_pixel, right_pixel in zip(left_pixels, right_pixels, strict=True):
-        for channel in range(3):
-            adjusted = max(0.0, min(255.0, float(right_pixel[channel]) * gain[channel]))
-            total += abs(float(left_pixel[channel]) - adjusted)
-    return total / (len(left_pixels) * 3.0)
-
-
-def _mean_abs_rgb(left: Image.Image, right: Image.Image) -> float:
-    diff = ImageChops.difference(left.convert("RGB"), right.convert("RGB"))
-    stat = ImageStat.Stat(diff)
-    return float(sum(stat.mean) / len(stat.mean))
-
-
-def _mean_abs_grayscale_diff(left: Image.Image, right: Image.Image) -> float:
-    if right.size != left.size:
-        right = right.resize(left.size)
-    stat = ImageStat.Stat(ImageChops.difference(left.convert("L"), right.convert("L")))
-    return float(stat.mean[0])
-
-
-def _residual_class(
-    *,
-    mean_abs_rgb: float,
-    left_metrics: dict[str, float],
-    right_metrics: dict[str, float],
-    edge_abs_diff: float,
-    rgb_gain_diff: float,
-) -> str:
-    if mean_abs_rgb <= 35.0:
-        return "low_residual"
-    left_edge = float(left_metrics.get("edge_mean") or 0.0)
-    right_edge = float(right_metrics.get("edge_mean") or 0.0)
-    if left_edge > 4.0 and right_edge < left_edge * 0.45:
-        return "geometry_or_texture_edge_residual"
-    if edge_abs_diff > 8.0:
-        return "geometry_or_texture_edge_residual"
-    if rgb_gain_diff <= mean_abs_rgb * 0.7:
-        return "view_dependent_color_residual"
-    if (
-        abs(
-            float(right_metrics.get("mean_luminance") or 0.0)
-            - float(left_metrics.get("mean_luminance") or 0.0)
-        )
-        > 35.0
-    ):
-        return "luminance_residual"
-    return "render_domain_residual"
-
-
-def _residual_next_action(residual_class: str) -> str:
-    if residual_class == "low_residual":
-        return "Residual is low enough for this probe; inspect other views before changing code."
-    if residual_class == "view_dependent_color_residual":
-        return (
-            "Per-view color gain helps, but a global post-process would overfit; inspect "
-            "room/object lighting, material albedo, and tone response."
-        )
-    if residual_class == "geometry_or_texture_edge_residual":
-        return (
-            "Edge/detail residual is high; compare visible USD/MuJoCo geometry, material "
-            "bindings, texture availability, and static robot/head articulation."
-        )
-    if residual_class == "luminance_residual":
-        return "Try a renderer/light/color-profile calibration probe before changing camera pose."
-    return "Inspect render-domain differences before changing camera geometry."
-
-
-def _residual_triage(locations: list[dict[str, Any]]) -> dict[str, Any]:
-    per_view: dict[str, dict[str, Any]] = {}
-    for view_key in ROBOT_VIEW_KEYS:
-        diffs = [
-            _dict_path(item, ("image_diffs", view_key, "residual"))
-            for item in locations
-            if item.get("status") == "success"
-        ]
-        diffs = [item for item in diffs if item]
-        classes = [str(item.get("residual_class") or "") for item in diffs]
-        per_view[view_key] = {
-            "view_count": len(diffs),
-            "residual_classes": {name: classes.count(name) for name in sorted(set(classes))},
-            "mean_abs_rgb_avg": _avg(
-                _get_float(item, ("image_diffs", view_key, "mean_abs_rgb")) for item in locations
-            ),
-            "rgb_gain_oracle_mean_abs_rgb_avg": _avg(
-                _get_float(item, ("rgb_gain_oracle", "mean_abs_rgb_after_gain")) for item in diffs
-            ),
-            "edge_abs_diff_avg": _avg(_get_float(item, ("edge_abs_diff",)) for item in diffs),
-        }
-    fpv = per_view.get("fpv") or {}
-    fpv_classes = dict(fpv.get("residual_classes") or {})
-    if fpv_classes.get("geometry_or_texture_edge_residual"):
-        status = "render_domain_geometry_or_texture_residual"
-        next_action = (
-            "Camera pose/color are improved; next compare visible geometry/material/texture "
-            "contracts and static head articulation for high-residual FPV views."
-        )
-    elif fpv_classes.get("view_dependent_color_residual"):
-        status = "view_dependent_color_residual"
-        next_action = (
-            "A single global color profile is insufficient; inspect per-room lighting and "
-            "material albedo before tuning camera geometry."
-        )
-    elif float(fpv.get("mean_abs_rgb_avg") or 0.0) <= 40.0:
-        status = "fpv_residual_low"
-        next_action = "FPV residual is low for this probe; broaden scene/seed coverage."
-    else:
-        status = "render_domain_residual_pending_triage"
-        next_action = "Inspect high-residual views before changing camera pose."
-    return {
-        "schema": "robot_camera_render_residual_triage_v1",
-        "status": status,
-        "views": per_view,
-        "recommended_next_action": next_action,
-    }
-
-
 def _dict_path(item: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any]:
     value: Any = item
     for key in path:
@@ -4893,7 +1794,9 @@ def _avg(values: Any) -> float | None:
 
 def _write_outputs(manifest: dict[str, Any], output_dir: Path) -> None:
     _write_json(output_dir / "comparison_manifest.json", manifest)
-    (output_dir / "report.html").write_text(_render_report(manifest), encoding="utf-8")
+    (output_dir / "report.html").write_text(
+        report_renderer.render_report(manifest), encoding="utf-8"
+    )
 
 
 if __name__ == "__main__":

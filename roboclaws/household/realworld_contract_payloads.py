@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Iterable, Mapping
 from typing import Any, Protocol
 
+from roboclaws.household import realworld_runtime_map_contract, realworld_runtime_map_targets
+
 
 class RealWorldPayloadContract(Protocol):
     map_mode: str
+    perception_mode: str
     sanitize_world_labels: bool
     _detections_by_handle: Mapping[str, dict[str, Any]]
     _fixtures: dict[str, dict[str, Any]]
@@ -25,40 +28,7 @@ class RealWorldPayloadContract(Protocol):
         *,
         fixture_hints: dict[str, Any] | None = None,
     ) -> dict[str, Any]: ...
-    def _runtime_observed_object_payload(
-        self,
-        handle: str,
-        detection: dict[str, Any],
-        worklist_item: dict[str, Any],
-    ) -> dict[str, Any]: ...
-    def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]: ...
-    def _runtime_target_candidates(
-        self,
-        *,
-        public_semantic_anchors: list[dict[str, Any]],
-        observed_objects: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]: ...
-    def _runtime_static_map_payload(
-        self,
-        *,
-        metric_map: dict[str, Any],
-        fixture_hints: dict[str, Any],
-    ) -> dict[str, Any]: ...
-    def _target_search_summary(
-        self,
-        target_candidates: list[dict[str, Any]],
-    ) -> dict[str, Any]: ...
-    def _target_query_recovery_summary(
-        self,
-        target_candidates: list[dict[str, Any]],
-    ) -> dict[str, Any]: ...
     def _visual_evidence_for_handle(self, handle: str) -> dict[str, Any]: ...
-    def target_fixture_for_detection(
-        self,
-        detection: dict[str, Any],
-        fixture_hints: dict[str, Any],
-    ) -> dict[str, Any] | None: ...
-    def _public_fixture_reference_id(self, fixture_id: str) -> str: ...
     def internal_fixture_id_for_public_reference(self, fixture_id: str) -> str | None: ...
     def _public_navigation_waypoints(self) -> list[dict[str, Any]]: ...
 
@@ -73,9 +43,15 @@ def runtime_metric_map_payload(
     runtime_metric_map_schema: str,
     cleanup_worklist_schema: str,
     minimal_map_mode: str,
+    visible_object_detections_mode: str,
+    sanitized_visible_object_detections_provenance: str,
     runtime_map_producer_summary: Callable[..., dict[str, Any]],
     merge_public_rooms: Callable[[Any, Any], list[dict[str, Any]]],
     room_category_hints_from_public_rooms: Callable[[Any, Any], list[dict[str, Any]]],
+    candidate_actionability_status: Callable[[dict[str, Any]], str],
+    candidate_state: Callable[[dict[str, Any]], str],
+    public_destination_policy_for_category: Callable[[Any], dict[str, Any]],
+    norm: Callable[[Any], str],
     assert_no_forbidden_agent_view_keys: Callable[[Any], None],
 ) -> dict[str, Any]:
     """Build the current-run map view from public map and observation evidence."""
@@ -91,11 +67,33 @@ def runtime_metric_map_payload(
         str(item.get("object_id") or ""): dict(item)
         for item in public_worklist.get("objects") or []
     }
+    runtime_map_priors = [dict(item) for item in contract._runtime_map_priors]
     observed_objects = [
-        contract._runtime_observed_object_payload(
-            handle,
-            dict(contract._detections_by_handle[handle]),
-            worklist_by_handle.get(handle, {}),
+        realworld_runtime_map_contract.runtime_observed_object_payload(
+            handle=handle,
+            detection=dict(contract._detections_by_handle[handle]),
+            worklist_item=worklist_by_handle.get(handle, {}),
+            object_lifecycle=dict(contract._object_lifecycle.get(handle, {})),
+            sanitize_world_labels=contract.sanitize_world_labels,
+            perception_mode=contract.perception_mode,
+            visible_object_detections_mode=visible_object_detections_mode,
+            sanitized_visible_object_detections_provenance=(
+                sanitized_visible_object_detections_provenance
+            ),
+            runtime_map_priors=runtime_map_priors,
+            public_fixture_reference_id=lambda fixture_id: (
+                realworld_runtime_map_targets.public_fixture_reference_id(
+                    contract,
+                    fixture_id,
+                    minimal_map_mode=minimal_map_mode,
+                )
+            ),
+            visual_evidence_for_handle=contract._visual_evidence_for_handle,
+            candidate_actionability_status=candidate_actionability_status,
+            candidate_state=candidate_state,
+            public_destination_policy_for_category=public_destination_policy_for_category,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+            norm=norm,
         )
         for handle in sorted(contract._detections_by_handle)
     ]
@@ -103,11 +101,17 @@ def runtime_metric_map_payload(
         *[dict(item) for item in contract._runtime_map_priors],
         *observed_objects,
     ]
-    public_semantic_anchors = contract._runtime_public_semantic_anchors()
+    public_semantic_anchors = realworld_runtime_map_targets.runtime_public_semantic_anchors(
+        contract,
+        minimal_map_mode=minimal_map_mode,
+        assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+    )
     map_update_candidates: list[dict[str, Any]] = []
-    target_candidates = contract._runtime_target_candidates(
+    target_candidates = realworld_runtime_map_targets.runtime_target_candidates(
+        contract,
         public_semantic_anchors=public_semantic_anchors,
         observed_objects=runtime_observed_objects,
+        assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
     )
     payload = {
         "schema": runtime_metric_map_schema,
@@ -117,9 +121,12 @@ def runtime_metric_map_payload(
         "minimal_map_mode": contract.map_mode == minimal_map_mode,
         "source_map_mutated": False,
         "private_truth_included": False,
-        "static_map": contract._runtime_static_map_payload(
+        "static_map": realworld_runtime_map_contract.runtime_static_map_payload(
             metric_map=public_metric_map,
             fixture_hints=public_fixture_hints,
+            map_mode=contract.map_mode,
+            minimal_map_mode=minimal_map_mode,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
         ),
         "rooms": [dict(item) for item in public_metric_map.get("rooms") or []],
         "room_category_hints": [
@@ -129,9 +136,15 @@ def runtime_metric_map_payload(
         "public_semantic_anchors": public_semantic_anchors,
         "observed_objects": runtime_observed_objects,
         "target_candidates": target_candidates,
-        "target_search_summary": contract._target_search_summary(target_candidates),
-        "target_query_recovery": contract._target_query_recovery_summary(
+        "target_search_summary": realworld_runtime_map_targets.target_search_summary(
+            contract,
             target_candidates,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
+        ),
+        "target_query_recovery": realworld_runtime_map_targets.target_query_recovery_summary(
+            contract,
+            target_candidates,
+            assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
         ),
         "map_update_candidates": map_update_candidates,
         "producer_summary": runtime_map_producer_summary(
@@ -222,13 +235,24 @@ def cleanup_worklist_payload(
                 "grounding_status": grounding_status,
             }
         )
-        public_candidate = contract.target_fixture_for_detection(detection, public_fixtures)
+        public_candidate = realworld_runtime_map_targets.target_fixture_for_detection(
+            contract,
+            detection,
+            public_fixtures,
+            minimal_map_mode=minimal_map_mode,
+        )
         candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
         source_fixture_id = str(support.get("fixture_id") or "")
-        public_candidate_fixture_id = contract._public_fixture_reference_id(
-            str(candidate_fixture_id)
+        public_candidate_fixture_id = realworld_runtime_map_targets.public_fixture_reference_id(
+            contract,
+            str(candidate_fixture_id),
+            minimal_map_mode=minimal_map_mode,
         )
-        public_source_fixture_id = contract._public_fixture_reference_id(source_fixture_id)
+        public_source_fixture_id = realworld_runtime_map_targets.public_fixture_reference_id(
+            contract,
+            source_fixture_id,
+            minimal_map_mode=minimal_map_mode,
+        )
         state = str(lifecycle.get("state", "pending"))
         cleanup_recommended = bool(
             grounding_status not in {"ambiguous", "unresolved"}

@@ -2,7 +2,7 @@
 refactor_scope: python-quality-backend-entropy
 status: COMPLETED_LEDGER
 active_plan: docs/plans/refactor-python-quality-backend-entropy.md
-last_compacted: 2026-06-15
+last_compacted: 2026-06-17
 ---
 
 # Completed Ledger: Python Quality And Backend Entropy
@@ -739,6 +739,316 @@ logs before choosing the next slice.
   realworld contract and MCP server contract test files, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: Report-performance skill calibration script now delegates to the
+  canonical `scripts/reports/calibrate_model_latency.py`, removing the stale
+  skill-local simplified implementation. Metric: skill script 112 -> 14 lines;
+  current dirty-checkout ratchet is 15 complexity rows and 65 oversized modules
+  because of plan-external render-preview drift tracked in the active plan.
+  Proof: wrapper CLI help, report-performance unit tests, ruff, format check,
+  and ratchet.
+
+- 2026-06-17: Scene-only prefilter report/policy/evidence helpers moved from
+  `scene_sampler.py` into `scene_sampler_prefilter.py`, keeping
+  `scene_only_prefilter_report` as the public facade. Metric:
+  `scene_sampler.py` 3070 -> 2607 lines; ratchet remains 15 complexity rows
+  and 65 oversized modules, so scene sampler stays active P1 debt. Proof:
+  focused scene-sampler and readiness-export tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: Candidate-profile policy, index expansion, row/status assembly,
+  and gate-mismatch profile helpers moved from `scene_sampler.py` into
+  `scene_sampler_profile.py`, keeping `candidate_profile_report` as the public
+  facade and preserving the existing MolmoSpaces dependency hook surface.
+  Metric: `scene_sampler.py` 2607 -> 2241 lines; current dirty-checkout
+  ratchet is 18 complexity rows and 65 oversized modules because unrelated B1
+  Map 12 runtime-bundle drift is now counted. Proof: focused scene-sampler and
+  readiness-export tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Scene-sampler source-prep report assembly moved into
+  `scene_sampler_prep.py`, and scanner-admission row assembly moved into
+  `scene_sampler_scanner.py`, leaving `scene_sampler.py` as the launch/eval
+  facade. Metric: `scene_sampler.py` 2241 -> 1965 lines, clearing the hard
+  ceiling; ratchet is 18 complexity rows and 66 oversized modules because the
+  scanner owner crossed the 800-line target while staying below the warning
+  band. Proof: focused scene-sampler, readiness-export, scanner-runner tests,
+  ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Runtime Metric Map static-map and observed-object payload
+  assembly moved from `RealWorldCleanupContract` into
+  `realworld_runtime_map_contract.py`, and `realworld_contract_payloads.py`
+  now passes explicit public inputs instead of requiring facade-private payload
+  methods. Metric: `realworld_contract.py` 5036 -> 4847 lines; ratchet remains
+  18 complexity rows and 66 oversized modules. Proof: realworld contract, MCP
+  server, and cleanup-checker contract tests, ruff, format check, py_compile,
+  and ratchet.
+
+- 2026-06-17: B1 Map 12 runtime-bundle review-manifest validation split into
+  header, label, shared-area, and explicit-policy helper families while
+  preserving existing manifest error text and runtime compiler behavior.
+  Metric: ratchet 18 -> 15 complexity rows; oversized modules unchanged at
+  66. Proof: B1 runtime-bundle contract tests, B1 operator-preview tests,
+  ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: B1 Map 12 label-tool semantic layer construction and draft
+  manifest validation split into fixture/waypoint/driveable-way and
+  header/label/geometry helper families while preserving packet keys and
+  manifest error text. Metric: ratchet 15 -> 11 complexity rows; oversized
+  modules unchanged at 66. Proof: B1 label-tool contract tests, ruff, format
+  check, py_compile, and ratchet.
+
+- 2026-06-17: Visual-candidate payload, model-declared observation event,
+  fixture-hint request, and overlay artifact assembly moved from
+  `RealWorldCleanupContract` into `realworld_visual_candidates.py`; stateful
+  registration/navigation stayed in the contract facade. Metric:
+  `realworld_contract.py` 4847 -> 4707 lines; ratchet remains 11 complexity
+  rows and 66 oversized modules. Proof: realworld contract and MCP server
+  contract tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Planner manipulation probe runtime diagnostics report panels
+  moved from `report.py` into `report_sections_probe_runtime.py`, covering
+  runtime modules, CUDA memory, CuRobo memory profile/cache, Warp
+  compatibility, and worker-stage timeline sections. Metric: `report.py` 3806
+  -> 3440 lines; ratchet remains 11 complexity rows and 66 oversized modules.
+  Proof: cleanup report and planner manipulation checker contract tests, ruff,
+  format check, py_compile, and ratchet.
+
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck refreshed
+  the active cleanup plan without implementation. Metric: ratchet remains 11
+  complexity rows and 66 oversized modules. Decision: next default slice is
+  `report.py` non-runtime planner-probe panels; completed visual-candidate
+  payload and planner-probe runtime-diagnostics slices stay closed; current
+  `visual_grounding` schemas/service/artifact fields remain active internal
+  contracts, while identity maps, legacy flags/aliases, and runner-private
+  report aliases stay scoped small-cut inputs. Proof: ratchet summary, grep
+  call-site checks, docs diff.
+
+- 2026-06-17: Planner manipulation probe quality, views, cleanup-binding,
+  task-sampler, post-placement rejection, grasp/placement failure, policy
+  exception, blocker, artifact, and RBY1M/CuRobo gate report panels moved from
+  `report.py` into `report_sections_probe.py` and
+  `report_sections_probe_failures.py`. Metric: `report.py` 3440 -> 2525
+  lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  cleanup report and planner manipulation checker contract tests, ruff, format
+  check, py_compile, and ratchet.
+
+- 2026-06-17: Robot-camera apple-to-apple Object Gate / Render Gate diagnostics
+  moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_object_gate.py`, and report-renderer tests now call
+  `robot_camera_apple2apple_report.py` directly instead of runner-private
+  aliases. Metric: runner 4900 -> 4573 lines; ratchet remains 11 complexity
+  rows and 66 oversized modules. Proof: apple-to-apple unit tests, ruff, format
+  check, py_compile, and ratchet.
+
+- 2026-06-17: Planning-only intuitive-refactor recheck after the apple Object
+  Gate slice refreshed the hard-ceiling candidate order without implementation.
+  Metric: ratchet remains 11 complexity rows and 66 oversized modules.
+  Decision: default next slice is `RealWorldCleanupContract` facade-private
+  coupling reduction; `scene_camera_comparison.py` capture/projection/report
+  diagnostics are the best candidate-B alternate; apple Object Gate / Render
+  Gate and report aliases stay closed. Proof: ratchet summary, function-index
+  scan, docs diff.
+
+- 2026-06-17: Contract init map-projection and runtime-map-prior setup now call
+  `realworld_contract_projection.py` and `realworld_runtime_map_contract.py`
+  directly instead of routing through `realworld_contract.py` private aliases.
+  Metric: `realworld_contract.py` 4707 -> 4656 lines; ratchet remains 11
+  complexity rows and 66 oversized modules. Proof: realworld contract, MCP
+  server, and cleanup-checker contract tests, ruff, format check, py_compile,
+  and ratchet.
+
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck compacted
+  the active cleanup plan and changed the default next slice to
+  `scene_camera_comparison.py` HTML report-rendering ownership. Metric:
+  ratchet remains 11 complexity rows and 66 oversized modules. Decision:
+  preserve `render_scene_camera_comparison_report` and report HTML claims while
+  moving report-only helpers to a report owner; keep contract facade, live
+  runtime, B1 preview, behavior-test, MCP/prompt, guidance, and stale-surface
+  items as alternates. Proof: ratchet summary, function-index scan,
+  ponytail call-site grep, docs diff.
+
+- 2026-06-17: Scene-camera HTML report rendering moved from
+  `scene_camera_comparison.py` into report owner modules
+  `scene_camera_report*.py`, while preserving the public
+  `render_scene_camera_comparison_report` write entry point and report HTML
+  contract. Metric: `scene_camera_comparison.py` 4693 -> 2830 lines; ratchet
+  remains 11 complexity rows and 66 oversized modules. Proof: scene-camera
+  contract tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck after the
+  scene-camera report split found no new ratchet drift and updated only the
+  cleanup plan. Decision: close the dirty scene-camera slice before starting
+  candidate A; repo-local underscore imports inside `scene_camera_report*.py`
+  are acceptable report-section internals; `visual_grounding` remains an
+  active internal artifact/service contract; identity maps, `_task_prefix_legacy`,
+  the legacy checker flag, and guidance wording stay small-cut inputs behind
+  P1 hard-ceiling work. Proof: ratchet summary and call-site grep.
+
+- 2026-06-17: Visual-candidate declaration orchestration moved from
+  `realworld_contract.py` into `realworld_visual_candidate_declarations.py`,
+  keeping the public `declare_visual_candidates` facade method as a thin
+  delegate and leaving stateful registration/resolution internals for the next
+  Candidate A sub-slice. Metric: `realworld_contract.py` 4656 -> 4410 lines,
+  new declaration owner 345 lines, `realworld_visual_candidates.py` 627 lines;
+  ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  realworld contract and MCP server contract tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: Visual-candidate registration/resolution lifecycle moved from
+  `realworld_contract.py` into `realworld_visual_candidate_lifecycle.py`,
+  covering normalization, match resolution, declaration payloads,
+  resolved/unresolved detection materialization, visual-evidence error payloads,
+  and handle actionability delegates. Metric: `realworld_contract.py` 4410 ->
+  3888 lines, new lifecycle owner 737 lines, declaration owner 345 lines, and
+  `realworld_visual_candidates.py` 627 lines; ratchet remains 11 complexity
+  rows and 66 oversized modules. Proof: realworld contract and MCP server
+  contract tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Robot-camera apple-to-apple capture-quality probe ownership
+  moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_capture_quality.py`, covering probe config,
+  legacy-manifest inference, RGB-gain parsing, quality-setting rows, and Isaac
+  render-settle argument translation. Tests now call the owner directly instead
+  of runner-private helpers. Metric: runner 4573 -> 4357 lines, new owner 225
+  lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  apple-to-apple unit tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Robot-camera apple-to-apple material/probe wrapper surface was
+  deleted from `run_robot_camera_apple2apple_comparison.py`; runner logic now
+  calls `robot_camera_apple2apple_materials.py` directly for material response,
+  probe-summary primitives, and texture basename helpers, while the
+  material-probe test calls the owner instead of the runner facade.
+  Light/shadow and tone/color interpretation stayed in the runner because they
+  still combine render-domain context. Metric: runner 4357 -> 4275 lines and
+  no new owner module; ratchet remains 11 complexity rows and 66 oversized
+  modules. Proof: focused apple-to-apple unit tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: Robot-camera apple-to-apple native Isaac render diagnostics
+  moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_native_render.py`, covering native-diagnostics
+  source selection, setting-group compaction, status interpretation, and summary
+  payload assembly. The runner now attaches the owner output and keeps Object
+  Gate compaction in `robot_camera_apple2apple_object_gate.py`. Metric: runner
+  4275 -> 4161 lines, new owner 130 lines; ratchet remains 11 complexity rows
+  and 66 oversized modules. Proof: focused apple-to-apple unit tests, ruff,
+  format check, py_compile, and ratchet.
+
+- 2026-06-17: Planning-only ponytail / intuitive-refactor recheck refreshed
+  the cleanup plan after the material/probe and native-render slices. Metric:
+  ratchet remains 11 complexity rows and 66 oversized modules; the apple runner
+  is now 4161 lines and remains the largest production hard-ceiling file.
+  Decision: continue Candidate B with apple image-metric artifact preparation
+  and residual diagnostics as the default next slice, but first reuse existing
+  `scene_camera_image_metrics.py` generic image math where practical so the
+  slice removes duplicate concepts instead of creating another generic metric
+  module. Proof: ratchet summary, function-index scan, image-metric call-site
+  grep, docs diff.
+
+- 2026-06-17: Robot-camera apple-to-apple saved/metric image artifact
+  preparation, image-diff payload assembly, residual diagnostics, and residual
+  triage moved from `run_robot_camera_apple2apple_comparison.py` into
+  `robot_camera_apple2apple_image_metrics.py`, with generic pixel visual
+  metrics reused from `scene_camera_image_metrics.py`. Tests now call the
+  image-metric owner directly instead of runner-private image helpers. Metric:
+  runner 4161 -> 3740 lines, new owner 484 lines; ratchet remains 11
+  complexity rows and 66 oversized modules. Proof: focused apple-to-apple unit
+  tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Done-readiness pending/held cleanup candidate derivation moved
+  from `RealWorldCleanupContract` into `realworld_done_readiness.py`, including
+  runtime public destination-option derivation. Contract-private
+  `_pending_cleanup_candidates()`, `_held_cleanup_candidates()`, and
+  `_destination_options_for_policy()` wrappers plus now-unused private aliases
+  were deleted after call-site scan. Metric: `realworld_contract.py` 3888 ->
+  3774 lines, owner module 276 -> 420 lines; ratchet remains 11 complexity rows
+  and 66 oversized modules. Proof: focused realworld contract and MCP server
+  contract tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Public manipulation/tool response envelope construction moved
+  from `RealWorldCleanupContract` into `realworld_tool_responses.py`, covering
+  fixture response ids, pick/place/open/close success/error envelopes, private
+  backend error projection, and semantic-order error payloads. Contract methods
+  keep sequencing and state mutation. Metric: `realworld_contract.py` 3774 ->
+  3741 lines, new owner 129 lines; ratchet remains 11 complexity rows and 66
+  oversized modules. Proof: focused realworld contract and MCP server contract
+  tests, ruff, format check, py_compile, and ratchet.
+
+- 2026-06-17: Camera-label producer declaration inputs moved from
+  `RealWorldCleanupContract` into `realworld_visual_candidate_declarations.py`,
+  covering simulated camera-model candidate rows, external visual-grounding
+  request/failure envelopes, producer destination resolution, model-declared
+  observation events, and direct registration calls into the lifecycle owner.
+  Direct cleanup and MCP contract tests now call the declaration owner instead
+  of contract-private declaration-input helpers. Metric:
+  `realworld_contract.py` 3741 -> 3554 lines, declaration owner 345 -> 533
+  lines; ratchet remains 11 complexity rows and 66 oversized modules. Proof:
+  focused realworld contract and MCP server contract tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: Runtime Metric Map target/public-anchor ownership moved from
+  `RealWorldCleanupContract` into `realworld_runtime_map_targets.py`, covering
+  target candidates, public semantic anchors, fixture-reference/anchor-id
+  mapping, target-search summaries, minimal-map target-fixture resolution,
+  waypoint anchor seeding, and runtime-anchor target resolution. Payload,
+  done-readiness, visual-candidate, tool-response, and init callers now use the
+  owner directly where they only need target/public-anchor data; the contract
+  facade keeps state mutation and tool sequencing. Closeout also removed the
+  now-unused target-owner `_recommended_place_tool` alias and
+  `realworld_contract.py` `TARGET_SEARCH_SUMMARY_SCHEMA` constant. Metric:
+  `realworld_contract.py` 3554 -> 2836 lines; new owner is 1009 lines, a
+  justified cohesive module below the 1200-line warning ceiling; ratchet is 11
+  complexity rows and 67 oversized modules. Proof: focused realworld contract,
+  actionable-snapshot, and MCP server tests, ruff, format check, py_compile,
+  and ratchet.
+
+- 2026-06-17: Proof-bundle result rendering moved from `report.py` into
+  `report_sections_proof_bundle.py`, covering proof result summaries,
+  proof-quality summary rows, grasp-feasibility signature tables, individual
+  proof result cards, view figures, and local artifact hrefs. The runner report
+  now composes `proof_bundle_results_section()` from the proof-bundle owner
+  instead of rebuilding the helper family inline. Metric: `report.py` 2525 ->
+  2108 lines; proof-bundle owner is 828 lines, a justified cohesive module
+  below the 1200-line warning ceiling; ratchet is 11 complexity rows and 68
+  oversized modules. Proof: cleanup report contract tests, proof-bundle checker
+  contract tests, proof-bundle runner script unit tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: Planning-only triage compacted the next P1 map after the
+  proof-bundle dirty checkpoint. Ratchet remains 11 complexity rows and 68
+  oversized modules; no ponytail dependency/std-lib deletion outranks the
+  hard-ceiling frontier. Active P1 candidates now explicitly include the
+  planner manipulation probe runner and the OpenAI Agents SDK live
+  runtime/runner pair, alongside the existing contract/report and visual
+  comparison families. Proof: ratchet summary and static call-site scan only;
+  no code behavior changed in this triage row.
+
+- 2026-06-17: Planner-probe runtime diagnostics moved from
+  `run_molmo_planner_manipulation_probe.py` into
+  `planner_probe_runtime_diagnostics.py`, covering runtime module/version
+  discovery, torch/CUDA diagnostics, CUDA memory snapshots, CuRobo extension
+  cache evidence, Warp compatibility and minimal `warp.torch` adapter, renderer
+  device selection, headless renderer env setup, and renderer constructor
+  patching. The runner keeps orchestration and worker event emission. Metric:
+  planner probe runner 2948 -> 2510 lines; new owner is 474 lines; ratchet
+  remains 11 complexity rows and 68 oversized modules. Proof: planner headless
+  renderer unit tests, planner manipulation checker contract tests, ruff,
+  format check, py_compile, diff check, and ratchet.
+
+- 2026-06-17: Planner-probe task-sampler diagnostics moved from
+  `run_molmo_planner_manipulation_probe.py` into
+  `planner_probe_task_sampler_diagnostics.py`, covering task-sampler
+  robot-placement profiles, exact cleanup task config, exact sampler adapter,
+  sampler failure diagnostics, placement scene/grasp/candidate-removal
+  diagnostics, diagnostic JSON coercion, sampled task binding, requested
+  cleanup primitive binding, and cleanup binding promotion. Tests now call the
+  owner directly for sampler/binding behavior while runner tests keep worker
+  exception context, CuRobo memory policy, policy execution diagnostics, and
+  image artifact coverage on the runner. Metric: planner probe runner 2510 ->
+  1103 lines, clearing the hard ceiling; new owner is 1412 lines warning-band
+  debt; ratchet is 11 complexity rows and 69 oversized modules. Proof: focused
+  planner headless renderer unit tests, planner manipulation checker contract
+  tests, ruff, format check, py_compile, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -748,5 +1058,139 @@ logs before choosing the next slice.
 - OpenAI live metrics/budget helpers already removed the known production
   complexity rows; file-size hard-ceiling work is still active, but the old
   metrics extraction slice is done.
+- Report-performance skill calibration now shares the root calibration CLI;
+  reopen only if skill/root calibration behavior diverges again.
+- Scene sampler is below the hard ceiling and delegates candidate profile,
+  source-prep, prefilter, and scanner-admission internals to named owner
+  modules; reopen only for fresh hard-ceiling or ownership drift.
+- Runtime Metric Map payload assembly is owned by
+  `realworld_runtime_map_contract.py`; reopen only if the realworld contract
+  facade starts rebuilding observed-object or static-map payload internals.
+- Runtime-map prior setup and init-time projection helpers no longer route
+  through `realworld_contract.py` private aliases; reopen only if contract init
+  or another owner starts using the facade as a compatibility helper bag again.
+- Visual-candidate payload/event/overlay assembly is owned by
+  `realworld_visual_candidates.py`; reopen only if the realworld contract
+  facade starts rebuilding visual-grounding candidate payloads or overlay
+  artifact paths directly.
+- Visual-candidate declaration orchestration is owned by
+  `realworld_visual_candidate_declarations.py`; reopen only if the realworld
+  contract facade starts rebuilding declaration inputs, invalid-candidate
+  responses, camera-label producer failure responses, or model-declared
+  observation response packets directly.
+- Camera-label producer declaration inputs are owned by
+  `realworld_visual_candidate_declarations.py`; reopen only if the realworld
+  contract facade starts rebuilding simulated declaration input rows,
+  visual-grounding requests, producer failure envelopes, model-declared
+  observation events, or registration wrapper aliases directly.
+- Visual-candidate registration/resolution lifecycle is owned by
+  `realworld_visual_candidate_lifecycle.py`; reopen only if the realworld
+  contract facade starts rebuilding normalization, match resolution,
+  declaration payloads, resolved/unresolved detection materialization,
+  visual-evidence error payloads, or handle actionability directly.
+- Planner manipulation probe runtime diagnostics report panels are owned by
+  `report_sections_probe_runtime.py`; reopen only if `report.py` starts
+  rebuilding Runtime Diagnostics, CUDA Memory, CuRobo Memory/Profile/Cache,
+  Warp Compatibility, or Worker Stage Timeline sections directly.
+- Planner manipulation probe non-runtime report panels are owned by
+  `report_sections_probe.py` and `report_sections_probe_failures.py`; reopen
+  only if `report.py` starts rebuilding quality, views, cleanup-binding,
+  task-sampler, post-placement rejection, grasp collision, placement scene,
+  policy exception, blocker, artifact, or RBY1M/CuRobo gate sections directly.
+- Robot-camera apple-to-apple Object Gate / Render Gate diagnostics are owned
+  by `robot_camera_apple2apple_object_gate.py`; reopen only if
+  `run_robot_camera_apple2apple_comparison.py` starts rebuilding object gate
+  records, object/render parity diagnostic packets, compact diagnostic packets,
+  skipped object-gate packets, or runner-private `_render_*` report aliases.
+- Robot-camera apple-to-apple capture-quality probe construction is owned by
+  `robot_camera_apple2apple_capture_quality.py`; reopen only if the runner
+  starts rebuilding probe config, inferred legacy manifests, RGB-gain parsing,
+  quality-setting rows, or Isaac render-settle argument translation directly.
+- Robot-camera apple-to-apple material/probe helper primitives are owned by
+  `robot_camera_apple2apple_materials.py`; reopen only if the runner recreates
+  private delegates for material response checks, material/tone probe history
+  primitives, preview-surface summaries, texture material summaries, or texture
+  basename helpers.
+- Robot-camera apple-to-apple native Isaac render diagnostics are owned by
+  `robot_camera_apple2apple_native_render.py`; reopen only if the runner
+  rebuilds native-diagnostics source selection, setting-group compaction,
+  native-status interpretation, or native summary payloads directly.
+- Robot-camera apple-to-apple image metric artifacts and residual diagnostics
+  are owned by `robot_camera_apple2apple_image_metrics.py`; reopen only if the
+  runner rebuilds saved-report image derivation, metric-image paths,
+  image-diff payloads, residual diagnostic math, or residual triage summaries
+  directly.
+- Done-readiness pending/held cleanup candidates and runtime public
+  destination options are owned by `realworld_done_readiness.py`; reopen only
+  if `realworld_contract.py` starts rebuilding pending candidates, held
+  candidates, destination options, or wrapper aliases directly.
+- Public manipulation/tool response envelopes are owned by
+  `realworld_tool_responses.py`; reopen only if `realworld_contract.py` starts
+  rebuilding fixture response ids, pick/place/open/close success/error payloads,
+  private backend error projection, or semantic-order error payloads inline.
+- Runtime Metric Map target/public-anchor construction is owned by
+  `realworld_runtime_map_targets.py`; reopen only if `realworld_contract.py` or
+  adjacent callers start rebuilding target candidates, public semantic anchors,
+  fixture-reference or anchor-id mapping, target-search summaries, minimal-map
+  target-fixture resolution, waypoint anchor seeding, or runtime-anchor target
+  resolution directly.
+- Proof-bundle result rendering is owned by `report_sections_proof_bundle.py`;
+  reopen only if `report.py` starts rebuilding proof-bundle result summaries,
+  proof-quality summary rows, grasp-feasibility signature tables, proof result
+  cards, or proof-result view figures directly.
+- Planner-probe runtime diagnostics are owned by
+  `planner_probe_runtime_diagnostics.py`; reopen only if
+  `run_molmo_planner_manipulation_probe.py` starts rebuilding runtime
+  module/version packets, torch/CUDA diagnostics, CUDA snapshot math, CuRobo
+  extension-cache evidence, Warp adapter diagnostics, or headless renderer
+  adapter setup directly.
+- Planner-probe task-sampler diagnostics are owned by
+  `planner_probe_task_sampler_diagnostics.py`; reopen only if
+  `run_molmo_planner_manipulation_probe.py` starts rebuilding task-sampler
+  robot-placement profiles, exact cleanup task config/binding, sampler failure
+  diagnostics, placement scene/grasp/candidate diagnostics, diagnostic JSON
+  coercion, sampled task binding, requested cleanup primitive binding, or
+  cleanup binding promotion directly.
+- OpenAI Agents SDK model-input compaction is owned by
+  `openai_agents_model_input.py`. Metric: `openai_agents_live.py` 2889 ->
+  1994 lines; new owner is 972 lines; staged/add-N ratchet reports 11
+  complexity rows and 70 oversized modules. Proof: focused OpenAI Agents live
+  runtime tests, ruff, format check, py_compile, and ratchet. Reopen only if
+  the SDK driver rebuilds compaction config/filter setup, raw-FPV image-memory
+  summaries, camera-grounded history summaries, tool-output unwrapping,
+  metric-map/public output summaries, aggregate model-input shape metrics, or
+  model-input filter event writing inline.
+- Robot-camera apple-to-apple camera-contract diagnostics are owned by
+  `robot_camera_apple2apple_camera_contract.py`. Metric: apple runner 2394 ->
+  1803 lines; new owner is 626 lines; staged/add-N ratchet remains 11
+  complexity rows and 70 oversized modules. Proof: focused apple comparison
+  tests, ruff, format check, py_compile, and ratchet. Reopen only if the runner
+  rebuilds top-level camera contract metadata, per-location camera contract
+  diagnostics, FPV pose/lens delta summaries, compact camera metadata,
+  robot-pose delta, Isaac robot import diagnostics, head-articulation
+  diagnostics, or chase-contract diagnostics directly.
+- Robot-camera apple-to-apple object parity audit construction is owned by
+  `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
+  owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state
+  contract evidence plus visual-physics-sensitive target selection are owned by
+  `robot_camera_apple2apple_visual_state.py`. Metric: apple runner 3740 ->
+  2394 lines; new owners are 689, 402, and 337 lines; staged/add-N ratchet
+  still reports 11 complexity rows and 66 oversized modules. Proof: focused
+  apple comparison tests, ruff, format check, py_compile, and ratchet. Reopen
+  only if the runner rebuilds object/receptacle audit rows, compact/skipped
+  audit packets, selected RGB/focus evidence, visual-state contracts,
+  semantic-pose index fallback, or category summaries directly.
+- Scene-camera USD render-contract parsing, image metrics, native render
+  diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
+  and render source references are owned by their focused scene-camera modules;
+  report rendering is owned by `scene_camera_report*.py`. Reopen scene-camera
+  report rendering only if `scene_camera_comparison.py` starts rebuilding
+  report sections directly again.
+- B1 runtime-bundle review-manifest validation is split into focused helper
+  families; reopen only if `review_manifest_errors` regains ratchet rows or
+  false-green review-gate behavior.
+- B1 label-tool layer construction and draft-manifest validation are split
+  into focused helper families; reopen only if label-tool packet or error
+  contracts drift.
 - Completed report-section extraction is partial evidence, not a reason to
   treat `report.py` as done; the active plan still owns the hard-ceiling split.

@@ -189,8 +189,8 @@ def test_molmospaces_preview_scene_ref_rejects_unknown_source_or_index() -> None
 def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypatch) -> None:
     import scripts.operator_console.render_scene_previews as render_scene_previews
 
-    bundle = _write_b1_map_bundle(tmp_path)
-    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
 
     result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
 
@@ -208,6 +208,9 @@ def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypa
     assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
     assert "fpv" not in metadata["views"]
     assert "chase" not in metadata["views"]
+    assert metadata["review_manifest"] == str(review)
+    assert metadata["runtime_map_bundle"] == str(tmp_path / "runtime-map-bundle")
+    assert metadata["views"]["topdown"]["review_label_count"] == 1
     assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 1
 
 
@@ -217,8 +220,8 @@ def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
 ) -> None:
     import scripts.operator_console.render_scene_previews as render_scene_previews
 
-    bundle = _write_b1_map_bundle(tmp_path)
-    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
     run_dir = tmp_path / "run"
     views_dir = run_dir / "robot_views"
     views_dir.mkdir(parents=True)
@@ -326,8 +329,8 @@ def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
 ) -> None:
     import scripts.operator_console.render_scene_previews as render_scene_previews
 
-    bundle = _write_b1_map_bundle(tmp_path)
-    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
     Image.new("RGB", (16, 16), (1, 2, 3)).save(tmp_path / "b1-map12-fpv.png")
     Image.new("RGB", (16, 16), (4, 5, 6)).save(tmp_path / "b1-map12-chase.png")
     metadata_path = tmp_path / "b1-map12-preview.json"
@@ -370,8 +373,8 @@ def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
 ) -> None:
     import scripts.operator_console.render_scene_previews as render_scene_previews
 
-    bundle = _write_b1_map_bundle(tmp_path)
-    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
     Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
     Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
     metadata_path = tmp_path / "b1-map12-preview.json"
@@ -413,21 +416,95 @@ def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
     assert "chase" not in metadata["views"]
 
 
+def _patch_b1_preview_inputs(
+    render_scene_previews,
+    monkeypatch,
+    tmp_path: Path,
+    bundle: Path,
+    review: Path,
+) -> None:
+    monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    monkeypatch.setattr(render_scene_previews, "B1_SCENE_ROOT", tmp_path)
+    monkeypatch.setattr(render_scene_previews, "B1_ALIGNMENT_REVIEW_MANIFEST", review)
+    monkeypatch.setattr(
+        render_scene_previews,
+        "B1_RUNTIME_PREVIEW_BUNDLE_DIR",
+        tmp_path / "runtime-map-bundle",
+    )
+
+
+def _write_b1_preview_inputs(tmp_path: Path) -> tuple[Path, Path]:
+    bundle = _write_b1_map_bundle(tmp_path)
+    review = _write_b1_review_manifest(tmp_path, bundle)
+    return bundle, review
+
+
 def _write_b1_map_bundle(tmp_path: Path) -> Path:
-    bundle = tmp_path / "b1-map12-room-semantics"
+    bundle = tmp_path / "agibot-robot-map-12"
     bundle.mkdir()
+    (bundle / "profiles").mkdir()
+    (bundle / "costmaps").mkdir()
+    (bundle / "map.yaml").write_text(
+        "\n".join(
+            [
+                "image: map.pgm",
+                "resolution: 0.050000",
+                "origin: [-1.000000, -1.000000, 0.000000]",
+                "negate: 0",
+                "occupied_thresh: 0.650000",
+                "free_thresh: 0.250000",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    image = Image.new("L", (120, 90), 255)
+    for x in range(120):
+        image.putpixel((x, 0), 0)
+        image.putpixel((x, 89), 0)
+    for y in range(90):
+        image.putpixel((0, y), 0)
+        image.putpixel((119, y), 0)
+    image.save(bundle / "map.pgm")
     Image.new("RGB", (120, 90), (230, 230, 230)).save(bundle / "preview.png")
-    Image.new("RGB", (160, 90), (225, 225, 225)).save(bundle / "room_semantic_topdown.png")
+    (bundle / "profiles" / "rby1m.yaml").write_text("robot_profile_id: rby1m\n", encoding="utf-8")
+    (bundle / "costmaps" / "rby1m.costmap_params.yaml").write_text(
+        "global_costmap:\n  global_costmap:\n    ros__parameters:\n      resolution: 0.05\n",
+        encoding="utf-8",
+    )
     semantics = {
         "display_frame": None,
-        "spatial_contract": {"alignment_status": "candidate"},
+        "environment_id": "agibot-robot-map-12",
+        "frame_ids": {"base": "base_link", "camera": "head_camera_rgb_optical_frame", "map": "map"},
+        "map_id": "agibot-robot-map-12_semantic_map",
+        "map_version": "test",
+        "provenance": {
+            "contains_private_scoring_truth": False,
+            "contains_runtime_observations": False,
+            "source": "test",
+        },
+        "schema": "nav2_cleanup_semantics_v1",
+        "spatial_contract": {
+            "alignment_status": "native",
+            "display_frame_status": "absent_first_slice_raw_source_map_frame_only",
+            "schema": "map_spatial_contract_v1",
+            "semantic_geometry_frame": "source_map_frame",
+            "source_map_frame": {"frame_id": "map", "spatial_truth": True, "units": "meters"},
+        },
         "rooms": [
             {
                 "room_id": "meeting_room_a",
                 "room_label": "Meeting room A",
-                "asset_partition_id": "meeting_room_a",
                 "category": "meeting_room",
-                "alignment_status": "candidate",
+                "alignment_status": "native",
+                "source_map_frame_id": "map",
+                "geometry_source": "operator_authored_navigation_zone",
+                "polygon_role": "navigation_area",
+                "polygon_usage": {
+                    "navigation": True,
+                    "review": True,
+                    "semantic_labeling": "native",
+                },
                 "polygon": [
                     {"x": 0.0, "y": 0.0},
                     {"x": 4.0, "y": 0.0},
@@ -437,31 +514,81 @@ def _write_b1_map_bundle(tmp_path: Path) -> Path:
             }
         ],
         "inspection_waypoints": [
-            {"waypoint_id": "scan_1", "x": 1.0, "y": 1.0},
+            {
+                "waypoint_id": "scan_1",
+                "frame_id": "map",
+                "room_id": "meeting_room_a",
+                "fixture_id": "table_1",
+                "x": 1.0,
+                "y": 1.0,
+                "yaw": 0.0,
+            },
         ],
         "fixtures": [
-            {"fixture_id": "table_1", "pose": {"x": 2.0, "y": 2.0}},
-        ],
-    }
-    overlay = {
-        "scene_map_correspondence_schema": "scene_map_correspondence_v1",
-        "scene_map_correspondence_v1": [
             {
-                "asset_partition_id": "meeting_room_a",
-                "navigation_area_id": "west_corridor",
-                "alignment_status": "candidate",
-            }
+                "fixture_id": "table_1",
+                "room_id": "meeting_room_a",
+                "affordances": ["place"],
+                "footprint": {"shape": "rectangle", "width_m": 0.7, "depth_m": 0.5},
+                "preferred_inspection_waypoint_id": "scan_1",
+                "pose": {"frame_id": "map", "x": 2.0, "y": 2.0, "yaw": 0.0},
+            },
+        ],
+        "driveable_ways": [
+            {"from_room_id": "meeting_room_a", "to_room_id": "meeting_room_a"}
         ],
     }
     (bundle / "semantics.json").write_text(
         json.dumps(semantics, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    (bundle / "room_semantic_overlay.json").write_text(
-        json.dumps(overlay, indent=2, sort_keys=True) + "\n",
+    return bundle
+
+
+def _write_b1_review_manifest(tmp_path: Path, bundle: Path) -> Path:
+    review = tmp_path / "b1-map12-alignment-review.json"
+    review.write_text(
+        json.dumps(
+            {
+                "schema": "b1_map12_alignment_review_v1",
+                "source_assets": {
+                    "map_bundle": str(bundle),
+                    "scene_root": str(tmp_path),
+                    "scene_usd_path": "scene_base.usd",
+                },
+                "display_adjustment": {
+                    "global_tilt_deg": 0.0,
+                    "status": "review_display_only",
+                },
+                "labels": [
+                    {
+                        "label_id": "meeting_room_a",
+                        "scene_partition_id": "meeting_room_a",
+                        "room_label": "Meeting room A",
+                        "category": "meeting_room",
+                        "map_area_id": "meeting_room_a",
+                        "review_status": "accepted",
+                        "geometry": {
+                            "type": "map_polygon",
+                            "source": "manual_review",
+                            "frame_id": "map",
+                            "points": [
+                                {"x": 0.0, "y": 0.0},
+                                {"x": 4.0, "y": 0.0},
+                                {"x": 4.0, "y": 3.0},
+                                {"x": 0.0, "y": 3.0},
+                            ],
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
     )
-    return bundle
+    return review
 
 
 def _write_pattern_image(path: Path, *, accent: tuple[int, int, int]) -> None:

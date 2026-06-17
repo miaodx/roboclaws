@@ -109,7 +109,8 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         resource_kind="gpu",
         availability="experimental",
         default_overrides=(
-            "map_bundle=b1-map12-room-semantics",
+            "map_bundle=agibot-robot-map-12",
+            "b1_alignment_review=assets/maps/b1-map12-alignment-review.json",
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
             "2rd_floor_seperated/storey_1/configuration/scene_base.usd",
             "robot_views=on",

@@ -77,6 +77,216 @@ def synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
     return f"visible_detection:{handle}"
 
 
+def runtime_static_map_payload(
+    *,
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    map_mode: str,
+    minimal_map_mode: str,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    fixtures = []
+    for room in fixture_hints.get("rooms") or []:
+        room_id = str(room.get("room_id") or "")
+        for fixture in room.get("fixtures") or []:
+            item = {
+                "fixture_id": str(fixture.get("fixture_id") or ""),
+                "category": str(fixture.get("category") or ""),
+                "name": str(fixture.get("name") or fixture.get("fixture_id") or ""),
+                "room_id": str(fixture.get("room_id") or room_id),
+                "affordances": list(fixture.get("affordances") or []),
+                "pose": dict(fixture.get("pose") or {}),
+                "preferred_inspection_waypoint_id": str(
+                    fixture.get("preferred_inspection_waypoint_id") or ""
+                ),
+                "preferred_manipulation_waypoint_id": str(
+                    fixture.get("preferred_manipulation_waypoint_id") or ""
+                ),
+            }
+            assert_no_forbidden_agent_view_keys(item)
+            fixtures.append(item)
+    return {
+        "rooms": [dict(item) for item in metric_map.get("rooms") or []],
+        "fixtures": fixtures,
+        "inspection_waypoints": [
+            dict(item) for item in metric_map.get("inspection_waypoints") or []
+        ],
+        "driveable_ways": [dict(item) for item in metric_map.get("driveable_ways") or []],
+        "map_bundle": dict(metric_map.get("map_bundle") or {}),
+        "contains_runtime_observations": False,
+        "map_mode": map_mode,
+        "minimal_map_mode": map_mode == minimal_map_mode,
+        "generated_exploration_candidates": [
+            dict(item) for item in metric_map.get("generated_exploration_candidates") or []
+        ],
+    }
+
+
+def runtime_observed_object_payload(
+    *,
+    handle: str,
+    detection: dict[str, Any],
+    worklist_item: dict[str, Any],
+    object_lifecycle: dict[str, Any],
+    sanitize_world_labels: bool,
+    perception_mode: str,
+    visible_object_detections_mode: str,
+    sanitized_visible_object_detections_provenance: str,
+    runtime_map_priors: list[dict[str, Any]],
+    public_fixture_reference_id: Any,
+    visual_evidence_for_handle: Any,
+    candidate_actionability_status: Any,
+    candidate_state: Any,
+    public_destination_policy_for_category: Any,
+    assert_no_forbidden_agent_view_keys: Any,
+    norm: Any,
+) -> dict[str, Any]:
+    support = detection.get("support_estimate") or {}
+    declaration = detection.get("model_declared_observation") or {}
+    source_observation_id = str(
+        detection.get("source_observation_id")
+        or declaration.get("source_observation_id")
+        or object_lifecycle.get("source_observation_id")
+        or synthetic_observation_id(handle, object_lifecycle.get("waypoint_id", ""))
+    )
+    waypoint_id = str(
+        worklist_item.get("last_waypoint_id")
+        or declaration.get("waypoint_id")
+        or object_lifecycle.get("waypoint_id")
+        or ""
+    )
+    room_id = str(
+        worklist_item.get("room_id")
+        or declaration.get("room_id")
+        or detection.get("current_room_id")
+        or object_lifecycle.get("room_id")
+        or ""
+    )
+    state = str(worklist_item.get("state") or object_lifecycle.get("state") or "pending")
+    grounding_status = str(
+        worklist_item.get("grounding_status")
+        or detection.get("grounding_status")
+        or declaration.get("grounding_status")
+        or "resolved"
+    )
+    confidence = runtime_observed_confidence(detection, declaration)
+    image_region = (
+        detection.get("image_region")
+        or declaration.get("image_region")
+        or {"type": "bbox", "value": detection.get("image_bbox") or []}
+    )
+    producer_type = str(
+        detection.get("producer_type")
+        or declaration.get("producer_type")
+        or detection.get("model_provenance")
+        or detection.get("perception_source")
+        or "visible_object_detections"
+    )
+    producer_id = str(
+        detection.get("producer_id")
+        or declaration.get("producer_id")
+        or detection.get("model_provenance")
+        or producer_type
+    )
+    actionability = runtime_actionability(
+        state=state,
+        grounding_status=grounding_status,
+        cleanup_recommended=bool(worklist_item.get("cleanup_recommended"))
+        and not sanitize_world_labels,
+    )
+    evidence = visual_evidence_for_handle(handle)
+    candidate_input = {
+        **detection,
+        "visual_grounding_evidence": evidence,
+        "grounding_status": grounding_status,
+    }
+    candidate_actionability = candidate_actionability_status(candidate_input)
+    if actionability == "actionable" and candidate_actionability != "actionable":
+        actionability = candidate_actionability
+    candidate_fixture_id = ""
+    candidate_source = "policy_required_destination_selection"
+    producer_type = (
+        sanitized_visible_object_detections_provenance
+        if sanitize_world_labels and perception_mode == visible_object_detections_mode
+        else producer_type
+    )
+    producer_id = (
+        sanitized_visible_object_detections_provenance
+        if sanitize_world_labels and perception_mode == visible_object_detections_mode
+        else producer_id
+    )
+    if not sanitize_world_labels:
+        candidate_fixture_id = str(
+            public_fixture_reference_id(str(worklist_item.get("candidate_fixture_id") or ""))
+        )
+        candidate_source = str(
+            worklist_item.get("candidate_source")
+            or detection.get("candidate_source")
+            or "public_category_fixture_affordance"
+        )
+    payload = {
+        "object_id": handle,
+        "category": str(detection.get("category") or worklist_item.get("category") or ""),
+        "room_id": room_id,
+        "waypoint_id": waypoint_id,
+        "source_fixture_id": str(
+            public_fixture_reference_id(
+                str(worklist_item.get("source_fixture_id") or support.get("fixture_id") or "")
+            )
+        ),
+        "source_observation_id": source_observation_id,
+        "image_region": image_region,
+        "visual_grounding_evidence": evidence,
+        "producer_type": producer_type,
+        "producer_id": producer_id,
+        "confidence": confidence,
+        "freshness": str(detection.get("freshness") or "current_run"),
+        "actionability": actionability,
+        "actionability_status": candidate_actionability,
+        "candidate_state": candidate_state(candidate_input),
+        "state": state,
+        "grounding_status": grounding_status,
+        "candidate_fixture_id": candidate_fixture_id,
+        "candidate_source": candidate_source,
+    }
+    if sanitize_world_labels:
+        payload["destination_policy_status"] = "policy_required"
+        payload["destination_policy"] = public_destination_policy_for_category(
+            payload.get("category")
+        )
+    if detection.get("prior_object_id"):
+        payload["prior_object_id"] = str(detection["prior_object_id"])
+    if detection.get("snapshot_object_id"):
+        payload["snapshot_object_id"] = str(detection["snapshot_object_id"])
+    prior = matching_runtime_map_prior(payload, runtime_map_priors, norm=norm)
+    if prior is not None:
+        payload["prior_object_id"] = str(prior.get("prior_object_id") or "")
+        payload["snapshot_object_id"] = str(prior.get("snapshot_object_id") or "")
+        payload["prior_match_basis"] = "category_room_source_fixture"
+    assert_no_forbidden_agent_view_keys(payload)
+    return payload
+
+
+def matching_runtime_map_prior(
+    current: dict[str, Any],
+    runtime_map_priors: list[dict[str, Any]],
+    *,
+    norm: Any,
+) -> dict[str, Any] | None:
+    category = norm(current.get("category"))
+    room_id = str(current.get("room_id") or "")
+    source_fixture_id = str(current.get("source_fixture_id") or "")
+    for prior in runtime_map_priors:
+        if norm(prior.get("category")) != category:
+            continue
+        if str(prior.get("room_id") or "") != room_id:
+            continue
+        if str(prior.get("source_fixture_id") or "") != source_fixture_id:
+            continue
+        return prior
+    return None
+
+
 def runtime_map_priors_from_snapshot(
     snapshot: dict[str, Any] | None,
     *,
