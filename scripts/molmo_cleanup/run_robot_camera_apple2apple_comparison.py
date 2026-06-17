@@ -78,8 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=Path(".venv-isaaclab/bin/python"),
     )
-    parser.add_argument("--render-width", type=int, default=540)
-    parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument("--render-width", type=_positive_int_arg, default=540)
+    parser.add_argument("--render-height", type=_positive_int_arg, default=360)
     parser.add_argument(
         "--saved-report-width",
         type=int,

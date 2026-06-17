@@ -84,6 +84,63 @@ def test_robot_camera_comparison_accepts_positive_location_count(
     assert seen["output_dir"] == tmp_path
 
 
+def test_robot_camera_comparison_rejects_non_positive_render_dimensions(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_dimensions_invalid",
+    )
+
+    for flag, value in (("--render-width", "0"), ("--render-height", "-1")):
+        try:
+            run_camera.main(
+                [
+                    "--output-dir",
+                    str(tmp_path),
+                    "--refresh-report-only",
+                    flag,
+                    value,
+                ]
+            )
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover - argparse should exit for invalid input
+            raise AssertionError(f"expected invalid {flag} to fail at parse time")
+
+
+def test_robot_camera_comparison_accepts_positive_render_dimensions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_dimensions_valid",
+    )
+    seen = {}
+
+    def fake_refresh_report_only(output_dir, **_kwargs):
+        seen["output_dir"] = output_dir
+        return {"status": "success"}
+
+    monkeypatch.setattr(run_camera, "refresh_report_only", fake_refresh_report_only)
+
+    status = run_camera.main(
+        [
+            "--output-dir",
+            str(tmp_path),
+            "--refresh-report-only",
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+        ]
+    )
+
+    assert status == 0
+    assert seen["output_dir"] == tmp_path
+
+
 def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     left_path = tmp_path / "mujoco.png"
     right_path = tmp_path / "isaac.png"
