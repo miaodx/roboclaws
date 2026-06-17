@@ -172,14 +172,16 @@ def test_alignment_manifest_records_lightweight_contract_without_fusion_claim(
         readiness_artifact="output/run/readiness_with_navigation.json",
         navigation_artifact="output/run/navigation_smoke.json",
         evidence_summary_artifact="output/run/alignment_evidence_summary.json",
-        map_bundle="assets/maps/agibot-robot-map-12",
+        map_bundle="vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
         alignment_id="b1-map12-test",
     )
 
     assert manifest["schema"] == "scene_gaussian_map_alignment_manifest_v1"
     assert manifest["alignment_id"] == "b1-map12-test"
     assert "not a fused USD/Gaussian scene" in manifest["contract_note"]
-    assert manifest["source_assets"]["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert manifest["source_assets"]["map_bundle"] == (
+        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
+    )
     assert manifest["frames"]["map_frame"] == "robot_map_12_map"
     assert manifest["frames"]["scene_frame"] == "b1_rebuilt_scene_usd_world_candidate"
     assert manifest["transform"]["status"] == "unverified"
@@ -231,7 +233,7 @@ def test_alignment_manifest_cli_writes_json(tmp_path: Path) -> None:
             "--navigation-artifact",
             str(navigation_path),
             "--map-bundle",
-            "assets/maps/agibot-robot-map-12",
+            "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
             "--output",
             str(output_path),
         ],
@@ -240,5 +242,7 @@ def test_alignment_manifest_cli_writes_json(tmp_path: Path) -> None:
 
     manifest = json.loads(output_path.read_text(encoding="utf-8"))
     assert manifest["schema"] == "scene_gaussian_map_alignment_manifest_v1"
-    assert manifest["source_assets"]["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert manifest["source_assets"]["map_bundle"] == (
+        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
+    )
     assert manifest["evidence"]["alignment_tier"] == "runtime_proven"

@@ -52,13 +52,14 @@ geometry source, and alignment status. B1 scene partition labels bind through
 `scene_map_correspondence_v1` instead of list order, and reports label
 raw/source-map aligned previews.
 
-The B1 / Map 12 digital-twin map input contract now uses raw Map12 plus a
-human review manifest instead of the old thick merged map bundle. Product and
-operator-preview routes compile a generated runtime bundle from
-`assets/maps/agibot-robot-map-12/`,
+The B1 / Map 12 digital-twin map input contract now uses vendor raw Map12 plus a
+human review manifest instead of the deleted authored merged map bundle.
+Product and operator-preview routes compile a generated runtime bundle from
+`vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
+`vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
 `assets/maps/b1-map12-alignment-review.json`, and the raw scene root before
-passing map context to lower-level consumers. Draft/shared south labels stay out
-of runtime semantics until reviewed.
+passing map context to lower-level consumers. Draft/shared south labels stay
+out of runtime semantics until reviewed.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented

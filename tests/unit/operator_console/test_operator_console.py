@@ -537,9 +537,7 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
         ) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
-        with urllib.request.urlopen(
-            f"http://{host}:{port}/asset-previews/maps/agibot-robot-map-12/preview.png"
-        ) as response:
+        with urllib.request.urlopen(f"http://{host}:{port}/previews/b1-map12-map.png") as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(

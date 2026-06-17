@@ -211,7 +211,7 @@ def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypa
     assert metadata["review_manifest"] == str(review)
     assert metadata["runtime_map_bundle"] == str(tmp_path / "runtime-map-bundle")
     assert metadata["views"]["topdown"]["review_label_count"] == 1
-    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 1
+    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 2
 
 
 def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
@@ -424,6 +424,11 @@ def _patch_b1_preview_inputs(
     review: Path,
 ) -> None:
     monkeypatch.setattr(render_scene_previews, "B1_MAP_BUNDLE_DIR", bundle)
+    monkeypatch.setattr(
+        render_scene_previews,
+        "B1_NAVIGATION_MEMORY",
+        bundle.parent / "navigation_memory.json",
+    )
     monkeypatch.setattr(render_scene_previews, "B1_SCENE_ROOT", tmp_path)
     monkeypatch.setattr(render_scene_previews, "B1_ALIGNMENT_REVIEW_MANIFEST", review)
     monkeypatch.setattr(
@@ -440,14 +445,12 @@ def _write_b1_preview_inputs(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def _write_b1_map_bundle(tmp_path: Path) -> Path:
-    bundle = tmp_path / "agibot-robot-map-12"
-    bundle.mkdir()
-    (bundle / "profiles").mkdir()
-    (bundle / "costmaps").mkdir()
-    (bundle / "map.yaml").write_text(
+    bundle = tmp_path / "robot_map_12" / "agibot"
+    bundle.mkdir(parents=True)
+    (bundle / "nav2.yaml").write_text(
         "\n".join(
             [
-                "image: map.pgm",
+                "image: occupancy.pgm",
                 "resolution: 0.050000",
                 "origin: [-1.000000, -1.000000, 0.000000]",
                 "negate: 0",
@@ -465,81 +468,30 @@ def _write_b1_map_bundle(tmp_path: Path) -> Path:
     for y in range(90):
         image.putpixel((0, y), 0)
         image.putpixel((119, y), 0)
-    image.save(bundle / "map.pgm")
-    Image.new("RGB", (120, 90), (230, 230, 230)).save(bundle / "preview.png")
-    (bundle / "profiles" / "rby1m.yaml").write_text("robot_profile_id: rby1m\n", encoding="utf-8")
-    (bundle / "costmaps" / "rby1m.costmap_params.yaml").write_text(
-        "global_costmap:\n  global_costmap:\n    ros__parameters:\n      resolution: 0.05\n",
+    image.save(bundle / "occupancy.pgm")
+    (bundle / "source.json").write_text(
+        json.dumps({"schema": "agibot.map_fetch.source.v1"}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    semantics = {
-        "display_frame": None,
-        "environment_id": "agibot-robot-map-12",
-        "frame_ids": {"base": "base_link", "camera": "head_camera_rgb_optical_frame", "map": "map"},
-        "map_id": "agibot-robot-map-12_semantic_map",
-        "map_version": "test",
-        "provenance": {
-            "contains_private_scoring_truth": False,
-            "contains_runtime_observations": False,
-            "source": "test",
-        },
-        "schema": "nav2_cleanup_semantics_v1",
-        "spatial_contract": {
-            "alignment_status": "native",
-            "display_frame_status": "absent_first_slice_raw_source_map_frame_only",
-            "schema": "map_spatial_contract_v1",
-            "semantic_geometry_frame": "source_map_frame",
-            "source_map_frame": {"frame_id": "map", "spatial_truth": True, "units": "meters"},
-        },
-        "rooms": [
+    (bundle / "raw_map.json.gz").write_bytes(b"test raw map")
+    (tmp_path / "robot_map_12" / "navigation_memory.json").write_text(
+        json.dumps(
             {
-                "room_id": "meeting_room_a",
-                "room_label": "Meeting room A",
-                "category": "meeting_room",
-                "alignment_status": "native",
-                "source_map_frame_id": "map",
-                "geometry_source": "operator_authored_navigation_zone",
-                "polygon_role": "navigation_area",
-                "polygon_usage": {
-                    "navigation": True,
-                    "review": True,
-                    "semantic_labeling": "native",
-                },
-                "polygon": [
-                    {"x": 0.0, "y": 0.0},
-                    {"x": 4.0, "y": 0.0},
-                    {"x": 4.0, "y": 3.0},
-                    {"x": 0.0, "y": 3.0},
+                "schema_version": 1,
+                "items": [
+                    {
+                        "id": "table_anchor",
+                        "label": "Table anchor",
+                        "kind": "surface",
+                        "pose": {"x": 1.0, "y": 1.0, "yaw": 0.0},
+                        "nav_goal": {"x": 1.0, "y": 1.0, "yaw": 0.0},
+                    }
                 ],
-            }
-        ],
-        "inspection_waypoints": [
-            {
-                "waypoint_id": "scan_1",
-                "frame_id": "map",
-                "room_id": "meeting_room_a",
-                "fixture_id": "table_1",
-                "x": 1.0,
-                "y": 1.0,
-                "yaw": 0.0,
             },
-        ],
-        "fixtures": [
-            {
-                "fixture_id": "table_1",
-                "room_id": "meeting_room_a",
-                "affordances": ["place"],
-                "footprint": {"shape": "rectangle", "width_m": 0.7, "depth_m": 0.5},
-                "preferred_inspection_waypoint_id": "scan_1",
-                "pose": {"frame_id": "map", "x": 2.0, "y": 2.0, "yaw": 0.0},
-            },
-        ],
-        "driveable_ways": [
-            {"from_room_id": "meeting_room_a", "to_room_id": "meeting_room_a"}
-        ],
-    }
-    (bundle / "semantics.json").write_text(
-        json.dumps(semantics, indent=2, sort_keys=True) + "\n",
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
         encoding="utf-8",
     )
     return bundle

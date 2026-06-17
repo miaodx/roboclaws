@@ -65,13 +65,20 @@ def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
             encoding="utf-8"
         )
     )
-    raw_map = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
+    raw_map = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
+        "robot_map_12"
+    ) / "agibot"
+    removed_authored_bundle = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
     assert review["schema"] == "b1_map12_alignment_review_v1"
-    assert review["source_assets"]["map_bundle"] == "assets/maps/agibot-robot-map-12"
+    assert review["source_assets"]["map_bundle"] == (
+        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
+    )
     assert correspondences["schema"] == "b1_map12_scene_correspondences_v1"
     assert correspondences["anchors"] == []
-    assert validate_nav2_map_bundle(raw_map).ok
+    assert (raw_map / "nav2.yaml").is_file()
+    assert (raw_map / "occupancy.pgm").is_file()
+    assert not removed_authored_bundle.exists()
     assert not (REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics").exists()
 
 

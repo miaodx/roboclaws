@@ -1434,7 +1434,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
         "7",
         "output/household/household-world/open-ended/codex-world-public-labels",
     ]
-    assert route[10] == "agibot-robot-map-12"
+    assert route[10] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert route[12] == "on"
     assert route[17] == "isaaclab_subprocess"
     assert route[21] == (
@@ -1448,7 +1448,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "backend=isaaclab" in plan_trace
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "household-world.open-ended codex-cli world-public-labels" in target_trace
-    assert "map_bundle=agibot-robot-map-12" in target_trace
+    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in target_trace
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in target_trace
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"

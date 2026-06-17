@@ -10,8 +10,8 @@
     "selected_waypoint_id": "",
     "source_kind": "run_result_robot_view_step"
   },
-  "generated_at": "2026-06-16T16:48:23Z",
-  "map_bundle": "assets/maps/agibot-robot-map-12",
+  "generated_at": "2026-06-17T05:34:17Z",
+  "map_bundle": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
   "render_resolution": {
     "height": 560,
     "width": 900
@@ -21,7 +21,7 @@
   "runtime_map_bundle": "output/operator-console-scene-previews/b1-map12-runtime-map-bundle",
   "runtime_provenance": {
     "compiler": "/home/mi/ws/gogo/roboclaws/scripts/maps/compile_b1_map12_runtime_bundle.py",
-    "generated_at": "2026-06-16T16:48:23.109485Z",
+    "generated_at": "2026-06-17T05:34:17.021040Z",
     "generated_from_review_manifest": true,
     "include_draft_labels": false,
     "output_dir": "output/operator-console-scene-previews/b1-map12-runtime-map-bundle",
@@ -40,18 +40,19 @@
     "runtime_label_count": 3,
     "schema": "b1_map12_runtime_bundle_provenance_v1",
     "source_assets": {
-      "map_bundle": "assets/maps/agibot-robot-map-12",
+      "map_bundle": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
+      "navigation_memory": "vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json",
       "review_manifest": "assets/maps/b1-map12-alignment-review.json",
       "review_schema": "b1_map12_alignment_review_v1",
       "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated"
     },
     "source_file_hashes": {
-      "assets/maps/agibot-robot-map-12/costmaps/rby1m.costmap_params.yaml": "670b3d0bbe7f0f8c21b43f35d23c6e8bd073d21ca9282dc66946c96fc43545c6",
-      "assets/maps/agibot-robot-map-12/map.pgm": "0e3008f061c14a33677456a46008e6dca2228fb56ff3e950e219fb587b4affa0",
-      "assets/maps/agibot-robot-map-12/map.yaml": "96adc1067e27248324544e1be2cab93f22da811ef1ca48ff3bb1df0453492d4c",
-      "assets/maps/agibot-robot-map-12/profiles/rby1m.yaml": "46495a0072a8c212a9a91c62b8267183e95a3f24f59c80cb19b1b38b6d2a712e",
-      "assets/maps/agibot-robot-map-12/semantics.json": "a29f1409c0e2cd6ef0532c45fc25ca82478609af0ee50faad3b7a95646391730",
-      "assets/maps/b1-map12-alignment-review.json": "69debf5fa081a0cff145c5ce0fca78d5305d0482b4030978642fec0e12bda5ef"
+      "assets/maps/b1-map12-alignment-review.json": "1899b7a7090fef36938552ef54f74621797415651a02df747c52ee992e4b6868",
+      "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/nav2.yaml": "5fe95d5db08ce40f5c0d5a0ed644e9e1703c5f66c4d7f941cd1d78fa51bbac8b",
+      "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/occupancy.pgm": "0e3008f061c14a33677456a46008e6dca2228fb56ff3e950e219fb587b4affa0",
+      "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/raw_map.json.gz": "07ce1b7996f2c2b85e84e0d8dcabd099e89ad7af4d5dfa091e431c7fed7b7a31",
+      "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/source.json": "644229880381b711bef74a3968517055fea975ed0a5ea25663ab904ce95da86f",
+      "vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json": "20051563150b53b28c1f9de7d3790dd4401f5172840511cbfa5fe7a67db84120"
     }
   },
   "scene_source": "b1-gaussian-digital-twin",
@@ -161,23 +162,23 @@
             255
           ]
         ],
-        "edge_fraction_over_16": 0.141813,
-        "edge_fraction_over_8": 0.168813,
+        "edge_fraction_over_16": 0.139625,
+        "edge_fraction_over_8": 0.167,
         "height": 560,
         "max_channel_range": 255.0,
-        "max_stddev": 25.518,
+        "max_stddev": 25.474,
         "mean_rgb": [
-          213.273,
-          214.429,
-          215.903
+          213.123,
+          214.498,
+          215.911
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
-        "thumbnail_color_count": 771,
+        "thumbnail_color_count": 767,
         "visual_status": "reviewable",
         "width": 900
       },
       "path": "b1-map12-map.png",
-      "provenance": "raw_map12_preview_png",
+      "provenance": "compiled_vendor_map12_runtime_preview_png",
       "semantic_map_fallback": false,
       "view": "source_map_preview"
     },
@@ -198,26 +199,26 @@
             255
           ]
         ],
-        "edge_fraction_over_16": 0.17575,
-        "edge_fraction_over_8": 0.211562,
+        "edge_fraction_over_16": 0.174625,
+        "edge_fraction_over_8": 0.208937,
         "height": 560,
         "max_channel_range": 255.0,
-        "max_stddev": 43.747,
+        "max_stddev": 43.637,
         "mean_rgb": [
-          197.252,
-          198.481,
-          191.656
+          197.074,
+          198.454,
+          191.584
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
-        "thumbnail_color_count": 1431,
+        "thumbnail_color_count": 1444,
         "visual_status": "reviewable",
         "width": 900
       },
-      "inspection_waypoint_count": 5,
+      "inspection_waypoint_count": 11,
       "path": "b1-map12-topdown.png",
       "provenance": "compiled_b1_map12_review_labels_topdown_png",
       "review_label_count": 3,
-      "room_count": 4,
+      "room_count": 3,
       "semantic_map_fallback": false,
       "view": "review_label_topdown"
     }

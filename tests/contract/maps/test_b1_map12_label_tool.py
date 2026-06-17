@@ -25,12 +25,12 @@ from scripts.maps.render_b1_map12_label_tool import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-MAP_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
-REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
-VENDOR_MAP_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
+MAP_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
     "robot_map_12"
 ) / "agibot"
+REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_label_tool.py"
+REMOVED_AUTHORED_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
 
 def test_map12_label_tool_pixel_world_roundtrip() -> None:
@@ -58,7 +58,7 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
 
     assert packet["schema"] == LABEL_TOOL_PACKET_SCHEMA
     assert packet["draft_manifest_schema"] == LABEL_DRAFT_MANIFEST_SCHEMA
-    assert packet["map_bundle"].endswith("assets/maps/agibot-robot-map-12")
+    assert packet["map_bundle"].endswith("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
     assert packet["review_manifest"].endswith("assets/maps/b1-map12-alignment-review.json")
     assert packet["scene_root"].endswith(
         "data/robot-data-lab/scene-engine/data/2rd_floor_seperated"
@@ -89,7 +89,7 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
 
 
 def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> None:
-    packet = build_label_tool_packet(map_bundle=VENDOR_MAP_BUNDLE)
+    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
 
     assert packet["map_bundle"].endswith("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
     assert packet["source_semantics"].endswith(
@@ -107,56 +107,18 @@ def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> Non
     assert packet["initial_draft_manifest"]["labels"] == []
 
 
-def test_label_tool_packet_exposes_map_native_semantic_layers() -> None:
+def test_authored_map12_bundle_stays_removed() -> None:
+    assert not REMOVED_AUTHORED_BUNDLE.exists()
+
+
+def test_label_tool_packet_has_empty_map_native_semantic_layers_without_authored_bundle() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
     layers = packet["semantic_map_layers"]
 
     assert layers["coordinate_policy"] == "map_native_layers_use_source_map_frame_coordinates_only"
-    assert len(layers["fixtures"]) == 10
-    assert len(layers["inspection_waypoints"]) == 5
-    assert len(layers["driveable_ways"]) == 3
-    assert {
-        "fixture_id": "coffee_table_01",
-        "label": "Coffee table",
-        "name": "coffee table",
-        "category": "coffee table",
-        "room_id": "central_floor",
-        "pose": {
-            "frame_id": "map",
-            "x": -1.0,
-            "y": 2.0,
-            "yaw": 0.0,
-        },
-        "pixel_center": world_to_pixel(
-            -1.0,
-            2.0,
-            SourceMapTransform(
-                width_px=913,
-                height_px=716,
-                resolution_m=0.0500000007451,
-                origin_x=-35.1000022888,
-                origin_y=-22.3000011444,
-            ),
-        ),
-        "footprint": {
-            "depth_m": 0.5,
-            "shape": "rectangle",
-            "width_m": 0.7,
-        },
-        "affordances": ["place"],
-        "position_detail": "agibot_map_authored",
-        "coordinate_status": "source_map_frame_coordinate",
-    } in layers["fixtures"]
-    assert any(
-        waypoint["waypoint_id"] == "central_floor_scan"
-        and waypoint["pose"]["frame_id"] == "map"
-        and waypoint["coordinate_status"] == "source_map_frame_coordinate"
-        for waypoint in layers["inspection_waypoints"]
-    )
-    assert all(
-        way["coordinate_status"] == "resolved_from_source_map_anchors"
-        for way in layers["driveable_ways"]
-    )
+    assert layers["fixtures"] == []
+    assert layers["inspection_waypoints"] == []
+    assert layers["driveable_ways"] == []
 
 
 def test_label_tool_packet_exposes_navigation_memory_layer() -> None:
@@ -424,7 +386,7 @@ def test_label_tool_cli_writes_standalone_html_and_packet(tmp_path: Path) -> Non
 
 def test_label_tool_can_prepare_served_artifacts(tmp_path: Path) -> None:
     artifacts = write_label_tool_artifacts(
-        map_bundle=VENDOR_MAP_BUNDLE,
+        map_bundle=MAP_BUNDLE,
         output_dir=tmp_path,
     )
 
