@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from roboclaws.household.camera_control import load_camera_control_request
-from roboclaws.household.subprocess_backend import (
-    _parse_last_json_object,
-    _scenario_from_worker_payload,
-)
+from roboclaws.household.subprocess_backend import _scenario_from_worker_payload
+from roboclaws.household.worker_runner import run_json_worker_once, worker_env, worker_timeout_s
 
 ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
 ISAAC_SEMANTIC_POSE_PROVENANCE = "isaac_semantic_pose"
@@ -409,62 +406,44 @@ class IsaacLabSubprocessBackend:
         return json.loads(self.state_path.read_text(encoding="utf-8"))
 
     def _run_worker(self, command: str, *args: str) -> dict[str, Any]:
-        if not self.python_executable.is_file():
-            raise RuntimeError(
-                "Isaac Lab Python runtime is missing: "
-                f"{self.python_executable}. Create .venv-isaaclab/ or set "
-                "ROBOCLAWS_ISAACLAB_PYTHON. CI tests may set "
-                "ROBOCLAWS_ISAACLAB_RUNTIME_MODE=fake explicitly."
-            )
-        worker_command = [
-            str(self.python_executable),
-            str(ISAAC_WORKER_SCRIPT),
-            "--state-path",
-            str(self.state_path),
-            command,
-            *args,
-        ]
-        try:
-            completed = subprocess.run(
-                worker_command,
-                check=False,
-                capture_output=True,
-                text=True,
-                env=_isaac_worker_env(self.runtime_mode),
-                timeout=_isaac_worker_timeout_s(command),
-            )
-        except subprocess.TimeoutExpired as exc:
-            timeout_s = _isaac_worker_timeout_s(command)
-            raise RuntimeError(
-                f"Isaac Lab subprocess worker timed out ({command}, {timeout_s:g}s)"
-            ) from exc
-        if completed.returncode != 0:
-            raise RuntimeError(
-                "Isaac Lab subprocess worker failed "
-                f"({command}, exit {completed.returncode}): {completed.stderr.strip()}"
-            )
-        return _parse_last_json_object(completed.stdout)
+        return run_json_worker_once(
+            worker_name="Isaac Lab",
+            python_executable=self.python_executable,
+            missing_runtime_hint=(
+                "Create .venv-isaaclab/ or set ROBOCLAWS_ISAACLAB_PYTHON. "
+                "CI tests may set ROBOCLAWS_ISAACLAB_RUNTIME_MODE=fake explicitly."
+            ),
+            worker_script=ISAAC_WORKER_SCRIPT,
+            state_path=self.state_path,
+            command=command,
+            args=args,
+            env=_isaac_worker_env(self.runtime_mode),
+            timeout_s=_isaac_worker_timeout_s(command),
+        )
 
 
 def _isaac_worker_env(runtime_mode: str) -> dict[str, str]:
-    env = os.environ.copy()
-    for key in (
-        "PYTHONPATH",
-        "AMENT_PREFIX_PATH",
-        "COLCON_PREFIX_PATH",
-        "ROS_DISTRO",
-        "ROS_VERSION",
-        "ROS_PYTHON_VERSION",
-    ):
-        env.pop(key, None)
-    env.setdefault("PYTHONUNBUFFERED", "1")
-    env.setdefault("ROBOCLAWS_ISAACLAB_RUNTIME_MODE", runtime_mode)
-    env.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
-    return env
+    return worker_env(
+        defaults={
+            "PYTHONUNBUFFERED": "1",
+            "ROBOCLAWS_ISAACLAB_RUNTIME_MODE": runtime_mode,
+            "OMNI_KIT_ACCEPT_EULA": "YES",
+        },
+        remove=(
+            "PYTHONPATH",
+            "AMENT_PREFIX_PATH",
+            "COLCON_PREFIX_PATH",
+            "ROS_DISTRO",
+            "ROS_VERSION",
+            "ROS_PYTHON_VERSION",
+        ),
+    )
 
 
 def _isaac_worker_timeout_s(command: str) -> float:
-    override = os.environ.get("ROBOCLAWS_ISAACLAB_WORKER_TIMEOUT_S")
-    if override:
-        return float(override)
-    return ISAAC_WORKER_TIMEOUTS_S.get(command, DEFAULT_ISAAC_WORKER_TIMEOUT_S)
+    return worker_timeout_s(
+        command=command,
+        override_env_var="ROBOCLAWS_ISAACLAB_WORKER_TIMEOUT_S",
+        command_timeouts=ISAAC_WORKER_TIMEOUTS_S,
+        default_timeout_s=DEFAULT_ISAAC_WORKER_TIMEOUT_S,
+    )

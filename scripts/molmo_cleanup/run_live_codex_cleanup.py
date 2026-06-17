@@ -29,7 +29,7 @@ from roboclaws.agents.provider_timing_proxy import (
     start_provider_timing_proxy,
     stop_provider_timing_proxy,
 )
-from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT
 from roboclaws.household.visual_backend_slots import (
     MOLMOSPACES_SUBPROCESS_BACKEND,

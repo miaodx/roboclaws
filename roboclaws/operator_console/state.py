@@ -11,6 +11,14 @@ from typing import Any
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
+from roboclaws.operator_console.state_summary import (
+    camera_angle_summary,
+    is_failure_string,
+    is_open_ended_run_result,
+    is_success_string,
+    run_result_has_failure,
+    run_result_success,
+)
 
 LIVE_RUN_MARKERS = (
     "live_status.json",
@@ -225,97 +233,7 @@ def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
 
 
 def _camera_angle_summary(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-
-    offset: dict[str, float] = {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}
-    latest_adjust: dict[str, Any] = {}
-    latest_event: str = ""
-    current_waypoint_id = ""
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
-        tool = str(payload.get("tool") or payload.get("tool_name") or "")
-        event = str(payload.get("event") or "")
-        response = payload.get("response") if isinstance(payload.get("response"), dict) else {}
-        request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
-
-        if event == "response" and tool in {
-            "navigate_to_waypoint",
-            "navigate_to_object",
-            "navigate_to_receptacle",
-        }:
-            if response.get("ok") is True:
-                offset = {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}
-                latest_event = f"{tool}_reset"
-                waypoint_id = response.get("waypoint_id")
-                if waypoint_id:
-                    current_waypoint_id = str(waypoint_id)
-            continue
-
-        if tool != "adjust_camera":
-            continue
-        if event == "request":
-            latest_adjust = {
-                "requested_yaw_delta_deg": _float_or_zero(request.get("yaw_delta_deg")),
-                "requested_pitch_delta_deg": _float_or_zero(request.get("pitch_delta_deg")),
-            }
-            latest_event = "adjust_camera_request"
-            continue
-        if event == "response":
-            camera_offset = response.get("camera_offset")
-            if isinstance(camera_offset, dict):
-                offset = {
-                    "yaw_delta_deg": _float_or_zero(camera_offset.get("yaw_delta_deg")),
-                    "pitch_delta_deg": _float_or_zero(camera_offset.get("pitch_delta_deg")),
-                }
-            else:
-                offset = {
-                    "yaw_delta_deg": _float_or_zero(response.get("yaw_delta_deg")),
-                    "pitch_delta_deg": _float_or_zero(response.get("pitch_delta_deg")),
-                }
-            previous = response.get("previous_camera_offset")
-            latest_adjust.update(
-                {
-                    "ok": response.get("ok"),
-                    "status": response.get("status"),
-                    "previous_camera_offset": previous if isinstance(previous, dict) else {},
-                    "camera_offset": dict(offset),
-                    "waypoint_id": str(response.get("waypoint_id") or current_waypoint_id),
-                }
-            )
-            latest_event = "adjust_camera_response"
-            if latest_adjust["waypoint_id"]:
-                current_waypoint_id = latest_adjust["waypoint_id"]
-
-    if not latest_adjust and offset == {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}:
-        return {}
-    active = bool(offset.get("yaw_delta_deg") or offset.get("pitch_delta_deg"))
-    return {
-        "camera_offset": offset,
-        "active": active,
-        "latest_adjust": latest_adjust,
-        "latest_event": latest_event,
-        "reset_on_navigation": True,
-        "summary": _camera_angle_label(offset, active=active),
-    }
-
-
-def _camera_angle_label(offset: dict[str, float], *, active: bool) -> str:
-    yaw = _float_or_zero(offset.get("yaw_delta_deg"))
-    pitch = _float_or_zero(offset.get("pitch_delta_deg"))
-    status = "active" if active else "neutral"
-    return f"yaw {yaw:g} deg, pitch {pitch:g} deg ({status})"
+    return camera_angle_summary(path)
 
 
 def _is_robot_tool_trace(payload: dict[str, Any]) -> bool:
@@ -719,64 +637,23 @@ def _checker_log_failure_reason(checker_log: Path) -> str:
 
 
 def _run_result_success(run_result: dict[str, Any]) -> bool:
-    if not run_result:
-        return False
-    if _run_result_has_failure(run_result):
-        return False
-    if _is_open_ended_run_result(run_result):
-        for key in ("intent_status", "goal_status", "final_status", "status"):
-            if _is_success_string(run_result.get(key)):
-                return True
-        score = run_result.get("score")
-        if isinstance(score, dict) and _is_success_string(score.get("status")):
-            return True
-        return False
-    for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
-        if run_result.get(key) is True:
-            return True
-    for key in ("cleanup_status", "completion_status", "final_status", "status"):
-        if _is_success_string(run_result.get(key)):
-            return True
-    score = run_result.get("score")
-    if isinstance(score, dict):
-        for key in ("completion_status", "status"):
-            if _is_success_string(score.get(key)):
-                return True
-    return False
+    return run_result_success(run_result)
 
 
 def _run_result_has_failure(run_result: dict[str, Any]) -> bool:
-    if _is_open_ended_run_result(run_result):
-        for key in ("ok", "success", "semantic_map_success"):
-            if run_result.get(key) is False:
-                return True
-        for key in ("intent_status", "goal_status", "status"):
-            if _is_failure_string(run_result.get(key)):
-                return True
-        return False
-    for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
-        if run_result.get(key) is False:
-            return True
-    for key in ("cleanup_status", "completion_status", "final_status", "status"):
-        if _is_failure_string(run_result.get(key)):
-            return True
-    return False
+    return run_result_has_failure(run_result)
 
 
 def _is_open_ended_run_result(run_result: dict[str, Any]) -> bool:
-    goal_contract = (
-        run_result.get("goal_contract") if isinstance(run_result.get("goal_contract"), dict) else {}
-    )
-    intent = str(run_result.get("task_intent") or goal_contract.get("intent") or "").strip()
-    return intent == "open-ended"
+    return is_open_ended_run_result(run_result)
 
 
 def _is_success_string(value: Any) -> bool:
-    return str(value).strip().lower() in {"success", "ok", "passed"}
+    return is_success_string(value)
 
 
 def _is_failure_string(value: Any) -> bool:
-    return str(value).strip().lower() in {"failed", "failure", "error"}
+    return is_failure_string(value)
 
 
 def _terminal_reason(

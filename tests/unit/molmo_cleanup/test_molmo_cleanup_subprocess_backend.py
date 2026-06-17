@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from roboclaws.household import subprocess_backend
+from roboclaws.household import worker_runner
 from roboclaws.household.camera_control import scene_light_rig
 from roboclaws.household.generated_mess import (
     build_generated_mess_manifest,
@@ -85,7 +85,7 @@ def test_subprocess_backend_worker_defaults_to_egl_for_mujoco(
         )
 
     monkeypatch.delenv("MUJOCO_GL", raising=False)
-    monkeypatch.setattr(subprocess_backend.subprocess, "run", fake_run)
+    monkeypatch.setattr(worker_runner.subprocess, "run", fake_run)
 
     result = backend._run_worker("locations")
 
@@ -106,9 +106,9 @@ def test_subprocess_backend_worker_times_out_hung_snapshot(
 
     def fake_run(command, **kwargs):
         captured["timeout"] = kwargs["timeout"]
-        raise subprocess_backend.subprocess.TimeoutExpired(command, kwargs["timeout"])
+        raise worker_runner.subprocess.TimeoutExpired(command, kwargs["timeout"])
 
-    monkeypatch.setattr(subprocess_backend.subprocess, "run", fake_run)
+    monkeypatch.setattr(worker_runner.subprocess, "run", fake_run)
 
     with pytest.raises(RuntimeError, match="worker timed out"):
         backend._run_worker("snapshot", "--output-path", str(tmp_path / "before.png"))

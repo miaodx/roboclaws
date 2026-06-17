@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,13 +10,17 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.maps.bundle_validation import (
+    parse_map_yaml as parse_map_yaml,
+)
+from roboclaws.maps.bundle_validation import (
+    validate_nav2_map_bundle_payload,
+)
 from roboclaws.maps.rasterize import (
     fixtures_from_hints,
-    load_pgm,
     occupancy_grid_from_metric_map,
     write_pgm,
 )
-from roboclaws.maps.route import validate_metric_map_route
 
 NAV2_MAP_BUNDLE_SCHEMA = "nav2_map_bundle_v1"
 NAV2_MAP_BUNDLE_SNAPSHOT_SCHEMA = "nav2_map_bundle_snapshot_v1"
@@ -292,205 +295,14 @@ def _existing_bundle_snapshot(
 
 
 def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:
-    errors: list[str] = []
-    warnings: list[str] = []
     bundle_dir = Path(bundle_dir)
-    paths = _bundle_local_paths()
-    for key, relative in paths.items():
-        if not (bundle_dir / relative).is_file():
-            errors.append(f"missing required artifact: {relative} ({key})")
-    if errors:
-        return MapBundleValidation(bundle_dir, tuple(errors), tuple(warnings), {})
-
-    try:
-        map_yaml = parse_map_yaml((bundle_dir / paths["map_yaml"]).read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive CLI path
-        errors.append(f"invalid map.yaml: {exc}")
-        map_yaml = {}
-    try:
-        semantics = json.loads((bundle_dir / paths["semantics_json"]).read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        errors.append(f"invalid semantics.json: {exc}")
-        semantics = {}
-    private_hits = sorted(_find_private_keys(semantics))
-    if private_hits:
-        errors.append(f"private cleanup truth encoded in semantics.json: {private_hits}")
-
-    image_name = str(map_yaml.get("image") or "")
-    if image_name != "map.pgm":
-        errors.append(f"map.yaml image must resolve to map.pgm, got {image_name!r}")
-    resolution = _positive_float(map_yaml.get("resolution"), "map.yaml resolution", errors)
-    origin = map_yaml.get("origin")
-    if not isinstance(origin, list) or len(origin) != 3:
-        errors.append("map.yaml origin must be a 3-item list")
-        origin = [0.0, 0.0, 0.0]
-    occupied = _positive_float(map_yaml.get("occupied_thresh"), "map.yaml occupied_thresh", errors)
-    free = _positive_float(map_yaml.get("free_thresh"), "map.yaml free_thresh", errors)
-    if occupied <= free:
-        errors.append("map.yaml occupied_thresh must be greater than free_thresh")
-
-    try:
-        grid = load_pgm(
-            bundle_dir / paths["occupancy_image"],
-            resolution_m=resolution or DEFAULT_COSTMAP_PARAMETERS["resolution_m"],
-            origin_x=float(origin[0]),
-            origin_y=float(origin[1]),
-        )
-        free_cells = sum(1 for row in grid.rows for value in row if value >= 250)
-        occupied_cells = sum(1 for row in grid.rows for value in row if value <= 5)
-        if free_cells == 0 or occupied_cells == 0:
-            errors.append(
-                "occupancy image must contain free and occupied cells, "
-                f"got free={free_cells} occupied={occupied_cells}"
-            )
-    except Exception as exc:  # pragma: no cover - defensive CLI path
-        errors.append(f"invalid occupancy image: {exc}")
-        grid = None
-
-    rooms = semantics.get("rooms") if isinstance(semantics.get("rooms"), list) else []
-    fixtures = semantics.get("fixtures") if isinstance(semantics.get("fixtures"), list) else []
-    waypoints = (
-        semantics.get("inspection_waypoints")
-        if isinstance(semantics.get("inspection_waypoints"), list)
-        else []
+    errors, warnings, metadata = validate_nav2_map_bundle_payload(
+        bundle_dir,
+        paths=_bundle_local_paths(),
+        default_resolution_m=DEFAULT_COSTMAP_PARAMETERS["resolution_m"],
+        private_map_keys=PRIVATE_MAP_KEYS,
     )
-    driveable = (
-        semantics.get("driveable_ways") if isinstance(semantics.get("driveable_ways"), list) else []
-    )
-    base_navigation_map = not rooms and not fixtures
-    if not waypoints:
-        errors.append("semantics.json must contain inspection_waypoints")
-    if not driveable and not base_navigation_map:
-        errors.append("semantics.json must contain driveable_ways")
-    if base_navigation_map and waypoints:
-        generated_waypoints = [
-            waypoint
-            for waypoint in waypoints
-            if waypoint.get("waypoint_source") == "generated_exploration_candidate"
-        ]
-        if not generated_waypoints:
-            errors.append(
-                "fixtureless semantics.json must contain generated_exploration_candidate "
-                "inspection_waypoints"
-            )
-    if not isinstance(semantics.get("frame_ids"), dict) or not semantics["frame_ids"].get("map"):
-        errors.append("semantics.json must contain frame_ids.map")
-    if not isinstance(semantics.get("provenance"), dict):
-        errors.append("semantics.json must contain provenance")
-    else:
-        provenance = semantics["provenance"]
-        if provenance.get("contains_runtime_observations") is not False:
-            errors.append("semantics.json provenance must exclude runtime observations")
-        if provenance.get("contains_private_scoring_truth") is not False:
-            errors.append("semantics.json provenance must exclude private scoring truth")
-
-    waypoint_by_id = {str(item.get("waypoint_id") or ""): item for item in waypoints}
-    if grid is not None:
-        for waypoint in waypoints:
-            waypoint_id = str(waypoint.get("waypoint_id") or "")
-            if not waypoint_id:
-                errors.append("inspection waypoint missing waypoint_id")
-                continue
-            if not grid.is_free_world(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0))):
-                errors.append(f"inspection waypoint is not on free costmap cell: {waypoint_id}")
-    for fixture in fixtures:
-        fixture_id = str(fixture.get("fixture_id") or "")
-        if not fixture_id:
-            errors.append("fixture missing fixture_id")
-        if not fixture.get("affordances"):
-            errors.append(f"fixture missing affordances: {fixture_id}")
-        if not isinstance(fixture.get("footprint"), dict):
-            errors.append(f"fixture missing footprint: {fixture_id}")
-        preferred = str(
-            fixture.get("preferred_inspection_waypoint_id")
-            or fixture.get("preferred_manipulation_waypoint_id")
-            or ""
-        )
-        if preferred not in waypoint_by_id:
-            errors.append(f"fixture has no reachable preferred waypoint: {fixture_id}")
-    route_failures = _validate_declared_routes(semantics, grid=grid)
-    errors.extend(route_failures)
-
-    metadata = {
-        "map_id": semantics.get("map_id"),
-        "map_version": semantics.get("map_version"),
-        "room_count": len(rooms),
-        "fixture_count": len(fixtures),
-        "waypoint_count": len(waypoints),
-        "driveable_way_count": len(driveable),
-    }
-    return MapBundleValidation(bundle_dir, tuple(errors), tuple(warnings), metadata)
-
-
-def parse_map_yaml(text: str) -> dict[str, Any]:
-    payload: dict[str, Any] = {}
-    for raw_line in text.splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line or ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        value = value.strip()
-        if value.startswith("[") and value.endswith("]"):
-            payload[key.strip()] = [
-                float(item.strip()) for item in value.removeprefix("[").removesuffix("]").split(",")
-            ]
-        elif re.fullmatch(r"-?\d+(\.\d+)?", value):
-            payload[key.strip()] = float(value) if "." in value else int(value)
-        else:
-            payload[key.strip()] = value.strip('"')
-    return payload
-
-
-def _validate_declared_routes(semantics: dict[str, Any], *, grid: Any | None) -> list[str]:
-    rooms = semantics.get("rooms") or []
-    waypoints = semantics.get("inspection_waypoints") or []
-    fixtures = semantics.get("fixtures") or []
-    fixture_hints = {"rooms": []}
-    for room in rooms:
-        room_id = str(room.get("room_id") or "")
-        item = dict(room)
-        item["fixtures"] = [
-            fixture for fixture in fixtures if str(fixture.get("room_id") or "") == room_id
-        ]
-        fixture_hints["rooms"].append(item)
-    metric_map = {
-        "resolution_m": (
-            grid.resolution_m if grid is not None else DEFAULT_COSTMAP_PARAMETERS["resolution_m"]
-        ),
-        "origin": {
-            "x": grid.origin_x if grid is not None else 0.0,
-            "y": grid.origin_y if grid is not None else 0.0,
-            "yaw": 0.0,
-        },
-        "width": grid.width if grid is not None else 240,
-        "height": grid.height if grid is not None else 180,
-        "rooms": rooms,
-        "driveable_ways": semantics.get("driveable_ways") or [],
-        "inspection_waypoints": waypoints,
-    }
-    waypoints_by_room: dict[str, str] = {}
-    for waypoint in waypoints:
-        waypoints_by_room.setdefault(
-            str(waypoint.get("room_id") or ""), str(waypoint.get("waypoint_id") or "")
-        )
-    failures: list[str] = []
-    for way in semantics.get("driveable_ways") or []:
-        start = waypoints_by_room.get(str(way.get("from_room_id") or ""))
-        goal = waypoints_by_room.get(str(way.get("to_room_id") or ""))
-        if not start or not goal:
-            failures.append(f"driveable way missing room waypoint: {way}")
-            continue
-        result = validate_metric_map_route(
-            metric_map,
-            fixture_hints,
-            start_waypoint_id=start,
-            goal_waypoint_id=goal,
-        )
-        if not result.ok:
-            failures.append(
-                f"driveable way has no static route: {start}->{goal}:{result.failure_type}"
-            )
-    return failures
+    return MapBundleValidation(bundle_dir, errors, warnings, metadata)
 
 
 def _bundle_local_paths() -> dict[str, Path]:
@@ -820,32 +632,6 @@ def _yaml_scalar(value: Any) -> str:
     if not text or any(ch in text for ch in ":#[]{}&,"):
         return json.dumps(text)
     return text
-
-
-def _find_private_keys(value: Any, *, prefix: str = "") -> set[str]:
-    hits: set[str] = set()
-    if isinstance(value, dict):
-        for key, item in value.items():
-            key_text = str(key)
-            path = f"{prefix}.{key_text}" if prefix else key_text
-            if key_text in PRIVATE_MAP_KEYS:
-                hits.add(path)
-            hits.update(_find_private_keys(item, prefix=path))
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            hits.update(_find_private_keys(item, prefix=f"{prefix}[{index}]"))
-    return hits
-
-
-def _positive_float(value: Any, label: str, errors: list[str]) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        errors.append(f"{label} must be numeric")
-        return 0.0
-    if parsed <= 0:
-        errors.append(f"{label} must be positive")
-    return parsed
 
 
 def _stable_hash(value: Any) -> str:

@@ -32,15 +32,31 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_BASELINE,
         help="Quality baseline JSON path.",
     )
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--write-baseline",
         action="store_true",
         help="Replace the baseline with the current quality debt.",
+    )
+    mode.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a read-only ranked quality-debt summary and exit.",
+    )
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=10,
+        help="Number of rows per section for --summary.",
     )
     args = parser.parse_args(argv)
 
     baseline_path = args.baseline if args.baseline.is_absolute() else REPO_ROOT / args.baseline
     current = collect_quality_state()
+
+    if args.summary:
+        print(format_quality_debt_summary(quality_debt_summary(current, top_n=args.top)))
+        return 0
 
     if args.write_baseline:
         baseline_path.parent.mkdir(parents=True, exist_ok=True)
@@ -221,6 +237,121 @@ def compare_to_baseline(current: dict[str, Any], baseline: dict[str, Any]) -> li
     return failures
 
 
+def quality_debt_summary(state: dict[str, Any], *, top_n: int = 10) -> dict[str, Any]:
+    top_limit = max(0, top_n)
+    ruff_items = list(state.get("ruff_complexity", {}).get("violations") or [])
+    oversized_items = list(state.get("pylint_too_many_lines", {}).get("files") or [])
+    top_oversized = sorted(
+        oversized_items,
+        key=lambda item: (-_int_value(item.get("lines")), str(item.get("path") or "")),
+    )[:top_limit]
+    top_complexity = sorted(
+        ruff_items,
+        key=lambda item: (
+            -_int_value(item.get("value")),
+            str(item.get("path") or ""),
+            str(item.get("symbol") or ""),
+            str(item.get("code") or ""),
+        ),
+    )[:top_limit]
+
+    by_file: dict[str, dict[str, Any]] = {}
+    for item in ruff_items:
+        path = str(item.get("path") or "<unknown>")
+        value = _int_value(item.get("value"))
+        limit = _int_value(item.get("limit"))
+        code = str(item.get("code") or "unknown")
+        bucket = by_file.setdefault(
+            path,
+            {
+                "path": path,
+                "violations": 0,
+                "max_value": 0,
+                "max_limit": 0,
+                "codes": {},
+            },
+        )
+        bucket["violations"] += 1
+        if value > int(bucket["max_value"]):
+            bucket["max_value"] = value
+            bucket["max_limit"] = limit
+        bucket["codes"][code] = int(bucket["codes"].get(code, 0)) + 1
+
+    complexity_by_file = [
+        {
+            "path": str(bucket["path"]),
+            "violations": int(bucket["violations"]),
+            "max_value": int(bucket["max_value"]),
+            "max_limit": int(bucket["max_limit"]),
+            "codes": [
+                {"code": code, "count": count}
+                for code, count in sorted(bucket["codes"].items())
+            ],
+        }
+        for bucket in by_file.values()
+    ]
+    complexity_by_file.sort(
+        key=lambda item: (
+            -int(item["violations"]),
+            -int(item["max_value"]),
+            str(item["path"]),
+        )
+    )
+
+    return {
+        "ruff_total": len(ruff_items),
+        "oversized_total": len(oversized_items),
+        "top_oversized_modules": top_oversized,
+        "top_complexity_entries": top_complexity,
+        "complexity_by_file": complexity_by_file[:top_limit],
+    }
+
+
+def format_quality_debt_summary(summary: dict[str, Any]) -> str:
+    lines = [
+        "python-quality-ratchet: summary",
+        f"- Ruff complexity violations: {summary['ruff_total']}",
+        f"- oversized modules: {summary['oversized_total']}",
+        "",
+        "Top oversized modules:",
+    ]
+    top_oversized = list(summary.get("top_oversized_modules") or [])
+    if top_oversized:
+        for item in top_oversized:
+            lines.append(f"- {_int_value(item.get('lines'))} lines {item.get('path')}")
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "Highest complexity entries:"])
+    top_complexity = list(summary.get("top_complexity_entries") or [])
+    if top_complexity:
+        for item in top_complexity:
+            lines.append(
+                "- "
+                f"{_measure_text(item)} "
+                f"{item.get('code')} {item.get('path')}::{item.get('symbol')}"
+            )
+    else:
+        lines.append("- none")
+
+    lines.extend(["", "Complexity by file:"])
+    complexity_by_file = list(summary.get("complexity_by_file") or [])
+    if complexity_by_file:
+        for item in complexity_by_file:
+            codes = ", ".join(
+                f"{code['code']}:{code['count']}" for code in item.get("codes") or []
+            )
+            suffix = f"; {codes}" if codes else ""
+            lines.append(
+                "- "
+                f"{item['violations']} violations {item['path']} "
+                f"(max {_measure_text(item)}{suffix})"
+            )
+    else:
+        lines.append("- none")
+    return "\n".join(lines)
+
+
 def ruff_command() -> str:
     override = os.environ.get("ROBOCLAWS_RUFF")
     if override:
@@ -240,6 +371,21 @@ def _measure_from_message(message: str) -> tuple[int, int]:
 
 def _ruff_key(path: str, code: str, symbol: str) -> str:
     return f"{path}|{code}|{symbol}"
+
+
+def _int_value(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _measure_text(item: dict[str, Any]) -> str:
+    value = _int_value(item.get("value", item.get("max_value")))
+    limit = _int_value(item.get("limit", item.get("max_limit")))
+    if limit:
+        return f"{value}>{limit}"
+    return str(value)
 
 
 class SymbolIndex:

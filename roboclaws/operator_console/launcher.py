@@ -6,7 +6,6 @@ import json
 import os
 import re
 import signal
-import socket
 import subprocess
 import time
 from dataclasses import dataclass
@@ -16,7 +15,6 @@ from typing import Any
 from roboclaws.agents.provider_registry import (
     default_provider_profile,
     provider_readiness,
-    provider_route_spec,
 )
 from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
@@ -27,18 +25,20 @@ from roboclaws.launch.environment_setup import (
 )
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
+from roboclaws.operator_console.launch_support import (
+    ALLOWED_ENV_OVERRIDES,
+    docker_container_ids_with_mount,
+    validate_env_overrides,
+)
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
+from roboclaws.operator_console.readiness import route_gate_rows
 from roboclaws.operator_console.routes import (
     ConsoleLaunchSelection,
-    accepted_isaac_preflight,
     get_selection,
 )
 from roboclaws.operator_console.state import resolve_display_run_dir
 
-DEFAULT_MCP_HOST = "127.0.0.1"
-DEFAULT_MCP_PORT = 18788
-ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
 RUN_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
@@ -143,19 +143,13 @@ def build_launch_argv(
         for item in route.launch_default_overrides
         if _override_key(item) not in overridden_keys
     ]
-    args = [
-        f"surface={route.surface}",
-        f"world={route.world_id}",
-        f"backend={route.backend_id}",
-        f"agent_engine={route.agent_engine_id}",
-        f"evidence_lane={route.evidence_lane}",
-        f"scenario_setup={request_overrides.pop('scenario_setup', route.scenario_setup)}",
-        *default_overrides,
-    ]
-    if selected_preset:
-        args.insert(3, f"preset={selected_preset}")
-    elif selected_intent != "open-ended":
-        args.insert(3, f"intent={selected_intent}")
+    args = _base_launch_args(
+        route,
+        selected_intent=selected_intent,
+        selected_preset=selected_preset,
+        scenario_setup=request_overrides.pop("scenario_setup", route.scenario_setup),
+        default_overrides=default_overrides,
+    )
     provider_profile = request_overrides.pop("provider_profile", route.provider_profile or "")
     if provider_profile:
         args.append(f"provider_profile={provider_profile}")
@@ -181,6 +175,30 @@ def build_launch_argv(
     except LaunchError as exc:
         raise ConsoleLaunchError(str(exc)) from exc
     return ["just", "run::surface", *args]
+
+
+def _base_launch_args(
+    route: ConsoleLaunchSelection,
+    *,
+    selected_intent: str,
+    selected_preset: str,
+    scenario_setup: str,
+    default_overrides: list[str],
+) -> list[str]:
+    args = [
+        f"surface={route.surface}",
+        f"world={route.world_id}",
+        f"backend={route.backend_id}",
+        f"agent_engine={route.agent_engine_id}",
+        f"evidence_lane={route.evidence_lane}",
+        f"scenario_setup={scenario_setup}",
+        *default_overrides,
+    ]
+    if selected_preset:
+        args.insert(3, f"preset={selected_preset}")
+    elif selected_intent != "open-ended":
+        args.insert(3, f"intent={selected_intent}")
+    return args
 
 
 def start_console_run(
@@ -304,111 +322,25 @@ def route_readiness(
     env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
     gate_map = gates or {}
-    gate_rows: list[dict[str, Any]] = []
-    blocker = ""
-    lock = ResourceLock(root, route.lock_name)
-    lock_state = lock.read()
-    if _release_terminal_owner_lock(root, lock_state):
-        lock_state = lock.read()
-    attachable_run = _attachable_run_payload(root, lock_state)
-    lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
-    real_movement_enabled = _truthy_override(override_map.get("real_movement_enabled"))
-    if lock_active:
-        if attachable_run:
-            blocker = (
-                f"Backend lock is held by run {attachable_run['run_id']}. "
-                "Attach to the existing run or wait for it to finish."
-            )
-        else:
-            blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
-        blocker_kind = "locked"
-    else:
-        blocker_kind = ""
-    for gate in route.gates:
-        ok = True
-        message = "Ready"
-        evidence = ""
-        kind = "ready"
-        severity = gate.severity
-        blocks_start = gate.required
-        if gate.kind == "provider_key":
-            provider_status = _provider_status(route, env_map)
-            ok = provider_status["ok"]
-            if not ok:
-                label = route.to_payload().get("agent_engine_label") or route.agent_engine_id
-                message = str(provider_status["message"] or f"No {label} provider route found.")
-                kind = "needs_provider"
-            elif provider_status.get("capability_blocker"):
-                ok = False
-                message = str(provider_status["capability_blocker"])
-                kind = "unsupported_evidence_lane"
-        elif gate.kind == "isaac_preflight":
-            accepted = accepted_isaac_preflight(root)
-            ok = accepted is not None
-            evidence = str(accepted or "")
-            if not ok:
-                message = (
-                    "No accepted Isaac runtime preflight or smoke marker found. "
-                    "Launch can start; backend diagnostics will report concrete runtime failures."
-                )
-                kind = "isaac_runtime_unverified"
-        elif gate.kind == "mcp_port_free":
-            host = _override_host(override_map)
-            port = _override_port(override_map)
-            ok = _tcp_port_free(host, port)
-            evidence = f"{host}:{port}"
-            if not ok:
-                message = (
-                    f"MCP port {host}:{port} is already accepting connections. "
-                    "Pick another port or stop the existing server."
-                )
-                kind = "mcp_port_in_use"
-        elif gate.kind == "request_field":
-            ok = bool(override_map.get(gate.id))
-            if not ok:
-                message = "Attach a completed Agibot map context JSON."
-                kind = "needs_agibot_context"
-        elif gate.kind == "operator_gate":
-            blocks_start = real_movement_enabled
-            ok = gate_map.get(gate.id) is True
-            if not ok:
-                if real_movement_enabled:
-                    message = (
-                        "Real movement is enabled; localization, run enablement, "
-                        "and E-stop/manual-stop readiness must be accepted before launch."
-                    )
-                    kind = "needs_real_movement_gate"
-                else:
-                    message = (
-                        "Dry-run launch can start; this evidence is required for real movement."
-                    )
-                    kind = "real_movement_gate_pending"
-        if ok:
-            kind = "ready"
-        if not ok and blocks_start and not blocker:
-            blocker = message
-            blocker_kind = kind
-        gate_rows.append(
-            {
-                "id": gate.id,
-                "label": gate.label,
-                "status": "ready" if ok else "needs_action",
-                "kind": kind,
-                "severity": severity,
-                "required": blocks_start,
-                "blocks_start": blocks_start,
-                "message": message,
-                "evidence": evidence,
-                "help_text": gate.help_text,
-            }
-        )
+    lock_state, attachable_run, blocker, blocker_kind = _route_lock_readiness(root, route)
+    provider_status = _provider_status(route, env_map)
+    gate_rows, gate_blocker, gate_blocker_kind = route_gate_rows(
+        root,
+        route,
+        override_map,
+        gate_map,
+        provider_status,
+    )
+    if not blocker and gate_blocker:
+        blocker = gate_blocker
+        blocker_kind = gate_blocker_kind
     return {
         "can_start": not blocker,
         "blocker": blocker,
         "blocker_kind": blocker_kind,
         "lock": lock_state.to_payload(),
         "attachable_run": attachable_run,
-        "provider": _provider_status(route, env_map),
+        "provider": provider_status,
         "gates": gate_rows,
     }
 
@@ -442,6 +374,28 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     if lock_name:
         ResourceLock(root, lock_name).release(run_id=run_id, force=True)
     return state
+
+
+def _route_lock_readiness(
+    root: Path,
+    route: ConsoleLaunchSelection,
+) -> tuple[Any, dict[str, Any] | None, str, str]:
+    lock = ResourceLock(root, route.lock_name)
+    lock_state = lock.read()
+    if _release_terminal_owner_lock(root, lock_state):
+        lock_state = lock.read()
+    attachable_run = _attachable_run_payload(root, lock_state)
+    lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
+    if not lock_active:
+        return lock_state, attachable_run, "", ""
+    if attachable_run:
+        blocker = (
+            f"Backend lock is held by run {attachable_run['run_id']}. "
+            "Attach to the existing run or wait for it to finish."
+        )
+    else:
+        blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
+    return lock_state, attachable_run, blocker, "locked"
 
 
 def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, str]) -> None:
@@ -529,44 +483,7 @@ def _normalized_launch_overrides(
 
 
 def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[str, str]) -> None:
-    if env_overrides and route.agent_engine_id not in {
-        "codex-cli",
-        "claude-code",
-        "openai-agents-sdk",
-    }:
-        raise ConsoleLaunchError("provider overrides are only supported for coding-agent routes")
-    for key, value in env_overrides.items():
-        if key not in ALLOWED_ENV_OVERRIDES:
-            raise ConsoleLaunchError(f"unsupported provider override: {key}")
-        if "\x00" in value or "\n" in value or "\r" in value:
-            raise ConsoleLaunchError(f"invalid control character in provider override: {key}")
-        if key == "ROBOCLAWS_CODEX_PROVIDER" and route.agent_engine_id not in {
-            "codex-cli",
-            "openai-agents-sdk",
-        }:
-            raise ConsoleLaunchError("Codex provider override is only supported for Codex routes")
-        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and route.agent_engine_id != "claude-code":
-            raise ConsoleLaunchError("Claude provider override is only supported for Claude routes")
-        if key == "ROBOCLAWS_CODEX_PROVIDER":
-            try:
-                route_spec = provider_route_spec(value)
-            except KeyError:
-                route_spec = None
-            if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
-                expected = ", ".join(route.to_payload()["supported_provider_profiles"])
-                raise ConsoleLaunchError(
-                    f"unsupported Codex provider override: {value}; expected {expected}"
-                )
-        if key == "ROBOCLAWS_CLAUDE_PROVIDER":
-            try:
-                route_spec = provider_route_spec(value)
-            except KeyError:
-                route_spec = None
-            if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
-                expected = ", ".join(route.to_payload()["supported_provider_profiles"])
-                raise ConsoleLaunchError(
-                    f"unsupported Claude provider override: {value}; expected {expected}"
-                )
+    validate_env_overrides(route, env_overrides, error_type=ConsoleLaunchError)
 
 
 def _apply_env_overrides(
@@ -940,52 +857,7 @@ def _stop_docker_containers_for_run(display_run_dir: Path) -> None:
 
 
 def _docker_container_ids_with_mount(source: Path) -> list[str]:
-    try:
-        result = subprocess.run(
-            ["docker", "ps", "-q"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-    except (FileNotFoundError, OSError):
-        return []
-    if result.returncode != 0:
-        return []
-    container_ids: list[str] = []
-    for container_id in result.stdout.split():
-        try:
-            inspect = subprocess.run(
-                ["docker", "inspect", "--format", "{{json .Mounts}}", container_id],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                text=True,
-            )
-        except (FileNotFoundError, OSError):
-            continue
-        if inspect.returncode != 0:
-            continue
-        try:
-            mounts = json.loads(inspect.stdout)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(mounts, list):
-            continue
-        for mount in mounts:
-            if not isinstance(mount, dict):
-                continue
-            mount_source = mount.get("Source")
-            if not mount_source:
-                continue
-            try:
-                candidate = Path(str(mount_source)).resolve()
-            except OSError:
-                continue
-            if candidate == source:
-                container_ids.append(container_id)
-                break
-    return container_ids
+    return docker_container_ids_with_mount(source, run_command=subprocess.run)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -1058,15 +930,6 @@ def _clean_dotenv_value(value: str) -> str:
     return clean
 
 
-def _override_host(overrides: dict[str, str]) -> str:
-    host = str(overrides.get("host") or DEFAULT_MCP_HOST).strip()
-    return host or DEFAULT_MCP_HOST
-
-
-def _override_port(overrides: dict[str, str]) -> int:
-    return _parse_port(str(overrides.get("port") or DEFAULT_MCP_PORT))
-
-
 def _parse_port(value: str) -> int:
     try:
         port = int(str(value).strip())
@@ -1085,19 +948,6 @@ def _parse_nonnegative_int(raw: str, key: str) -> int:
     if value < 0:
         raise ConsoleLaunchError(f"{key} must be >= 0")
     return value
-
-
-def _truthy_override(raw: str | None) -> bool:
-    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _tcp_port_free(host: str, port: int) -> bool:
-    probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-    try:
-        with socket.create_connection((probe_host, port), timeout=0.2):
-            return False
-    except OSError:
-        return True
 
 
 def _new_run_id(route: ConsoleLaunchSelection) -> str:

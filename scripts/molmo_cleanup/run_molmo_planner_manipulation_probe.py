@@ -9,7 +9,6 @@ import importlib.util
 import json
 import os
 import platform
-import signal
 import subprocess
 import sys
 import time
@@ -23,26 +22,26 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.household.manipulation_provenance import (  # noqa: E402
-    BLOCKED_CAPABILITY_PROVENANCE,
-    MANIPULATION_PROBE_CONTRACT,
-    PLANNER_BACKED_PROVENANCE,
-    blocked_planner_probe_evidence,
-    planner_backed_probe_evidence,
-)
 from roboclaws.household.planner_probe_primitive_executor import (  # noqa: E402
     PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
 )
-from roboclaws.household.rby1m_curobo_gate import (  # noqa: E402
-    rby1m_curobo_gate_from_planner_probe,
-)
-from roboclaws.household.report import render_planner_manipulation_report  # noqa: E402
 from roboclaws.household.semantic_timeline import (  # noqa: E402
     canonical_cleanup_tool_sequence,
 )
 from roboclaws.household.subprocess_backend import (  # noqa: E402
     DEFAULT_MOLMOSPACES_PYTHON,
-    MOLMOSPACES_SUBPROCESS_BACKEND,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (  # noqa: E402
+    blockers_from_completed as _blockers_from_completed,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (
+    process_output_text as _process_output_text,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (
+    worker_payload_from_stdout as _worker_payload_from_stdout,
+)
+from scripts.molmo_cleanup.planner_manipulation_probe_result import (
+    write_probe_result as _write_probe_result,
 )
 
 DEFAULT_MOLMOSPACES_ROOT = Path("/tmp/roboclaws-molmospaces-spike/molmospaces")
@@ -1258,6 +1257,66 @@ def _execute_policy_probe(
     import numpy as np
     from molmo_spaces.utils.test_utils import run_task_for_steps_with_observations
 
+    renderer_adapter = _prepare_execute_renderer(renderer_device_id)
+    sampler_context = _prepare_execute_task_sampler(
+        config,
+        output_dir,
+        requested_cleanup_binding=requested_cleanup_binding,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
+    )
+    task, task_binding_context = _sample_execute_task(
+        sampler_context["task_sampler"],
+        requested_cleanup_binding,
+    )
+    _emit_worker_event("execute_warp_adapter_start", stage="execute_warp_adapter")
+    warp_adapter = _apply_warp_torch_adapter()
+    _emit_worker_event(
+        "execute_warp_adapter_ready",
+        stage="execute_warp_adapter",
+        warp_adapter=warp_adapter,
+    )
+    policy, initial_qpos, final_qpos, initial_obs, final_obs = _run_execute_policy(
+        config,
+        task,
+        steps,
+        run_task_for_steps_with_observations,
+    )
+    image_artifacts = _execute_probe_image_artifacts(
+        output_dir,
+        initial_obs,
+        final_obs,
+    )
+    max_abs_qpos_delta = float(np.max(np.abs(final_qpos - initial_qpos)))
+    _emit_worker_event(
+        "execute_probe_evidence_ready",
+        stage="execute_probe_evidence",
+        steps_executed=steps,
+        max_abs_qpos_delta=max_abs_qpos_delta,
+        image_artifacts=image_artifacts,
+    )
+    return {
+        "execution_attempted": True,
+        "steps_requested": steps,
+        "steps_executed": steps,
+        "max_abs_qpos_delta": max_abs_qpos_delta,
+        "image_artifacts": image_artifacts,
+        "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
+        "renderer_adapter": renderer_adapter,
+        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
+        "cleanup_task_sampler_adapter": sampler_context["cleanup_task_sampler_adapter"],
+        "task_sampler_failure_diagnostics": sampler_context["task_sampler_failure_diagnostics"],
+        "sampled_task_binding": task_binding_context["sampled_task_binding"],
+        "requested_cleanup_primitive_binding": requested_cleanup_binding,
+        "cleanup_primitive_binding": task_binding_context["cleanup_binding_result"].get(
+            "cleanup_primitive_binding"
+        ),
+        "cleanup_primitive_binding_blockers": task_binding_context["cleanup_binding_result"].get(
+            "blockers", []
+        ),
+    }
+
+
+def _prepare_execute_renderer(renderer_device_id: int | None) -> dict[str, Any]:
     _emit_worker_event("execute_renderer_adapter_start", stage="execute_renderer_adapter")
     renderer_adapter = _apply_headless_renderer_adapter(renderer_device_id)
     _emit_worker_event(
@@ -1265,6 +1324,16 @@ def _execute_policy_probe(
         stage="execute_renderer_adapter",
         renderer_adapter=renderer_adapter,
     )
+    return renderer_adapter
+
+
+def _prepare_execute_task_sampler(
+    config: Any,
+    output_dir: Path,
+    *,
+    requested_cleanup_binding: dict[str, Any],
+    task_sampler_robot_placement_profile: dict[str, Any],
+) -> dict[str, Any]:
     _emit_worker_event("execute_task_sampler_construct_start", stage="execute_task_sampler")
     task_sampler = config.task_sampler_config.task_sampler_class(config)
     cleanup_task_sampler_adapter = _apply_exact_cleanup_task_sampler_adapter(
@@ -1283,6 +1352,17 @@ def _execute_policy_probe(
         task_sampler_failure_diagnostics=task_sampler_failure_diagnostics,
     )
     _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
+    return {
+        "task_sampler": task_sampler,
+        "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
+        "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
+    }
+
+
+def _sample_execute_task(
+    task_sampler: Any,
+    requested_cleanup_binding: dict[str, Any],
+) -> tuple[Any, dict[str, Any]]:
     _emit_worker_event("execute_task_sampler_reset_start", stage="execute_task_sampler_reset")
     task_sampler.reset()
     _emit_worker_event("execute_task_sampler_reset_done", stage="execute_task_sampler_reset")
@@ -1310,13 +1390,18 @@ def _execute_policy_probe(
     _emit_worker_event("execute_task_reset_start", stage="execute_task_reset")
     task.reset()
     _emit_worker_event("execute_task_reset_done", stage="execute_task_reset")
-    _emit_worker_event("execute_warp_adapter_start", stage="execute_warp_adapter")
-    warp_adapter = _apply_warp_torch_adapter()
-    _emit_worker_event(
-        "execute_warp_adapter_ready",
-        stage="execute_warp_adapter",
-        warp_adapter=warp_adapter,
-    )
+    return task, {
+        "sampled_task_binding": sampled_task_binding,
+        "cleanup_binding_result": cleanup_binding_result,
+    }
+
+
+def _run_execute_policy(
+    config: Any,
+    task: Any,
+    steps: int,
+    run_task_for_steps_with_observations: Any,
+) -> tuple[Any, Any, Any, dict[str, Any], dict[str, Any]]:
     _record_cuda_memory_snapshot("execute_policy_construct_before")
     _emit_worker_event("execute_policy_construct_start", stage="execute_policy_construct")
     policy = config.policy_config.policy_cls(config, task)
@@ -1337,24 +1422,36 @@ def _execute_policy_probe(
             profiler=None,
         )
     except BaseException as exc:  # noqa: BLE001 - preserve target-runtime diagnosis.
-        policy_exception_context = _policy_exception_context(
-            policy,
-            exc,
-            stage="execute_policy_run",
-            steps_requested=steps,
-        )
-        _record_worker_exception_context(
-            policy_exception_context=policy_exception_context,
-        )
-        _emit_worker_event(
-            "execute_policy_run_exception",
-            stage="execute_policy_run",
-            policy_exception_context=policy_exception_context,
-        )
-        _record_cuda_memory_snapshot("execute_policy_run_exception")
+        _record_policy_run_exception(policy, exc, steps=steps)
         raise
     _record_cuda_memory_snapshot("execute_policy_run_done")
     _emit_worker_event("execute_policy_run_done", stage="execute_policy_run", steps=steps)
+    return policy, initial_qpos, final_qpos, initial_obs, final_obs
+
+
+def _record_policy_run_exception(policy: Any, exc: BaseException, *, steps: int) -> None:
+    policy_exception_context = _policy_exception_context(
+        policy,
+        exc,
+        stage="execute_policy_run",
+        steps_requested=steps,
+    )
+    _record_worker_exception_context(
+        policy_exception_context=policy_exception_context,
+    )
+    _emit_worker_event(
+        "execute_policy_run_exception",
+        stage="execute_policy_run",
+        policy_exception_context=policy_exception_context,
+    )
+    _record_cuda_memory_snapshot("execute_policy_run_exception")
+
+
+def _execute_probe_image_artifacts(
+    output_dir: Path,
+    initial_obs: dict[str, Any],
+    final_obs: dict[str, Any],
+) -> dict[str, str]:
     views_dir = output_dir / "planner_views"
     image_artifacts = {}
     initial = _write_first_camera_image(initial_obs, views_dir, "initial")
@@ -1363,30 +1460,7 @@ def _execute_policy_probe(
         image_artifacts["initial"] = str(initial.relative_to(output_dir))
     if final:
         image_artifacts["final"] = str(final.relative_to(output_dir))
-    max_abs_qpos_delta = float(np.max(np.abs(final_qpos - initial_qpos)))
-    _emit_worker_event(
-        "execute_probe_evidence_ready",
-        stage="execute_probe_evidence",
-        steps_executed=steps,
-        max_abs_qpos_delta=max_abs_qpos_delta,
-        image_artifacts=image_artifacts,
-    )
-    return {
-        "execution_attempted": True,
-        "steps_requested": steps,
-        "steps_executed": steps,
-        "max_abs_qpos_delta": max_abs_qpos_delta,
-        "image_artifacts": image_artifacts,
-        "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
-        "renderer_adapter": renderer_adapter,
-        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
-        "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
-        "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
-        "sampled_task_binding": sampled_task_binding,
-        "requested_cleanup_primitive_binding": requested_cleanup_binding,
-        "cleanup_primitive_binding": cleanup_binding_result.get("cleanup_primitive_binding"),
-        "cleanup_primitive_binding_blockers": cleanup_binding_result.get("blockers", []),
-    }
+    return image_artifacts
 
 
 def _policy_exception_context(
@@ -1760,6 +1834,28 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "image_artifacts": {},
         "visual_capture_failures": [],
     }
+    _install_robot_placement_diagnostics(
+        task_sampler,
+        diagnostics,
+        profile,
+        output_dir=output_dir,
+    )
+    _install_asset_failure_diagnostics(task_sampler, diagnostics)
+    _install_grasp_collision_diagnostics(task_sampler, diagnostics)
+    _install_grasp_failure_diagnostics(task_sampler, diagnostics)
+    _install_candidate_removal_diagnostics(task_sampler, diagnostics)
+    diagnostics["applied"] = bool(diagnostics["hooks"])
+    _refresh_task_sampler_failure_diagnostics(diagnostics)
+    return diagnostics
+
+
+def _install_robot_placement_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+    profile: dict[str, Any],
+    *,
+    output_dir: Path | None,
+) -> None:
     sample_and_place_robot = getattr(task_sampler, "_sample_and_place_robot", None)
     if callable(sample_and_place_robot):
 
@@ -1809,6 +1905,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("_sample_and_place_robot")
 
+
+def _install_asset_failure_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> None:
     report_asset_failure = getattr(task_sampler, "report_asset_failure", None)
     if callable(report_asset_failure):
 
@@ -1828,8 +1929,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("report_asset_failure")
 
-    _install_grasp_collision_diagnostics(task_sampler, diagnostics)
 
+def _install_grasp_failure_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> None:
     report_grasp_failure = getattr(task_sampler, "report_grasp_failure", None)
     if callable(report_grasp_failure):
 
@@ -1883,6 +1987,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("report_grasp_failure")
 
+
+def _install_candidate_removal_diagnostics(
+    task_sampler: Any,
+    diagnostics: dict[str, Any],
+) -> None:
     remove_candidate_object = getattr(task_sampler, "_remove_candidate_object", None)
     if callable(remove_candidate_object):
 
@@ -1919,10 +2028,6 @@ def _apply_task_sampler_failure_diagnostics_adapter(
             task_sampler,
         )
         diagnostics["hooks"].append("_remove_candidate_object")
-
-    diagnostics["applied"] = bool(diagnostics["hooks"])
-    _refresh_task_sampler_failure_diagnostics(diagnostics)
-    return diagnostics
 
 
 def _install_grasp_collision_diagnostics(task_sampler: Any, diagnostics: dict[str, Any]) -> None:
@@ -2776,221 +2881,6 @@ def _write_first_camera_image(
         image.save(path)
         return path
     return None
-
-
-def _write_probe_result(
-    *,
-    output_dir: Path,
-    stdout_path: Path,
-    stderr_path: Path,
-    embodiment: str,
-    probe_mode: str,
-    steps: int,
-    worker_payload: dict[str, Any] | None,
-    returncode: int,
-    blockers: list[dict[str, Any]],
-) -> dict[str, Any]:
-    worker_payload = worker_payload or {}
-    executed = bool(worker_payload.get("execution_attempted"))
-    max_delta = float(worker_payload.get("max_abs_qpos_delta") or 0.0)
-    planner_success = returncode == 0 and executed and max_delta > 0.0 and not blockers
-    if planner_success:
-        evidence = planner_backed_probe_evidence(
-            backend=MOLMOSPACES_SUBPROCESS_BACKEND,
-            embodiment=embodiment,
-            task=PROBE_TASK,
-            probe_mode=probe_mode,
-            upstream_policy_class=str(worker_payload["upstream_policy_class"]),
-            steps_requested=steps,
-            steps_executed=int(worker_payload.get("steps_executed") or 0),
-            max_abs_qpos_delta=max_delta,
-            image_artifacts=worker_payload.get("image_artifacts") or {},
-        )
-        status = PLANNER_BACKED_PROVENANCE
-        primitive_provenance = PLANNER_BACKED_PROVENANCE
-    else:
-        blockers = blockers or _default_blockers(worker_payload, probe_mode)
-        evidence = blocked_planner_probe_evidence(
-            backend=MOLMOSPACES_SUBPROCESS_BACKEND,
-            embodiment=embodiment,
-            task=PROBE_TASK,
-            probe_mode=probe_mode,
-            blockers=blockers,
-            upstream_policy_class=worker_payload.get("upstream_policy_class"),
-            execution_attempted=executed,
-        )
-        status = BLOCKED_CAPABILITY_PROVENANCE
-        primitive_provenance = BLOCKED_CAPABILITY_PROVENANCE
-    evidence["worker_returncode"] = returncode
-    evidence["worker_payload"] = worker_payload
-    if worker_payload.get("runtime_diagnostics"):
-        evidence["runtime_diagnostics"] = worker_payload["runtime_diagnostics"]
-    if worker_payload.get("cuda_memory_snapshots"):
-        evidence["cuda_memory_snapshots"] = worker_payload["cuda_memory_snapshots"]
-    if worker_payload.get("curobo_memory_profile"):
-        evidence["curobo_memory_profile"] = worker_payload["curobo_memory_profile"]
-    if worker_payload.get("cleanup_task_config"):
-        evidence["cleanup_task_config"] = worker_payload["cleanup_task_config"]
-    task_sampler_robot_placement_profile = worker_payload.get(
-        "task_sampler_robot_placement_profile"
-    )
-    if task_sampler_robot_placement_profile and (
-        task_sampler_robot_placement_profile.get("requested")
-        or task_sampler_robot_placement_profile.get("applied")
-    ):
-        evidence["task_sampler_robot_placement_profile"] = task_sampler_robot_placement_profile
-    if worker_payload.get("cleanup_task_sampler_adapter"):
-        evidence["cleanup_task_sampler_adapter"] = worker_payload["cleanup_task_sampler_adapter"]
-    if worker_payload.get("task_sampler_failure_diagnostics"):
-        evidence["task_sampler_failure_diagnostics"] = worker_payload[
-            "task_sampler_failure_diagnostics"
-        ]
-    if worker_payload.get("image_artifacts"):
-        evidence["image_artifacts"] = worker_payload["image_artifacts"]
-    if worker_payload.get("sampled_task_binding"):
-        evidence["sampled_task_binding"] = worker_payload["sampled_task_binding"]
-    if worker_payload.get("requested_cleanup_primitive_binding"):
-        evidence["requested_cleanup_primitive_binding"] = worker_payload[
-            "requested_cleanup_primitive_binding"
-        ]
-    if worker_payload.get("cleanup_primitive_binding"):
-        evidence["cleanup_primitive_binding"] = worker_payload["cleanup_primitive_binding"]
-    if "cleanup_primitive_binding_blockers" in worker_payload:
-        evidence["cleanup_primitive_binding_blockers"] = worker_payload[
-            "cleanup_primitive_binding_blockers"
-        ]
-    if worker_payload.get("policy_exception_context"):
-        evidence["policy_exception_context"] = worker_payload["policy_exception_context"]
-    worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
-    if worker_stage_events:
-        evidence["worker_stage_events"] = worker_stage_events
-        evidence["last_worker_stage"] = worker_payload.get("last_worker_stage")
-    run_result = {
-        "artifact_kind": "molmo_planner_backed_manipulation_probe",
-        "contract": MANIPULATION_PROBE_CONTRACT,
-        "backend": MOLMOSPACES_SUBPROCESS_BACKEND,
-        "status": status,
-        "final_status": status,
-        "primitive_provenance": primitive_provenance,
-        "manipulation_evidence": evidence,
-        "artifacts": {
-            "stdout": stdout_path.name,
-            "stderr": stderr_path.name,
-        },
-    }
-    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
-    report_path = render_planner_manipulation_report(run_dir=output_dir, run_result=run_result)
-    run_result["artifacts"]["report"] = report_path.name
-    (output_dir / "run_result.json").write_text(
-        json.dumps(run_result, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    return run_result
-
-
-def _blockers_from_completed(
-    returncode: int,
-    worker_payload: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    if returncode == 0 and worker_payload and worker_payload.get("ok"):
-        return []
-    if returncode < 0:
-        signum = -returncode
-        name = (
-            signal.Signals(signum).name
-            if signum in {item.value for item in signal.Signals}
-            else signum
-        )
-        return [{"code": "process_signal", "message": f"worker terminated by {name}"}]
-    if worker_payload and not worker_payload.get("ok"):
-        message = (
-            worker_payload.get("message") or worker_payload.get("exception_type") or "worker failed"
-        )
-        return [
-            {
-                "code": str(worker_payload.get("exception_type", "worker_exception")),
-                "message": str(message),
-            }
-        ]
-    if returncode != 0:
-        return [{"code": "worker_exit", "message": f"worker exited {returncode}"}]
-    return []
-
-
-def _default_blockers(worker_payload: dict[str, Any], probe_mode: str) -> list[dict[str, Any]]:
-    if probe_mode == "config_import":
-        return [
-            {
-                "code": "execution_not_attempted",
-                "message": (
-                    "Planner config/class import succeeded, but execution proof was not attempted."
-                ),
-            }
-        ]
-    if not worker_payload.get("execution_attempted"):
-        return [
-            {
-                "code": "execution_not_reached",
-                "message": "Planner execution did not start.",
-            }
-        ]
-    return [
-        {"code": "no_robot_state_delta", "message": "Planner execution did not move robot state."}
-    ]
-
-
-def _worker_payload_from_stdout(stdout: str) -> dict[str, Any] | None:
-    json_objects = _parse_stdout_json_objects(stdout)
-    if not json_objects:
-        return None
-    final_payload = next((item for item in reversed(json_objects) if "ok" in item), None)
-    payload: dict[str, Any] = dict(final_payload or {})
-    worker_events = [item for item in json_objects if item.get("event")]
-    runtime_diagnostics = next(
-        (
-            item.get("runtime_diagnostics")
-            for item in reversed(worker_events)
-            if item.get("event") == "runtime_diagnostics"
-        ),
-        None,
-    )
-    if runtime_diagnostics and "runtime_diagnostics" not in payload:
-        payload["runtime_diagnostics"] = runtime_diagnostics
-    if worker_events:
-        payload["worker_stage_events"] = worker_events
-        last_stage = str(worker_events[-1].get("stage") or worker_events[-1].get("event") or "")
-        payload["last_worker_stage"] = last_stage
-        memory_snapshots = [
-            item["cuda_memory"]
-            for item in worker_events
-            if item.get("event") == "cuda_memory_snapshot" and item.get("cuda_memory")
-        ]
-        if memory_snapshots and "cuda_memory_snapshots" not in payload:
-            payload["cuda_memory_snapshots"] = memory_snapshots
-    return payload or None
-
-
-def _parse_stdout_json_objects(stdout: str) -> list[dict[str, Any]]:
-    objects = []
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            objects.append(payload)
-    return objects
-
-
-def _process_output_text(value: str | bytes | None) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value
 
 
 def _append_optional_int_arg(command: list[str], name: str, value: int | None) -> None:

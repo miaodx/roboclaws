@@ -121,6 +121,7 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     goal_contract_path="${goal_contract_path#goal-contract-path=}"
     goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"
     goal_contract_path="${goal_contract_path:-${ROBOCLAWS_GOAL_CONTRACT_PATH:-}}"
+    python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-.venv/bin/python}"
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
       trace_args=(
         "$driver" "$profile" "$seeds" "$output_dir" "$task"
@@ -345,12 +346,8 @@ household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="
     case "$backend_override" in
       auto|"")
         ;;
-      api_semantic_synthetic|molmospaces_subprocess|isaaclab_subprocess)
-        backend="$backend_override"
-        ;;
       *)
-        echo "error: unsupported backend '$backend_override' (expected api_semantic_synthetic|molmospaces_subprocess|isaaclab_subprocess)" >&2
-        exit 1
+        backend="$("$python_bin" -m roboclaws.launch.backends cleanup-implementation-backend "$backend_override")"
         ;;
     esac
     if [[ "$profile" == "world-oracle-labels" && "$backend" == "isaaclab_subprocess" ]]; then

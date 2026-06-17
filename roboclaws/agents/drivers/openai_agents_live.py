@@ -157,43 +157,15 @@ def _run_openai_agents(
         add_trace_processor = None
         flush_traces = None
 
-    model = _model_for_request(request)
-    timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
-    runtime_config = _runtime_config(
+    parts = _openai_agents_run_parts(
         request,
-        mcp_client_session_timeout_configured=timeout_configured,
-        mcp_client_session_timeout_s=timeout_s,
+        agent_cls=Agent,
+        model_settings_cls=ModelSettings,
+        run_config_cls=RunConfig,
+        mcp_server_cls=MCPServerStreamableHttp,
+        events_path=events_path,
+        skill_context_path=skill_context_path,
     )
-    model_settings_payload = _sdk_model_settings_payload(request)
-    run_config_payload = _sdk_run_config_payload(request, events_path=events_path)
-    model_settings = ModelSettings(**model_settings_payload)
-    run_config = RunConfig(model_settings=model_settings, **run_config_payload)
-    server_kwargs: dict[str, Any] = {
-        "name": request.mcp_server.name,
-        "params": {"url": request.mcp_server.url},
-        "cache_tools_list": _cache_tools_list(request),
-    }
-    if timeout_configured:
-        server_kwargs["client_session_timeout_seconds"] = timeout_s
-    server = MCPServerStreamableHttp(
-        **server_kwargs,
-    )
-    instructions, skill_context_summary = _instructions_with_skill_context(request)
-    _write_skill_context_summary(skill_context_path, skill_context_summary)
-    agent_kwargs: dict[str, Any] = {
-        "name": f"roboclaws-{request.task_name}",
-        "instructions": instructions,
-        "mcp_servers": [server],
-        "mcp_config": {
-            "failure_error_function": _recording_tool_error_function(
-                events_path,
-                runtime_config=runtime_config,
-            )
-        },
-        "model": model,
-        "model_settings": model_settings,
-    }
-    agent = Agent(**agent_kwargs)
     events_path.parent.mkdir(parents=True, exist_ok=True)
     events_path.write_text("", encoding="utf-8")
     spans_path.parent.mkdir(parents=True, exist_ok=True)
@@ -203,15 +175,15 @@ def _run_openai_agents(
         {
             "event": "start",
             "ts_epoch": time.time(),
-            **runtime_config,
-            "skill_context": skill_context_summary,
+            **parts.runtime_config,
+            "skill_context": parts.skill_context_summary,
         },
     )
-    span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=runtime_config)
+    span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=parts.runtime_config)
     if add_trace_processor is None:
         _append_span_limitation(
             spans_path,
-            runtime_config=runtime_config,
+            runtime_config=parts.runtime_config,
             reason="sdk_trace_processor_api_unavailable",
         )
         span_processor = None
@@ -221,24 +193,24 @@ def _run_openai_agents(
         except Exception as exc:
             _append_span_limitation(
                 spans_path,
-                runtime_config=runtime_config,
+                runtime_config=parts.runtime_config,
                 reason="sdk_trace_processor_registration_failed",
                 exc=exc,
             )
             span_processor = None
 
     try:
-        if hasattr(server, "__aenter__"):
+        if hasattr(parts.server, "__aenter__"):
             return _run_with_async_mcp_server(
-                server,
-                agent,
+                parts.server,
+                parts.agent,
                 request,
                 events_path,
-                run_config=run_config,
+                run_config=parts.run_config,
             )
         runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
-        runner_kwargs["run_config"] = run_config
-        result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
+        runner_kwargs["run_config"] = parts.run_config
+        result = Runner.run_sync(parts.agent, request.kickoff_prompt, **runner_kwargs)
         _append_event(
             events_path,
             {"event": "result", "ts_epoch": time.time(), "summary": _summarize_sdk_result(result)},
@@ -261,6 +233,106 @@ def _run_openai_agents(
         if span_processor is not None:
             span_processor.force_flush()
             span_processor.shutdown()
+
+
+@dataclass(frozen=True)
+class _OpenAIAgentsRunParts:
+    agent: Any
+    server: Any
+    run_config: Any
+    runtime_config: dict[str, Any]
+    skill_context_summary: dict[str, Any]
+
+
+def _openai_agents_run_parts(
+    request: LiveAgentRequest,
+    *,
+    agent_cls: Any,
+    model_settings_cls: Any,
+    run_config_cls: Any,
+    mcp_server_cls: Any,
+    events_path: Path,
+    skill_context_path: Path,
+) -> _OpenAIAgentsRunParts:
+    timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
+    runtime_config = _runtime_config(
+        request,
+        mcp_client_session_timeout_configured=timeout_configured,
+        mcp_client_session_timeout_s=timeout_s,
+    )
+    model_settings = model_settings_cls(**_sdk_model_settings_payload(request))
+    run_config = run_config_cls(
+        model_settings=model_settings,
+        **_sdk_run_config_payload(request, events_path=events_path),
+    )
+    server = mcp_server_cls(
+        **_mcp_server_kwargs(
+            request,
+            timeout_configured=timeout_configured,
+            timeout_s=timeout_s,
+        )
+    )
+    instructions, skill_context_summary = _instructions_with_skill_context(request)
+    _write_skill_context_summary(skill_context_path, skill_context_summary)
+    agent = agent_cls(
+        **_agent_kwargs(
+            request,
+            model=_model_for_request(request),
+            model_settings=model_settings,
+            server=server,
+            instructions=instructions,
+            events_path=events_path,
+            runtime_config=runtime_config,
+        )
+    )
+    return _OpenAIAgentsRunParts(
+        agent=agent,
+        server=server,
+        run_config=run_config,
+        runtime_config=runtime_config,
+        skill_context_summary=skill_context_summary,
+    )
+
+
+def _mcp_server_kwargs(
+    request: LiveAgentRequest,
+    *,
+    timeout_configured: bool,
+    timeout_s: float,
+) -> dict[str, Any]:
+    server_kwargs: dict[str, Any] = {
+        "name": request.mcp_server.name,
+        "params": {"url": request.mcp_server.url},
+        "cache_tools_list": _cache_tools_list(request),
+    }
+    if timeout_configured:
+        server_kwargs["client_session_timeout_seconds"] = timeout_s
+    return server_kwargs
+
+
+def _agent_kwargs(
+    request: LiveAgentRequest,
+    *,
+    model: Any,
+    model_settings: Any,
+    server: Any,
+    instructions: str,
+    events_path: Path,
+    runtime_config: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "name": f"roboclaws-{request.task_name}",
+        "instructions": instructions,
+        "mcp_servers": [server],
+        "mcp_config": {
+            "failure_error_function": _recording_tool_error_function(
+                events_path,
+                runtime_config=runtime_config,
+            )
+        },
+        "model": model,
+        "model_settings": model_settings,
+    }
 
 
 def _run_with_async_mcp_server(
@@ -918,19 +990,11 @@ def _camera_grounded_history_info(
     }:
         return None
     call_id = str(payload.get("call_id") or "")
-    tool = _normalize_mcp_tool_name(
-        (tool_names_by_call_id or {}).get(call_id)
-        or payload.get("name")
-        or payload.get("tool")
-        or payload.get("tool_name")
-        or ""
+    tool = _camera_grounded_history_tool(
+        payload,
+        call_id=call_id,
+        tool_names_by_call_id=tool_names_by_call_id,
     )
-    if not tool and "observe_camera_grounded_candidates" in call_id:
-        tool = "observe_camera_grounded_candidates"
-    if not tool and "declare_visual_candidates" in call_id:
-        tool = "declare_visual_candidates"
-    if not tool and "observe" in call_id:
-        tool = "observe"
     output = payload.get("output") if "output" in payload else payload.get("content")
     if output is None:
         return None
@@ -938,19 +1002,7 @@ def _camera_grounded_history_info(
     decoded = decoded if isinstance(decoded, dict) else {}
     if not tool:
         tool = _normalize_mcp_tool_name(decoded.get("tool") or "")
-    if tool not in {
-        "observe_camera_grounded_candidates",
-        "declare_visual_candidates",
-        "observe",
-    }:
-        return None
-    if tool == "observe" and str(decoded.get("perception_mode") or "") != "camera_model_policy":
-        return None
-    if tool == "declare_visual_candidates" and not (
-        "camera_model_candidates" in decoded
-        or "model_declared_observations" in decoded
-        or "visual_grounding_pipeline" in decoded
-    ):
+    if not _camera_grounded_history_tool_allowed(tool, decoded):
         return None
     output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
     raw_fpv_observation = decoded.get("raw_fpv_observation")
@@ -971,6 +1023,44 @@ def _camera_grounded_history_info(
         "actionable_candidate_count": _camera_grounded_actionable_candidate_count(decoded),
         "candidate_refs": _camera_grounded_candidate_refs(decoded),
     }
+
+
+def _camera_grounded_history_tool(
+    payload: dict[str, Any],
+    *,
+    call_id: str,
+    tool_names_by_call_id: dict[str, str] | None,
+) -> str:
+    tool = _normalize_mcp_tool_name(
+        (tool_names_by_call_id or {}).get(call_id)
+        or payload.get("name")
+        or payload.get("tool")
+        or payload.get("tool_name")
+        or ""
+    )
+    if tool:
+        return tool
+    if "observe_camera_grounded_candidates" in call_id:
+        return "observe_camera_grounded_candidates"
+    if "declare_visual_candidates" in call_id:
+        return "declare_visual_candidates"
+    if "observe" in call_id:
+        return "observe"
+    return ""
+
+
+def _camera_grounded_history_tool_allowed(tool: str, decoded: dict[str, Any]) -> bool:
+    if tool not in {"observe_camera_grounded_candidates", "declare_visual_candidates", "observe"}:
+        return False
+    if tool == "observe":
+        return str(decoded.get("perception_mode") or "") == "camera_model_policy"
+    if tool == "declare_visual_candidates":
+        return (
+            "camera_model_candidates" in decoded
+            or "model_declared_observations" in decoded
+            or "visual_grounding_pipeline" in decoded
+        )
+    return True
 
 
 def _normalize_mcp_tool_name(value: Any) -> str:
@@ -1144,32 +1234,40 @@ def _decode_tool_output_payload(output: Any) -> Any:
 
 def _unwrap_mcp_text_content_payload(decoded: Any) -> Any:
     if isinstance(decoded, dict):
-        content = decoded.get("content")
-        if isinstance(content, list):
-            unwrapped = _unwrap_mcp_text_content_payload(content)
-            if unwrapped is not content:
-                return unwrapped
-        text = decoded.get("text")
-        if isinstance(text, str) and str(decoded.get("type") or "") in {"", "text"}:
-            try:
-                return _unwrap_mcp_text_content_payload(json.loads(text))
-            except json.JSONDecodeError:
-                return decoded
-        return decoded
+        return _unwrap_mcp_text_content_dict(decoded)
     if isinstance(decoded, list):
-        for item in decoded:
-            if not isinstance(item, dict):
-                continue
-            if str(item.get("type") or "") not in {"", "text"}:
-                continue
-            text = item.get("text")
-            if not isinstance(text, str):
-                continue
-            try:
-                return _unwrap_mcp_text_content_payload(json.loads(text))
-            except json.JSONDecodeError:
-                continue
-        return decoded
+        return _unwrap_mcp_text_content_list(decoded)
+    return decoded
+
+
+def _unwrap_mcp_text_content_dict(decoded: dict[str, Any]) -> Any:
+    content = decoded.get("content")
+    if isinstance(content, list):
+        unwrapped = _unwrap_mcp_text_content_payload(content)
+        if unwrapped is not content:
+            return unwrapped
+    text = decoded.get("text")
+    if isinstance(text, str) and str(decoded.get("type") or "") in {"", "text"}:
+        try:
+            return _unwrap_mcp_text_content_payload(json.loads(text))
+        except json.JSONDecodeError:
+            return decoded
+    return decoded
+
+
+def _unwrap_mcp_text_content_list(decoded: list[Any]) -> Any:
+    for item in decoded:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "") not in {"", "text"}:
+            continue
+        text = item.get("text")
+        if not isinstance(text, str):
+            continue
+        try:
+            return _unwrap_mcp_text_content_payload(json.loads(text))
+        except json.JSONDecodeError:
+            continue
     return decoded
 
 

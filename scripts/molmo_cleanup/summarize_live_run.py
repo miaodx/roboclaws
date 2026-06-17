@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.reports.live_performance import (
     compare_report_performance_metrics,
     extract_report_performance_metrics,
