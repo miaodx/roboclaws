@@ -943,7 +943,7 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     assert not (tmp_path / "map_overlay.json").exists()
 
 
-def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerate(
+def test_cleanup_report_does_not_generate_schematic_preview_when_occupancy_frame_is_degenerate(
     tmp_path: Path,
 ) -> None:
     scenario = build_cleanup_scenario(seed=7)
@@ -1018,7 +1018,7 @@ def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerat
         },
     }
 
-    render_cleanup_report(
+    report_path = render_cleanup_report(
         run_dir=tmp_path,
         scenario=scenario,
         run_result=run_result,
@@ -1027,9 +1027,10 @@ def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerat
         after_snapshot=after,
     )
 
-    preview = Image.open(map_bundle / "report_static_navigation_map.png")
-    assert preview.size == (1100, 360)
-    assert preview.getpixel((20, 20)) != (28, 28, 28)
+    html = report_path.read_text(encoding="utf-8")
+    assert 'src="map_bundle/preview.png"' in html
+    assert "report_static_navigation_map.png" not in html
+    assert not (map_bundle / "report_static_navigation_map.png").exists()
 
 
 def test_cleanup_report_labels_observe_roles_and_zero_pixel_focus(tmp_path: Path) -> None:

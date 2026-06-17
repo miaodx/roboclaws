@@ -597,10 +597,7 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, Any]]:
     patterns = {
         "fpv": ("*.fpv*.png", "*.fpv*.jpg", "*fpv*.png", "*fpv*.jpg"),
         "chase": ("*.chase*.png", "*.chase*.jpg", "*chase*.png", "*chase*.jpg"),
-        "map": (
-            "map_bundle/preview.png",
-            "map_bundle/report_static_navigation_map.png",
-        ),
+        "map": ("map_bundle/preview.png",),
         "topdown": (
             "*topdown*.png",
             "*topdown*.jpg",

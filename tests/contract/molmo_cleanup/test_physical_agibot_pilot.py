@@ -246,7 +246,8 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert bundle["source_bundle_root"] == str(ROBOT_MAP_9_ARTIFACT)
     assert bundle["source_provenance"] == "agibot_gdk_map_artifact"
     assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
-    assert (run_dir / "map_bundle" / "report_static_navigation_map.png").is_file()
+    assert (run_dir / "map_bundle" / "preview.png").is_file()
+    assert not (run_dir / "map_bundle" / "report_static_navigation_map.png").exists()
     assert subphase_result["privacy_check"]["ok"] is True
     assert "Nav2 Map Bundle" in report_text
     assert "agibot-robot-map-9" in report_text
@@ -294,7 +295,8 @@ def test_physical_agibot_pilot_report_uses_default_robot_map_12_artifact(
     assert bundle["source_bundle_root"] == str(ROBOT_MAP_12_ARTIFACT)
     assert bundle["source_provenance"] == "agibot_gdk_map_artifact"
     assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
-    assert (run_dir / "map_bundle" / "report_static_navigation_map.png").is_file()
+    assert (run_dir / "map_bundle" / "preview.png").is_file()
+    assert not (run_dir / "map_bundle" / "report_static_navigation_map.png").exists()
     assert "agibot-robot-map-12" in report_text
 
 

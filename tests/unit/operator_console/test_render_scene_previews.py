@@ -358,7 +358,7 @@ def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
     assert "chase" not in metadata["views"]
 
 
-def test_b1_map12_preserves_prepared_nurec_camera_preview_renderer(
+def test_b1_map12_rewrites_prepared_nurec_scene_probe_camera_previews(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -397,10 +397,12 @@ def test_b1_map12_preserves_prepared_nurec_camera_preview_renderer(
     result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
 
     assert result["status"] == "rendered"
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
-    assert metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
-    assert metadata["views"]["chase"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
 
 
 def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(

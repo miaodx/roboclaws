@@ -547,16 +547,9 @@ def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bo
     chase = views.get("chase")
     if not isinstance(fpv, dict) or not isinstance(chase, dict):
         return False
-    return _b1_camera_preview_provenance_is_preservable(fpv) and (
-        _b1_camera_preview_provenance_is_preservable(chase)
-    )
-
-
-def _b1_camera_preview_provenance_is_preservable(view: dict[str, Any]) -> bool:
-    provenance = str(view.get("provenance") or "")
-    return provenance.startswith("isaac_runtime_") or (
-        provenance == "prepared_b1_nurec_scene_camera_preview"
-    )
+    return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
+        chase.get("provenance") or ""
+    ).startswith("isaac_runtime_")
 
 
 def _b1_existing_real_camera_preview_metadata(

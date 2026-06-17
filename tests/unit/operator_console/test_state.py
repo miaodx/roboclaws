@@ -526,15 +526,15 @@ def test_state_splits_semantic_map_from_top_down_scene_preview(
         encoding="utf-8",
     )
     robot_map = robot_views / "0042_observe.map.png"
-    report_map = map_bundle / "report_static_navigation_map.png"
+    stale_report_map = map_bundle / "report_static_navigation_map.png"
     bundle_preview = map_bundle / "preview.png"
     semantic_map = run_dir / "semantic_map.png"
     robot_map.write_bytes(b"robot map")
-    report_map.write_bytes(b"report map")
+    stale_report_map.write_bytes(b"stale report map")
     bundle_preview.write_bytes(b"bundle preview")
     semantic_map.write_bytes(b"semantic map")
     os.utime(robot_map, (1, 1))
-    os.utime(report_map, (2, 2))
+    os.utime(stale_report_map, (2, 2))
     os.utime(bundle_preview, (3, 3))
     os.utime(semantic_map, (3, 3))
     (run_dir / "run_result.json").write_text(

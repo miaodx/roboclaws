@@ -109,7 +109,6 @@ Do cuts 1 and 2 together.
 
 Current files:
 
-- `roboclaws/household/report_semantic_map_artifacts.py`
 - `roboclaws/household/realworld_mcp_server.py`
 - `roboclaws/operator_console/state.py`
 - `tests/contract/reports/test_molmo_cleanup_report.py`
@@ -120,6 +119,8 @@ Change:
 - Stop generating new `semantic_map.png` and `map_overlay.json` for current
   sim reports when the same information is already present in
   `runtime_metric_map.json` and report tables.
+- Delete the old report artifact writer instead of leaving an unused path that
+  can revive `semantic_map.png` / `map_overlay.json`.
 - Stop publishing `semantic_map.png` from live public artifact refresh for
   current sim runs.
 - Operator console should not prefer `semantic_map.png` as the map slot for sim
@@ -145,9 +146,10 @@ Current files:
 Change:
 
 - Prefer `map_bundle/preview.png` as the static map image.
-- Keep `map_bundle/report_static_navigation_map.png` only as a degenerate-frame
-  fallback for current sim reports. A report should use `map_bundle/preview.png`
-  when the source occupancy preview has usable framing.
+- Do not synthesize `map_bundle/report_static_navigation_map.png` as a
+  degenerate-frame fallback. Missing or awkward source framing should stay a
+  missing/awkward static artifact, while top-down scene maps and Runtime Metric
+  Map tables carry active review evidence.
 - Rename report copy from "Semantic Map" to "Static Navigation Map" or "Base
   Navigation Map Preview".
 
@@ -211,9 +213,8 @@ Change:
   runs.
 - `actionable_semantic_map_snapshot.json` remains visible only as a prior
   artifact link, not as an independent map image or fourth map concept.
-- Static map image source is `map_bundle/preview.png` by default. The only
-  current fallback is `map_bundle/report_static_navigation_map.png` for
-  degenerate source occupancy framing.
+- Static map image source is `map_bundle/preview.png`. Reports should not draw
+  a separate schematic map fallback.
 - Runtime semantic evidence is shown from `runtime_metric_map.json` counts and
   tables, not inferred from a drawn PNG.
 - Cleanup/open-ended still runs without prior map-build output.
@@ -354,9 +355,8 @@ Scope:
 - Phase 1: stop current sim report/live artifact paths from publishing
   `semantic_map.png` / `map_overlay.json` as map truth.
 - Phase 1: make static map preview naming use Base Navigation Map / Static
-  Navigation Map language and prefer `map_bundle/preview.png` with the bounded
-  `report_static_navigation_map.png` fallback only for degenerate source
-  occupancy framing.
+  Navigation Map language and use `map_bundle/preview.png` only, without a
+  synthesized `report_static_navigation_map.png` fallback.
 - Phase 1: make operator-console artifact selection stop preferring
   `semantic_map.png` for current sim map slots and keep
   `actionable_semantic_map_snapshot.json` as a prior wrapper artifact link.
@@ -386,7 +386,7 @@ Entity budget:
   `map_bundle/preview.png`, Runtime Metric Map report tables, eval harness, and
   `map_build_consumer` suite.
 - remove/merge: remove or narrow current-sim use of `semantic_map.png`,
-  `map_overlay.json`, `report_static_navigation_map.png` as default preview,
+  `map_overlay.json`, `report_static_navigation_map.png` schematic preview,
   and `operator_console_semantic_map_projection_v1`.
 - new: no new production entities. Test updates may add/rename focused test
   cases only if replacing old assertions.
@@ -398,7 +398,6 @@ Context:
 
 - must-read: `docs/plans/2026-06-17-sim-map-surface-simplification.md`,
   `docs/human/domain.md`, ADR-0136, ADR-0143,
-  `roboclaws/household/report_semantic_map_artifacts.py`,
   `roboclaws/household/report_sections_nav2_map.py`,
   `roboclaws/household/realworld_mcp_server.py`,
   `roboclaws/operator_console/state.py`,
@@ -483,11 +482,11 @@ without reading a generated PNG as semantic truth.
 Implemented on 2026-06-17.
 
 - Current sim report/live artifact paths no longer generate or publish
-  `semantic_map.png` or `map_overlay.json` as map evidence.
+  `semantic_map.png` or `map_overlay.json` as map evidence; the old report
+  artifact writer was deleted so this path cannot be reselected by accident.
 - Report and operator-console map copy now uses Base Navigation Map / Static
-  Navigation Map language and prefers `map_bundle/preview.png`; the
-  `report_static_navigation_map.png` path remains only as the degenerate-frame
-  fallback.
+  Navigation Map language and links `map_bundle/preview.png` only; the
+  `report_static_navigation_map.png` schematic fallback was removed.
 - `actionable_semantic_map_snapshot.json` remains linked as `Runtime Map Prior`
   instead of an independent map image slot.
 - The sim operator-console generated
