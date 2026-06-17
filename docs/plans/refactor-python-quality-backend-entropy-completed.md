@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Isaac worker render command numeric configuration now fails
+  aloud. The worker CLI rejects non-positive snapshot/robot-view/camera-view
+  render dimensions and negative robot-view settle frames at argument parsing
+  time instead of allowing invalid dimensions through or clamping settle frames
+  to zero in the output hooks. Owner layer: Backend Runtime / Environment
+  Primitive. Behavior-change class: fail-aloud Isaac worker render
+  configuration; default dimensions, valid positive dimensions,
+  zero-as-no-extra-settle behavior, worker command names, output packet schemas,
+  placeholder/real-render routing, and higher-level backend argv construction
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `isaac_worker_cli.py` is 269 lines,
+  `isaac_worker_outputs.py` is 429 lines, and
+  `test_relative_navigation_worker_routing.py` is 247 lines. Proof: focused
+  worker-routing tests, `test_isaac_lab_backend.py`, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Robot-camera apple-to-apple comparison target count now fails
   aloud. The comparison CLI rejects non-positive `--location-count` at argument
   parsing time instead of clamping zero or negative values to one target before

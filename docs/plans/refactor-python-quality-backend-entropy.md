@@ -60,6 +60,19 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one Isaac worker render
+  command numeric-config false-green. The worker CLI now rejects non-positive
+  snapshot/robot-view/camera-view render dimensions and negative robot-view
+  settle frames at argument parsing time instead of allowing invalid dimensions
+  through or clamping settle frames to zero in the output hooks. Owner layer:
+  Backend Runtime / Environment Primitive. Behavior-change class: fail-aloud
+  Isaac worker render configuration; default dimensions, valid positive
+  dimensions, zero-as-no-extra-settle behavior, worker command names, output
+  packet schemas, placeholder/real-render routing, and higher-level backend
+  argv construction are unchanged. The ratchet remains 0 complexity rows and
+  79 oversized modules; `isaac_worker_cli.py` is 269 lines,
+  `isaac_worker_outputs.py` is 429 lines, and
+  `test_relative_navigation_worker_routing.py` is 247 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one robot-camera
   apple-to-apple comparison target-count false-green. The comparison CLI now
   rejects non-positive `--location-count` at argument parsing time instead of

@@ -172,3 +172,76 @@ def test_isaac_worker_cli_exposes_relative_pose_command() -> None:
     assert args.lateral_m == pytest.approx(-0.125)
     assert args.yaw_delta_deg == pytest.approx(15.0)
     assert "navigate_to_relative_pose" in isaac_lab_backend_worker._STATE_COMMANDS
+
+
+def test_isaac_worker_cli_rejects_non_positive_render_dimensions() -> None:
+    from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
+
+    for command, required_args, flag in (
+        (
+            "snapshot",
+            ["--output-path", "/tmp/snapshot.png", "--title", "snapshot"],
+            "--render-width",
+        ),
+        ("robot_views", ["--output-dir", "/tmp/views", "--label", "views"], "--render-height"),
+        ("camera_views", ["--output-dir", "/tmp/cameras"], "--render-width"),
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            isaac_lab_backend_worker.parse_args(
+                [
+                    "--state-path",
+                    "state.json",
+                    command,
+                    *required_args,
+                    flag,
+                    "0",
+                ]
+            )
+        assert exc_info.value.code == 2
+
+
+def test_isaac_worker_cli_rejects_negative_render_settle_frames() -> None:
+    from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
+
+    with pytest.raises(SystemExit) as exc_info:
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                "state.json",
+                "robot_views",
+                "--output-dir",
+                "/tmp/views",
+                "--label",
+                "views",
+                "--render-settle-frames",
+                "-1",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+
+
+def test_isaac_worker_cli_accepts_positive_render_config() -> None:
+    from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
+
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            "state.json",
+            "robot_views",
+            "--output-dir",
+            "/tmp/views",
+            "--label",
+            "views",
+            "--render-width",
+            "64",
+            "--render-height",
+            "48",
+            "--render-settle-frames",
+            "0",
+        ]
+    )
+
+    assert args.render_width == 64
+    assert args.render_height == 48
+    assert args.render_settle_frames == 0
