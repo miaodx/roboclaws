@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections import Counter
@@ -19,6 +20,10 @@ if __package__ in {None, ""}:
 from scripts.maps.fit_b1_map12_scene_alignment import (
     SCENE_PROJECTION_HORIZONTAL_AXES,
     SCENE_PROJECTION_UP_AXIS,
+)
+from scripts.maps.render_b1_scene_gaussian_topdown import (
+    TOPDOWN_RENDER_SCHEMA,
+    validate_topdown_render_packet,
 )
 
 DIAGNOSTIC_SCHEMA = "b1_scene_topdown_diagnostic_v1"
@@ -44,6 +49,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=640)
+    parser.add_argument(
+        "--scene-topdown-render",
+        type=Path,
+        help=(
+            "Optional rendered Gaussian topdown packet. When provided, scene USD room/object "
+            "bounds are drawn onto that image. Missing or malformed inputs fail loudly."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -54,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=args.output_dir,
         width=max(1, int(args.width)),
         height=max(1, int(args.height)),
+        scene_topdown_render=args.scene_topdown_render,
     )
     errors = validate_scene_topdown_diagnostic(packet)
     packet["validation"] = {"status": "passed" if not errors else "failed", "errors": errors}
@@ -86,15 +100,52 @@ def build_scene_topdown_diagnostic(
     output_dir: Path,
     width: int = 960,
     height: int = 640,
+    scene_topdown_render: Path | None = None,
 ) -> dict[str, Any]:
     scene_root = Path(scene_root)
     output_dir = Path(output_dir)
+    if not scene_root.is_dir():
+        raise FileNotFoundError(f"scene root does not exist: {scene_root}")
     output_dir.mkdir(parents=True, exist_ok=True)
     partitions = scene_partitions(scene_root)
-    topdown_path = output_dir / "scene_topdown_diagnostic.png"
-    render_label_inventory_topdown(partitions, topdown_path, width=width, height=height)
-    geometry_status = "label_inventory_only" if partitions else "unavailable_no_scene_partitions"
-    return {
+    topdown_packet = None
+    object_bounds: list[dict[str, Any]] = []
+    render_stats: dict[str, Any] = {}
+    source_topdown_image = ""
+    if scene_topdown_render is not None:
+        topdown_packet = load_scene_topdown_render(scene_topdown_render)
+        object_bounds = scene_object_bounds_from_usd(scene_root / "storey_1" / "scene.usd")
+        partitions = attach_scene_bounds(partitions, object_bounds)
+        topdown_path = output_dir / "scene_topdown_label_overlay.png"
+        render_stats = render_scene_label_overlay_topdown(
+            topdown_packet,
+            partitions,
+            object_bounds,
+            topdown_path,
+        )
+        geometry_status = "rendered_gaussian_topdown_with_scene_usd_bounds_overlay"
+        geometry_backend = "scene_usd_world_bounds_on_gaussian_topdown"
+        geometry_honesty = (
+            "This PNG draws scene USD top-level object bounds, partition bounds, and labels "
+            "onto the rendered Gaussian topdown. It is a scene self-check in the B1 scene "
+            "frame only. It does not project labels into Map12 and cannot verify map-scene "
+            "alignment by itself."
+        )
+        source_topdown_image = str(topdown_packet["topdown_image"])
+    else:
+        topdown_path = output_dir / "scene_topdown_diagnostic.png"
+        render_label_inventory_topdown(partitions, topdown_path, width=width, height=height)
+        geometry_status = (
+            "label_inventory_only" if partitions else "unavailable_no_scene_partitions"
+        )
+        geometry_backend = "scene_partition_label_inventory"
+        geometry_honesty = (
+            "No metric USD/mesh bounds were extracted. The PNG is a review inventory "
+            "layout showing partition identities and object label counts. It is not a "
+            "Gaussian asset topdown, not a metric scene projection, and cannot verify "
+            "map-scene alignment by itself."
+        )
+    packet = {
         "schema": DIAGNOSTIC_SCHEMA,
         "scene_root": str(scene_root),
         "up_axis": SCENE_PROJECTION_UP_AXIS,
@@ -105,24 +156,24 @@ def build_scene_topdown_diagnostic(
             "source": "2rd_floor_seperated_scene_topdown_policy",
         },
         "geometry_status": geometry_status,
-        "geometry_backend": "scene_partition_label_inventory",
-        "geometry_honesty": (
-            "No metric USD/mesh bounds were extracted. The PNG is a review inventory "
-            "layout showing partition identities and object label counts. It is not a "
-            "Gaussian asset topdown, not a metric scene projection, and cannot verify "
-            "map-scene alignment by itself."
-        ),
+        "geometry_backend": geometry_backend,
+        "geometry_honesty": geometry_honesty,
+        "source_topdown_render": str(scene_topdown_render or ""),
+        "source_topdown_image": source_topdown_image,
         "topdown_image": str(topdown_path),
+        "alignment_scope": "scene_self_check_only",
+        "map_projection_status": "not_projected_to_map12",
         "partition_count": len(partitions),
         "partitions": partitions,
+        "object_bound_count": len(object_bounds),
+        "overlay_render_stats": render_stats,
         "high_signal_object_labels": high_signal_object_labels(partitions),
         "self_consistency": scene_self_consistency(partitions),
     }
+    return packet
 
 
 def scene_partitions(scene_root: Path) -> list[dict[str, Any]]:
-    if not scene_root.is_dir():
-        return []
     partitions = []
     for index, partition_root in enumerate(
         sorted(path for path in scene_root.iterdir() if path.is_dir()),
@@ -160,6 +211,141 @@ def scene_partitions(scene_root: Path) -> list[dict[str, Any]]:
     return partitions
 
 
+def load_scene_topdown_render(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"required scene top-down render missing: {path}")
+    packet = json.loads(path.read_text(encoding="utf-8"))
+    if packet.get("schema") != TOPDOWN_RENDER_SCHEMA:
+        raise ValueError(
+            f"scene top-down render must use schema {TOPDOWN_RENDER_SCHEMA}; "
+            f"got {packet.get('schema')!r}"
+        )
+    errors = validate_topdown_render_packet(packet)
+    if errors:
+        raise ValueError("invalid scene top-down render packet: " + "; ".join(errors))
+    camera = packet.get("camera") if isinstance(packet.get("camera"), dict) else {}
+    if not camera:
+        raise ValueError("scene top-down render missing camera")
+    return packet
+
+
+def scene_object_bounds_from_usd(scene_usd: Path) -> list[dict[str, Any]]:
+    if not scene_usd.is_file():
+        raise FileNotFoundError(f"scene USD missing for bounds overlay: {scene_usd}")
+    try:
+        from pxr import Usd, UsdGeom
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "scene USD bounds overlay requires pxr/OpenUSD; run with "
+            ".venv-isaaclab/bin/python or install a declared USD runtime"
+        ) from exc
+
+    stage = Usd.Stage.Open(str(scene_usd))
+    if stage is None:
+        raise ValueError(f"failed to open scene USD: {scene_usd}")
+    root = stage.GetDefaultPrim()
+    if not root:
+        raise ValueError(f"scene USD has no default prim: {scene_usd}")
+    cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(),
+        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+        useExtentsHint=True,
+    )
+    bounds = []
+    for prim in root.GetChildren():
+        prim_name = prim.GetName()
+        if "__" not in prim_name:
+            continue
+        partition_id, raw_object = prim_name.split("__", 1)
+        object_label = normalize_object_label(raw_object)
+        box = cache.ComputeWorldBound(prim).ComputeAlignedBox()
+        if box.IsEmpty():
+            continue
+        min_point = box.GetMin()
+        max_point = box.GetMax()
+        values = [
+            float(min_point[0]),
+            float(min_point[1]),
+            float(min_point[2]),
+            float(max_point[0]),
+            float(max_point[1]),
+            float(max_point[2]),
+        ]
+        if not all(math.isfinite(value) for value in values):
+            continue
+        min_x, min_y, min_z, max_x, max_y, max_z = values
+        bounds.append(
+            {
+                "partition_id": partition_id,
+                "object_id": prim_name,
+                "object_label": object_label,
+                "prim_path": str(prim.GetPath()),
+                "bounds": {
+                    "min_x": round(min_x, 6),
+                    "min_y": round(min_y, 6),
+                    "min_z": round(min_z, 6),
+                    "max_x": round(max_x, 6),
+                    "max_y": round(max_y, 6),
+                    "max_z": round(max_z, 6),
+                },
+                "center": {
+                    "x": round((min_x + max_x) / 2.0, 6),
+                    "y": round((min_y + max_y) / 2.0, 6),
+                    "z": round((min_z + max_z) / 2.0, 6),
+                },
+            }
+        )
+    if not bounds:
+        raise ValueError(f"no top-level scene object bounds extracted from {scene_usd}")
+    return bounds
+
+
+def attach_scene_bounds(
+    partitions: list[dict[str, Any]],
+    object_bounds: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    bounds_by_partition: dict[str, list[dict[str, Any]]] = {}
+    for item in object_bounds:
+        bounds_by_partition.setdefault(str(item.get("partition_id") or ""), []).append(item)
+    output = []
+    for partition in partitions:
+        row = dict(partition)
+        items = bounds_by_partition.get(str(row.get("partition_id") or ""), [])
+        if items:
+            row["scene_frame_bounds"] = aggregate_bounds(items)
+            row["geometry_status"] = "scene_usd_world_bounds"
+            row["object_bounds_count"] = len(items)
+        else:
+            row["scene_frame_bounds"] = {"status": "missing_scene_usd_bounds"}
+            row["geometry_status"] = "missing_scene_usd_bounds"
+            row["object_bounds_count"] = 0
+        output.append(row)
+    return output
+
+
+def aggregate_bounds(items: list[dict[str, Any]]) -> dict[str, Any]:
+    min_x = min(float(item["bounds"]["min_x"]) for item in items)
+    min_y = min(float(item["bounds"]["min_y"]) for item in items)
+    min_z = min(float(item["bounds"]["min_z"]) for item in items)
+    max_x = max(float(item["bounds"]["max_x"]) for item in items)
+    max_y = max(float(item["bounds"]["max_y"]) for item in items)
+    max_z = max(float(item["bounds"]["max_z"]) for item in items)
+    return {
+        "status": "extracted_from_scene_usd_world_bounds",
+        "min_x": round(min_x, 6),
+        "min_y": round(min_y, 6),
+        "min_z": round(min_z, 6),
+        "max_x": round(max_x, 6),
+        "max_y": round(max_y, 6),
+        "max_z": round(max_z, 6),
+        "center": {
+            "x": round((min_x + max_x) / 2.0, 6),
+            "y": round((min_y + max_y) / 2.0, 6),
+            "z": round((min_z + max_z) / 2.0, 6),
+        },
+    }
+
+
 def object_counts_from_gaussian_layer(path: Path) -> Counter[str]:
     counts: Counter[str] = Counter()
     if not path.is_file():
@@ -169,8 +355,7 @@ def object_counts_from_gaussian_layer(path: Path) -> Counter[str]:
         if "__" not in name:
             continue
         _partition_id, raw_object = name.split("__", 1)
-        object_name = _INSTANCE_SUFFIX_RE.sub("", raw_object)
-        object_name = re.sub(r"__.*$", "", object_name)
+        object_name = normalize_object_label(raw_object)
         if object_name:
             counts[object_name] += 1
     return counts
@@ -186,6 +371,12 @@ def object_counts_from_materials(materials_dir: Path) -> Counter[str]:
         if object_name:
             counts[object_name] += 1
     return counts
+
+
+def normalize_object_label(raw_object: str) -> str:
+    object_name = _INSTANCE_SUFFIX_RE.sub("", raw_object)
+    object_name = re.sub(r"__.*$", "", object_name)
+    return object_name
 
 
 def high_signal_object_labels(partitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -269,6 +460,247 @@ def render_label_inventory_topdown(
     image.save(path)
 
 
+def render_scene_label_overlay_topdown(
+    topdown_packet: dict[str, Any],
+    partitions: list[dict[str, Any]],
+    object_bounds: list[dict[str, Any]],
+    path: Path,
+) -> dict[str, Any]:
+    source_image = Path(str(topdown_packet.get("topdown_image") or ""))
+    image = Image.open(source_image).convert("RGBA")
+    draw = ImageDraw.Draw(image, "RGBA")
+    projector = scene_projector_from_topdown_packet(topdown_packet)
+    drawn_partitions = 0
+    drawn_objects = 0
+
+    partition_colors = {
+        str(partition.get("partition_id") or ""): _PARTITION_COLORS[index % len(_PARTITION_COLORS)]
+        for index, partition in enumerate(partitions)
+    }
+    for partition in partitions:
+        bounds = partition.get("scene_frame_bounds")
+        if (
+            not isinstance(bounds, dict)
+            or bounds.get("status") != "extracted_from_scene_usd_world_bounds"
+        ):
+            continue
+        polygon = projected_bounds_polygon(bounds, projector)
+        if len(polygon) < 3:
+            continue
+        color = partition_colors.get(str(partition.get("partition_id") or ""), (69, 123, 157))
+        fill = color + (34,)
+        outline = color + (210,)
+        draw.polygon(polygon, fill=fill)
+        draw.line(polygon + [polygon[0]], fill=outline, width=3)
+        center = projector.project(
+            float(bounds["center"]["x"]),
+            float(bounds["center"]["y"]),
+            z=0.0,
+        )
+        if center:
+            draw_label(
+                draw,
+                center,
+                f"{partition.get('partition_id')} ({partition.get('object_bounds_count')})",
+                fill=(20, 24, 28, 255),
+                background=color + (220,),
+            )
+        drawn_partitions += 1
+
+    for item in object_bounds:
+        center = item.get("center") if isinstance(item.get("center"), dict) else {}
+        point = projector.project(float(center["x"]), float(center["y"]), z=0.0)
+        if not point:
+            continue
+        partition_id = str(item.get("partition_id") or "")
+        color = partition_colors.get(partition_id, (69, 123, 157))
+        x, y = point
+        draw.ellipse(
+            (x - 3, y - 3, x + 3, y + 3), fill=color + (235,), outline=(255, 255, 255, 230)
+        )
+        if should_label_object(str(item.get("object_label") or "")):
+            draw.text(
+                (x + 5, y - 6), str(item.get("object_label") or "")[:24], fill=(13, 21, 31, 230)
+            )
+        drawn_objects += 1
+
+    draw_overlay_header(draw, topdown_packet)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.convert("RGB").save(path)
+    return {
+        "source_image": str(source_image),
+        "drawn_partition_count": drawn_partitions,
+        "drawn_object_count": drawn_objects,
+        "projection": projector.metadata,
+        "overlay_note": (
+            "Scene USD bounds are projected through the recorded topdown camera with z=0 "
+            "for labels. Tall objects may appear shifted relative to their visible top."
+        ),
+    }
+
+
+class SceneProjector:
+    def __init__(
+        self,
+        *,
+        eye: tuple[float, float, float],
+        target: tuple[float, float, float],
+        up: tuple[float, float, float],
+        vertical_fov_deg: float,
+        width: int,
+        height: int,
+    ) -> None:
+        self.eye = eye
+        self.forward = normalize((target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]))
+        self.right = normalize(cross(self.forward, up))
+        if vector_length(self.right) <= 0:
+            raise ValueError("topdown camera right vector is degenerate")
+        self.camera_up = normalize(cross(self.right, self.forward))
+        self.width = int(width)
+        self.height = int(height)
+        self.focal_y = (self.height / 2.0) / math.tan(math.radians(vertical_fov_deg) / 2.0)
+        self.focal_x = self.focal_y
+        self.metadata = {
+            "model": "recorded_perspective_camera_world_to_pixel",
+            "label_z_policy": "project_scene_xy_at_z0",
+            "width_px": self.width,
+            "height_px": self.height,
+            "vertical_fov_deg": vertical_fov_deg,
+            "eye": list(eye),
+            "target": list(target),
+            "up": list(up),
+        }
+
+    def project(self, x: float, y: float, *, z: float) -> tuple[float, float] | None:
+        rel = (x - self.eye[0], y - self.eye[1], z - self.eye[2])
+        cam_x = dot(rel, self.right)
+        cam_y = dot(rel, self.camera_up)
+        depth = dot(rel, self.forward)
+        if depth <= 1e-6:
+            return None
+        px = self.width / 2.0 + self.focal_x * cam_x / depth
+        py = self.height / 2.0 - self.focal_y * cam_y / depth
+        if not math.isfinite(px) or not math.isfinite(py):
+            return None
+        return px, py
+
+
+def scene_projector_from_topdown_packet(packet: dict[str, Any]) -> SceneProjector:
+    camera = packet.get("camera") if isinstance(packet.get("camera"), dict) else {}
+    lens = camera.get("lens") if isinstance(camera.get("lens"), dict) else {}
+    width = int(packet.get("width_px") or 0)
+    height = int(packet.get("height_px") or 0)
+    eye = xyz_tuple(camera.get("eye"), "camera.eye")
+    target = xyz_tuple(camera.get("target"), "camera.target")
+    up = xyz_tuple(camera.get("up") or [0.0, 0.0, 1.0], "camera.up")
+    vertical_fov = float(lens.get("vertical_fov_deg") or 0.0)
+    if width <= 0 or height <= 0:
+        raise ValueError("scene topdown render image size missing")
+    if vertical_fov <= 0:
+        raise ValueError("scene topdown render missing positive vertical_fov_deg")
+    return SceneProjector(
+        eye=eye,
+        target=target,
+        up=up,
+        vertical_fov_deg=vertical_fov,
+        width=width,
+        height=height,
+    )
+
+
+def projected_bounds_polygon(
+    bounds: dict[str, Any],
+    projector: SceneProjector,
+) -> list[tuple[float, float]]:
+    points = [
+        projector.project(float(bounds["min_x"]), float(bounds["min_y"]), z=0.0),
+        projector.project(float(bounds["max_x"]), float(bounds["min_y"]), z=0.0),
+        projector.project(float(bounds["max_x"]), float(bounds["max_y"]), z=0.0),
+        projector.project(float(bounds["min_x"]), float(bounds["max_y"]), z=0.0),
+    ]
+    return [point for point in points if point is not None]
+
+
+def draw_label(
+    draw: ImageDraw.ImageDraw,
+    point: tuple[float, float],
+    text: str,
+    *,
+    fill: tuple[int, int, int, int],
+    background: tuple[int, int, int, int],
+) -> None:
+    x, y = point
+    text = text[:42]
+    bbox = draw.textbbox((x, y), text)
+    pad = 4
+    draw.rectangle(
+        (bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad),
+        fill=background,
+        outline=(255, 255, 255, 220),
+    )
+    draw.text((x, y), text, fill=fill)
+
+
+def draw_overlay_header(draw: ImageDraw.ImageDraw, packet: dict[str, Any]) -> None:
+    policy = packet.get("scene_visibility_policy")
+    crop_source = ""
+    if isinstance(policy, dict):
+        crop_source = str(policy.get("source") or policy.get("status") or "")
+    lines = [
+        "B1 Gaussian topdown + scene USD label/bounds overlay",
+        "Scene self-check only. Not projected to Map12.",
+    ]
+    if crop_source:
+        lines.append(f"visibility: {crop_source}")
+    y = 14
+    for line in lines:
+        bbox = draw.textbbox((14, y), line)
+        draw.rectangle(
+            (bbox[0] - 5, bbox[1] - 3, bbox[2] + 5, bbox[3] + 3), fill=(255, 255, 255, 205)
+        )
+        draw.text((14, y), line, fill=(20, 24, 28, 255))
+        y += 20
+
+
+def should_label_object(label: str) -> bool:
+    return label not in {"chair", "plant"} and bool(label)
+
+
+def xyz_tuple(value: Any, label: str) -> tuple[float, float, float]:
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        raise ValueError(f"scene topdown render missing {label}")
+    result = tuple(float(item) for item in value)
+    if not all(math.isfinite(item) for item in result):
+        raise ValueError(f"scene topdown render has non-finite {label}")
+    return result
+
+
+def normalize(vector: tuple[float, float, float]) -> tuple[float, float, float]:
+    length = vector_length(vector)
+    if length <= 0:
+        raise ValueError("zero-length vector")
+    return (vector[0] / length, vector[1] / length, vector[2] / length)
+
+
+def vector_length(vector: tuple[float, float, float]) -> float:
+    return math.sqrt(dot(vector, vector))
+
+
+def dot(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def cross(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
 def validate_scene_topdown_diagnostic(packet: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     require(packet.get("schema") == DIAGNOSTIC_SCHEMA, "unexpected diagnostic schema", errors)
@@ -279,6 +711,16 @@ def validate_scene_topdown_diagnostic(packet: dict[str, Any]) -> list[str]:
         errors,
     )
     require(bool(packet.get("geometry_status")), "diagnostic must record geometry_status", errors)
+    require(
+        packet.get("alignment_scope") == "scene_self_check_only",
+        "diagnostic must be scoped to scene self-check only",
+        errors,
+    )
+    require(
+        packet.get("map_projection_status") == "not_projected_to_map12",
+        "diagnostic must not project scene labels to Map12",
+        errors,
+    )
     require(
         int(packet.get("partition_count") or 0) > 0, "diagnostic must list scene partitions", errors
     )
@@ -297,6 +739,23 @@ def validate_scene_topdown_diagnostic(packet: dict[str, Any]) -> list[str]:
             f"partition {partition.get('partition_id')} missing object_name_counts",
             errors,
         )
+        if (
+            packet.get("geometry_status")
+            == "rendered_gaussian_topdown_with_scene_usd_bounds_overlay"
+        ):
+            require(
+                partition.get("geometry_status") == "scene_usd_world_bounds",
+                f"partition {partition.get('partition_id')} missing scene USD bounds",
+                errors,
+            )
+    if packet.get("geometry_status") == "rendered_gaussian_topdown_with_scene_usd_bounds_overlay":
+        require(
+            int(packet.get("object_bound_count") or 0) > 0,
+            "scene bounds overlay must include object bounds",
+            errors,
+        )
+        stats = packet.get("overlay_render_stats")
+        require(isinstance(stats, dict), "scene bounds overlay missing render stats", errors)
     return errors
 
 
@@ -314,6 +773,25 @@ def render_diagnostic_html(packet: dict[str, Any], *, packet_path: Path) -> str:
     )
     image_name = Path(str(packet.get("topdown_image") or "")).name
     packet_name = packet_path.name
+    source_image = Path(str(packet.get("source_topdown_image") or "")).name
+    source_html = (
+        f"<p>Source Gaussian topdown: <strong>{escape_html(source_image)}</strong></p>"
+        if source_image
+        else ""
+    )
+    overlay_stats = packet.get("overlay_render_stats")
+    stats_html = ""
+    if isinstance(overlay_stats, dict) and overlay_stats:
+        drawn_partitions = overlay_stats.get("drawn_partition_count") or 0
+        drawn_objects = overlay_stats.get("drawn_object_count") or 0
+        stats_html = (
+            "<p>"
+            f"Drawn partitions: <strong>{drawn_partitions}</strong>. "
+            f"Drawn objects: <strong>{drawn_objects}</strong>."
+            "</p>"
+        )
+    alignment_scope = escape_html(str(packet.get("alignment_scope") or ""))
+    map_projection_status = escape_html(str(packet.get("map_projection_status") or ""))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -338,7 +816,11 @@ def render_diagnostic_html(packet: dict[str, Any], *, packet_path: Path) -> str:
   <p>Geometry status: <strong>{escape_html(str(packet.get("geometry_status") or ""))}</strong>.
   Up axis: <strong>{escape_html(str(packet.get("up_axis") or ""))}</strong>.
   Horizontal axes: <strong>{axes}</strong>.</p>
+  <p>Alignment scope: <strong>{alignment_scope}</strong>.
+  Map projection: <strong>{map_projection_status}</strong>.</p>
   <p>{escape_html(str(packet.get("geometry_honesty") or ""))}</p>
+  {source_html}
+  {stats_html}
   <img src="{escape_html(image_name)}" alt="B1 scene label inventory diagnostic" />
   <table>
     <thead>

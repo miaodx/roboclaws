@@ -256,6 +256,11 @@ python scripts/maps/render_b1_scene_gaussian_topdown.py \
   --output-dir output/b1-map12/scene-gaussian-topdown \
   --capture
 
+.venv-isaaclab/bin/python scripts/maps/render_b1_scene_topdown_diagnostic.py \
+  --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
+  --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json \
+  --output-dir output/b1-map12/scene-topdown-label-overlay
+
 python scripts/maps/render_b1_map12_correspondence_review.py \
   --correspondences assets/maps/b1-map12-scene-correspondences.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
@@ -431,6 +436,12 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   requires explicit scene XY bounds and records camera height/FOV plus
   ray-plane `scene_xyz` mapping; it does not infer bounds or fall back to label
   inventory.
+- `scripts/maps/render_b1_scene_topdown_diagnostic.py --scene-topdown-render ...`
+  can draw `2rd_floor_seperated` scene USD room/object labels and top-level
+  object bounds onto a captured Gaussian topdown. The packet is explicitly
+  `alignment_scope=scene_self_check_only` and
+  `map_projection_status=not_projected_to_map12`; it is not accepted as a
+  correspondence picker input or Map12 semantic projection.
 - `scripts/maps/render_b1_map12_correspondence_review.py` now loads the vendor
   Map12 bundle directly from `nav2.yaml` / `occupancy.pgm`, requires the
   rendered Gaussian top-down packet through `--scene-topdown-render`, and
@@ -461,6 +472,10 @@ Latest deterministic evidence:
 ruff check scripts/maps/render_b1_scene_gaussian_topdown.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
 ruff format --check scripts/maps/render_b1_scene_gaussian_topdown.py scripts/maps/render_b1_map12_correspondence_review.py scripts/maps/fit_b1_map12_scene_alignment.py scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py scripts/operator_console/render_scene_previews.py tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py
 ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q
+ruff check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py
+ruff format --check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_topdown_diagnostic.py -q
+.venv-isaaclab/bin/python scripts/maps/render_b1_scene_topdown_diagnostic.py --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --output-dir output/b1-map12/scene-topdown-label-overlay
 python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
 python scripts/operator_console/render_scene_previews.py --world b1-map12 --output-dir output/b1-map12/static-preview-proof
