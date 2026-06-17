@@ -60,6 +60,17 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one provider timing
+  proxy bind-port false-green. `start_provider_timing_proxy()` and the direct
+  proxy CLI now reject malformed or out-of-range
+  `ROBOCLAWS_TIMING_PROXY_BIND_PORT` / `--bind-port` values instead of treating
+  invalid env as omitted and silently choosing a free local port. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: fail-aloud live-agent
+  timing-proxy configuration; omitted bind-port values, valid explicit ports,
+  free-port selection, loopback host validation, provider URL rewriting, request
+  metric schemas, and live-runner proxy metadata are unchanged. The ratchet
+  remains 0 complexity rows and 79 oversized modules;
+  `provider_timing_proxy.py` is 493 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one launch-catalog
   blank-axis false-green. `resolve_surface_launch()` now rejects explicit blank
   optional axes for `world=`, `backend=`, `intent=`, `preset=`, and

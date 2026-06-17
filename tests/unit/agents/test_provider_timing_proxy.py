@@ -10,8 +10,10 @@ from aiohttp import ClientSession, web
 from roboclaws.agents.provider_timing_proxy import (
     ProviderTimingProxyConfig,
     free_local_port,
+    main,
     replace_base_url_origin,
     serve_provider_timing_proxy,
+    start_provider_timing_proxy,
 )
 from roboclaws.reports.live_performance import privacy_findings_for_run_dir
 
@@ -31,6 +33,76 @@ def test_replace_base_url_origin_preserves_upstream_path() -> None:
 
 def test_provider_timing_proxy_streams_counts_bytes_and_redacts(tmp_path: Path) -> None:
     asyncio.run(_proxy_streaming_case(tmp_path))
+
+
+def test_start_provider_timing_proxy_rejects_invalid_bind_port_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_TIMING_PROXY_BIND_PORT", "abc")
+
+    try:
+        asyncio.run(
+            start_provider_timing_proxy(
+                repo_root=Path(__file__).resolve().parents[3],
+                run_dir=tmp_path,
+                upstream_base_url="https://provider.example.test/v1",
+                agent_engine="codex-cli",
+                provider_profile="codex-router-responses",
+            )
+        )
+    except RuntimeError as exc:
+        assert str(exc) == (
+            "ROBOCLAWS_TIMING_PROXY_BIND_PORT must be an integer port from 0 to 65535; got 'abc'"
+        )
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected invalid bind-port env to fail before proxy launch")
+
+    assert not (tmp_path / "provider_timing_proxy.ready.json").exists()
+
+
+def test_start_provider_timing_proxy_rejects_out_of_range_bind_port_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_TIMING_PROXY_BIND_PORT", "70000")
+
+    try:
+        asyncio.run(
+            start_provider_timing_proxy(
+                repo_root=Path(__file__).resolve().parents[3],
+                run_dir=tmp_path,
+                upstream_base_url="https://provider.example.test/v1",
+                agent_engine="codex-cli",
+                provider_profile="codex-router-responses",
+            )
+        )
+    except RuntimeError as exc:
+        assert str(exc) == (
+            "ROBOCLAWS_TIMING_PROXY_BIND_PORT must be an integer port from 0 to 65535; got 70000"
+        )
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected out-of-range bind-port env to fail before proxy launch")
+
+    assert not (tmp_path / "provider_timing_proxy.ready.json").exists()
+
+
+def test_provider_timing_proxy_cli_rejects_out_of_range_bind_port(tmp_path: Path) -> None:
+    assert (
+        main(
+            [
+                "--upstream-base-url",
+                "https://provider.example.test/v1",
+                "--metrics-path",
+                str(tmp_path / "metrics.jsonl"),
+                "--bind-port",
+                "70000",
+            ]
+        )
+        == 1
+    )
+
+    assert not (tmp_path / "metrics.jsonl").exists()
 
 
 async def _proxy_streaming_case(tmp_path: Path) -> None:

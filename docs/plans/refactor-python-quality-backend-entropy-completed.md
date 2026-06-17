@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Provider timing proxy bind-port configuration now fails aloud.
+  `start_provider_timing_proxy()` and the direct proxy CLI reject malformed or
+  out-of-range `ROBOCLAWS_TIMING_PROXY_BIND_PORT` / `--bind-port` values instead
+  of treating invalid env as omitted and silently choosing a free local port.
+  Owner layer: Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud live-agent timing-proxy configuration; omitted bind-port values,
+  valid explicit ports, free-port selection, loopback host validation, provider
+  URL rewriting, request metric schemas, and live-runner proxy metadata are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `provider_timing_proxy.py` is 493 lines. Proof: focused provider
+  timing proxy tests, focused live-runner provider-proxy tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Launch-catalog blank-axis selection now fails aloud.
   `resolve_surface_launch()` rejects explicit blank optional axes for `world=`,
   `backend=`, `intent=`, `preset=`, and `provider_profile=` instead of treating

@@ -112,9 +112,12 @@ async def start_provider_timing_proxy(
     if not upstream_base_url:
         raise RuntimeError("provider timing proxy requires an upstream base URL")
     bind_host = bind_host or os.environ.get(PROVIDER_TIMING_PROXY_BIND_HOST_ENV) or "127.0.0.1"
-    bind_port = (
-        bind_port or _int_env(PROVIDER_TIMING_PROXY_BIND_PORT_ENV) or free_local_port(bind_host)
+    configured_bind_port = (
+        _validated_bind_port(bind_port, "bind_port")
+        if bind_port is not None
+        else _bind_port_env(PROVIDER_TIMING_PROXY_BIND_PORT_ENV)
     )
+    bind_port = configured_bind_port or free_local_port(bind_host)
     metrics_path = run_dir / PROVIDER_REQUEST_METRICS_FILENAME
     ready_path = run_dir / "provider_timing_proxy.ready.json"
     ready_path.unlink(missing_ok=True)
@@ -409,14 +412,23 @@ def _round_epoch(value: float | None) -> float | None:
     return round(value, 6)
 
 
-def _int_env(name: str) -> int | None:
+def _bind_port_env(name: str) -> int | None:
     value = os.environ.get(name)
     if not value:
         return None
     try:
-        return int(value)
+        port = int(value)
     except ValueError:
-        return None
+        raise RuntimeError(
+            f"{name} must be an integer port from 0 to 65535; got {value!r}"
+        ) from None
+    return _validated_bind_port(port, name)
+
+
+def _validated_bind_port(value: int, setting_name: str) -> int:
+    if not 0 <= value <= 65535:
+        raise RuntimeError(f"{setting_name} must be an integer port from 0 to 65535; got {value!r}")
+    return value
 
 
 def _read_ready_payload(path: Path) -> dict[str, Any]:
@@ -460,7 +472,7 @@ async def async_main(argv: list[str] | None = None) -> int:
         upstream_base_url=args.upstream_base_url,
         metrics_path=args.metrics_path,
         bind_host=args.bind_host,
-        bind_port=args.bind_port,
+        bind_port=_validated_bind_port(args.bind_port, "--bind-port"),
         agent_engine=args.agent_engine,
         provider_profile=args.provider_profile,
         model=args.model,
