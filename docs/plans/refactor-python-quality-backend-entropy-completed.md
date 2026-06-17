@@ -1001,6 +1001,27 @@ logs before choosing the next slice.
   actionable-snapshot, and MCP server tests, ruff, format check, py_compile,
   and ratchet.
 
+- 2026-06-17: Proof-bundle result rendering moved from `report.py` into
+  `report_sections_proof_bundle.py`, covering proof result summaries,
+  proof-quality summary rows, grasp-feasibility signature tables, individual
+  proof result cards, view figures, and local artifact hrefs. The runner report
+  now composes `proof_bundle_results_section()` from the proof-bundle owner
+  instead of rebuilding the helper family inline. Metric: `report.py` 2525 ->
+  2108 lines; proof-bundle owner is 828 lines, a justified cohesive module
+  below the 1200-line warning ceiling; ratchet is 11 complexity rows and 68
+  oversized modules. Proof: cleanup report contract tests, proof-bundle checker
+  contract tests, proof-bundle runner script unit tests, ruff, format check,
+  py_compile, and ratchet.
+
+- 2026-06-17: Planning-only triage compacted the next P1 map after the
+  proof-bundle dirty checkpoint. Ratchet remains 11 complexity rows and 68
+  oversized modules; no ponytail dependency/std-lib deletion outranks the
+  hard-ceiling frontier. Active P1 candidates now explicitly include the
+  planner manipulation probe runner and the OpenAI Agents SDK live
+  runtime/runner pair, alongside the existing contract/report and visual
+  comparison families. Proof: ratchet summary and static call-site scan only;
+  no code behavior changed in this triage row.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact
@@ -1086,6 +1107,10 @@ logs before choosing the next slice.
   fixture-reference or anchor-id mapping, target-search summaries, minimal-map
   target-fixture resolution, waypoint anchor seeding, or runtime-anchor target
   resolution directly.
+- Proof-bundle result rendering is owned by `report_sections_proof_bundle.py`;
+  reopen only if `report.py` starts rebuilding proof-bundle result summaries,
+  proof-quality summary rows, grasp-feasibility signature tables, proof result
+  cards, or proof-result view figures directly.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state

@@ -18,15 +18,13 @@ the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 80` on 2026-06-17 after the local Candidate A runtime-map
-target/public-anchor split. Treat this as a planning snapshot, not proof of a
-landed checkpoint; refresh before the next execution slice. The latest refresh
-includes the intent-to-add `realworld_runtime_map_targets.py` owner in the
-ratchet script's `git ls-files -- "*.py"` view.
+--summary --top 80` on 2026-06-17 after the local proof-bundle report owner
+split. Treat this as a planning snapshot, not proof of a landed checkpoint;
+refresh before the next execution slice.
 
-- 11 Ruff complexity violations and 67 oversized modules remain. The oversized
-  count increased by one because the new target/public-anchor owner is now
-  counted.
+- 11 Ruff complexity violations and 68 oversized modules remain. The oversized
+  count increased by one because the proof-bundle result owner is now counted
+  above the default 800-line target.
 - Largest P1 production hard-ceiling files are
   `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py` at 2948 lines,
   `roboclaws/agents/drivers/openai_agents_live.py` at 2889,
@@ -34,11 +32,15 @@ ratchet script's `git ls-files -- "*.py"` view.
   `roboclaws/household/scene_camera_comparison.py` at 2830,
   `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py` at 2808,
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` at 2711,
-  `roboclaws/household/report.py` at 2525, and
-  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 2394.
+  `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py` at 2394,
+  and `roboclaws/household/report.py` at 2108.
 - `roboclaws/household/realworld_runtime_map_targets.py` is 1009 lines. Keep
   it as a justified cohesive 800-1200-line owner only while it owns the single
   target/public-anchor concept; do not split it again just to chase line count.
+- `roboclaws/household/report_sections_proof_bundle.py` is 828 lines after
+  taking proof-bundle result rendering. Keep it as a justified cohesive
+  800-1200-line owner for proof-bundle runner report sections; split it only if
+  a second real owner emerges, not because it crossed 800 by 28 lines.
 - Backend workers remain below the hard ceiling:
   `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` is 1994 lines and
   `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` is 1841 lines.
@@ -49,11 +51,11 @@ ratchet script's `git ls-files -- "*.py"` view.
 - `roboclaws/launch/scene_sampler.py` is 1965 lines and stays cleared from P1
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
-- Current complexity rows are assigned to candidates C-H: operator-console
-  tests, B1 preview rendering, a cleanup checker helper, live eval polling,
-  MCP semantic tool registration, prompt preview, and eval-harness blockers.
-  They should not hide while a file-size slice improves, but they are not the
-  default next P1 unless the active product focus changes.
+- Current complexity rows are P2 unless paired with hard-ceiling work:
+  operator-console tests, B1 preview rendering, a cleanup checker helper, live
+  eval polling, MCP semantic tool registration, prompt preview, and eval-harness
+  blockers. They should not hide while a file-size slice improves, but they are
+  not the default next P1 unless the active product focus changes.
 
 Execution refresh on 2026-06-17 moved visual-candidate declaration
 orchestration into `realworld_visual_candidate_declarations.py` and the
@@ -223,6 +225,34 @@ realworld-contract, actionable-snapshot, and MCP server tests, plus ratchet.
 Before committing, rerun `git diff --check`; after commit, choose the next
 slice from a fresh scan instead of reopening this boundary.
 
+Implementation refresh on 2026-06-17 moved proof-bundle result rendering from
+`report.py` into `report_sections_proof_bundle.py`. That owner now renders
+proof result summaries, proof-quality summary rows, grasp-feasibility signature
+tables, individual proof result cards, view figures, and local artifact hrefs.
+`render_planner_proof_bundle_runner_report()` now composes the public
+`proof_bundle_results_section()` instead of owning the proof-result helper
+family inline. Metric: `report.py` 2525 -> 2108 lines;
+`report_sections_proof_bundle.py` is 828 lines; ratchet reports 11 complexity
+rows and 68 oversized modules because the proof-bundle owner is now counted
+above 800. Proof already run in the local dirty checkpoint: ruff, format check,
+py_compile, cleanup report contract tests, proof-bundle checker contract tests,
+proof-bundle runner script unit tests, and ratchet. Reopen this boundary only
+if `report.py` starts rebuilding proof-bundle result summaries, proof-quality
+summary rows, grasp-feasibility signature tables, proof result cards, or
+proof-result view figures directly.
+
+Planning-only intuitive-refactor / ponytail recheck on 2026-06-17 refreshed the
+ratchet after the proof-bundle dirty checkpoint and expanded the active P1 map
+beyond A/B. The ratchet remains 11 complexity rows and 68 oversized modules. No
+dependency removal, stdlib/native replacement, or one-shot ponytail deletion
+outranks the hard-ceiling frontier. `run_molmo_planner_manipulation_probe.py`
+and the OpenAI Agents SDK live runtime/runner are now explicit P1 candidate
+clusters because they are production hard-ceiling files with real owner seams.
+The default remains: close the current dirty proof-bundle checkpoint first, then
+choose one owner-boundary slice from Candidates A-D by call-site evidence, not
+by line count. Keep `_task_prefix_legacy`, empty camera-labeler maps, the legacy
+checker flag, and duplicate wording as P2 opportunistic cuts only.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
@@ -262,32 +292,38 @@ slice from a fresh scan instead of reopening this boundary.
 
 ## Current Target
 
-Current checkpoint: Candidate A's Runtime Metric Map target/public-anchor split
-is locally complete and verified, but not yet committed in this worktree. Do
-not start another implementation slice until that dirty checkpoint is either
-committed or explicitly paused. After that, refresh the ratchet and choose one
-new owner-boundary slice. Candidate A remains active because
+Current checkpoint: Candidate A's proof-bundle result renderer split is locally
+complete and verified, but not yet committed in this worktree. Do not start
+another implementation slice until that dirty checkpoint is either committed or
+explicitly paused. After that, refresh the ratchet and choose one new
+owner-boundary slice from Candidates A-D. Candidate A remains active because
 `realworld_contract.py` and `report.py` are still above the hard ceiling, but
-the runtime-map target/public-anchor boundary is closed. Candidate B remains
-active through the visual comparison family: `scene_camera_comparison.py`,
-`summarize_robot_camera_visual_parity.py`, and the apple runner are still above
-the ceiling, but the apple object-parity audit, selected RGB evidence, and
-visual-state contract boundaries are closed. Do not choose by line count alone;
-pick the clearer owner boundary from a fresh call-site scan.
+the runtime-map target/public-anchor and proof-bundle result-renderer
+boundaries are closed. Candidate B remains active through the visual comparison
+family: `scene_camera_comparison.py`, `summarize_robot_camera_visual_parity.py`,
+and the apple runner are still above the ceiling, but the apple object-parity
+audit, selected RGB evidence, and visual-state contract boundaries are closed.
+Candidate C covers the planner manipulation probe runner; Candidate D covers
+the OpenAI Agents SDK live runtime/runner pair. Do not choose by line count
+alone; pick the clearer owner boundary from a fresh call-site scan.
 
 Recommended next slice claim:
 
-- Slice: choose either a fresh `RealWorldCleanupContract` facade/report
-  ownership boundary or a visual-comparison owner boundary confirmed by
-  call-site scan.
-- Owner layer: MCP Capability Contract And Tools for Candidate A, or Artifacts,
-  reports, and eval suites for Candidate B.
-- Current friction: `realworld_contract.py` is still 2836 lines and
-  `report.py` is 2525 lines after the runtime-map target split. The visual
-  comparison family still has multiple above-ceiling report/probe scripts, but
-  apple Object Gate, capture-quality, material/probe primitives, native-render
-  diagnostics, image-metric artifacts, object-parity audit assembly, selected
-  RGB evidence, and visual-state contract evidence are closed.
+- Slice: choose one fresh owner boundary confirmed by call-site scan from
+  Candidate A, B, C, or D.
+- Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
+  reports, and eval suites for Candidates B/C; Agent Engines And Provider
+  Profiles plus Thin Runtime / Server Adapters for Candidate D.
+- Current friction: `run_molmo_planner_manipulation_probe.py` is 2948 lines,
+  `openai_agents_live.py` is 2889, `realworld_contract.py` is 2836,
+  `scene_camera_comparison.py` is 2830,
+  `summarize_robot_camera_visual_parity.py` is 2808,
+  `run_live_openai_agents_cleanup.py` is 2711, the apple runner is 2394, and
+  `report.py` is 2108. Candidate A's runtime-map target and proof-bundle
+  result-renderer splits are closed. Candidate B's apple Object Gate,
+  capture-quality, material/probe primitives, native-render diagnostics,
+  image-metric artifacts, object-parity audit assembly, selected RGB evidence,
+  and visual-state contract evidence are closed.
 - Simplification: move one remaining real responsibility to an existing or
   focused owner and update callers to that owner directly. Delete obsolete
   private wrappers when call-site scan proves they are internal. Do not replace
@@ -300,32 +336,34 @@ Recommended next slice claim:
 - Non-goals: changing artifact schema, launch axes, `camera_labeler`,
   visual-grounding contracts, map-prior semantics, target-query behavior,
   done-readiness policy, visual-candidate declaration/lifecycle ownership,
-  Runtime Metric Map target/public-anchor ownership, apple Object Gate /
-  Render Gate classification, capture-quality, native-render diagnostics,
+  Runtime Metric Map target/public-anchor ownership, proof-bundle result
+  rendering, planner-probe report-panel ownership, apple Object Gate / Render
+  Gate classification, capture-quality, native-render diagnostics,
   material/probe delegates, image-metric artifacts, apple object-parity
-  audit/RGB/visual-state ownership, or lane initialization / manifest setup
-  without fresh duplication.
+  audit/RGB/visual-state ownership, OpenAI Agents provider semantics, or lane
+  initialization / manifest setup without fresh duplication.
 
 Candidate A remains valid only for a new `RealWorldCleanupContract` boundary
 such as agent-view wrapper cleanup that reduces private method coupling,
 runtime-map/cleanup-worklist caller migration, report-section ownership, or
 another named facade-private coupling point; do not reopen visual-candidate
-payload, declaration, lifecycle, camera-label producer input, tool-response, or
-Runtime Metric Map target/public-anchor work without fresh drift. B1 label-tool
-rows are cleared; candidate D is preview rendering only. Ponytail small cuts are
-inputs when they remove stale surface, duplicate concept, or false confidence,
-but they must not postpone the P1 hard-ceiling checkpoint.
+payload, declaration, lifecycle, camera-label producer input, tool-response,
+Runtime Metric Map target/public-anchor work, or proof-bundle result rendering
+without fresh drift. B1 label-tool rows are cleared; B1 preview rendering is P2
+only. Ponytail small cuts are inputs when they remove stale surface, duplicate
+concept, or false confidence, but they must not postpone the P1 hard-ceiling
+checkpoint.
 
 ## Execution Preflight
 
 Preflight status: REVIEWED. Route: `$intuitive-refactor` ratchet mode. Default
 execution: close the current dirty Candidate A checkpoint first, then refresh
-the ratchet and execute one P1 owner-boundary slice from Candidate A or
-Candidate B based on a fresh call-site scan. Non-goals: broad repo cleanup,
-line-count shaving across many files, preserving obsolete internal wrappers,
-lane initialization unless fresh drift appears, and live/provider/simulator
-proof unless the chosen slice changes that route. Re-approve if a slice would
-change a public launch, artifact schema, report shape, agent-facing payload, or
+the ratchet and execute one P1 owner-boundary slice from Candidates A-D based on
+a fresh call-site scan. Non-goals: broad repo cleanup, line-count shaving across
+many files, preserving obsolete internal wrappers, lane initialization unless
+fresh drift appears, and live/provider/simulator proof unless the chosen slice
+changes that route. Re-approve if a slice would change a public launch,
+artifact schema, report shape, agent-facing payload, provider behavior, or
 private/public eval contract.
 
 ## Active Candidates
@@ -333,7 +371,7 @@ private/public eval contract.
 ### A: Contract And Report Hard-Ceiling Split
 
 Severity: P1. `roboclaws/household/realworld_contract.py` is 2836 lines and
-`roboclaws/household/report.py` is 2525 lines. Owning architecture layers: MCP
+`roboclaws/household/report.py` is 2108 lines. Owning architecture layers: MCP
 Capability Contract And Tools plus Artifacts, reports, and eval suites.
 Done-readiness pending/held cleanup candidate derivation now belongs to
 `realworld_done_readiness.py`; reopen it only if the contract facade starts
@@ -372,6 +410,13 @@ directly. The new owner is 1009 lines; keep it as a cohesive justified module
 unless a later scan finds a second real owner inside it. Same-boundary ponytail
 closeout cut the unused `_recommended_place_tool` alias in that owner and the
 now-unused `TARGET_SEARCH_SUMMARY_SCHEMA` constant in `realworld_contract.py`.
+
+Proof-bundle result rendering now belongs to `report_sections_proof_bundle.py`.
+Reopen it only if `report.py` starts rebuilding proof-bundle result summaries,
+proof-quality summary rows, grasp-feasibility signature tables, proof result
+cards, or proof-result view figures directly. The owner is 828 lines, a
+justified cohesive proof-bundle runner report module below the 1200-line
+warning ceiling.
 
 ### B: Visual Comparison Pipeline Split
 
@@ -442,7 +487,63 @@ selected boundary is not already owned by
 over splitting by helper count; do not duplicate Object Gate, Render Gate, or
 capture-quality interpretation that already has focused owners.
 
-### C-H: P2 Rows And Small Cuts
+### C: Planner Manipulation Probe Runner Split
+
+Severity: P1. `scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py`
+is 2948 lines. Owning architecture layer: Artifacts, reports, and eval suites,
+with Backend Runtime / Environment Primitive details behind the MolmoSpaces
+worker and planner runtime imports. The runner currently owns CLI orchestration,
+worker subprocess setup, runtime diagnostics, CUDA memory snapshots, CuRobo
+extension/cache and memory-profile diagnostics, Warp compatibility, task-sampler
+robot-placement profile defaults/adapters, exact cleanup task binding, sampler
+failure instrumentation, policy execution, diagnostic image capture, and small
+JSON-safe coercion helpers.
+
+Default C slice candidates are real concept moves, not helper shuffling:
+runtime diagnostics and CUDA/CuRobo/Warp packet construction can move to a
+planner-probe runtime diagnostics owner; task-sampler robot-placement profiles,
+exact cleanup binding, and sampler failure instrumentation can move to a
+planner-probe task-sampler diagnostics owner; diagnostic image capture can move
+only if it is not still tightly coupled to execute-mode policy orchestration.
+Keep `run_probe()`, worker/main dispatch, subprocess command construction,
+policy execution control flow, and artifact write orchestration in the runner
+unless a scan proves a stronger owner. Do not reopen the already-extracted
+planner-probe result writer/checker/report-panel owners.
+
+Behavior-change class is internal artifact-construction cleanup unless the slice
+changes probe CLI flags, result schema, report claims, or checker semantics.
+Proof should include the focused planner probe checker/unit tests that cover the
+selected owner, plus ruff, format check, py_compile, and ratchet.
+
+### D: OpenAI Agents Live Runtime / Runner Split
+
+Severity: P1. `roboclaws/agents/drivers/openai_agents_live.py` is 2889 lines
+and `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is 2711 lines.
+Owning architecture layers: Agent Engines And Provider Profiles for SDK request,
+model settings, retry, input compaction, camera-grounded history, model racing,
+and span/event artifacts; Thin Runtime / Server Adapters for live server
+ownership, lease/status/timing, continuation attempts, checker invocation, and
+live-run metrics attachment.
+
+Default D slice candidates should preserve the runtime/runner boundary instead
+of creating another catch-all module. Plausible owner moves are model-input
+compaction plus raw-FPV/camera-grounded history policy and metrics from the SDK
+driver; model-service retry/model-racing observability from the SDK driver; span
+recorder/event sanitization from the SDK driver; or runner-side
+performance-profile/default resolution and timing summary construction from the
+live cleanup runner. Do not mix SDK driver internals with runner lifecycle in
+one new owner, and do not change provider route semantics, model thinking
+policy, MCP session behavior, continuation policy, checker gates, or
+live-status payloads unless explicitly approved.
+
+Behavior-change class is internal owner cleanup unless the selected slice
+changes provider behavior, event/span schemas, status artifacts, prompt/profile
+contracts, or live-run retry semantics. Proof should include focused OpenAI
+Agents driver/runner tests for the chosen owner, static checks, py_compile, and
+ratchet. Live provider proof is not required for an internal split and must not
+be claimed without an explicit local run.
+
+### E-H: P2 Rows And Small Cuts
 
 - Live runtime / eval harness: P1 only for hard-ceiling runner work. Current P2
   rows are `roboclaws/evals/live_runtime.py::wait_for_live_surface_completion`
