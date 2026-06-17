@@ -64,7 +64,7 @@ def test_openai_agents_runtime_can_use_minimax_responses_profile(tmp_path, monke
         SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
     )
     request = LiveAgentRequest(
-        task_name="household-cleanup",
+        run_id="household-world.cleanup",
         skill_name="molmo-realworld-cleanup",
         kickoff_prompt="clean the room",
         mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),

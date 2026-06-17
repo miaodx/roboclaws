@@ -204,6 +204,8 @@ def _wrapper_launch_failure(
     phase = str(status.get("phase") or "").strip().lower()
     if not _phase_is_active(phase):
         return {}
+    if not status.get("pid"):
+        return {}
     if pid_is_active(status.get("pid")):
         return {}
     reason = _launch_log_failure_reason(run_dir / "console-launch.log")
@@ -773,7 +775,6 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "profile",
         "task_surface",
         "task_intent",
-        "task_intent_mode",
         "status",
         "ok",
         "success",

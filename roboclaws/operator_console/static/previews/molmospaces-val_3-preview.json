@@ -1,6 +1,6 @@
 {
   "backend": "mujoco",
-  "generated_at": "2026-06-11T08:09:24Z",
+  "generated_at": "2026-06-15T07:31:29Z",
   "render_resolution": {
     "height": 560,
     "width": 900
@@ -177,11 +177,11 @@
         ],
         "height": 560,
         "max_channel_range": 236.0,
-        "max_stddev": 22.923,
+        "max_stddev": 24.017,
         "mean_rgb": [
-          231.945,
-          235.538,
-          236.828
+          231.454,
+          234.994,
+          236.291
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
         "visual_status": "reviewable",
@@ -209,6 +209,92 @@
         "topdown_azimuth_deg": 90.0
       },
       "semantic_map_fallback": false,
+      "semantic_projection": {
+        "projected_waypoint_bounds": {
+          "max_x": 8.4905,
+          "max_y": 11.3776,
+          "min_x": 2.547,
+          "min_y": 1.0188
+        },
+        "projected_waypoints": [
+          {
+            "projection": "room_remapped",
+            "room_id": "room_2",
+            "waypoint_id": "generated_exploration_001",
+            "x": 8.4905,
+            "y": 5.60355
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_2",
+            "waypoint_id": "generated_exploration_002",
+            "x": 8.4905,
+            "y": 7.98145
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_3",
+            "waypoint_id": "generated_exploration_003",
+            "x": 8.4905,
+            "y": 2.2074
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_3",
+            "waypoint_id": "generated_exploration_004",
+            "x": 8.4905,
+            "y": 4.5846
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_4",
+            "waypoint_id": "generated_exploration_005",
+            "x": 8.4905,
+            "y": 9.0004
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_4",
+            "waypoint_id": "generated_exploration_006",
+            "x": 8.4905,
+            "y": 11.3776
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_5",
+            "waypoint_id": "generated_exploration_007",
+            "x": 3.396,
+            "y": 1.0188
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_5",
+            "waypoint_id": "generated_exploration_008",
+            "x": 3.396,
+            "y": 5.7732
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_6",
+            "waypoint_id": "generated_exploration_009",
+            "x": 2.547,
+            "y": 7.55625
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_6",
+            "waypoint_id": "generated_exploration_010",
+            "x": 2.547,
+            "y": 11.12275
+          }
+        ],
+        "raw_scene_waypoint_count": 0,
+        "rendered_waypoint_count": 10,
+        "room_remapped_waypoint_count": 10,
+        "schema": "operator_console_semantic_map_projection_v1",
+        "skipped_waypoint_count": 0,
+        "waypoint_count": 10
+      },
       "view": "semantic_map_aligned_preview"
     },
     "topdown": {

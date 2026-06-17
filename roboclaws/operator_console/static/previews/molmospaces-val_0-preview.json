@@ -1,6 +1,6 @@
 {
   "backend": "mujoco",
-  "generated_at": "2026-06-11T08:08:44Z",
+  "generated_at": "2026-06-15T07:30:48Z",
   "render_resolution": {
     "height": 560,
     "width": 900
@@ -177,11 +177,11 @@
         ],
         "height": 560,
         "max_channel_range": 236.0,
-        "max_stddev": 27.402,
+        "max_stddev": 27.927,
         "mean_rgb": [
-          229.294,
-          230.59,
-          232.294
+          230.207,
+          230.765,
+          232.42
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
         "visual_status": "reviewable",
@@ -209,6 +209,120 @@
         "topdown_azimuth_deg": 90.0
       },
       "semantic_map_fallback": false,
+      "semantic_projection": {
+        "projected_waypoint_bounds": {
+          "max_x": 14.952,
+          "max_y": 9.7188,
+          "min_x": 2.136,
+          "min_y": 2.4564
+        },
+        "projected_waypoints": [
+          {
+            "projection": "room_remapped",
+            "room_id": "room_2",
+            "waypoint_id": "generated_exploration_001",
+            "x": 6.408,
+            "y": 5.2332
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_2",
+            "waypoint_id": "generated_exploration_002",
+            "x": 6.408,
+            "y": 9.7188
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_3",
+            "waypoint_id": "generated_exploration_003",
+            "x": 2.136,
+            "y": 5.2332
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_3",
+            "waypoint_id": "generated_exploration_004",
+            "x": 2.136,
+            "y": 9.7188
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_4",
+            "waypoint_id": "generated_exploration_005",
+            "x": 3.204,
+            "y": 2.4564
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_4",
+            "waypoint_id": "generated_exploration_006",
+            "x": 3.204,
+            "y": 3.9516
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_5",
+            "waypoint_id": "generated_exploration_007",
+            "x": 7.476,
+            "y": 2.4564
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_5",
+            "waypoint_id": "generated_exploration_008",
+            "x": 7.476,
+            "y": 3.9516
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_6",
+            "waypoint_id": "generated_exploration_009",
+            "x": 10.68,
+            "y": 5.2332
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_6",
+            "waypoint_id": "generated_exploration_010",
+            "x": 10.68,
+            "y": 9.7188
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_7",
+            "waypoint_id": "generated_exploration_011",
+            "x": 14.952,
+            "y": 4.9128
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_7",
+            "waypoint_id": "generated_exploration_012",
+            "x": 14.952,
+            "y": 7.9032
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_8",
+            "waypoint_id": "generated_exploration_013",
+            "x": 10.68,
+            "y": 2.4564
+          },
+          {
+            "projection": "room_remapped",
+            "room_id": "room_8",
+            "waypoint_id": "generated_exploration_014",
+            "x": 10.68,
+            "y": 3.9516
+          }
+        ],
+        "raw_scene_waypoint_count": 0,
+        "rendered_waypoint_count": 14,
+        "room_remapped_waypoint_count": 14,
+        "schema": "operator_console_semantic_map_projection_v1",
+        "skipped_waypoint_count": 0,
+        "waypoint_count": 14
+      },
       "view": "semantic_map_aligned_preview"
     },
     "topdown": {

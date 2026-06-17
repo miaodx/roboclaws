@@ -122,6 +122,7 @@ aid, not a source of truth for current priority.
 - [Domain-First Launch Architecture](refactor-reduce-entropy-domain-first-launch-architecture.md)
 - [Operator Console Agent Interaction](operator-console-agent-interaction.md)
 - [Operator Console Layered Launch Gates](operator-console-layered-launch-gates.md)
+- [Operator Console Background Tasks](2026-06-15-operator-console-background-tasks.md)
 - [Operator Console UI](refactor-operator-console-ui.md)
 - [Standalone Codex Operator Console](standalone-codex-operator-console.md)
 - [Standalone Operator Console UI Design Contract](standalone-codex-operator-console-UI-SPEC.md)

@@ -31,6 +31,9 @@ from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
 from scripts.operator_console.semantic_map_preview import (  # noqa: E402
     render_semantic_map_preview as _render_semantic_map_preview,
 )
+from scripts.operator_console.semantic_map_preview import (  # noqa: E402
+    semantic_map_preview_projection_summary as _semantic_map_preview_projection_summary,
+)
 
 PREVIEW_METADATA_SCHEMA = "operator_console_scene_preview_v1"
 DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
@@ -213,6 +216,11 @@ def render_molmospaces_preview(
             height=height,
         )
         semantic_map.save(map_path)
+        semantic_projection = _semantic_map_preview_projection_summary(
+            state,
+            metric_map=metric_map,
+            alignment=scene_alignment,
+        )
 
         topdown_request = _topdown_camera_request(
             state,
@@ -276,6 +284,7 @@ def render_molmospaces_preview(
             chase_selection=chase_selection,
             topdown_path=topdown_path,
             scene_alignment=scene_alignment,
+            semantic_projection=semantic_projection,
         )
         metadata_path.write_text(
             json.dumps(metadata, indent=2, sort_keys=True) + "\n",
@@ -317,6 +326,7 @@ def _preview_metadata(
     chase_selection: dict[str, Any],
     topdown_path: Path,
     scene_alignment: dict[str, Any],
+    semantic_projection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     topdown_view = next(
         (
@@ -356,6 +366,7 @@ def _preview_metadata(
                 "alignment_status": "aligned_to_topdown_scene_bounds",
                 "semantic_map_fallback": False,
                 "scene_alignment": scene_alignment,
+                "semantic_projection": semantic_projection or {},
                 "image_diagnostics": _image_diagnostics(map_path),
             },
             "chase": {

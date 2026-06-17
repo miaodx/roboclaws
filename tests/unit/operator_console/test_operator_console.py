@@ -30,6 +30,7 @@ from roboclaws.operator_console.routes import (
 )
 from roboclaws.operator_console.server import (
     ConsoleRequestHandler,
+    _registered_preview_asset_names,
 )
 from roboclaws.operator_console.server import (
     main as operator_console_main,
@@ -432,6 +433,12 @@ def test_operator_console_messup_preview_endpoint_is_non_launching(tmp_path: Pat
 
 
 def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
+    registered_previews = _registered_preview_asset_names()
+    assert "molmospaces-val_9-map.png" in registered_previews
+    assert "molmospaces-val_9-preview.json" in registered_previews
+    assert "molmospaces-val_6-map.png" not in registered_previews
+    assert "molmospaces-val_8-map.png" not in registered_previews
+
     handler = partial(ConsoleRequestHandler, root=tmp_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -466,6 +473,9 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             assert preview["views"]["topdown"]["semantic_map_fallback"] is False
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
+        assert exc_info.value.code == 404
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(f"http://{host}:{port}/previews/molmospaces-val_6-map.png")
         assert exc_info.value.code == 404
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             urllib.request.urlopen(f"http://{host}:{port}/asset-previews/maps/../README.md")
