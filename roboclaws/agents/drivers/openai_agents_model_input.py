@@ -26,7 +26,7 @@ def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
         config = metadata.get("model_input_compaction")
     if not isinstance(config, dict):
         config = {}
-    enabled = _bool_setting(config.get("enabled"), default=False)
+    enabled = _bool_setting(config.get("enabled"), "model_input_compaction.enabled", default=False)
     mode = str(config.get("mode") or ("public_tool_result_summary_v1" if enabled else "off"))
     min_chars = _non_negative_int(
         config.get("min_chars"),
@@ -53,20 +53,20 @@ def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
     return payload
 
 
-def _bool_setting(value: Any, *, default: bool) -> bool:
+def _bool_setting(value: Any, setting_name: str, *, default: bool) -> bool:
     if value is None:
         return default
     if isinstance(value, bool):
         return value
-    return str(value).strip().lower() not in {"0", "false", "no", "off"}
-
-
-def _boolish(value: Any, *, default: bool) -> bool:
-    if value is None:
+    if value == "":
         return default
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() not in {"0", "false", "no", "off", ""}
+    true_values = {"1", "true", "yes", "on"}
+    false_values = {"0", "false", "no", "off"}
+    if (normalized := str(value).strip().lower()) in true_values | false_values:
+        return normalized in true_values
+    raise ValueError(
+        f"OpenAI Agents SDK setting {setting_name} must be true or false, got {value!r}"
+    )
 
 
 def _positive_int(value: Any, *, default: int, setting_name: str) -> int:
@@ -282,7 +282,7 @@ def _compaction_candidate(
 
 def _raw_fpv_image_memory_policy(config: dict[str, Any] | None) -> dict[str, Any]:
     config = config if isinstance(config, dict) else {}
-    enabled = _boolish(config.get("enabled"), default=False)
+    enabled = _bool_setting(config.get("enabled"), "raw_fpv_image_memory.enabled", default=False)
     retained = _positive_int(
         config.get("retained_full_frame_limit"),
         default=1,
@@ -424,7 +424,7 @@ def _raw_fpv_image_memory_candidate(
 
 def _camera_grounded_history_policy(config: dict[str, Any] | None) -> dict[str, Any]:
     config = config if isinstance(config, dict) else {}
-    enabled = _boolish(config.get("enabled"), default=False)
+    enabled = _bool_setting(config.get("enabled"), "camera_grounded_history.enabled", default=False)
     retained = _positive_int(
         config.get("retained_recent_outputs"),
         default=4,

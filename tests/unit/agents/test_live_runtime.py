@@ -1321,6 +1321,60 @@ def test_model_input_compaction_rejects_invalid_min_chars_env(tmp_path: Path, mo
     assert "must be a non-negative integer" in payload["detail"]
 
 
+@pytest.mark.parametrize(
+    ("metadata", "setting_name"),
+    [
+        (
+            {"model_input_compaction": {"enabled": "sometimes"}},
+            "model_input_compaction.enabled",
+        ),
+        (
+            {
+                "model_input_compaction": {
+                    "enabled": True,
+                    "raw_fpv_image_memory": {"enabled": "sometimes"},
+                }
+            },
+            "raw_fpv_image_memory.enabled",
+        ),
+        (
+            {
+                "model_input_compaction": {
+                    "enabled": True,
+                    "camera_grounded_history": {"enabled": "sometimes"},
+                }
+            },
+            "camera_grounded_history.enabled",
+        ),
+    ],
+)
+def test_model_input_compaction_rejects_invalid_boolean_settings(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    setting_name: str,
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata=metadata,
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert setting_name in payload["detail"]
+    assert "must be true or false" in payload["detail"]
+
+
 def test_model_input_compaction_rejects_invalid_direct_policy_limits(
     tmp_path: Path, monkeypatch
 ) -> None:

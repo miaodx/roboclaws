@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK model-input compaction boolean config now fails
+  aloud. Direct `model_input_compaction.enabled`,
+  `raw_fpv_image_memory.enabled`, and `camera_grounded_history.enabled`
+  metadata accept only explicit true/false spellings instead of treating
+  arbitrary non-false strings as enabled. Behavior-change class: fail-aloud
+  OpenAI Agents SDK boolean/profile configuration; omitted values,
+  empty-string defaults, valid true/false values, profile-owned compaction
+  packets, public launch axes, normalized live-status packets, and event schemas
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `openai_agents_model_input.py` stays at 990 lines. Proof: focused
+  OpenAI Agents model-input compaction runtime tests, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK cache-tools-list boolean config now fails
   aloud. Direct runtime metadata, `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST`,
   and performance-profile resolution accept only explicit true/false spellings
