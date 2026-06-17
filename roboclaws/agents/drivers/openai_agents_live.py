@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -560,12 +561,47 @@ def _bool_setting(
     )
 
 
-def _positive_int(value: Any, *, default: int) -> int:
+def _positive_int(value: Any, setting_name: str, *, default: int) -> int:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        )
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
-    return max(1, parsed)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
+        )
+    return parsed
+
+
+def _positive_float(value: Any, setting_name: str, *, default: float) -> float:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive finite number, "
+            f"got {value!r}"
+        )
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive finite number, "
+            f"got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} must be a positive finite number, "
+            f"got {value!r}"
+        )
+    return parsed
 
 
 def _max_turns(request: LiveAgentRequest) -> int:
@@ -702,12 +738,18 @@ def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, A
     enabled = _bool_setting(
         config.get("enabled"), "model_racing_observability.enabled", default=False
     )
-    arm_count = _positive_int(config.get("arm_count"), default=1)
+    arm_count = _positive_int(
+        config.get("arm_count"), "model_racing_observability.arm_count", default=1
+    )
     if not enabled:
         arm_count = 1
     else:
         arm_count = max(2, arm_count)
-    configured_multiplier = float(config.get("racing_multiplier") or arm_count)
+    configured_multiplier = _positive_float(
+        config.get("racing_multiplier"),
+        "model_racing_observability.racing_multiplier",
+        default=float(arm_count),
+    )
     racing_multiplier = max(float(arm_count), configured_multiplier) if enabled else 1.0
     racing_mode = str(
         config.get("mode") or ("get_response_racing_v1" if enabled else "per_arm_observability_v1")
@@ -1101,7 +1143,9 @@ class _RetryingModel(_AgentsModel):
             if isinstance(self.runtime_config.get("model_racing_observability"), dict)
             else {}
         )
-        return _positive_int(config.get("arm_count"), default=1)
+        return _positive_int(
+            config.get("arm_count"), "model_racing_observability.arm_count", default=1
+        )
 
     async def _race_get_response(
         self,

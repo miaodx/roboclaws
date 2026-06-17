@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK model-racing observability numeric config now
+  fails aloud. Direct `model_racing_observability.arm_count` and
+  `model_racing_observability.racing_multiplier` metadata reject malformed,
+  boolean, non-positive, or non-finite values instead of silently clamping
+  `arm_count` to the default or surfacing raw float conversion failures.
+  Behavior-change class: fail-aloud OpenAI Agents SDK numeric/profile
+  configuration; omitted values, empty-string defaults, profile-owned
+  model-racing packets, public launch axes, normalized live-status packets, and
+  event schemas are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules; `openai_agents_live.py` is 1943 lines. Proof: focused
+  OpenAI Agents model-racing runtime tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK model-racing observability boolean config now
   fails aloud. Direct `model_racing_observability.enabled` and
   `model_racing_observability.unknown_loser_billing` metadata accept only

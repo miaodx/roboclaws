@@ -1447,6 +1447,59 @@ def test_openai_agents_runtime_rejects_invalid_model_racing_boolean_settings(
     assert "must be true or false" in payload["detail"]
 
 
+@pytest.mark.parametrize(
+    ("config", "setting_name", "message"),
+    [
+        (
+            {"arm_count": "many"},
+            "model_racing_observability.arm_count",
+            "must be a positive integer",
+        ),
+        (
+            {"arm_count": 0},
+            "model_racing_observability.arm_count",
+            "must be a positive integer",
+        ),
+        (
+            {"racing_multiplier": "fast"},
+            "model_racing_observability.racing_multiplier",
+            "must be a positive finite number",
+        ),
+        (
+            {"racing_multiplier": float("inf")},
+            "model_racing_observability.racing_multiplier",
+            "must be a positive finite number",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_model_racing_numeric_settings(
+    tmp_path: Path,
+    monkeypatch,
+    config: dict[str, object],
+    setting_name: str,
+    message: str,
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"model_racing_observability": config},
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert setting_name in payload["detail"]
+    assert message in payload["detail"]
+
+
 def test_openai_agents_runtime_rejects_invalid_retry_attempts_env(
     tmp_path: Path, monkeypatch
 ) -> None:

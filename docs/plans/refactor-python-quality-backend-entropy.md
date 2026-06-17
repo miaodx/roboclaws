@@ -112,6 +112,17 @@ again.
   The ratchet remains 0 complexity rows and 79 oversized modules;
   `live_runtime.py` is 728 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
+  model-racing observability numeric config false-green. Direct
+  `model_racing_observability.arm_count` and
+  `model_racing_observability.racing_multiplier` metadata now reject malformed,
+  boolean, non-positive, or non-finite values instead of silently clamping
+  `arm_count` to the default or surfacing raw float conversion failures.
+  Behavior-change class: fail-aloud OpenAI Agents SDK numeric/profile
+  configuration; omitted values, empty-string defaults, profile-owned
+  model-racing packets, public launch axes, normalized live-status packets, and
+  event schemas are unchanged. The ratchet remains 0 complexity rows and 79
+  oversized modules; `openai_agents_live.py` is 1943 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
   model-racing observability boolean config false-green. Direct
   `model_racing_observability.enabled` and
   `model_racing_observability.unknown_loser_billing` metadata now accept only
