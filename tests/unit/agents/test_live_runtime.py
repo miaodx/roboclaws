@@ -1641,6 +1641,134 @@ def test_openai_agents_runtime_rejects_non_positive_direct_max_turns(tmp_path: P
     assert "must be a positive integer, got 0" in payload["detail"]
 
 
+@pytest.mark.parametrize(
+    ("metadata", "env", "expected_detail"),
+    [
+        (
+            {"provider_profile": "kimi-openai-chat"},
+            {"ROBOCLAWS_PROVIDER_PROFILE": "codex-router-responses"},
+            "conflicting OpenAI Agents SDK setting provider_profile",
+        ),
+        (
+            {"model": "gpt-5.5"},
+            {"ROBOCLAWS_OPENAI_AGENTS_MODEL": "kimi-k2.7-code"},
+            "conflicting OpenAI Agents SDK setting model",
+        ),
+        (
+            {"base_url": "https://codex-one.example.test/v1"},
+            {"CODEX_BASE_URL": "https://codex-two.example.test/v1"},
+            "conflicting OpenAI Agents SDK setting base_url",
+        ),
+        (
+            {"api_key": "metadata-key"},
+            {"CODEX_API_KEY": "env-key"},
+            "conflicting OpenAI Agents SDK setting api_key",
+        ),
+    ],
+)
+def test_openai_agents_runtime_rejects_conflicting_provider_model_env_settings(
+    tmp_path: Path,
+    monkeypatch,
+    metadata: dict[str, object],
+    env: dict[str, str],
+    expected_detail: str,
+) -> None:
+    base_env = {
+        "CODEX_BASE_URL": "https://codex.example.test/v1",
+        "CODEX_API_KEY": "fake-codex-key",
+    }
+    base_env.update(env)
+    for key, value in base_env.items():
+        monkeypatch.setenv(key, value)
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata=metadata,
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert expected_detail in payload["detail"]
+
+
+def test_openai_agents_runtime_allows_matching_provider_model_env_aliases(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("MM_BASE_URL", "https://codex.example.test/v1/")
+    monkeypatch.setenv("MM_API_KEY", "fake-codex-key")
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_PROFILE", "minimax-responses")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL", "MiniMax-M3")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="minimax-responses",
+        model="minimax",
+        metadata={
+            "provider_profile": "minimax-responses",
+            "base_url": "https://codex.example.test/v1",
+            "api_key": "fake-codex-key",
+        },
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.exit_status == 0
+    assert captured["model"] == "MiniMax-M3"
+    assert captured["base_url"] == "https://codex.example.test/v1"
+    assert captured["api_key"] == "fake-codex-key"
+
+
 def test_model_input_shape_summary_is_aggregate_only() -> None:
     summary = _model_input_shape_summary(
         [

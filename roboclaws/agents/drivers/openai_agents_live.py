@@ -25,9 +25,7 @@ from roboclaws.agents.provider_registry import (
     PROVIDER_PROFILE_CODEX_RESPONSES,
     PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
     WIRE_CHAT_COMPLETIONS,
-    normalize_provider_route,
-    provider_route_spec,
-    route_base_url,
+    openai_agents_runtime_settings,
 )
 from roboclaws.agents.thinking_policy import apply_model_thinking_policy
 
@@ -1717,51 +1715,21 @@ def _int_from_any(value: Any) -> int | None:
 
 def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     metadata = dict(request.metadata)
-    raw_provider = str(
-        metadata.get("provider_profile")
-        or request.provider_profile
-        or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_PROVIDER")
-        or os.environ.get("ROBOCLAWS_PROVIDER_PROFILE")
-        or PROVIDER_PROFILE_CODEX_RESPONSES
-    ).strip()
-    try:
-        provider = normalize_provider_route(raw_provider, default=PROVIDER_PROFILE_CODEX_RESPONSES)
-        route = provider_route_spec(provider)
-    except KeyError as exc:
-        raise RuntimeError(
-            "openai-agents-live supports provider profiles codex-router-responses, "
-            "mimo-mify-responses, minimax-responses, mimo-tp-openai-chat, "
-            "mimo-inside-openai-chat, and kimi-openai-chat"
-        ) from exc
-    if "openai-agents-sdk" not in route.supported_engines:
-        raise RuntimeError(f"openai-agents-live does not support provider profile {provider}")
-
-    base_url = str(metadata.get("base_url") or route_base_url(route))
-    api_key = str(
-        metadata.get("api_key")
-        or (os.environ.get(route.api_key_env or "") if route.api_key_env else "")
-        or ""
+    settings = openai_agents_runtime_settings(
+        provider_profile=metadata.get("provider_profile"),
+        request_provider_profile=request.provider_profile,
+        model=metadata.get("model"),
+        request_model=request.model,
+        base_url=metadata.get("base_url"),
+        api_key=metadata.get("api_key"),
     )
-    model = str(
-        metadata.get("model")
-        or request.model
-        or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-        or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-        or route.default_model_id
-    )
-    if route.base_url_env == "CODEX_BASE_URL":
-        _require_setting(provider, route.base_url_env, base_url)
-    if route.api_key_env:
-        _require_setting(provider, route.api_key_env, api_key)
-    return {
-        "provider_profile": provider,
-        "wire_api": route.wire_api,
-        "wire_source": route.wire_source,
-        "route_status": route.status_for_engine("openai-agents-sdk"),
-        "base_url": base_url,
-        "api_key": api_key,
-        "model": model,
-    }
+    if settings["base_url_env"] == "CODEX_BASE_URL":
+        _require_setting(
+            settings["provider_profile"], settings["base_url_env"], settings["base_url"]
+        )
+    if settings["api_key_env"]:
+        _require_setting(settings["provider_profile"], settings["api_key_env"], settings["api_key"])
+    return settings
 
 
 def _require_setting(provider: str, name: str, value: str) -> None:

@@ -60,6 +60,20 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
+  direct provider/model/env precedence false-green. Provider profile, model,
+  base URL, and API key selection for the direct SDK runtime now rejects
+  conflicting explicit request/metadata and env settings instead of silently
+  letting one source retarget the route. The conflict policy lives in the
+  provider registry owner, while `openai_agents_live.py` only applies the
+  selected runtime settings and missing-setting checks. Owner layer: Agent
+  Engines And Provider Profiles. Behavior-change class: fail-aloud OpenAI
+  Agents SDK provider/model/env configuration; omitted defaults, matching
+  env/request values, canonical provider/model aliases, base-url trailing-slash
+  normalization, public launch axes, normalized live-status packets, and event
+  schemas are unchanged. The ratchet remains 0 complexity rows and 79 oversized
+  modules; `openai_agents_live.py` is 1911 lines and `provider_registry.py` is
+  989 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
   benchmark timeout false-green. `run_visual_grounding_benchmark.py` now
   validates `--timeout-s` and `VISUAL_GROUNDING_TIMEOUT_S` as positive finite

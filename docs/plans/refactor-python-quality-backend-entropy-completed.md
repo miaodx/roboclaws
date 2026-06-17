@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK direct provider/model/env precedence now fails
+  aloud. Provider profile, model, base URL, and API key selection for the direct
+  SDK runtime rejects conflicting explicit request/metadata and env settings
+  instead of silently letting one source retarget the route. The conflict policy
+  lives in `provider_registry.py`, while `openai_agents_live.py` only applies
+  selected runtime settings and missing-setting checks. Owner layer: Agent
+  Engines And Provider Profiles. Behavior-change class: fail-aloud OpenAI
+  Agents SDK provider/model/env configuration; omitted defaults, matching
+  env/request values, canonical provider/model aliases, base-url trailing-slash
+  normalization, public launch axes, normalized live-status packets, and event
+  schemas are unchanged. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules; `openai_agents_live.py` is 1911 lines and
+  `provider_registry.py` is 989 lines. Proof: focused OpenAI Agents live runtime
+  and provider catalog tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK model-racing observability numeric config now
   fails aloud. Direct `model_racing_observability.arm_count` and
   `model_racing_observability.racing_multiplier` metadata reject malformed,

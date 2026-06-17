@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -699,6 +700,77 @@ def provider_readiness(
     }
 
 
+def openai_agents_runtime_settings(
+    *,
+    provider_profile: str | None,
+    request_provider_profile: str | None,
+    model: str | None,
+    request_model: str | None,
+    base_url: str | None,
+    api_key: str | None,
+    env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    env_map = os.environ if env is None else env
+    provider = _conflict_checked_value(
+        "provider_profile",
+        [
+            ("provider_profile", provider_profile),
+            ("LiveAgentRequest.provider_profile", request_provider_profile),
+            (
+                "ROBOCLAWS_OPENAI_AGENTS_PROVIDER",
+                env_map.get("ROBOCLAWS_OPENAI_AGENTS_PROVIDER"),
+            ),
+            ("ROBOCLAWS_PROVIDER_PROFILE", env_map.get("ROBOCLAWS_PROVIDER_PROFILE")),
+        ],
+        default=PROVIDER_PROFILE_CODEX_RESPONSES,
+        normalizer=_normal_provider_profile,
+    )
+    try:
+        route = resolve_provider_route_for_engine("openai-agents-sdk", provider)
+    except (KeyError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting provider_profile is unsupported, got {provider!r}"
+        ) from exc
+    selected_model = _conflict_checked_value(
+        "model",
+        [
+            ("model", model),
+            ("LiveAgentRequest.model", request_model),
+            ("ROBOCLAWS_OPENAI_AGENTS_MODEL", env_map.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")),
+            ("ROBOCLAWS_CODEX_MODEL", env_map.get("ROBOCLAWS_CODEX_MODEL")),
+        ],
+        default=route.default_model_id,
+        normalizer=_normal_model_id,
+    )
+    return {
+        "provider_profile": route.public_profile,
+        "wire_api": route.wire_api,
+        "wire_source": route.wire_source,
+        "route_status": route.status_for_engine("openai-agents-sdk"),
+        "base_url_env": route.base_url_env or "",
+        "base_url": _conflict_checked_pair(
+            "base_url",
+            "base_url",
+            base_url,
+            route.base_url_env or "",
+            env_map.get(route.base_url_env or ""),
+            default=route_base_url(route, env=dict(env_map)),
+            normalizer=lambda item: item.rstrip("/"),
+        ),
+        "api_key_env": route.api_key_env or "",
+        "api_key": _conflict_checked_pair(
+            "api_key",
+            "api_key",
+            api_key,
+            route.api_key_env or "",
+            env_map.get(route.api_key_env or ""),
+            default="",
+            redact=True,
+        ),
+        "model": selected_model,
+    }
+
+
 def route_payload(route: ProviderRouteSpec, *, agent_engine: str) -> dict[str, Any]:
     model = resolve_model(route.default_model_id)
     return {
@@ -719,6 +791,77 @@ def route_payload(route: ProviderRouteSpec, *, agent_engine: str) -> dict[str, A
         "route_status_note": route.status_note,
         "route_capabilities": route_capabilities_for_engine(route, agent_engine),
     }
+
+
+def _conflict_checked_value(
+    setting_name: str,
+    candidates: list[tuple[str, Any]],
+    *,
+    default: str,
+    normalizer: Callable[[str], str],
+) -> str:
+    selected_source = ""
+    selected_raw = ""
+    selected_normalized = ""
+    for source, raw_value in candidates:
+        value = _explicit_string(raw_value)
+        if not value:
+            continue
+        normalized = normalizer(value)
+        if not selected_normalized:
+            selected_source = source
+            selected_raw = value
+            selected_normalized = normalized
+            continue
+        if normalized != selected_normalized:
+            raise ValueError(
+                f"conflicting OpenAI Agents SDK setting {setting_name}: "
+                f"{selected_source}={selected_raw!r} and {source}={value!r}"
+            )
+    return selected_normalized or default
+
+
+def _conflict_checked_pair(
+    setting_name: str,
+    direct_source: str,
+    direct_raw: Any,
+    env_source: str,
+    env_raw: Any,
+    *,
+    default: str,
+    normalizer: Callable[[str], str] = lambda item: item,
+    redact: bool = False,
+) -> str:
+    direct_value = _explicit_string(direct_raw)
+    env_value = _explicit_string(env_raw) if env_source else ""
+    if direct_value and env_value and normalizer(direct_value) != normalizer(env_value):
+        detail = (
+            f"{direct_source} and {env_source} are both set with different values"
+            if redact
+            else f"{direct_source}={direct_value!r} and {env_source}={env_value!r}"
+        )
+        raise ValueError(f"conflicting OpenAI Agents SDK setting {setting_name}: {detail}")
+    return direct_value or env_value or default
+
+
+def _normal_provider_profile(value: str) -> str:
+    try:
+        return normalize_provider_route(value, default=PROVIDER_PROFILE_CODEX_RESPONSES)
+    except KeyError as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting provider_profile is unsupported, got {value!r}"
+        ) from exc
+
+
+def _normal_model_id(value: str) -> str:
+    model = maybe_resolve_model(value)
+    return model.model_id if model is not None else value
+
+
+def _explicit_string(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _mify_anthropic_base_url(env_map: dict[str, str]) -> str:
