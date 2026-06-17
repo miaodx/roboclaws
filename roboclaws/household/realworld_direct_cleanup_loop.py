@@ -15,8 +15,8 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.skill_scratchpad import empty_skill_scratchpad
 
-SEMANTIC_SWEEP_POLICY = "semantic_sweep_baseline"
-SEMANTIC_SWEEP_CAMERA_SCHEDULE: tuple[dict[str, float], ...] = (
+MAP_BUILD_POLICY = "map_build_baseline"
+MAP_BUILD_CAMERA_SCHEDULE: tuple[dict[str, float], ...] = (
     {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},
     {"yaw_delta_deg": -30.0, "pitch_delta_deg": 0.0},
     {"yaw_delta_deg": 60.0, "pitch_delta_deg": 0.0},
@@ -33,7 +33,7 @@ class DirectCleanupLoopHooks:
     view_index_after_raw_fpv: Callable[[list[dict[str, Any]], int], int]
     detections_for_policy: Callable[..., list[dict[str, Any]]]
     maybe_clean_visible_object: Callable[..., int]
-    semantic_sweep_done: Callable[..., dict[str, Any]]
+    map_build_done: Callable[..., dict[str, Any]]
     failed_score: Callable[[RealWorldCleanupContract], dict[str, Any]]
 
 
@@ -58,9 +58,9 @@ def record_direct_cleanup_robot_view(
     )
 
 
-def direct_cleanup_policy_name(*, semantic_sweep: bool, perception_mode: str) -> str:
-    if semantic_sweep:
-        return SEMANTIC_SWEEP_POLICY
+def direct_cleanup_policy_name(*, map_build: bool, perception_mode: str) -> str:
+    if map_build:
+        return MAP_BUILD_POLICY
     if perception_mode == CAMERA_MODEL_POLICY_MODE:
         return CAMERA_MODEL_POLICY_NAME
     return DETERMINISTIC_SWEEP_POLICY
@@ -86,7 +86,7 @@ def run_direct_cleanup_scan(
     output_dir: Path,
     view_index: int,
     record_robot_views: bool,
-    semantic_sweep: bool,
+    map_build: bool,
     map_mode: str,
     perception_mode: str,
     planner_proof_evidence: dict[str, Any] | None,
@@ -107,7 +107,7 @@ def run_direct_cleanup_scan(
             output_dir=output_dir,
             view_index=view_index,
             record_robot_views=record_robot_views,
-            semantic_sweep=semantic_sweep,
+            map_build=map_build,
             map_mode=map_mode,
             perception_mode=perception_mode,
             planner_proof_evidence=planner_proof_evidence,
@@ -116,7 +116,7 @@ def run_direct_cleanup_scan(
             pending_minimal_detections=pending_minimal_detections,
             hooks=hooks,
         )
-    if not semantic_sweep and map_mode == MINIMAL_MAP_MODE:
+    if not map_build and map_mode == MINIMAL_MAP_MODE:
         return _clean_pending_minimal_detections(
             trace_events=trace_events,
             started_at=started_at,
@@ -149,7 +149,7 @@ def _scan_direct_cleanup_waypoint(
     output_dir: Path,
     view_index: int,
     record_robot_views: bool,
-    semantic_sweep: bool,
+    map_build: bool,
     map_mode: str,
     perception_mode: str,
     planner_proof_evidence: dict[str, Any] | None,
@@ -175,11 +175,11 @@ def _scan_direct_cleanup_waypoint(
         output_dir=output_dir,
         view_index=view_index,
         record_robot_views=record_robot_views,
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
         perception_mode=perception_mode,
         hooks=hooks,
     )
-    if semantic_sweep:
+    if map_build:
         return view_index
     return _handle_direct_cleanup_detections(
         trace_events=trace_events,
@@ -212,13 +212,13 @@ def _observe_direct_cleanup_waypoint(
     output_dir: Path,
     view_index: int,
     record_robot_views: bool,
-    semantic_sweep: bool,
+    map_build: bool,
     perception_mode: str,
     hooks: DirectCleanupLoopHooks,
 ) -> tuple[list[dict[str, Any]], int]:
     detections = []
-    for camera_index, camera_step in enumerate(_camera_schedule_for_direct_scan(semantic_sweep)):
-        if semantic_sweep and camera_index > 0:
+    for camera_index, camera_step in enumerate(_camera_schedule_for_direct_scan(map_build)):
+        if map_build and camera_index > 0:
             hooks.call_tool(
                 trace_events,
                 started_at,
@@ -255,9 +255,9 @@ def _observe_direct_cleanup_waypoint(
     return detections, view_index
 
 
-def _camera_schedule_for_direct_scan(semantic_sweep: bool) -> tuple[dict[str, float], ...]:
-    if semantic_sweep:
-        return SEMANTIC_SWEEP_CAMERA_SCHEDULE
+def _camera_schedule_for_direct_scan(map_build: bool) -> tuple[dict[str, float], ...]:
+    if map_build:
+        return MAP_BUILD_CAMERA_SCHEDULE
     return ({"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},)
 
 
@@ -386,7 +386,7 @@ def complete_direct_cleanup(
     contract: RealWorldCleanupContract,
     base_contract: CleanupBackendSession,
     policy_name: str,
-    semantic_sweep: bool,
+    map_build: bool,
     hooks: DirectCleanupLoopHooks,
 ) -> dict[str, Any]:
     reason = f"{policy_name} complete"
@@ -396,8 +396,8 @@ def complete_direct_cleanup(
         "done",
         {"reason": reason},
         lambda: (
-            hooks.semantic_sweep_done(contract, base_contract, reason)
-            if semantic_sweep
+            hooks.map_build_done(contract, base_contract, reason)
+            if map_build
             else contract.done(reason)
         ),
     )

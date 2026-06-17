@@ -1683,12 +1683,12 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     assert "--min-sweep-coverage 1.0" in body
 
 
-def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
+def test_molmo_map_build_strips_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert 'if [[ "$semantic_sweep_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
-    assert "checker_semantic_args=(--require-runtime-metric-map)" in text
-    assert 'elif [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
+    assert 'if [[ "$map_build_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
+    assert "checker_map_build_args=(--require-runtime-metric-map)" in text
+    assert 'elif [[ "$map_build_enabled" == "true" ]]; then' in text
     assert (
         "--min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions"
         in text
@@ -2466,7 +2466,11 @@ def test_coding_agent_provider_helper_defaults_codex_to_codex_env_without_args()
         text=True,
     )
 
-    assert result.stdout.splitlines() == ["codex-router-responses", "claude_model_args=0", "claude_env_args=0"]
+    assert result.stdout.splitlines() == [
+        "codex-router-responses",
+        "claude_model_args=0",
+        "claude_env_args=0",
+    ]
 
 
 def test_coding_agent_codex_default_ignores_xm_key_and_requires_codex_env() -> None:
@@ -2714,10 +2718,12 @@ def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> 
             source "$ROBOCLAWS_HELPER"
             ROBOCLAWS_PROVIDER_PROFILE=mimo-tp-openai-chat
             MIMO_TP_KEY=fake-mimo-key
-            roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
+            roboclaws_code_agent_profile_summary \
+              ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
             ROBOCLAWS_PROVIDER_PROFILE=kimi-openai-chat
             KIMI_API_KEY=fake-kimi-key
-            roboclaws_code_agent_profile_summary ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
+            roboclaws_code_agent_profile_summary \
+              ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
             """,
         ],
         cwd=REPO_ROOT,
@@ -2840,7 +2846,10 @@ def test_coding_agent_codex_provider_timing_proxy_disables_responses_websockets(
 
     assert "--disable" in result.stdout.splitlines()
     assert "responses_websockets" in result.stdout.splitlines()
-    assert 'model_providers.codex-router-responses.wire_api="responses"' in result.stdout.splitlines()
+    assert (
+        'model_providers.codex-router-responses.wire_api="responses"'
+        in result.stdout.splitlines()
+    )
 
 
 def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:

@@ -34,18 +34,18 @@ def assert_agibot_map_build_result(
     require_agent_driven: bool,
     require_camera_model_policy: bool,
     require_runtime_metric_map: bool,
-    require_semantic_sweep: bool,
+    require_map_build: bool,
     require_agibot_g2_hardware: bool,
     expect_visual_grounding_pipeline: str | None,
     require_visual_grounding_failure: bool,
     min_sweep_coverage: float | None,
 ) -> None:
-    assert require_semantic_sweep, data
+    assert require_map_build, data
     assert data.get("schema") == AGIBOT_MAP_BUILD_SCHEMA, data
     backend_evidence = data.get("backend_evidence") or {}
     assert backend_evidence.get("evidence_lane") == PHYSICAL_ROBOT_EVIDENCE_LANE, data
     assert data.get("backend_variant") == "agibot_gdk", data
-    expected_policy = _expected_policy(expect_policy, require_semantic_sweep=require_semantic_sweep)
+    expected_policy = _expected_policy(expect_policy, require_map_build=require_map_build)
     _assert_expected_identity(
         data,
         expect_backend=expect_backend,
@@ -92,11 +92,11 @@ def assert_agibot_map_build_result(
 def _expected_policy(
     expect_policy: str | None,
     *,
-    require_semantic_sweep: bool,
+    require_map_build: bool,
 ) -> str | None:
-    if require_semantic_sweep and expect_policy in {
+    if require_map_build and expect_policy in {
         "deterministic_sweep_baseline",
-        "semantic_sweep_baseline",
+        "map_build_baseline",
     }:
         return AGIBOT_MAP_BUILD_POLICY
     return expect_policy

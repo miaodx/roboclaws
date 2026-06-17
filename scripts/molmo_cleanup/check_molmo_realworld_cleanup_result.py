@@ -151,7 +151,7 @@ def _add_evidence_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--require-runtime-metric-map", action="store_true")
     parser.add_argument("--require-goal-contract", action="store_true")
     parser.add_argument("--require-completion-claim", action="store_true")
-    parser.add_argument("--require-semantic-sweep", action="store_true")
+    parser.add_argument("--require-map-build", action="store_true")
     parser.add_argument("--require-agibot-g2-hardware", action="store_true")
     parser.add_argument("--require-minimal-map", action="store_true")
     parser.add_argument("--expect-visual-grounding-pipeline")
@@ -277,8 +277,8 @@ def main() -> None:
     expect_policy = args.expect_policy
     if expect_policy is None:
         expect_policy = (
-            "semantic_sweep_baseline"
-            if args.require_semantic_sweep
+            "map_build_baseline"
+            if args.require_map_build
             else "openclaw_agent"
             if args.require_openclaw_minimum
             else CAMERA_MODEL_POLICY_NAME
@@ -307,7 +307,7 @@ def main() -> None:
             require_runtime_metric_map=args.require_runtime_metric_map,
             require_goal_contract=args.require_goal_contract,
             require_completion_claim=args.require_completion_claim,
-            require_semantic_sweep=args.require_semantic_sweep,
+            require_map_build=args.require_map_build,
             require_agibot_g2_hardware=args.require_agibot_g2_hardware,
             require_minimal_map=args.require_minimal_map,
             expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
@@ -387,7 +387,7 @@ def _assert_result(
             require_agent_driven=opts["require_agent_driven"],
             require_camera_model_policy=opts["require_camera_model_policy"],
             require_runtime_metric_map=opts["require_runtime_metric_map"],
-            require_semantic_sweep=opts["require_semantic_sweep"],
+            require_map_build=opts["require_map_build"],
             require_agibot_g2_hardware=opts["require_agibot_g2_hardware"],
             expect_visual_grounding_pipeline=opts["expect_visual_grounding_pipeline"],
             require_visual_grounding_failure=opts["require_visual_grounding_failure"],
@@ -396,7 +396,7 @@ def _assert_result(
         return
 
     enforce_success, semantic_success_gate = _assert_core_run_result(data, opts)
-    semantic_sweep = _assert_agent_view_and_runtime_map(data, base, opts)
+    map_build = _assert_agent_view_and_runtime_map(data, base, opts)
     _assert_private_evaluation_and_semantic_success(
         data,
         opts,
@@ -415,14 +415,14 @@ def _assert_result(
         report_text,
         opts,
         enforce_success=enforce_success,
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
     )
 
 
 def _assert_core_run_result(data: dict[str, Any], opts: _ResultOptions) -> tuple[bool, bool]:
     assert data.get("adr_0003_satisfied") is True, data
-    if opts["require_semantic_sweep"] and opts["expect_policy"] == "deterministic_sweep_baseline":
-        opts["expect_policy"] = "semantic_sweep_baseline"
+    if opts["require_map_build"] and opts["expect_policy"] == "deterministic_sweep_baseline":
+        opts["expect_policy"] = "map_build_baseline"
     if opts["expect_policy"] is not None:
         assert data.get("policy") == opts["expect_policy"], data
     assert data.get("semantic_loop_variant") == SEMANTIC_LOOP_VARIANT, data
@@ -439,7 +439,7 @@ def _assert_core_run_result(data: dict[str, Any], opts: _ResultOptions) -> tuple
         (opts["require_clean_agent_run"] or not opts["require_openclaw_minimum"])
         and not raw_contract_only
         and not opts["allow_partial_cleanup"]
-        and not opts["require_semantic_sweep"]
+        and not opts["require_map_build"]
     )
     semantic_success_gate = opts["min_semantic_accepted_count"] is not None
     if enforce_success:
@@ -501,11 +501,11 @@ def _assert_agent_view_and_runtime_map(
     opts: _ResultOptions,
 ) -> bool:
     agent_view = data.get("agent_view") or {}
-    semantic_sweep = _is_semantic_sweep_or_map_build(data)
+    map_build = _is_map_build(data)
     _assert_public_agent_view(
         agent_view,
         open_ended_intent=_is_open_ended_intent(data),
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
     )
     if opts["require_minimal_map"]:
         _assert_minimal_map(data, agent_view)
@@ -521,22 +521,22 @@ def _assert_agent_view_and_runtime_map(
     runtime_metric_map = (
         data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
     )
-    semantic_sweep = semantic_sweep or runtime_metric_map.get("mode") == "semantic_sweep"
-    if opts["require_semantic_sweep"]:
-        assert semantic_sweep, data
+    map_build = map_build or runtime_metric_map.get("mode") == "map_build"
+    if opts["require_map_build"]:
+        assert map_build, data
         if _is_live_map_build(data):
             _assert_live_map_build_scan_only(data)
         else:
             assert data.get("cleanup_actions_disabled") is True, data
-            assert data.get("policy") == "semantic_sweep_baseline", data
-            assert (data.get("semantic_sweep") or {}).get("snapshot_artifact"), data
-            assert len((data.get("semantic_sweep") or {}).get("camera_schedule") or []) >= 1, data
-    if semantic_sweep:
-        _assert_semantic_sweep_did_not_clean(data)
+            assert data.get("policy") == "map_build_baseline", data
+            assert (data.get("map_build") or {}).get("snapshot_artifact"), data
+            assert len((data.get("map_build") or {}).get("camera_schedule") or []) >= 1, data
+    if map_build:
+        _assert_map_build_did_not_clean(data)
     trace_path = _resolve_path(base, data["artifacts"]["trace"])
     _assert_trace_is_public(trace_path)
     _assert_no_duplicate_post_place_navigation(trace_path)
-    return semantic_sweep
+    return map_build
 
 
 def _assert_private_evaluation_and_semantic_success(
@@ -595,9 +595,9 @@ def _assert_artifacts_and_report_core(
     assert "ADR-0003 real-world-style cleanup run" not in report_text, report_text[:500]
     if opts["require_runtime_metric_map"]:
         assert "Runtime Metric Map" in report_text, report_text[:500]
-    if opts["require_semantic_sweep"] and not _is_live_map_build(data):
-        assert "Semantic Sweep Mode" in report_text, report_text[:500]
-    elif opts["require_semantic_sweep"]:
+    if opts["require_map_build"] and not _is_live_map_build(data):
+        assert "Map Build Mode" in report_text, report_text[:500]
+    elif opts["require_map_build"]:
         assert "Runtime Metric Map" in report_text, report_text[:500]
         assert "Target Candidates" in report_text, report_text[:500]
     assert_cleanup_report_visual_core(
@@ -619,7 +619,7 @@ def _assert_optional_result_gates(
     opts: _ResultOptions,
     *,
     enforce_success: bool,
-    semantic_sweep: bool,
+    map_build: bool,
 ) -> None:
     _assert_optional_agent_observation_gates(
         data,
@@ -627,7 +627,7 @@ def _assert_optional_result_gates(
         report_text,
         opts,
         enforce_success=enforce_success,
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
     )
     _assert_optional_planner_gates(data, base, report_text, opts)
     _assert_optional_backend_gates(data, base, report_text, opts)
@@ -640,7 +640,7 @@ def _assert_optional_agent_observation_gates(
     opts: _ResultOptions,
     *,
     enforce_success: bool,
-    semantic_sweep: bool,
+    map_build: bool,
 ) -> None:
     if opts["require_openclaw_minimum"]:
         _assert_openclaw_minimum(data)
@@ -661,7 +661,7 @@ def _assert_optional_agent_observation_gates(
             report_text,
             expect_pipeline_id=opts["expect_visual_grounding_pipeline"],
             require_failure=opts["require_visual_grounding_failure"],
-            semantic_sweep=semantic_sweep,
+            map_build=map_build,
         )
     if opts["require_model_declared_observations"]:
         _assert_model_declared_observations(
@@ -917,7 +917,7 @@ def _assert_completion_claim(data: dict[str, Any]) -> None:
     assert isinstance(claim["remaining_risks"], list), claim
 
 
-def _assert_semantic_sweep_did_not_clean(data: dict[str, Any]) -> None:
+def _assert_map_build_did_not_clean(data: dict[str, Any]) -> None:
     counts = data.get("tool_event_counts") or {}
     cleanup_tools = {
         "navigate_to_object",
@@ -962,13 +962,13 @@ def _assert_adaptive_inspection_thresholds(
     }
 
 
-def _is_semantic_sweep_or_map_build(data: dict[str, Any]) -> bool:
+def _is_map_build(data: dict[str, Any]) -> bool:
     runtime_metric_map = data.get("runtime_metric_map") or (
         (data.get("agent_view") or {}).get("runtime_metric_map") or {}
     )
     return (
-        data.get("semantic_sweep_mode") is True
-        or runtime_metric_map.get("mode") == "semantic_sweep"
+        data.get("map_build_mode") is True
+        or runtime_metric_map.get("mode") == "map_build"
         or _is_live_map_build(data)
     )
 
@@ -1374,7 +1374,7 @@ def _assert_camera_model_policy(
     *,
     expect_pipeline_id: str | None = None,
     require_failure: bool = False,
-    semantic_sweep: bool = False,
+    map_build: bool = False,
 ) -> None:
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
     evidence = data.get("camera_model_policy_evidence") or (
@@ -1407,7 +1407,7 @@ def _assert_camera_model_policy(
     failure_count = int(evidence.get("visual_grounding_failure_count") or 0)
     if require_failure:
         assert failure_count >= 1, evidence
-    elif semantic_sweep and (data.get("runtime_metric_map") or {}).get("target_candidates"):
+    elif map_build and (data.get("runtime_metric_map") or {}).get("target_candidates"):
         assert int(evidence.get("event_count") or 0) >= 1, evidence
     else:
         assert int(evidence.get("candidate_count") or 0) >= 1, evidence
@@ -1699,7 +1699,7 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
         data,
         report_text,
         open_ended_intent=_is_open_ended_intent(data),
-        semantic_sweep_or_map_build=_is_semantic_sweep_or_map_build(data),
+        map_build=_is_map_build(data),
     )
 
 

@@ -48,7 +48,10 @@ def _assert_static_fixture_projection_artifact_only(run_dir: Path, run_result: d
         if line.strip()
     ]
     assert "static_fixture_projection" not in runner_task_input["public_tool_sequence"]
-    assert "static_fixture_projection" not in runner_task_input["stage_mapping"]["agent_view_export"]
+    assert (
+        "static_fixture_projection"
+        not in runner_task_input["stage_mapping"]["agent_view_export"]
+    )
     assert not any(event.get("tool") == "static_fixture_projection" for event in trace_events)
 
 
@@ -294,7 +297,7 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
     assert run_result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
     assert run_result["task_name"] == "household-world.map-build"
     assert run_result["cleanup_actions_disabled"] is True
-    assert run_result["semantic_sweep_mode"] is True
+    assert run_result["map_build_mode"] is True
     assert run_result["map_mode"] == "minimal"
     assert run_result["perception_mode"] == "camera_model_policy"
     assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
@@ -341,7 +344,7 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
     assert result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
     assert result["task_name"] == "household-world.cleanup"
     assert result["cleanup_actions_disabled"] is False
-    assert result["semantic_sweep_mode"] is False
+    assert result["map_build_mode"] is False
     assert result["map_mode"] == "minimal"
     assert result["perception_mode"] == "raw_fpv_only"
     assert runtime_metric_map["minimal_map_mode"] is True

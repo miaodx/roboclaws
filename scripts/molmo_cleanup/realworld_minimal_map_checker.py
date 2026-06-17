@@ -14,9 +14,9 @@ def assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None
     _assert_minimal_core(metric_map, static_fixture_projection, runtime_map)
     _assert_minimal_rooms_and_static_map(metric_map, static_fixture_projection, static_map)
     _assert_minimal_waypoints(metric_map, runtime_map)
-    semantic_sweep = data.get("semantic_sweep")
-    if semantic_sweep is not None:
-        assert semantic_sweep.get("minimal_map_mode") is True, data
+    map_build = data.get("map_build")
+    if map_build is not None:
+        assert map_build.get("minimal_map_mode") is True, data
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(static_fixture_projection)
 

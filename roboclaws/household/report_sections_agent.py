@@ -31,10 +31,10 @@ def agent_view_section(run_result: dict[str, Any]) -> str:
         f"{len(raw_observations)} raw FPV observations."
     )
     sweep_note = (
-        '<p class="note">Semantic Sweep Mode: cleanup actions were disabled. '
+        '<p class="note">Map Build Mode: cleanup actions were disabled. '
         "This report shows runtime-map evidence from public observations, not "
         "private cleanup target truth.</p>"
-        if run_result.get("semantic_sweep_mode") is True
+        if run_result.get("map_build_mode") is True
         else ""
     )
     return (

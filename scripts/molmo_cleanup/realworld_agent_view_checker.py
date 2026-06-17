@@ -21,7 +21,7 @@ def assert_public_agent_view(
     agent_view: dict[str, Any],
     *,
     open_ended_intent: bool = False,
-    semantic_sweep: bool = False,
+    map_build: bool = False,
 ) -> None:
     _assert_agent_view_core(agent_view)
     if agent_view.get("runtime_metric_map"):
@@ -36,13 +36,13 @@ def assert_public_agent_view(
         _assert_camera_model_agent_view(
             agent_view,
             open_ended_intent=open_ended_intent,
-            semantic_sweep=semantic_sweep,
+            map_build=map_build,
         )
         return
     _assert_visible_detection_agent_view(
         agent_view,
         open_ended_intent=open_ended_intent,
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
     )
 
 
@@ -114,7 +114,7 @@ def _assert_camera_model_agent_view(
     agent_view: dict[str, Any],
     *,
     open_ended_intent: bool,
-    semantic_sweep: bool,
+    map_build: bool,
 ) -> None:
     assert agent_view.get("structured_detections_available") is False, agent_view
     raw = agent_view.get("raw_fpv_observations") or []
@@ -123,7 +123,7 @@ def _assert_camera_model_agent_view(
     assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
     assert evidence.get("enabled") is True, evidence
     observed = agent_view.get("observed_objects") or []
-    if not observed and (open_ended_intent or semantic_sweep):
+    if not observed and (open_ended_intent or map_build):
         assert agent_view.get("model_declared_observations") == [], agent_view
         assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
         return
@@ -177,10 +177,10 @@ def _assert_visible_detection_agent_view(
     agent_view: dict[str, Any],
     *,
     open_ended_intent: bool,
-    semantic_sweep: bool,
+    map_build: bool,
 ) -> None:
     observed = agent_view.get("observed_objects") or []
-    if not observed and (open_ended_intent or semantic_sweep):
+    if not observed and (open_ended_intent or map_build):
         assert agent_view.get("perception_mode") == "visible_object_detections", agent_view
         assert agent_view.get("structured_detections_available") is True, agent_view
         assert agent_view.get("raw_fpv_observations") == [], agent_view

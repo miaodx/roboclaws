@@ -790,11 +790,11 @@ def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
         if "runtime_map_prior_path" in kwargs:
             seen_runtime_priors.append(str(kwargs["runtime_map_prior_path"]))
         if sample_id == "map_build.baseline_seed7":
-            _write_product_artifacts(run_dir, completion_status="semantic_sweep_complete")
+            _write_product_artifacts(run_dir, completion_status="map_build_complete")
             return _run_result(
                 run_dir,
-                completion_status="semantic_sweep_complete",
-                semantic_sweep=True,
+                completion_status="map_build_complete",
+                map_build=True,
             )
         if sample_id == "open_ended.drink_seed7":
             _write_product_artifacts(
@@ -844,9 +844,9 @@ def test_map_build_consumer_suite_passes_runtime_map_prior_between_samples(
 def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> None:
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
-        _write_product_artifacts(run_dir, completion_status="semantic_sweep_complete")
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
         (run_dir / "runtime_metric_map.json").write_text('{"schema": "wrong"}\n')
-        return _run_result(run_dir, completion_status="semantic_sweep_complete")
+        return _run_result(run_dir, completion_status="map_build_complete")
 
     run = run_eval_suite(
         "evals/household_world/suites/map_build_consumer.json",
@@ -868,13 +868,13 @@ def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
         run_dir = Path(kwargs["output_dir"])
         _write_product_artifacts(
             run_dir,
-            completion_status="semantic_sweep_complete",
+            completion_status="map_build_complete",
             generated_exploration_candidate_count=20,
         )
         return _run_result(
             run_dir,
-            completion_status="semantic_sweep_complete",
-            semantic_sweep=True,
+            completion_status="map_build_complete",
+            map_build=True,
         )
 
     run = run_eval_suite(
@@ -949,13 +949,13 @@ def test_sampler_admission_rejects_heuristic_category_provenance(tmp_path: Path)
         run_dir = Path(kwargs["output_dir"])
         _write_product_artifacts(
             run_dir,
-            completion_status="semantic_sweep_complete",
+            completion_status="map_build_complete",
             generated_exploration_candidate_count=20,
         )
         return _run_result(
             run_dir,
-            completion_status="semantic_sweep_complete",
-            semantic_sweep=True,
+            completion_status="map_build_complete",
+            map_build=True,
         )
 
     run = run_eval_suite(
@@ -981,12 +981,12 @@ def test_cleanup_consumer_fails_when_runtime_map_dependency_is_missing(tmp_path:
         sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
         launched_samples.append(sample_id)
         if sample_id == "map_build.baseline_seed7":
-            _write_product_artifacts(run_dir, completion_status="semantic_sweep_complete")
+            _write_product_artifacts(run_dir, completion_status="map_build_complete")
             (run_dir / "runtime_metric_map.json").unlink()
             return _run_result(
                 run_dir,
-                completion_status="semantic_sweep_complete",
-                semantic_sweep=True,
+                completion_status="map_build_complete",
+                map_build=True,
                 include_runtime_map=False,
             )
         if sample_id == "open_ended.drink_seed7":
@@ -1031,11 +1031,11 @@ def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path)
         run_dir = Path(kwargs["output_dir"])
         sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
         if sample_id == "map_build.baseline_seed7":
-            _write_product_artifacts(run_dir, completion_status="semantic_sweep_complete")
+            _write_product_artifacts(run_dir, completion_status="map_build_complete")
             return _run_result(
                 run_dir,
-                completion_status="semantic_sweep_complete",
-                semantic_sweep=True,
+                completion_status="map_build_complete",
+                map_build=True,
             )
         if sample_id == "cleanup.consume_map_seed7":
             _write_product_artifacts(run_dir, completion_status="success")
@@ -1285,7 +1285,7 @@ def _run_result(
     run_dir: Path,
     *,
     completion_status: str,
-    semantic_sweep: bool = False,
+    map_build: bool = False,
     task_intent: str = "cleanup",
     final_status: str | None = None,
     include_completion_claim: bool = False,
@@ -1311,7 +1311,7 @@ def _run_result(
         "cleanup_status": completion_status,
         "task_intent": task_intent,
         "final_status": final_status or completion_status,
-        "semantic_sweep_mode": semantic_sweep,
+        "map_build_mode": map_build,
         "agent_completion_claim": completion_claim,
         "tool_event_counts": {
             "metric_map:request": 1,

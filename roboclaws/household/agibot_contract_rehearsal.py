@@ -195,7 +195,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
         evidence_lane=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
-        semantic_sweep=is_map_build,
+        map_build=is_map_build,
         map_mode=MINIMAL_MAP_MODE,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,

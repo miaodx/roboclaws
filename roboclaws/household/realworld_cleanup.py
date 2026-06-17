@@ -49,7 +49,7 @@ from roboclaws.household.realworld_contract import (
     RealWorldCleanupContract,
 )
 from roboclaws.household.realworld_direct_cleanup_loop import (
-    SEMANTIC_SWEEP_CAMERA_SCHEDULE,
+    MAP_BUILD_CAMERA_SCHEDULE,
     DirectCleanupLoopHooks,
     complete_direct_cleanup,
     direct_cleanup_policy_name,
@@ -129,7 +129,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
-        "--semantic-sweep",
+        "--map-build",
         action="store_true",
         help=(
             "Visit inspection waypoints and update the runtime metric map without "
@@ -255,7 +255,7 @@ def run_realworld_cleanup(
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     evidence_lane: str | None = None,
-    semantic_sweep: bool = False,
+    map_build: bool = False,
     map_mode: str = DEFAULT_MAP_MODE,
     runtime_map_prior_path: str | Path | None = None,
     planner_proof_run_result: Path | None = None,
@@ -359,7 +359,7 @@ def run_realworld_cleanup(
         view_index_after_raw_fpv=_view_index_after_raw_fpv,
         detections_for_policy=_detections_for_policy,
         maybe_clean_visible_object=_maybe_clean_visible_object,
-        semantic_sweep_done=_semantic_sweep_done,
+        map_build_done=_map_build_done,
         failed_score=_failed_score,
     )
     view_index = record_direct_cleanup_robot_view(
@@ -382,7 +382,7 @@ def run_realworld_cleanup(
     )
 
     policy_name = direct_cleanup_policy_name(
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
         perception_mode=perception_mode,
     )
     agent_scratchpad = direct_cleanup_scratchpad(policy_name)
@@ -397,7 +397,7 @@ def run_realworld_cleanup(
         output_dir=output_dir,
         view_index=view_index,
         record_robot_views=record_robot_views,
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
         map_mode=map_mode,
         perception_mode=perception_mode,
         planner_proof_evidence=(
@@ -413,7 +413,7 @@ def run_realworld_cleanup(
         contract=contract,
         base_contract=base_contract,
         policy_name=policy_name,
-        semantic_sweep=semantic_sweep,
+        map_build=map_build,
         hooks=direct_loop_hooks,
     )
 
@@ -450,7 +450,7 @@ def run_realworld_cleanup(
             generated_mess_count=generated_mess_count,
             goal_contract=goal_contract,
             agent_scratchpad=agent_scratchpad,
-            semantic_sweep=semantic_sweep,
+            map_build=map_build,
             map_mode=map_mode,
             runtime_map_prior=runtime_map_prior,
             runtime_map_prior_path=runtime_map_prior_path,
@@ -460,7 +460,7 @@ def run_realworld_cleanup(
             selected_bundle_dir=selected_bundle_dir,
             planner_proof_evidence=planner_proof_evidence,
             use_planner_proof_for_cleanup_primitives=(use_planner_proof_for_cleanup_primitives),
-            semantic_sweep_camera_schedule=SEMANTIC_SWEEP_CAMERA_SCHEDULE,
+            map_build_camera_schedule=MAP_BUILD_CAMERA_SCHEDULE,
             run_metadata_overrides=run_metadata_overrides,
         )
     )
@@ -501,7 +501,7 @@ def _failed_score(contract: RealWorldCleanupContract) -> dict[str, Any]:
     }
 
 
-def _semantic_sweep_done(
+def _map_build_done(
     contract: RealWorldCleanupContract,
     base_contract: CleanupBackendSession,
     reason: str,
@@ -516,14 +516,14 @@ def _semantic_sweep_done(
         "tool": "done",
         "status": "ok",
         "reason": reason,
-        "cleanup_status": "semantic_sweep_complete",
+        "cleanup_status": "map_build_complete",
         "score": score,
         "final_locations": final_locations,
         "final_containment": done.get("final_containment", {}),
         "tool_event_counts": done.get("tool_event_counts", {}),
         "contract": REALWORLD_CONTRACT,
         "policy_uses_private_truth": False,
-        "semantic_sweep_mode": True,
+        "map_build_mode": True,
         "cleanup_actions_disabled": True,
     }
 
@@ -1133,7 +1133,7 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         evidence_lane=args.evidence_lane,
-        semantic_sweep=args.semantic_sweep,
+        map_build=args.map_build,
         map_mode=args.map_mode,
         runtime_map_prior_path=args.runtime_map_prior,
         planner_proof_run_results=args.planner_proof_run_result,

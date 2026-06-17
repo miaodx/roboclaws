@@ -155,7 +155,7 @@ run dispatch_target agent_engine mode="" *overrides:
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|skill_name|task_intent|task_preset|task_surface|goal_contract_json|goal_contract_path|\
-        scene_index|scene_source|seed|seeds|semantic_sweep|task|timeout_s|world|\
+        scene_index|scene_source|seed|seeds|map_build|task|timeout_s|world|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
@@ -402,9 +402,9 @@ run dispatch_target agent_engine mode="" *overrides:
             ;;
         esac
         visual_grounding_timeout_s="$(get visual_grounding_timeout_s "$(get visual_grounding_timeout auto)")"
-        semantic_sweep="$(get semantic_sweep off)"
+        map_build="$(get map_build off)"
         if [[ "$dispatch_intent" == "map-build" ]]; then
-          semantic_sweep="on"
+          map_build="on"
         fi
         map_mode="$(get map_mode minimal)"
         runtime_map_prior="$(get runtime_map_prior "")"
@@ -752,7 +752,7 @@ run dispatch_target agent_engine mode="" *overrides:
           "$impl_driver" "$profile" "$seeds"
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port"
           "$map_bundle" "$cleanup_routine" "$robot_views" "$camera_labeler"
-          "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend"
+          "$visual_grounding_timeout_s" "$map_build" "$runtime_map_prior" "$backend"
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path"
           "$min_generated_mess_count" "$generated_mess_object_ids" "$dispatch_surface"
           "$resolved_task_intent" "$operator_messages_path" "$b1_alignment_review"
