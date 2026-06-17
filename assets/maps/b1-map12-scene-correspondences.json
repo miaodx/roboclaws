@@ -9,7 +9,7 @@
   "scene_projection_policy": {
     "horizontal_axes": [
       "x",
-      "z"
+      "y"
     ],
     "source": "pending_operator_review_for_2rd_floor_seperated",
     "up_axis": "z"

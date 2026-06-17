@@ -49,12 +49,34 @@ photorealistic, but lacks the same split object labels. Bring it back after
 `2rd_floor_seperated` establishes the Map12 alignment, mainly for visual/open
 task background evidence.
 
+Coordinate contract for the first pass:
+
+- `2rd_floor_seperated` is Z-up.
+- Scene topdown uses horizontal axes `x,y`.
+- Accepted anchors are stored as `scene_xyz`, even when the UI captures a 2D
+  topdown point. A 2D pick is exported as `[x, y, 0]` unless the review surface
+  can provide a better Z value.
+- Do not mix this with the old Y-up / `x,z` convention. Update fitter tests and
+  correspondence fixtures before accepting anchors.
+
+Diagnostic contract:
+
+- Generate the best topdown possible from available assets.
+- Add dependencies such as OpenUSD/`pxr`, `trimesh`, or `open3d` if they are the
+  shortest reliable path to extract bounds or render useful diagnostics.
+- If full geometry extraction is unavailable, still emit an honest inventory
+  diagnostic with partition names, object label counts, asset files, and a clear
+  `geometry_status` value. Do not pretend that label-only inventory is a
+  geometric topdown.
+
 ## Minimal Path
 
 1. Render a `2rd_floor_seperated` topdown diagnostic.
    - Show room partitions.
    - Show object labels or counts.
-   - Show scene-frame bounds/centers when available.
+   - Show scene-frame bounds/centers when available. Add a dependency if that
+     is the shortest reliable path.
+   - Record whether geometry was rendered, extracted as bounds, or unavailable.
    - Do not project into Map12 yet.
 
 2. Check scene self-consistency.
@@ -78,7 +100,7 @@ Each accepted anchor needs explicit:
 
 ```text
 map_xy
-scene_xyz or scene_xy
+scene_xyz
 asset_partition_id
 navigation_area_id
 evidence note
@@ -103,8 +125,12 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
 
 - A topdown diagnostic exists for `2rd_floor_seperated`.
 - The diagnostic lists all scene partitions and high-signal object labels.
+- The diagnostic records `up_axis=z`, `horizontal_axes=[x,y]`, and
+  `geometry_status`.
 - At least six accepted anchors exist across at least three scene partitions or
   navigation areas.
+- Accepted anchors use `scene_xyz`; UI-only 2D picks are normalized to
+  `scene_xyz=[x,y,0]`.
 - The residual artifact reports rigid/similarity candidates, residual metrics,
   and pass/fail status.
 - No code path treats empty or seed-derived correspondences as verified.
@@ -124,10 +150,13 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
 P0:
 
 - Add a small topdown diagnostic generator for `2rd_floor_seperated`.
-- Add a simple alignment review UI or extend the current label tool in a
-  separate alignment mode so Map12 and scene topdown can be clicked side by
-  side.
+- Use a separate minimal alignment tool for two-map anchor picking. Do not hide
+  alignment inside the Map12 room-label editor.
 - Export accepted anchors to the existing correspondence schema.
+- Make the correspondence schema/fitter/tests agree on Z-up, `x,y` topdown, and
+  `scene_xyz` anchor storage.
+- Make the review UI load vendor Map12 from `nav2.yaml` / `occupancy.pgm`
+  directly.
 
 P1:
 
@@ -141,6 +170,18 @@ P2:
   tasks.
 
 ## Verification
+
+Before anchors exist, expected status is blocked, not green:
+
+```bash
+python scripts/maps/render_b1_map12_correspondence_review.py \
+  --correspondences assets/maps/b1-map12-scene-correspondences.json \
+  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --output-dir output/b1-map12/correspondence-review
+# expected before review: manifest_needs_fix or review_pending, accepted_anchor_count=0
+```
+
+After accepted anchors exist, run:
 
 ```bash
 python scripts/maps/check_robot_map12_consistency.py vendors/agibot_sdk/artifacts/maps/robot_map_12
