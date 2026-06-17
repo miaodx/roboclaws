@@ -34,6 +34,15 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Scene-sampler next-flow readiness assertions moved summary,
+  artifact-path, source-status, and scanner-plan checks out of
+  `_assert_next_flow()` into focused local assertion helpers. Behavior-change
+  class: test-only cleanup; generated readiness artifact contracts are
+  unchanged. Metric: ratchet reports 2 complexity rows and 77 oversized
+  modules, and `test_scene_sampler_readiness_export.py::_assert_next_flow`
+  dropped from the complexity list. Proof: focused scene-sampler readiness
+  export test, ruff, format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Cleanup-checker fixture-id lookup moved semantic-substep,
   cleanup-primitive, agent-view worklist, and destination-option lookup out of
   `_candidate_fixture_id_for_object()` into local fixture-vocabulary helpers.

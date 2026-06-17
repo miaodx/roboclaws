@@ -271,6 +271,13 @@ def _assert_next_flow(
     next_flow = payloads["next_flow"]
     scanner_execution = payloads["scanner_execution"]
 
+    _assert_next_flow_summary(next_flow, result=result)
+    _assert_next_flow_artifact_paths(next_flow, output_dir=output_dir)
+    _assert_next_flow_source_statuses(next_flow)
+    _assert_ithor_scanner_plan(scanner_execution)
+
+
+def _assert_next_flow_summary(next_flow: dict[str, Any], *, result: dict[str, Any]) -> None:
     assert next_flow["schema"] == "molmospaces_scene_sampler_next_flow_worklist_v1"
     assert next_flow["probe_mode"] == "no_download_no_backend_no_vlm"
     assert next_flow["download_policy"] == "manual_operator_only"
@@ -294,6 +301,9 @@ def _assert_next_flow(
         "holodeck-objaverse-val",
     }
     assert result["summary"]["next_flow_worklist"]["source_count"] == 4
+
+
+def _assert_next_flow_artifact_paths(next_flow: dict[str, Any], *, output_dir: Path) -> None:
     assert next_flow["artifact_paths"]["readiness_output_dir"] == str(output_dir)
     assert next_flow["artifact_paths"]["source_prep"] == str(
         output_dir / "scene_sampler_source_prep.json"
@@ -301,6 +311,9 @@ def _assert_next_flow(
     assert next_flow["artifact_paths"]["scene_prefilter"] == str(
         output_dir / "scene_sampler_scene_prefilter.json"
     )
+
+
+def _assert_next_flow_source_statuses(next_flow: dict[str, Any]) -> None:
     assert next_flow["sources"]["procthor-10k-val"]["ui_status"] == "not_visible"
     assert next_flow["sources"]["procthor-10k-val"]["eval_ready_count"] == 5
     assert next_flow["sources"]["procthor-10k-val"]["eval_needed_count"] == 5
@@ -332,6 +345,9 @@ def _assert_next_flow(
         "missing_public_inspection_waypoints",
         "preview_not_reviewable",
     }
+
+
+def _assert_ithor_scanner_plan(scanner_execution: dict[str, Any]) -> None:
     if scanner_execution["sources"]["ithor"]["candidates"]:
         ithor_scanner = scanner_execution["sources"]["ithor"]["candidates"][0]
         assert ithor_scanner["world_id"].startswith("molmospaces/ithor/")
