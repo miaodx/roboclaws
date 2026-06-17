@@ -33,6 +33,12 @@ B1 / Map 12 product routes now consume raw Map12 plus a human review manifest,
 compile a generated runtime bundle at launch/preview time, and no longer use
 `assets/maps/b1-map12-room-semantics` as a product input.
 
+2026-06-17 correction: the current checked-in review manifest is not a finished
+operator-authored room semantic manifest. It is a seed/review placeholder until
+manual room labeling is redone after scene-partition naming conflicts are
+resolved. Product code must not treat placeholder labels as residual-backed
+scene-map alignment proof.
+
 This plan supersedes using `assets/maps/b1-map12-room-semantics` as a maintained
 source of truth for B1 / Map 12 room labels. The replacement direction is:
 
@@ -46,6 +52,11 @@ raw Map12 bundle
 The generated runtime bundle may be used by B1 digital-twin runs, reports, and
 operator previews, but it must be rebuildable and must not become the human-edited
 source.
+
+Use `2rd_floor_seperated` first for registration because it has split labels and
+object/partition structure. Keep `B1_floor2_slow` as a later visual-quality
+asset for open-ended tasks after the split scene has established the Map12
+alignment.
 
 There is no backward-compatibility requirement for the old B1 / Map 12 merged
 bundle path. Current product routes, scripts, docs, and tests should move to the
