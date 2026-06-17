@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household.b1_nurec_scene import prepare_b1_nurec_scene_usd
 from roboclaws.household.camera_control import load_camera_control_request
 from roboclaws.household.subprocess_backend import _scenario_from_worker_payload
 from roboclaws.household.worker_runner import run_json_worker_once, worker_env, worker_timeout_s
@@ -70,6 +71,7 @@ class IsaacLabSubprocessBackend:
         self.runtime_mode = runtime_mode or os.environ.get(
             "ROBOCLAWS_ISAACLAB_RUNTIME_MODE", "real"
         )
+        prepared_scene_usd_path = prepare_b1_nurec_scene_usd(scene_usd_path)
         self.snapshot_artifacts: list[dict[str, Any]] = []
         init_args = [
             "--run-dir",
@@ -92,7 +94,7 @@ class IsaacLabSubprocessBackend:
             include_robot=include_robot,
             robot_name=robot_name,
             map_bundle_dir=map_bundle_dir,
-            scene_usd_path=scene_usd_path,
+            scene_usd_path=prepared_scene_usd_path,
         )
         _extend_segmentation_args(
             init_args,

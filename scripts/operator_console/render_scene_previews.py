@@ -52,7 +52,7 @@ B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
 )
 B1_SCENE_USD_PATH = Path(
     "data/robot-data-lab/scene-engine/data/"
-    "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+    "2rd_floor_seperated/storey_1/scene_gs.usda"
 )
 
 
@@ -504,7 +504,10 @@ def render_b1_map12_preview(
         metadata["views"]["chase"] = camera_result["views"]["chase"]
         metadata["camera_preview_artifact"] = camera_result["artifact"]
     elif preserved_camera is not None:
-        metadata["renderer"] = "static_b1_map12_with_isaac_runtime_camera_previews"
+        metadata["renderer"] = (
+            preserved_camera.get("renderer")
+            or "static_b1_map12_with_isaac_runtime_camera_previews"
+        )
         metadata["views"]["fpv"] = preserved_camera["views"]["fpv"]
         metadata["views"]["chase"] = preserved_camera["views"]["chase"]
         if preserved_camera.get("artifact"):
@@ -561,9 +564,16 @@ def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bo
     chase = views.get("chase")
     if not isinstance(fpv, dict) or not isinstance(chase, dict):
         return False
-    return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
-        chase.get("provenance") or ""
-    ).startswith("isaac_runtime_")
+    return _b1_camera_preview_provenance_is_preservable(fpv) and (
+        _b1_camera_preview_provenance_is_preservable(chase)
+    )
+
+
+def _b1_camera_preview_provenance_is_preservable(view: dict[str, Any]) -> bool:
+    provenance = str(view.get("provenance") or "")
+    return provenance.startswith("isaac_runtime_") or (
+        provenance == "prepared_b1_nurec_scene_camera_preview"
+    )
 
 
 def _b1_existing_real_camera_preview_metadata(
@@ -583,6 +593,7 @@ def _b1_existing_real_camera_preview_metadata(
     return {
         "views": {"fpv": dict(views["fpv"]), "chase": dict(views["chase"])},
         "artifact": dict(payload.get("camera_preview_artifact") or {}),
+        "renderer": str(payload.get("renderer") or ""),
     }
 
 

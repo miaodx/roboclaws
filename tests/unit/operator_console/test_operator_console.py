@@ -571,11 +571,13 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             f"http://{host}:{port}/previews/b1-map12-preview.json"
         ) as response:
             preview = json.loads(response.read().decode("utf-8"))
-            assert preview["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+            assert preview["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
             assert preview["views"]["fpv"]["provenance"] == (
-                "isaac_runtime_robot_mounted_head_camera_fpv"
+                "prepared_b1_nurec_scene_camera_preview"
             )
-            assert preview["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+            assert preview["views"]["chase"]["provenance"] == (
+                "prepared_b1_nurec_scene_camera_preview"
+            )
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
         assert exc_info.value.code == 404

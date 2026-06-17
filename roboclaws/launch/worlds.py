@@ -112,7 +112,7 @@ WORLD_SPECS: dict[str, WorldSpec] = {
             "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
             "b1_alignment_review=assets/maps/b1-map12-alignment-review.json",
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "2rd_floor_seperated/storey_1/configuration/scene_base.usd",
+            "2rd_floor_seperated/storey_1/scene_gs.usda",
             "robot_views=on",
         ),
         preview_assets=(

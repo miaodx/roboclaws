@@ -1,14 +1,14 @@
 {
   "backend": "isaaclab",
   "camera_preview_artifact": {
-    "accepted_candidate_count": 8,
-    "candidate_count": 8,
-    "path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-public-labels/0615_1857/seed-7/run_result.json",
-    "schema": "realworld_cleanup_v1",
-    "selected_action": "observe",
-    "selected_label": "0001_observe",
+    "accepted_candidate_count": 6,
+    "candidate_count": 6,
+    "path": "output/gaussian-map-comparison/0617-corrected/new_2rd_prepared_wrapper_result.json",
+    "schema": "isaac_scene_camera_views_v1",
+    "selected_action": "render_scene_preview",
+    "selected_label": "prepared_nurec_default",
     "selected_waypoint_id": "",
-    "source_kind": "run_result_robot_view_step"
+    "source_kind": "prepared_b1_nurec_scene_probe"
   },
   "generated_at": "2026-06-17T05:34:17Z",
   "map_bundle": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
@@ -16,7 +16,7 @@
     "height": 560,
     "width": 900
   },
-  "renderer": "static_b1_map12_with_isaac_runtime_camera_previews",
+  "renderer": "static_b1_map12_with_prepared_nurec_camera_previews",
   "review_manifest": "assets/maps/b1-map12-alignment-review.json",
   "runtime_map_bundle": "output/operator-console-scene-previews/b1-map12-runtime-map-bundle",
   "runtime_provenance": {
@@ -56,91 +56,91 @@
     }
   },
   "scene_source": "b1-gaussian-digital-twin",
-  "scene_usd_path": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/configuration/scene_base.usd",
+  "scene_usd_path": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda",
   "schema": "operator_console_scene_preview_v1",
   "views": {
     "chase": {
-      "action": "observe",
-      "camera": "robot_relative_chase_camera",
+      "action": "render_scene_preview",
+      "camera": "prepared_b1_nurec_scene_probe_camera",
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
             0,
-            228
+            255
           ],
           [
             0,
-            231
+            255
           ],
           [
             0,
-            235
+            255
           ]
         ],
-        "edge_fraction_over_16": 0.073688,
-        "edge_fraction_over_8": 0.100062,
+        "edge_fraction_over_16": 0.061,
+        "edge_fraction_over_8": 0.101062,
         "height": 560,
-        "max_channel_range": 235.0,
-        "max_stddev": 76.072,
+        "max_channel_range": 255.0,
+        "max_stddev": 29.33,
         "mean_rgb": [
-          172.22,
-          173.783,
-          175.934
+          208.991,
+          207.798,
+          205.191
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
-        "thumbnail_color_count": 1127,
+        "thumbnail_color_count": 2942,
         "visual_status": "reviewable",
         "width": 900
       },
-      "label": "0001_observe",
+      "label": "prepared_nurec_default",
       "path": "b1-map12-chase.png",
       "policy_note": "Chase is report evidence, not agent-facing policy input.",
-      "provenance": "isaac_runtime_report_chase_camera",
-      "source": "robot_relative_camera_follower",
-      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-public-labels/0615_1857/seed-7/robot_views/0001_observe.chase.png",
+      "provenance": "prepared_b1_nurec_scene_camera_preview",
+      "source": "prepared_b1_nurec_scene_camera_view:x_axis_corridor",
+      "source_path": "output/gaussian-map-comparison/0617-corrected/new_2rd_prepared_wrapper_views/x_axis_corridor.png",
       "view": "chase_camera",
       "waypoint_id": ""
     },
     "fpv": {
-      "action": "observe",
-      "camera": "/World/robot_0/head_camera",
+      "action": "render_scene_preview",
+      "camera": "/World/RoboclawsSceneProbeCameraRig/Camera",
       "head_camera_equivalent": false,
       "image_diagnostics": {
         "channel_extrema_rgb": [
           [
-            35,
-            228
+            0,
+            255
           ],
           [
-            35,
-            231
+            1,
+            255
           ],
           [
-            35,
-            235
+            0,
+            255
           ]
         ],
-        "edge_fraction_over_16": 0.0685,
-        "edge_fraction_over_8": 0.079062,
+        "edge_fraction_over_16": 0.10625,
+        "edge_fraction_over_8": 0.163562,
         "height": 560,
-        "max_channel_range": 200.0,
-        "max_stddev": 60.999,
+        "max_channel_range": 255.0,
+        "max_stddev": 51.405,
         "mean_rgb": [
-          181.787,
-          184.106,
-          187.78
+          203.835,
+          200.53,
+          195.248
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
-        "thumbnail_color_count": 386,
+        "thumbnail_color_count": 3701,
         "visual_status": "reviewable",
         "width": 900
       },
-      "label": "0001_observe",
+      "label": "prepared_nurec_default",
       "path": "b1-map12-fpv.png",
-      "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
-      "robot_mounted": true,
-      "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
-      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-public-labels/0615_1857/seed-7/robot_views/0001_observe.fpv.png",
+      "provenance": "prepared_b1_nurec_scene_camera_preview",
+      "robot_mounted": false,
+      "source": "prepared_b1_nurec_scene_camera_view:authored_perspective",
+      "source_path": "output/gaussian-map-comparison/0617-corrected/new_2rd_prepared_wrapper_views/authored_perspective.png",
       "view": "raw_fpv",
       "waypoint_id": ""
     },

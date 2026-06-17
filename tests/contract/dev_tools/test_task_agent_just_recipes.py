@@ -1437,7 +1437,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert route[17] == "isaaclab_subprocess"
     assert route[21] == (
         "data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+        "2rd_floor_seperated/storey_1/scene_gs.usda"
     )
     assert route[24:26] == ["household-world", "open-ended"]
     assert route[26] == ""
@@ -1450,7 +1450,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in target_trace
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+        "2rd_floor_seperated/storey_1/scene_gs.usda"
     ) in target_trace
     assert "world=b1-map12" in target_trace
     assert "backend=isaaclab_subprocess" in target_trace

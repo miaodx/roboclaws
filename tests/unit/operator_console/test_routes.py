@@ -153,11 +153,11 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
     assert metadata["views"]["fpv"]["view"] == "raw_fpv"
-    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
     assert metadata["views"]["chase"]["view"] == "chase_camera"
-    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+    assert metadata["views"]["chase"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
     assert metadata["map_bundle"] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
     assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
@@ -508,7 +508,7 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     assert "robot_views=on" in argv
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-        "2rd_floor_seperated/storey_1/configuration/scene_base.usd"
+        "2rd_floor_seperated/storey_1/scene_gs.usda"
     ) in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
 

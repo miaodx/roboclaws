@@ -367,6 +367,51 @@ def test_b1_map12_skip_existing_rewrites_stale_camera_preview_metadata(
     assert "chase" not in metadata["views"]
 
 
+def test_b1_map12_preserves_prepared_nurec_camera_preview_renderer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+    Image.new("RGB", (16, 16), (80, 90, 100)).save(tmp_path / "b1-map12-fpv.png")
+    Image.new("RGB", (16, 16), (100, 90, 80)).save(tmp_path / "b1-map12-chase.png")
+    metadata_path = tmp_path / "b1-map12-preview.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "schema": PREVIEW_METADATA_SCHEMA,
+                "renderer": "static_b1_map12_with_prepared_nurec_camera_previews",
+                "views": {
+                    "fpv": {
+                        "path": "b1-map12-fpv.png",
+                        "provenance": "prepared_b1_nurec_scene_camera_preview",
+                    },
+                    "chase": {
+                        "path": "b1-map12-chase.png",
+                        "provenance": "prepared_b1_nurec_scene_camera_preview",
+                    },
+                    "map": {"path": "b1-map12-map.png"},
+                    "topdown": {"path": "b1-map12-topdown.png"},
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
+
+    assert result["status"] == "rendered"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["renderer"] == "static_b1_map12_with_prepared_nurec_camera_previews"
+    assert metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert metadata["views"]["chase"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+
+
 def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
     tmp_path: Path,
     monkeypatch,

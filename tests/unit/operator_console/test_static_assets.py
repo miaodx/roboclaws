@@ -325,11 +325,11 @@ def test_static_app_renders_scene_preview_assets() -> None:
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["views"]["fpv"]["provenance"] == (
-        "isaac_runtime_robot_mounted_head_camera_fpv"
+    assert b1_metadata["views"]["fpv"]["provenance"] == "prepared_b1_nurec_scene_camera_preview"
+    assert b1_metadata["views"]["chase"]["provenance"] == (
+        "prepared_b1_nurec_scene_camera_preview"
     )
-    assert b1_metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
-    assert b1_metadata["views"]["topdown"]["view"] == "semantic_room_topdown"
+    assert b1_metadata["views"]["topdown"]["view"] == "review_label_topdown"
     assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
     assert b1_metadata["views"]["fpv"]["path"] != b1_metadata["views"]["map"]["path"]
     assert b1_metadata["views"]["chase"]["path"] != b1_metadata["views"]["fpv"]["path"]
