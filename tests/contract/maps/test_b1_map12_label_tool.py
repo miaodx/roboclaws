@@ -15,7 +15,6 @@ from scripts.maps.render_b1_map12_label_tool import (
     draft_manifest_from_shapes,
     label_tool_template,
     label_tool_template_path,
-    label_tool_url,
     materialize_scene_evidence_artifacts,
     pixel_to_world,
     render_label_tool_html,
@@ -387,7 +386,7 @@ def test_label_tool_cli_writes_standalone_html_and_packet(tmp_path: Path) -> Non
     assert "B1 / Map 12 Label Tool" in html
 
 
-def test_label_tool_can_prepare_served_artifacts(tmp_path: Path) -> None:
+def test_label_tool_writes_static_artifacts(tmp_path: Path) -> None:
     artifacts = write_label_tool_artifacts(
         map_bundle=MAP_BUNDLE,
         output_dir=tmp_path,
@@ -399,11 +398,9 @@ def test_label_tool_can_prepare_served_artifacts(tmp_path: Path) -> None:
     assert (tmp_path / "label_tool.html").is_file()
     packet = json.loads((tmp_path / "label_tool_packet.json").read_text(encoding="utf-8"))
     assert "scene_evidence" not in packet
-    assert label_tool_url("0.0.0.0", 8765) == "http://127.0.0.1:8765/label_tool.html"
-    assert label_tool_url("127.0.0.1", 8765) == "http://127.0.0.1:8765/label_tool.html"
 
 
-def test_label_tool_cli_exposes_serve_mode() -> None:
+def test_label_tool_cli_does_not_own_a_server() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--help"],
         check=True,
@@ -411,7 +408,7 @@ def test_label_tool_cli_exposes_serve_mode() -> None:
         text=True,
     )
 
-    assert "--serve" in result.stdout
     assert "--include-gaussian-scene" in result.stdout
-    assert "--host" in result.stdout
-    assert "--port" in result.stdout
+    assert "--serve" not in result.stdout
+    assert "--host" not in result.stdout
+    assert "--port" not in result.stdout
