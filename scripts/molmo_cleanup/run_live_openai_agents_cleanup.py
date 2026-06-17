@@ -28,6 +28,7 @@ from roboclaws.agents.drivers.openai_agents_live import (
     DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
     DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     DEFAULT_OPENAI_AGENTS_MAX_TURNS,
+    KIMI_CODING_USER_AGENT,
     MCP_CLIENT_SESSION_TIMEOUT_ENV,
     MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
     MODEL_SERVICE_RETRY_SLEEP_ENV,
@@ -37,6 +38,10 @@ from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
 from roboclaws.agents.provider_registry import (
+    PROVIDER_PROFILE_CODEX_RESPONSES,
+    PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
+    WIRE_CHAT_COMPLETIONS,
+    WIRE_RESPONSES,
     model_family_for_route_model,
     normalize_provider_route,
     provider_route_spec,
@@ -1511,14 +1516,16 @@ def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
         "parallel_tool_calls": False,
         "model_thinking_mode": str(profile.get("model_thinking_mode") or "default"),
     }
-    if wire_api == "responses":
+    if wire_api == WIRE_RESPONSES:
         settings["store"] = False
-        if provider_profile != "codex-router-responses":
+        if provider_profile != PROVIDER_PROFILE_CODEX_RESPONSES:
             settings["truncation"] = "auto"
-        if provider_profile == "codex-router-responses" and profile_id != "baseline":
+        if provider_profile == PROVIDER_PROFILE_CODEX_RESPONSES and profile_id != "baseline":
             settings["prompt_cache_retention"] = "in_memory"
-    elif wire_api == "chat-completions":
+    elif wire_api == WIRE_CHAT_COMPLETIONS:
         settings["include_usage"] = True
+        if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
+            settings["extra_headers"] = {"User-Agent": KIMI_CODING_USER_AGENT}
     return settings
 
 

@@ -19,6 +19,7 @@ from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.provider_registry import (
     PROVIDER_PROFILE_CODEX_RESPONSES,
     PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
+    WIRE_CHAT_COMPLETIONS,
     normalize_provider_route,
     provider_route_spec,
     route_base_url,
@@ -38,6 +39,7 @@ MODEL_SERVICE_RETRY_ATTEMPTS_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_
 MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S"
 MODEL_RACING_OBSERVABILITY_SCHEMA = "agent_sdk_model_racing_observability_v1"
 MODEL_RACING_EVENT_SCHEMA = "openai_agents_model_racing_observability_v1"
+KIMI_CODING_USER_AGENT = "claude-code/1.0.0"
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -427,20 +429,41 @@ def _sdk_model_settings_payload(request: LiveAgentRequest) -> dict[str, Any]:
             or metadata.get("model_thinking_mode")
             or "default"
         )
-        return apply_model_thinking_policy(
-            payload,
+        return _apply_provider_default_model_settings(
+            apply_model_thinking_policy(
+                payload,
+                provider_profile=provider_profile,
+                wire_api=wire_api,
+                mode=thinking_mode,
+            ),
             provider_profile=provider_profile,
             wire_api=wire_api,
-            mode=thinking_mode,
         )
     profile_id = str(profile.get("profile_id") if isinstance(profile, dict) else "baseline")
     thinking_mode = str(metadata.get("model_thinking_mode") or "default")
-    return _default_sdk_model_settings_payload(
+    return _apply_provider_default_model_settings(
+        _default_sdk_model_settings_payload(
+            provider_profile=provider_profile,
+            wire_api=wire_api,
+            profile_id=profile_id,
+            thinking_mode=thinking_mode,
+        ),
         provider_profile=provider_profile,
         wire_api=wire_api,
-        profile_id=profile_id,
-        thinking_mode=thinking_mode,
     )
+
+
+def _apply_provider_default_model_settings(
+    payload: dict[str, Any],
+    *,
+    provider_profile: str,
+    wire_api: str,
+) -> dict[str, Any]:
+    if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT and wire_api == WIRE_CHAT_COMPLETIONS:
+        headers = dict(payload.get("extra_headers") or {})
+        headers.setdefault("User-Agent", KIMI_CODING_USER_AGENT)
+        payload["extra_headers"] = headers
+    return payload
 
 
 def _sdk_run_config_payload(
@@ -489,7 +512,7 @@ def _default_sdk_model_settings_payload(
     if wire_api == "chat-completions":
         payload["include_usage"] = True
         if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
-            payload["extra_headers"] = {"User-Agent": "claude-code/1.0.0"}
+            payload["extra_headers"] = {"User-Agent": KIMI_CODING_USER_AGENT}
     else:
         payload["store"] = False
         if provider_profile != PROVIDER_PROFILE_CODEX_RESPONSES:

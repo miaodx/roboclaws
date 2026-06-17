@@ -170,28 +170,30 @@ Each entry should answer:
 
 - **Real-task thinking / reasoning-effort comparison**
   - Created: 2026-06-16.
-  - Updated: 2026-06-16.
+  - Updated: 2026-06-17.
   - Status: Parked live-provider comparison.
-  - Why: Roboclaws now defaults supported OpenAI Agents SDK routes to Thinking
-    On through provider-aware payloads, but quick health probes only prove API
-    acceptance. We still need real open-ended household tasks to decide whether
-    `thinking` / `reasoning.effort` levels materially improve completion
-    quality enough to justify added latency, token use, and route-specific
-    quirks.
-  - Next action: Run a bounded open-ended matrix on the same world, seed,
-    evidence lane, prompt, and scenario setup. Compare Chat routes with
-    `model_thinking_mode=enabled` vs `disabled`; compare Responses routes with
-    `none`, `low`, and `medium` first. Escalate to `high` or `xhigh` only for a
-    route/case that fails at `medium` and looks reasoning-limited rather than
-    tool/runtime-limited.
+  - Why: Same-input live probes showed route-specific behavior: Kimi K2.7 Code
+    needs the Claude Code user agent and works with Thinking On, MiniMax
+    Responses works with medium reasoning, but `mimo-inside-openai-chat`
+    Thinking On can explode into 200k+ token responses while disabled thinking
+    completes. Defaults now use the smallest route-specific fix; a broader
+    matrix is still needed before tuning other routes.
+  - Next action: Turn the ad hoc runs into a bounded eval row on the same world,
+    seed, evidence lane, prompt, and scenario setup. Keep Kimi and MiniMax as
+    current-control rows, compare `mimo-inside-openai-chat` disabled vs enabled
+    for regression proof, and only add other route/effort variants after a
+    product run fails or is too slow.
   - Evidence:
     `roboclaws/agents/thinking_policy.py`;
     `docs/human/model-matrix.md`;
     `scripts/dev/check_model_providers.py`;
     `tests/unit/agents/test_thinking_policy.py`;
-    `output/dev/model-matrix-mimo-compare/20260616_133229/model_matrix_benchmark.json`.
-  - Try now: Yes for one or two same-prompt live A/B runs. Broader cross-route
-    matrices need provider budget and local runtime availability.
+    `output/operator-console/runs/20260617-1513-mimo-inside-no-thinking-fruit/0617_1513/seed-7`;
+    `output/household/household-world/open-ended/openai-agents-live-world-public-labels/0617_1545/seed-7`;
+    `output/household/household-world/open-ended/openai-agents-live-world-public-labels/0617_1526/seed-7`.
+  - Try now: Yes for one focused eval-row design or one same-prompt live A/B
+    check. Broader cross-route matrices need provider budget and local runtime
+    availability.
 
 - **Periodic Docker-pinned coding-agent CLI updates**
   - Created: 2026-06-12.

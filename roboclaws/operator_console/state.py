@@ -84,15 +84,23 @@ def derive_operator_state(
         or run_result.get("status")
         or "idle"
     )
+    stale_live_failure = _stale_live_status_failure(live_status, run_result)
+    if stale_live_failure:
+        phase = "failed"
     checker = checker_status(
         checker_log=_latest_existing(display_run_dir, ("checker.log",)),
         report=_latest_existing(display_run_dir, ("report.html",)),
         run_result=run_result,
         phase=phase,
-        launch_failure_reason=str(launch_failure.get("terminal_reason") or ""),
+        launch_failure_reason=str(
+            stale_live_failure.get("terminal_reason")
+            or launch_failure.get("terminal_reason")
+            or ""
+        ),
     )
     terminal_status = dict(status)
     terminal_status.update(launch_failure)
+    terminal_status.update(stale_live_failure)
     terminal_reason = _terminal_reason(terminal_status, live_status, run_result)
     artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
     artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
@@ -250,6 +258,37 @@ def _launch_log_failure_reason(log_path: Path) -> str:
     if "Traceback (most recent call last)" in text:
         return "launch command raised an exception before live artifacts were written"
     return ""
+
+
+def _stale_live_status_failure(
+    live_status: dict[str, Any], run_result: dict[str, Any]
+) -> dict[str, str]:
+    phase = str(live_status.get("phase") or "").strip().lower()
+    if not _phase_is_active(phase) or run_result:
+        return {}
+    pid = _live_status_owner_pid(live_status)
+    if pid is None or pid_is_active(pid):
+        return {}
+    return {
+        "phase": "failed",
+        "terminal_reason": "live runner process exited before terminal status",
+    }
+
+
+def _live_status_owner_pid(live_status: dict[str, Any]) -> int | None:
+    for value in (
+        live_status.get("pid"),
+        (live_status.get("visual_backend_slot") or {}).get("pid")
+        if isinstance(live_status.get("visual_backend_slot"), dict)
+        else None,
+    ):
+        try:
+            pid = int(value)
+        except (TypeError, ValueError):
+            continue
+        if pid > 0:
+            return pid
+    return None
 
 
 def _read_json(path: Path) -> dict[str, Any]:

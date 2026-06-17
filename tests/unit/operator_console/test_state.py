@@ -128,6 +128,47 @@ def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path)
     assert any(item["label"] == "Console Launch Log" for item in state["artifact_paths"])
 
 
+def test_state_marks_dead_live_status_owner_as_failed(tmp_path: Path, monkeypatch) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0617_1606" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    dead_pid = 99999999
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+                "started_at_epoch": 1.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "running-codex",
+                "started_at_epoch": 2.0,
+                "visual_backend_slot": {"pid": dead_pid, "held": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "driver.log").write_text("==> Codex turn 1/1\n", encoding="utf-8")
+    monkeypatch.setattr("roboclaws.operator_console.state.pid_is_active", lambda pid: False)
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "live runner process exited before terminal status"
+    assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["message"] == (
+        "Launch failed: live runner process exited before terminal status"
+    )
+
+
 def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
     tmp_path: Path,
 ) -> None:
