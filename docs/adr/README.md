@@ -32,6 +32,8 @@ guidance:
 | [0136](0136-use-base-navigation-map-and-first-class-household-launch-contracts.md) | Use Base Navigation Map And First-Class Household Launch Contracts | Current map, launch-axis, intent, and evidence-lane contract. |
 | [0137](0137-retire-ai2thor-and-direct-vlm-public-surfaces.md) | Retire AI2-THOR And Direct VLM Public Surfaces | Prevents revival of old public surfaces. |
 | [0138](0138-use-detector-only-visual-grounding-sidecar.md) | Use Detector-Only Visual Grounding Sidecar | Current visual-grounding sidecar and VLM-retirement boundary. |
+| [0139](0139-use-household-open-task-surface-with-presets.md) | Use Household Open Task Surface With Presets | Current household public surface and preset contract. |
+| [0140](0140-use-eval-suites-as-first-class-architecture-layer.md) | Use Eval Suites As First-Class Architecture Layer | Separates product runs, validation matrices, eval suites, and harness recipes. |
 
 ## Archived Superseded ADRs
 

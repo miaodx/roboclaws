@@ -1,0 +1,32 @@
+{
+  "schema": "roboclaws_eval_suite_v1",
+  "suite_id": "household_world.map_build_consumer",
+  "version": "2026-06-15",
+  "capability": "household_world",
+  "sample_ids": [
+    "map_build.baseline_seed7",
+    "cleanup.consume_map_seed7",
+    "open_ended.drink_seed7"
+  ],
+  "sample_refs": [
+    "evals/household_world/samples/map_build/baseline_seed7.json",
+    "evals/household_world/samples/cleanup/consume_map_seed7.json",
+    "evals/household_world/samples/open_ended/drink_seed7.json"
+  ],
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "outcome"
+  ],
+  "thresholds": {
+    "pass_at_1": 1.0,
+    "private_truth_leak_count": 0,
+    "trajectory_policy_violation_count": 0
+  },
+  "metadata": {
+    "runner_scope": "direct-runner-only",
+    "live_provider_required": false,
+    "runtime_map_prior_flow": "map_build.baseline_seed7 -> cleanup.consume_map_seed7"
+  }
+}

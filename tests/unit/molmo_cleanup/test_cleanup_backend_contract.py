@@ -7,6 +7,7 @@ from typing import Any
 
 from roboclaws.household.backend import ApiSemanticCleanupBackend
 from roboclaws.household.backend_contract import (
+    CLEANUP_BACKEND_EVIDENCE_SCHEMA,
     SYNTHETIC_BACKEND,
     CleanupBackendSession,
     attach_cleanup_backend_runtime_metadata,
@@ -86,6 +87,31 @@ def test_synthetic_backend_factory_can_build_baseline_scenario(tmp_path: Path) -
     assert session.backend.scenario.private_manifest.success_threshold == 0
 
 
+def test_synthetic_runtime_metadata_attaches_normalized_backend_evidence(
+    tmp_path: Path,
+) -> None:
+    backend = SimpleNamespace(backend=SYNTHETIC_BACKEND)
+    run_result = {"artifacts": {}}
+
+    attach_cleanup_backend_runtime_metadata(
+        run_result=run_result,
+        backend=backend,
+        run_dir=tmp_path,
+    )
+
+    evidence = run_result["cleanup_backend_evidence"]
+    assert evidence["schema"] == CLEANUP_BACKEND_EVIDENCE_SCHEMA
+    assert evidence["implementation_backend"] == SYNTHETIC_BACKEND
+    assert evidence["launch_backend"]["id"] == "not_applicable"
+    assert evidence["launch_backend"]["resource_kind"] == "in_process"
+    assert evidence["runtime_metadata"] == {"key": "not_applicable", "attached": False}
+    assert evidence["capabilities"]["visual_artifacts"] is False
+    assert evidence["agent_facing"] is False
+    assert evidence["private_manifest_exposed_to_agent"] is False
+    assert "molmospaces_runtime" not in run_result
+    assert "isaac_runtime" not in run_result
+
+
 def test_cleanup_backend_session_exposes_optional_backend_capabilities(
     tmp_path: Path,
 ) -> None:
@@ -143,6 +169,20 @@ def test_molmospaces_runtime_metadata_attaches_common_backend_payload(tmp_path: 
     )
 
     assert run_result["molmospaces_runtime"]["runtime"] == {"runtime": "fake"}
+    evidence = run_result["cleanup_backend_evidence"]
+    assert evidence["schema"] == CLEANUP_BACKEND_EVIDENCE_SCHEMA
+    assert evidence["implementation_backend"] == "molmospaces_subprocess"
+    assert evidence["launch_backend"]["id"] == "mujoco"
+    assert evidence["runtime_metadata"] == {"key": "molmospaces_runtime", "attached": True}
+    assert evidence["diagnostics"]["mess_placement"] == {"status": "available", "count": 1}
+    assert evidence["diagnostics"]["placement"] == {"status": "available", "count": 1}
+    assert evidence["capabilities"]["visual_artifacts"] is True
+    assert evidence["generated_mess"] == {"requested_count": 5, "actual_count": 4}
+    assert evidence["robot"] == {
+        "present": True,
+        "robot_name": "rby1m",
+        "import_status": "",
+    }
     assert run_result["mess_placement_diagnostics"] == [{"object_id": "apple_1"}]
     assert run_result["placement_diagnostics"] == [{"object_id": "mug_1"}]
     assert run_result["robot_name"] == "rby1m"
@@ -191,4 +231,16 @@ def test_isaac_runtime_metadata_writes_scene_index_artifact(tmp_path: Path) -> N
     assert run_result["artifacts"]["isaac_scene_index"] == str(scene_index_path)
     assert run_result["isaac_runtime"]["object_index_count"] == 1
     assert run_result["isaac_runtime"]["receptacle_index_count"] == 1
+    evidence = run_result["cleanup_backend_evidence"]
+    assert evidence["implementation_backend"] == "isaaclab_subprocess"
+    assert evidence["launch_backend"]["id"] == "isaaclab"
+    assert evidence["runtime_metadata"] == {"key": "isaac_runtime", "attached": True}
+    assert evidence["artifacts"]["keys"] == ["isaac_scene_index"]
+    assert evidence["robot"] == {
+        "present": True,
+        "robot_name": "rby1m",
+        "import_status": "missing_urdf",
+    }
+    assert evidence["agent_facing"] is False
+    assert evidence["private_manifest_exposed_to_agent"] is False
     assert run_result["robot_import"] == {"status": "missing_urdf"}

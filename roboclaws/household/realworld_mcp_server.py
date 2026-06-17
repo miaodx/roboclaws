@@ -436,22 +436,6 @@ class RealWorldMolmoCleanupMCPServer:
             augmented["instruction"] = raw_fpv_inline_candidate_instruction(
                 str(raw.get("observation_id") or "")
             )
-        if tool == "fixture_hints":
-            if self.contract.map_mode == "minimal":
-                augmented["instruction"] = (
-                    "Base Navigation Map exposes public room labels but hides fixture hints. Use "
-                    "runtime_metric_map.public_semantic_anchors and each observed object's "
-                    "cleanup_worklist.candidate_fixture_id as public destination anchors. "
-                    "Those anchor_fixture_* ids are valid for navigate_to_receptacle, place, "
-                    "place_inside, open_receptacle, and close_receptacle. Acceptable "
-                    "destination sets and generated mess truth are private."
-                )
-            else:
-                augmented["instruction"] = (
-                    "Use room-level fixture ids and affordances as static public landmarks. "
-                    "Runtime movable objects come only from observe; acceptable destination "
-                    "sets and generated mess truth are private."
-                )
         if tool == "declare_visual_candidates" and augmented.get("ok"):
             augmented = _compact_declare_visual_candidates_response(augmented)
             augmented["instruction"] = (

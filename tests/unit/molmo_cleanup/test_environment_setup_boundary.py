@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.household.realworld_cleanup import _merge_run_metadata
 from roboclaws.household.realworld_contract import (
     _assert_no_forbidden_agent_view_keys,
     forbidden_agent_view_keys,
 )
+from roboclaws.household.realworld_run_artifacts import _merge_run_metadata
 from roboclaws.launch.environment_setup_metadata import (
     ENVIRONMENT_SETUP_METADATA_ENV,
     environment_setup_run_metadata_from_env,

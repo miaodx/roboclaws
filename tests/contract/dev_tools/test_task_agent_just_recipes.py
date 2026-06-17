@@ -322,6 +322,7 @@ def test_public_just_summary_is_small_facade() -> None:
         "agent::harness",
         "agent::mcp",
         "agent::gateway",
+        "agent::eval",
         "console::run",
     }
 
@@ -1073,7 +1074,6 @@ def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
     legacy_arch = (
         REPO_ROOT / "docs" / "human" / "molmospaces-cleanup-mode-architecture.md"
     ).read_text(encoding="utf-8")
-
     assert "just task::run" not in legacy_arch
     assert "profile=world-labels" not in legacy_arch
     assert "profile=world-labels-sanitized" not in legacy_arch

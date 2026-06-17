@@ -2073,7 +2073,7 @@ def _next_requested_action(completed_waypoints: list[str], pending: list[str]) -
     if pending:
         return "clean the public pending handles before broad re-sweep"
     if not completed_waypoints:
-        return "call metric_map, fixture_hints, navigate_to_waypoint, then observe"
+        return "call metric_map, navigate_to_waypoint, then observe"
     return "inspect public MCP state, finish missing objects or waypoints, then call done"
 
 

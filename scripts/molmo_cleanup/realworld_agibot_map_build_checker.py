@@ -144,7 +144,8 @@ def _assert_agibot_policy_trace(data: dict[str, Any]) -> None:
     assert trace.get("agent_reasoning_visible") is True, trace
     assert trace.get("cleanup_action_count") == 0, trace
     decisions = {str(item.get("decision") or "") for item in trace.get("events") or []}
-    assert {"inspect_public_metric_map", "inspect_public_fixture_hints"} <= decisions, trace
+    assert "inspect_public_metric_map" in decisions, trace
+    assert "inspect_public_fixture_hints" not in decisions, trace
     assert "observe_head_color" in decisions, trace
 
 
@@ -196,6 +197,7 @@ def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> 
     assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
     assert "metric_map" in agent_view, agent_view
     assert "fixture_hints" in agent_view, agent_view
+    assert "fixture_hints" not in (agent_view.get("public_tool_names") or []), agent_view
     assert agent_view.get("observed_objects") == [], agent_view
     policy_view = agent_view.get("policy_view") or {}
     assert policy_view.get("policy_observation_camera") == "head_color", policy_view

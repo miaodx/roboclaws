@@ -1,0 +1,32 @@
+{
+  "schema": "roboclaws_eval_suite_v1",
+  "suite_id": "household_world.cleanup_capability",
+  "version": "2026-06-15",
+  "capability": "household_world_cleanup",
+  "sample_ids": [
+    "cleanup.repeated_seed7"
+  ],
+  "sample_refs": [
+    "evals/household_world/samples/cleanup/repeated_seed7.json"
+  ],
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "outcome",
+    "efficiency"
+  ],
+  "thresholds": {
+    "pass_at_1": 1.0,
+    "pass_at_3": 1.0,
+    "pass_caret_3": 1.0,
+    "private_truth_leak_count": 0,
+    "trajectory_policy_violation_count": 0
+  },
+  "metadata": {
+    "runner_scope": "direct-runner-repeatable; live-agent identity can be recorded as blocked until runtime integration lands",
+    "live_provider_required": false,
+    "trial_count": 3,
+    "slice": "5"
+  }
+}

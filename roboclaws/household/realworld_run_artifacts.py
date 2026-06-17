@@ -223,23 +223,29 @@ def _base_run_result(
     artifacts: _RunArtifactPaths,
     payloads: _RunPayloads,
 ) -> dict[str, Any]:
+    task_intent = str(
+        payloads.goal_contract_payload.get("intent")
+        or ("map-build" if inputs.semantic_sweep else "cleanup")
+    )
+    cleanup_status = inputs.done["cleanup_status"]
+    final_status = "success" if task_intent == "open-ended" else cleanup_status
     return {
         "backend": inputs.backend,
         "scenario_id": inputs.scenario.scenario_id,
         "seed": inputs.seed,
         "task_prompt": inputs.task_prompt,
         "task_surface": payloads.goal_contract_payload.get("surface", "household-world"),
-        "task_intent": payloads.goal_contract_payload.get(
-            "intent",
-            "map-build" if inputs.semantic_sweep else "cleanup",
-        ),
+        "task_intent": task_intent,
         "goal_contract": payloads.goal_contract_payload,
         "agent_completion_claim": payloads.agent_completion_claim,
         "contract": REALWORLD_CONTRACT,
         "adr_0003_satisfied": True,
-        "final_status": inputs.done["cleanup_status"],
+        "intent_status": final_status,
+        "goal_status": final_status,
+        "final_status": final_status,
+        "cleanup_status_role": "advisory" if task_intent == "open-ended" else "terminal",
         "terminate_reason": f"{inputs.policy_name} complete",
-        "cleanup_status": inputs.done["cleanup_status"],
+        "cleanup_status": cleanup_status,
         "completion_status": inputs.done["score"]["completion_status"],
         "primitive_provenance": payloads.primitive.provenance,
         "primitive_provenance_summary": payloads.primitive.summary,
@@ -249,9 +255,7 @@ def _base_run_result(
         "agent_driven": False,
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
-        "planner_proof_cleanup_executor_enabled": (
-            inputs.use_planner_proof_for_cleanup_primitives
-        ),
+        "planner_proof_cleanup_executor_enabled": (inputs.use_planner_proof_for_cleanup_primitives),
         "fixture_hint_mode": inputs.contract.fixture_hint_mode,
         "perception_mode": inputs.perception_mode,
         "map_mode": inputs.map_mode,
@@ -274,12 +278,8 @@ def _base_run_result(
         "agent_view": payloads.agent_view,
         "runtime_metric_map": payloads.runtime_metric_map,
         "raw_fpv_observations": payloads.agent_view.get("raw_fpv_observations", []),
-        "camera_model_policy_evidence": payloads.agent_view.get(
-            "camera_model_policy_evidence", {}
-        ),
-        "model_declared_observations": payloads.agent_view.get(
-            "model_declared_observations", []
-        ),
+        "camera_model_policy_evidence": payloads.agent_view.get("camera_model_policy_evidence", {}),
+        "model_declared_observations": payloads.agent_view.get("model_declared_observations", []),
         "model_declared_observation_evidence": payloads.agent_view.get(
             "model_declared_observation_evidence", {}
         ),
@@ -414,9 +414,7 @@ def _profile_metadata(inputs: RealWorldRunArtifactInputs) -> dict[str, Any] | No
         perception_mode=inputs.perception_mode,
         record_robot_views=inputs.record_robot_views,
         camera_labeler=(
-            _camera_labeler(inputs)
-            if inputs.perception_mode == CAMERA_MODEL_POLICY_MODE
-            else None
+            _camera_labeler(inputs) if inputs.perception_mode == CAMERA_MODEL_POLICY_MODE else None
         ),
     )
 

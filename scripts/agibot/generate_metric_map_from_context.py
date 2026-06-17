@@ -74,6 +74,29 @@ def main(argv: list[str] | None = None) -> None:
 
 def validate_context(context: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    rooms = _list(context.get("rooms"))
+    fixtures = _list(context.get("fixtures"))
+    waypoints = _list(context.get("inspection_waypoints"))
+    _validate_context_header(context, errors)
+    _validate_context_mode(
+        context,
+        rooms=rooms,
+        fixtures=fixtures,
+        waypoints=waypoints,
+        errors=errors,
+    )
+    room_ids = _validate_context_rooms(rooms, errors)
+    fixture_ids = _validate_context_fixtures(fixtures, room_ids=room_ids, errors=errors)
+    _validate_context_waypoints(
+        waypoints,
+        room_ids=room_ids,
+        fixture_ids=fixture_ids,
+        errors=errors,
+    )
+    return errors
+
+
+def _validate_context_header(context: dict[str, Any], errors: list[str]) -> None:
     if context.get("schema") != "agibot_gdk_map_context_authoring_v1":
         errors.append("schema must be agibot_gdk_map_context_authoring_v1")
     map_source = _dict(context.get("map_source"))
@@ -82,34 +105,53 @@ def validate_context(context: dict[str, Any]) -> list[str]:
     if _is_blank(map_source.get("map_name")) and map_source.get("map_id") is None:
         errors.append("map_source must include map_name or map_id")
 
-    rooms = _list(context.get("rooms"))
-    fixtures = _list(context.get("fixtures"))
-    waypoints = _list(context.get("inspection_waypoints"))
-    generated_candidates = generated_exploration_candidates(context)
-    minimal_mode = _minimal_context_mode(context)
-    if minimal_mode:
-        if not _list(_dict(context.get("safety_bounds")).get("polygon")):
-            errors.append("minimal context safety_bounds.polygon must contain at least one point")
-        if not generated_candidates:
-            errors.append(
-                "minimal context must include free_space_samples, exploration_candidates, "
-                "or generated_exploration_candidates"
-            )
-    elif not rooms:
-        errors.append("rooms must contain at least one room")
-    else:
-        if not fixtures:
-            errors.append("fixtures must contain at least one fixture")
-        if not waypoints:
-            errors.append("inspection_waypoints must contain at least one waypoint")
 
+def _validate_context_mode(
+    context: dict[str, Any],
+    *,
+    rooms: list[dict[str, Any]],
+    fixtures: list[dict[str, Any]],
+    waypoints: list[dict[str, Any]],
+    errors: list[str],
+) -> None:
+    if _minimal_context_mode(context):
+        _validate_minimal_context(context, errors)
+        return
+    if not rooms:
+        errors.append("rooms must contain at least one room")
+        return
+    if not fixtures:
+        errors.append("fixtures must contain at least one fixture")
+    if not waypoints:
+        errors.append("inspection_waypoints must contain at least one waypoint")
+
+
+def _validate_minimal_context(context: dict[str, Any], errors: list[str]) -> None:
+    if not _list(_dict(context.get("safety_bounds")).get("polygon")):
+        errors.append("minimal context safety_bounds.polygon must contain at least one point")
+    if not generated_exploration_candidates(context):
+        errors.append(
+            "minimal context must include free_space_samples, exploration_candidates, "
+            "or generated_exploration_candidates"
+        )
+
+
+def _validate_context_rooms(rooms: list[dict[str, Any]], errors: list[str]) -> set[str]:
     room_ids = set()
     for index, room in enumerate(rooms):
         room_id = _required_text(room, "room_id", f"rooms[{index}]", errors)
         _required_text(room, "room_label", f"rooms[{index}]", errors)
         if room_id:
             room_ids.add(room_id)
+    return room_ids
 
+
+def _validate_context_fixtures(
+    fixtures: list[dict[str, Any]],
+    *,
+    room_ids: set[str],
+    errors: list[str],
+) -> set[str]:
     fixture_ids = set()
     for index, fixture in enumerate(fixtures):
         fixture_id = _required_text(fixture, "fixture_id", f"fixtures[{index}]", errors)
@@ -120,7 +162,16 @@ def validate_context(context: dict[str, Any]) -> list[str]:
             errors.append(f"fixtures[{index}].room_id does not match a room: {room_id}")
         if fixture_id:
             fixture_ids.add(fixture_id)
+    return fixture_ids
 
+
+def _validate_context_waypoints(
+    waypoints: list[dict[str, Any]],
+    *,
+    room_ids: set[str],
+    fixture_ids: set[str],
+    errors: list[str],
+) -> None:
     for index, waypoint in enumerate(waypoints):
         room_id = _required_text(waypoint, "room_id", f"inspection_waypoints[{index}]", errors)
         fixture_id = str(waypoint.get("fixture_id") or "")
@@ -135,7 +186,6 @@ def validate_context(context: dict[str, Any]) -> list[str]:
             errors.append(
                 f"inspection_waypoints[{index}].fixture_id does not match a fixture: {fixture_id}"
             )
-    return errors
 
 
 def metric_map_from_context(
@@ -415,34 +465,9 @@ def _robot_pose(context: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
 
 
 def _coordinate_bounds(context: dict[str, Any]) -> dict[str, float]:
-    xs: list[float] = []
-    ys: list[float] = []
-    for waypoint in generated_exploration_candidates(context):
-        xs.append(float(waypoint["x"]))
-        ys.append(float(waypoint["y"]))
-    for waypoint in _list(context.get("inspection_waypoints")):
-        xs.append(float(waypoint["x"]))
-        ys.append(float(waypoint["y"]))
-    for point in _list(_dict(context.get("safety_bounds")).get("polygon")):
-        x = _number_or_none(point.get("x"))
-        y = _number_or_none(point.get("y"))
-        if x is not None and y is not None:
-            xs.append(x)
-            ys.append(y)
-    for fixture in _list(context.get("fixtures")):
-        pose = _dict(fixture.get("pose"))
-        x = _number_or_none(pose.get("x"))
-        y = _number_or_none(pose.get("y"))
-        if x is not None and y is not None:
-            xs.append(x)
-            ys.append(y)
-    for room in _list(context.get("rooms")):
-        for point in _list(room.get("polygon")):
-            x = _number_or_none(point.get("x"))
-            y = _number_or_none(point.get("y"))
-            if x is not None and y is not None:
-                xs.append(x)
-                ys.append(y)
+    points = _coordinate_bound_points(context)
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
     if not xs or not ys:
         return {"min_x": -2.0, "min_y": -2.0, "max_x": 2.0, "max_y": 2.0}
     pad = 1.0
@@ -452,6 +477,45 @@ def _coordinate_bounds(context: dict[str, Any]) -> dict[str, float]:
         "max_x": max(xs) + pad,
         "max_y": max(ys) + pad,
     }
+
+
+def _coordinate_bound_points(context: dict[str, Any]) -> list[tuple[float, float]]:
+    points = []
+    points.extend(
+        (float(waypoint["x"]), float(waypoint["y"]))
+        for waypoint in generated_exploration_candidates(context)
+    )
+    points.extend(
+        (float(waypoint["x"]), float(waypoint["y"]))
+        for waypoint in _list(context.get("inspection_waypoints"))
+    )
+    points.extend(_numbered_xy_points(_list(_dict(context.get("safety_bounds")).get("polygon"))))
+    points.extend(_fixture_pose_points(_list(context.get("fixtures"))))
+    for room in _list(context.get("rooms")):
+        points.extend(_numbered_xy_points(_list(room.get("polygon"))))
+    return points
+
+
+def _fixture_pose_points(fixtures: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    points = []
+    for fixture in fixtures:
+        pose = _dict(fixture.get("pose"))
+        point = _numbered_xy_point(pose)
+        if point is not None:
+            points.append(point)
+    return points
+
+
+def _numbered_xy_points(items: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    return [point for item in items if (point := _numbered_xy_point(item)) is not None]
+
+
+def _numbered_xy_point(item: dict[str, Any]) -> tuple[float, float] | None:
+    x = _number_or_none(item.get("x"))
+    y = _number_or_none(item.get("y"))
+    if x is None or y is None:
+        return None
+    return x, y
 
 
 def _copy_capture_images(context: dict[str, Any], output_dir: Path, *, source_root: Path) -> None:

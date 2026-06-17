@@ -18,9 +18,15 @@ from roboclaws.household.subprocess_backend import (
     MolmoSpacesSubprocessBackend,
 )
 from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
+from roboclaws.launch.backends import (
+    BACKEND_SPECS,
+    SYNTHETIC_CLEANUP_IMPLEMENTATION_BACKEND,
+    BackendSpec,
+)
 
-SYNTHETIC_BACKEND = "api_semantic_synthetic"
+SYNTHETIC_BACKEND = SYNTHETIC_CLEANUP_IMPLEMENTATION_BACKEND
 VISUAL_BACKENDS = frozenset({MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND})
+CLEANUP_BACKEND_EVIDENCE_SCHEMA = "roboclaws_cleanup_backend_evidence_v1"
 
 
 class CleanupBackendSession:
@@ -275,13 +281,21 @@ def attach_cleanup_backend_runtime_metadata(
     run_dir: Path,
 ) -> None:
     resolved_backend_name = backend_name or cleanup_backend_name(backend)
-    if resolved_backend_name not in VISUAL_BACKENDS:
-        return
-    _attach_common_diagnostics(run_result, backend)
+    runtime_key = "not_applicable"
     if resolved_backend_name == ISAACLAB_SUBPROCESS_BACKEND:
         _attach_isaac_runtime(run_result=run_result, backend=backend, run_dir=run_dir)
-        return
-    _attach_molmospaces_runtime(run_result=run_result, backend=backend)
+        runtime_key = "isaac_runtime"
+    elif resolved_backend_name == MOLMOSPACES_SUBPROCESS_BACKEND:
+        _attach_molmospaces_runtime(run_result=run_result, backend=backend)
+        runtime_key = "molmospaces_runtime"
+    if resolved_backend_name in VISUAL_BACKENDS:
+        _attach_common_diagnostics(run_result, backend)
+    _attach_cleanup_backend_evidence(
+        run_result=run_result,
+        backend=backend,
+        backend_name=resolved_backend_name,
+        runtime_key=runtime_key,
+    )
 
 
 def scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
@@ -362,6 +376,107 @@ def _attach_isaac_runtime(
         "generated_mess_count": getattr(backend, "generated_mess_count", None),
     }
     _attach_robot_metadata(run_result, backend)
+
+
+def _attach_cleanup_backend_evidence(
+    *,
+    run_result: dict[str, Any],
+    backend: Any,
+    backend_name: str,
+    runtime_key: str,
+) -> None:
+    launch_spec = _launch_backend_spec_for_implementation(backend_name)
+    run_result["cleanup_backend_evidence"] = {
+        "schema": CLEANUP_BACKEND_EVIDENCE_SCHEMA,
+        "implementation_backend": backend_name,
+        "launch_backend": _launch_backend_payload(backend_name, launch_spec),
+        "runtime_metadata": {
+            "key": runtime_key,
+            "attached": bool(runtime_key != "not_applicable" and run_result.get(runtime_key)),
+        },
+        "artifacts": {
+            "keys": sorted(str(key) for key in (run_result.get("artifacts") or {}).keys()),
+        },
+        "diagnostics": {
+            "mess_placement": _diagnostic_summary(run_result.get("mess_placement_diagnostics")),
+            "placement": _diagnostic_summary(run_result.get("placement_diagnostics")),
+        },
+        "capabilities": {
+            "visual_artifacts": cleanup_backend_supports_visual_artifacts(backend_name),
+            "snapshot_writer": callable(getattr(backend, "write_snapshot", None)),
+            "robot_view_writer": callable(getattr(backend, "write_robot_views", None)),
+        },
+        "generated_mess": {
+            "requested_count": _optional_int(
+                getattr(backend, "requested_generated_mess_count", None)
+            ),
+            "actual_count": _optional_int(getattr(backend, "generated_mess_count", None)),
+        },
+        "robot": _robot_evidence(run_result, backend),
+        "agent_facing": False,
+        "private_manifest_exposed_to_agent": False,
+    }
+
+
+def _launch_backend_spec_for_implementation(backend_name: str) -> BackendSpec | None:
+    for spec in BACKEND_SPECS.values():
+        if spec.implementation_backend == backend_name:
+            return spec
+    return None
+
+
+def _launch_backend_payload(backend_name: str, launch_spec: Any | None) -> dict[str, Any]:
+    if launch_spec is not None:
+        return {
+            "id": launch_spec.id,
+            "label": launch_spec.label,
+            "resource_kind": launch_spec.resource_kind,
+        }
+    if backend_name == SYNTHETIC_BACKEND:
+        return {
+            "id": "not_applicable",
+            "label": "Synthetic cleanup backend",
+            "resource_kind": "in_process",
+        }
+    return {
+        "id": "unknown",
+        "label": "Unknown backend",
+        "resource_kind": "unknown",
+    }
+
+
+def _diagnostic_summary(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {"status": "unavailable", "count": 0}
+    if isinstance(value, (list, tuple, set)):
+        return {"status": "available", "count": len(value)}
+    if isinstance(value, dict):
+        return {"status": "available", "count": len(value)}
+    return {"status": "available", "count": 1}
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _robot_evidence(run_result: dict[str, Any], backend: Any) -> dict[str, Any]:
+    robot = run_result.get("robot") or getattr(backend, "robot", None)
+    robot_import = run_result.get("robot_import") or getattr(backend, "robot_import", {})
+    payload = {
+        "present": isinstance(robot, dict),
+        "robot_name": "",
+        "import_status": "",
+    }
+    if isinstance(robot, dict):
+        payload["robot_name"] = str(robot.get("robot_name") or "")
+    if isinstance(robot_import, dict):
+        payload["import_status"] = str(robot_import.get("status") or "")
+    return payload
 
 
 def _attach_robot_metadata(run_result: dict[str, Any], backend: Any) -> None:

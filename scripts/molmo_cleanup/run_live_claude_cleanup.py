@@ -270,16 +270,16 @@ class LiveClaudeCleanupRunner:
             env[key] = value
         self._configure_provider_timing_proxy(env)
         task_name = getattr(self.args, "task_name", "household-cleanup")
+        skill_name = getattr(self.args, "skill_name", None) or "molmo-realworld-cleanup"
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
             task_name=task_name,
-            skill_name=self.args.skill_name,
+            skill_name=skill_name,
         )
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", task_name)
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", self.args.skill_name)
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", skill_name)
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
-
         subprocess.run(
             [self.args.claude_bin, "mcp", "remove", "roboclaws"],
             cwd=agent_task_dir,

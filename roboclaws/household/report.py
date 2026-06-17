@@ -4068,7 +4068,7 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
 
 def _agibot_public_tool_mapping(stage: str) -> str:
     mappings = {
-        "agent_view_export": "metric_map, fixture_hints",
+        "agent_view_export": "metric_map",
         "observe": "observe",
         "navigate_waypoint": "navigate_to_waypoint",
         "blocked_manipulation": "pick, place, place_inside, open_receptacle, close_receptacle",

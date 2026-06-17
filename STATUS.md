@@ -1,19 +1,37 @@
 # Project Status
 
-Last updated: 2026-06-12
+Last updated: 2026-06-15
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
 
 ## Current Focus
 
-Roboclaws has completed the household-world launch contract saturation:
-`surface=household-world` now defaults to the no-preset open household task
+Roboclaws has implemented the eval-driven architecture plan. Eval suites are
+visible as a first-class architecture layer, stale launch-axis documentation is
+cleaned, current cleanup/map-build MCP contracts no longer advertise
+`fixture_hints` as a callable active tool, and repo-native eval
+suite/sample/trial/result schema packets plus direct-runner household fixtures
+exist. Deterministic eval suites are available through
+`just agent::eval suite=smoke_regression budget=smoke` and
+`just agent::eval suite=map_build_consumer budget=smoke`; the repeated
+`cleanup_capability` suite records `pass@k` and `pass^k` metrics. Eval suites
+write `eval_results.json` plus `eval_report.html` linked to product run
+artifacts. The `map_build_consumer` suite covers map-build Runtime Metric Map
+actionability, cleanup consumption of `runtime_map_prior`, and open-ended
+completion-claim versus artifact-readiness grading. Live eval execution is
+opt-in with `live_execution=run`; default non-direct eval requests still record
+blocked identity/preflight packets so provider-backed work is not launched by
+accident. Codex CLI live eval runs pass a fixed product `run_dir` through the
+public launch route and poll detached live artifacts before grading. Failed,
+blocked, or inconclusive eval results can now be promoted into regression
+samples with `just agent::eval promote-regression ...` while keeping private
+scorer truth inside grader-only sample metadata.
+
+The household-world launch contract remains the active product shape:
+`surface=household-world` defaults to the no-preset open household task
 contract, with `preset=map-build` and `preset=cleanup` for standard jobs, plus
-the `surface=planner-proof` confidence route. The
-AI2-THOR/direct-VLM public-surface retirement is implemented and verified; the
-active code, docs, tests, skills, CI, and public command facade now center on
-household-world / planner-proof.
+the `surface=planner-proof` confidence route.
 
 The active visual-grounding sidecar contract is now detector-only: hosted VLM
 refiner/direct-producer camera labelers are retired from active code, command
@@ -21,7 +39,9 @@ examples, tests, and benchmark promotion. OpenClaw remains available only as a
 guarded validation-required maintainer route until an off-work-network Gateway
 proof runs.
 
-The implemented source of truth is
+The active source of truth is
+`docs/plans/2026-06-14-eval-driven-architecture.md`, backed by ADR-0140. The
+implemented household launch contract is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
 ADR-0136. The implemented visual-grounding cleanup is
 `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`,
@@ -30,24 +50,31 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 
 ## Next Action
 
-Use the canonical launch shape for new work:
-`just run::surface surface=household-world ... prompt=...` for open tasks, or
-`preset=map-build|cleanup` for standard jobs. Pick the next implementation task
-from `TODOS.md`, `docs/plans/`, or the issue tracker rather than reopening the
-completed launch-contract or VLM-sidecar retirement work.
+Pick the next repo maintenance or product slice. The eval-driven architecture
+plan is implemented; remaining live-provider and OpenClaw proofs are
+environment-dependent validation items, not active implementation blockers.
 
 ## Current Blocker
 
-No current implementation blocker for the detector-only sidecar cleanup. The
-only known validation blocker is OpenClaw Gateway: this host is on the work
-network, so Gateway proof must run separately off the work network before
-OpenClaw can be called healthy.
+No current implementation blocker for deterministic eval work. Opt-in live eval
+execution reaches the live product route on this host, and Codex CLI detached
+live routes now have eval-side artifact polling. The latest real provider proof
+was blocked by provider 502 responses and correctly classified as
+`model_or_provider_unavailable`. Default non-direct eval requests remain blocked
+identity/preflight packets instead of being downgraded. Remaining validation
+blockers are external: a successful live-agent `pass^k` proof needs a healthy
+provider/runtime route, and OpenClaw Gateway proof must run separately off the
+work network before OpenClaw can be called healthy.
 
 ## Human Review Surface
 
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
+- Implemented eval-driven architecture plan:
+  `docs/plans/2026-06-14-eval-driven-architecture.md`
+- Active eval-suite ADR:
+  `docs/adr/0140-use-eval-suites-as-first-class-architecture-layer.md`
 - Implemented household map/launch/open-ended plan:
   `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`
 - Active launch contract ADR:

@@ -192,7 +192,6 @@ def run_molmospaces_agibot_contract_rehearsal(
             )
         ]
         _record(trace_events, started_at, "metric_map", {}, metric_map)
-        _record(trace_events, started_at, "fixture_hints", {}, fixture_hints)
 
         runtime_dir = run_dir / "runtime"
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -848,13 +847,12 @@ def _write_preflight_artifacts(
         "execution_backend": EXECUTION_BACKEND,
         "public_tool_sequence": [
             "metric_map",
-            "fixture_hints",
             "observe",
             "navigate_to_waypoint",
             *BLOCKED_MANIPULATION_TOOLS,
         ],
         "stage_mapping": {
-            "agent_view_export": ["metric_map", "fixture_hints"],
+            "agent_view_export": ["metric_map"],
             "observe": ["observe"],
             "navigate_waypoint": ["navigate_to_waypoint"],
             "blocked_manipulation": list(BLOCKED_MANIPULATION_TOOLS),

@@ -7,6 +7,7 @@ import pytest
 
 from roboclaws.household.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.household.agibot_map_build_mcp_server import (
+    AGIBOT_SEMANTIC_MAP_BUILD_TOOLS,
     MCP_SERVER_NAME,
     _camera_model_policy_evidence,
     make_agibot_semantic_map_build_mcp,
@@ -62,6 +63,28 @@ def _require_robot_map_12_artifact() -> None:
         or (ROBOT_MAP_12_ARTIFACT / "agibot" / "source.json").is_file()
     ):
         pytest.skip("Agibot robot_map_12 artifact is unavailable in this checkout")
+
+
+def _assert_fixture_hints_artifact_only(
+    run_result: dict,
+    runtime_map: dict,
+    trace_events: list[dict],
+) -> None:
+    assert "fixture_hints" not in AGIBOT_SEMANTIC_MAP_BUILD_TOOLS
+    assert "fixture_hints" not in run_result["agent_view"]["public_tool_names"]
+    assert "fixture_hints" in run_result["agent_view"]
+    assert "fixture_hints" in runtime_map
+    assert not any(event.get("tool") == "fixture_hints" for event in trace_events)
+
+
+def _assert_camera_grounding_failure_evidence(run_result: dict) -> None:
+    camera_policy = run_result["camera_model_policy_evidence"]
+    assert camera_policy["enabled"] is True
+    assert camera_policy["visual_grounding_pipeline_id"] == "grounding-dino"
+    assert camera_policy["visual_grounding_failure_count"] == 1
+    assert camera_policy["model_provenance"] == "external_visual_grounding_service"
+    assert camera_policy["events"][0]["visual_grounding_pipeline"]["status"] == "failed"
+    assert run_result["agent_view"]["camera_model_policy_evidence"] == camera_policy
 
 
 def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
@@ -176,7 +199,7 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert "No semantic cleanup actions recorded" in report_text
     assert "AgiBot Backend Evidence" in report_text
     assert "One Roboclaws pilot run" in report_text
-    assert "metric_map, fixture_hints" in report_text
+    assert "metric_map" in report_text
     assert "navigate_to_waypoint" in report_text
     assert "Dry-run blocked" in report_text
     assert "Next confidence layer" in report_text
@@ -337,7 +360,8 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
 
     try:
         metric_map = server.call_tool("metric_map")
-        fixture_hints = server.call_tool("fixture_hints")
+        with pytest.raises(ValueError, match="fixture_hints"):
+            server.call_tool("fixture_hints")
         nav = server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
         observe = server.call_tool("observe")
         blocked = server.call_tool("pick", object_id="observed_unknown")
@@ -355,7 +379,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
 
     assert metric_map["tool"] == "metric_map"
-    assert fixture_hints["tool"] == "fixture_hints"
+    _assert_fixture_hints_artifact_only(run_result, runtime_map, trace_events)
     assert nav["tool"] == "navigate_to_waypoint"
     assert nav["waypoint_id"] == "wp_sofa_front"
     assert observe["tool"] == "observe"
@@ -369,13 +393,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     assert run_result["perception_mode"] == "camera_model_policy"
     assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
     assert run_result["raw_fpv_observations"][0]["camera"] == "head_color"
-    camera_policy = run_result["camera_model_policy_evidence"]
-    assert camera_policy["enabled"] is True
-    assert camera_policy["visual_grounding_pipeline_id"] == "grounding-dino"
-    assert camera_policy["visual_grounding_failure_count"] == 1
-    assert camera_policy["model_provenance"] == "external_visual_grounding_service"
-    assert camera_policy["events"][0]["visual_grounding_pipeline"]["status"] == "failed"
-    assert run_result["agent_view"]["camera_model_policy_evidence"] == camera_policy
+    _assert_camera_grounding_failure_evidence(run_result)
     assert run_result["cleanup_policy_trace"]["agent_reasoning_visible"] is True
     assert run_result["cleanup_policy_trace"]["agent_review_kind"] == (
         "agibot_codex_semantic_map_build_review"

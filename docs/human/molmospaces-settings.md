@@ -393,10 +393,13 @@ the current source of truth before claiming a run supports a setting.
 Use the public launch catalog for operator-facing runs:
 
 ```bash
-just run::surface surface=household-world preset=cleanup agent_engine=<engine> evidence_lane=<lane>
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=<engine> evidence_lane=<lane>
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
 ```
 
-Use `agent::run` for maintainer-only axis/debug routes:
+Use `agent::run` and lower `molmo::*` recipes only for maintainer debugging or
+historical report reproduction:
 
 ```bash
 just agent::run household-world.cleanup <agent-engine-or-private-driver> <evidence-lane>
@@ -438,6 +441,11 @@ Convenience report recipes:
 | `just molmo::camera-raw-report` | `direct camera-raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
 | `just molmo::codex-report` | `codex-live world-oracle-labels` | Live Codex agent report. |
 | `just molmo::claude-report` | `claude-live world-oracle-labels` | Live Claude Code agent report. |
+
+The `driver=`, `profile=`, `codex-live`, and `claude-live` tokens above are
+private implementation-runner vocabulary. Prefer `agent_engine=...`,
+`provider_profile=...`, and `evidence_lane=...` in new docs, plans, and user
+runbooks.
 
 For live Codex / Claude reports, repo-local `.env` keys are honored the same
 way as the direct navigation demos. Normal users configure keys only; command
@@ -509,8 +517,8 @@ Live Codex Molmo cleanup remains single-session by launcher policy; if one row
 is active, later live Codex rows are blocked rather than moved to a hidden port
 or silently replaced by a cheaper substitute.
 
-For quick axis overrides, use positional values or `driver=` / `profile=`
-prefixes on the smoke convenience recipe:
+For quick maintainer debugging, the smoke convenience recipe still accepts
+private positional values or `driver=` / `profile=` prefixes:
 
 ```bash
 just molmo::quick-check openclaw-smoke smoke

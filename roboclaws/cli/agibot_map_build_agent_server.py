@@ -88,9 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"MCP server   : {MCP_SERVER_NAME}")
     print(f"Movement     : {'enabled' if args.real_movement_enabled else 'dry-run'}")
     print("\nAgent task:")
-    print("  Call metric_map and fixture_hints first.")
+    print("  Call metric_map first and use public map anchors plus observations.")
     print("  Navigate only to public waypoint ids, observe with head_color, then call done.")
-    print("  Do not call raw Agibot GDK tools or invent coordinates.\n")
+    print("  Do not call fixture_hints, raw Agibot GDK tools, or invent coordinates.\n")
     sys.stdout.flush()
 
     try:
