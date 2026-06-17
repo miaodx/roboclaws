@@ -209,6 +209,21 @@ format check, py_compile, and ratchet. Do not reopen runner-side perf-profile
 ownership unless the runner starts rebuilding profile/default/config packets
 inline again.
 
+Implementation refresh on 2026-06-17 completed the next Candidate D SDK
+driver owner split. Sanitized OpenAI Agents SDK span recording, span limitation
+packets, span export parsing, span-name safety, MCP/tool-name extraction,
+usage/model extraction, sanitized error projection, ISO duration parsing, and
+span JSONL writing now live in `roboclaws/agents/drivers/openai_agents_spans.py`.
+`openai_agents_live.py` keeps live run assembly, model settings, retry/racing,
+provider settings, and runtime failure classification. Metric:
+`openai_agents_live.py` is down to 1825 lines and no longer a hard-ceiling P1;
+the new span owner is 240 lines. The ratchet remains 14 complexity rows and 74
+oversized modules, now led by other production hard-ceiling files rather than
+the OpenAI Agents SDK driver. Proof passed with focused OpenAI Agents
+span/retry/runtime tests, ruff, format check, py_compile, and ratchet. Do not
+reopen SDK span ownership unless the driver starts rebuilding sanitized span
+packets or span capture limitations inline again.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and

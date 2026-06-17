@@ -14,13 +14,13 @@ from roboclaws.agents.drivers.openai_agents_live import (
     _default_sdk_model_settings_payload,
     _failure_from_exception,
     _RetryingModel,
-    _RoboclawsSpanRecorder,
     _should_retry_model_service_failure,
 )
 from roboclaws.agents.drivers.openai_agents_model_input import (
     _compact_model_input_items,
     _model_input_shape_summary,
 )
+from roboclaws.agents.drivers.openai_agents_spans import RoboclawsSpanRecorder
 from roboclaws.agents.live_runtime import (
     LiveAgentMCPServer,
     LiveAgentRequest,
@@ -4124,7 +4124,7 @@ def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
 
 def test_openai_agents_span_recorder_writes_sanitized_span_events(tmp_path: Path) -> None:
     spans_path = tmp_path / "openai-agents-spans.jsonl"
-    recorder = _RoboclawsSpanRecorder(
+    recorder = RoboclawsSpanRecorder(
         spans_path,
         runtime_config={
             "runtime": "openai-agents-live",

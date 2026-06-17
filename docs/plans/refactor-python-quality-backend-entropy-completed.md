@@ -76,6 +76,17 @@ logs before choosing the next slice.
   Proof: focused OpenAI Agents perf-profile tests, ruff, format check,
   py_compile, and ratchet.
 
+- 2026-06-17: OpenAI Agents SDK sanitized span capture moved from
+  `openai_agents_live.py` into `openai_agents_spans.py`. The new owner covers
+  SDK span recording, span capture-unavailable packets, sanitized span export
+  parsing, safe span names, MCP/tool-name extraction, usage/model extraction,
+  sanitized error projection, ISO duration parsing, and span JSONL writes.
+  Metric: SDK driver 2020 -> 1825 lines, clearing the hard ceiling; new owner
+  is 240 lines; ratchet reports 14 complexity rows and 74 oversized modules.
+  Owning layer: Agent Engines And Provider Profiles. Behavior-change class:
+  internal owner split. Proof: focused OpenAI Agents span/retry/runtime tests,
+  ruff, format check, py_compile, and ratchet.
+
 - 2026-06-14: Backend facade started. `CleanupBackendSession` gained backend
   id/runtime-artifact attachment, shared backend construction, and common
   direct/MCP metadata attachment. Proof: focused backend/MCP tests and ratchet.
@@ -1220,6 +1231,14 @@ logs before choosing the next slice.
   selection, provider route/model-family packets, SDK settings/run config,
   CLI/env precedence checks, compaction/racing/camera-grounded/robot-view/retry
   profile packets, or context-limit validation inline.
+- OpenAI Agents SDK sanitized span capture is owned by
+  `openai_agents_spans.py`. Metric: SDK driver 2020 -> 1825 lines; new owner
+  is 240 lines; ratchet reports 14 complexity rows and 74 oversized modules.
+  Proof: focused OpenAI Agents span/retry/runtime tests, ruff, format check,
+  py_compile, and ratchet. Reopen only if `openai_agents_live.py` starts
+  rebuilding sanitized span packets, span capture-unavailable records, span
+  export parsing, safe span names, MCP/tool-name extraction, usage/model
+  extraction, sanitized error projection, or ISO duration parsing inline.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state
