@@ -146,9 +146,9 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     task_identity = intent_helpers.household_task_identity(intent=intent)
-    is_semantic_map_build = intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
+    is_map_build = intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
     default_task_prompt = (
-        "帮我建立这个房间的语义地图" if is_semantic_map_build else "帮我收拾这个房间"
+        "帮我建立这个房间的 Runtime Metric Map" if is_map_build else "帮我收拾这个房间"
     )
     selected_task_prompt = str(task_prompt or default_task_prompt)
     perception_mode = _prehardware_perception_mode(profile)
@@ -180,7 +180,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         visual_grounding=visual_grounding,
         camera_labeler=camera_labeler,
         agibot_map_reference=agibot_map_reference,
-        cleanup_actions_disabled=is_semantic_map_build,
+        cleanup_actions_disabled=is_map_build,
     )
     result = run_realworld_cleanup(
         output_dir=run_dir,
@@ -195,7 +195,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
         evidence_lane=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
-        semantic_sweep=is_semantic_map_build,
+        semantic_sweep=is_map_build,
         map_mode=MINIMAL_MAP_MODE,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
@@ -271,7 +271,7 @@ def _prehardware_metadata_overrides(
         "schema": REHEARSAL_SCHEMA,
         "report_eyebrow": "Agibot-shaped pre-hardware rehearsal",
         "report_title": (
-            "Agibot MolmoSpaces Semantic Map-Build Rehearsal"
+            "Agibot MolmoSpaces Map-Build Rehearsal"
             if intent == intent_helpers.HOUSEHOLD_INTENT_MAP_BUILD
             else "Agibot MolmoSpaces Cleanup Rehearsal"
         ),
@@ -310,7 +310,7 @@ def _prehardware_metadata_overrides(
             ),
             "visual_grounding_pipeline_id": visual_grounding,
             "minimal_map_start": True,
-            "online_semantic_map_build": True,
+            "online_map_build": True,
             "cleanup_actions_included": intent == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
             "cleanup_actions_disabled": cleanup_actions_disabled,
             "source_map_mutation_allowed": False,
@@ -372,7 +372,7 @@ def _write_prehardware_runtime_export(
         "camera_labeler": camera_labeler or "",
         "visual_grounding_pipeline_id": visual_grounding,
         "minimal_map_start": True,
-        "online_semantic_map_build": True,
+        "online_map_build": True,
         "cleanup_actions_included": task_identity["task_intent"]
         == intent_helpers.HOUSEHOLD_INTENT_CLEANUP,
         "cleanup_object_count_limit": cleanup_object_count,

@@ -128,7 +128,7 @@ def test_online_and_offline_snapshots_share_consumer_contract_shape() -> None:
         assert materialized["fixture_candidates"]
         assert materialized["actionable_waypoint_ids"]
 
-    assert online_snapshot["producer"]["type"] == "online_semantic_map_build"
+    assert online_snapshot["producer"]["type"] == "online_map_build"
     assert offline_snapshot["producer"]["type"] == "offline_navigation_memory_conversion"
 
 

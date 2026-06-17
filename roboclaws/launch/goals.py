@@ -162,13 +162,13 @@ def _normalized_goal(intent_id: str, prompt: str) -> str:
         if intent_id == "cleanup":
             return f"Clean the household world within this user-scoped request: {prompt}"
         if intent_id == "map-build":
-            return f"Build public semantic map evidence for this request: {prompt}"
+            return f"Build public runtime map evidence for this request: {prompt}"
         if intent_id == "open-ended":
             return prompt
         return prompt
     defaults = {
         "cleanup": "Clean up the household world.",
-        "map-build": "Build public semantic map evidence for the household world.",
+        "map-build": "Build public runtime map evidence for the household world.",
         "planner-proof": "Produce planner-proof evidence.",
     }
     return defaults.get(intent_id, f"Complete the {intent_id} goal.")

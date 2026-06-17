@@ -308,7 +308,7 @@ def test_agibot_molmospaces_prehardware_map_build_starts_from_minimal_map(
     assert agent_view["metric_map"]["inspection_waypoints"]
     assert agent_view["forbidden_private_fields_absent"] is True
     assert runtime_export["minimal_map_start"] is True
-    assert runtime_export["online_semantic_map_build"] is True
+    assert runtime_export["online_map_build"] is True
     assert runtime_export["cleanup_actions_included"] is False
     assert runtime_export["runtime_metric_map_summary"]["minimal_map_mode"] is True
     assert runtime_export["runtime_metric_map_summary"]["source_map_mutated"] is False

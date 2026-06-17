@@ -399,7 +399,7 @@ class AgibotMapBuildMCPServer:
         thread = threading.Thread(
             target=self._mcp.run,
             kwargs={"transport": "streamable-http"},
-            name=f"agibot-semantic-map-build-mcp-{self.port}",
+            name=f"agibot-map-build-mcp-{self.port}",
             daemon=True,
         )
         thread.start()

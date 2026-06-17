@@ -59,8 +59,8 @@ def actionable_snapshot_from_runtime_metric_map(
         "inspection_waypoints": _materialized_waypoints_from_runtime_map(runtime_metric_map),
         "fixture_candidates": _materialized_fixtures_from_runtime_map(runtime_metric_map),
         "producer": {
-            "type": "online_semantic_map_build",
-            "provenance": "semantic_map_build_runtime_metric_map",
+            "type": "online_map_build",
+            "provenance": "map_build_runtime_metric_map",
             **dict(producer or {}),
         },
         "contract": {
