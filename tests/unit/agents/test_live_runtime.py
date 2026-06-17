@@ -3838,6 +3838,7 @@ def _expected_raw_fpv_image_memory_policy(retained_full_frame_limit: int) -> dic
 
 def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
     baseline = _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args())
 
     assert baseline["profile_id"] == "baseline"
@@ -3849,6 +3850,7 @@ def test_openai_agents_perf_profile_resolves_baseline_defaults(monkeypatch) -> N
     assert baseline["continuation_mode"] == "repeat_full_prompt"
     assert baseline["max_turns"] == 128
     assert baseline["max_continuations"] == 2
+    assert baseline["mcp_client_session_timeout_s"] == 30.0
     assert baseline["context_soft_limit_tokens"] is None
     assert baseline["camera_grounded_composite_tools"]["enabled"] is False
     assert baseline["camera_grounded_composite_tools"]["tool_names"] == []
@@ -3900,6 +3902,7 @@ def test_openai_agents_perf_profile_rejects_conflicting_cli_and_env_settings(
 ) -> None:
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE", "repeat_full_prompt")
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "10")
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S", "1.5")
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING", "0")
 
@@ -3921,11 +3924,26 @@ def test_openai_agents_perf_profile_rejects_conflicting_cli_and_env_settings(
             _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
 
 
+def test_openai_agents_perf_profile_rejects_conflicting_mcp_timeout_cli_and_env(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "45")
+
+    with pytest.raises(
+        ValueError,
+        match="conflicting OpenAI Agents SDK setting mcp_client_session_timeout_s",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=30.0)
+        )
+
+
 def test_openai_agents_perf_profile_accepts_matching_cli_and_env_settings(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE", "state_summary_only")
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "9")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "45")
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S", "1.5")
     monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING", "yes")
 
@@ -3934,6 +3952,7 @@ def test_openai_agents_perf_profile_accepts_matching_cli_and_env_settings(
             agent_sdk_perf_profile="custom",
             continuation_mode="state_summary_only",
             max_turns=9,
+            mcp_client_session_timeout_s=45.0,
             model_service_retry_sleep_s=1.5,
             model_racing=True,
         )
@@ -3941,8 +3960,32 @@ def test_openai_agents_perf_profile_accepts_matching_cli_and_env_settings(
 
     assert profile["continuation_mode"] == "state_summary_only"
     assert profile["max_turns"] == 9
+    assert profile["mcp_client_session_timeout_s"] == 45.0
     assert profile["model_service_retry_sleep_s"] == 1.5
     assert profile["model_racing_observability"]["enabled"] is True
+
+
+def test_openai_agents_perf_profile_rejects_invalid_mcp_timeout_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s must be a non-negative number"
+        ),
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=None)
+        )
+
+
+def test_openai_agents_perf_profile_rejects_negative_mcp_timeout(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
+
+    with pytest.raises(ValueError, match="mcp_client_session_timeout_s must be non-negative"):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=-1.0)
+        )
 
 
 def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:

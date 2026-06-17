@@ -9,6 +9,7 @@ from roboclaws.agents.drivers.openai_agents_live import (
     DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     DEFAULT_OPENAI_AGENTS_MAX_TURNS,
     KIMI_CODING_USER_AGENT,
+    MCP_CLIENT_SESSION_TIMEOUT_ENV,
     MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
     MODEL_SERVICE_RETRY_SLEEP_ENV,
 )
@@ -50,6 +51,7 @@ MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
+DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
 
 
 def _round_duration(value: float) -> float:
@@ -104,8 +106,11 @@ def resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=defaults["max_continuations"],
         ),
         "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
-        "mcp_client_session_timeout_s": _round_duration(
-            max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
+        "mcp_client_session_timeout_s": _float_setting(
+            args,
+            "mcp_client_session_timeout_s",
+            MCP_CLIENT_SESSION_TIMEOUT_ENV,
+            default=DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S,
         ),
         "raw_fpv_candidate_budget": _int_setting(
             args,
@@ -735,17 +740,26 @@ def _float_setting(
     raw = getattr(args, attr, None)
     env_raw = os.environ.get(env_name)
     if raw is not None and env_raw not in {None, ""}:
-        value = float(raw)
-        env_value = float(env_raw)
+        value = _float_setting_value(attr, raw)
+        env_value = _float_setting_value(attr, env_raw)
         if value != env_value:
             _raise_setting_conflict(attr, env_name, value, env_value)
         raw = value
     if raw is None:
         raw = env_raw if env_raw not in {None, ""} else default
-    value = float(raw)
+    value = _float_setting_value(attr, raw)
     if value < 0:
         raise ValueError(f"{attr} must be non-negative")
     return _round_duration(value)
+
+
+def _float_setting_value(attr: str, raw: object) -> float:
+    try:
+        return float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI Agents SDK setting {attr} must be a non-negative number, got {raw!r}"
+        ) from exc
 
 
 def _bool_arg_setting(

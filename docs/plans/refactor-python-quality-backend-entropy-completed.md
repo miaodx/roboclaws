@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
+  default/env validation moved into `openai_agents_perf_profile.py`. Malformed
+  `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct
+  timeout values, and CLI/env timeout conflicts now fail through the same
+  performance-profile resolver as the other SDK runtime settings instead of
+  being parsed early by argparse or silently clamped to zero. Behavior-change
+  class: fail-aloud runner/provider-profile configuration; default 30s timeout,
+  matching CLI/env values, valid positive values, and explicit zero-as-disable
+  profile output are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules; `run_live_openai_agents_cleanup.py` is down to 1972
+  lines. Proof: focused OpenAI Agents live runtime/profile tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK direct `max_turns` metadata now fails aloud for
   malformed runtime settings. Invalid or non-positive direct `max_turns`
   metadata produces normalized `provider_config_failure` live-status packets

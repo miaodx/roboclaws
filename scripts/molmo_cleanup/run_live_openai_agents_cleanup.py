@@ -24,10 +24,7 @@ from roboclaws.agents.drivers.household_live import (
     household_cleanup_server_argv,
     without_full_cleanup_checker_gates,
 )
-from roboclaws.agents.drivers.openai_agents_live import (
-    MCP_CLIENT_SESSION_TIMEOUT_ENV,
-    OpenAIAgentsLiveRuntime,
-)
+from roboclaws.agents.drivers.openai_agents_live import OpenAIAgentsLiveRuntime
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
@@ -86,7 +83,6 @@ from scripts.molmo_cleanup.openai_agents_perf_profile import (
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
-DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
 MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
 
 
@@ -152,12 +148,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--mcp-client-session-timeout-s",
         type=float,
-        default=float(
-            os.environ.get(
-                MCP_CLIENT_SESSION_TIMEOUT_ENV,
-                str(DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S),
-            )
-        ),
+        default=None,
         help=(
             "OpenAI Agents SDK MCP ClientSession read timeout. Visual cleanup lanes can "
             "exceed the SDK's short default while robot-view artifacts are captured."

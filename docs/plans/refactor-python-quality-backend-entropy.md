@@ -60,6 +60,17 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 60` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
+  runner-side MCP client-session timeout default/env validation into
+  `openai_agents_perf_profile.py`. Malformed
+  `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct
+  timeout values, and CLI/env timeout conflicts now fail through the same
+  performance-profile resolver as the other SDK runtime settings instead of
+  being parsed early by argparse or silently clamped to zero. Behavior-change
+  class: fail-aloud runner/provider-profile configuration; default 30s timeout,
+  matching CLI/env values, valid positive values, and explicit zero-as-disable
+  profile output are unchanged. The ratchet remains 0 complexity rows and 79
+  oversized modules; `run_live_openai_agents_cleanup.py` is down to 1972 lines.
 - Follow-up implementation refresh on 2026-06-18 closed an OpenAI Agents SDK
   direct `max_turns` metadata false-green. Invalid or non-positive direct
   `max_turns` metadata now fails as a normalized `provider_config_failure`
@@ -217,7 +228,7 @@ again.
   only if the summarizer starts rebuilding HTML report rendering,
   object/capture-quality payload compaction, or manifest-ranking summaries
   inline again.
-- `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is down to 1981
+- `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` is down to 1972
   lines and is no longer a hard-ceiling P1. Keep it below 2000; reopen it only
   if runner-side profile/default/config ownership grows again.
 - `roboclaws/agents/drivers/openai_agents_live.py` is 1883 lines and is
