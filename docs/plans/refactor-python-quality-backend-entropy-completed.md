@@ -100,6 +100,142 @@ logs before choosing the next slice.
   test cleanup. Ratchet passed at 19 Ruff complexity violations and 56
   oversized modules; remaining work returned to the active plan.
 
+- 2026-06-15: Scene-sampler scanner evidence/admission helpers moved into
+  `scene_sampler_scanner.py`, removing production complexity rows from
+  `scene_sampler.py`. Metric: dirty resumed checkpoint 28 -> 25 complexity
+  rows; oversized modules stayed at 60. Proof: focused scene-sampler tests,
+  ruff, format check, and ratchet.
+
+- 2026-06-16: Scene-sampler source-selection metadata moved into
+  `scene_sampler_sources.py` while admitting the `procthor-objaverse-val`
+  sampler rows and fixtures. Metric: `scene_sampler.py` is down to 2432 lines
+  but remains a P1 hard-ceiling candidate. Proof: focused scene-sampler/eval
+  tests, ruff, format check, and ratchet.
+
+- 2026-06-16: Scene-sampler readiness-export artifact assertions moved behind
+  focused local helpers, removing that operator-console test from the ratchet
+  complexity list. Current ratchet still shows 25 complexity rows and 62
+  oversized modules, led next by `export_scene_sampler_readiness.py`,
+  `scene_sampler.py`, and one launch test. Proof: focused scene-sampler/eval
+  tests, ruff, format check, and ratchet.
+
+- 2026-06-16: Scene-sampler readiness export script split payload construction,
+  artifact writes, generated eval emission, summary assembly, and threshold
+  checks into focused helpers. Metric: 25 -> 21 complexity rows; oversized
+  modules unchanged at 62. Proof: focused scene-sampler/eval tests, ruff,
+  format check, and ratchet.
+
+- 2026-06-16: Scene-sampler projection launch test split source-specific
+  assertions into focused helpers, removing the last scene-sampler test row
+  from the complexity list. Metric: 21 -> 20 complexity rows; oversized modules
+  unchanged at 62. Proof: focused scene-sampler/eval tests, ruff, format check,
+  and ratchet.
+
+- 2026-06-16: Scene-sampler source prep and availability helpers moved into
+  `scene_sampler_prep.py`, keeping `scene_sampler.py` as the public sampler
+  facade. Metric: `scene_sampler.py` 2457 -> 1975 lines and no longer above the
+  2000-line hard ceiling; ratchet remains 20 complexity rows and 62 oversized
+  modules. Proof: focused scene-sampler/eval tests, ruff, format check, and
+  ratchet.
+
+- 2026-06-16: Planner proof bundle runner report assertions moved behind
+  focused HTML helper families while preserving rendered report coverage.
+  Metric: 20 -> 19 complexity rows; oversized modules unchanged at 62. Proof:
+  focused report test, ruff, format check, and ratchet.
+
+- 2026-06-16: Fake Isaac backend protocol test split runtime, scene-binding,
+  visual-artifact, semantic-pose, and robot-import checks into focused local
+  helpers. Metric: 19 -> 18 complexity rows; oversized modules unchanged at 62.
+  Proof: focused Isaac backend test, ruff, format check, and ratchet.
+
+- 2026-06-16: Scene-camera comparison report contract test split fixture-image
+  setup, review UI, contract-section, lighting/render-domain, and lane-image
+  assertions into focused helpers. Metric: 18 -> 17 complexity rows; oversized
+  modules unchanged at 62. Proof: focused scene-camera report test, ruff,
+  format check, and ratchet.
+
+- 2026-06-16: Planner manipulation probe report assertions moved into focused
+  overview, cleanup-binding, sampler-failure, and runtime-diagnostics helper
+  families. Metric: removed the `93>50` report row; dirty worktree ratchet
+  stayed at 17 because unrelated scene-sampler readiness edits introduced a
+  new `52>50` helper row. Proof: focused report test, ruff, format check, and
+  ratchet.
+
+- 2026-06-16: Real Isaac worker semantic-pose recapture test split runtime
+  setup, capture hooks, worker commands, result assertions, and persisted-state
+  assertions into focused helpers. Metric: dirty worktree ratchet 17 -> 15
+  complexity rows; oversized modules unchanged at 62. Proof: focused Isaac
+  backend test, ruff, format check, and ratchet.
+
+- 2026-06-16: Minimal-map privacy/generated-candidate contract test split
+  first-observation lookup, static-map privacy checks, target-candidate search
+  checks, public-anchor checks, and observed-object anchor checks into focused
+  helpers. Metric: 15 -> 14 complexity rows; oversized modules unchanged at
+  62. Proof: focused realworld-contract test, ruff, format check, and ratchet.
+
+- 2026-06-16: Nav2-shaped public map/provenance contract test split detection
+  lookup, confirmation/pick/navigation flow, map-shape assertions, navigation
+  provenance assertions, and runtime-map assertions into focused helpers.
+  Metric: 14 -> 13 complexity rows; oversized modules unchanged at 62. Proof:
+  focused realworld-contract test, ruff, format check, and ratchet.
+
+- 2026-06-16: Robot visual timeline report test split render-context setup,
+  robot-view step builders, layout/lightbox/semantic-substep/pose/caveat
+  assertions, and yaw-rendering proof into focused helpers. Metric: 13 -> 12
+  complexity rows; oversized modules unchanged at 62. Proof: focused report
+  test, ruff, format check, and ratchet.
+
+- 2026-06-16: Robot-camera object parity audit test split fixture files/state,
+  audit assertions, render-parity diagnostics assertions, and report assertions
+  into focused helpers. Metric: 12 -> 11 complexity rows; oversized modules
+  unchanged at 62. Proof: focused apple-to-apple test, ruff, format check, and
+  ratchet.
+
+- 2026-06-16: Robot-camera render-contract diagnostics test split light/shadow
+  fixtures, scene-binding diagnostics, summary checks, material response checks,
+  preview-surface checks, and tone/location assertions into focused helpers.
+  Metric: 11 -> 10 complexity rows; oversized modules unchanged at 62. Proof:
+  focused apple-to-apple test, ruff, format check, and ratchet.
+
+- 2026-06-16: Agibot semantic map-build MCP contract test split tool-response,
+  run-identity, policy-trace, runtime-map, and artifact/report assertions into
+  focused helpers. Metric: 10 -> 9 complexity rows; oversized modules unchanged
+  at 62. Proof: focused physical Agibot pilot test, ruff, format check, and
+  ratchet.
+
+- 2026-06-16: Isaac semantic-pose stage tests now share fake USD stage, parent
+  transform, translate-op, PXR install, and semantic-pose state helpers instead
+  of redefining nested fake classes per case. Metric: 9 -> 7 complexity rows;
+  oversized modules unchanged at 62. Proof: focused Isaac backend tests, ruff,
+  format check, and ratchet.
+
+- 2026-06-16: Isaac head-camera robot-pose test moved fake robot prim/stage,
+  PXR install, head-camera xform ops, and shared robot-pose state into focused
+  helpers. Metric: 7 -> 6 complexity rows; oversized modules unchanged at 62.
+  Proof: focused Isaac backend test, ruff, format check, and ratchet.
+
+- 2026-06-16: Isaac scene-camera color-profile test moved fake sim, sim-utils,
+  camera config, tensor, camera type, torch shim, and camera request setup into
+  focused helpers. Metric: 6 -> 5 complexity rows; oversized modules unchanged
+  at 62. Proof: focused Isaac backend test, ruff, format check, and ratchet.
+
+- 2026-06-16: Planner manipulation checker report fixture builder became
+  table-driven, with policy-exception and task-sampler diagnostics fragments in
+  focused helpers. Metric: 5 -> 3 complexity rows; oversized modules unchanged
+  at 62. Proof: planner manipulation checker contract file, ruff, format check,
+  and ratchet.
+
+- 2026-06-16: Realworld cleanup checker Isaac robot-view fixture split image
+  writing, report/artifact wiring, per-step provenance, camera-control
+  contracts, and summary construction into focused helpers. Metric: 3 -> 1
+  complexity rows; oversized modules unchanged at 62. Proof: realworld cleanup
+  checker contract file, ruff, format check, and ratchet.
+
+- 2026-06-16: Operator-console scene-preview map transform split semantic-map
+  point collection, padded bounds, and plot geometry helpers. Metric: 1 -> 0
+  Ruff complexity rows; oversized modules unchanged at 62. Proof:
+  operator-console render-preview tests, ruff, format check, and ratchet.
+
 ## Do Not Reopen Without Fresh Evidence
 
 - Backend facade mainline already owns backend id/runtime metadata/artifact

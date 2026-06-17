@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,20 @@ from roboclaws.launch.scene_sampler import (  # noqa: E402
 )
 
 DEFAULT_OUTPUT_DIR = Path("output/scene-sampler-readiness")
+
+
+@dataclass(frozen=True)
+class _ReadinessPayloads:
+    manifest: dict[str, Any]
+    projection: dict[str, Any]
+    readiness: dict[str, Any]
+    selection: dict[str, Any]
+    availability: dict[str, Any] | None
+    candidates: dict[str, Any] | None
+    source_prep: dict[str, Any] | None
+    scanner_admission: dict[str, Any] | None
+    scanner_execution: dict[str, Any] | None
+    next_flow_worklist: dict[str, Any] | None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -175,6 +190,65 @@ def export_readiness_artifacts(
 ) -> dict[str, Any]:
     """Write deterministic sampler artifacts for review and later scanner slices."""
 
+    payloads = _build_readiness_payloads(
+        output_dir=output_dir,
+        candidate_indices=candidate_indices,
+        write_source_availability=write_source_availability,
+        write_candidate_readiness=write_candidate_readiness,
+        write_source_prep=write_source_prep,
+        write_scanner_admission=write_scanner_admission,
+        write_scanner_execution_plan=write_scanner_execution_plan,
+        write_next_flow_worklist=write_next_flow_worklist,
+        required_scanner_ready_sources=required_scanner_ready_sources,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = _write_requested_artifacts(
+        output_dir=output_dir,
+        payloads=payloads,
+        write_manifest=write_manifest,
+        write_eval_projection=write_eval_projection,
+        write_readiness_report=write_readiness_report,
+        write_source_availability=write_source_availability,
+        write_candidate_readiness=write_candidate_readiness,
+        write_selection_gaps=write_selection_gaps,
+        write_source_prep=write_source_prep,
+        write_scanner_admission=write_scanner_admission,
+        write_scanner_execution_plan=write_scanner_execution_plan,
+        write_next_flow_worklist=write_next_flow_worklist,
+        write_generated_eval=write_generated_eval,
+    )
+    failures = _threshold_failures(
+        readiness=payloads.readiness,
+        selection=payloads.selection,
+        required_ui_supported_sources=required_ui_supported_sources,
+        required_eval_complete_sources=required_eval_complete_sources,
+        required_selection_capacity_sources=required_selection_capacity_sources,
+        required_scanner_ready_sources=required_scanner_ready_sources,
+        scanner_execution=payloads.scanner_execution,
+    )
+    return {
+        "schema": "molmospaces_scene_sampler_readiness_export_v1",
+        "status": "failed" if failures else "success",
+        "output_dir": str(output_dir),
+        "candidate_indices": list(candidate_indices),
+        "artifacts": artifacts,
+        "summary": _export_summary(payloads),
+        "threshold_failures": failures,
+    }
+
+
+def _build_readiness_payloads(
+    *,
+    output_dir: Path,
+    candidate_indices: tuple[int, ...],
+    write_source_availability: bool,
+    write_candidate_readiness: bool,
+    write_source_prep: bool,
+    write_scanner_admission: bool,
+    write_scanner_execution_plan: bool,
+    write_next_flow_worklist: bool,
+    required_scanner_ready_sources: tuple[str, ...],
+) -> _ReadinessPayloads:
     validate_sampler_manifest()
     manifest = sampler_manifest()
     projection = eval_projection_metadata()
@@ -198,99 +272,139 @@ def export_readiness_artifacts(
         if write_scanner_admission
         else None
     )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    artifacts: dict[str, str] = {}
-    if write_manifest:
-        manifest_path = output_dir / "scene_sampler_manifest.json"
-        _write_json(manifest_path, manifest)
-        artifacts["manifest"] = str(manifest_path)
-    if write_eval_projection:
-        projection_path = output_dir / "scene_sampler_eval_projection.json"
-        _write_json(projection_path, projection)
-        artifacts["eval_projection"] = str(projection_path)
-    if write_readiness_report:
-        readiness_path = output_dir / "scene_sampler_readiness_report.json"
-        _write_json(readiness_path, readiness)
-        artifacts["readiness_report"] = str(readiness_path)
-    if write_source_availability:
-        availability_path = output_dir / "scene_sampler_source_availability.json"
-        _write_json(availability_path, availability or {})
-        artifacts["source_availability"] = str(availability_path)
-    if write_candidate_readiness:
-        candidate_path = output_dir / "scene_sampler_candidate_readiness.json"
-        _write_json(candidate_path, candidates or {})
-        artifacts["candidate_readiness"] = str(candidate_path)
-    if write_selection_gaps:
-        selection_path = output_dir / "scene_sampler_selection_gaps.json"
-        _write_json(selection_path, selection)
-        artifacts["selection_gaps"] = str(selection_path)
-    if write_source_prep:
-        source_prep_path = output_dir / "scene_sampler_source_prep.json"
-        _write_json(source_prep_path, source_prep or {})
-        artifacts["source_prep"] = str(source_prep_path)
-    if write_scanner_admission:
-        scanner_admission_path = output_dir / "scene_sampler_scanner_admission.json"
-        _write_json(scanner_admission_path, scanner_admission or {})
-        artifacts["scanner_admission"] = str(scanner_admission_path)
     scanner_execution: dict[str, Any] | None = None
     if write_scanner_execution_plan or required_scanner_ready_sources:
         scanner_execution = scanner_execution_plan(candidate_indices=candidate_indices)
-    if write_scanner_execution_plan:
-        scanner_execution_path = output_dir / "scene_sampler_scanner_execution_plan.json"
-        _write_json(scanner_execution_path, scanner_execution or {})
-        artifacts["scanner_execution_plan"] = str(scanner_execution_path)
     next_flow_worklist = (
         next_flow_worklist_report(candidate_indices=candidate_indices, output_dir=output_dir)
         if write_next_flow_worklist
         else None
     )
-    if write_next_flow_worklist:
-        next_flow_worklist_path = output_dir / "scene_sampler_next_flow_worklist.json"
-        _write_json(next_flow_worklist_path, next_flow_worklist or {})
-        artifacts["next_flow_worklist"] = str(next_flow_worklist_path)
-    if write_generated_eval:
-        generated_eval_dir = output_dir / "generated_eval"
-        generated_samples_dir = generated_eval_dir / "samples" / "scene_sampler"
-        generated_samples_dir.mkdir(parents=True, exist_ok=True)
-        generated_suite_path = generated_eval_dir / "scene_sampler_stress.json"
-        _write_json(generated_suite_path, eval_suite_payload())
-        sample_paths = []
-        for row in eval_sampler_rows():
-            sample_path = generated_samples_dir / (
-                f"{row.scene_source}_{row.scene_index}_map_build.json"
-            )
-            _write_json(sample_path, eval_sample_payload(row))
-            sample_paths.append(str(sample_path))
-        artifacts["generated_eval_suite"] = str(generated_suite_path)
-        artifacts["generated_eval_samples"] = sample_paths
-    failures = _threshold_failures(
-        readiness,
-        selection,
-        required_ui_supported_sources=required_ui_supported_sources,
-        required_eval_complete_sources=required_eval_complete_sources,
-        required_selection_capacity_sources=required_selection_capacity_sources,
-        required_scanner_ready_sources=required_scanner_ready_sources,
+    return _ReadinessPayloads(
+        manifest=manifest,
+        projection=projection,
+        readiness=readiness,
+        selection=selection,
+        availability=availability,
+        candidates=candidates,
+        source_prep=source_prep,
+        scanner_admission=scanner_admission,
         scanner_execution=scanner_execution,
+        next_flow_worklist=next_flow_worklist,
     )
-    return {
-        "schema": "molmospaces_scene_sampler_readiness_export_v1",
-        "status": "failed" if failures else "success",
-        "output_dir": str(output_dir),
-        "candidate_indices": list(candidate_indices),
-        "artifacts": artifacts,
-        "summary": _export_summary(
-            manifest=manifest,
-            projection=projection,
-            readiness=readiness,
-            selection=selection,
-            availability=availability,
-            candidates=candidates,
-            source_prep=source_prep,
-            scanner_admission=scanner_admission,
-            scanner_execution=scanner_execution,
-            next_flow_worklist=next_flow_worklist,
+
+
+def _write_requested_artifacts(
+    *,
+    output_dir: Path,
+    payloads: _ReadinessPayloads,
+    write_manifest: bool,
+    write_eval_projection: bool,
+    write_readiness_report: bool,
+    write_source_availability: bool,
+    write_candidate_readiness: bool,
+    write_selection_gaps: bool,
+    write_source_prep: bool,
+    write_scanner_admission: bool,
+    write_scanner_execution_plan: bool,
+    write_next_flow_worklist: bool,
+    write_generated_eval: bool,
+) -> dict[str, str | list[str]]:
+    artifacts = _write_named_artifacts(
+        output_dir,
+        (
+            ("manifest", write_manifest, "scene_sampler_manifest.json", payloads.manifest),
+            (
+                "eval_projection",
+                write_eval_projection,
+                "scene_sampler_eval_projection.json",
+                payloads.projection,
+            ),
+            (
+                "readiness_report",
+                write_readiness_report,
+                "scene_sampler_readiness_report.json",
+                payloads.readiness,
+            ),
+            (
+                "source_availability",
+                write_source_availability,
+                "scene_sampler_source_availability.json",
+                payloads.availability,
+            ),
+            (
+                "candidate_readiness",
+                write_candidate_readiness,
+                "scene_sampler_candidate_readiness.json",
+                payloads.candidates,
+            ),
+            (
+                "selection_gaps",
+                write_selection_gaps,
+                "scene_sampler_selection_gaps.json",
+                payloads.selection,
+            ),
+            (
+                "source_prep",
+                write_source_prep,
+                "scene_sampler_source_prep.json",
+                payloads.source_prep,
+            ),
+            (
+                "scanner_admission",
+                write_scanner_admission,
+                "scene_sampler_scanner_admission.json",
+                payloads.scanner_admission,
+            ),
+            (
+                "scanner_execution_plan",
+                write_scanner_execution_plan,
+                "scene_sampler_scanner_execution_plan.json",
+                payloads.scanner_execution,
+            ),
+            (
+                "next_flow_worklist",
+                write_next_flow_worklist,
+                "scene_sampler_next_flow_worklist.json",
+                payloads.next_flow_worklist,
+            ),
         ),
-        "threshold_failures": failures,
+    )
+    if write_generated_eval:
+        artifacts.update(_write_generated_eval_artifacts(output_dir))
+    return artifacts
+
+
+def _write_named_artifacts(
+    output_dir: Path,
+    entries: tuple[tuple[str, bool, str, dict[str, Any] | None], ...],
+) -> dict[str, str]:
+    artifacts: dict[str, str] = {}
+    for key, enabled, filename, payload in entries:
+        if not enabled:
+            continue
+        path = output_dir / filename
+        _write_json(path, payload or {})
+        artifacts[key] = str(path)
+    return artifacts
+
+
+def _write_generated_eval_artifacts(output_dir: Path) -> dict[str, str | list[str]]:
+    generated_eval_dir = output_dir / "generated_eval"
+    generated_samples_dir = generated_eval_dir / "samples" / "scene_sampler"
+    generated_samples_dir.mkdir(parents=True, exist_ok=True)
+    generated_suite_path = generated_eval_dir / "scene_sampler_stress.json"
+    _write_json(generated_suite_path, eval_suite_payload())
+    sample_paths = []
+    for row in eval_sampler_rows():
+        sample_path = generated_samples_dir / (
+            f"{row.scene_source}_{row.scene_index}_map_build.json"
+        )
+        _write_json(sample_path, eval_sample_payload(row))
+        sample_paths.append(str(sample_path))
+    return {
+        "generated_eval_suite": str(generated_suite_path),
+        "generated_eval_samples": sample_paths,
     }
 
 
@@ -298,32 +412,20 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _export_summary(
-    *,
-    manifest: dict[str, Any],
-    projection: dict[str, Any],
-    readiness: dict[str, Any],
-    selection: dict[str, Any],
-    availability: dict[str, Any] | None,
-    candidates: dict[str, Any] | None,
-    source_prep: dict[str, Any] | None,
-    scanner_admission: dict[str, Any] | None,
-    scanner_execution: dict[str, Any] | None,
-    next_flow_worklist: dict[str, Any] | None,
-) -> dict[str, Any]:
+def _export_summary(payloads: _ReadinessPayloads) -> dict[str, Any]:
     return {
-        "supported_scene_sources": manifest.get("supported_scene_sources", []),
-        "ui_world_ids": (manifest.get("projections") or {}).get("ui_world_ids", []),
-        "eval_sample_ids": (manifest.get("projections") or {}).get("eval_sample_ids", []),
-        "eval_projection": projection.get("summary", {}),
-        "readiness": readiness.get("summary", {}),
-        "source_availability": (availability or {}).get("summary", {}),
-        "candidate_readiness": (candidates or {}).get("summary", {}),
-        "selection_gaps": (selection or {}).get("summary", {}),
-        "source_prep": (source_prep or {}).get("summary", {}),
-        "scanner_admission": (scanner_admission or {}).get("summary", {}),
-        "scanner_execution": (scanner_execution or {}).get("summary", {}),
-        "next_flow_worklist": (next_flow_worklist or {}).get("summary", {}),
+        "supported_scene_sources": payloads.manifest.get("supported_scene_sources", []),
+        "ui_world_ids": (payloads.manifest.get("projections") or {}).get("ui_world_ids", []),
+        "eval_sample_ids": (payloads.manifest.get("projections") or {}).get("eval_sample_ids", []),
+        "eval_projection": payloads.projection.get("summary", {}),
+        "readiness": payloads.readiness.get("summary", {}),
+        "source_availability": (payloads.availability or {}).get("summary", {}),
+        "candidate_readiness": (payloads.candidates or {}).get("summary", {}),
+        "selection_gaps": (payloads.selection or {}).get("summary", {}),
+        "source_prep": (payloads.source_prep or {}).get("summary", {}),
+        "scanner_admission": (payloads.scanner_admission or {}).get("summary", {}),
+        "scanner_execution": (payloads.scanner_execution or {}).get("summary", {}),
+        "next_flow_worklist": (payloads.next_flow_worklist or {}).get("summary", {}),
     }
 
 
@@ -370,110 +472,149 @@ def _threshold_failures(
     required_scanner_ready_sources: tuple[str, ...],
     scanner_execution: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    sources = readiness.get("sources") if isinstance(readiness.get("sources"), dict) else {}
+    readiness_sources = _source_payloads(readiness)
     failures: list[dict[str, Any]] = []
-    for source in required_ui_supported_sources:
-        payload = sources.get(source)
-        if not isinstance(payload, dict):
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "ui_supported",
-                    "reason": "unknown_scene_source",
-                }
-            )
-            continue
-        if payload.get("ui_status") != "ready":
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "ui_supported",
-                    "reason": "ui_not_ready",
-                    "ready_count": payload.get("ui_ready_count"),
-                    "target_count": payload.get("ui_target_count"),
-                }
-            )
-    for source in required_eval_complete_sources:
-        payload = sources.get(source)
-        if not isinstance(payload, dict):
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "eval_complete",
-                    "reason": "unknown_scene_source",
-                }
-            )
-            continue
-        if payload.get("eval_status") != "complete":
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "eval_complete",
-                    "reason": "eval_not_complete",
-                    "ready_count": payload.get("eval_ready_count"),
-                    "target_count": payload.get("eval_target_count"),
-                }
-            )
-    selection_sources = (
-        selection.get("sources") if isinstance(selection.get("sources"), dict) else {}
+    failures.extend(
+        _readiness_status_failures(
+            readiness_sources,
+            required_sources=required_ui_supported_sources,
+            threshold="ui_supported",
+            status_key="ui_status",
+            ready_status="ready",
+            reason="ui_not_ready",
+            ready_count_key="ui_ready_count",
+            target_count_key="ui_target_count",
+        )
     )
-    for source in required_selection_capacity_sources:
-        payload = selection_sources.get(source)
+    failures.extend(
+        _readiness_status_failures(
+            readiness_sources,
+            required_sources=required_eval_complete_sources,
+            threshold="eval_complete",
+            status_key="eval_status",
+            ready_status="complete",
+            reason="eval_not_complete",
+            ready_count_key="eval_ready_count",
+            target_count_key="eval_target_count",
+        )
+    )
+    failures.extend(
+        _selection_capacity_failures(
+            _source_payloads(selection),
+            required_sources=required_selection_capacity_sources,
+        )
+    )
+    failures.extend(
+        _scanner_ready_failures(
+            _source_payloads(scanner_execution),
+            required_sources=required_scanner_ready_sources,
+        )
+    )
+    return failures
+
+
+def _source_payloads(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    sources = payload.get("sources")
+    return sources if isinstance(sources, dict) else {}
+
+
+def _unknown_source_failure(source: str, threshold: str) -> dict[str, str]:
+    return {
+        "scene_source": source,
+        "threshold": threshold,
+        "reason": "unknown_scene_source",
+    }
+
+
+def _readiness_status_failures(
+    sources: dict[str, Any],
+    *,
+    required_sources: tuple[str, ...],
+    threshold: str,
+    status_key: str,
+    ready_status: str,
+    reason: str,
+    ready_count_key: str,
+    target_count_key: str,
+) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for source in required_sources:
+        payload = sources.get(source)
         if not isinstance(payload, dict):
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "selection_capacity",
-                    "reason": "unknown_scene_source",
-                }
-            )
+            failures.append(_unknown_source_failure(source, threshold))
+            continue
+        if payload.get(status_key) == ready_status:
+            continue
+        failures.append(
+            {
+                "scene_source": source,
+                "threshold": threshold,
+                "reason": reason,
+                "ready_count": payload.get(ready_count_key),
+                "target_count": payload.get(target_count_key),
+            }
+        )
+    return failures
+
+
+def _selection_capacity_failures(
+    sources: dict[str, Any],
+    *,
+    required_sources: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for source in required_sources:
+        payload = sources.get(source)
+        if not isinstance(payload, dict):
+            failures.append(_unknown_source_failure(source, "selection_capacity"))
             continue
         ui_needed = int(payload.get("ui_needed_count") or 0)
         eval_needed = int(payload.get("eval_needed_count") or 0)
         ui_available = len(payload.get("next_ui_scan_world_ids") or [])
         eval_available = len(payload.get("next_eval_scan_world_ids") or [])
-        if ui_available < ui_needed or eval_available < eval_needed:
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "selection_capacity",
-                    "reason": "insufficient_candidate_scan_capacity",
-                    "ui_needed_count": ui_needed,
-                    "ui_available_count": ui_available,
-                    "eval_needed_count": eval_needed,
-                    "eval_available_count": eval_available,
-                }
-            )
-    scanner_sources = (
-        scanner_execution.get("sources")
-        if isinstance(scanner_execution, dict)
-        and isinstance(scanner_execution.get("sources"), dict)
-        else {}
-    )
-    for source in required_scanner_ready_sources:
-        payload = scanner_sources.get(source)
+        if ui_available >= ui_needed and eval_available >= eval_needed:
+            continue
+        failures.append(
+            {
+                "scene_source": source,
+                "threshold": "selection_capacity",
+                "reason": "insufficient_candidate_scan_capacity",
+                "ui_needed_count": ui_needed,
+                "ui_available_count": ui_available,
+                "eval_needed_count": eval_needed,
+                "eval_available_count": eval_available,
+            }
+        )
+    return failures
+
+
+def _scanner_ready_failures(
+    sources: dict[str, Any],
+    *,
+    required_sources: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for source in required_sources:
+        payload = sources.get(source)
         if not isinstance(payload, dict):
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "scanner_ready",
-                    "reason": "unknown_scene_source",
-                }
-            )
+            failures.append(_unknown_source_failure(source, "scanner_ready"))
             continue
         ready_count = int(payload.get("ready_for_product_smoke_count") or 0)
-        if ready_count < 1:
-            failures.append(
-                {
-                    "scene_source": source,
-                    "threshold": "scanner_ready",
-                    "reason": "no_ready_product_smoke_candidates",
-                    "ready_for_product_smoke_count": ready_count,
-                    "candidate_count": int(payload.get("candidate_count") or 0),
-                    "blocked_count": int(payload.get("blocked_count") or 0),
-                    "prep_status": payload.get("prep_status", ""),
-                }
-            )
+        if ready_count >= 1:
+            continue
+        failures.append(
+            {
+                "scene_source": source,
+                "threshold": "scanner_ready",
+                "reason": "no_ready_product_smoke_candidates",
+                "ready_for_product_smoke_count": ready_count,
+                "candidate_count": int(payload.get("candidate_count") or 0),
+                "blocked_count": int(payload.get("blocked_count") or 0),
+                "prep_status": payload.get("prep_status", ""),
+            }
+        )
     return failures
 
 

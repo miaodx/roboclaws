@@ -4,7 +4,11 @@ import json
 import re
 from pathlib import Path
 
-from roboclaws.launch.worlds import MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
+from roboclaws.launch.worlds import (
+    MOLMOSPACES_CONSOLE_WORLD_IDS,
+    MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES,
+    WORLD_SPECS,
+)
 
 STATIC_ROOT = Path(__file__).resolve().parents[3] / "roboclaws" / "operator_console" / "static"
 
@@ -206,21 +210,45 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "Grounding will appear after a camera-grounded run starts." in app
 
     expected_preview_files = sorted(
-        f"molmospaces-val_{scene_index}-{view_name}.png"
-        for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
-        for view_name in ("chase", "fpv", "map", "topdown")
+        {
+            *(
+                f"molmospaces-val_{scene_index}-{view_name}.png"
+                for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
+                for view_name in ("chase", "fpv", "map", "topdown")
+            ),
+            *(
+                Path(path).name
+                for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS
+                for _view_name, path in WORLD_SPECS[world_id].preview_assets
+                if path.startswith("/previews/")
+            ),
+        }
     )
     molmospaces_preview_files = sorted(
-        path.name for path in preview_dir.glob("molmospaces-val_*-*.png")
+        path.name
+        for path in preview_dir.glob("molmospaces-*.png")
+        if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
     )
     assert molmospaces_preview_files == expected_preview_files
     metadata_files = sorted(
-        path.name for path in preview_dir.glob("molmospaces-val_*-preview.json")
+        path.name
+        for path in preview_dir.glob("molmospaces-*-preview.json")
+        if path.name.startswith(("molmospaces-val_", "molmospaces-procthor-objaverse-val-"))
     )
-    assert metadata_files == [
-        f"molmospaces-val_{scene_index}-preview.json"
-        for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
-    ]
+    expected_metadata_files = sorted(
+        {
+            *(
+                f"molmospaces-val_{scene_index}-preview.json"
+                for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES
+            ),
+            *(
+                f"{Path(WORLD_SPECS[world_id].preview_assets[0][1]).name.rsplit('-', 1)[0]}"
+                "-preview.json"
+                for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS
+            ),
+        }
+    )
+    assert metadata_files == expected_metadata_files
     assert not any(name.startswith("molmospaces-val_6-") for name in molmospaces_preview_files)
     assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
     b1_preview_files = sorted(path.name for path in preview_dir.glob("b1-map12-*.png"))
@@ -231,13 +259,16 @@ def test_static_app_renders_scene_preview_assets() -> None:
         "b1-map12-topdown.png",
     ]
 
-    for scene_index in MOLMOSPACES_LAUNCH_ALIAS_SCENE_INDICES:
+    for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        preview_by_view = dict(WORLD_SPECS[world_id].preview_assets)
         for view_name in ("fpv", "map", "chase", "topdown"):
-            path = preview_dir / f"molmospaces-val_{scene_index}-{view_name}.png"
+            path = preview_dir / Path(preview_by_view[view_name]).name
             assert path.is_file()
             assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-        metadata_path = preview_dir / f"molmospaces-val_{scene_index}-preview.json"
+        scene_slug = Path(preview_by_view["fpv"]).name.rsplit("-", 1)[0]
+        metadata_path = preview_dir / f"{scene_slug}-preview.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        assert metadata["world_id"] == world_id
         assert metadata["views"]["fpv"]["view"] == "raw_fpv"
         assert metadata["views"]["map"]["view"] == "semantic_map_aligned_preview"
         assert metadata["views"]["chase"]["view"] == "chase_camera"

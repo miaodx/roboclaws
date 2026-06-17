@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
@@ -211,6 +212,27 @@ def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None
 
 
 def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
+    context = _robot_visual_timeline_report_context(tmp_path)
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=context.scenario,
+        run_result=context.run_result,
+        trace_events=[],
+        before_snapshot=context.before,
+        after_snapshot=context.after,
+        robot_view_steps=_robot_visual_timeline_steps(),
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    _assert_robot_visual_timeline_layout(html)
+    _assert_robot_visual_timeline_lightbox(html)
+    _assert_robot_visual_timeline_semantic_substeps(html)
+    _assert_robot_visual_timeline_pose_and_focus(html)
+    _assert_robot_visual_timeline_static_isaac_caveat(html)
+    _assert_robot_visual_timeline_yaw_rendering(tmp_path, context)
+
+
+def _robot_visual_timeline_report_context(tmp_path: Path) -> SimpleNamespace:
     scenario = build_cleanup_scenario(seed=7)
     score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
     before = write_state_snapshot(
@@ -228,7 +250,16 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (tmp_path / "robot_views" / name).parent.mkdir(exist_ok=True)
         (tmp_path / "robot_views" / name).write_bytes(b"placeholder")
-    run_result = {
+    return SimpleNamespace(
+        scenario=scenario,
+        before=before,
+        after=after,
+        run_result=_robot_visual_timeline_run_result(score),
+    )
+
+
+def _robot_visual_timeline_run_result(score: object) -> dict[str, object]:
+    return {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
         "score": score.to_dict(),
@@ -249,118 +280,84 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
                         "location_relation": "on",
                     },
                 ],
-            }
+            },
         ],
     }
 
-    report_path = render_cleanup_report(
-        run_dir=tmp_path,
-        scenario=scenario,
-        run_result=run_result,
-        trace_events=[],
-        before_snapshot=before,
-        after_snapshot=after,
-        robot_view_steps=[
-            {
-                "action": "before",
-                "robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0},
-                "view_provenance": {
-                    "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
-                    "map": "isaac_lab_camera_rgb_static_robot_views:map",
-                    "semantic_pose_state_refreshed": False,
-                    "evidence_note": (
-                        "Robot-view images are static captures from the loaded USD scene."
-                    ),
-                },
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "chase": "robot_views/step.chase.png",
-                    "map": "robot_views/step.map.png",
-                    "verify": "robot_views/bootstrap.verify.png",
-                },
-                "focus": {
-                    "has_focus": False,
-                    "fpv_visibility": {
-                        "status": "ok",
-                        "object_pixels": 0,
-                        "receptacle_pixels": 0,
-                    },
-                    "visibility": {
-                        "status": "ok",
-                        "object_pixels": 0,
-                        "receptacle_pixels": 0,
-                    },
-                },
-            },
-            {
-                "action": "goto sink",
-                "semantic_phase": "navigate_to_receptacle",
-                "view_provenance": {
-                    "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
-                    "map": "isaac_lab_camera_rgb_static_robot_views:map",
-                    "semantic_pose_state_refreshed": False,
-                    "evidence_note": (
-                        "Robot-view images are static captures from the loaded USD scene."
-                    ),
-                },
-                "robot_pose": {
-                    "x": 1.0,
-                    "y": 2.0,
-                    "theta": 0.5,
-                    "theta_source": "target_facing_base_yaw",
-                    "head_pitch": 0.6,
-                    "head_pitch_source": "target_framing_head_pitch",
-                    "robot_room_id": "room_1",
-                    "target_room_id": "room_1",
-                    "same_room_as_target": True,
-                },
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "chase": "robot_views/step.chase.png",
-                    "map": "robot_views/step.map.png",
-                    "verify": "robot_views/step.verify.png",
-                },
-                "focus": {
-                    "has_focus": True,
-                    "object_label": "Mug mug",
-                    "receptacle_label": "Sink sink",
-                    "provenance": "public_mujoco_state_report_aid",
-                    "fpv_visibility": {
-                        "status": "ok",
-                        "object_pixels": 12,
-                        "receptacle_pixels": 80,
-                    },
-                    "visibility": {
-                        "status": "ok",
-                        "object_pixels": 24,
-                        "receptacle_pixels": 120,
-                    },
-                },
-            },
-            {
-                "action": "pick mug_01",
-                "semantic_phase": "pick",
-                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "verify": "robot_views/step.verify.png",
-                },
-                "focus": {"has_focus": True},
-            },
-            {
-                "action": "place mug_01",
-                "semantic_phase": "place",
-                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
-                "views": {
-                    "fpv": "robot_views/step.fpv.png",
-                    "verify": "robot_views/step.verify.png",
-                },
-                "focus": {"has_focus": True},
-            },
-        ],
-    )
 
-    html = report_path.read_text(encoding="utf-8")
+def _robot_visual_timeline_steps() -> list[dict[str, object]]:
+    static_view_provenance = {
+        "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
+        "map": "isaac_lab_camera_rgb_static_robot_views:map",
+        "semantic_pose_state_refreshed": False,
+        "evidence_note": "Robot-view images are static captures from the loaded USD scene.",
+    }
+    return [
+        {
+            "action": "before",
+            "robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0},
+            "view_provenance": static_view_provenance,
+            "views": {
+                "fpv": "robot_views/step.fpv.png",
+                "chase": "robot_views/step.chase.png",
+                "map": "robot_views/step.map.png",
+                "verify": "robot_views/bootstrap.verify.png",
+            },
+            "focus": {
+                "has_focus": False,
+                "fpv_visibility": {"status": "ok", "object_pixels": 0, "receptacle_pixels": 0},
+                "visibility": {"status": "ok", "object_pixels": 0, "receptacle_pixels": 0},
+            },
+        },
+        {
+            "action": "goto sink",
+            "semantic_phase": "navigate_to_receptacle",
+            "view_provenance": static_view_provenance,
+            "robot_pose": {
+                "x": 1.0,
+                "y": 2.0,
+                "theta": 0.5,
+                "theta_source": "target_facing_base_yaw",
+                "head_pitch": 0.6,
+                "head_pitch_source": "target_framing_head_pitch",
+                "robot_room_id": "room_1",
+                "target_room_id": "room_1",
+                "same_room_as_target": True,
+            },
+            "views": {
+                "fpv": "robot_views/step.fpv.png",
+                "chase": "robot_views/step.chase.png",
+                "map": "robot_views/step.map.png",
+                "verify": "robot_views/step.verify.png",
+            },
+            "focus": {
+                "has_focus": True,
+                "object_label": "Mug mug",
+                "receptacle_label": "Sink sink",
+                "provenance": "public_mujoco_state_report_aid",
+                "fpv_visibility": {"status": "ok", "object_pixels": 12, "receptacle_pixels": 80},
+                "visibility": {"status": "ok", "object_pixels": 24, "receptacle_pixels": 120},
+            },
+        },
+        _robot_visual_timeline_action_step("pick mug_01", "pick"),
+        _robot_visual_timeline_action_step("place mug_01", "place"),
+    ]
+
+
+def _robot_visual_timeline_action_step(action: str, phase: str) -> dict[str, object]:
+    return {
+        "action": action,
+        "semantic_phase": phase,
+        "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
+        "views": {
+            "fpv": "robot_views/step.fpv.png",
+            "verify": "robot_views/step.verify.png",
+        },
+        "focus": {"has_focus": True},
+    }
+
+
+def _assert_robot_visual_timeline_layout(html: str) -> None:
     assert "Robot View Timeline" in html
     assert 'data-report-tab-button="timeline"' in html
     assert html.index('data-report-tab-button="timeline"') < html.index(
@@ -369,7 +366,9 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert '<details class="robot-timeline-details" open>' in html
     assert "captured robot-view" in html
     assert "Top-down Scene View" in html
-    assert "Semantic Substeps" in html
+
+
+def _assert_robot_visual_timeline_lightbox(html: str) -> None:
     assert "Pick/place visual checks" in html
     assert '<details class="comparison-item" open>' in html
     assert '<a class="image-link" href="robot_views/step.fpv.png" data-lightbox-image' in html
@@ -382,6 +381,10 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert 'class="image-lightbox"' in html
     assert "Close image review" in html
     assert "sim-only-grid-single" in html
+
+
+def _assert_robot_visual_timeline_semantic_substeps(html: str) -> None:
+    assert "Semantic Substeps" in html
     assert '<details class="semantic-card">' in html
     assert "semantic-card-status" in html
     assert SEMANTIC_LOOP_DISPLAY_NOTE in html
@@ -392,6 +395,9 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "Subphase" in html
     assert "Role" in html
     assert "object_done" not in html
+
+
+def _assert_robot_visual_timeline_pose_and_focus(html: str) -> None:
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
     assert "robot_views/bootstrap.verify.png" not in html
@@ -403,13 +409,19 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "public_mujoco_state_report_aid" in html
     assert "target_facing_base_yaw" in html
     assert "target_framing_head_pitch" in html
+
+
+def _assert_robot_visual_timeline_yaw_rendering(
+    tmp_path: Path,
+    context: SimpleNamespace,
+) -> None:
     assert "yaw_deg=257.0" in render_cleanup_report(
         run_dir=tmp_path,
-        scenario=scenario,
-        run_result=run_result,
+        scenario=context.scenario,
+        run_result=context.run_result,
         trace_events=[],
-        before_snapshot=before,
-        after_snapshot=after,
+        before_snapshot=context.before,
+        after_snapshot=context.after,
         robot_view_steps=[
             {
                 "action": "isaac waypoint",
@@ -421,6 +433,9 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
             }
         ],
     ).read_text(encoding="utf-8")
+
+
+def _assert_robot_visual_timeline_static_isaac_caveat(html: str) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
@@ -2502,120 +2517,179 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert "Planner Proof Bundle Runner" in html
-    assert "Source Cleanup Artifact" in html
-    assert "Proof Execution Horizon" in html
-    assert "multi_step_motion" in html
-    assert "Proof Request Selection" in html
-    assert "Grasp Feasibility Mitigation Decision" in html
-    assert "decision-card" in html
-    assert "grasp_cache_mitigation" in html
-    assert "mitigate_missing_grasp_cache_before_retry" in html
-    assert "Grasp Cache Availability Preflight" in html
-    assert "Grasp Cache Generation Preflight" in html
-    assert "python_module_sklearn" in html
-    assert "manifold_executable_missing" in html
-    assert "run_rigid.py" in html
-    assert "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz" in html
-    assert "has_grasp_folder_only" in html
-    assert "objects/thor/Bread_1.xml" in html
-    assert "available_for_unproven_requests" in html
-    assert "Prior Proof Evidence" in html
-    assert "Proof Probe Commands" in html
-    assert "Semantic subphases" in html
-    assert "surface / place" in html
-    assert "Proof Probe Results" in html
-    assert "Cleanup Rerun Command" in html
-    assert "dry_run" in html
-    assert "proof_001" in html
-    assert "proof_001_fallback_01" in html
-    assert "observed_001" in html
-    assert "sink/alt" in html
-    assert "HouseInvalidForTask" in html
-    assert "Fallback status" in html
-    assert "generated" in html
-    assert "Fallback required" in html
-    assert "prior_task_feasibility_blocked" in html
-    assert "Generated Fallback Requests" in html
-    assert "Discovered Runtime Aliases" in html
-    assert "Discovered aliases" in html
-    assert "sink/body_alt" in html
-    assert "valid_name_sibling_from_prior_keyerror" in html
-    assert "Filtered Fallback Aliases" in html
-    assert "Filtered aliases" in html
-    assert "Sink|1|2" in html
-    assert "not_exact_scene_runtime_alias" in html
-    assert "Filtered Fallback Pairs" in html
-    assert "Filtered pairs" in html
-    assert "Target Feasibility Blockers" in html
-    assert "Target blockers" in html
-    assert "Grasp Feasibility Blockers" in html
-    assert "Grasp Feasibility Blocker Matrix" in html
-    assert "Grasp blockers" in html
-    assert "Prior match" in html
-    assert "request_id" in html
-    assert "source_request" in html
-    assert "fallback_pair" in html
-    assert "worker_exception" in html
-    assert "pickup/body" in html
-    assert "sink/body_alt" in html
-    assert "prior_task_feasibility_blocked_pair" in html
-    assert "fallback_generated" in html
-    assert "RBY1M/CuRobo Warmup" in html
-    assert "config_import" in html
-    assert "torch_extensions" in html
-    assert "Task feasibility" in html
-    assert "blocked" in html
-    assert "Grasp-feasible blocked" in html
-    assert "Grasp Feasibility Signature Matrix" in html
-    assert "Grasp-load failures" in html
-    assert "grasp_cache_missing" in html
-    assert "Bread_1" in html
-    assert "PriorBread_1" in html
-    assert "prior/pickup" in html
-    assert "Diagnostic views" in html
-    assert "Task feasibility blocker" in html
-    assert "grasp_feasibility" in html
-    assert "3 grasp failures; 1 candidate-removal calls" in html
-    assert "standalone_observed_001_to_sink_01" in html
-    assert "prior-proof/run_result.json" in html
-    assert "prior-proof/report.html" in html
-    assert "prior-proof/initial.png" in html
-    assert "prior-proof/final.png" in html
-    assert 'src="prior-proof/initial.png"' in html
-    assert 'src="prior-proof/final.png"' in html
-    assert 'src="proofs/001/initial.png"' in html
-    assert 'src="proofs/001/final.png"' in html
-    assert f'src="{tmp_path}/prior-proof/initial.png"' not in html
-    assert f'src="{tmp_path}/proofs/001/initial.png"' not in html
-    assert "Robot placement profile" in html
-    assert "relaxed" in html
-    assert "place_robot_near max tries" in html
-    assert "Exact sampler adapter applied" in html
-    assert "Exact sampler adapter class" in html
-    assert "PickAndPlaceTaskSampler" in html
-    assert "Exact sampler adapter target" in html
-    assert "Task sampler placement failures" in html
-    assert "Task sampler asset failures" in html
-    assert "Post-placement grasp failures" in html
-    assert "Post-placement candidate name misses" in html
-    assert "Post-Placement Rejection Views" in html
-    assert "Post-placement rejection flow: pickup/body" in html
-    assert "Placement free-space fraction" in html
-    assert "0.000017" in html
-    assert "Failed to place robot near object: pickup/body" in html
-    assert "sink/body" in html
-    assert "Timeouts" in html
-    assert "Config-import timeouts" in html
-    assert "Last worker stage" in html
-    assert "rby1m_config_import" in html
-    assert "Worker stages" in html
-    assert "planner_probe_stdout.txt" in html
-    assert "planner_probe_stderr.txt" in html
-    assert "initial.png" in html
-    assert "final.png" in html
-    assert "report.html" in html
-    assert "--planner-proof-run-result" in html
+    _assert_planner_proof_bundle_runner_overview(html)
+    _assert_planner_proof_bundle_runner_selection(html)
+    _assert_planner_proof_bundle_runner_proof_results(html, tmp_path)
+    _assert_planner_proof_bundle_runner_sampler_diagnostics(html)
+    _assert_planner_proof_bundle_runner_artifacts(html)
+
+
+def _assert_html_contains(html: str, fragments: tuple[str, ...]) -> None:
+    missing = [fragment for fragment in fragments if fragment not in html]
+    assert not missing, f"Missing expected HTML fragments: {missing}"
+
+
+def _assert_html_omits(html: str, fragments: tuple[str, ...]) -> None:
+    unexpected = [fragment for fragment in fragments if fragment in html]
+    assert not unexpected, f"Unexpected HTML fragments: {unexpected}"
+
+
+def _assert_planner_proof_bundle_runner_overview(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Planner Proof Bundle Runner",
+            "Source Cleanup Artifact",
+            "Proof Execution Horizon",
+            "multi_step_motion",
+            "Grasp Feasibility Mitigation Decision",
+            "decision-card",
+            "grasp_cache_mitigation",
+            "mitigate_missing_grasp_cache_before_retry",
+            "Grasp Cache Availability Preflight",
+            "Grasp Cache Generation Preflight",
+            "python_module_sklearn",
+            "manifold_executable_missing",
+            "run_rigid.py",
+            "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz",
+            "has_grasp_folder_only",
+            "objects/thor/Bread_1.xml",
+            "available_for_unproven_requests",
+            "RBY1M/CuRobo Warmup",
+            "config_import",
+            "torch_extensions",
+            "Cleanup Rerun Command",
+            "--planner-proof-run-result",
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_selection(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Proof Request Selection",
+            "dry_run",
+            "proof_001",
+            "proof_001_fallback_01",
+            "observed_001",
+            "sink/alt",
+            "HouseInvalidForTask",
+            "Fallback status",
+            "generated",
+            "Fallback required",
+            "prior_task_feasibility_blocked",
+            "Generated Fallback Requests",
+            "Discovered Runtime Aliases",
+            "Discovered aliases",
+            "sink/body_alt",
+            "valid_name_sibling_from_prior_keyerror",
+            "Filtered Fallback Aliases",
+            "Filtered aliases",
+            "Sink|1|2",
+            "not_exact_scene_runtime_alias",
+            "Filtered Fallback Pairs",
+            "Filtered pairs",
+            "Target Feasibility Blockers",
+            "Target blockers",
+            "Grasp Feasibility Blockers",
+            "Grasp Feasibility Blocker Matrix",
+            "Grasp blockers",
+            "Prior match",
+            "request_id",
+            "source_request",
+            "fallback_pair",
+            "worker_exception",
+            "pickup/body",
+            "prior_task_feasibility_blocked_pair",
+            "fallback_generated",
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_proof_results(html: str, tmp_path: Path) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Prior Proof Evidence",
+            "Proof Probe Commands",
+            "Semantic subphases",
+            "surface / place",
+            "Proof Probe Results",
+            "Task feasibility",
+            "blocked",
+            "Grasp-feasible blocked",
+            "Grasp Feasibility Signature Matrix",
+            "Grasp-load failures",
+            "grasp_cache_missing",
+            "Bread_1",
+            "PriorBread_1",
+            "prior/pickup",
+            "Diagnostic views",
+            "Task feasibility blocker",
+            "grasp_feasibility",
+            "3 grasp failures; 1 candidate-removal calls",
+            "standalone_observed_001_to_sink_01",
+            "prior-proof/run_result.json",
+            "prior-proof/report.html",
+            "prior-proof/initial.png",
+            "prior-proof/final.png",
+            'src="prior-proof/initial.png"',
+            'src="prior-proof/final.png"',
+            'src="proofs/001/initial.png"',
+            'src="proofs/001/final.png"',
+        ),
+    )
+    _assert_html_omits(
+        html,
+        (
+            f'src="{tmp_path}/prior-proof/initial.png"',
+            f'src="{tmp_path}/proofs/001/initial.png"',
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_sampler_diagnostics(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Robot placement profile",
+            "relaxed",
+            "place_robot_near max tries",
+            "Exact sampler adapter applied",
+            "Exact sampler adapter class",
+            "PickAndPlaceTaskSampler",
+            "Exact sampler adapter target",
+            "Task sampler placement failures",
+            "Task sampler asset failures",
+            "Post-placement grasp failures",
+            "Post-placement candidate name misses",
+            "Post-Placement Rejection Views",
+            "Post-placement rejection flow: pickup/body",
+            "Placement free-space fraction",
+            "0.000017",
+            "Failed to place robot near object: pickup/body",
+            "sink/body",
+        ),
+    )
+
+
+def _assert_planner_proof_bundle_runner_artifacts(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Timeouts",
+            "Config-import timeouts",
+            "Last worker stage",
+            "rby1m_config_import",
+            "Worker stages",
+            "planner_probe_stdout.txt",
+            "planner_probe_stderr.txt",
+            "initial.png",
+            "final.png",
+            "report.html",
+        ),
+    )
 
 
 def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
@@ -3220,79 +3294,114 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
     html = report_path.read_text(encoding="utf-8")
 
-    assert "Planner-Backed Manipulation Probe" in html
-    assert "Manipulation Provenance" in html
-    assert "Planner Proof Quality" in html
-    assert "Runtime Diagnostics" in html
-    assert "Planner Probe Diagnostic Views" in html
-    assert "Task sampler diagnostic: pickup/body" in html
-    assert "Planner Probe Cleanup Binding" in html
-    assert "Task Sampler Robot Placement Profile" in html
-    assert "relaxed" in html
-    assert "place_robot_near max tries" in html
-    assert "Exact task config applied" in html
-    assert "Exact task config blockers" in html
-    assert "cleanup_scene_xml_missing" in html
-    assert "Exact sampler adapter class" in html
-    assert "Exact sampler adapter object" in html
-    assert "Exact pickup candidate action" in html
+    _assert_planner_manipulation_probe_overview(html)
+    _assert_planner_manipulation_probe_cleanup_binding(html)
+    _assert_planner_manipulation_probe_sampler_failures(html)
+    _assert_planner_manipulation_probe_runtime_diagnostics(html)
 
-    assert "Exact pickup retry budget" in html
-    assert "injected_requested_candidate_name" in html
-    assert "PickAndPlaceTaskSampler" in html
-    assert "Task Sampler Failure Diagnostics" in html
-    assert "Placement failures" in html
-    assert "Effective max tries" in html
-    assert "Post-Placement Candidate Rejections" in html
-    assert "Grasp Collision Diagnostics" in html
-    assert "Non-colliding grasps" in html
-    assert "Zero non-colliding" in html
-    assert "Post-Placement Rejection Views" in html
-    assert "Post-placement rejection flow: pickup/body" in html
-    assert "Removed by grasp threshold" in html
-    assert "Candidate Removal Effectiveness" in html
-    assert "Effective removals" in html
-    assert "Candidate name misses" in html
-    assert "Removal-call delta" in html
-    assert "Placement Scene Diagnostics" in html
-    assert "Free-space fraction" in html
-    assert "0.000017" in html
-    assert "Nearest free distance" in html
-    assert "Failed to place robot near object: pickup/body" in html
-    assert "asset-book" in html
-    assert "pickup/body" in html
-    assert "sink/body" in html
-    assert "Planner object alias" in html
-    assert "navigate_to_receptacle" in html
-    assert "CUDA Memory Headroom" in html
-    assert "CuRobo Memory Profile" in html
-    assert "Policy Exception Diagnostics" in html
-    assert "curobo_no_planned_trajectory" in html
-    assert "_execute_trajectory was called with no planned trajectory" in html
-    assert "pre_grasp" in html
-    assert "Trajectory len" in html
-    assert "CuRobo Extension Cache" in html
-    assert "lbfgs_step_cu" in html
-    assert "Warp Compatibility" in html
-    assert "Adapter applied" in html
-    assert "Worker Stage Timeline" in html
-    assert "Capability Blockers" in html
-    assert "PickAndPlacePlannerPolicy" in html
-    assert "rby1m_config_import_start" in html
-    assert "rby1m_config_import" in html
-    assert "faulthandler=True" in html
-    assert "renderer_adapter=True" in html
-    assert "MUJOCO_GL=egl" in html
-    assert "CUDA_HOME=/usr/local/cuda" in html
-    assert "torch_cuda_available=True" in html
-    assert "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" in html
-    assert "execute_policy_run_start" in html
-    assert "num_ik_seeds" in html
-    assert "Collision avoidance" in html
-    assert "10.6 GiB" in html
-    assert "curobo" in html
-    assert "RBY1M CuRobo Gate" in html
-    assert "wrong_embodiment" in html
+
+def _assert_planner_manipulation_probe_overview(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Planner-Backed Manipulation Probe",
+            "Manipulation Provenance",
+            "Planner Proof Quality",
+            "Runtime Diagnostics",
+            "Planner Probe Diagnostic Views",
+            "Task sampler diagnostic: pickup/body",
+            "Planner Probe Cleanup Binding",
+            "Capability Blockers",
+            "RBY1M CuRobo Gate",
+            "wrong_embodiment",
+        ),
+    )
+
+
+def _assert_planner_manipulation_probe_cleanup_binding(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Task Sampler Robot Placement Profile",
+            "relaxed",
+            "place_robot_near max tries",
+            "Exact task config applied",
+            "Exact task config blockers",
+            "cleanup_scene_xml_missing",
+            "Exact sampler adapter class",
+            "Exact sampler adapter object",
+            "Exact pickup candidate action",
+            "Exact pickup retry budget",
+            "injected_requested_candidate_name",
+            "PickAndPlaceTaskSampler",
+            "pickup/body",
+            "sink/body",
+            "Planner object alias",
+            "navigate_to_receptacle",
+        ),
+    )
+
+
+def _assert_planner_manipulation_probe_sampler_failures(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Task Sampler Failure Diagnostics",
+            "Placement failures",
+            "Effective max tries",
+            "Post-Placement Candidate Rejections",
+            "Grasp Collision Diagnostics",
+            "Non-colliding grasps",
+            "Zero non-colliding",
+            "Post-Placement Rejection Views",
+            "Post-placement rejection flow: pickup/body",
+            "Removed by grasp threshold",
+            "Candidate Removal Effectiveness",
+            "Effective removals",
+            "Candidate name misses",
+            "Removal-call delta",
+            "Placement Scene Diagnostics",
+            "Free-space fraction",
+            "0.000017",
+            "Nearest free distance",
+            "Failed to place robot near object: pickup/body",
+            "asset-book",
+        ),
+    )
+
+
+def _assert_planner_manipulation_probe_runtime_diagnostics(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "CUDA Memory Headroom",
+            "CuRobo Memory Profile",
+            "Policy Exception Diagnostics",
+            "curobo_no_planned_trajectory",
+            "_execute_trajectory was called with no planned trajectory",
+            "pre_grasp",
+            "Trajectory len",
+            "CuRobo Extension Cache",
+            "lbfgs_step_cu",
+            "Warp Compatibility",
+            "Adapter applied",
+            "Worker Stage Timeline",
+            "PickAndPlacePlannerPolicy",
+            "rby1m_config_import_start",
+            "rby1m_config_import",
+            "faulthandler=True",
+            "renderer_adapter=True",
+            "MUJOCO_GL=egl",
+            "CUDA_HOME=/usr/local/cuda",
+            "torch_cuda_available=True",
+            "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True",
+            "execute_policy_run_start",
+            "num_ik_seeds",
+            "Collision avoidance",
+            "10.6 GiB",
+            "curobo",
+        ),
+    )
 
 
 def test_planner_manipulation_probe_report_renders_proof_quality(tmp_path: Path) -> None:

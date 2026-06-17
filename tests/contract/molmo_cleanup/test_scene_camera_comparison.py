@@ -644,106 +644,172 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
         "candidates": [ISAAC_LANE_ID],
     }
     _write_render_contract_probe_fixtures(tmp_path, manifest)
-    for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
-        for image in lane["images"].values():  # type: ignore[index,union-attr]
-            path = str(image["path"])  # type: ignore[index]
-            if "molmospaces" in path and "room_01" in path:
-                color = (80, 80, 80)
-            elif "isaaclab" in path and "room_01" in path:
-                color = (180, 180, 180)
-            elif "molmospaces" in path and "view_01" in path:
-                color = (180, 180, 180)
-            elif "isaaclab" in path and "view_01" in path:
-                color = (80, 80, 80)
-            elif "molmospaces" in path:
-                color = (120, 70, 50)
-            else:
-                color = (200, 160, 120)
-            _write_image(tmp_path / path, color=color)
+    _write_scene_camera_comparison_fixture_images(tmp_path, manifest)
 
     report_path = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
     html = report_path.read_text(encoding="utf-8")
 
+    _assert_scene_camera_report_artifacts(report_path, tmp_path, manifest)
+    _assert_scene_camera_report_review_ui(html)
+    _assert_scene_camera_report_contract_sections(html)
+    _assert_scene_camera_report_lighting_and_render_domain(html, manifest)
+    _assert_scene_camera_report_lane_images(html)
+
+
+def _write_scene_camera_comparison_fixture_images(
+    tmp_path: Path,
+    manifest: dict[str, object],
+) -> None:
+    for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
+        for image in lane["images"].values():  # type: ignore[index,union-attr]
+            path = str(image["path"])  # type: ignore[index]
+            _write_image(tmp_path / path, color=_scene_camera_fixture_color(path))
+
+
+def _scene_camera_fixture_color(path: str) -> tuple[int, int, int]:
+    if "molmospaces" in path and "room_01" in path:
+        return (80, 80, 80)
+    if "isaaclab" in path and "room_01" in path:
+        return (180, 180, 180)
+    if "molmospaces" in path and "view_01" in path:
+        return (180, 180, 180)
+    if "isaaclab" in path and "view_01" in path:
+        return (80, 80, 80)
+    if "molmospaces" in path:
+        return (120, 70, 50)
+    return (200, 160, 120)
+
+
+def _assert_scene_camera_report_artifacts(
+    report_path: Path,
+    tmp_path: Path,
+    manifest: dict[str, object],
+) -> None:
     assert report_path == tmp_path / "report.html"
     assert (tmp_path / "contact_sheet.png").is_file()
     assert manifest["artifacts"]["contact_sheet"] == "contact_sheet.png"  # type: ignore[index]
     assert manifest["contact_sheet"]["view_count"] == 3  # type: ignore[index]
-    assert "Render-only scene identity probe" in html
-    assert "Standalone Image Review" in html
-    assert "Contact Sheet" in html
+
+
+def _assert_html_contains(html: str, fragments: tuple[str, ...]) -> None:
+    missing = [fragment for fragment in fragments if fragment not in html]
+    assert not missing, f"Missing expected HTML fragments: {missing}"
+
+
+def _assert_scene_camera_report_review_ui(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Render-only scene identity probe",
+            "Standalone Image Review",
+            "Contact Sheet",
+            "contact_sheet.png",
+            'data-image-src="contact_sheet.png"',
+            'data-image-src="molmospaces/camera_views/room_01_room_2.png"',
+            'data-image-src="isaaclab/camera_views/view_02_sink.png"',
+            'id="image-modal"',
+            "does not execute household cleanup",
+            "pick, place, or scoring",
+            "MolmoSpaces metadata handle",
+        ),
+    )
     assert html.index("Standalone Image Review") < html.index("Contact Sheet")
-    assert "contact_sheet.png" in html
-    assert 'data-image-src="contact_sheet.png"' in html
-    assert 'data-image-src="molmospaces/camera_views/room_01_room_2.png"' in html
-    assert 'data-image-src="isaaclab/camera_views/view_02_sink.png"' in html
-    assert 'id="image-modal"' in html
-    assert "does not execute household cleanup" in html
-    assert "pick, place, or scoring" in html
-    assert "MolmoSpaces metadata handle" in html
-    assert "Camera Pose Contract" in html
-    assert "Camera Intrinsics Contract" in html
-    assert "Room Scale Contract" in html
-    assert "Backend Swap Geometry Contract" in html
-    assert "Target Vs USD Bounds Diagnostics" in html
-    assert "Projection Diagnostics" in html
-    assert "Visual Diagnostics" in html
-    assert "Room Wall Light Diagnostics" in html
-    assert "upper_center_wall_proxy" in html
-    assert "tone lum=" in html
-    assert "wall-proxy lum=" in html
-    assert "baseline tone reference" in html
-    assert "vs baseline lum_delta=" in html
-    assert "Candidate Visual Acceptance" in html
-    assert "Native Isaac Render Diagnostics" in html
-    assert "Lighting &amp; Tone Provenance" in html
+
+
+def _assert_scene_camera_report_contract_sections(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Camera Pose Contract",
+            "Camera Intrinsics Contract",
+            "Room Scale Contract",
+            "Backend Swap Geometry Contract",
+            "Target Vs USD Bounds Diagnostics",
+            "Projection Diagnostics",
+            "same_backend_pose_within_threshold",
+            "same_projected_geometry_within_threshold",
+            "intrinsics_consistent",
+            "mujoco_room_mesh_world_bounds",
+            "room_center_inset_eye_target",
+            "canonical_scene_frame_similarity_fit_v1",
+            "canonical_eye_target_camera_v1",
+            "backend eye=",
+        ),
+    )
+
+
+def _assert_scene_camera_report_lighting_and_render_domain(
+    html: str,
+    manifest: dict[str, object],
+) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Visual Diagnostics",
+            "Room Wall Light Diagnostics",
+            "upper_center_wall_proxy",
+            "tone lum=",
+            "wall-proxy lum=",
+            "baseline tone reference",
+            "vs baseline lum_delta=",
+            "Candidate Visual Acceptance",
+            "Native Isaac Render Diagnostics",
+            "Lighting &amp; Tone Provenance",
+        ),
+    )
     assert manifest["lighting_tone_provenance"]["status"] == "environment_light_configured"  # type: ignore[index]
-    assert "environment_light_configured" in html
-    assert "missing_environment_light_lanes=" in html
-    assert "scene_light_rig_v1" in html
-    assert "authored=disabled_for_comparison" in html
-    assert "active_authored_usd_lights=0" in html
-    assert "active_roles=dome_environment, directional_key" in html
-    assert "Lighting is configured; inspect render-domain residual diagnostics" in html
-    assert "Render Domain Source Diagnostics" in html
-    assert "Render Domain View Triage" in html
-    assert "Render Domain Contract Probe" in html
-    assert "native_settings_recorded" in html
-    assert "/rtx/post/tonemap/op" in html
-    assert "not_a_native_renderer_setting" in html
-    assert "geometry_swap_ready_render_domain_pending" in html
-    assert "render_domain_residual_high" in html
-    assert "same_explicit_eye_target_pose" in html
-    assert "object_material_texture_binding_contract" in html
-    assert "room_light_wall_shadow_contract" in html
-    assert "light_or_shadow_contract_delta" in html
-    assert "mujoco_housegen_materials" in html
-    assert "isaac_preview_surface_material_conversion" in html
-    assert "USD PreviewSurface" in html
-    assert "isaac_shadow_disabled_prims=1" in html
-    assert "same_backend_pose_within_threshold" in html
-    assert "same_projected_geometry_within_threshold" in html
-    assert "intrinsics_consistent" in html
-    assert "mujoco_room_mesh_world_bounds" in html
-    assert "room_center_inset_eye_target" in html
-    assert "https://github.com/allenai/molmospaces.git" in html
-    assert CAMERA_CONTROL_API_NAME in html
-    assert "canonical_scene_frame_similarity_fit_v1" in html
-    assert "display_srgb_soft_highlight_v1" in html
-    assert "canonical_eye_target_camera_v1" in html
-    assert "backend eye=" in html
-    assert "scene_probe_balanced_review_light_v1" in html
-    assert "added_capture_lights" in html
+    _assert_html_contains(
+        html,
+        (
+            "environment_light_configured",
+            "missing_environment_light_lanes=",
+            "scene_light_rig_v1",
+            "authored=disabled_for_comparison",
+            "active_authored_usd_lights=0",
+            "active_roles=dome_environment, directional_key",
+            "Lighting is configured; inspect render-domain residual diagnostics",
+            "Render Domain Source Diagnostics",
+            "Render Domain View Triage",
+            "Render Domain Contract Probe",
+            "native_settings_recorded",
+            "/rtx/post/tonemap/op",
+            "not_a_native_renderer_setting",
+            "geometry_swap_ready_render_domain_pending",
+            "render_domain_residual_high",
+            "same_explicit_eye_target_pose",
+            "object_material_texture_binding_contract",
+            "room_light_wall_shadow_contract",
+            "light_or_shadow_contract_delta",
+            "mujoco_housegen_materials",
+            "isaac_preview_surface_material_conversion",
+            "USD PreviewSurface",
+            "isaac_shadow_disabled_prims=1",
+            "https://github.com/allenai/molmospaces.git",
+            CAMERA_CONTROL_API_NAME,
+            "display_srgb_soft_highlight_v1",
+            "scene_probe_balanced_review_light_v1",
+            "added_capture_lights",
+        ),
+    )
     assert _manifest()["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"]["added_light_paths"] == [
         "/RoboclawsSmokeDomeLight",
         "/RoboclawsSmokeKeyLight",
     ]
-    assert "Candidate color calibrations" in html
-    assert "best=" in html
-    assert MOLMOSPACES_LANE_ID in html
-    assert ISAAC_LANE_ID in html
-    assert "molmospaces/camera_views/view_01_bed.png" in html
-    assert "molmospaces/camera_views/room_01_room_2.png" in html
-    assert "isaaclab/camera_views/view_02_sink.png" in html
+
+
+def _assert_scene_camera_report_lane_images(html: str) -> None:
+    _assert_html_contains(
+        html,
+        (
+            "Candidate color calibrations",
+            "best=",
+            MOLMOSPACES_LANE_ID,
+            ISAAC_LANE_ID,
+            "molmospaces/camera_views/view_01_bed.png",
+            "molmospaces/camera_views/room_01_room_2.png",
+            "isaaclab/camera_views/view_02_sink.png",
+        ),
+    )
     assert "Pick up" not in html
 
 

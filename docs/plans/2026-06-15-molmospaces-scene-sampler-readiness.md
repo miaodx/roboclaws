@@ -1,8 +1,8 @@
 ---
 plan_scope: molmospaces-scene-sampler-readiness
-status: Partially implemented; next Flow scoped
+status: Implemented; source outcomes classified and verified
 created: 2026-06-15
-last_reviewed: 2026-06-15
+last_reviewed: 2026-06-16
 implementation_allowed: true
 source:
   - user request to expose a smaller UI sample set and a larger eval-harness stress set
@@ -24,11 +24,11 @@ other_source_targets:
   - procthor-objaverse-val
   - holodeck-objaverse-val
 next_flow_scope:
-  - fill procthor-10k-val eval stress projection to ten admitted samples
-  - add sampler readiness support for ithor
-  - add sampler readiness support for procthor-objaverse-val
-  - add sampler readiness support for holodeck-objaverse-val
-  - turn remaining plan slices into scanner, source-prep, UI, eval, and docs work
+  - completed procthor-10k-val eval stress projection to ten admitted samples
+  - classified ithor as rejected exhausted under current admission gates
+  - completed procthor-objaverse-val UI and eval stress projection
+  - classified holodeck-objaverse-val as rejected exhausted under current admission gates
+  - leave only new-human-curation follow-up for rejected exhausted sources
 next_flow_policy:
   - treat readiness gates, target sources, vertical slices, acceptance criteria, and verification as implementation scope
   - classify every candidate/source as admitted, normalized blocked, or rejected instead of leaving parked notes
@@ -39,7 +39,44 @@ next_flow_policy:
 
 ## Implementation Status
 
-First slice implemented on 2026-06-15.
+Implemented on 2026-06-15. The sampler readiness work now has explicit source
+outcomes instead of parked source notes:
+
+- `procthor-10k-val`: complete. Eval-stress projection admits ten samples
+  (`0`, `2`, `3`, `5`, `9`, `10`, `11`, `12`, `13`, `15`) and the operator
+  console keeps exactly three UI rows (`0`, `2`, `9`).
+- `procthor-objaverse-val`: complete. Eval-stress projection admits ten samples
+  (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`, `13`, `14`) and the operator
+  console exposes three UI rows (`0`, `1`, `4`).
+- `ithor`: rejected exhausted under current admission gates. Candidate evidence
+  for indices `1..12` all fails with
+  `fewer_than_three_public_navigation_areas`; next action is
+  `do_not_scan_without_new_human_curation`.
+- `holodeck-objaverse-val`: rejected exhausted under current admission gates.
+  Source prep and scanner execution for indices `0..19` completed, but all
+  twenty candidates have one public room, two waypoints, coverage `0.1`, and
+  `blocked_reason=fewer_than_three_public_navigation_areas`; next action is
+  `do_not_scan_without_new_human_curation`.
+
+The top-level readiness summary is now:
+
+- complete sources: 2 (`procthor-10k-val`, `procthor-objaverse-val`);
+- rejected exhausted sources: 2 (`ithor`, `holodeck-objaverse-val`);
+- scanner-ready sources: 0;
+- source-prep-required sources: 0.
+
+The "parked" looking material in this plan existed because sampler admission is
+evidence-gated. Each source can fail at different layers: asset visibility,
+source loader support, preview metadata, public-room count, waypoint count,
+trusted category provenance, or map-build artifacts. Those are not separate
+product ideas; they are the gate taxonomy required to explain why a source is
+admitted, blocked, or rejected. This implementation converted that taxonomy
+into durable source metadata, readiness artifacts, and next-flow actions. With
+the current evidence, more download permission is not the missing input for
+`ithor` or `holodeck-objaverse-val`; admitting them would require new human
+curation or a deliberate change to the public-room/actionability gate.
+
+Historical implementation notes follow.
 
 - Canonical sampler source: `roboclaws/launch/scene_sampler.py`.
   The sampler now enforces both per-source caps: exactly three UI rows when a
@@ -331,53 +368,76 @@ ruff format --check roboclaws/launch/scene_sampler.py scripts/operator_console/e
 .venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-command-worklist --candidate-range 0:19 --no-generated-eval
 ```
 
-Current limits feeding the next Flow:
+Completion audit on 2026-06-16:
 
-- This first slice does not run a live provider or implicit VLM labeler. That
+```bash
+./scripts/dev/run_pytest_standalone.sh tests/unit/launch tests/unit/operator_console tests/unit/evals -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_cross_environment_semantic_map_parity.py tests/contract/maps/test_actionable_semantic_map_snapshot.py -q
+ruff check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaws/evals/runner.py roboclaws/operator_console/routes.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_harness_selector.py skills/eval-harness/scripts/select_eval_harness.py skills/eval-harness/scripts/eval_harness_rows.py docs/human/molmospaces-settings.md docs/human/evaluation.md
+ruff format --check roboclaws/launch/scene_sampler.py roboclaws/launch/worlds.py roboclaws/evals/runner.py roboclaws/operator_console/routes.py tests/unit/launch/test_scene_sampler.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py tests/unit/evals/test_eval_models.py tests/unit/evals/test_eval_runner.py tests/unit/evals/test_eval_harness_selector.py skills/eval-harness/scripts/select_eval_harness.py skills/eval-harness/scripts/eval_harness_rows.py
+just agent::eval suite=scene_sampler_stress budget=smoke output_dir=/tmp/roboclaws-scene-sampler-final-scene-sampler-stress
+just agent::eval suite=map_build_consumer budget=focused output_dir=/tmp/roboclaws-scene-sampler-final-map-build-consumer
+just agent::eval recommend plan=docs/plans/2026-06-15-molmospaces-scene-sampler-readiness.md budget=focused output_dir=/tmp/roboclaws-scene-sampler-final-harness
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-final-readiness-default
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-final-readiness-ui-procthor --require-ui-supported-source procthor-10k-val
+.venv/bin/python scripts/operator_console/export_scene_sampler_readiness.py --output-dir /tmp/roboclaws-scene-sampler-final-readiness-ui-objaverse --require-ui-supported-source procthor-objaverse-val
+just run::surface surface=household-world world=molmospaces/procthor-objaverse-val/0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline output_dir=/tmp/roboclaws-scene-sampler-final-product-objaverse-0
+```
+
+Additional audit evidence:
+
+- Static sampler check reports UI rows `3+3` for `procthor-10k-val` and
+  `procthor-objaverse-val`, eval rows `10+10`, and rejected exhausted rows for
+  `ithor` and `holodeck-objaverse-val`.
+- Generated eval artifacts from
+  `/tmp/roboclaws-scene-sampler-final-readiness-default/generated_eval/`
+  semantically match the committed `scene_sampler_stress` suite plus all 20
+  committed sample JSON files.
+- `scene_sampler_stress` passed 20/20 direct-runner samples and reported two
+  complete sources plus two rejected sources.
+- `map_build_consumer` passed 3/3 focused samples.
+- New UI source product smoke for
+  `molmospaces/procthor-objaverse-val/0` produced
+  `/tmp/roboclaws-scene-sampler-final-product-objaverse-0/0616_0151/seed-7/report.html`
+  and `runtime_metric_map.json`.
+
+Current limits after this Flow:
+
+- This flow does not run a live provider or implicit VLM labeler. That
   is intentional and remains a non-goal for sampler, eval, and CI paths.
-- Non-`procthor-10k-val` sources are represented by blocked rows today, not
-  supported UI sources. The next Flow should turn `ithor`,
-  `procthor-objaverse-val`, and `holodeck-objaverse-val` from blocked rows into
-  either supported source rows or explicit asset/runtime-blocked rows.
-- The eval-stress target of ten samples per supported source is not complete
-  yet. The next Flow should first fill `procthor-10k-val` from five to ten
-  admitted eval samples, then apply the same admission rules to the other
-  source targets.
+- `ithor` and `holodeck-objaverse-val` are no longer parked or environment
+  blocked. They are rejected exhausted under the current public-room /
+  actionability gate and should not be scanned again without new human
+  curation.
 - The static smoke eval verifies runtime-map artifact readiness and sampler
   admission metadata; full scene-specific runtime output remains a product-run
   or later scanner proof.
-- The readiness exporter is a deterministic preparation artifact scaffold. It
-  does not yet render or admit new `ithor`, `procthor-objaverse-val`, or
-  `holodeck-objaverse-val` samples; those remain blocked until local assets and
-  preview/map-build evidence exist.
+- The readiness exporter remains a deterministic preparation artifact scaffold.
+  It now reports no source-prep or scanner-execution work for the two rejected
+  exhausted sources.
 - Run source availability and scanner prep through the repo-local runtime
   (`.venv/bin/python` or `uv run`), not the host default Python. On this host,
   the host default Python is a conda Python 3.13 that cannot import
-  `molmo_spaces`, while the repo-local Python 3.12 runtime can. Under the
-  repo-local runtime, the current blocker is missing candidate XML files:
-  non-`procthor-10k-val` source directories exist but have no `val_<index>.xml`
-  candidates, and `procthor-10k-val` does not yet have enough expanded-range
-  candidate XMLs to scan/admit ten eval samples.
+  `molmo_spaces`, while the repo-local Python 3.12 runtime can.
 - The availability probe records `python_executable`, `python_version`, and
   captured MolmoSpaces import/scene-root stdout in the artifact. This keeps the
   exporter CLI stdout valid JSON even when upstream MolmoSpaces prints
   `Using SCENES_ROOT: ...` during import.
 
-## Next Flow Development Plan
+## Implemented Flow Development Plan
 
-The remaining sampler work is next-Flow development scope, not a loose
-parked-todo list. In this plan, "other sources" means exactly these planned
+This sampler work was promoted into development scope, not left as a loose
+parked-todo list. In this plan, "other sources" meant exactly these planned
 MolmoSpaces scene sources:
 
 - `ithor`
 - `procthor-objaverse-val`
 - `holodeck-objaverse-val`
 
-Those are the non-current source targets we want the next Flow to try to
-support on the primary MolmoSpaces MuJoCo path. The current source,
-`procthor-10k-val`, is not part of "other sources"; it remains in scope because
-its eval-stress projection still needs to grow from five admitted samples to
-ten.
+Those were the non-current source targets the Flow tried to support on the
+primary MolmoSpaces MuJoCo path. The current source, `procthor-10k-val`, was
+also in scope because its eval-stress projection needed to grow from five
+admitted samples to ten.
 
 All remaining plan material is promoted into next-Flow development input rather
 than parked work:
@@ -389,41 +449,40 @@ than parked work:
 - only items explicitly declared out of scope by the next Flow should move to
   `TODOS.md` or `THOUGHTS.md`.
 
-The next Flow should try to make those three sources supported on the primary
+The implemented Flow tried to make those three sources supported on the primary
 MolmoSpaces MuJoCo path. Here, "supported" means three UI-ready samples for the
 default operator-console scene rail and up to ten eval-stress-ready samples for
 the eval projection. If local assets, loader support, preview rendering,
 metadata, waypoint generation, or map-build proof are unavailable, the source
-still belongs to the next Flow: it should end as a normalized blocked row with a
-specific reason, not as an omitted source or a vague follow-up.
+still belonged to the Flow: it had to end as admitted, normalized blocked, or
+rejected with a specific reason, not as an omitted source or a vague follow-up.
 
-The current source must also be finished:
+The current source was also finished:
 
-- `procthor-10k-val`: raise eval-stress coverage from five admitted samples to
-  ten admitted samples while keeping the operator-console UI set at exactly
-  three default-visible samples.
+- `procthor-10k-val`: eval-stress coverage was raised from five admitted
+  samples to ten admitted samples while keeping the operator-console UI set at
+  exactly three default-visible samples.
 
-Everything else in this plan is also next-Flow development input. The next Flow
-should consume the target-source list, readiness gates, small/full demo shape,
-vertical slices, acceptance criteria, and verification commands below as the
-execution contract. The only acceptable outcomes for a scoped source/candidate
-are admitted, normalized blocked with evidence, or rejected with a stable
-quality/readiness reason.
+Everything else in this plan was also development input. The Flow consumed the
+target-source list, readiness gates, small/full demo shape, vertical slices,
+acceptance criteria, and verification commands below as the execution contract.
+The only acceptable outcomes for a scoped source/candidate were admitted,
+normalized blocked with evidence, or rejected with a stable quality/readiness
+reason.
 
 The plan has a lot of parked-looking information because source admission is
 intentionally evidence-gated. A scene source can be unsupported for several
 different reasons: missing local XML/assets, source loader mismatch, missing
 preview evidence, insufficient public rooms/navigation areas, missing prepared
 category provenance, or missing map-build/actionability proof. Those are not
-separate product ideas; they are the blocker taxonomy the next Flow must either
-resolve or preserve as normalized blocked rows. After the next Flow, every row
-should land in one of these states:
+separate product ideas; they were the blocker taxonomy the Flow had to either
+resolve or preserve as normalized rows. After this Flow, every source has landed
+in one of these states:
 
 - admitted to UI and/or eval projections;
-- blocked with a concrete asset/runtime/metadata/preview/map-build reason;
 - rejected with a stable quality/readiness reason.
 
-Recommended next Flow goal:
+Implemented Flow goal:
 
 ```text
 Implement the remaining MolmoSpaces scene sampler plan: finish ten
@@ -513,6 +572,16 @@ Next Flow implementation slices:
 Everything above is next-Flow implementation scope. Items can finish as either
 admitted samples or normalized blocked rows, but they should not be left as
 unclassified parked information after the next Flow runs.
+
+Post-implementation worklist conclusion:
+
+- No sampler source currently needs manual source prep.
+- No sampler source currently has scanner-ready product-smoke candidates.
+- `ithor` and `holodeck-objaverse-val` should not be scanned again without new
+  human curation because the existing rejected evidence already exhausts the
+  current admission target.
+- Future work, if desired, is a new curation or gate-change plan, not an
+  unfinished download/permission step from this Flow.
 
 Next Flow acceptance:
 

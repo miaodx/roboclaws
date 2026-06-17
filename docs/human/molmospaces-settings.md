@@ -58,18 +58,25 @@ for fast contract checks, but it has no robot camera timeline.
 The operator console uses the source-aware MolmoSpaces sampler for its default
 household scene rail. The visible first-slice UI set is intentionally small:
 `molmospaces/val_0`, `molmospaces/val_2`, and `molmospaces/val_9`, all from
-`scene_source=procthor-10k-val` on the MuJoCo path. Existing launch aliases
-such as `molmospaces/val_1`, `val_3`, `val_4`, `val_5`, and `val_7` remain
-explicitly launchable as `procthor-10k-val` aliases, but they are hidden from
-the default console scene rail unless admitted by the sampler.
+`scene_source=procthor-10k-val` on the MuJoCo path, plus
+`molmospaces/procthor-objaverse-val/0`,
+`molmospaces/procthor-objaverse-val/1`, and
+`molmospaces/procthor-objaverse-val/4` from
+`scene_source=procthor-objaverse-val`. Existing launch aliases such as
+`molmospaces/val_1`, `val_3`, `val_4`, `val_5`, and `val_7` remain explicitly
+launchable as `procthor-10k-val` aliases, but they are hidden from the default
+console scene rail unless admitted by the sampler.
 
 The eval stress projection is broader than the UI projection. It currently
-admits prepared `procthor-10k-val` samples `0`, `2`, `3`, `5`, and `9` and
-records the source as partial because the target remains ten eval-ready samples
-per supported `scene_source`. Other MolmoSpaces sources such as `ithor`,
-`procthor-objaverse-val`, and `holodeck-objaverse-val` are represented as
-blocked sampler/eval rows until local assets, previews, room/category
-provenance, navigation waypoints, and map-build artifacts are prepared.
+admits ten prepared `procthor-10k-val` samples
+(`0`, `2`, `3`, `5`, `9`, `10`, `11`, `12`, `13`, `15`) and ten prepared
+`procthor-objaverse-val` samples (`0`, `1`, `4`, `5`, `7`, `10`, `11`, `12`,
+`13`, `14`). `ithor` and `holodeck-objaverse-val` are rejected exhausted under
+the current public-room/actionability gates, not waiting on an implicit
+download step. `ithor` candidate evidence for indices `1..12` and
+`holodeck-objaverse-val` candidate evidence for indices `0..19` fail with
+`fewer_than_three_public_navigation_areas`, so they should not be scanned again
+without new human curation or an intentional gate change.
 
 `procthor-10k-val` means the `val` split of the `procthor-10k` scene family; it
 does not mean that Roboclaws has ten thousand validation scenes ready. Sampler

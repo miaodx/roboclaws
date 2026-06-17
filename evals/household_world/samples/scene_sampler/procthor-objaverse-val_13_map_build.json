@@ -1,0 +1,62 @@
+{
+  "allowed_agent_engines": [
+    "direct-runner"
+  ],
+  "backend": "mujoco",
+  "camera_labeler": "not_applicable",
+  "evidence_lane": "world-oracle-labels",
+  "goal_contract_hash": "unavailable",
+  "grader_config": {
+    "min_generated_exploration_candidates": 1,
+    "min_public_semantic_anchors": 1,
+    "require_private_truth_absent": true,
+    "require_runtime_metric_map_schema": "runtime_metric_map_v1",
+    "require_source_map_not_mutated": true,
+    "sampler_admission": {
+      "category_manifest": "",
+      "category_provenance": "source_metadata",
+      "generator_version": "2026-06-15.preview-readiness-v1",
+      "room_count": 6,
+      "scene_family": "procthor-objaverse",
+      "scene_index": 13,
+      "scene_source": "procthor-objaverse-val",
+      "scene_split": "val",
+      "schema": "molmospaces_scene_sampler_admission_v1",
+      "waypoint_count": 12
+    }
+  },
+  "intent": "map-build",
+  "launch_overrides": {
+    "agent_engine": "direct-runner",
+    "evidence_lane": "world-oracle-labels",
+    "scenario_setup": "baseline",
+    "scene_index": 13,
+    "scene_source": "procthor-objaverse-val",
+    "seed": 7
+  },
+  "preset": "map-build",
+  "private_goal_reference": {
+    "expected_runtime_metric_map": true,
+    "private_truth_scope": "grader_only",
+    "schema": "household_eval_private_goal_reference_v1"
+  },
+  "prompt": "not_applicable",
+  "provider_profiles": [
+    "not_applicable"
+  ],
+  "required_graders": [
+    "artifacts",
+    "privacy",
+    "trajectory",
+    "sampler_admission",
+    "outcome"
+  ],
+  "sample_id": "scene_sampler.procthor-objaverse-val.13.map_build",
+  "scenario_setup": "baseline",
+  "schema": "roboclaws_eval_sample_v1",
+  "seed": 7,
+  "surface": "household-world",
+  "trial_count": 1,
+  "version": "2026-06-15",
+  "world": "molmospaces/procthor-objaverse-val/13"
+}

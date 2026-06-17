@@ -18,10 +18,11 @@ This file is the unfinished active plan only. Completed work lives in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`.
 
 Checkpoint quality signal from `python scripts/dev/check_python_quality_ratchet.py
---summary --top 30` on 2026-06-15, before later parallel repo changes:
+--summary --top 40` on 2026-06-16, after the latest committed Candidate A
+test-helper slices:
 
-- 19 Ruff complexity violations.
-- 56 oversized modules.
+- 17 Ruff complexity violations.
+- 62 oversized modules.
 - Remaining complexity is test-heavy; remaining file-size debt is split between
   large production modules and large behavior tests.
 
