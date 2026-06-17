@@ -538,12 +538,26 @@ def _default_sdk_run_config_payload() -> dict[str, Any]:
     }
 
 
-def _bool_setting(value: Any, *, default: bool) -> bool:
+def _bool_setting(
+    value: Any,
+    setting_name: str,
+    *,
+    default: bool,
+    empty_uses_default: bool = True,
+) -> bool:
     if value is None:
         return default
     if isinstance(value, bool):
         return value
-    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+    if value == "" and empty_uses_default:
+        return default
+    true_values = {"1", "true", "yes", "on"}
+    false_values = {"0", "false", "no", "off"}
+    if (normalized := str(value).strip().lower()) in true_values | false_values:
+        return normalized in true_values
+    raise ValueError(
+        f"OpenAI Agents SDK setting {setting_name} must be true or false, got {value!r}"
+    )
 
 
 def _positive_int(value: Any, *, default: int) -> int:
@@ -581,15 +595,7 @@ def _cache_tools_list(request: LiveAgentRequest) -> bool:
     if configured is None:
         source = "ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST"
         configured = os.environ.get("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST")
-    if configured is None or isinstance(configured, bool):
-        return True if configured is None else configured
-    true_values = {"1", "true", "yes", "on"}
-    false_values = {"0", "false", "no", "off"}
-    if (value := str(configured).strip().lower()) in true_values | false_values:
-        return value in true_values
-    raise ValueError(
-        f"OpenAI Agents SDK setting {source} must be true or false, got {configured!r}"
-    )
+    return _bool_setting(configured, source, default=True, empty_uses_default=False)
 
 
 def _mcp_client_session_timeout_seconds(request: LiveAgentRequest) -> tuple[bool, float | None]:
@@ -693,7 +699,9 @@ def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, A
         config = metadata.get("model_racing_observability")
     if not isinstance(config, dict):
         config = {}
-    enabled = _bool_setting(config.get("enabled"), default=False)
+    enabled = _bool_setting(
+        config.get("enabled"), "model_racing_observability.enabled", default=False
+    )
     arm_count = _positive_int(config.get("arm_count"), default=1)
     if not enabled:
         arm_count = 1
@@ -724,7 +732,11 @@ def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, A
         ),
         "unknown_loser_billing": True
         if enabled
-        else bool(config.get("unknown_loser_billing", False)),
+        else _bool_setting(
+            config.get("unknown_loser_billing"),
+            "model_racing_observability.unknown_loser_billing",
+            default=False,
+        ),
         "private_artifact_policy": (
             "records model-call arm lifecycle, winner/cancel fields, timing, provider/model ids, "
             "and usage availability only; raw prompts, model text, tool payload bodies, "

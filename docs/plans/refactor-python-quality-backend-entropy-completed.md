@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK model-racing observability boolean config now
+  fails aloud. Direct `model_racing_observability.enabled` and
+  `model_racing_observability.unknown_loser_billing` metadata accept only
+  explicit true/false spellings instead of treating arbitrary non-false strings
+  as enabled. Behavior-change class: fail-aloud OpenAI Agents SDK
+  boolean/profile configuration; omitted values, empty-string defaults, valid
+  true/false values, profile-owned model-racing packets, public launch axes,
+  normalized live-status packets, and event schemas are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules;
+  `openai_agents_live.py` is 1899 lines. Proof: focused OpenAI Agents
+  model-racing/cache-tools runtime tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK model-input compaction boolean config now fails
   aloud. Direct `model_input_compaction.enabled`,
   `raw_fpv_image_memory.enabled`, and `camera_grounded_history.enabled`

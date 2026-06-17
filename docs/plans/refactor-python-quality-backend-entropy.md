@@ -112,6 +112,17 @@ again.
   The ratchet remains 0 complexity rows and 79 oversized modules;
   `live_runtime.py` is 728 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
+  model-racing observability boolean config false-green. Direct
+  `model_racing_observability.enabled` and
+  `model_racing_observability.unknown_loser_billing` metadata now accept only
+  explicit true/false spellings instead of treating arbitrary non-false strings
+  as enabled. Behavior-change class: fail-aloud OpenAI Agents SDK
+  boolean/profile configuration; omitted values, empty-string defaults, valid
+  true/false values, profile-owned model-racing packets, public launch axes,
+  normalized live-status packets, and event schemas are unchanged. The ratchet
+  remains 0 complexity rows and 79 oversized modules;
+  `openai_agents_live.py` is 1899 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
   cache-tools-list boolean config false-green. Direct runtime metadata,
   `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST`, and performance-profile
   resolution now accept only explicit true/false spellings instead of treating
