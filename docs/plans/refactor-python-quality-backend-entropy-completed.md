@@ -61,6 +61,20 @@ logs before choosing the next slice.
   map-bundle contract tests, touched-file ruff and format check, py_compile,
   `git diff --check`, and ratchet.
 
+- 2026-06-18: Runtime Map Prior artifact loading now rejects malformed
+  non-empty prior payloads. `runtime_metric_map_from_prior_artifact()` accepts
+  only raw `runtime_metric_map_v1` payloads or `runtime_map_prior_snapshot_v1`
+  wrappers whose nested runtime map is also `runtime_metric_map_v1`; unknown
+  prior artifact schemas fail with a clear schema error instead of being treated
+  as usable runtime-map evidence. Behavior-change class: fail-aloud runtime
+  artifact/source truth; omitted prior paths, valid raw runtime maps, valid
+  snapshot wrappers, public launch axes, and downstream Runtime Map Prior
+  Snapshot contracts are unchanged. Metric: ratchet remains at 0 complexity rows
+  and 79 oversized modules; `runtime_prior_snapshot.py` is 844 lines and remains
+  a justified warning-band owner. Proof: focused Runtime Map Prior contract
+  tests, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
   default/env validation moved into `openai_agents_perf_profile.py`. Malformed
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct

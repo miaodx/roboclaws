@@ -81,6 +81,17 @@ again.
   metric-map projection, public launch axes, Nav2 bundle artifact schemas, and
   computed geometry expansion clamping are unchanged. The ratchet remains 0
   complexity rows and 79 oversized modules; `rasterize.py` is 268 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one Runtime Map Prior
+  artifact false-green. `runtime_metric_map_from_prior_artifact()` now accepts
+  only raw `runtime_metric_map_v1` payloads or `runtime_map_prior_snapshot_v1`
+  wrappers whose nested runtime map is also `runtime_metric_map_v1`; unknown or
+  malformed non-empty prior artifacts fail with a clear schema error instead of
+  being treated as usable runtime-map evidence. Behavior-change class:
+  fail-aloud runtime artifact/source truth; omitted prior paths, valid raw
+  runtime maps, valid snapshot wrappers, public launch axes, and downstream
+  Runtime Map Prior Snapshot contracts are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules; `runtime_prior_snapshot.py` is 844
+  lines and remains a justified warning-band owner.
 - Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
   runner-side MCP client-session timeout default/env validation into
   `openai_agents_perf_profile.py`. Malformed
