@@ -421,15 +421,17 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   `scripts/maps/render_b1_scene_topdown_diagnostic.py` emits an honest
   `2rd_floor_seperated` diagnostic with `up_axis=z`,
   `horizontal_axes=["x","y"]`, `geometry_status=label_inventory_only`, six
-  partitions, and high-signal label inventory.
+  partitions, and high-signal label inventory. This is not a Gaussian asset
+  topdown and cannot verify map-scene alignment by itself.
 - `scripts/maps/render_b1_map12_correspondence_review.py` now loads the vendor
   Map12 bundle directly from `nav2.yaml` / `occupancy.pgm`, loads the scene
-  topdown diagnostic, and renders a separate two-map picker/export surface. The
-  HTML picker uses a browser-ready `map12_source_map.png` generated into the
-  review output directory while preserving the vendor `occupancy.pgm` as packet
-  provenance. The exported draft manifest contains paired `map_xy` plus
-  `scene_xyz` picks and labels label-inventory scene picks as non-metric review
-  candidates.
+  label-inventory diagnostic, and renders a separate two-map picker/export
+  surface. The HTML picker uses a browser-ready `map12_source_map.png`
+  generated into the review output directory while preserving the vendor
+  `occupancy.pgm` as packet provenance. The exported draft manifest contains
+  paired `map_xy` plus `scene_xyz` candidates and labels label-inventory scene
+  picks as non-metric review candidates that must remain proposed until
+  replaced with reviewed metric scene coordinates.
 - The correspondence fitter, tests, and draft/capsule artifacts use the Z-up
   `x,y` scene projection policy and reject legacy Y-up `x,z` policy for
   accepted-anchor evidence.

@@ -43,8 +43,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_SCENE_DIAGNOSTIC,
         help=(
-            "Optional scene topdown diagnostic packet. When present, the HTML review tool "
-            "shows it beside Map12 and exports paired map_xy plus scene_xyz picks."
+            "Optional scene diagnostic packet. Label-inventory diagnostics are shown beside "
+            "Map12 only as non-metric review context."
         ),
     )
     return parser.parse_args(argv)
@@ -250,6 +250,7 @@ def scene_diagnostic_context(
             "width_px": 0,
             "height_px": 0,
             "geometry_status": "missing",
+            "display_role": "missing_scene_geometry",
             "up_axis": "z",
             "horizontal_axes": ["x", "y"],
             "pixel_to_scene_xyz": {
@@ -266,6 +267,7 @@ def scene_diagnostic_context(
     image_path = local_review_image(source_image_path, output_dir=output_dir)
     size = image_size(source_image_path)
     geometry_status = str(packet.get("geometry_status") or "")
+    is_label_inventory = geometry_status == "label_inventory_only"
     return {
         "status": "available" if image_path.is_file() else "image_missing",
         "path": str(scene_diagnostic_path),
@@ -274,22 +276,27 @@ def scene_diagnostic_context(
         "width_px": size[0],
         "height_px": size[1],
         "geometry_status": geometry_status,
+        "display_role": "label_inventory_not_scene_topdown"
+        if is_label_inventory
+        else "metric_scene_diagnostic",
         "up_axis": str(packet.get("up_axis") or "z"),
         "horizontal_axes": list(packet.get("horizontal_axes") or ["x", "y"]),
         "partition_count": int(packet.get("partition_count") or 0),
         "pixel_to_scene_xyz": {
-            "status": "non_metric" if geometry_status == "label_inventory_only" else "pixel_xy",
-            "source": NON_METRIC_SCENE_PICK_SOURCE
-            if geometry_status == "label_inventory_only"
-            else "scene_topdown_diagnostic_pixel_pick",
+            "status": "non_metric" if is_label_inventory else "pixel_xy",
+            "source": (
+                NON_METRIC_SCENE_PICK_SOURCE
+                if is_label_inventory
+                else "scene_topdown_diagnostic_pixel_pick"
+            ),
             "horizontal_axes": list(packet.get("horizontal_axes") or ["x", "y"]),
             "up_axis": str(packet.get("up_axis") or "z"),
             "z_default": 0.0,
             "note": (
-                "The current scene diagnostic is label-inventory only. Scene clicks export "
-                "image pixel x/y as scene_xyz=[x,y,0] review candidates; a reviewer must "
-                "replace or explicitly accept metric scene coordinates before fitting."
-                if geometry_status == "label_inventory_only"
+                "The right panel is label inventory only, not a Gaussian asset topdown "
+                "or metric scene projection. Do not mark exported anchors accepted until "
+                "scene_xyz is replaced with reviewed metric scene coordinates."
+                if is_label_inventory
                 else "Scene clicks export diagnostic image x/y as scene_xyz=[x,y,0]."
             ),
         },
@@ -579,6 +586,7 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
     scene_policy = (
         scene.get("pixel_to_scene_xyz") if isinstance(scene.get("pixel_to_scene_xyz"), dict) else {}
     )
+    is_non_metric_scene = scene_policy.get("status") == "non_metric"
     map_img = picker_image_html(
         output_dir=output_dir,
         image=map_image,
@@ -589,11 +597,17 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
         output_dir=output_dir,
         image=scene_image,
         image_id="sceneImage",
-        alt="B1 scene topdown diagnostic",
+        alt="B1 scene label inventory diagnostic",
+    )
+    accepted_option = "" if is_non_metric_scene else '<option value="accepted">accepted</option>'
+    status_help = (
+        "Label-inventory scene picks stay proposed until metric scene coordinates are reviewed."
+        if is_non_metric_scene
+        else "Metric scene picks may be accepted after operator review."
     )
     return f"""
   <p>
-    Pick one point on Map12 and one corresponding point on the scene diagnostic,
+    Pick one point on Map12 and one corresponding point on the scene context image,
     then export a draft manifest. Draft anchors default to proposed review status.
   </p>
   <div class="notice">{escape(str(scene_policy.get("note") or ""))}</div>
@@ -607,12 +621,12 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
       <div class="pick-readout" id="mapReadout">No map pick.</div>
     </section>
     <section class="picker-panel">
-      <h3>2rd_floor_seperated Scene Diagnostic</h3>
+      <h3>2rd_floor_seperated Label Inventory</h3>
       <div class="image-stage" id="sceneStage">
         {scene_img}
         <span id="sceneMarker" class="pick-marker scene" hidden></span>
       </div>
-      <div class="pick-readout" id="sceneReadout">No scene pick.</div>
+      <div class="pick-readout" id="sceneReadout">No scene-context pick.</div>
     </section>
   </div>
   <div class="pick-form">
@@ -623,7 +637,7 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
     <label>Status
       <select id="reviewStatus">
         <option value="proposed" selected>proposed</option>
-        <option value="accepted">accepted</option>
+        {accepted_option}
       </select>
     </label>
     <label class="wide">
@@ -635,6 +649,7 @@ def render_picker_section(packet: dict[str, Any], *, output_dir: Path) -> str:
       <button type="button" id="resetButton">Reset Draft</button>
     </div>
   </div>
+  <div class="pick-readout">{escape(status_help)}</div>
   <textarea class="draft-output" id="draftOutput" readonly></textarea>
   <script id="reviewPacketData" type="application/json">{script_json(packet)}</script>
   <script>
@@ -749,7 +764,9 @@ function addDraftAnchor() {
     asset_partition_id: document.getElementById("assetPartitionId").value || "",
     map_xy: currentMapPick.map_xy,
     scene_xyz: currentScenePick.scene_xyz,
-    review_status: document.getElementById("reviewStatus").value || "proposed",
+    review_status: scenePolicy.status === "non_metric"
+      ? "proposed"
+      : document.getElementById("reviewStatus").value || "proposed",
     confidence: null,
     map_coordinate_source: "operator_map_pick",
     scene_coordinate_source: scenePolicy.source || "scene_topdown_diagnostic_pixel_pick",

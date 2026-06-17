@@ -25,6 +25,8 @@ def test_b1_scene_topdown_diagnostic_lists_partitions_and_labels(tmp_path: Path)
     assert packet["up_axis"] == "z"
     assert packet["horizontal_axes"] == ["x", "y"]
     assert packet["geometry_status"] == "label_inventory_only"
+    assert "not a Gaussian asset topdown" in packet["geometry_honesty"]
+    assert "cannot verify map-scene alignment" in packet["geometry_honesty"]
     assert packet["partition_count"] >= 6
     partition_ids = {partition["partition_id"] for partition in packet["partitions"]}
     assert {"meeting_room_a", "meeting_room_b", "meeting_room_c"}.issubset(partition_ids)
@@ -55,4 +57,7 @@ def test_b1_scene_topdown_diagnostic_cli_writes_packet_and_report(tmp_path: Path
     assert summary["status"] == "passed"
     assert summary["geometry_status"] == "label_inventory_only"
     assert (tmp_path / "scene_topdown_diagnostic.html").is_file()
+    html = (tmp_path / "scene_topdown_diagnostic.html").read_text(encoding="utf-8")
+    assert "B1 Scene Label Inventory Diagnostic" in html
+    assert "not a Gaussian asset topdown" in html
     assert packet["validation"]["status"] == "passed"

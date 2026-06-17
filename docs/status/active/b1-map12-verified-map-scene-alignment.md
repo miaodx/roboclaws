@@ -20,8 +20,9 @@ Last proven evidence:
   `scene_topdown_diagnostic.html`, and `scene_topdown_diagnostic.png` with
   `up_axis=z`, `horizontal_axes=["x","y"]`,
   `geometry_status=label_inventory_only`, six scene partitions, 16 high-signal
-  labels, and validation passed. The artifact is honest inventory/topdown
-  evidence, not a geometric projection into Map12.
+  labels, and validation passed. The artifact is honest label-inventory
+  evidence, not a Gaussian asset topdown, not a metric scene projection, and
+  not a geometric projection into Map12.
 - `python scripts/maps/render_b1_map12_label_tool.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --review-manifest assets/maps/b1-map12-alignment-review.json --output-dir output/b1-map12/label-tool`
   writes `output/b1-map12/label-tool/label_tool.html` and
   `label_tool_packet.json`. The HTML editor loads raw Map12 navigation layers,
@@ -34,7 +35,10 @@ Last proven evidence:
   and `correspondence_review_packet.json` with
   `review_status=review_pending`, `accepted_anchor_count=0`, validation
   passed, and the next action to produce at least six accepted anchors with
-  explicit map and scene picks. The picker uses browser-ready
+  explicit map and metric scene picks. The current right panel is label
+  inventory only; it is non-metric context and cannot produce accepted anchors
+  until `scene_xyz` is replaced with reviewed metric scene coordinates. The
+  picker uses browser-ready
   `output/b1-map12/correspondence-review/map12_source_map.png` while preserving
   the vendor `occupancy.pgm` as `source_map.source_image` and using
   `nav2.yaml` origin/resolution for `map_xy` conversion.

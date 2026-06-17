@@ -444,7 +444,11 @@ def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
     assert packet["scene_diagnostic"]["image"].endswith("scene_topdown.png")
     assert Path(packet["scene_diagnostic"]["image"]).is_file()
     assert packet["scene_diagnostic"]["geometry_status"] == "label_inventory_only"
+    assert packet["scene_diagnostic"]["display_role"] == "label_inventory_not_scene_topdown"
     assert packet["scene_diagnostic"]["pixel_to_scene_xyz"]["status"] == "non_metric"
+    assert (
+        "not a Gaussian asset topdown" in packet["scene_diagnostic"]["pixel_to_scene_xyz"]["note"]
+    )
     assert packet["scene_diagnostic"]["pixel_to_scene_xyz"]["up_axis"] == "z"
     assert packet["export_manifest_template"]["scene_projection_policy"] == {
         "horizontal_axes": ["x", "y"],
@@ -490,6 +494,10 @@ def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Pat
     assert "scene_topdown.png" in html
     assert 'id="mapImage"' in html
     assert 'id="sceneImage"' in html
+    assert "2rd_floor_seperated Label Inventory" in html
+    assert "Label-inventory scene picks stay proposed" in html
+    assert '<option value="accepted">accepted</option>' not in html
+    assert 'scenePolicy.status === "non_metric"' in html
     assert "function mapPixelToMapXY" in html
     assert "function scenePixelToSceneXYZ" in html
     assert "function downloadCorrespondenceManifest" in html

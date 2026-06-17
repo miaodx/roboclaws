@@ -108,7 +108,9 @@ def build_scene_topdown_diagnostic(
         "geometry_backend": "scene_partition_label_inventory",
         "geometry_honesty": (
             "No metric USD/mesh bounds were extracted. The PNG is a review inventory "
-            "layout showing partition identities and object label counts, not geometric truth."
+            "layout showing partition identities and object label counts. It is not a "
+            "Gaussian asset topdown, not a metric scene projection, and cannot verify "
+            "map-scene alignment by itself."
         ),
         "topdown_image": str(topdown_path),
         "partition_count": len(partitions),
@@ -208,7 +210,7 @@ def scene_self_consistency(partitions: list[dict[str, Any]]) -> dict[str, Any]:
         "conflicts": conflicts,
         "review_note": (
             "This check proves only inventory consistency. Room-label identity still needs "
-            "operator review against the rendered/topdown diagnostic."
+            "operator review against a rendered or metric topdown when available."
         ),
     }
 
@@ -223,8 +225,12 @@ def render_label_inventory_topdown(
     image = Image.new("RGB", (width, height), color=(248, 250, 252))
     draw = ImageDraw.Draw(image)
     draw.rectangle((18, 18, width - 18, height - 18), outline=(191, 201, 214), width=2)
-    draw.text((34, 30), "2rd_floor_seperated scene diagnostic", fill=(23, 32, 42))
-    draw.text((34, 54), "Z-up, topdown axes x,y. Label inventory only.", fill=(85, 99, 114))
+    draw.text((34, 30), "2rd_floor_seperated label inventory diagnostic", fill=(23, 32, 42))
+    draw.text(
+        (34, 54),
+        "Not Gaussian topdown. Not metric geometry. Labels only.",
+        fill=(85, 99, 114),
+    )
     if not partitions:
         draw.text((34, 92), "No scene partitions found.", fill=(130, 40, 40))
         image.save(path)
@@ -313,7 +319,7 @@ def render_diagnostic_html(packet: dict[str, Any], *, packet_path: Path) -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>B1 Scene Topdown Diagnostic</title>
+  <title>B1 Scene Label Inventory Diagnostic</title>
   <style>
     :root {{ font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #17202a; }}
     body {{ margin: 0; background: #fff; }}
@@ -328,12 +334,12 @@ def render_diagnostic_html(packet: dict[str, Any], *, packet_path: Path) -> str:
 </head>
 <body>
 <main>
-  <h1>B1 Scene Topdown Diagnostic</h1>
+  <h1>B1 Scene Label Inventory Diagnostic</h1>
   <p>Geometry status: <strong>{escape_html(str(packet.get("geometry_status") or ""))}</strong>.
   Up axis: <strong>{escape_html(str(packet.get("up_axis") or ""))}</strong>.
   Horizontal axes: <strong>{axes}</strong>.</p>
   <p>{escape_html(str(packet.get("geometry_honesty") or ""))}</p>
-  <img src="{escape_html(image_name)}" alt="B1 scene topdown diagnostic" />
+  <img src="{escape_html(image_name)}" alt="B1 scene label inventory diagnostic" />
   <table>
     <thead>
       <tr><th>Partition</th><th>Object Labels</th><th>Unique</th><th>High-Signal Labels</th></tr>
