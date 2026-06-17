@@ -571,6 +571,22 @@ files, `git diff --check`, and the ratchet summary. If a selected fallback is
 user-facing launch, env-var, or status behavior, include a contract test proving
 the message/status is visible and the old implicit route no longer starts.
 
+Implementation refresh on 2026-06-18 closed one operator-console provider-env
+false-green. `launch_support.py` now owns provider env override selection,
+application, and public filtering. Readiness and `start_console_run()` resolve a
+single canonical provider profile from the route/override first, force the
+child environment to that same value, reject conflicting
+`ROBOCLAWS_PROVIDER_PROFILE` input, and prevent ambient process or repo `.env`
+provider settings from silently retargeting a selected route. Focused tests
+cover conflicting canonical/env provider input, ambient provider-profile drift,
+and launch-state/child-env consistency. Proof passed with focused
+operator-console provider-profile tests, ruff, format check, py_compile,
+`git diff --check`, and ratchet. The broader
+`tests/unit/operator_console/test_launcher.py` module still has pre-existing
+stale Molmo route IDs (`molmospaces/val_0::...::cleanup`) and fails collection
+against the current route registry; fixing that fixture drift is parked as a
+separate operator-console test maintenance slice.
+
 ### T: Unnecessary Unit-Test Pruning
 
 Severity: P2 by default; P1 only when tests create false confidence for a public

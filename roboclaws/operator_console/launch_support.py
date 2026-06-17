@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
-from roboclaws.agents.provider_registry import provider_route_spec
+from roboclaws.agents.provider_registry import normalize_provider_route, provider_route_spec
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
 
 ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_PROVIDER_PROFILE"}
@@ -28,6 +28,52 @@ def validate_env_overrides(
         raise error_type("provider overrides are only supported for coding-agent routes")
     for key, value in env_overrides.items():
         _validate_env_override(route, key, value, error_type=error_type)
+
+
+def provider_env_overrides_for_route(
+    route: ConsoleLaunchSelection,
+    overrides: dict[str, str],
+    env_overrides: dict[str, str],
+    *,
+    error_type: type[ValueError] = ValueError,
+) -> dict[str, str]:
+    merged = dict(env_overrides)
+    selected_provider = _selected_provider_profile(route, overrides, error_type=error_type)
+    if not selected_provider:
+        return merged
+    env_provider = str(merged.get("ROBOCLAWS_PROVIDER_PROFILE") or "").strip()
+    if env_provider and _normalize_provider_profile(env_provider, error_type) != selected_provider:
+        raise error_type(
+            "conflicting provider profile selection: "
+            f"provider_profile={selected_provider} but "
+            f"ROBOCLAWS_PROVIDER_PROFILE={_normalize_provider_profile(env_provider, error_type)}"
+        )
+    merged["ROBOCLAWS_PROVIDER_PROFILE"] = selected_provider
+    return merged
+
+
+def apply_env_overrides(
+    route: ConsoleLaunchSelection,
+    env_map: dict[str, str],
+    env_overrides: dict[str, str],
+    *,
+    error_type: type[ValueError] = ValueError,
+) -> dict[str, str]:
+    clean = {str(key): str(value) for key, value in env_overrides.items() if str(value) != ""}
+    validate_env_overrides(route, clean, error_type=error_type)
+    merged = dict(env_map)
+    if not clean:
+        return merged
+    merged.update(clean)
+    return merged
+
+
+def public_env_overrides(env_overrides: dict[str, str]) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in env_overrides.items()
+        if key in ALLOWED_ENV_OVERRIDES and str(value) != ""
+    }
 
 
 def _validate_env_override(
@@ -67,9 +113,29 @@ def _validate_provider_override(
         route_spec = None
     if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
         expected = ", ".join(route.to_payload()["supported_provider_profiles"])
-        raise error_type(
-            f"unsupported {provider_label} override: {value}; expected {expected}"
-        )
+        raise error_type(f"unsupported {provider_label} override: {value}; expected {expected}")
+
+
+def _selected_provider_profile(
+    route: ConsoleLaunchSelection,
+    overrides: dict[str, str],
+    *,
+    error_type: type[ValueError],
+) -> str:
+    provider_profile = str(overrides.get("provider_profile") or route.provider_profile or "")
+    if not provider_profile:
+        return ""
+    return _normalize_provider_profile(provider_profile, error_type)
+
+
+def _normalize_provider_profile(
+    provider_profile: str,
+    error_type: type[ValueError],
+) -> str:
+    try:
+        return normalize_provider_route(provider_profile)
+    except KeyError as exc:
+        raise error_type(f"unsupported provider profile override: {provider_profile}") from exc
 
 
 def docker_container_ids_with_mount(

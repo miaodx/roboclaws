@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console provider env override selection moved into the
+  existing `launch_support.py` owner and now fails loudly on conflicting
+  `provider_profile` / `ROBOCLAWS_PROVIDER_PROFILE` input. Readiness and
+  `start_console_run()` resolve one canonical provider profile, apply that same
+  value to the child environment, and keep launch state aligned with the argv
+  provider profile so ambient `.env` values cannot silently retarget a selected
+  route. Metric: `launcher.py` stays below the warning ceiling at 994 lines;
+  ratchet reports 14 complexity rows and 75 oversized modules. Proof: focused
+  provider-profile selection tests, ruff, format check, py_compile,
+  `git diff --check`, and ratchet. Parked: the broader launcher test module has
+  pre-existing stale `molmospaces/val_0` cleanup route constants and should be
+  migrated separately.
+
 - 2026-06-17: Cleanup report Agibot section rendering moved from
   `report.py` into `report_sections_agibot.py`. The new owner covers
   MolmoSpaces Agibot contract rehearsal rendering, Agibot SDK runner rendering,

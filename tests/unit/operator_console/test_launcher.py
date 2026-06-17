@@ -623,7 +623,7 @@ def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path)
         tmp_path,
         get_selection(MUJOCO_CODEX_CLEANUP),
         env={"XM_LLM_API_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "mimo-mify-responses"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-responses"},
     )
 
@@ -636,7 +636,7 @@ def test_provider_gate_allows_explicit_minimax_override_with_mm_key(tmp_path: Pa
         tmp_path,
         get_selection(MUJOCO_CODEX_CLEANUP),
         env={"MM_API_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "minimax-responses"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
     )
 
@@ -652,7 +652,7 @@ def test_provider_gate_blocks_raw_fpv_when_route_image_transport_unknown(tmp_pat
         tmp_path,
         route,
         env={"MM_API_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "minimax-responses"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
     )
 
@@ -668,7 +668,7 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
         tmp_path,
         route,
         env={"MM_API_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "minimax-responses"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "minimax-responses"},
     )
     assert minimax["can_start"] is True
@@ -680,7 +680,7 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
         tmp_path,
         route,
         env={"MIMO_TP_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "mimo-tp-openai-chat"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-tp-openai-chat"},
     )
     assert mimo["can_start"] is True
@@ -692,7 +692,7 @@ def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> Non
         tmp_path,
         route,
         env={"KIMI_API_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "kimi-openai-chat"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "kimi-openai-chat"},
     )
     assert kimi["can_start"] is True
@@ -722,7 +722,7 @@ def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
         tmp_path,
         route,
         env={"XM_LLM_API_KEY": "key"},
-        overrides={"port": _free_port()},
+        overrides={"port": _free_port(), "provider_profile": "mimo-mify-anthropic"},
         env_overrides={"ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-anthropic"},
     )
     assert mify["can_start"] is True
