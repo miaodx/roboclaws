@@ -801,6 +801,145 @@ def test_live_codex_idle_turn_fails_without_continuation(tmp_path: Path, monkeyp
     assert "codex_recoverable_errors" not in runner.live_timing
 
 
+def test_live_codex_explicit_operator_handoff_pauses_without_killing_server(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "live_status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_model="gpt-5.5",
+        codex_provider_summary="codex-env model=gpt-5.5",
+        codex_turn_idle_timeout_s=3.0,
+        kickoff_prompt=("到达第一个 waypoint 点，等待，不要推出，我计划手动调整下位置"),
+        codex_model_arg=[],
+        backend="isaaclab_subprocess",
+        task_surface="household-world",
+        intent="open-ended",
+        skill_name="household-open-task",
+        policy="codex_agent",
+        task="到达第一个 waypoint 点，等待，不要推出，我计划手动调整下位置",
+        min_generated_mess_count="0",
+        profile="world-public-labels",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    calls: list[list[str]] = []
+
+    def fake_prepare_agent_workspace(
+        *, repo_root: Path, run_id: str, skill_name: str, workspace: Path | None = None
+    ):
+        return agent_dir, agent_dir
+
+    def fake_subprocess_run(*_args, **_kwargs):
+        return SimpleNamespace(returncode=0)
+
+    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
+        calls.append(command)
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        stdout_path.write_text(
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "agent_message",
+                        "text": "我现在停止，不调用 done，等待你手动调整位置。",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (agent_dir / "codex-last-message.md").write_text(
+            "我现在停止，不调用 done，等待你手动调整位置。",
+            encoding="utf-8",
+        )
+        return 0
+
+    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
+    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+
+    runner._run_codex()
+
+    assert runner.operator_handoff_active is True
+    assert len(calls) == 1
+    payload = json.loads(args.status_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "paused"
+    assert payload["reason"] == "operator_handoff_requested"
+    assert payload["resume_available"] is True
+    assert "MCP server remains alive" in payload["detail"]
+
+
+def test_live_codex_no_done_without_operator_handoff_still_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "live_status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_model="gpt-5.5",
+        codex_provider_summary="codex-env model=gpt-5.5",
+        kickoff_prompt="找到一瓶水",
+        codex_model_arg=[],
+        backend="molmospaces_subprocess",
+        task_surface="household-world",
+        intent="open-ended",
+        skill_name="household-open-task",
+        policy="codex_agent",
+        task="找到一瓶水",
+        min_generated_mess_count="0",
+        profile="world-public-labels",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+
+    def fake_prepare_agent_workspace(
+        *, repo_root: Path, run_id: str, skill_name: str, workspace: Path | None = None
+    ):
+        return agent_dir, agent_dir
+
+    def fake_subprocess_run(*_args, **_kwargs):
+        return SimpleNamespace(returncode=0)
+
+    def fake_run_and_tee(_command, *, stdout_path, stderr_path, **_kwargs):
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        (agent_dir / "codex-last-message.md").write_text(
+            "我还没有找到目标，先停在这里。",
+            encoding="utf-8",
+        )
+        return 0
+
+    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
+    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+
+    try:
+        runner._run_codex()
+    except RuntimeError as exc:
+        assert str(exc) == "Codex exec ended without done after one live-agent turn"
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected no-done run to fail without explicit handoff")
+
+    assert runner.operator_handoff_active is False
+
+
 def test_live_codex_provider_timing_proxy_rewrites_provider_base_url(
     tmp_path: Path,
     monkeypatch,

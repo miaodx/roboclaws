@@ -847,6 +847,66 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
     assert any(item["label"] == "Operator Interventions" for item in state["artifact_paths"])
 
 
+def test_operator_console_control_endpoint_allows_paused_operator_handoff(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    run_id = "handoff-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "paused",
+                "reason": "operator_handoff_requested",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:19999/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def fake_call_mcp_tool(mcp_url, action, arguments):  # noqa: ANN001, ANN202
+        assert mcp_url == "http://127.0.0.1:19999/mcp"
+        assert action == "observe"
+        assert arguments == {}
+        return {
+            "ok": True,
+            "tool": action,
+            "status": "ok",
+            "visible_object_detections": [],
+        }
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/control",
+            method="POST",
+            data=json.dumps({"action": "observe"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["ok"] is True
+    state = derive_operator_state(tmp_path, run_dir, route)
+    assert state["phase"] == "paused"
+    assert state["controls"]["relative_navigation_control_available"] is True
+    assert state["controls"]["next_goal_available"] is False
+    assert state["latest_operator_control"]["action"] == "observe"
+
+
 def test_operator_console_control_endpoint_rejects_unsupported_route(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_CODEX_MAP_BUILD)
     run_id = "map-build-run"

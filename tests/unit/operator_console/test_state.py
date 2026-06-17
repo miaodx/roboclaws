@@ -834,6 +834,58 @@ def test_state_allows_stop_to_release_lock_for_failed_terminal_run(tmp_path: Pat
     assert state["controls"]["stop_available"] is True
 
 
+def test_state_keeps_manual_control_available_for_paused_handoff_attempt(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0617_1126" / "seed-7"
+    route = get_selection(B1_CODEX_OPEN_TASK)
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+                "mcp_url": "http://127.0.0.1:18788/mcp",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "paused",
+                "reason": "operator_handoff_requested",
+                "resume_available": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "server.pid").write_text("12345\n", encoding="utf-8")
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "response",
+                "tool": "navigate_to_waypoint",
+                "response": {"ok": True, "waypoint_id": "generated_exploration_001"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, route)
+
+    assert state["phase"] == "paused"
+    assert state["status"] == "paused"
+    assert state["terminal_reason"] == "operator_handoff_requested"
+    assert state["latest_action"] == "navigate_to_waypoint"
+    assert state["controls"]["relative_navigation_control_available"] is True
+    assert state["controls"]["next_goal_available"] is False
+
+
 def test_state_summarizes_checker_log_failure_when_structured_diagnostic_missing(
     tmp_path: Path,
 ) -> None:
