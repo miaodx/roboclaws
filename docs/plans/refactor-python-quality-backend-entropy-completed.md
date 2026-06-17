@@ -34,6 +34,14 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: B1 / Map 12 static preview generation no longer carries forward
+  stale Isaac runtime FPV/chase previews when no fresh `--b1-camera-artifact` is
+  supplied. The renderer now removes stale camera preview files and rewrites
+  static map/topdown-only metadata, keeping real camera promotion explicit.
+  Metric: ratchet reports 13 complexity rows and 76 oversized modules. Proof:
+  focused operator-console preview tests, ruff, format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Operator-console route fixtures and scene-sampler stress eval
   artifacts now match the current source-aware MolmoSpaces catalog. The console
   registry no longer exposes legacy default cleanup rows, disabled Claude

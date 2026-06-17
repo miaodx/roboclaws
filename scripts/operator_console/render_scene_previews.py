@@ -350,12 +350,7 @@ def render_b1_map12_preview(
     topdown_path = output_dir / f"{slug}-topdown.png"
     metadata_path = output_dir / f"{slug}-preview.json"
     removed_stale: list[str] = []
-    preserved_camera = (
-        _b1_existing_real_camera_preview_metadata(metadata_path, fpv_path, chase_path)
-        if camera_artifact is None
-        else None
-    )
-    if camera_artifact is None and preserved_camera is None:
+    if camera_artifact is None:
         for stale_path in (fpv_path, chase_path):
             if stale_path.exists():
                 stale_path.unlink()
@@ -366,13 +361,7 @@ def render_b1_map12_preview(
         and topdown_path.exists()
         and metadata_path.exists()
         and (
-            (
-                camera_artifact is None
-                and (
-                    preserved_camera is not None
-                    or _b1_metadata_has_no_camera_previews(metadata_path)
-                )
-            )
+            (camera_artifact is None and _b1_metadata_has_no_camera_previews(metadata_path))
             or (
                 camera_artifact is not None
                 and fpv_path.exists()
@@ -487,14 +476,6 @@ def render_b1_map12_preview(
         metadata["views"]["fpv"] = camera_result["views"]["fpv"]
         metadata["views"]["chase"] = camera_result["views"]["chase"]
         metadata["camera_preview_artifact"] = camera_result["artifact"]
-    elif preserved_camera is not None:
-        metadata["renderer"] = (
-            preserved_camera.get("renderer") or "static_b1_map12_with_isaac_runtime_camera_previews"
-        )
-        metadata["views"]["fpv"] = preserved_camera["views"]["fpv"]
-        metadata["views"]["chase"] = preserved_camera["views"]["chase"]
-        if preserved_camera.get("artifact"):
-            metadata["camera_preview_artifact"] = preserved_camera["artifact"]
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -550,27 +531,6 @@ def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bo
     return str(fpv.get("provenance") or "").startswith("isaac_runtime_") and str(
         chase.get("provenance") or ""
     ).startswith("isaac_runtime_")
-
-
-def _b1_existing_real_camera_preview_metadata(
-    metadata_path: Path,
-    fpv_path: Path,
-    chase_path: Path,
-) -> dict[str, Any] | None:
-    if not fpv_path.is_file() or not chase_path.is_file() or not metadata_path.is_file():
-        return None
-    try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not _b1_metadata_payload_has_real_camera_previews(payload):
-        return None
-    views = payload.get("views") or {}
-    return {
-        "views": {"fpv": dict(views["fpv"]), "chase": dict(views["chase"])},
-        "artifact": dict(payload.get("camera_preview_artifact") or {}),
-        "renderer": str(payload.get("renderer") or ""),
-    }
 
 
 def _promote_b1_camera_previews(

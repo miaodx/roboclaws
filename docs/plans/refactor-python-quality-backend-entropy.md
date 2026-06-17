@@ -596,6 +596,14 @@ now contains 15 generated samples. Proof passed with focused operator-console
 tests, focused eval/model/scene-sampler tests, ruff, format check, py_compile,
 `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 closed one B1 static-preview false-green.
+Static B1 / Map 12 preview generation without `--b1-camera-artifact` now always
+removes stale `b1-map12-fpv.png` / `b1-map12-chase.png` files and rewrites
+map/topdown-only metadata instead of carrying forward a previous Isaac runtime
+camera artifact. Fresh Isaac camera preview promotion remains explicit through
+`--b1-camera-artifact`. Proof passed with focused operator-console preview
+tests, ruff, format check, py_compile, `git diff --check`, and ratchet.
+
 ### T: Unnecessary Unit-Test Pruning
 
 Severity: P2 by default; P1 only when tests create false confidence for a public

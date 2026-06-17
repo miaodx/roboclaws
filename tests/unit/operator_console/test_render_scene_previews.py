@@ -518,6 +518,64 @@ def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
     assert "chase" not in metadata["views"]
 
 
+def test_b1_map12_static_preview_does_not_carry_forward_real_camera_previews(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+    Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
+    Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
+    Image.new("RGB", (16, 16), (120, 130, 140)).save(tmp_path / "b1-map12-fpv.png")
+    Image.new("RGB", (16, 16), (80, 90, 100)).save(tmp_path / "b1-map12-chase.png")
+    metadata_path = tmp_path / "b1-map12-preview.json"
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "schema": PREVIEW_METADATA_SCHEMA,
+                "renderer": "static_b1_map12_with_isaac_runtime_camera_previews",
+                "camera_preview_artifact": {
+                    "path": str(tmp_path / "old-run" / "run_result.json"),
+                    "alignment_transform_source": "reviewed_correspondence_fit",
+                },
+                "views": {
+                    "fpv": {
+                        "path": "b1-map12-fpv.png",
+                        "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
+                    },
+                    "chase": {
+                        "path": "b1-map12-chase.png",
+                        "provenance": "isaac_runtime_report_chase_camera",
+                    },
+                    "map": {"path": "b1-map12-map.png"},
+                    "topdown": {"path": "b1-map12-topdown.png"},
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = render_b1_map12_preview(output_dir=tmp_path, width=320, height=200)
+
+    assert result["status"] == "rendered"
+    assert set(result["removed_stale"]) == {
+        str(tmp_path / "b1-map12-fpv.png"),
+        str(tmp_path / "b1-map12-chase.png"),
+    }
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
+    assert "camera_preview_artifact" not in metadata
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
+
+
 def _patch_b1_preview_inputs(
     render_scene_previews,
     monkeypatch,
