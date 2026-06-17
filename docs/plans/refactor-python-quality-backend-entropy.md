@@ -101,6 +101,16 @@ again.
   disable, Codex live-run commands, public launch axes, live-status packets,
   and report artifacts are unchanged. The ratchet remains 0 complexity rows and
   79 oversized modules; `run_live_codex_cleanup.py` is 1250 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one live-eval
+  timeout-completion-grace env false-green. `live_timeout_completion_grace_s()`
+  now rejects malformed, non-finite, or negative
+  `ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S` values instead of silently
+  reusing the 30s default. Behavior-change class: fail-aloud eval runner
+  configuration; omitted env values, valid non-negative grace overrides
+  including zero, detached live-run polling, `live_eval_command.json` records,
+  public launch axes, live-status packets, and product artifacts are unchanged.
+  The ratchet remains 0 complexity rows and 79 oversized modules;
+  `live_runtime.py` is 728 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one visual-grounding
   real-sidecar runtime-parameter false-green. Explicit request/runtime and env
   knobs for Grounding DINO, YOLO, OmDet-Turbo, and sidecar candidate limits now

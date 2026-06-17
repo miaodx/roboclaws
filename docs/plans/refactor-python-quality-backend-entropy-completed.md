@@ -85,6 +85,18 @@ logs before choosing the next slice.
   live-report unit test, touched-file ruff and format check, py_compile,
   `git diff --check`, and ratchet.
 
+- 2026-06-18: Live-eval timeout-completion-grace env overrides now fail aloud.
+  `live_timeout_completion_grace_s()` rejects malformed, non-finite, or
+  negative `ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S` values instead of
+  silently reusing the 30s default. Behavior-change class: fail-aloud eval
+  runner configuration; omitted env values, valid non-negative grace overrides
+  including zero, detached live-run polling, `live_eval_command.json` records,
+  public launch axes, live-status packets, and product artifacts are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `live_runtime.py` is 728 lines. Proof: focused eval live-runtime unit tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: Visual-grounding real sidecar runtime-parameter parsing now fails
   aloud. Explicit request/runtime and env knobs for Grounding DINO, YOLO,
   OmDet-Turbo, and sidecar candidate limits reject malformed,

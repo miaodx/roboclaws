@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -452,10 +453,21 @@ def live_timeout_completion_grace_s() -> float:
     raw = str(os.environ.get("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S") or "").strip()
     if not raw:
         return DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S
+    return _non_negative_timeout_value(raw, "ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S")
+
+
+def _non_negative_timeout_value(value: object, setting_name: str) -> float:
     try:
-        return max(float(raw), 0.0)
-    except ValueError:
-        return DEFAULT_LIVE_TIMEOUT_COMPLETION_GRACE_S
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed < 0:
+        raise ValueError(
+            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
+        )
+    return parsed
 
 
 def live_product_run_kwargs(

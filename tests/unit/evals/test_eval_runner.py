@@ -339,6 +339,35 @@ def test_live_surface_product_recovers_completed_artifact_after_timeout(
     assert record["timeout_completion_grace_s"] == 30.0
 
 
+def test_live_timeout_completion_grace_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    from roboclaws.evals import live_runtime
+
+    monkeypatch.delenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", raising=False)
+    assert live_runtime.live_timeout_completion_grace_s() == 30.0
+
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "0")
+    assert live_runtime.live_timeout_completion_grace_s() == 0.0
+
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "7.5")
+    assert live_runtime.live_timeout_completion_grace_s() == 7.5
+
+
+@pytest.mark.parametrize("value", ["bad", "nan", "inf", "-1"])
+def test_live_timeout_completion_grace_rejects_invalid_env(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", value)
+
+    with pytest.raises(
+        ValueError,
+        match=r"ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S must be a non-negative finite",
+    ):
+        live_runtime.live_timeout_completion_grace_s()
+
+
 def test_live_surface_product_recovers_after_detached_wait_deadline(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
