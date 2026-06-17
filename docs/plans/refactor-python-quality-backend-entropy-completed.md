@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: B1 preview cache/stale policy moved out of
+  `render_b1_map12_preview()` into focused helpers for stale camera-preview
+  deletion and `--skip-existing` eligibility. Runtime bundle compilation,
+  static map/topdown rendering, and camera promotion remain in the main
+  renderer. Behavior-change class: internal cleanup. Metric: ratchet reports
+  12 complexity rows and 77 oversized modules; `render_scene_previews.py`
+  remains oversized at 1335 lines, but the `render_b1_map12_preview()` C901 row
+  is cleared. Proof: focused operator-console preview/static tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 / Map 12 `--skip-existing --b1-camera-artifact <path>` now
   skips only when existing preview metadata records real Isaac camera previews
   from the same requested artifact path. Stale camera previews from a different

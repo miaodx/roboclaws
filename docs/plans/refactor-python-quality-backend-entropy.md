@@ -612,6 +612,15 @@ the requested artifact instead of being treated as current. Proof passed with
 focused operator-console preview tests, ruff, format check, py_compile,
 `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 split B1 preview cache/stale policy out of
+`render_b1_map12_preview()`. The renderer now delegates stale camera-preview
+deletion and `--skip-existing` eligibility to focused helpers, while keeping
+runtime bundle compilation, static map/topdown rendering, and camera promotion
+in the main renderer. Behavior is unchanged; the C901 row for
+`render_b1_map12_preview()` is cleared. Proof passed with focused
+operator-console preview/static tests, ruff, format check, py_compile,
+`git diff --check`, and ratchet.
+
 ### T: Unnecessary Unit-Test Pruning
 
 Severity: P2 by default; P1 only when tests create false confidence for a public

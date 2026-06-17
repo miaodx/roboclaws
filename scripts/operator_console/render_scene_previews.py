@@ -349,44 +349,26 @@ def render_b1_map12_preview(
     chase_path = output_dir / f"{slug}-chase.png"
     topdown_path = output_dir / f"{slug}-topdown.png"
     metadata_path = output_dir / f"{slug}-preview.json"
-    removed_stale: list[str] = []
-    if camera_artifact is None:
-        for stale_path in (fpv_path, chase_path):
-            if stale_path.exists():
-                stale_path.unlink()
-                removed_stale.append(str(stale_path))
-    if (
-        skip_existing
-        and map_path.exists()
-        and topdown_path.exists()
-        and metadata_path.exists()
-        and (
-            (camera_artifact is None and _b1_metadata_has_no_camera_previews(metadata_path))
-            or (
-                camera_artifact is not None
-                and fpv_path.exists()
-                and chase_path.exists()
-                and _b1_metadata_has_real_camera_previews(
-                    metadata_path,
-                    camera_artifact=camera_artifact,
-                )
-            )
+    removed_stale = _remove_stale_b1_camera_previews(
+        camera_artifact=camera_artifact,
+        fpv_path=fpv_path,
+        chase_path=chase_path,
+    )
+    skip_result = (
+        _b1_preview_skip_result(
+            camera_artifact=camera_artifact,
+            fpv_path=fpv_path,
+            map_path=map_path,
+            chase_path=chase_path,
+            topdown_path=topdown_path,
+            metadata_path=metadata_path,
+            removed_stale=removed_stale,
         )
-    ):
-        return {
-            "world_id": B1_MAP12_WORLD_ID,
-            "scene_source": "b1-gaussian-digital-twin",
-            "status": "skipped",
-            **(
-                {"fpv": str(fpv_path), "chase": str(chase_path)}
-                if camera_artifact is not None
-                else {}
-            ),
-            "map": str(map_path),
-            "topdown": str(topdown_path),
-            "metadata": str(metadata_path),
-            "removed_stale": removed_stale,
-        }
+        if skip_existing
+        else None
+    )
+    if skip_result is not None:
+        return skip_result
 
     raw_map_bundle = B1_MAP_BUNDLE_DIR
     if not raw_map_bundle.is_dir():
@@ -502,6 +484,59 @@ def render_b1_map12_preview(
             }
         )
     return result
+
+
+def _remove_stale_b1_camera_previews(
+    *,
+    camera_artifact: Path | None,
+    fpv_path: Path,
+    chase_path: Path,
+) -> list[str]:
+    if camera_artifact is not None:
+        return []
+    removed_stale: list[str] = []
+    for stale_path in (fpv_path, chase_path):
+        if stale_path.exists():
+            stale_path.unlink()
+            removed_stale.append(str(stale_path))
+    return removed_stale
+
+
+def _b1_preview_skip_result(
+    *,
+    camera_artifact: Path | None,
+    fpv_path: Path,
+    map_path: Path,
+    chase_path: Path,
+    topdown_path: Path,
+    metadata_path: Path,
+    removed_stale: list[str],
+) -> dict[str, Any] | None:
+    if not (map_path.exists() and topdown_path.exists() and metadata_path.exists()):
+        return None
+    if camera_artifact is None:
+        can_skip = _b1_metadata_has_no_camera_previews(metadata_path)
+    else:
+        can_skip = (
+            fpv_path.exists()
+            and chase_path.exists()
+            and _b1_metadata_has_real_camera_previews(
+                metadata_path,
+                camera_artifact=camera_artifact,
+            )
+        )
+    if not can_skip:
+        return None
+    return {
+        "world_id": B1_MAP12_WORLD_ID,
+        "scene_source": "b1-gaussian-digital-twin",
+        "status": "skipped",
+        **({"fpv": str(fpv_path), "chase": str(chase_path)} if camera_artifact is not None else {}),
+        "map": str(map_path),
+        "topdown": str(topdown_path),
+        "metadata": str(metadata_path),
+        "removed_stale": removed_stale,
+    }
 
 
 def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
