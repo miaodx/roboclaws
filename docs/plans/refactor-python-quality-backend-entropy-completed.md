@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Live-eval detached-route polling moved early completion checks,
+  timeout normalization/deadline calculation, per-poll completion handling, and
+  post-deadline artifact recovery out of `wait_for_live_surface_completion()`
+  into focused helpers. Behavior-change class: internal cleanup; live surface
+  commands, artifact discovery, timeout/grace behavior, and `live_status.json`
+  semantics are unchanged. Metric: ratchet reports 7 complexity rows and 77
+  oversized modules, and `live_runtime.py::wait_for_live_surface_completion`
+  dropped from the complexity list. Proof: focused eval-runner tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Provider-registry CLI dispatch moved parser setup, JSON payload
   construction/write, route text output, and supports-engine exit-code handling
   out of `_main()` into focused helpers. Behavior-change class: internal

@@ -66,8 +66,16 @@ again.
   route semantics, env precedence, public profile names, command names, and model
   metadata are unchanged. The ratchet reports 8 complexity rows and 77 oversized
   modules; `provider_registry.py::_main` is cleared from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split live-eval detached-route
+  polling out of `wait_for_live_surface_completion()` into focused helpers for
+  early completion, timeout normalization/deadline calculation, poll completion,
+  and post-deadline recovery. Behavior-change class: internal cleanup; live
+  surface commands, artifact discovery, timeout/grace behavior, and
+  `live_status.json` semantics are unchanged. The ratchet reports 7 complexity
+  rows and 77 oversized modules; `live_runtime.py::wait_for_live_surface_completion`
+  is cleared from the complexity list.
 
-- 8 Ruff complexity violations and 77 oversized modules remain.
+- 7 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -127,10 +135,10 @@ again.
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
-  operator-console tests, a cleanup checker helper, live eval polling, MCP
-  semantic tool registration, prompt preview, and eval-harness blockers. They
-  should not hide while a file-size slice improves, but they are not the default
-  next P1 unless the active product focus changes.
+  operator-console tests, a cleanup checker helper, MCP semantic tool
+  registration, prompt preview, and eval-harness blockers. They should not hide
+  while a file-size slice improves, but they are not the default next P1 unless
+  the active product focus changes.
 
 Current closure snapshot:
 
@@ -1029,7 +1037,9 @@ be claimed without an explicit local run.
   validation helper families; MolmoSpaces robot-map projection, room, focus,
   object, trajectory, heading, and legend drawing helpers in
   `molmospaces_room_map.py`; provider-registry CLI parser, JSON output,
-  route-text, and supports-engine dispatch helpers in `provider_registry.py`.
+  route-text, and supports-engine dispatch helpers in `provider_registry.py`;
+  live-eval detached-route early-completion, timeout, poll-completion, and
+  post-deadline recovery helpers in `live_runtime.py`.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad

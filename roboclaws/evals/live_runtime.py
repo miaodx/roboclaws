@@ -324,12 +324,7 @@ def wait_for_live_surface_completion(
 ) -> Path:
     """Wait for a detached live product route to finish when the route returns early."""
 
-    if (
-        (effective_run_dir / "run_result.json").is_file()
-        and not allow_open_ended_checker_failure
-    ):
-        return effective_run_dir
-    if _live_surface_run_is_terminal(
+    if _live_surface_already_complete(
         effective_run_dir,
         allow_open_ended_checker_failure=allow_open_ended_checker_failure,
     ):
@@ -337,32 +332,81 @@ def wait_for_live_surface_completion(
     if not _live_surface_route_can_detach(kwargs):
         return effective_run_dir
 
-    timeout_s = kwargs.get("live_timeout_s")
-    if timeout_s is None:
-        timeout_s = DEFAULT_DETACHED_LIVE_TIMEOUT_S
-    remaining_s = max(float(timeout_s) - max(elapsed_s, 0.0), 0.0)
-    deadline = time.monotonic() + remaining_s
+    timeout_s = live_surface_timeout_s(kwargs)
+    deadline = _live_surface_wait_deadline(timeout_s=timeout_s, elapsed_s=elapsed_s)
     while time.monotonic() <= deadline:
         effective_run_dir = discover_live_surface_run_dir(
             kwargs,
             output_dir=output_dir,
             fallback_run_dir=effective_run_dir,
         )
-        if (effective_run_dir / "run_result.json").is_file():
-            status = _load_json(effective_run_dir / "live_status.json")
-            if status and status.get("exit_status") in {0}:
-                return effective_run_dir
-            if _live_surface_run_is_terminal(
-                effective_run_dir,
-                allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-            ):
-                return effective_run_dir
-        elif _live_surface_run_is_terminal(
+        if _live_surface_poll_completed(
             effective_run_dir,
             allow_open_ended_checker_failure=allow_open_ended_checker_failure,
         ):
             return effective_run_dir
         time.sleep(max(poll_s, 0.05))
+    return _recover_live_surface_after_wait_timeout(
+        kwargs,
+        output_dir=output_dir,
+        effective_run_dir=effective_run_dir,
+        poll_s=poll_s,
+        timeout_s=timeout_s,
+    )
+
+
+def _live_surface_already_complete(
+    effective_run_dir: Path,
+    *,
+    allow_open_ended_checker_failure: bool,
+) -> bool:
+    return (
+        (effective_run_dir / "run_result.json").is_file() and not allow_open_ended_checker_failure
+    ) or _live_surface_run_is_terminal(
+        effective_run_dir,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+    )
+
+
+def live_surface_timeout_s(kwargs: dict[str, Any]) -> float:
+    timeout_s = kwargs.get("live_timeout_s")
+    if timeout_s is None:
+        return DEFAULT_DETACHED_LIVE_TIMEOUT_S
+    return float(timeout_s)
+
+
+def _live_surface_wait_deadline(*, timeout_s: float, elapsed_s: float) -> float:
+    remaining_s = max(timeout_s - max(elapsed_s, 0.0), 0.0)
+    return time.monotonic() + remaining_s
+
+
+def _live_surface_poll_completed(
+    effective_run_dir: Path,
+    *,
+    allow_open_ended_checker_failure: bool,
+) -> bool:
+    if not (effective_run_dir / "run_result.json").is_file():
+        return _live_surface_run_is_terminal(
+            effective_run_dir,
+            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        )
+    status = _load_json(effective_run_dir / "live_status.json")
+    if status and status.get("exit_status") in {0}:
+        return True
+    return _live_surface_run_is_terminal(
+        effective_run_dir,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+    )
+
+
+def _recover_live_surface_after_wait_timeout(
+    kwargs: dict[str, Any],
+    *,
+    output_dir: Path,
+    effective_run_dir: Path,
+    poll_s: float,
+    timeout_s: float,
+) -> Path:
     effective_run_dir = wait_for_timed_out_live_surface_artifact(
         kwargs,
         output_dir=output_dir,
