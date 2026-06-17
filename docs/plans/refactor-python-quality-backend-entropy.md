@@ -28,6 +28,14 @@ ambiguous provider/model/key/base-url combinations instead of silently selecting
 another route or developer fallback. Execute these as dedicated slices before
 returning to hard-ceiling owner splits.
 
+Planning update on 2026-06-17: unnecessary unit-test cleanup is also in scope,
+but it must run through `$intuitive-tests` audit/propose before deleting tests.
+The suite already has `unit` / `contract` / `integration` layers and strict
+markers, so the next test cleanup should be pruning-first rather than
+layout-first: remove, merge, or reclassify low-signal unit tests that assert
+implementation shape, copied constants, private-call choreography, file/path
+trivia, or registration metadata without caller-visible behavior.
+
 Refreshed quality signal from `python scripts/dev/check_python_quality_ratchet.py
 --summary --top 80` on 2026-06-17 after the OpenAI Agents SDK model-input
 compaction owner split. Treat this as the planning snapshot for the next slice;
@@ -176,6 +184,11 @@ lane/workflow wording.
 - Complexity target: production/shared code trends toward zero ratcheted Ruff
   complexity rows. Test complexity is reduced through fixture builders, data
   factories, behavior-focused split tests, and shared assertions.
+- Unit-test cleanup rule: existing unit tests are not grandfathered in. Keep
+  tests that prove project logic, caller-visible behavior, meaningful failure
+  modes, public contracts, or known regressions; delete, merge, or reclassify
+  tests that only assert static shape, duplicated constants, file names, import
+  paths, private helper calls, or implementation layout.
 - Line-count relief is evidence, not the goal. Prefer concept reduction:
   delete stale surfaces, merge duplicate concepts, move behavior to existing
   owners, or create a new owner only around a named ownership boundary. Preserve
@@ -233,6 +246,25 @@ longer the default next P1 unless the planner probe runner crosses 2000 lines
 again or the task-sampler owner reveals a second real owner with call-site
 evidence.
 
+Dedicated `$intuitive-tests` prompt for the next UT cleanup run:
+
+```text
+Audit Roboclaws unit tests for unnecessary coverage before deleting anything.
+Selected mode: Audit / propose first, then Prune / consolidate after the slice
+is accepted. The suite already has unit/contract/integration layers, strict
+pytest markers, and auto-marking from tests/conftest.py; do not start with a
+layout or marker migration. Inventory the selected domain's unit tests, map each
+candidate to the behavior/contract/regression it protects, and classify it as
+keep, merge, delete, or reclassify. Delete or merge tests that only assert
+dataclass mechanics, copied constants, static registry/config metadata,
+file/path/name trivia, import locations, private helper call choreography, or
+stale implementation layout. Preserve the last meaningful proof of parser
+behavior, validation, safety defaults, fail-aloud errors, public CLI/report/MCP
+contracts, artifact schemas, provider route semantics, and known regressions.
+Run only focused collection/tests for the accepted domain plus git diff check;
+do not broaden into production refactors or unrelated test layout churn.
+```
+
 Recommended next slice claim:
 
 - Slice: choose one owner-boundary P1. Default order after this slice is:
@@ -240,8 +272,11 @@ Recommended next slice claim:
   SDK performance-profile/default resolution, Candidate D timing/timeline
   summary only as a separate follow-up if D remains the best frontier,
   Candidate B scene-camera / visual-parity summary ownership, then Candidate A
-  only with new facade-private/report evidence. Choose by fresh call-site
-  evidence, not file size alone.
+  only with new facade-private/report evidence. Candidate T unit-test pruning
+  is a valid separate P2 slice when production P1 work is paused or when the
+  selected production slice leaves duplicated/low-signal tests directly in its
+  touched scope. Choose by fresh call-site and test-value evidence, not file
+  size alone.
 - Owner layer: MCP Capability Contract And Tools for Candidate A; Artifacts,
   reports, and eval suites for Candidates B/C; Agent Engines And Provider
   Profiles plus Thin Runtime / Server Adapters for Candidate D and provider/env
@@ -395,6 +430,62 @@ Proof should include focused tests for the selected owner plus `ruff` on touched
 files, `git diff --check`, and the ratchet summary. If a selected fallback is
 user-facing launch, env-var, or status behavior, include a contract test proving
 the message/status is visible and the old implicit route no longer starts.
+
+### T: Unnecessary Unit-Test Pruning
+
+Severity: P2 by default; P1 only when tests create false confidence for a public
+route, block safe refactors through private implementation coupling, or preserve
+obsolete behavior that conflicts with the current launch/profile/MCP contract.
+Route through `$intuitive-tests`, selected mode Audit / propose before any
+deletion. Current inventory: `tests/` already uses layer-first folders, strict
+pytest markers, and auto-marking; the next slice should be pruning-first or
+fixture/factory-first, not marker-first or layout-first.
+
+Owning architecture layer depends on the selected test domain. Unit tests should
+prove behavior in the code owner they exercise. Contract tests should remain
+only for public schemas, CLI/recipe shapes, MCP tools, reports, replay/artifact
+compatibility, provider route contracts, and documented compatibility promises.
+
+Audit prompts for the implementation slice:
+
+- Pick one domain first, for example provider/env route tests, operator-console
+  tests, eval-harness tests, Molmo cleanup worker tests, or report tests. Do not
+  prune the whole suite in one pass.
+- For each candidate unit test, answer: would a real project bug fail it; would
+  a harmless refactor fail it; is it already covered by a stronger behavior,
+  contract, or regression test; and does it protect a public API/artifact or only
+  implementation shape?
+- Classify each candidate as keep, merge, delete, or reclassify. Do not delete
+  the last proof of parsing, validation, state transition, fail-aloud behavior,
+  safety default, artifact schema, public command, provider route semantics, or
+  known regression.
+- Delete tests that only assert dataclass field storage, copied constants,
+  import paths, module locations, file existence, directory listings,
+  registration-table membership, decorator/marker presence, mocked private calls
+  without user-visible effect, or stale private helper layout.
+- Merge one-field-at-a-time tests into behavior tests when that improves
+  diagnosis and keeps the public behavior obvious.
+- Reclassify file/artifact/CLI/recipe checks as contract tests only when the
+  runtime, packaging, public docs, or artifact compatibility actually depends on
+  them.
+
+Good first families:
+
+- Provider/env tests that duplicate constants or assert route tables without
+  exercising canonical resolution, readiness failure, or visible diagnostics.
+- Operator-console tests that assert static DOM/route wiring without exercising
+  launch readiness, redaction, locks, status transitions, or artifact links.
+- Eval-harness selector/model tests that duplicate manifest keys one field at a
+  time instead of proving selected rows, blockers, promotion packets, or result
+  contracts.
+- Molmo cleanup worker/report tests that assert helper shape, static file names,
+  or copied fixture metadata already covered by contract/report tests.
+
+Proof should include `git diff --check`, focused collection for the selected
+test domain, and the smallest behavior/contract test command that proves the
+remaining coverage. Use `./scripts/dev/run_pytest_standalone.sh <tests> -q`.
+Report kept/merged/deleted/reclassified counts in the slice summary. Do not
+claim product behavior proof from pruning tests alone.
 
 ### A: Contract And Report Hard-Ceiling Split
 
@@ -676,6 +767,9 @@ be claimed without an explicit local run.
 - Fail-aloud cleanup changes: include at least one regression test where the
   old path would silently fabricate or substitute data, and the new path raises
   a clear error or returns an explicit blocked/unavailable packet.
+- Unit-test pruning changes: run focused collection and the selected domain's
+  remaining behavior/contract tests; include a short keep/merge/delete/
+  reclassify report. Deleting tests is not proof that behavior still works.
 - Changed-code review: after implementation, run `$intuitive-refactor`
   changed-code review on the changed scope before final verification when the
   slice is not docs-only.
@@ -694,6 +788,9 @@ Stop this cleanup stream when:
 - Production/shared Ruff complexity rows are at or near zero.
 - Remaining test complexity is fixture-builder debt with clear ownership, not
   one-off long test bodies.
+- Low-signal unit tests in the accepted domains have been deleted, merged, or
+  reclassified, and the remaining unit tests protect behavior/failure modes
+  rather than static implementation shape.
 - Backend id, runtime metadata, artifacts, and evidence attachments use common
   surfaces instead of repeated concrete-class or `backend == ...` branching.
 - Silent fallback families that can create false confidence are either removed,
