@@ -49,6 +49,15 @@
             Agent engine
             <select id="agent-engine-input" name="agent_engine"></select>
           </label>
+          <div id="provider-profile-fields" class="route-fields" hidden>
+          <label>
+            Provider profile
+            <select id="provider-profile-input" name="provider_profile"></select>
+          </label>
+          <div class="prompt-copy" id="provider-profile-help">
+            Provider profiles are resolved through the selected agent engine.
+          </div>
+          </div>
           <label>
             Evidence lane
             <select id="evidence-lane-input" name="evidence_lane"></select>
@@ -94,15 +103,6 @@
             Agent port
             <input id="port-input" name="port" value="18788" />
           </label>
-          </div>
-          <div id="provider-profile-fields" class="route-fields" hidden>
-          <label>
-            Provider profile
-            <select id="provider-profile-input" name="provider_profile"></select>
-          </label>
-          <div class="prompt-copy" id="provider-profile-help">
-            Provider profiles are resolved through the selected agent engine.
-          </div>
           </div>
           <div id="agibot-fields" class="route-fields" hidden>
           <label>

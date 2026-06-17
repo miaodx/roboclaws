@@ -233,6 +233,34 @@ def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blockin
     assert "Backend lock is held" in readiness["blocker"]
 
 
+def test_console_readiness_uses_provider_profile_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        overrides={"port": _free_port(), "provider_profile": "mify"},
+        env={"XM_LLM_API_KEY": "key"},
+    )
+
+    assert readiness["can_start"] is True
+    assert readiness["provider"]["provider"] == "mify"
+    assert readiness["provider"]["model"] == "xiaomi/mimo-v2.5"
+
+
+def test_console_readiness_uses_claude_provider_profile_override(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CLAUDE_CLEANUP)
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        overrides={"port": _free_port(), "provider_profile": "kimi-anthropic"},
+        env={"KIMI_API_KEY": "key"},
+    )
+
+    assert readiness["can_start"] is True
+    assert readiness["provider"]["provider"] == "kimi-anthropic"
+    assert readiness["provider"]["model"] == "kimi-k2.6"
+
+
 def test_resource_lock_prevents_conflicting_starts(tmp_path: Path) -> None:
     lock = ResourceLock(tmp_path, "molmospaces_mujoco")
     first = lock.acquire(run_id="run-a", pid=os.getpid())

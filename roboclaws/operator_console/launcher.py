@@ -353,8 +353,9 @@ def route_readiness(
             "gates": [],
         }
 
-    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
+    env_override_map = _provider_env_overrides_for_route(route, override_map, env_overrides or {})
+    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_override_map)
     gate_map = gates or {}
     if runtime_tasks is None:
         _, port = requested_mcp_endpoint(override_map)
@@ -550,6 +551,22 @@ def _normalized_launch_overrides(
 
 def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[str, str]) -> None:
     validate_env_overrides(route, env_overrides, error_type=ConsoleLaunchError)
+
+
+def _provider_env_overrides_for_route(
+    route: ConsoleLaunchSelection,
+    overrides: dict[str, str],
+    env_overrides: dict[str, str],
+) -> dict[str, str]:
+    merged = dict(env_overrides)
+    provider_profile = str(overrides.get("provider_profile") or "")
+    if not provider_profile:
+        return merged
+    if route.agent_engine_id in {"codex-cli", "openai-agents-sdk"}:
+        merged.setdefault("ROBOCLAWS_CODEX_PROVIDER", provider_profile)
+    elif route.agent_engine_id == "claude-code":
+        merged.setdefault("ROBOCLAWS_CLAUDE_PROVIDER", provider_profile)
+    return merged
 
 
 def _apply_env_overrides(

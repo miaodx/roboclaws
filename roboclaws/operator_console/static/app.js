@@ -763,6 +763,8 @@ function renderProviderProfileOptions(route) {
   if (!route || !route.provider_profile) {
     els.providerProfileFields.hidden = true;
     els.providerProfileInput.innerHTML = "";
+    els.providerProfileHelp.textContent =
+      "Provider profiles are resolved through the selected agent engine.";
     return;
   }
   els.providerProfileFields.hidden = false;
@@ -774,11 +776,19 @@ function renderProviderProfileOptions(route) {
           .map((item) => item.provider_profile)
           .filter(Boolean)
       )];
+  const current = els.providerProfileInput.value || "";
+  const selected = profiles.includes(current)
+    ? current
+    : route.provider_profile || route.default_provider_profile || profiles[0] || "";
   renderSelectOptions(
     els.providerProfileInput,
     profiles.map((profile) => ({ value: profile, label: profile })),
-    route.provider_profile
+    selected
   );
+  const providerRoute = selectedProviderRoute(route);
+  els.providerProfileHelp.textContent = providerRoute
+    ? `${providerRoute.label}; default model ${providerRoute.default_model_id}.`
+    : "Provider profiles are resolved through the selected agent engine.";
 }
 
 function renderOperatorInput(route) {
@@ -989,7 +999,7 @@ function renderIntentSelector(route) {
 
 function commandPreview(route) {
   const selected = selectedIntentForRoute(route);
-  const parts = [...(route.argv_preview || route.command_preview || [])];
+  let parts = [...(route.argv_preview || route.command_preview || [])];
   if (!parts.length) {
     return "Route unavailable.";
   }
@@ -997,11 +1007,21 @@ function commandPreview(route) {
   if (intentIndex >= 0) {
     parts[intentIndex] = `intent=${selected}`;
   }
+  const providerProfile = selectedProviderProfile();
+  if (providerProfile) {
+    parts = withProviderProfile(parts, providerProfile);
+  }
   const prompt = effectiveLaunchPromptText(route);
   if (route.supports_prompt && prompt) {
     parts.push(`prompt=${prompt}`);
   }
   return commandPartsWithSetup(parts).join(" ");
+}
+
+function withProviderProfile(parts, providerProfile) {
+  const next = withoutKeys(parts, ["provider_profile"]);
+  next.push(`provider_profile=${providerProfile}`);
+  return next;
 }
 
 function commandPartsWithSetup(parts) {
@@ -2285,6 +2305,14 @@ function selectedClaudeProvider() {
 
 function selectedProviderProfile() {
   return (els.providerProfileInput && els.providerProfileInput.value) || "";
+}
+
+function selectedProviderRoute(route = state.selectedRoute) {
+  const providerProfile = selectedProviderProfile();
+  if (!providerProfile || !route || !Array.isArray(route.provider_routes)) {
+    return null;
+  }
+  return route.provider_routes.find((item) => item.provider_profile === providerProfile) || null;
 }
 
 function selectedClaudeProviderLabel() {
