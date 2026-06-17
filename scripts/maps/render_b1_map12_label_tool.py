@@ -944,11 +944,7 @@ def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
             POLYGON_ROLES,
             POLYGON_ROLE_NAVIGATION_AREA,
         ),
-        "geometry_source": _valid_or_default(
-            str(shape.get("geometry_source") or ""),
-            POLYGON_GEOMETRY_SOURCES,
-            GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-        ),
+        "geometry_source": GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
         "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
         "review_status": "draft",
         "polygon_usage": {

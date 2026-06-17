@@ -299,6 +299,8 @@ def test_label_tool_html_exposes_layer_toggles_and_candidate_scene_panel() -> No
     assert "do_not_project_scene_or_gaussian_objects_without_verified_transform" not in html
     assert '"scene_evidence"' not in html
     assert '"object_map_coordinates"' not in html
+    assert "Geometry source" not in html
+    assert 'data-field="geometry_source"' not in html
 
 
 def test_label_tool_html_can_include_candidate_scene_panel_when_requested() -> None:
@@ -328,7 +330,7 @@ def test_label_draft_manifest_keeps_circle_candidate_and_review_only() -> None:
                 },
                 "map_center": {"x": 0.7, "y": -3.8},
                 "polygon_role": "navigation_area",
-                "geometry_source": "operator_authored_navigation_zone",
+                "geometry_source": "scene_engine_partition",
                 "alignment_status": "verified",
                 "review_status": "accepted",
             }
@@ -345,6 +347,7 @@ def test_label_draft_manifest_keeps_circle_candidate_and_review_only() -> None:
     label = manifest["labels"][0]
     assert label["geometry"]["kind"] == "circle"
     assert label["geometry"]["radius_m"] == pytest.approx(0.85)
+    assert label["geometry_source"] == "operator_authored_navigation_zone"
     assert label["alignment_status"] == "candidate"
     assert label["review_status"] == "draft"
 

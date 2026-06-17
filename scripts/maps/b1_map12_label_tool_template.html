@@ -1129,7 +1129,6 @@ function renderEditor() {
     return;
   }
   const roleOptions = options(PACKET.valid_polygon_roles, shape.polygon_role);
-  const sourceOptions = options(PACKET.valid_geometry_sources, shape.geometry_source);
   const conflict = shape.geometry_conflict ? `
     <div class="meta">
       geometry conflict: ${escapeHtml(shape.geometry_conflict.status)}<br />
@@ -1174,10 +1173,6 @@ function renderEditor() {
     <label>
       Polygon role
       <select data-field="polygon_role">${roleOptions}</select>
-    </label>
-    <label>
-      Geometry source
-      <select data-field="geometry_source">${sourceOptions}</select>
     </label>
     ${angleControl}
     <div class="meta">
@@ -1280,7 +1275,7 @@ function exportManifest() {
       geometry,
       map_center: shape.map_center || geometry.center || polygonCenter(geometry.polygon || []),
       polygon_role: shape.polygon_role || PACKET.shape_defaults.polygon_role,
-      geometry_source: shape.geometry_source || PACKET.shape_defaults.geometry_source,
+      geometry_source: PACKET.shape_defaults.geometry_source,
       alignment_status: "candidate",
       review_status: "draft",
       polygon_usage: { navigation: true, semantic_labeling: "candidate", review: true }
@@ -1360,7 +1355,7 @@ function loadManifest(payload) {
     geometry: label.geometry || { kind: "point", center: label.map_center || { x: 0, y: 0 } },
     map_center: label.map_center || { x: 0, y: 0 },
     polygon_role: label.polygon_role || PACKET.shape_defaults.polygon_role,
-    geometry_source: label.geometry_source || PACKET.shape_defaults.geometry_source,
+    geometry_source: PACKET.shape_defaults.geometry_source,
     alignment_status: "candidate",
     review_status: "draft",
     polygon_usage: { navigation: true, semantic_labeling: "candidate", review: true }
