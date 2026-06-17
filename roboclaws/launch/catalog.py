@@ -514,6 +514,12 @@ def _resolve_provider_profile(
     agent_engine: AgentEngineSpec,
     provider_profile: str | None,
 ) -> str | None:
+    if provider_profile is not None and not provider_profile.strip():
+        default_profile = agent_engine.default_provider_profile or "no provider"
+        raise LaunchError(
+            f"provider_profile for agent_engine '{agent_engine.id}' must be non-empty",
+            f"omit provider_profile= to use {default_profile}",
+        )
     if not agent_engine.supported_provider_profiles:
         if provider_profile:
             raise LaunchError(f"agent_engine '{agent_engine.id}' does not accept provider_profile")
@@ -597,8 +603,7 @@ def _normalize_scenario_setup_overrides(
     if _override_value(overrides, "generated_mess_count") is not None:
         raise LaunchError(
             "generated_mess_count is no longer a public run::surface argument",
-            "use scenario_setup=baseline|relocate-cleanup-related-objects "
-            "and relocation_count=<N>",
+            "use scenario_setup=baseline|relocate-cleanup-related-objects and relocation_count=<N>",
         )
     default_setup = preset.default_scenario_setup if preset else ENVIRONMENT_SETUP_BASELINE
     setup = _override_value(overrides, "scenario_setup") or default_setup

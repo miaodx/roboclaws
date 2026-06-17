@@ -84,9 +84,7 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
     assert b1.world == "b1-map12"
     assert b1.backend == "isaaclab"
     assert b1.implementation_backend == "isaaclab_subprocess"
-    assert (
-        "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1.overrides
-    )
+    assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1.overrides
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1.overrides
     assert "world=b1-map12" in b1.argv
     assert "backend=isaaclab_subprocess" in b1.argv
@@ -222,6 +220,23 @@ def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
 
     assert plan.provider_profile == "mimo-tp-openai-chat"
     assert "provider_profile=mimo-tp-openai-chat" in plan.overrides
+
+
+def test_launch_rejects_explicit_blank_provider_profile() -> None:
+    with pytest.raises(LaunchError, match="provider_profile .* must be non-empty") as exc:
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=mujoco",
+                "intent=cleanup",
+                "agent_engine=codex-cli",
+                "provider_profile=",
+                "evidence_lane=world-public-labels",
+            ]
+        )
+
+    assert "omit provider_profile= to use codex-router-responses" in exc.value.hint
 
 
 @pytest.mark.parametrize(

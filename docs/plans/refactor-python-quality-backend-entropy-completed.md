@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Launch-catalog provider-profile selection now fails aloud for
+  explicit blank input. `resolve_surface_launch()` rejects
+  `provider_profile=` instead of treating it as omitted and silently selecting
+  the agent engine default provider profile. Owner layers: Runnable Surfaces And
+  Presets, and Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud launch-axis configuration; omitted provider profiles, valid
+  provider profile aliases, unsupported non-empty provider profile errors,
+  public launch axes, provider env export, and runner argv construction are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `catalog.py` is 704 lines. Proof: focused launch-catalog provider
+  profile tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: OpenAI Agents SDK direct provider/model/env precedence now fails
   aloud. Provider profile, model, base URL, and API key selection for the direct
   SDK runtime rejects conflicting explicit request/metadata and env settings
