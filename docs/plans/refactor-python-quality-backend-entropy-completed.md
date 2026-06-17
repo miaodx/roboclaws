@@ -34,6 +34,15 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Provider-registry CLI dispatch moved parser setup, JSON payload
+  construction/write, route text output, and supports-engine exit-code handling
+  out of `_main()` into focused helpers. Behavior-change class: internal
+  cleanup; provider route semantics, env precedence, public profile names,
+  command names, and model metadata are unchanged. Metric: ratchet reports 8
+  complexity rows and 77 oversized modules, and `provider_registry.py::_main`
+  dropped from the complexity list. Proof: focused provider catalog tests,
+  ruff, format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: MolmoSpaces robot-map rendering moved projection, frame, room
   outline, focus marker, object marker, trajectory, heading, and legend drawing
   out of `render_robot_map()` into focused helpers inside the existing map

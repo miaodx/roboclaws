@@ -9,6 +9,7 @@ from roboclaws.agents.provider_registry import (
     ROUTE_EXPERIMENTAL,
     ROUTE_HEALTHY,
     ROUTE_PROVISIONAL,
+    _main,
     default_enabled_models,
     default_enabled_provider_routes,
     model_aliases,
@@ -198,3 +199,17 @@ def test_provider_readiness_reports_status_and_missing_env() -> None:
     assert readiness["provider"] == "mimo-mify-responses"
     assert readiness["route_status"] == ROUTE_DEGRADED
     assert readiness["missing_env"] == ["XM_LLM_API_KEY"]
+
+
+def test_provider_registry_cli_dispatches_route_and_json_commands(
+    tmp_path,
+    capsys,
+) -> None:
+    output = tmp_path / "providers.json"
+
+    assert _main(["json", "--output", str(output)]) == 0
+    assert "codex-router-responses" in output.read_text(encoding="utf-8")
+    assert _main(["default-model", "minimax-responses"]) == 0
+    assert capsys.readouterr().out.strip() == "MiniMax-M3"
+    assert _main(["supports-engine", "minimax-responses", "openai-agents-sdk"]) == 0
+    assert _main(["supports-engine", "mimo-tp-openai-chat", "codex-cli"]) == 1

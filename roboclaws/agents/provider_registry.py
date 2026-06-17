@@ -662,8 +662,7 @@ def provider_readiness(
     if missing_env:
         required = " and ".join(required_env)
         message = (
-            f"{_engine_label(agent_engine)} provider "
-            f"{route.public_profile} requires {required}."
+            f"{_engine_label(agent_engine)} provider {route.public_profile} requires {required}."
         )
     else:
         message = ""
@@ -750,7 +749,7 @@ def _engine_label(agent_engine: str) -> str:
     }.get(agent_engine, agent_engine)
 
 
-def _main(argv: list[str] | None = None) -> int:
+def _build_registry_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Print Roboclaws provider registry facts.")
     parser.add_argument(
         "command",
@@ -767,40 +766,64 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("route_id", nargs="?")
     parser.add_argument("agent_engine", nargs="?")
     parser.add_argument("--output", type=Path)
+    return parser
+
+
+def _registry_json_payload() -> dict[str, Any]:
+    return {
+        "models": [
+            asdict(spec) | {"model_capabilities": sorted(spec.model_capabilities)}
+            for spec in _MODEL_SPECS
+        ],
+        "provider_routes": [asdict(spec) for spec in _PROVIDER_ROUTE_SPECS],
+    }
+
+
+def _write_registry_json(output: Path | None) -> None:
+    text = json.dumps(_registry_json_payload(), indent=2, sort_keys=True)
+    if output:
+        output.write_text(text + "\n", encoding="utf-8")
+    else:
+        print(text)
+
+
+def _provider_route_command_text(command: str, route: ProviderRouteSpec) -> str:
+    if command == "default-model":
+        return route.default_model_id
+    if command == "base-url":
+        return route_base_url(route)
+    if command == "key-env":
+        return route.api_key_env or ""
+    if command == "public-profile":
+        return route.public_profile
+    if command == "wire-api":
+        return route.wire_api
+    raise ValueError(f"unsupported provider route command: {command}")
+
+
+def _supports_engine_exit_code(
+    route: ProviderRouteSpec,
+    agent_engine: str,
+) -> int:
+    return 0 if agent_engine in route.supported_engines else 1
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser = _build_registry_parser()
     args = parser.parse_args(argv)
 
     if args.command == "json":
-        payload = {
-            "models": [
-                asdict(spec) | {"model_capabilities": sorted(spec.model_capabilities)}
-                for spec in _MODEL_SPECS
-            ],
-            "provider_routes": [asdict(spec) for spec in _PROVIDER_ROUTE_SPECS],
-        }
-        text = json.dumps(payload, indent=2, sort_keys=True)
-        if args.output:
-            args.output.write_text(text + "\n", encoding="utf-8")
-        else:
-            print(text)
+        _write_registry_json(args.output)
         return 0
 
     if not args.route_id:
         parser.error("route_id is required")
     route = provider_route_spec(args.route_id)
-    if args.command == "default-model":
-        print(route.default_model_id)
-    elif args.command == "base-url":
-        print(route_base_url(route))
-    elif args.command == "key-env":
-        print(route.api_key_env or "")
-    elif args.command == "public-profile":
-        print(route.public_profile)
-    elif args.command == "wire-api":
-        print(route.wire_api)
-    elif args.command == "supports-engine":
+    if args.command == "supports-engine":
         if not args.agent_engine:
             parser.error("agent_engine is required")
-        return 0 if args.agent_engine in route.supported_engines else 1
+        return _supports_engine_exit_code(route, args.agent_engine)
+    print(_provider_route_command_text(args.command, route))
     return 0
 
 

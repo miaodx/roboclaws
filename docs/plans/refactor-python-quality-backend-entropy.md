@@ -60,7 +60,14 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 60` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
-- 9 Ruff complexity violations and 77 oversized modules remain.
+- Follow-up implementation refresh on 2026-06-18 split provider-registry CLI
+  dispatch out of `_main()` into focused parser, JSON payload/write, route-text,
+  and supports-engine helpers. Behavior-change class: internal cleanup; provider
+  route semantics, env precedence, public profile names, command names, and model
+  metadata are unchanged. The ratchet reports 8 complexity rows and 77 oversized
+  modules; `provider_registry.py::_main` is cleared from the complexity list.
+
+- 8 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -1021,7 +1028,8 @@ be claimed without an explicit local run.
   diagnostics in focused scene-camera modules; B1 runtime-bundle and label-tool
   validation helper families; MolmoSpaces robot-map projection, room, focus,
   object, trajectory, heading, and legend drawing helpers in
-  `molmospaces_room_map.py`.
+  `molmospaces_room_map.py`; provider-registry CLI parser, JSON output,
+  route-text, and supports-engine dispatch helpers in `provider_registry.py`.
 - Parked unless a matching product slice needs them: `agibot_contract_rehearsal.py`
   below-ceiling cleanup, report-performance skill wrapper consolidation,
   `PhysicalObservationProvider`, scene-sampler public alias removal, and broad
