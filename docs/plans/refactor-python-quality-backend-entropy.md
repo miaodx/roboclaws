@@ -190,6 +190,25 @@ format check, py_compile, and ratchet. Continue only with new fail-aloud
 families that have similarly clear false-confidence risk; otherwise return to
 Candidate D profile-owner extraction.
 
+Implementation refresh on 2026-06-17 completed the Candidate D runner-side
+OpenAI Agents SDK performance-profile owner split. Profile id/default
+selection, environment/CLI precedence checks, SDK model settings, SDK run
+config, model-input compaction profile knobs, model-racing observability,
+camera-grounded composite-tool gating, robot-view capture policy, retry
+settings, and context-limit validation now live in
+`scripts/molmo_cleanup/openai_agents_perf_profile.py`. The live runner keeps
+runner-owned skill-context loading, stable-prefix hashing, prompt rendering,
+server lifecycle, continuation, timing, checker, and artifact orchestration.
+Metric: `run_live_openai_agents_cleanup.py` is down to 1981 lines and no
+longer a hard-ceiling P1; the new owner is 786 lines. The ratchet remains 14
+complexity rows and 74 oversized modules; `openai_agents_live.py` is now 2020
+lines and should be treated as fresh Candidate D driver-side P1 evidence only
+after confirming request/session/provider orchestration or compaction ownership
+drift. Proof passed with focused OpenAI Agents perf-profile tests, ruff,
+format check, py_compile, and ratchet. Do not reopen runner-side perf-profile
+ownership unless the runner starts rebuilding profile/default/config packets
+inline again.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and

@@ -25,33 +25,14 @@ from roboclaws.agents.drivers.household_live import (
     without_full_cleanup_checker_gates,
 )
 from roboclaws.agents.drivers.openai_agents_live import (
-    DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
-    DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
-    DEFAULT_OPENAI_AGENTS_MAX_TURNS,
-    KIMI_CODING_USER_AGENT,
     MCP_CLIENT_SESSION_TIMEOUT_ENV,
-    MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
-    MODEL_SERVICE_RETRY_SLEEP_ENV,
     OpenAIAgentsLiveRuntime,
 )
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
-from roboclaws.agents.provider_registry import (
-    PROVIDER_PROFILE_CODEX_RESPONSES,
-    PROVIDER_PROFILE_KIMI_OPENAI_CHAT,
-    WIRE_CHAT_COMPLETIONS,
-    WIRE_RESPONSES,
-    model_family_for_route_model,
-    normalize_provider_route,
-    provider_route_spec,
-    route_capabilities_for_engine,
-)
-from roboclaws.agents.thinking_policy import THINKING_MODES, normalize_thinking_mode
-from roboclaws.household.realworld_mcp_server import (
-    ROBOT_VIEW_CAPTURE_POLICIES,
-    ROBOT_VIEW_CAPTURE_POLICY_FULL,
-)
+from roboclaws.agents.thinking_policy import THINKING_MODES
+from roboclaws.household.realworld_mcp_server import ROBOT_VIEW_CAPTURE_POLICY_FULL
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     household_intent_from_args as _household_intent,
@@ -95,32 +76,17 @@ from scripts.molmo_cleanup.openai_agents_metrics import (
 from scripts.molmo_cleanup.openai_agents_metrics import (
     openai_agents_span_metrics as _openai_agents_span_metrics,
 )
+from scripts.molmo_cleanup.openai_agents_perf_profile import (
+    MODEL_THINKING_MODE_ENV,
+    camera_grounded_composite_tools_enabled_for_run,
+)
+from scripts.molmo_cleanup.openai_agents_perf_profile import (
+    resolve_agent_sdk_perf_profile as _resolve_agent_sdk_perf_profile,
+)
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
-DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS = 2
 DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
-AGENT_SDK_PERF_PROFILE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE"
-CONTINUATION_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE"
-CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
-CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
-MODEL_INPUT_COMPACTION_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION"
-MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
-MODEL_RACING_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING"
-MODEL_RACING_ARM_COUNT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT"
-RAW_FPV_IMAGE_MEMORY_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY"
-RAW_FPV_IMAGE_MEMORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN"
-CAMERA_GROUNDED_HISTORY_COMPACTION_ENV = (
-    "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION"
-)
-CAMERA_GROUNDED_HISTORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN"
-CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
-ROBOT_VIEW_CAPTURE_POLICY_ENV = "ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY"
-MODEL_THINKING_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_THINKING_MODE"
-MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
-RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
-RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
-DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
 MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
 
 
@@ -306,13 +272,93 @@ def _env_bool(name: str, *, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
         return default
-    return _bool_setting_value(raw)
-
-
-def _bool_setting_value(raw: object) -> bool:
-    if isinstance(raw, bool):
-        return raw
     return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _load_agent_sdk_skill_context(repo_root: Path, *, skill_name: str) -> dict[str, Any]:
+    relative_path = Path("skills") / skill_name / "SKILL.md"
+    source_path = Path(repo_root) / relative_path
+    base_payload: dict[str, Any] = {
+        "schema": "agent_sdk_skill_context_v1",
+        "skill_name": skill_name,
+        "source_path": str(source_path),
+        "relative_path": str(relative_path),
+        "policy": "canonical_skill_markdown",
+    }
+    try:
+        raw = source_path.read_bytes()
+    except OSError as exc:
+        return {
+            **base_payload,
+            "included": False,
+            "reason": "source_unavailable",
+            "error_type": exc.__class__.__name__,
+        }
+    truncated = raw[:MAX_AGENT_SDK_SKILL_CONTEXT_BYTES]
+    text = truncated.decode("utf-8", errors="replace")
+    return {
+        **base_payload,
+        "included": bool(text),
+        "reason": "included" if text else "empty",
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+        "included_bytes": len(truncated),
+        "truncated": len(raw) > len(truncated),
+        "estimated_tokens": _estimated_tokens_from_chars(len(text)),
+        "content": text,
+    }
+
+
+def _skill_context_timing_summary(skill_context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in skill_context.items()
+        if key
+        in {
+            "schema",
+            "skill_name",
+            "source_path",
+            "relative_path",
+            "policy",
+            "included",
+            "reason",
+            "sha256",
+            "bytes",
+            "included_bytes",
+            "truncated",
+            "estimated_tokens",
+            "error_type",
+        }
+    }
+
+
+def _stable_prefix_packet(
+    prompt: str,
+    skill_context: dict[str, Any],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    skill_hash = str(skill_context.get("sha256") or "")
+    prompt_prefix = str(prompt or "")[:2048]
+    material = "\n".join(
+        [
+            str(skill_context.get("relative_path") or ""),
+            skill_hash,
+            str(profile.get("provider_profile") or ""),
+            str(profile.get("wire_api") or ""),
+            prompt_prefix,
+        ]
+    )
+    return {
+        "schema": "agent_sdk_stable_prefix_v1",
+        "hash": hashlib.sha256(material.encode("utf-8")).hexdigest(),
+        "material": "skill-path+skill-hash+provider-profile+wire-api+prompt-prefix",
+        "skill_context_sha256": skill_hash,
+        "prompt_prefix_chars": len(prompt_prefix),
+        "prompt_cache_retention": (profile.get("sdk_model_settings") or {}).get(
+            "prompt_cache_retention"
+        )
+        or "",
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -449,7 +495,7 @@ class LiveOpenAIAgentsCleanupRunner:
             *household_cleanup_server_argv(str(self.args.repo_root / ".venv/bin/python")),
             *self.args.server_arg,
         ]
-        if _camera_grounded_composite_tools_enabled_for_run(
+        if camera_grounded_composite_tools_enabled_for_run(
             self.agent_sdk_perf_profile,
             evidence_lane=str(getattr(self.args, "profile", "") or ""),
         ):
@@ -884,820 +930,10 @@ class IncompleteTurnRecoveryPolicy:
         return f"{original_prompt.rstrip()}\n\n{self.continuation_suffix}\n"
 
 
-def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
-    provider_profile = _normal_provider_profile(str(getattr(args, "provider_profile", "") or ""))
-    model = str(getattr(args, "model", "") or "")
-    model_family = _registry_model_family(provider_profile, model)
-    route = provider_route_spec(provider_profile)
-    profile_id, profile_source = _profile_id_with_source(args, provider_profile, model_family)
-    defaults = _profile_defaults(profile_id)
-    payload = {
-        "schema": "agent_sdk_perf_profile_v1",
-        "profile_id": profile_id,
-        "source": profile_source,
-        "provider_profile": provider_profile,
-        "wire_api": _wire_api_for_provider_profile(provider_profile),
-        "wire_source": route.wire_source,
-        "route_status": route.status_for_engine("openai-agents-sdk"),
-        "route_status_note": route.status_note,
-        "route_capabilities": route_capabilities_for_engine(route, "openai-agents-sdk"),
-        "model_family": model_family,
-        "model_thinking_mode": normalize_thinking_mode(
-            getattr(args, "model_thinking_mode", "default"),
-            default="default",
-        ),
-        "continuation_mode": _string_setting(
-            args,
-            "continuation_mode",
-            CONTINUATION_MODE_ENV,
-            default=defaults["continuation_mode"],
-            allowed={"repeat_full_prompt", "state_summary_only"},
-        ),
-        "max_turns": _positive_int_setting(
-            args,
-            "max_turns",
-            "ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS",
-            default=defaults["max_turns"],
-        ),
-        "max_continuations": _int_setting(
-            args,
-            "incomplete_turn_continuation_attempts",
-            "ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS",
-            default=defaults["max_continuations"],
-        ),
-        "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
-        "mcp_client_session_timeout_s": _round_duration(
-            max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
-        ),
-        "raw_fpv_candidate_budget": _int_setting(
-            args,
-            "raw_fpv_candidate_budget",
-            RAW_FPV_CANDIDATE_BUDGET_ENV,
-            default=defaults["raw_fpv_candidate_budget"],
-            allow_none=True,
-        ),
-        "raw_fpv_repeated_failure_limit": _int_setting(
-            args,
-            "raw_fpv_repeated_failure_limit",
-            RAW_FPV_REPEATED_FAILURE_LIMIT_ENV,
-            default=defaults["raw_fpv_repeated_failure_limit"],
-            allow_none=True,
-        ),
-        "done_retry_budget": _int_setting(
-            args,
-            "done_retry_budget",
-            DONE_RETRY_BUDGET_ENV,
-            default=defaults["done_retry_budget"],
-            allow_none=True,
-        ),
-        "max_observe_per_waypoint": _int_setting(
-            args,
-            "max_observe_per_waypoint",
-            MAX_OBSERVE_PER_WAYPOINT_ENV,
-            default=defaults["max_observe_per_waypoint"],
-            allow_none=True,
-        ),
-        "context_soft_limit_tokens": _int_setting(
-            args,
-            "context_soft_limit_tokens",
-            CONTEXT_SOFT_LIMIT_ENV,
-            default=defaults["context_soft_limit_tokens"],
-            allow_none=True,
-        ),
-        "context_hard_limit_tokens": _int_setting(
-            args,
-            "context_hard_limit_tokens",
-            CONTEXT_HARD_LIMIT_ENV,
-            default=defaults["context_hard_limit_tokens"],
-            allow_none=True,
-        ),
-        "model_input_compaction": _model_input_compaction_profile(args, defaults),
-        "camera_grounded_composite_tools": _camera_grounded_composite_tools_profile(
-            args,
-            defaults,
-        ),
-        "robot_view_capture_policy": _robot_view_capture_policy_profile(args, defaults),
-        "model_racing_observability": _model_racing_observability_profile(args, defaults),
-        "model_service_retry_attempts": _int_setting(
-            args,
-            "model_service_retry_attempts",
-            MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
-            default=DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
-        ),
-        "model_service_retry_sleep_s": _float_setting(
-            args,
-            "model_service_retry_sleep_s",
-            MODEL_SERVICE_RETRY_SLEEP_ENV,
-            default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
-        ),
-    }
-    payload["sdk_model_settings"] = _sdk_model_settings_for_profile(payload)
-    payload["sdk_run_config"] = _sdk_run_config_for_profile(payload)
-    _validate_context_limits(payload)
-    return payload
-
-
-def _load_agent_sdk_skill_context(repo_root: Path, *, skill_name: str) -> dict[str, Any]:
-    relative_path = Path("skills") / skill_name / "SKILL.md"
-    source_path = Path(repo_root) / relative_path
-    base_payload: dict[str, Any] = {
-        "schema": "agent_sdk_skill_context_v1",
-        "skill_name": skill_name,
-        "source_path": str(source_path),
-        "relative_path": str(relative_path),
-        "policy": "canonical_skill_markdown",
-    }
-    try:
-        raw = source_path.read_bytes()
-    except OSError as exc:
-        return {
-            **base_payload,
-            "included": False,
-            "reason": "source_unavailable",
-            "error_type": exc.__class__.__name__,
-        }
-    truncated = raw[:MAX_AGENT_SDK_SKILL_CONTEXT_BYTES]
-    text = truncated.decode("utf-8", errors="replace")
-    return {
-        **base_payload,
-        "included": bool(text),
-        "reason": "included" if text else "empty",
-        "sha256": hashlib.sha256(raw).hexdigest(),
-        "bytes": len(raw),
-        "included_bytes": len(truncated),
-        "truncated": len(raw) > len(truncated),
-        "estimated_tokens": _estimated_tokens_from_chars(len(text)),
-        "content": text,
-    }
-
-
-def _skill_context_timing_summary(skill_context: dict[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in skill_context.items()
-        if key
-        in {
-            "schema",
-            "skill_name",
-            "source_path",
-            "relative_path",
-            "policy",
-            "included",
-            "reason",
-            "sha256",
-            "bytes",
-            "included_bytes",
-            "truncated",
-            "estimated_tokens",
-            "error_type",
-        }
-    }
-
-
-def _stable_prefix_packet(
-    prompt: str,
-    skill_context: dict[str, Any],
-    profile: dict[str, Any],
-) -> dict[str, Any]:
-    skill_hash = str(skill_context.get("sha256") or "")
-    prompt_prefix = str(prompt or "")[:2048]
-    material = "\n".join(
-        [
-            str(skill_context.get("relative_path") or ""),
-            skill_hash,
-            str(profile.get("provider_profile") or ""),
-            str(profile.get("wire_api") or ""),
-            prompt_prefix,
-        ]
-    )
-    return {
-        "schema": "agent_sdk_stable_prefix_v1",
-        "hash": hashlib.sha256(material.encode("utf-8")).hexdigest(),
-        "material": "skill-path+skill-hash+provider-profile+wire-api+prompt-prefix",
-        "skill_context_sha256": skill_hash,
-        "prompt_prefix_chars": len(prompt_prefix),
-        "prompt_cache_retention": (profile.get("sdk_model_settings") or {}).get(
-            "prompt_cache_retention"
-        )
-        or "",
-    }
-
-
-def _profile_id_with_source(
-    args: argparse.Namespace,
-    provider_profile: str,
-    model_family: str,
-) -> tuple[str, str]:
-    cli_value = str(getattr(args, "agent_sdk_perf_profile", "") or "").strip()
-    env_value = os.environ.get(AGENT_SDK_PERF_PROFILE_ENV, "").strip()
-    if cli_value:
-        profile_id = _validate_profile_id(cli_value)
-        if env_value:
-            env_profile_id = _validate_profile_id(env_value)
-            if env_profile_id != profile_id:
-                raise ValueError(
-                    "conflicting OpenAI Agents SDK performance profile: "
-                    f"--agent-sdk-perf-profile={profile_id!r} and "
-                    f"{AGENT_SDK_PERF_PROFILE_ENV}={env_profile_id!r}"
-                )
-            return profile_id, "cli+environment"
-        return profile_id, "cli"
-    if env_value:
-        return _validate_profile_id(env_value), "environment"
-    return _validate_profile_id(_default_profile_id(provider_profile, model_family)), "default"
-
-
-def _default_profile_id(_provider_profile: str, _model_family: str) -> str:
-    return "baseline"
-
-
-def _validate_profile_id(value: str) -> str:
-    profile_id = value.strip()
-    if profile_id not in {
-        "baseline",
-        "gpt_compact_v1",
-        "mimo_compact_v1",
-        "raw_fpv_budgeted_v1",
-        "custom",
-    }:
-        raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{value}'")
-    return profile_id
-
-
-def _profile_defaults(profile_id: str) -> dict[str, Any]:
-    baseline = {
-        "continuation_mode": "repeat_full_prompt",
-        "max_turns": DEFAULT_OPENAI_AGENTS_MAX_TURNS,
-        "max_continuations": DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
-        "raw_fpv_candidate_budget": None,
-        "raw_fpv_repeated_failure_limit": None,
-        "done_retry_budget": None,
-        "max_observe_per_waypoint": None,
-        "context_soft_limit_tokens": None,
-        "context_hard_limit_tokens": None,
-        "model_input_compaction": {
-            "schema": "agent_sdk_model_input_compaction_v1",
-            "enabled": False,
-            "mode": "off",
-            "min_chars": 1200,
-            "raw_fpv_image_memory": {
-                "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
-                "enabled": False,
-                "mode": "off",
-                "retained_full_frame_limit": 0,
-                "candidate_ids": [],
-                "private_artifact_policy": (
-                    "model-facing raw-FPV image memory only; MCP traces, reports, and "
-                    "image artifacts remain complete"
-                ),
-            },
-            "camera_grounded_history": {
-                "schema": "agent_sdk_camera_grounded_history_policy_v1",
-                "enabled": False,
-                "mode": "off",
-                "retained_recent_outputs": 0,
-                "candidate_ids": [],
-                "private_artifact_policy": (
-                    "model-facing camera-grounded history compaction only; MCP traces, "
-                    "reports, and run artifacts remain complete"
-                ),
-            },
-        },
-        "camera_grounded_composite_tools": {
-            "schema": "agent_sdk_camera_grounded_composite_tools_v1",
-            "enabled": False,
-            "tool_names": [],
-            "candidate_ids": ["O"],
-            "private_artifact_policy": (
-                "SDK-private MCP tool addition only; default public MCP/profile tools remain "
-                "unchanged"
-            ),
-        },
-        "robot_view_capture_policy": {
-            "schema": "agent_sdk_robot_view_capture_policy_v1",
-            "policy": ROBOT_VIEW_CAPTURE_POLICY_FULL,
-            "candidate_ids": [],
-            "scope": "report-only robot-view capture",
-            "private_artifact_policy": (
-                "full report robot-view capture; default public route behavior unchanged"
-            ),
-        },
-        "model_racing_observability": {
-            "schema": "agent_sdk_model_racing_observability_v1",
-            "enabled": False,
-            "mode": "per_arm_observability_v1",
-            "candidate_ids": ["D"],
-            "arm_count": 1,
-            "racing_multiplier": 1.0,
-            "winner_selection": "single_arm_no_racing",
-            "loser_cancellation": "not_applicable_until_racing_enabled",
-            "unknown_loser_billing": False,
-            "hook": "OpenAI Agents SDK model request boundary",
-            "private_artifact_policy": (
-                "records model-call arm lifecycle, winner/cancel fields, timing, "
-                "provider/model ids, and usage availability only; raw prompts, model text, "
-                "tool payload bodies, credentials, and private truth are not persisted"
-            ),
-        },
-    }
-    if profile_id in {"baseline", "custom"}:
-        return baseline
-    if profile_id == "gpt_compact_v1":
-        return {
-            **baseline,
-            "continuation_mode": "state_summary_only",
-            "max_continuations": 1,
-            "done_retry_budget": 2,
-            "max_observe_per_waypoint": 1,
-            "context_soft_limit_tokens": 96_000,
-            "context_hard_limit_tokens": 128_000,
-        }
-    if profile_id == "mimo_compact_v1":
-        return {
-            **baseline,
-            "continuation_mode": "state_summary_only",
-            "max_continuations": 1,
-            "done_retry_budget": 2,
-            "max_observe_per_waypoint": 1,
-            "context_soft_limit_tokens": 64_000,
-            "context_hard_limit_tokens": 96_000,
-        }
-    if profile_id == "raw_fpv_budgeted_v1":
-        return {
-            **baseline,
-            "continuation_mode": "state_summary_only",
-            "max_turns": 40,
-            "max_continuations": 1,
-            "raw_fpv_candidate_budget": 24,
-            "raw_fpv_repeated_failure_limit": 3,
-            "done_retry_budget": 1,
-            "max_observe_per_waypoint": 1,
-            "context_soft_limit_tokens": 64_000,
-            "context_hard_limit_tokens": 96_000,
-            "model_input_compaction": {
-                "schema": "agent_sdk_model_input_compaction_v1",
-                "enabled": True,
-                "mode": (
-                    "public_tool_result_summary_v1+repeated_metric_map_delta_v1+"
-                    "raw_fpv_image_memory_v1"
-                ),
-                "min_chars": 1200,
-                "raw_fpv_image_memory": {
-                    "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
-                    "enabled": True,
-                    "mode": "retain_latest_full_frame",
-                    "retained_full_frame_limit": 1,
-                    "candidate_ids": ["AA"],
-                    "private_artifact_policy": (
-                        "model-facing raw-FPV image memory only; MCP traces, reports, and "
-                        "image artifacts remain complete"
-                    ),
-                },
-            },
-        }
-    raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{profile_id}'")
-
-
-def _model_input_compaction_profile(
-    args: argparse.Namespace,
-    defaults: dict[str, Any],
-) -> dict[str, Any]:
-    default_config = (
-        defaults.get("model_input_compaction")
-        if isinstance(defaults.get("model_input_compaction"), dict)
-        else {}
-    )
-    default_enabled = bool(default_config.get("enabled", False))
-    enabled = _bool_arg_setting(
-        args,
-        "model_input_compaction",
-        MODEL_INPUT_COMPACTION_ENV,
-        default=default_enabled,
-    )
-    min_chars = _int_setting(
-        args,
-        "model_input_compaction_min_chars",
-        MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
-        default=int(default_config.get("min_chars") or 1200),
-    )
-    raw_fpv_image_memory = _raw_fpv_image_memory_profile(args, default_config)
-    camera_grounded_history = _camera_grounded_history_profile(args, default_config)
-    mode_parts = []
-    candidate_ids = []
-    if enabled:
-        mode_parts.extend(["public_tool_result_summary_v1", "repeated_metric_map_delta_v1"])
-        candidate_ids.extend(["I", "N"])
-    if raw_fpv_image_memory["enabled"]:
-        mode_parts.append("raw_fpv_image_memory_v1")
-        candidate_ids.append("AA")
-    if camera_grounded_history["enabled"]:
-        mode_parts.append("camera_grounded_history_v1")
-        candidate_ids.append("AC")
-    hook_enabled = (
-        enabled or bool(raw_fpv_image_memory["enabled"]) or bool(camera_grounded_history["enabled"])
-    )
-    return {
-        "schema": "agent_sdk_model_input_compaction_v1",
-        "enabled": hook_enabled,
-        "mode": "+".join(mode_parts) if mode_parts else "off",
-        "min_chars": int(min_chars or 1200),
-        "candidate_ids": candidate_ids,
-        "hook": "RunConfig.call_model_input_filter",
-        "repeated_metric_map_delta": enabled,
-        "raw_fpv_image_memory": raw_fpv_image_memory,
-        "camera_grounded_history": camera_grounded_history,
-        "private_artifact_policy": (
-            "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
-        ),
-    }
-
-
-def _model_racing_observability_profile(
-    args: argparse.Namespace,
-    defaults: dict[str, Any],
-) -> dict[str, Any]:
-    config = (
-        defaults.get("model_racing_observability")
-        if isinstance(defaults.get("model_racing_observability"), dict)
-        else {}
-    )
-    enabled = _bool_arg_setting(
-        args,
-        "model_racing",
-        MODEL_RACING_ENV,
-        default=bool(config.get("enabled", False)),
-    )
-    default_arm_count = int(config.get("arm_count") or 1)
-    if enabled and default_arm_count < 2:
-        default_arm_count = 2
-    arm_count = _int_setting(
-        args,
-        "model_racing_arm_count",
-        MODEL_RACING_ARM_COUNT_ENV,
-        default=default_arm_count,
-    )
-    arm_count = max(1, int(arm_count or 1))
-    if not enabled:
-        arm_count = 1
-    else:
-        arm_count = max(2, arm_count)
-    candidate_ids = (
-        ["D", "C"] if enabled else [str(item) for item in config.get("candidate_ids", ["D"])]
-    )
-    return {
-        "schema": "agent_sdk_model_racing_observability_v1",
-        "enabled": enabled,
-        "mode": (
-            "get_response_racing_v1"
-            if enabled
-            else str(config.get("mode") or "per_arm_observability_v1")
-        ),
-        "candidate_ids": candidate_ids,
-        "arm_count": arm_count,
-        "racing_multiplier": float(
-            arm_count if enabled else config.get("racing_multiplier") or 1.0
-        ),
-        "winner_selection": (
-            "first_successful_sdk_response"
-            if enabled
-            else str(config.get("winner_selection") or "single_arm_no_racing")
-        ),
-        "loser_cancellation": str(
-            "cancel_pending_losers"
-            if enabled
-            else config.get("loser_cancellation") or "not_applicable_until_racing_enabled"
-        ),
-        "unknown_loser_billing": True
-        if enabled
-        else bool(config.get("unknown_loser_billing", False)),
-        "hook": str(config.get("hook") or "OpenAI Agents SDK model request boundary"),
-        "private_artifact_policy": (
-            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
-            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
-            "credentials, and private truth are not persisted"
-        ),
-    }
-
-
-def _raw_fpv_image_memory_profile(
-    args: argparse.Namespace,
-    default_config: dict[str, Any],
-) -> dict[str, Any]:
-    default_policy = (
-        default_config.get("raw_fpv_image_memory")
-        if isinstance(default_config.get("raw_fpv_image_memory"), dict)
-        else {}
-    )
-    default_enabled = bool(default_policy.get("enabled", False))
-    enabled = _bool_arg_setting(
-        args,
-        "raw_fpv_image_memory",
-        RAW_FPV_IMAGE_MEMORY_ENV,
-        default=default_enabled,
-    )
-    retain = _int_setting(
-        args,
-        "raw_fpv_image_memory_retain",
-        RAW_FPV_IMAGE_MEMORY_RETAIN_ENV,
-        default=int(default_policy.get("retained_full_frame_limit") or (1 if enabled else 0)),
-    )
-    retain = max(1, int(retain or 1)) if enabled else 0
-    return {
-        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
-        "enabled": enabled,
-        "mode": "retain_latest_full_frame" if enabled else "off",
-        "retained_full_frame_limit": retain,
-        "candidate_ids": ["AA"] if enabled else [],
-        "private_artifact_policy": (
-            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
-            "remain complete"
-        ),
-    }
-
-
-def _camera_grounded_history_profile(
-    args: argparse.Namespace,
-    default_config: dict[str, Any],
-) -> dict[str, Any]:
-    default_policy = (
-        default_config.get("camera_grounded_history")
-        if isinstance(default_config.get("camera_grounded_history"), dict)
-        else {}
-    )
-    default_enabled = bool(default_policy.get("enabled", False))
-    enabled = _bool_arg_setting(
-        args,
-        "camera_grounded_history_compaction",
-        CAMERA_GROUNDED_HISTORY_COMPACTION_ENV,
-        default=default_enabled,
-    )
-    retain = _int_setting(
-        args,
-        "camera_grounded_history_retain",
-        CAMERA_GROUNDED_HISTORY_RETAIN_ENV,
-        default=int(default_policy.get("retained_recent_outputs") or (4 if enabled else 0)),
-    )
-    retain = max(1, int(retain or 1)) if enabled else 0
-    return {
-        "schema": "agent_sdk_camera_grounded_history_policy_v1",
-        "enabled": enabled,
-        "mode": "retain_latest_actionable_outputs" if enabled else "off",
-        "retained_recent_outputs": retain,
-        "candidate_ids": ["AC"] if enabled else [],
-        "private_artifact_policy": (
-            "model-facing camera-grounded history compaction only; MCP traces, reports, "
-            "and run artifacts remain complete"
-        ),
-    }
-
-
-def _camera_grounded_composite_tools_profile(
-    args: argparse.Namespace,
-    defaults: dict[str, Any],
-) -> dict[str, Any]:
-    default_config = (
-        defaults.get("camera_grounded_composite_tools")
-        if isinstance(defaults.get("camera_grounded_composite_tools"), dict)
-        else {}
-    )
-    default_enabled = bool(default_config.get("enabled", False))
-    enabled = _bool_arg_setting(
-        args,
-        "camera_grounded_composite_tools",
-        CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV,
-        default=default_enabled,
-    )
-    return {
-        "schema": "agent_sdk_camera_grounded_composite_tools_v1",
-        "enabled": enabled,
-        "tool_names": ["observe_camera_grounded_candidates"] if enabled else [],
-        "candidate_ids": ["O"],
-        "scope": "camera-grounded-labels only",
-        "hook": "cleanup MCP server private extra tool",
-        "private_artifact_policy": (
-            "SDK-private MCP tool addition only; default public MCP/profile tools remain unchanged"
-        ),
-    }
-
-
-def _camera_grounded_composite_tools_enabled_for_run(
-    profile: dict[str, Any],
-    *,
-    evidence_lane: str,
-) -> bool:
-    config = profile.get("camera_grounded_composite_tools")
-    if not isinstance(config, dict) or not config.get("enabled"):
-        return False
-    return evidence_lane == "camera-grounded-labels"
-
-
-def _robot_view_capture_policy_profile(
-    args: argparse.Namespace,
-    defaults: dict[str, Any],
-) -> dict[str, Any]:
-    default_config = (
-        defaults.get("robot_view_capture_policy")
-        if isinstance(defaults.get("robot_view_capture_policy"), dict)
-        else {}
-    )
-    policy = _string_setting(
-        args,
-        "robot_view_capture_policy",
-        ROBOT_VIEW_CAPTURE_POLICY_ENV,
-        default=str(default_config.get("policy") or ROBOT_VIEW_CAPTURE_POLICY_FULL),
-        allowed=set(ROBOT_VIEW_CAPTURE_POLICIES),
-    )
-    enabled = policy != ROBOT_VIEW_CAPTURE_POLICY_FULL
-    return {
-        "schema": "agent_sdk_robot_view_capture_policy_v1",
-        "policy": policy,
-        "candidate_ids": ["F"] if enabled else [],
-        "scope": "report-only robot-view capture",
-        "hook": "cleanup MCP server --robot-view-capture-policy",
-        "private_artifact_policy": (
-            "SDK-private report-capture reduction; before/after snapshots, cleanup action "
-            "views, raw-FPV observe artifacts, traces, and reports remain complete"
-            if enabled
-            else "full report robot-view capture; default public route behavior unchanged"
-        ),
-    }
-
-
-def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
-    wire_api = str(profile.get("wire_api") or "")
-    provider_profile = str(profile.get("provider_profile") or "")
-    profile_id = str(profile.get("profile_id") or "baseline")
-    settings: dict[str, Any] = {
-        "tool_choice": "auto",
-        "parallel_tool_calls": False,
-        "model_thinking_mode": str(profile.get("model_thinking_mode") or "default"),
-    }
-    if wire_api == WIRE_RESPONSES:
-        settings["store"] = False
-        if provider_profile != PROVIDER_PROFILE_CODEX_RESPONSES:
-            settings["truncation"] = "auto"
-        if provider_profile == PROVIDER_PROFILE_CODEX_RESPONSES and profile_id != "baseline":
-            settings["prompt_cache_retention"] = "in_memory"
-    elif wire_api == WIRE_CHAT_COMPLETIONS:
-        settings["include_usage"] = True
-        if provider_profile == PROVIDER_PROFILE_KIMI_OPENAI_CHAT:
-            settings["extra_headers"] = {"User-Agent": KIMI_CODING_USER_AGENT}
-    return settings
-
-
-def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "trace_include_sensitive_data": False,
-        "workflow_name": "roboclaws-openai-agents-live",
-    }
-
-
-def _normal_provider_profile(provider_profile: str) -> str:
-    return normalize_provider_route(provider_profile, default="codex-router-responses")
-
-
-def _wire_api_for_provider_profile(provider_profile: str) -> str:
-    return provider_route_spec(provider_profile).wire_api
-
-
-def _registry_model_family(provider_profile: str, model: str) -> str:
-    return model_family_for_route_model(provider_profile, model or None)
-
-
-def _string_setting(
-    args: argparse.Namespace,
-    attr: str,
-    env_name: str,
-    *,
-    default: str,
-    allowed: set[str],
-) -> str:
-    arg_raw = getattr(args, attr, "")
-    env_raw = os.environ.get(env_name, "")
-    value = str(arg_raw or env_raw or default).strip()
-    if arg_raw and env_raw and str(arg_raw).strip() != str(env_raw).strip():
-        _raise_setting_conflict(attr, env_name, str(arg_raw).strip(), str(env_raw).strip())
-    if value not in allowed:
-        raise ValueError(f"unsupported OpenAI Agents SDK {attr.replace('_', '-')} '{value}'")
-    return value
-
-
-def _int_setting(
-    args: argparse.Namespace,
-    attr: str,
-    env_name: str,
-    *,
-    default: int | None,
-    allow_none: bool = False,
-) -> int | None:
-    raw = getattr(args, attr, None)
-    env_raw = os.environ.get(env_name)
-    if raw is not None and env_raw not in {None, ""}:
-        value = int(raw)
-        env_value = int(env_raw)
-        if value != env_value:
-            _raise_setting_conflict(attr, env_name, value, env_value)
-        raw = value
-    if raw is None:
-        raw = env_raw if env_raw not in {None, ""} else default
-    if raw is None:
-        if allow_none:
-            return None
-        raise ValueError(f"{attr} is required")
-    value = int(raw)
-    if value < 0:
-        raise ValueError(f"{attr} must be non-negative")
-    return value
-
-
-def _positive_int_setting(
-    args: argparse.Namespace,
-    attr: str,
-    env_name: str,
-    *,
-    default: int,
-) -> int:
-    raw = getattr(args, attr, None)
-    env_raw = os.environ.get(env_name)
-    if raw is not None and env_raw not in {None, ""}:
-        value = int(raw)
-        env_value = int(env_raw)
-        if value != env_value:
-            _raise_setting_conflict(attr, env_name, value, env_value)
-        raw = value
-    if raw is None:
-        raw = env_raw if env_raw not in {None, ""} else default
-    value = int(raw)
-    if value < 1:
-        raise ValueError(f"{attr} must be >= 1")
-    return value
-
-
-def _float_setting(
-    args: argparse.Namespace,
-    attr: str,
-    env_name: str,
-    *,
-    default: float,
-) -> float:
-    raw = getattr(args, attr, None)
-    env_raw = os.environ.get(env_name)
-    if raw is not None and env_raw not in {None, ""}:
-        value = float(raw)
-        env_value = float(env_raw)
-        if value != env_value:
-            _raise_setting_conflict(attr, env_name, value, env_value)
-        raw = value
-    if raw is None:
-        raw = env_raw if env_raw not in {None, ""} else default
-    value = float(raw)
-    if value < 0:
-        raise ValueError(f"{attr} must be non-negative")
-    return _round_duration(value)
-
-
-def _bool_arg_setting(
-    args: argparse.Namespace,
-    attr: str,
-    env_name: str,
-    *,
-    default: bool,
-) -> bool:
-    raw = getattr(args, attr, None)
-    env_raw = os.environ.get(env_name)
-    if raw is not None and env_raw not in {None, ""}:
-        value = _bool_setting_value(raw)
-        env_value = _bool_setting_value(env_raw)
-        if value != env_value:
-            _raise_setting_conflict(attr, env_name, value, env_value)
-        raw = value
-    if raw is None:
-        if env_raw not in {None, ""}:
-            raw = env_raw
-    if raw is None:
-        return default
-    return _bool_setting_value(raw)
-
-
-def _raise_setting_conflict(attr: str, env_name: str, arg_value: object, env_value: object) -> None:
-    cli_name = f"--{attr.replace('_', '-')}"
-    raise ValueError(
-        f"conflicting OpenAI Agents SDK setting {attr}: "
-        f"{cli_name}={arg_value!r} and {env_name}={env_value!r}"
-    )
-
-
-def _validate_context_limits(profile: dict[str, Any]) -> None:
-    soft = profile.get("context_soft_limit_tokens")
-    hard = profile.get("context_hard_limit_tokens")
-    if soft is not None and hard is not None and int(soft) > int(hard):
-        raise ValueError("context_soft_limit_tokens must be <= context_hard_limit_tokens")
-
-
 def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any]) -> str:
     original = str(getattr(args, "kickoff_prompt", "") or "")
     lane = str(getattr(args, "profile", "") or "")
-    composite_tools = _camera_grounded_composite_tools_enabled_for_run(
+    composite_tools = camera_grounded_composite_tools_enabled_for_run(
         profile,
         evidence_lane=lane,
     )
@@ -1744,7 +980,7 @@ def _target_cleanup_count_for_prompt(args: argparse.Namespace, *, lane: str) -> 
 
 def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) -> str:
     original = str(getattr(args, "kickoff_prompt", "") or "")
-    composite_tools = _camera_grounded_composite_tools_enabled_for_run(
+    composite_tools = camera_grounded_composite_tools_enabled_for_run(
         profile,
         evidence_lane=str(getattr(args, "profile", "") or ""),
     )

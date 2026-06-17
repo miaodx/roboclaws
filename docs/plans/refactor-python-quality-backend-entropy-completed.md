@@ -62,6 +62,20 @@ logs before choosing the next slice.
   fail-aloud provider/base-url cleanup. Proof: focused RAW-FPV visual-labeler
   provider tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: OpenAI Agents SDK runner-side performance-profile/default
+  resolution moved from `run_live_openai_agents_cleanup.py` into
+  `openai_agents_perf_profile.py`. The new owner covers profile defaults,
+  CLI/env conflict checks, SDK model settings/run config, compaction and
+  racing policy packets, camera-grounded composite-tool gating, robot-view
+  capture policy, retry settings, and context-limit validation; the live runner
+  keeps skill-context loading, stable-prefix hashing, prompt/server/timing, and
+  artifact orchestration. Metric: live runner 2711 -> 1981 lines, clearing the
+  hard ceiling; new owner is 786 lines; ratchet reports 14 complexity rows and
+  74 oversized modules. Owning layers: Agent Engines And Provider Profiles plus
+  Thin Runtime / Server Adapters. Behavior-change class: internal owner split.
+  Proof: focused OpenAI Agents perf-profile tests, ruff, format check,
+  py_compile, and ratchet.
+
 - 2026-06-14: Backend facade started. `CleanupBackendSession` gained backend
   id/runtime-artifact attachment, shared backend construction, and common
   direct/MCP metadata attachment. Proof: focused backend/MCP tests and ratchet.
@@ -1197,6 +1211,15 @@ logs before choosing the next slice.
   diagnostics, FPV pose/lens delta summaries, compact camera metadata,
   robot-pose delta, Isaac robot import diagnostics, head-articulation
   diagnostics, or chase-contract diagnostics directly.
+- OpenAI Agents SDK runner-side performance-profile/default resolution is
+  owned by `openai_agents_perf_profile.py`. Metric: live runner 2711 -> 1981
+  lines; new owner is 786 lines; ratchet reports 14 complexity rows and 74
+  oversized modules. Proof: focused OpenAI Agents perf-profile tests, ruff,
+  format check, py_compile, and ratchet. Reopen only if
+  `run_live_openai_agents_cleanup.py` starts rebuilding profile id/default
+  selection, provider route/model-family packets, SDK settings/run config,
+  CLI/env precedence checks, compaction/racing/camera-grounded/robot-view/retry
+  profile packets, or context-limit validation inline.
 - Robot-camera apple-to-apple object parity audit construction is owned by
   `robot_camera_apple2apple_object_parity.py`, selected RGB/focus evidence is
   owned by `robot_camera_apple2apple_rgb_evidence.py`, and visual-state

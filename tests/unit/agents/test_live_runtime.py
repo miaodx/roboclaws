@@ -29,6 +29,9 @@ from roboclaws.agents.live_runtime import (
 )
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
+from scripts.molmo_cleanup.openai_agents_perf_profile import (
+    resolve_agent_sdk_perf_profile as _resolve_agent_sdk_perf_profile,
+)
 from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     IncompleteTurnRecoveryPolicy,
     LiveOpenAIAgentsCleanupRunner,
@@ -46,7 +49,6 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
     _profiled_kickoff_prompt,
-    _resolve_agent_sdk_perf_profile,
 )
 
 
