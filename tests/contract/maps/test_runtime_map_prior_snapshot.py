@@ -23,7 +23,7 @@ from roboclaws.maps.runtime_prior_snapshot import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "actionable_semantic_map" / "robot_map_12"
+ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "runtime_map_prior" / "robot_map_12"
 CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_agibot_navigation_memory.py"
 FORBIDDEN_PRIVATE_KEYS = {
     "acceptable_destination_sets",

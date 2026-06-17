@@ -8,7 +8,7 @@ from pathlib import Path
 from scripts.maps.check_robot_map12_consistency import check_robot_map12_consistency
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "actionable_semantic_map" / "robot_map_12"
+ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "runtime_map_prior" / "robot_map_12"
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "check_robot_map12_consistency.py"
 
 
