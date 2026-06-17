@@ -30,6 +30,9 @@ from scripts.maps.render_b1_scene_gaussian_topdown import (
     TOPDOWN_RENDER_SCHEMA,
     build_topdown_camera_request,
 )
+from scripts.maps.suggest_b1_map12_manual_anchor_semantics import (
+    build_semantic_suggestions,
+)
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_readiness_payload
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -468,6 +471,68 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
     assert payload["anchors"][0]["navigation_area_id"] == "manual_draft_area_1"
     assert payload["anchors"][0]["asset_partition_id"] == "manual_draft_region_1"
     assert "not final room semantics" in payload["anchors"][0]["evidence"]["verification_note"]
+
+
+def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
+    draft = correspondence_manifest(
+        anchors=[
+            {
+                "anchor_id": "manual_draft_anchor",
+                "anchor_type": "operator_correspondence",
+                "navigation_area_id": "",
+                "asset_partition_id": "",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "review_status": "proposed",
+            }
+        ]
+    )
+    review_manifest = {
+        "labels": [
+            {
+                "label_id": "room_a",
+                "map_area_id": "area_a",
+                "scene_partition_id": "partition_a",
+                "room_label": "Room A",
+                "review_status": "accepted",
+                "geometry": {
+                    "type": "map_polygon",
+                    "points": [
+                        {"x": 0.0, "y": 0.0},
+                        {"x": 2.0, "y": 0.0},
+                        {"x": 2.0, "y": 2.0},
+                        {"x": 0.0, "y": 2.0},
+                    ],
+                },
+            }
+        ]
+    }
+    scene_diagnostic = {
+        "partitions": [
+            {
+                "partition_id": "partition_a",
+                "scene_frame_bounds": {
+                    "min_x": 0.0,
+                    "min_y": 0.0,
+                    "max_x": 2.0,
+                    "max_y": 2.0,
+                },
+            }
+        ]
+    }
+
+    payload = build_semantic_suggestions(
+        draft=draft,
+        review_manifest=review_manifest,
+        scene_diagnostic=scene_diagnostic,
+    )
+
+    suggestion = payload["suggestions"][0]
+    assert payload["policy"]["accepted_manifest_mutated"] is False
+    assert suggestion["review_status"] == "proposed_suggestion"
+    assert suggestion["suggestion_status"] == "strong_candidate_needs_review"
+    assert suggestion["recommended_navigation_area_id"] == "area_a"
+    assert suggestion["recommended_asset_partition_id"] == "partition_a"
 
 
 def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(

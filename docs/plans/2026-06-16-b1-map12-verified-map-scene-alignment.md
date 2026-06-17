@@ -50,6 +50,13 @@ mean residual `0.352908 m` and max `0.502064 m`, but it uses synthetic
 area/partition ids and must not be committed as the final accepted
 correspondence asset.
 
+Semantic suggestion pass:
+`scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` compares the manual
+anchors against the current Map12 review polygons and B1 scene partition bounds.
+It found only 1 strong candidate out of 7 anchors, so the current evidence is
+not strong enough to auto-fill final `navigation_area_id` /
+`asset_partition_id` values.
+
 ## Goal
 
 Promote the B1 / Map 12 digital twin from a weak candidate overlay to a
@@ -358,6 +365,7 @@ them before claiming `verified` requires an explicit plan update.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/maps/auto_align_b1_map12_scene_topdown.py`
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
+- `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `tests/contract/maps/test_b1_map12_verified_alignment.py`
 - `tests/contract/maps/test_b1_map12_digital_twin_readiness.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`

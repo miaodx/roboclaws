@@ -36,6 +36,11 @@ Last proven evidence:
   explicitly creates a verification-only accepted manifest for the manual
   fallback. It uses synthetic area/partition ids only to exercise the residual
   gate; do not commit it as the final accepted asset.
+- `python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py --draft docs/status/active/b1-map12-scene-correspondences-draft.json --review-manifest assets/maps/b1-map12-alignment-review.json --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json`
+  writes review suggestions for real `navigation_area_id` /
+  `asset_partition_id` values without mutating the accepted manifest. It found
+  only 1 strong candidate out of 7 anchors; the rest are nearest-only hints,
+  so final semantic acceptance still needs human review.
 - `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/manual-draft-alignment`
   writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
   and residual evidence with mean `0.352908 m`, p90 `0.491765 m`, and max
@@ -96,6 +101,12 @@ python scripts/maps/render_b1_map12_correspondence_review.py \
 python scripts/maps/promote_b1_map12_manual_draft_for_verification.py \
   --draft docs/status/active/b1-map12-scene-correspondences-draft.json \
   --output output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json
+
+python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
+  --draft docs/status/active/b1-map12-scene-correspondences-draft.json \
+  --review-manifest assets/maps/b1-map12-alignment-review.json \
+  --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json \
+  --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json
 
 python scripts/maps/fit_b1_map12_scene_alignment.py \
   --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json \
