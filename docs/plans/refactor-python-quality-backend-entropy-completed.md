@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Operator-console control endpoint assertions moved running-state
+  fixture setup, allowlisted transport, blocked-action transport,
+  too-large-movement transport, response checks, and persisted operator-artifact
+  checks out of
+  `test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows()`
+  into focused local helpers. Behavior-change class: test-only cleanup; control
+  route allowlisting, movement bounds, MCP call payload, and operator artifact
+  persistence are unchanged. Metric: ratchet reports 0 complexity rows and 77
+  oversized modules, and the remaining
+  `test_operator_console.py::test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows`
+  PLR0915 row dropped from the complexity list. Proof: focused
+  operator-console control endpoint test, ruff, format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Operator-console scene-preview asset endpoint assertions moved
   registered-asset checks, PNG response checks, JSON response checks, and
   invalid-path rejection checks out of

@@ -118,8 +118,18 @@ again.
   are unchanged. The ratchet reports 1 complexity row and 77 oversized modules;
   `test_operator_console.py::test_operator_console_serves_scene_preview_assets`
   is cleared from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split operator-console control
+  endpoint setup, transport cases, response assertions, and persistence checks
+  out of
+  `test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows()`
+  into focused local helpers. Behavior-change class: test-only cleanup; control
+  route allowlisting, movement bounds, MCP call payload, and operator artifact
+  persistence are unchanged. The ratchet reports 0 complexity rows and 77
+  oversized modules; the remaining
+  `test_operator_console.py::test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows`
+  PLR0915 row is cleared from the complexity list.
 
-- 1 Ruff complexity violation and 77 oversized modules remain.
+- 0 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.

@@ -755,11 +755,7 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert launch_request.parent_run_id == run_id
 
 
-def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows(
-    tmp_path: Path,
-) -> None:
-    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
-    run_id = "control-run"
+def _write_running_operator_control_state(tmp_path: Path, route, run_id: str) -> Path:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
     run_dir.mkdir(parents=True)
     (run_dir / "operator_state.json").write_text(
@@ -774,6 +770,48 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
         ),
         encoding="utf-8",
     )
+    return run_dir
+
+
+def _operator_control_request(host: str, port: int, run_id: str, body: dict[str, object]):
+    return urllib.request.Request(
+        f"http://{host}:{port}/api/runs/{run_id}/control",
+        method="POST",
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+
+
+def _post_operator_control_payload(
+    host: str,
+    port: int,
+    run_id: str,
+    body: dict[str, object],
+) -> dict[str, object]:
+    request = _operator_control_request(host, port, run_id, body)
+    with urllib.request.urlopen(request) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _blocked_operator_control_payload(
+    host: str,
+    port: int,
+    run_id: str,
+    body: dict[str, object],
+) -> dict[str, object]:
+    request = _operator_control_request(host, port, run_id, body)
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(request)
+    return json.loads(exc_info.value.read().decode("utf-8"))
+
+
+def _exercise_allowlisted_operator_control(
+    root: Path, run_id: str
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
 
     async def fake_call_mcp_tool(mcp_url, action, arguments):  # noqa: ANN001, ANN202
         assert mcp_url == "http://127.0.0.1:19999/mcp"
@@ -788,58 +826,53 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
             "requires_reobserve": True,
         }
 
-    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    handler = partial(ConsoleRequestHandler, root=root)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
         host, port = server.server_address
-        request = urllib.request.Request(
-            f"http://{host}:{port}/api/runs/{run_id}/control",
-            method="POST",
-            data=json.dumps(
+        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
+            payload = _post_operator_control_payload(
+                host,
+                port,
+                run_id,
                 {
                     "action": "navigate_to_relative_pose",
                     "forward_m": 0.25,
                     "lateral_m": 0.0,
                     "yaw_delta_deg": 0.0,
-                }
-            ).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
-            with urllib.request.urlopen(request) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                },
+            )
 
-        blocked_request = urllib.request.Request(
-            f"http://{host}:{port}/api/runs/{run_id}/control",
-            method="POST",
-            data=json.dumps({"action": "shell", "command": "whoami"}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+        blocked_payload = _blocked_operator_control_payload(
+            host,
+            port,
+            run_id,
+            {"action": "shell", "command": "whoami"},
         )
-        with pytest.raises(urllib.error.HTTPError) as exc_info:
-            urllib.request.urlopen(blocked_request)
-        blocked_payload = json.loads(exc_info.value.read().decode("utf-8"))
-
-        large_request = urllib.request.Request(
-            f"http://{host}:{port}/api/runs/{run_id}/control",
-            method="POST",
-            data=json.dumps(
-                {
-                    "action": "navigate_to_relative_pose",
-                    "forward_m": 2.0,
-                }
-            ).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+        large_payload = _blocked_operator_control_payload(
+            host,
+            port,
+            run_id,
+            {
+                "action": "navigate_to_relative_pose",
+                "forward_m": 2.0,
+            },
         )
-        with pytest.raises(urllib.error.HTTPError) as large_exc_info:
-            urllib.request.urlopen(large_request)
-        large_payload = json.loads(large_exc_info.value.read().decode("utf-8"))
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
 
+    return payload, blocked_payload, large_payload
+
+
+def _assert_allowlisted_operator_control_response(
+    payload: dict[str, object],
+    blocked_payload: dict[str, object],
+    large_payload: dict[str, object],
+) -> None:
     assert payload["ok"] is True
     assert payload["actor"] == "operator"
     assert payload["action"] == "navigate_to_relative_pose"
@@ -848,6 +881,8 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
     assert blocked_payload["error"] == "unsupported control action: shell"
     assert large_payload["error"] == "relative movement request exceeds console limits"
 
+
+def _assert_operator_control_artifacts(tmp_path: Path, run_dir: Path, route) -> None:
     rows = [
         json.loads(line)
         for line in (run_dir / "operator_control.jsonl").read_text(encoding="utf-8").splitlines()
@@ -866,6 +901,22 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
     assert state["operator_interventions"]["count"] == 1
     assert any(item["label"] == "Operator Control" for item in state["artifact_paths"])
     assert any(item["label"] == "Operator Interventions" for item in state["artifact_paths"])
+
+
+def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "control-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+
+    payload, blocked_payload, large_payload = _exercise_allowlisted_operator_control(
+        tmp_path,
+        run_id,
+    )
+
+    _assert_allowlisted_operator_control_response(payload, blocked_payload, large_payload)
+    _assert_operator_control_artifacts(tmp_path, run_dir, route)
 
 
 def test_operator_console_control_endpoint_allows_paused_operator_handoff(
