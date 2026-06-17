@@ -88,8 +88,10 @@ def scene_topdown_render_packet(tmp_path: Path) -> Path:
         width=2,
         height=2,
         camera_height_m=28.0,
+        camera_y_offset_m=0.05,
         target_z_m=0.6,
         fov_deg=65.0,
+        camera_mode="near-vertical-topdown",
     )
     scene_packet_path = tmp_path / "scene_gaussian_topdown.json"
     scene_packet_path.write_text(

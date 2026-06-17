@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import re
 import subprocess
 import sys
 import traceback
@@ -44,8 +46,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Scene XY bounds as min_x,min_y,max_x,max_y. Required; no inferred fallback.",
     )
     parser.add_argument("--camera-height-m", type=float, default=28.0)
+    parser.add_argument("--camera-y-offset-m", type=float, default=0.05)
     parser.add_argument("--target-z-m", type=float, default=0.6)
     parser.add_argument("--fov-deg", type=float, default=65.0)
+    parser.add_argument(
+        "--camera-mode",
+        choices=("near-vertical-topdown", "high-oblique"),
+        default="near-vertical-topdown",
+    )
+    parser.add_argument(
+        "--nurec-crop-max-z",
+        type=float,
+        help=(
+            "Explicit review-only NuRec crop max Z. Use this to remove upper volume/roof "
+            "occlusion. Omit to render the original Gaussian volume."
+        ),
+    )
     parser.add_argument("--capture", action="store_true")
     parser.add_argument("--capture-one-scene", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--camera-request", type=Path, help=argparse.SUPPRESS)
@@ -66,13 +82,22 @@ def main(argv: list[str] | None = None) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     scene_usd = Path(args.scene_usd)
     prepared_scene_usd = prepare_b1_nurec_scene_usd(scene_usd) or scene_usd
+    nurec_crop = nurec_crop_not_requested()
+    if args.nurec_crop_max_z is not None:
+        prepared_scene_usd, nurec_crop = prepare_nurec_crop_max_z_scene_usd(
+            prepared_scene_usd,
+            crop_max_z=float(args.nurec_crop_max_z),
+            output_dir=output_dir,
+        )
     request = build_topdown_camera_request(
         scene_bounds=scene_bounds,
         width=max(1, int(args.width)),
         height=max(1, int(args.height)),
         camera_height_m=float(args.camera_height_m),
+        camera_y_offset_m=float(args.camera_y_offset_m),
         target_z_m=float(args.target_z_m),
         fov_deg=float(args.fov_deg),
+        camera_mode=str(args.camera_mode),
     )
     request_path = write_camera_control_request(output_dir / "camera_request.json", request)
     packet = topdown_render_packet(
@@ -82,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         request=request,
         request_path=request_path,
         output_dir=output_dir,
+        nurec_crop=nurec_crop,
         capture_result=None,
     )
     if args.capture:
@@ -101,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             request=request,
             request_path=request_path,
             output_dir=output_dir,
+            nurec_crop=nurec_crop,
             capture_result=capture,
         )
     packet_path = output_dir / "scene_gaussian_topdown.json"
@@ -124,25 +151,53 @@ def build_topdown_camera_request(
     width: int,
     height: int,
     camera_height_m: float,
+    camera_y_offset_m: float,
     target_z_m: float,
     fov_deg: float,
+    camera_mode: str,
 ) -> dict[str, Any]:
     min_x, min_y, max_x, max_y = scene_bounds
     center_x = (min_x + max_x) / 2.0
     center_y = (min_y + max_y) / 2.0
     span = max(max_x - min_x, max_y - min_y)
+    if camera_mode == "high-oblique":
+        camera_y_offset = span * 0.55
+        camera_mode_label = "high_oblique_topdown_perspective"
+        label = "B1 Gaussian scene high-oblique top-down"
+    elif camera_mode == "near-vertical-topdown":
+        camera_y_offset = abs(float(camera_y_offset_m))
+        if camera_y_offset <= 0:
+            raise ValueError("--camera-y-offset-m must be positive for near-vertical topdown")
+        camera_mode_label = "near_vertical_topdown_perspective"
+        label = "B1 Gaussian scene near-vertical top-down"
+    else:
+        raise ValueError(f"unsupported camera mode: {camera_mode}")
     view = {
         "view_id": "top2down",
-        "label": "B1 Gaussian scene top-down oblique",
+        "label": label,
         "camera_model": CANONICAL_CAMERA_MODEL,
         "coordinate_frame": "b1_rebuilt_scene_usd_world_candidate",
         "coordinate_convention": "b1_rebuilt_scene_usd_world_candidate",
-        "camera_mode": "high_oblique_topdown_perspective",
-        "eye": [round(center_x, 6), round(center_y - span * 0.55, 6), round(camera_height_m, 6)],
+        "camera_mode": camera_mode_label,
+        "eye": [
+            round(center_x, 6),
+            round(center_y - camera_y_offset, 6),
+            round(camera_height_m, 6),
+        ],
         "target": [round(center_x, 6), round(center_y, 6), round(target_z_m, 6)],
         "up": [0.0, 0.0, 1.0],
         "lens": {"focal_length_mm": 18.0, "vertical_fov_deg": float(fov_deg)},
         "calibration_status": "explicit_scene_xy_bounds_topdown_v1",
+        "topdown_camera_policy": {
+            "requested_camera_mode": camera_mode,
+            "camera_y_offset_m": round(float(camera_y_offset), 6),
+            "reason": (
+                "Isaac Lab's look-at helper is singular when eye and target share the same "
+                "XY under world Z-up, so near-vertical topdown records a tiny explicit XY offset."
+            )
+            if camera_mode == "near-vertical-topdown"
+            else "High-oblique review camera retained only when explicitly requested.",
+        },
     }
     request = canonical_scene_camera_control_request(
         [view],
@@ -169,6 +224,7 @@ def topdown_render_packet(
     request: dict[str, Any],
     request_path: Path,
     output_dir: Path,
+    nurec_crop: dict[str, Any] | None,
     capture_result: dict[str, Any] | None,
 ) -> dict[str, Any]:
     image = ""
@@ -185,6 +241,7 @@ def topdown_render_packet(
         "geometry_status": "rendered_gaussian_scene_topdown" if image else "render_required",
         "scene_usd": str(scene_usd),
         "prepared_scene_usd": str(prepared_scene_usd),
+        "scene_visibility_policy": nurec_crop or nurec_crop_not_requested(),
         "camera_request": str(request_path),
         "capture_result": capture_result_path,
         "capture_status": capture_status,
@@ -232,6 +289,119 @@ def validate_topdown_render_packet(packet: dict[str, Any]) -> list[str]:
     elif transform.get("source") != SCENE_TOPDOWN_PICK_SOURCE:
         errors.append("topdown render has unexpected pixel_to_scene_xyz source")
     return errors
+
+
+def nurec_crop_not_requested() -> dict[str, Any]:
+    return {
+        "status": "not_requested",
+        "source": "original_gaussian_scene_volume",
+        "note": "No upper-volume/roof crop was applied.",
+    }
+
+
+def prepare_nurec_crop_max_z_scene_usd(
+    prepared_scene_usd: Path,
+    *,
+    crop_max_z: float,
+    output_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    if not math.isfinite(float(crop_max_z)):
+        raise ValueError("--nurec-crop-max-z must be finite")
+    prepared_scene_usd = Path(prepared_scene_usd)
+    prepared_text = prepared_scene_usd.read_text(encoding="utf-8")
+    default_ref = _required_usd_reference(prepared_text, "default.usda")
+    default_path = _resolve_usd_reference(default_ref, base_dir=prepared_scene_usd.parent)
+    gauss_path = default_path.with_name("gauss.usda")
+    nurec_path = default_path.with_name("xm_large_scene.nurec")
+    if not default_path.is_file():
+        raise FileNotFoundError(f"NuRec default USD missing for explicit crop: {default_path}")
+    if not gauss_path.is_file():
+        raise FileNotFoundError(f"NuRec gauss USD missing for explicit crop: {gauss_path}")
+    if not nurec_path.is_file():
+        raise FileNotFoundError(f"NuRec field asset missing for explicit crop: {nurec_path}")
+
+    crop_dir = output_dir / f"prepared-nurec-crop-max-z-{_safe_float_token(crop_max_z)}"
+    cropped_default = crop_dir / "default.usda"
+    cropped_gauss = crop_dir / "gauss.usda"
+    cropped_scene = crop_dir / "scene_gs.cropped_nurec.usda"
+    crop_dir.mkdir(parents=True, exist_ok=True)
+
+    default_text = default_path.read_text(encoding="utf-8")
+    gauss_text = gauss_path.read_text(encoding="utf-8")
+    cropped_gauss_text, original_max_bounds = _replace_nurec_crop_max_z(
+        gauss_text,
+        crop_max_z=float(crop_max_z),
+    )
+    cropped_gauss_text = cropped_gauss_text.replace(
+        "@./xm_large_scene.nurec@",
+        f"@{nurec_path.resolve().as_posix()}@",
+    )
+    cropped_scene_text = prepared_text.replace(
+        f"@{default_ref}@",
+        f"@{cropped_default.resolve().as_posix()}@",
+    )
+    _write_if_changed(cropped_default, default_text)
+    _write_if_changed(cropped_gauss, cropped_gauss_text)
+    _write_if_changed(cropped_scene, cropped_scene_text)
+    return cropped_scene, {
+        "status": "applied",
+        "source": "explicit_nurec_crop_max_z",
+        "crop_max_z": round(float(crop_max_z), 9),
+        "original_crop_max_bounds": original_max_bounds,
+        "cropped_scene_usd": str(cropped_scene),
+        "cropped_default_usd": str(cropped_default),
+        "cropped_gauss_usd": str(cropped_gauss),
+        "source_default_usd": str(default_path),
+        "source_gauss_usd": str(gauss_path),
+        "source_nurec_asset": str(nurec_path),
+    }
+
+
+def _required_usd_reference(text: str, filename: str) -> str:
+    pattern = re.compile(rf"@([^@\n]*{re.escape(filename)})@")
+    match = pattern.search(text)
+    if not match:
+        raise ValueError(f"required USD reference missing: {filename}")
+    return str(match.group(1))
+
+
+def _resolve_usd_reference(reference: str, *, base_dir: Path) -> Path:
+    path = Path(reference)
+    if path.is_absolute():
+        return path
+    return base_dir / path
+
+
+def _replace_nurec_crop_max_z(
+    gauss_text: str,
+    *,
+    crop_max_z: float,
+) -> tuple[str, list[float]]:
+    pattern = re.compile(
+        r"(custom float3 omni:nurec:crop:maxBounds = \(\s*)"
+        r"([^,\)]+),\s*([^,\)]+),\s*([^,\)]+)"
+        r"(\s*\))"
+    )
+    match = pattern.search(gauss_text)
+    if not match:
+        raise ValueError("NuRec crop maxBounds missing; cannot apply explicit roof crop")
+    original = [float(match.group(index).strip()) for index in (2, 3, 4)]
+    replacement = (
+        f"{match.group(1)}{original[0]:.9g}, {original[1]:.9g}, "
+        f"{float(crop_max_z):.9g}{match.group(5)}"
+    )
+    return pattern.sub(replacement, gauss_text, count=1), original
+
+
+def _safe_float_token(value: float) -> str:
+    return f"{float(value):.3f}".replace("-", "m").replace(".", "p")
+
+
+def _write_if_changed(path: Path, text: str) -> None:
+    if path.is_file() and path.read_text(encoding="utf-8") == text:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def _capture_scene(
