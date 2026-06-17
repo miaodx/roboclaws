@@ -642,8 +642,7 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
 
 
 class MolmoSpacesSubprocessBackend(_FakeVisualBackend):
-    """Test double whose class name satisfies cleanup profile metadata validation."""
-
+    backend = "molmospaces_subprocess"
     requested_generated_mess_count = 5
 
 

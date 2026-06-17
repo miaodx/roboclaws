@@ -30,6 +30,7 @@ from roboclaws.household.semantic_timeline import (
     PLACE_CLEANUP_PHASES,
     SEMANTIC_LOOP_VARIANT,
 )
+from scripts.molmo_cleanup import isaac_runtime_checker
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -508,7 +509,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert "isaac_prim_transform" in report_text
     assert first_pose_object_id in report_text
     assert "isaac_semantic_pose" in report_text
-    checker._assert_isaac_scene_index_report_rows(
+    isaac_runtime_checker._assert_isaac_scene_index_report_rows(
         run_result["isaac_runtime"]["scene_binding_diagnostics"],
         report_text,
     )

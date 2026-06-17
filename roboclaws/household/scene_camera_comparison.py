@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -32,6 +31,28 @@ from roboclaws.household.camera_control import (
     write_camera_control_request,
 )
 from roboclaws.household.isaac_lab_backend import IsaacLabSubprocessBackend
+from roboclaws.household.scene_camera_render_diagnostics import (
+    float_list as _float_list,
+)
+from roboclaws.household.scene_camera_render_diagnostics import (
+    mujoco_render_contract_from_xml as _mujoco_render_contract_from_xml,
+)
+from roboclaws.household.scene_camera_render_diagnostics import (
+    normalized_vec3 as _normalized_vec3,
+)
+from roboclaws.household.scene_camera_render_diagnostics import (
+    render_source_snippet as _render_source_snippet,
+)
+from roboclaws.household.scene_camera_render_diagnostics import (
+    room_scale_contract_from_capture as _room_scale_contract_from_capture_impl,
+)
+from roboclaws.household.scene_camera_render_diagnostics import (
+    view_usd_prim_path as _view_usd_prim_path_impl,
+)
+from roboclaws.household.scene_camera_report_hydration import (
+    SceneCameraReportHydration,
+    hydrate_scene_camera_report_manifest,
+)
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 
 SCENE_CAMERA_COMPARISON_SCHEMA = "molmospaces_isaac_scene_camera_comparison_v1"
@@ -316,23 +337,11 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         canonical_views=canonical_views,
         isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
     )
-    manifest["candidate_visual_diagnostics"] = _candidate_visual_diagnostics(
+    hydrate_scene_camera_report_manifest(
         manifest,
         output_dir=output_dir,
+        builders=_report_hydration(),
     )
-    manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
-    manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
-    manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
-        manifest,
-        output_dir=output_dir,
-    )
-    manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
-    manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
-    manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
-    manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
-    manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
-    manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
-    manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
     manifest_path.write_text(
@@ -345,37 +354,30 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
 
 def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_dir: Path) -> Path:
     _write_contact_sheet(manifest, output_dir=output_dir)
-    if not isinstance(manifest.get("candidate_visual_diagnostics"), dict):
-        manifest["candidate_visual_diagnostics"] = _candidate_visual_diagnostics(
-            manifest,
-            output_dir=output_dir,
-        )
-    if not isinstance(manifest.get("projection_diagnostics"), dict):
-        manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
-    if not isinstance(manifest.get("visual_diagnostics"), dict):
-        manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
-    if not isinstance(manifest.get("room_wall_light_diagnostics"), dict):
-        manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
-            manifest,
-            output_dir=output_dir,
-        )
-    if not isinstance(manifest.get("native_isaac_render_diagnostics"), dict):
-        manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
-    if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
-        manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
-    if not isinstance(manifest.get("render_domain_view_triage"), dict):
-        manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
-    if not isinstance(manifest.get("render_domain_contract_probe"), dict):
-        manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
-    if not isinstance(manifest.get("lighting_tone_provenance"), dict):
-        manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
-    if not isinstance(manifest.get("shadow_parity_probe"), dict):
-        manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
-    if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
-        manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
+    hydrate_scene_camera_report_manifest(
+        manifest,
+        output_dir=output_dir,
+        builders=_report_hydration(),
+    )
     report_path = output_dir / "report.html"
     report_path.write_text(_report_html(manifest, output_dir=output_dir), encoding="utf-8")
     return report_path
+
+
+def _report_hydration() -> SceneCameraReportHydration:
+    return SceneCameraReportHydration(
+        candidate_visual_diagnostics=_candidate_visual_diagnostics,
+        projection_diagnostics=_projection_diagnostics,
+        visual_diagnostics=_visual_diagnostics,
+        room_wall_light_diagnostics=_room_wall_light_diagnostics,
+        native_isaac_render_diagnostics=_native_isaac_render_diagnostics,
+        render_domain_source_diagnostics=_render_domain_source_diagnostics,
+        render_domain_view_triage=_render_domain_view_triage,
+        render_domain_contract_probe=_render_domain_contract_probe,
+        lighting_tone_provenance=_lighting_tone_provenance,
+        shadow_parity_probe=_shadow_parity_probe,
+        backend_swap_geometry_contract=_backend_swap_geometry_contract,
+    )
 
 
 def comparison_successful(manifest: dict[str, Any]) -> bool:
@@ -1324,149 +1326,11 @@ def _room_scale_contract_from_capture(
     room_views: list[dict[str, Any]],
     isaac_lane: dict[str, Any],
 ) -> dict[str, Any]:
-    rooms = []
-    for view in room_views:
-        if not isinstance(view, dict):
-            continue
-        outline = view.get("room_outline") if isinstance(view.get("room_outline"), dict) else {}
-        half_extents = outline.get("half_extents")
-        center = outline.get("center")
-        if not (
-            isinstance(half_extents, list)
-            and len(half_extents) >= 2
-            and isinstance(center, list)
-            and len(center) >= 2
-        ):
-            continue
-        size = [float(half_extents[0]) * 2.0, float(half_extents[1]) * 2.0]
-        rooms.append(
-            {
-                "view_id": view.get("view_id"),
-                "room_id": view.get("room_id"),
-                "center": [float(center[0]), float(center[1])],
-                "size": size,
-                "half_extents": [float(half_extents[0]), float(half_extents[1])],
-                "provenance": str(outline.get("provenance") or ""),
-            }
-        )
-    isaac_room_outlines = _isaac_room_outlines_by_id(isaac_lane)
-    outline_pairs = []
-    for room in rooms:
-        room_id = str(room.get("room_id") or "")
-        isaac_outline = isaac_room_outlines.get(room_id)
-        if not isaac_outline:
-            continue
-        isaac_center = isaac_outline.get("center")
-        isaac_half_extents = isaac_outline.get("half_extents")
-        if not (
-            isinstance(isaac_center, list)
-            and len(isaac_center) >= 2
-            and isinstance(isaac_half_extents, list)
-            and len(isaac_half_extents) >= 2
-        ):
-            continue
-        isaac_size = [float(isaac_half_extents[0]) * 2.0, float(isaac_half_extents[1]) * 2.0]
-        center_delta = _distance_xy(room["center"], isaac_center)
-        size_delta = _distance_xy(room["size"], isaac_size)
-        half_extent_delta = _distance_xy(room["half_extents"], isaac_half_extents)
-        outline_pairs.append(
-            {
-                "room_id": room_id,
-                "molmospaces_center": list(room["center"]),
-                "isaac_center": [float(isaac_center[0]), float(isaac_center[1])],
-                "center_delta_m": center_delta,
-                "molmospaces_size": list(room["size"]),
-                "isaac_size": isaac_size,
-                "size_delta_m": size_delta,
-                "molmospaces_half_extents": list(room["half_extents"]),
-                "isaac_half_extents": [
-                    float(isaac_half_extents[0]),
-                    float(isaac_half_extents[1]),
-                ],
-                "half_extent_delta_m": half_extent_delta,
-                "molmospaces_provenance": str(room.get("provenance") or ""),
-                "isaac_provenance": str(isaac_outline.get("provenance") or ""),
-                "isaac_usd_prim_path": str(isaac_outline.get("usd_prim_path") or ""),
-            }
-        )
-    max_center_delta = (
-        max(float(item["center_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    return _room_scale_contract_from_capture_impl(
+        room_views=room_views,
+        isaac_lane=isaac_lane,
+        threshold_m=CANONICAL_ROOM_OUTLINE_THRESHOLD_M,
     )
-    max_size_delta = (
-        max(float(item["size_delta_m"]) for item in outline_pairs) if outline_pairs else None
-    )
-    max_half_extent_delta = (
-        max(float(item["half_extent_delta_m"]) for item in outline_pairs) if outline_pairs else None
-    )
-    scene_bounds = (
-        isaac_lane.get("scene_bounds") if isinstance(isaac_lane.get("scene_bounds"), dict) else {}
-    )
-    scene_size = scene_bounds.get("size") if isinstance(scene_bounds.get("size"), list) else []
-    status = "room_outline_mesh_bounds"
-    max_room_to_scene_width_ratio = None
-    max_room_to_scene_depth_ratio = None
-    if len(scene_size) >= 2 and rooms:
-        scene_width = max(float(scene_size[0]), 1e-6)
-        scene_depth = max(float(scene_size[1]), 1e-6)
-        max_room_to_scene_width_ratio = max(float(room["size"][0]) / scene_width for room in rooms)
-        max_room_to_scene_depth_ratio = max(float(room["size"][1]) / scene_depth for room in rooms)
-        if max_room_to_scene_width_ratio > 1.05 or max_room_to_scene_depth_ratio > 1.05:
-            status = "room_outline_exceeds_isaac_scene_bounds"
-    if not rooms:
-        status = "missing_room_outline_diagnostics"
-    elif not outline_pairs:
-        status = "missing_isaac_room_outline_pairs"
-    elif (
-        status == "room_outline_mesh_bounds"
-        and max_center_delta is not None
-        and max_size_delta is not None
-        and max_half_extent_delta is not None
-    ):
-        if max(max_center_delta, max_size_delta, max_half_extent_delta) <= (
-            CANONICAL_ROOM_OUTLINE_THRESHOLD_M
-        ):
-            status = "same_room_outlines_within_threshold"
-        else:
-            status = "room_outline_mismatch"
-    return {
-        "schema": "room_scale_contract_v1",
-        "status": status,
-        "room_count": len(rooms),
-        "matched_room_outline_count": len(outline_pairs),
-        "room_outline_source": "molmospaces_room_outlines",
-        "isaac_room_outline_source": "isaac_scene_index_diagnostics.room_outlines",
-        "isaac_scene_bounds": dict(scene_bounds),
-        "max_room_to_scene_width_ratio": max_room_to_scene_width_ratio,
-        "max_room_to_scene_depth_ratio": max_room_to_scene_depth_ratio,
-        "room_outline_threshold_m": CANONICAL_ROOM_OUTLINE_THRESHOLD_M,
-        "max_room_outline_center_delta_m": max_center_delta,
-        "max_room_outline_size_delta_m": max_size_delta,
-        "max_room_outline_half_extent_delta_m": max_half_extent_delta,
-        "interpretation": (
-            "Room-level camera poses are derived from MolmoSpaces room outlines. "
-            "Those outlines must match Isaac USD room mesh world bounds room-by-room; "
-            "otherwise same-pose backend comparisons can start from a wrong room scale."
-        ),
-        "rooms": rooms,
-        "room_outline_pairs": outline_pairs,
-    }
-
-
-def _isaac_room_outlines_by_id(isaac_lane: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    diagnostics = (
-        isaac_lane.get("scene_index_diagnostics")
-        if isinstance(isaac_lane.get("scene_index_diagnostics"), dict)
-        else {}
-    )
-    outlines = diagnostics.get("room_outlines") if isinstance(diagnostics, dict) else []
-    result: dict[str, dict[str, Any]] = {}
-    for item in outlines or []:
-        if not isinstance(item, dict):
-            continue
-        room_id = str(item.get("room_id") or "")
-        if room_id:
-            result[room_id] = item
-    return result
 
 
 def _projection_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -3625,27 +3489,7 @@ def _view_anchor_kind(manifest: dict[str, Any], view_id: str) -> str:
 
 
 def _view_usd_prim_path(manifest: dict[str, Any], view_id: str) -> str:
-    anchor_id = ""
-    for view in ((manifest.get("lanes") or {}).get(ISAAC_LANE_ID) or {}).get("views") or []:
-        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
-            usd_prim_path = str(view.get("usd_prim_path") or "")
-            if usd_prim_path:
-                return usd_prim_path
-            anchor_id = str(view.get("anchor_id") or "")
-            break
-    for view in manifest.get("canonical_camera_views") or []:
-        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
-            usd_prim_path = str(view.get("usd_prim_path") or "")
-            if usd_prim_path:
-                return usd_prim_path
-            if not anchor_id:
-                anchor_id = str(view.get("anchor_id") or "")
-            break
-    if anchor_id:
-        for anchor in manifest.get("anchors") or []:
-            if isinstance(anchor, dict) and str(anchor.get("anchor_id") or "") == anchor_id:
-                return str(anchor.get("isaac_usd_prim_path") or "")
-    return ""
+    return _view_usd_prim_path_impl(manifest, view_id, isaac_lane_id=ISAAC_LANE_ID)
 
 
 def _view_render_residual_class(
@@ -3798,80 +3642,6 @@ def _render_domain_artifact_paths(manifest: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _mujoco_render_contract_from_xml(path_text: str | None) -> dict[str, Any]:
-    path = Path(str(path_text or ""))
-    if not path.is_file():
-        return {"status": "missing_scene_xml", "path": str(path)}
-    try:
-        root = ElementTree.parse(path).getroot()
-    except ElementTree.ParseError as exc:
-        return {"status": "parse_failed", "path": str(path), "error": str(exc)}
-    textures: dict[str, dict[str, Any]] = {}
-    materials: dict[str, dict[str, Any]] = {}
-    lights = []
-    body_visuals: dict[str, list[dict[str, Any]]] = {}
-    for texture in root.findall(".//texture"):
-        name = str(texture.attrib.get("name") or "")
-        if name:
-            textures[name] = {
-                "name": name,
-                "type": texture.attrib.get("type"),
-                "file": texture.attrib.get("file"),
-            }
-    for material in root.findall(".//material"):
-        name = str(material.attrib.get("name") or "")
-        if name:
-            texture_name = str(material.attrib.get("texture") or "")
-            materials[name] = {
-                "name": name,
-                "rgba": _float_list(material.attrib.get("rgba")),
-                "texture": texture_name,
-                "texture_file": textures.get(texture_name, {}).get("file")
-                if texture_name
-                else None,
-            }
-    for light in root.findall(".//light"):
-        light_contract = dict(light.attrib)
-        light_contract["dir_vector"] = _normalized_vec3(_float_list(light.attrib.get("dir")))
-        light_contract["pos_vector"] = _float_list(light.attrib.get("pos"))
-        lights.append(light_contract)
-    for body in root.findall(".//body"):
-        body_name = str(body.attrib.get("name") or "")
-        if not body_name:
-            continue
-        visuals = []
-        for geom in body.findall(".//geom"):
-            geom_name = str(geom.attrib.get("name") or "")
-            geom_class = str(geom.attrib.get("class") or "")
-            if "_visual_" not in geom_name and "__VISUAL" not in geom_class:
-                continue
-            material_name = str(geom.attrib.get("material") or "")
-            material = materials.get(material_name, {})
-            visuals.append(
-                {
-                    "geom_name": geom_name,
-                    "mesh": geom.attrib.get("mesh"),
-                    "material": material_name,
-                    "rgba": material.get("rgba") or _float_list(geom.attrib.get("rgba")),
-                    "texture": material.get("texture"),
-                    "texture_file": material.get("texture_file"),
-                }
-            )
-        if visuals:
-            body_visuals[body_name] = visuals
-    return {
-        "status": "parsed",
-        "path": str(path),
-        "texture_count": len(textures),
-        "material_count": len(materials),
-        "light_count": len(lights),
-        "textures": textures,
-        "materials": materials,
-        "lights": lights,
-        "body_visuals": body_visuals,
-    }
-
-
 def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
     path = Path(str(path_text or ""))
     if not path.is_file():
@@ -3933,19 +3703,6 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         "visual_physics_status": prepared_summary.get("visual_physics_status")
         or physics_contract.get("visual_physics_status"),
     }
-
-
-def _normalized_vec3(value: Any) -> list[float] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 3:
-        return None
-    try:
-        vector = [float(value[0]), float(value[1]), float(value[2])]
-    except (TypeError, ValueError):
-        return None
-    magnitude = math.sqrt(sum(component * component for component in vector))
-    if magnitude <= 0.0:
-        return None
-    return [component / magnitude for component in vector]
 
 
 def _angle_deg_between(left: Any, right: Any) -> float | None:
@@ -4435,18 +4192,6 @@ def _view_anchor_id(manifest: dict[str, Any], view_id: str) -> str:
     return ""
 
 
-def _float_list(value: Any) -> list[float] | None:
-    if value is None:
-        return None
-    result = []
-    for token in str(value).replace(",", " ").split():
-        try:
-            result.append(float(token))
-        except ValueError:
-            return None
-    return result or None
-
-
 def _render_source_reference(reference: dict[str, Any]) -> dict[str, Any]:
     rel_path = Path(str(reference.get("path") or ""))
     path = REPO_ROOT / rel_path
@@ -4473,63 +4218,6 @@ def _render_source_reference(reference: dict[str, Any]) -> dict[str, Any]:
         "claim": reference.get("claim"),
         "snippet_summary": snippet,
     }
-
-
-def _render_source_snippet(lines: list[str]) -> str:
-    priority_keywords = (
-        "doNotCastShadows",
-        "opacity=1.0",
-        "definePreviewMaterial",
-        "addDiffuseTextureToPreviewMaterial",
-        "UsdLux.DistantLight",
-        "defineDomeLight",
-        "add_light",
-        "add_texture",
-    )
-    keywords = (
-        "material",
-        "texture",
-        "light",
-        "shadow",
-        "opacity",
-        "roughness",
-        "specular",
-        "Preview",
-        "DistantLight",
-        "DomeLight",
-        "doNotCastShadows",
-    )
-    matching = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if (
-            stripped.startswith("def ")
-            or stripped.startswith("#")
-            or stripped.endswith(":")
-            or stripped in {")", "("}
-        ):
-            continue
-        if any(keyword.lower() in stripped.lower() for keyword in keywords):
-            matching.append(stripped)
-    selected = []
-    for keyword in priority_keywords:
-        for line in matching:
-            if keyword.lower() in line.lower() and line not in selected:
-                selected.append(line)
-            if len(selected) >= 5:
-                break
-        if len(selected) >= 5:
-            break
-    for line in matching:
-        if line not in selected:
-            selected.append(line)
-        if len(selected) >= 5:
-            break
-    if not selected:
-        selected = [line.strip() for line in lines if line.strip()][:3]
-    return " | ".join(selected)
 
 
 def _image_visual_metrics(path: Path) -> dict[str, Any]:
@@ -4773,10 +4461,6 @@ def _distance_3d(left: list[float], right: list[float]) -> float:
         + (float(left[1]) - float(right[1])) ** 2
         + (float(left[2]) - float(right[2])) ** 2
     )
-
-
-def _distance_xy(left: list[float], right: list[float]) -> float:
-    return math.hypot(float(left[0]) - float(right[0]), float(left[1]) - float(right[1]))
 
 
 def _is_vec3(value: Any) -> bool:

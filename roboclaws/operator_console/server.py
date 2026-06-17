@@ -10,7 +10,7 @@ from functools import partial
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 
 from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.interactions import (
@@ -46,6 +46,103 @@ def _selection_task_selector(intent_id: str) -> str:
     return intent_id if intent_id in {"cleanup", "map-build"} else "open-task"
 
 
+def _readiness_selection_id(query: dict[str, list[str]]) -> str:
+    selection_id = str(query.get("selection_id", [""])[0])
+    if selection_id:
+        return selection_id
+    world_id = str(query.get("world_id", [""])[0])
+    backend_id = str(query.get("backend_id", [""])[0])
+    intent_id = str(query.get("intent_id", [""])[0])
+    agent_engine_id = str(query.get("agent_engine_id", [""])[0])
+    evidence_lane = str(query.get("evidence_lane", ["world-oracle-labels"])[0])
+    return "::".join(
+        (
+            world_id,
+            backend_id,
+            _selection_task_selector(intent_id),
+            agent_engine_id,
+            evidence_lane,
+        )
+    )
+
+
+def _query_overrides(query: dict[str, list[str]], keys: tuple[str, ...]) -> dict[str, str]:
+    return {key: str(query[key][0]) for key in keys if query.get(key, [""])[0]}
+
+
+def _query_gates(query: dict[str, list[str]], keys: tuple[str, ...]) -> dict[str, bool]:
+    return {key: str(query[key][0]).lower() == "true" for key in keys if query.get(key, [""])[0]}
+
+
+def _query_provider_env_overrides(query: dict[str, list[str]]) -> dict[str, str]:
+    overrides = {
+        "ROBOCLAWS_CODEX_PROVIDER": str(query.get("codex_provider", [""])[0]),
+        "ROBOCLAWS_CLAUDE_PROVIDER": str(query.get("claude_provider", [""])[0]),
+    }
+    return {key: value for key, value in overrides.items() if value}
+
+
+def _launch_request_from_payload(payload: dict[str, object]) -> LaunchRequest:
+    return LaunchRequest(
+        world_id=str(payload.get("world_id") or ""),
+        backend_id=str(payload.get("backend_id") or ""),
+        intent_id=str(payload.get("intent_id") or payload.get("intent") or ""),
+        agent_engine_id=str(payload.get("agent_engine_id") or ""),
+        provider_profile=str(payload.get("provider_profile") or ""),
+        evidence_lane=str(payload.get("evidence_lane") or ""),
+        scenario_setup=str(payload.get("scenario_setup") or ""),
+        prompt=str(payload.get("prompt") or ""),
+        overrides=dict(payload.get("overrides") or {}),
+        env_overrides=dict(payload.get("env_overrides") or {}),
+        gates=dict(payload.get("gates") or {}),
+        operator_session_id=str(payload.get("operator_session_id") or ""),
+        parent_run_id=str(payload.get("parent_run_id") or ""),
+        next_goal_packet=dict(payload.get("next_goal_packet") or {}),
+        selection_id_override=str(payload.get("selection_id") or ""),
+    )
+
+
+def _try_autostart_follow_up(root: Path, parent_run_id: str, follow_up: dict[str, object]) -> None:
+    launch = _follow_up_launch_request(parent_run_id, follow_up)
+    try:
+        follow_up["started_run"] = start_console_run(root, launch)
+        follow_up["status"] = "started"
+    except ConsoleLaunchError as exc:
+        follow_up["start_error"] = str(exc)
+
+
+def _follow_up_launch_request(parent_run_id: str, follow_up: dict[str, object]) -> LaunchRequest:
+    selection_id = str(follow_up.get("selection_id") or "")
+    launch_parts = _selection_launch_parts(selection_id)
+    return LaunchRequest(
+        selection_id_override=selection_id,
+        intent_id=str(follow_up.get("intent") or "") or launch_parts.get("intent_id", ""),
+        prompt=str(follow_up.get("body") or ""),
+        operator_session_id=str(follow_up.get("operator_session_id") or ""),
+        parent_run_id=parent_run_id,
+        next_goal_packet=dict(follow_up.get("next_goal_packet") or {}),
+        world_id=launch_parts.get("world_id", ""),
+        backend_id=launch_parts.get("backend_id", ""),
+        agent_engine_id=launch_parts.get("agent_engine_id", ""),
+        evidence_lane=launch_parts.get("evidence_lane", ""),
+    )
+
+
+def _selection_launch_parts(selection_id: str) -> dict[str, str]:
+    if not selection_id:
+        return {}
+    parts = selection_id.split("::")
+    if len(parts) != 5:
+        return {}
+    return {
+        "world_id": parts[0],
+        "backend_id": parts[1],
+        "intent_id": "open-ended" if parts[2] == "open-task" else parts[2],
+        "agent_engine_id": parts[3],
+        "evidence_lane": parts[4],
+    }
+
+
 class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     """Serve static assets plus JSON APIs."""
 
@@ -58,140 +155,12 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
-        if parsed.path in {"/", "/index.html", "/app.js", "/styles.css"}:
-            return self._static_file(parsed.path)
-        if parsed.path.startswith("/previews/"):
-            rel = Path(unquote(parsed.path.removeprefix("/previews/")))
-            path = (self.static_root / "previews" / rel).resolve()
-            preview_root = (self.static_root / "previews").resolve()
-            if not _is_relative_to(path, preview_root) or not path.exists():
-                return self.send_error(HTTPStatus.NOT_FOUND)
-            return self._file(path)
-        if parsed.path.startswith("/asset-previews/maps/"):
-            rel = Path(unquote(parsed.path.removeprefix("/asset-previews/maps/")))
-            preview_root = (self.project_root / "assets" / "maps").resolve()
-            path = (preview_root / rel).resolve()
-            if not _is_relative_to(path, preview_root) or path.name != "preview.png":
-                return self.send_error(HTTPStatus.NOT_FOUND)
-            if not path.exists():
-                return self.send_error(HTTPStatus.NOT_FOUND)
-            return self._file(path)
-        if parsed.path == "/api/routes":
-            return self._json(
-                {
-                    "worlds": list(list_worlds()),
-                    "evidence_lanes": list(list_evidence_lanes()),
-                    "combinations": [
-                        selection.to_payload()
-                        for selection in list_console_combinations(include_disabled=True)
-                    ],
-                    "routes": [
-                        selection.to_payload()
-                        for selection in list_console_combinations(include_disabled=True)
-                    ],
-                    "readiness": {
-                        selection.id: route_readiness(self.repo_root, selection)
-                        for selection in list_console_combinations(include_disabled=False)
-                    },
-                }
-            )
-        if parsed.path == "/api/readiness":
-            try:
-                query = parse_qs(parsed.query)
-                selection_id = str(query.get("selection_id", [""])[0])
-                if not selection_id:
-                    world_id = str(query.get("world_id", [""])[0])
-                    backend_id = str(query.get("backend_id", [""])[0])
-                    intent_id = str(query.get("intent_id", [""])[0])
-                    agent_engine_id = str(query.get("agent_engine_id", [""])[0])
-                    evidence_lane = str(query.get("evidence_lane", ["world-oracle-labels"])[0])
-                    selection_id = "::".join(
-                        (
-                            world_id,
-                            backend_id,
-                            _selection_task_selector(intent_id),
-                            agent_engine_id,
-                            evidence_lane,
-                        )
-                    )
-                route = get_selection(selection_id)
-                overrides = {
-                    key: str(query[key][0])
-                    for key in (
-                        "host",
-                        "port",
-                        "context_json",
-                        "real_movement_enabled",
-                        "scenario_setup",
-                        "provider_profile",
-                    )
-                    if query.get(key, [""])[0]
-                }
-                gates = {
-                    key: str(query[key][0]).lower() == "true"
-                    for key in ("localization_ready", "run_enabled", "estop_ready")
-                    if query.get(key, [""])[0]
-                }
-                env_overrides = {
-                    "ROBOCLAWS_CODEX_PROVIDER": str(query.get("codex_provider", [""])[0]),
-                    "ROBOCLAWS_CLAUDE_PROVIDER": str(query.get("claude_provider", [""])[0]),
-                }
-                env_overrides = {key: value for key, value in env_overrides.items() if value}
-                return self._json(
-                    route_readiness(
-                        self.repo_root,
-                        route,
-                        overrides=overrides,
-                        env_overrides=env_overrides,
-                        gates=gates,
-                    )
-                )
-            except (ConsoleLaunchError, KeyError, ValueError) as exc:
-                return self._json({"error": str(exc)}, status=400)
-        if parsed.path == "/api/runs/latest":
-            latest = latest_run_payload(self.repo_root)
-            if not latest:
-                return self._json({"error": "No operator-console run artifacts found."}, status=404)
-            return self._json(latest)
-        if parsed.path.startswith("/api/sessions/"):
-            session_id = unquote(parsed.path.removeprefix("/api/sessions/"))
-            try:
-                return self._json(get_operator_session(self.repo_root, session_id))
-            except InteractionError as exc:
-                return self._json({"error": str(exc)}, status=404)
-        if parsed.path.startswith("/api/runs/"):
-            run_id = unquote(parsed.path.removeprefix("/api/runs/"))
-            if run_id.endswith("/pause"):
-                run_id = run_id.removesuffix("/pause")
-                return self._json(
-                    {
-                        "run_id": run_id,
-                        "paused": False,
-                        "reason": PAUSE_UNAVAILABLE_REASON,
-                    }
-                )
-            if run_id.endswith("/messages"):
-                run_id = run_id.removesuffix("/messages")
-                try:
-                    return self._json(list_operator_messages(self.repo_root, run_id))
-                except InteractionError as exc:
-                    return self._json({"error": str(exc)}, status=404)
-            selection_id = parse_qs(parsed.query).get("selection_id", [""])[0]
-            route = get_selection(selection_id) if selection_id else None
-            run_dir = console_output_root(self.repo_root) / "runs" / run_id
-            return self._json(derive_operator_state(self.repo_root, run_dir, route))
-        if parsed.path.startswith("/api/raw/"):
-            rel = Path(unquote(parsed.path.removeprefix("/api/raw/")))
-            path = (self.repo_root / rel).resolve()
-            if not _is_relative_to(path, self.repo_root) or not path.exists():
-                return self.send_error(HTTPStatus.NOT_FOUND)
-            return self._text(redacted_artifact_text(path))
-        if parsed.path.startswith("/artifacts/"):
-            rel = Path(unquote(parsed.path.removeprefix("/artifacts/")))
-            path = (self.repo_root / rel).resolve()
-            if not _is_relative_to(path, self.repo_root) or not path.exists():
-                return self.send_error(HTTPStatus.NOT_FOUND)
-            return self._file(path)
+        if self._handle_static_get(parsed):
+            return
+        if self._handle_api_get(parsed):
+            return
+        if self._handle_file_get(parsed):
+            return
         return super().do_GET()
 
     def do_HEAD(self) -> None:  # noqa: N802
@@ -204,111 +173,258 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             payload = self._read_payload()
-            if parsed.path == "/api/sessions":
-                return self._json(create_operator_session(self.repo_root), status=201)
-            if parsed.path == "/api/messup-preview":
-                return self._json(
-                    preview_messup(
-                        self.repo_root,
-                        world_id=str(payload.get("world_id") or ""),
-                        backend_id=str(payload.get("backend_id") or ""),
-                        scenario_setup=str(payload.get("scenario_setup") or ""),
-                        relocation_count=str(payload.get("relocation_count") or "5"),
-                        seed=str(payload.get("seed") or ""),
-                    )
-                )
-            if parsed.path == "/api/runs":
-                request = LaunchRequest(
-                    world_id=str(payload.get("world_id") or ""),
-                    backend_id=str(payload.get("backend_id") or ""),
-                    intent_id=str(payload.get("intent_id") or payload.get("intent") or ""),
-                    agent_engine_id=str(payload.get("agent_engine_id") or ""),
-                    provider_profile=str(payload.get("provider_profile") or ""),
-                    evidence_lane=str(payload.get("evidence_lane") or ""),
-                    scenario_setup=str(payload.get("scenario_setup") or ""),
-                    prompt=str(payload.get("prompt") or ""),
-                    overrides=dict(payload.get("overrides") or {}),
-                    env_overrides=dict(payload.get("env_overrides") or {}),
-                    gates=dict(payload.get("gates") or {}),
-                    operator_session_id=str(payload.get("operator_session_id") or ""),
-                    parent_run_id=str(payload.get("parent_run_id") or ""),
-                    next_goal_packet=dict(payload.get("next_goal_packet") or {}),
-                    selection_id_override=str(payload.get("selection_id") or ""),
-                )
-                return self._json(start_console_run(self.repo_root, request), status=201)
-            run_action = _parse_run_action_path(parsed.path)
-            if run_action and run_action[1] == "ask-why":
-                run_id = run_action[0]
-                return self._json(
-                    append_ask_why(self.repo_root, run_id, str(payload.get("question") or "")),
-                    status=201,
-                )
-            if run_action and run_action[1] == "messages":
-                run_id = run_action[0]
-                return self._json(
-                    append_steer_message(self.repo_root, run_id, str(payload.get("body") or "")),
-                    status=201,
-                )
-            if run_action and run_action[1] == "next-goal":
-                run_id = run_action[0]
-                follow_up = append_next_goal_request(
-                    self.repo_root,
-                    run_id,
-                    str(payload.get("prompt") or payload.get("body") or ""),
-                    confirmed=bool(payload.get("confirmed")),
-                )
-                if follow_up.get("status") == "ready_to_start" and follow_up.get(
-                    "auto_start_allowed"
-                ):
-                    selection_id = str(follow_up.get("selection_id") or "")
-                    launch_parts: dict[str, str] = {}
-                    if selection_id:
-                        parts = selection_id.split("::")
-                        if len(parts) == 5:
-                            launch_parts = {
-                                "world_id": parts[0],
-                                "backend_id": parts[1],
-                                "intent_id": "open-ended" if parts[2] == "open-task" else parts[2],
-                                "agent_engine_id": parts[3],
-                                "evidence_lane": parts[4],
-                            }
-                    launch = LaunchRequest(
-                        selection_id_override=selection_id,
-                        intent_id=str(follow_up.get("intent") or "")
-                        or launch_parts.get("intent_id", ""),
-                        prompt=str(follow_up.get("body") or ""),
-                        operator_session_id=str(follow_up.get("operator_session_id") or ""),
-                        parent_run_id=run_id,
-                        next_goal_packet=dict(follow_up.get("next_goal_packet") or {}),
-                        world_id=launch_parts.get("world_id", ""),
-                        backend_id=launch_parts.get("backend_id", ""),
-                        agent_engine_id=launch_parts.get("agent_engine_id", ""),
-                        evidence_lane=launch_parts.get("evidence_lane", ""),
-                    )
-                    try:
-                        follow_up["started_run"] = start_console_run(self.repo_root, launch)
-                        follow_up["status"] = "started"
-                    except ConsoleLaunchError as exc:
-                        follow_up["start_error"] = str(exc)
-                return self._json(follow_up, status=201)
-            if run_action and run_action[1] == "pause":
-                run_id = run_action[0]
-                return self._json(
-                    {
-                        "run_id": run_id,
-                        "paused": False,
-                        "reason": PAUSE_UNAVAILABLE_REASON,
-                    }
-                )
-            if run_action and run_action[1] == "stop":
-                run_id = run_action[0]
-                return self._json(stop_console_run(self.repo_root, run_id))
-            if run_action and run_action[1] == "emergency-stop":
-                run_id = run_action[0]
-                return self._json(stop_console_run(self.repo_root, run_id, emergency=True))
+            if self._handle_exact_post(parsed.path, payload):
+                return
+            if self._handle_run_action_post(parsed.path, payload):
+                return
         except (ConsoleLaunchError, InteractionError, KeyError, ValueError) as exc:
             return self._json({"error": str(exc)}, status=400)
         return self.send_error(HTTPStatus.NOT_FOUND)
+
+    def _handle_static_get(self, parsed: ParseResult) -> bool:
+        if parsed.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+            self._static_file(parsed.path)
+            return True
+        if parsed.path.startswith("/previews/"):
+            self._serve_preview_asset(parsed.path)
+            return True
+        if parsed.path.startswith("/asset-previews/maps/"):
+            self._serve_map_preview_asset(parsed.path)
+            return True
+        return False
+
+    def _handle_api_get(self, parsed: ParseResult) -> bool:
+        if parsed.path == "/api/routes":
+            self._json(self._routes_payload())
+            return True
+        if parsed.path == "/api/readiness":
+            self._serve_route_readiness(parsed.query)
+            return True
+        if parsed.path == "/api/runs/latest":
+            self._serve_latest_run()
+            return True
+        if parsed.path.startswith("/api/sessions/"):
+            self._serve_session_get(parsed.path)
+            return True
+        if parsed.path.startswith("/api/runs/"):
+            self._serve_run_get(parsed)
+            return True
+        if parsed.path.startswith("/api/raw/"):
+            self._serve_raw_artifact(parsed.path)
+            return True
+        return False
+
+    def _handle_file_get(self, parsed: ParseResult) -> bool:
+        if not parsed.path.startswith("/artifacts/"):
+            return False
+        rel = Path(unquote(parsed.path.removeprefix("/artifacts/")))
+        path = (self.repo_root / rel).resolve()
+        if not _is_relative_to(path, self.repo_root) or not path.exists():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return True
+        self._file(path)
+        return True
+
+    def _handle_exact_post(self, path: str, payload: dict[str, object]) -> bool:
+        if path == "/api/sessions":
+            self._json(create_operator_session(self.repo_root), status=201)
+            return True
+        if path == "/api/messup-preview":
+            self._serve_messup_preview(payload)
+            return True
+        if path == "/api/runs":
+            self._serve_run_start(payload)
+            return True
+        return False
+
+    def _handle_run_action_post(self, path: str, payload: dict[str, object]) -> bool:
+        run_action = _parse_run_action_path(path)
+        if not run_action:
+            return False
+        run_id, action = run_action
+        handlers = {
+            "ask-why": self._serve_ask_why,
+            "messages": self._serve_steer_message,
+            "next-goal": self._serve_next_goal,
+            "pause": self._serve_pause_post,
+            "stop": self._serve_stop_post,
+            "emergency-stop": self._serve_emergency_stop_post,
+        }
+        handler = handlers.get(action)
+        if handler is None:
+            return False
+        handler(run_id, payload)
+        return True
+
+    def _serve_preview_asset(self, request_path: str) -> None:
+        rel = Path(unquote(request_path.removeprefix("/previews/")))
+        path = (self.static_root / "previews" / rel).resolve()
+        preview_root = (self.static_root / "previews").resolve()
+        if not _is_relative_to(path, preview_root) or not path.exists():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self._file(path)
+
+    def _serve_map_preview_asset(self, request_path: str) -> None:
+        rel = Path(unquote(request_path.removeprefix("/asset-previews/maps/")))
+        preview_root = (self.project_root / "assets" / "maps").resolve()
+        path = (preview_root / rel).resolve()
+        if not _is_relative_to(path, preview_root) or path.name != "preview.png":
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if not path.exists():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self._file(path)
+
+    def _routes_payload(self) -> dict[str, object]:
+        return {
+            "worlds": list(list_worlds()),
+            "evidence_lanes": list(list_evidence_lanes()),
+            "combinations": [
+                selection.to_payload()
+                for selection in list_console_combinations(include_disabled=True)
+            ],
+            "routes": [
+                selection.to_payload()
+                for selection in list_console_combinations(include_disabled=True)
+            ],
+            "readiness": {
+                selection.id: route_readiness(self.repo_root, selection)
+                for selection in list_console_combinations(include_disabled=False)
+            },
+        }
+
+    def _serve_route_readiness(self, query_string: str) -> None:
+        try:
+            query = parse_qs(query_string)
+            selection_id = _readiness_selection_id(query)
+            route = get_selection(selection_id)
+            self._json(
+                route_readiness(
+                    self.repo_root,
+                    route,
+                    overrides=_query_overrides(
+                        query,
+                        (
+                            "host",
+                            "port",
+                            "context_json",
+                            "real_movement_enabled",
+                            "scenario_setup",
+                            "provider_profile",
+                        ),
+                    ),
+                    env_overrides=_query_provider_env_overrides(query),
+                    gates=_query_gates(
+                        query,
+                        ("localization_ready", "run_enabled", "estop_ready"),
+                    ),
+                )
+            )
+        except (ConsoleLaunchError, KeyError, ValueError) as exc:
+            self._json({"error": str(exc)}, status=400)
+
+    def _serve_latest_run(self) -> None:
+        latest = latest_run_payload(self.repo_root)
+        if not latest:
+            self._json({"error": "No operator-console run artifacts found."}, status=404)
+            return
+        self._json(latest)
+
+    def _serve_session_get(self, request_path: str) -> None:
+        session_id = unquote(request_path.removeprefix("/api/sessions/"))
+        try:
+            self._json(get_operator_session(self.repo_root, session_id))
+        except InteractionError as exc:
+            self._json({"error": str(exc)}, status=404)
+
+    def _serve_run_get(self, parsed: ParseResult) -> None:
+        run_id = unquote(parsed.path.removeprefix("/api/runs/"))
+        if run_id.endswith("/pause"):
+            self._serve_pause_get(run_id.removesuffix("/pause"))
+            return
+        if run_id.endswith("/messages"):
+            self._serve_run_messages_get(run_id.removesuffix("/messages"))
+            return
+        selection_id = parse_qs(parsed.query).get("selection_id", [""])[0]
+        route = get_selection(selection_id) if selection_id else None
+        run_dir = console_output_root(self.repo_root) / "runs" / run_id
+        self._json(derive_operator_state(self.repo_root, run_dir, route))
+
+    def _serve_pause_get(self, run_id: str) -> None:
+        self._json(
+            {
+                "run_id": run_id,
+                "paused": False,
+                "reason": PAUSE_UNAVAILABLE_REASON,
+            }
+        )
+
+    def _serve_run_messages_get(self, run_id: str) -> None:
+        try:
+            self._json(list_operator_messages(self.repo_root, run_id))
+        except InteractionError as exc:
+            self._json({"error": str(exc)}, status=404)
+
+    def _serve_raw_artifact(self, request_path: str) -> None:
+        rel = Path(unquote(request_path.removeprefix("/api/raw/")))
+        path = (self.repo_root / rel).resolve()
+        if not _is_relative_to(path, self.repo_root) or not path.exists():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self._text(redacted_artifact_text(path))
+
+    def _serve_messup_preview(self, payload: dict[str, object]) -> None:
+        self._json(
+            preview_messup(
+                self.repo_root,
+                world_id=str(payload.get("world_id") or ""),
+                backend_id=str(payload.get("backend_id") or ""),
+                scenario_setup=str(payload.get("scenario_setup") or ""),
+                relocation_count=str(payload.get("relocation_count") or "5"),
+                seed=str(payload.get("seed") or ""),
+            )
+        )
+
+    def _serve_run_start(self, payload: dict[str, object]) -> None:
+        request = _launch_request_from_payload(payload)
+        self._json(start_console_run(self.repo_root, request), status=201)
+
+    def _serve_ask_why(self, run_id: str, payload: dict[str, object]) -> None:
+        self._json(
+            append_ask_why(self.repo_root, run_id, str(payload.get("question") or "")),
+            status=201,
+        )
+
+    def _serve_steer_message(self, run_id: str, payload: dict[str, object]) -> None:
+        self._json(
+            append_steer_message(self.repo_root, run_id, str(payload.get("body") or "")),
+            status=201,
+        )
+
+    def _serve_next_goal(self, run_id: str, payload: dict[str, object]) -> None:
+        follow_up = append_next_goal_request(
+            self.repo_root,
+            run_id,
+            str(payload.get("prompt") or payload.get("body") or ""),
+            confirmed=bool(payload.get("confirmed")),
+        )
+        if follow_up.get("status") == "ready_to_start" and follow_up.get("auto_start_allowed"):
+            _try_autostart_follow_up(self.repo_root, run_id, follow_up)
+        self._json(follow_up, status=201)
+
+    def _serve_pause_post(self, run_id: str, payload: dict[str, object]) -> None:
+        del payload
+        self._serve_pause_get(run_id)
+
+    def _serve_stop_post(self, run_id: str, payload: dict[str, object]) -> None:
+        del payload
+        self._json(stop_console_run(self.repo_root, run_id))
+
+    def _serve_emergency_stop_post(self, run_id: str, payload: dict[str, object]) -> None:
+        del payload
+        self._json(stop_console_run(self.repo_root, run_id, emergency=True))
 
     def _read_payload(self) -> dict[str, object]:
         length = int(self.headers.get("Content-Length", "0") or "0")

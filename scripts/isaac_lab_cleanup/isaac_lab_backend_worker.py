@@ -11,7 +11,7 @@ import sys
 import traceback
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -65,6 +65,44 @@ from roboclaws.household.types import (
     PrivateScoringManifest,
     TargetRule,
 )
+from scripts.isaac_lab_cleanup.isaac_camera_capture import (
+    IsaacCameraCaptureHooks,
+    IsaacCameraCaptureRequest,
+    capture_isaac_lab_camera_views,
+)
+from scripts.isaac_lab_cleanup.isaac_capture_quality import (
+    apply_isaac_capture_quality_overrides,
+)
+from scripts.isaac_lab_cleanup.isaac_capture_quality import (
+    json_safe_setting_value as _json_safe_setting_value,
+)
+from scripts.isaac_lab_cleanup.isaac_capture_quality import (
+    restore_isaac_capture_quality_overrides as _restore_isaac_capture_quality_overrides,
+)
+from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
+    IsaacSceneCameraCaptureHooks,
+    IsaacSceneCameraCaptureRequest,
+    capture_isaac_lab_scene_camera_views,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
+    apply_scene_index_semantic_labels,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
+    semantic_label_application_not_requested as _semantic_label_application_not_requested,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_labels import (
+    semantic_label_target_prims as _semantic_label_target_prims,
+)
+from scripts.isaac_lab_cleanup.isaac_semantic_pose_robot_view import (
+    SemanticPoseRobotViewHooks,
+    SemanticPoseRobotViewRequest,
+    real_semantic_pose_robot_view_images,
+)
+from scripts.isaac_lab_cleanup.isaac_support_surfaces import usd_support_surface_union
+from scripts.isaac_lab_cleanup.isaac_usd_xform import (
+    set_usd_xform_translate as _set_usd_xform_translate,
+)
+from scripts.isaac_lab_cleanup.isaac_worker_cli import build_arg_parser
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
@@ -233,157 +271,15 @@ _DEFERRED_SIMULATION_APP: Any | None = None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Isaac Lab cleanup backend worker for Roboclaws.")
-    parser.add_argument("--state-path", type=Path, required=True)
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    return build_arg_parser(
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
+        generated_scene_kinds=GENERATED_SCENE_KINDS,
+        segmentation_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
+    ).parse_args(argv)
 
-    init = subparsers.add_parser("init")
-    init.add_argument("--run-dir", type=Path, required=True)
-    init.add_argument("--seed", type=int, default=7)
-    init.add_argument("--scene-source", default="procthor-10k-val")
-    init.add_argument("--scene-index", type=int, default=0)
-    init.add_argument("--generated-mess-count", type=int, default=1)
-    init.add_argument(
-        "--generated-mess-object-id",
-        action="append",
-        help="Private run-control object id to include in the generated mess set. Repeatable.",
-    )
-    init.add_argument(
-        "--generated-mess-manifest-path",
-        type=Path,
-        help="Private backend-neutral generated mess manifest to apply during init.",
-    )
-    init.add_argument(
-        "--generated-scene-kind",
-        choices=GENERATED_SCENE_KINDS,
-        default="roboclaws_smoke",
-        help=(
-            "Generated USD control scene to write when --scene-usd-path is omitted. "
-            "Use isaac_official_blocks to probe NVIDIA Isaac sample assets."
-        ),
-    )
-    init.add_argument("--runtime-mode", choices=("real", "fake"), default="real")
-    init.add_argument("--include-robot", action="store_true")
-    init.add_argument("--robot-name", default="rby1m")
-    init.add_argument("--map-bundle-dir", type=Path)
-    init.add_argument(
-        "--enable-segmentation",
-        action="store_true",
-        help="Request Isaac semantic/instance segmentation tensors during real RGB capture.",
-    )
-    init.add_argument(
-        "--segmentation-data-type",
-        action="append",
-        choices=ISAAC_SEGMENTATION_DATA_TYPES,
-        help=(
-            "Isaac segmentation data type to request. Repeat to probe individual "
-            "annotators; defaults to all supported segmentation data types."
-        ),
-    )
-    init.add_argument(
-        "--segmentation-semantic-filter",
-        action="append",
-        help=(
-            "Semantic label instance name to request from Isaac camera semantic filters. "
-            "Repeat to probe class vs usd_prim_path labels; defaults to class."
-        ),
-    )
-    init.add_argument(
-        "--scene-usd-path",
-        type=Path,
-        help=(
-            "Optional local USD/USDA scene to load in real mode. Use this for "
-            "MolmoSpaces Isaac scene parity once a scene shard is available locally."
-        ),
-    )
 
-    subparsers.add_parser("locations")
-    subparsers.add_parser("observe")
-
-    snapshot = subparsers.add_parser("snapshot")
-    snapshot.add_argument("--output-path", type=Path, required=True)
-    snapshot.add_argument("--title", required=True)
-    snapshot.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
-    snapshot.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
-
-    robot_views = subparsers.add_parser("robot_views")
-    robot_views.add_argument("--output-dir", type=Path, required=True)
-    robot_views.add_argument("--label", required=True)
-    robot_views.add_argument("--focus-object-id")
-    robot_views.add_argument("--focus-receptacle-id")
-    robot_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
-    robot_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
-    robot_views.add_argument(
-        "--render-settle-frames",
-        type=int,
-        default=0,
-        help=(
-            "Extra Isaac render frames to advance after the first nonblank RGB tensor before "
-            "saving robot-view images. This is an opt-in capture-quality probe control."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-aa-op",
-        type=int,
-        help=(
-            "Optional Isaac /rtx/post/aa/op value for an opt-in capture-quality probe. "
-            "The worker records the previous value and restores it after capture."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-tonemap-op",
-        type=int,
-        help=(
-            "Optional Isaac /rtx/post/tonemap/op value for an opt-in native tone probe. "
-            "The worker records the previous value and restores it after capture."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-exposure-bias",
-        type=float,
-        help=(
-            "Optional Isaac /rtx/post/tonemap/exposureBias value for an opt-in native "
-            "exposure probe. The worker records the previous value and restores it after "
-            "capture."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-colorcorr-gain",
-        type=_parse_rgb_gain,
-        help=(
-            "Optional Isaac /rtx/post/colorcorr gain as R,G,B for an opt-in native color "
-            "correction probe. The worker enables color correction, records previous values, "
-            "and restores them after capture."
-        ),
-    )
-
-    camera_views = subparsers.add_parser("camera_views")
-    camera_views.add_argument("--output-dir", type=Path, required=True)
-    camera_views.add_argument("--view-specs-path", type=Path)
-    camera_views.add_argument("--camera-request-path", type=Path)
-    camera_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
-    camera_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
-
-    object_cmds = ("navigate_to_object", "pick")
-    for command in object_cmds:
-        item = subparsers.add_parser(command)
-        item.add_argument("--object-id", required=True)
-
-    receptacle_cmds = (
-        "navigate_to_receptacle",
-        "open_receptacle",
-        "place",
-        "place_inside",
-        "close_receptacle",
-    )
-    for command in receptacle_cmds:
-        item = subparsers.add_parser(command)
-        item.add_argument("--receptacle-id", required=True)
-
-    done = subparsers.add_parser("done")
-    done.add_argument("--reason", default="")
-
-    return parser.parse_args(argv)
+type _IsaacWorkerCommand = Callable[[argparse.Namespace, dict[str, Any]], dict[str, Any]]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -399,36 +295,10 @@ def main(argv: list[str] | None = None) -> int:
                 os._exit(1)
             raise
         return _finish_command(result)
-    else:
-        state = read_state(args.state_path)
-        if args.command == "locations":
-            result = {"ok": True, "tool": "locations", "final_locations": state["locations"]}
-        elif args.command == "snapshot":
-            result = write_snapshot(args, state)
-        elif args.command == "robot_views":
-            result = write_robot_views(args, state)
-        elif args.command == "camera_views":
-            result = write_camera_views(args, state)
-        elif args.command == "observe":
-            result = observe(args, state)
-        elif args.command == "navigate_to_object":
-            result = navigate_to_object(args, state)
-        elif args.command == "navigate_to_receptacle":
-            result = navigate_to_receptacle(args, state)
-        elif args.command == "pick":
-            result = pick(args, state)
-        elif args.command == "open_receptacle":
-            result = open_receptacle(args, state)
-        elif args.command == "place":
-            result = place(args, state, relation="on")
-        elif args.command == "place_inside":
-            result = place(args, state, relation="inside")
-        elif args.command == "close_receptacle":
-            result = close_receptacle(args, state)
-        elif args.command == "done":
-            result = done(args, state)
-        else:  # pragma: no cover - argparse prevents this.
-            raise ValueError(f"unsupported command: {args.command}")
+    handler = _STATE_COMMANDS.get(args.command)
+    if handler is None:  # pragma: no cover - argparse prevents this.
+        raise ValueError(f"unsupported command: {args.command}")
+    result = handler(args, read_state(args.state_path))
     return _finish_command(result)
 
 
@@ -1244,19 +1114,6 @@ def _float_or_default(value: Any, default: float) -> float:
         return float(default)
 
 
-def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
-    parts = [part.strip() for part in str(value).split(",")]
-    if len(parts) != 3:
-        raise argparse.ArgumentTypeError("RGB gain must be three comma-separated floats")
-    try:
-        gain = tuple(float(part) for part in parts)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("RGB gain must contain only floats") from exc
-    if any(item <= 0.0 for item in gain):
-        raise argparse.ArgumentTypeError("RGB gain values must be positive")
-    return gain  # type: ignore[return-value]
-
-
 def _usd_receptacle_support_surfaces(*, prim: Any, usd_geom: Any) -> list[dict[str, Any]]:
     whole_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
     whole_surface = _support_surface_from_usd_bounds(
@@ -1373,60 +1230,12 @@ def _usd_support_surface_union(
     *,
     whole_surface: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    broad = []
-    best_top_z = float(candidates[0].get("top_z") or 0.0) if candidates else 0.0
-    for surface in candidates:
-        if surface.get("source") != ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE:
-            continue
-        top_z = _float_or_default(surface.get("top_z"), best_top_z)
-        area = _float_or_default(surface.get("area_m2"), 0.0)
-        whole_area = _float_or_default(_dict(whole_surface).get("area_m2"), 0.0)
-        if area < 0.03:
-            continue
-        if whole_area > 0.0 and area / whole_area < 0.35:
-            continue
-        if abs(top_z - best_top_z) > 0.08:
-            continue
-        center = surface.get("center")
-        half_extents = surface.get("half_extents")
-        if not isinstance(center, (list, tuple)) or len(center) < 2:
-            continue
-        if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
-            continue
-        try:
-            min_x = float(center[0]) - abs(float(half_extents[0]))
-            max_x = float(center[0]) + abs(float(half_extents[0]))
-            min_y = float(center[1]) - abs(float(half_extents[1]))
-            max_y = float(center[1]) + abs(float(half_extents[1]))
-        except (TypeError, ValueError):
-            continue
-        broad.append((surface, min_x, max_x, min_y, max_y, top_z))
-    if len(broad) < 2:
-        return None
-    min_x = min(item[1] for item in broad)
-    max_x = max(item[2] for item in broad)
-    min_y = min(item[3] for item in broad)
-    max_y = max(item[4] for item in broad)
-    top_z = max(item[5] for item in broad)
-    area = (max_x - min_x) * (max_y - min_y)
-    if area <= 0.0:
-        return None
-    return {
-        "surface_id": "+".join(str(item[0].get("surface_id") or "") for item in broad),
-        "center": [round((min_x + max_x) / 2.0, 6), round((min_y + max_y) / 2.0, 6)],
-        "top_z": round(top_z, 6),
-        "half_extents": [
-            round((max_x - min_x) / 2.0, 6),
-            round((max_y - min_y) / 2.0, 6),
-        ],
-        "area_m2": round(area, 6),
-        "source": ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
-        "selection_score": round(
-            max(float(item[0].get("selection_score") or 0.0) for item in broad),
-            6,
-        ),
-        "member_count": len(broad),
-    }
+    return usd_support_surface_union(
+        candidates,
+        whole_surface=whole_surface,
+        descendant_source=ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
+        union_source=ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
+    )
 
 
 def _room_outline_from_usd_prim(
@@ -2105,265 +1914,65 @@ def _capture_isaac_lab_camera_views(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    import isaaclab.sim as sim_utils
-    import isaacsim.core.utils.stage as stage_utils
-    import numpy as np
-    import torch
-    from isaaclab.sensors.camera import Camera, CameraCfg
-
-    opened = stage_utils.open_stage(str(scene_usd))
-    if opened is False:
-        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
-    _wait_for_stage_load(stage_utils, simulation_app)
-    _load_current_stage_payloads(stage_utils)
-    pose_apply = _apply_semantic_pose_state_to_stage(
-        stage_utils=stage_utils,
-        semantic_pose_state=semantic_pose_state,
-    )
-    robot_stage = _ensure_rby1m_robot_on_stage(
-        stage_utils=stage_utils,
-        robot_import=_dict(robot_import),
-    )
-    if robot_stage.get("head_camera_prim_exists") is True and hasattr(
-        sim_utils, "standardize_xform_ops"
-    ):
-        current_stage = stage_utils.get_current_stage()
-        if current_stage is not None:
-            sim_utils.standardize_xform_ops(
-                current_stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM)
-            )
-    scene_bounds = _current_stage_bounds(stage_utils)
-    lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
-    lighting_diagnostics = _ensure_capture_lighting(stage_utils, profile=lighting_profile)
-    semantic_label_application = (
-        _apply_scene_index_semantic_labels(
-            stage_utils=stage_utils,
-            sim_utils=sim_utils,
-            scene_index_diagnostics=scene_index_diagnostics,
-        )
-        if include_segmentation
-        else _semantic_label_application_not_requested()
-    )
-    camera_semantic_filter: str | list[str]
-    camera_semantic_filter = list(semantic_filter) if include_segmentation else "*:*"
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
-    mounted_head_camera = robot_stage.get("head_camera_prim_exists") is True
-    head_camera_lens = (
-        _configure_rby1m_head_camera_lens(stage_utils=stage_utils, width=width, height=height)
-        if mounted_head_camera
-        else {"status": "not_requested"}
-    )
-    data_types = [
-        "rgb",
-        *(segmentation_data_types if include_segmentation else ()),
-    ]
-    robot_view_horizontal_aperture = _horizontal_aperture_from_lens(
-        {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
-        width=width,
-        height=height,
-        focal_length=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
-    )
-    camera_spawn = sim_utils.PinholeCameraCfg(
-        focal_length=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
-        focus_distance=4.0,
-        horizontal_aperture=robot_view_horizontal_aperture,
-    )
-    head_camera = (
-        Camera(
-            cfg=CameraCfg(
-                prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-                update_period=0.0,
-                height=height,
-                width=width,
-                data_types=data_types,
-                semantic_filter=camera_semantic_filter,
-                colorize_semantic_segmentation=False,
-                colorize_instance_segmentation=False,
-                colorize_instance_id_segmentation=False,
-                spawn=None,
-            )
-        )
-        if mounted_head_camera
-        else None
-    )
-    sim_utils.create_prim("/World/RoboclawsSmokeCameraRig", "Xform")
-    scene_camera = Camera(
-        cfg=CameraCfg(
-            prim_path="/World/RoboclawsSmokeCameraRig/Camera",
-            update_period=0.0,
-            height=height,
+    return capture_isaac_lab_camera_views(
+        request=IsaacCameraCaptureRequest(
+            scene_usd=scene_usd,
+            view_paths=view_paths,
             width=width,
-            data_types=data_types,
-            semantic_filter=camera_semantic_filter,
-            colorize_semantic_segmentation=False,
-            colorize_instance_segmentation=False,
-            colorize_instance_id_segmentation=False,
-            spawn=camera_spawn,
-        )
-    )
-    view_poses = _isaac_camera_view_poses(
-        torch=torch,
-        device=sim.device,
-        scene_bounds=scene_bounds,
-        semantic_pose_state=semantic_pose_state,
-    )
-    sim.reset()
-    render_settle_frames = max(0, int(render_settle_frames))
-    settings = _isaac_settings_interface()
-    settings_mutation = _apply_isaac_capture_quality_overrides(
-        settings=settings,
-        isaac_aa_op=isaac_aa_op,
-        isaac_tonemap_op=isaac_tonemap_op,
-        isaac_exposure_bias=isaac_exposure_bias,
-        isaac_colorcorr_gain=isaac_colorcorr_gain,
-    )
-    native_render_diagnostics = _isaac_native_render_diagnostics(
-        renderer_mode=REAL_SMOKE_RENDERER_MODE,
-        capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
-        view_kind="robot_views",
-        render_resolution={"width": width, "height": height},
-        camera_prim_paths=[
-            ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
-            "/World/RoboclawsSmokeCameraRig/Camera",
-        ],
-        render_product_paths=[
-            *(_camera_render_product_paths(head_camera) if head_camera is not None else []),
-            *_camera_render_product_paths(scene_camera),
-        ],
-        isaac_lab_isp_active=False,
-        capture_quality_settings=_capture_quality_settings(
+            height=height,
+            simulation_app=simulation_app,
+            robot_import=_dict(robot_import),
+            include_segmentation=include_segmentation,
+            segmentation_data_types=segmentation_data_types,
+            semantic_filter=semantic_filter,
+            scene_index_diagnostics=scene_index_diagnostics,
+            semantic_pose_state=_dict(semantic_pose_state),
+            color_profile_override=color_profile_override,
             render_settle_frames=render_settle_frames,
-            settings=settings,
-            settings_mutation=settings_mutation,
+            isaac_aa_op=isaac_aa_op,
+            isaac_tonemap_op=isaac_tonemap_op,
+            isaac_exposure_bias=isaac_exposure_bias,
+            isaac_colorcorr_gain=isaac_colorcorr_gain,
+            robot_view_keys=ROBOT_VIEW_KEYS,
+            head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            head_camera_vertical_fov_deg=RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
+            head_camera_focal_length_mm=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+            renderer_mode=REAL_SMOKE_RENDERER_MODE,
+            capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
+            default_lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+        ),
+        hooks=IsaacCameraCaptureHooks(
+            wait_for_stage_load=_wait_for_stage_load,
+            load_current_stage_payloads=_load_current_stage_payloads,
+            apply_semantic_pose_state_to_stage=_apply_semantic_pose_state_to_stage,
+            ensure_rby1m_robot_on_stage=_ensure_rby1m_robot_on_stage,
+            current_stage_bounds=_current_stage_bounds,
+            ensure_capture_lighting=_ensure_capture_lighting,
+            apply_scene_index_semantic_labels=_apply_scene_index_semantic_labels,
+            semantic_label_application_not_requested=_semantic_label_application_not_requested,
+            configure_rby1m_head_camera_lens=_configure_rby1m_head_camera_lens,
+            horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+            isaac_camera_view_poses=_isaac_camera_view_poses,
+            isaac_settings_interface=_isaac_settings_interface,
+            apply_isaac_capture_quality_overrides=_apply_isaac_capture_quality_overrides,
+            isaac_native_render_diagnostics=_isaac_native_render_diagnostics,
+            capture_quality_settings=_capture_quality_settings,
+            camera_render_product_paths=_camera_render_product_paths,
+            position_robot_for_head_camera_view=_position_robot_for_head_camera_view,
+            usd_camera_diagnostics=_usd_camera_diagnostics,
+            isaac_eye_target_camera_diagnostics=_isaac_eye_target_camera_diagnostics,
+            robot_relative_chase_eye_target=_robot_relative_chase_eye_target,
+            rgb_tensor_to_uint8=_rgb_tensor_to_uint8,
+            image_has_variance=_image_has_variance,
+            robot_view_color_profile=_robot_view_color_profile,
+            camera_segmentation_view_diagnostics=_camera_segmentation_view_diagnostics,
+            restore_isaac_capture_quality_overrides=_restore_isaac_capture_quality_overrides,
+            camera_segmentation_capture_diagnostics=_camera_segmentation_capture_diagnostics,
+            camera_segmentation_not_requested_diagnostics=(
+                _camera_segmentation_not_requested_diagnostics
+            ),
         ),
     )
-    saved: dict[str, str] = {}
-    segmentation_views: list[dict[str, Any]] = []
-    total_render_steps = 0
-    robot_pose_application: dict[str, Any] = {}
-    camera_diagnostics: dict[str, dict[str, Any]] = {}
-    color_profile = _robot_view_color_profile(color_profile_override)
-    color_management: dict[str, dict[str, Any]] = {}
-    try:
-        for view_name in ROBOT_VIEW_KEYS:
-            if view_name == "fpv" and mounted_head_camera:
-                camera = head_camera
-                if camera is None:
-                    raise RuntimeError(
-                        "mounted head camera was requested but Camera sensor is absent"
-                    )
-                robot_pose_application = _position_robot_for_head_camera_view(
-                    stage_utils=stage_utils,
-                    scene_bounds=scene_bounds,
-                    semantic_pose_state=semantic_pose_state,
-                )
-                camera_diagnostics[view_name] = _usd_camera_diagnostics(
-                    stage_utils=stage_utils,
-                    prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-                    view_name=view_name,
-                    width=width,
-                    height=height,
-                    robot_pose_application=robot_pose_application,
-                    lens_application=head_camera_lens,
-                )
-            else:
-                camera = scene_camera
-                positions, targets = view_poses[view_name]
-                camera.set_world_poses_from_view(positions, targets)
-                camera_diagnostics[view_name] = _isaac_eye_target_camera_diagnostics(
-                    view_name=view_name,
-                    positions=positions,
-                    targets=targets,
-                    width=width,
-                    height=height,
-                    camera_basis="robot_relative_camera_follower"
-                    if view_name == "chase"
-                    and _robot_relative_chase_eye_target(
-                        _dict(_dict(semantic_pose_state).get("robot_pose"))
-                    )
-                    is not None
-                    else "scene_bounds_eye_target",
-                )
-            rgb_image = None
-            for _ in range(24):
-                sim.step()
-                total_render_steps += 1
-                camera.update(dt=sim.get_physics_dt())
-                rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-                if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                    break
-            for _ in range(render_settle_frames):
-                sim.step()
-                total_render_steps += 1
-                camera.update(dt=sim.get_physics_dt())
-                settled_rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-                if settled_rgb_image is not None:
-                    rgb_image = settled_rgb_image
-            if rgb_image is None:
-                raise RuntimeError(
-                    f"Isaac Lab camera did not produce an RGB tensor for {view_name}"
-                )
-            if not _image_has_variance(rgb_image, np=np):
-                raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_name}")
-            if view_name != "map":
-                rgb_image, color_management[view_name] = apply_camera_color_profile(
-                    rgb_image,
-                    np=np,
-                    profile=color_profile,
-                    backend=ISAACLAB_SUBPROCESS_BACKEND,
-                    view_id=view_name,
-                )
-            output_path = view_paths[view_name]
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(rgb_image, mode="RGB").save(output_path)
-            saved[view_name] = str(output_path)
-            if include_segmentation:
-                segmentation_views.append(
-                    _camera_segmentation_view_diagnostics(
-                        camera,
-                        data_types=segmentation_data_types,
-                        view_name=view_name,
-                        np=np,
-                    )
-                )
-    finally:
-        _restore_isaac_capture_quality_overrides(
-            settings=settings,
-            mutation=settings_mutation,
-        )
-    return {
-        "render_steps": total_render_steps,
-        "robot_view_images": saved,
-        "scene_bounds": scene_bounds,
-        "robot_stage": robot_stage,
-        "robot_view_uses_mounted_head_camera": mounted_head_camera,
-        "robot_pose_stage_application": robot_pose_application,
-        "camera_diagnostics": {
-            "schema": "isaac_robot_view_camera_diagnostics_v1",
-            "backend": ISAACLAB_SUBPROCESS_BACKEND,
-            "render_resolution": {"width": width, "height": height},
-            "render_settle_frames": render_settle_frames,
-            "lighting_profile": lighting_profile,
-            "lighting_diagnostics": lighting_diagnostics,
-            "native_render_diagnostics": native_render_diagnostics,
-            "views": camera_diagnostics,
-        },
-        "native_render_diagnostics": native_render_diagnostics,
-        "lighting_profile": lighting_profile,
-        "lighting_diagnostics": lighting_diagnostics,
-        "color_profile": color_profile,
-        "color_management": color_management,
-        "semantic_pose_stage_application": pose_apply,
-        "segmentation": _camera_segmentation_capture_diagnostics(
-            segmentation_views,
-            requested_data_types=segmentation_data_types,
-            semantic_label_application=semantic_label_application,
-            semantic_filter=camera_semantic_filter,
-        )
-        if include_segmentation
-        else _camera_segmentation_not_requested_diagnostics(),
-    }
 
 
 def _capture_scene_camera_request_with_existing_sim(
@@ -2531,136 +2140,32 @@ def _capture_isaac_lab_scene_camera_views(
     simulation_app: Any,
     semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    import isaaclab.sim as sim_utils
-    import isaacsim.core.utils.stage as stage_utils
-    import numpy as np
-    import torch
-    from isaaclab.sensors.camera import Camera, CameraCfg
-
-    opened = stage_utils.open_stage(str(scene_usd))
-    if opened is False:
-        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
-    _wait_for_stage_load(stage_utils, simulation_app)
-    _load_current_stage_payloads(stage_utils)
-    pose_apply = _apply_semantic_pose_state_to_stage(
-        stage_utils=stage_utils,
-        semantic_pose_state=semantic_pose_state,
-    )
-    scene_bounds = _current_stage_bounds(stage_utils)
-    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
-    resolution = camera_request["render_resolution"]
-    width = int(resolution["width"])
-    height = int(resolution["height"])
-    lighting_diagnostics = _ensure_capture_lighting(
-        stage_utils,
-        profile=camera_request.get("lighting_profile"),
-    )
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
-    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
-    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
-    color_profile = camera_request.get("color_profile") or {}
-    focal_length = float(lens.get("focal_length_mm", 24.0))
-    horizontal_aperture = _horizontal_aperture_from_lens(
-        lens,
-        width=width,
-        height=height,
-        focal_length=focal_length,
-    )
-    sim_utils.create_prim("/World/RoboclawsSceneProbeCameraRig", "Xform")
-    camera = Camera(
-        cfg=CameraCfg(
-            prim_path="/World/RoboclawsSceneProbeCameraRig/Camera",
-            update_period=0.0,
-            height=height,
+    return capture_isaac_lab_scene_camera_views(
+        request=IsaacSceneCameraCaptureRequest(
+            scene_usd=scene_usd,
+            camera_request=camera_request,
+            output_dir=output_dir,
             width=width,
-            data_types=["rgb"],
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=focal_length,
-                focus_distance=4.0,
-                horizontal_aperture=horizontal_aperture,
-            ),
-        )
+            height=height,
+            simulation_app=simulation_app,
+            semantic_pose_state=_dict(semantic_pose_state),
+            renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        ),
+        hooks=IsaacSceneCameraCaptureHooks(
+            normalize_camera_control_request=normalize_camera_control_request,
+            wait_for_stage_load=_wait_for_stage_load,
+            load_current_stage_payloads=_load_current_stage_payloads,
+            apply_semantic_pose_state_to_stage=_apply_semantic_pose_state_to_stage,
+            current_stage_bounds=_current_stage_bounds,
+            ensure_capture_lighting=_ensure_capture_lighting,
+            horizontal_aperture_from_lens=_horizontal_aperture_from_lens,
+            isaac_native_render_diagnostics=_isaac_native_render_diagnostics,
+            camera_render_product_paths=_camera_render_product_paths,
+            isaac_scene_camera_view_spec=_isaac_scene_camera_view_spec,
+            rgb_tensor_to_uint8=_rgb_tensor_to_uint8,
+            image_has_variance=_image_has_variance,
+        ),
     )
-    sim.reset()
-    native_render_diagnostics = _isaac_native_render_diagnostics(
-        renderer_mode=REAL_SMOKE_RENDERER_MODE,
-        capture_method="isaac_lab_camera_rgb_scene_probe",
-        view_kind="scene_camera_views",
-        render_resolution={"width": width, "height": height},
-        camera_prim_paths=["/World/RoboclawsSceneProbeCameraRig/Camera"],
-        render_product_paths=_camera_render_product_paths(camera),
-        isaac_lab_isp_active=False,
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    saved: dict[str, str] = {}
-    shapes: dict[str, list[int]] = {}
-    color_diagnostics: dict[str, dict[str, Any]] = {}
-    views: list[dict[str, Any]] = []
-    total_render_steps = 0
-    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
-        spec = _isaac_scene_camera_view_spec(
-            raw_spec,
-            index=index,
-            stage_utils=stage_utils,
-        )
-        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
-        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
-        camera.set_world_poses_from_view(position, target)
-        rgb_image = None
-        for _ in range(24):
-            sim.step()
-            total_render_steps += 1
-            camera.update(dt=sim.get_physics_dt())
-            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                break
-        if rgb_image is None:
-            raise RuntimeError(
-                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
-            )
-        if not _image_has_variance(rgb_image, np=np):
-            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
-        rgb_image, color_diagnostic = apply_camera_color_profile(
-            rgb_image,
-            np=np,
-            profile=color_profile,
-            backend="isaaclab-prepared-usd",
-            view_id=str(spec["view_id"]),
-        )
-        output_path = output_dir / f"{spec['view_id']}.png"
-        Image.fromarray(rgb_image, mode="RGB").save(output_path)
-        saved[str(spec["view_id"])] = str(output_path)
-        shapes[str(spec["view_id"])] = list(rgb_image.shape)
-        color_diagnostics[str(spec["view_id"])] = color_diagnostic
-        views.append(
-            {
-                **spec,
-                "image_path": str(output_path),
-                "shape": list(rgb_image.shape),
-            }
-        )
-    return {
-        "schema": "isaac_scene_camera_views_v1",
-        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
-        "camera_request_schema": camera_request.get("schema"),
-        "calibration_status": camera_request.get("calibration_status"),
-        "lighting_profile": camera_request.get("lighting_profile") or {},
-        "color_profile": color_profile,
-        "color_management": color_diagnostics,
-        "lighting_diagnostics": lighting_diagnostics,
-        "native_render_diagnostics": native_render_diagnostics,
-        "lens": camera_request.get("lens") or {},
-        "derived_lens": {
-            "focal_length_mm": focal_length,
-            "horizontal_aperture_mm": horizontal_aperture,
-        },
-        "render_steps": total_render_steps,
-        "scene_bounds": scene_bounds,
-        "semantic_pose_stage_application": pose_apply,
-        "views": views,
-        "images": saved,
-        "shapes": shapes,
-    }
 
 
 def _apply_semantic_pose_state_to_stage(
@@ -2781,64 +2286,6 @@ def _world_position_to_parent_local_translate(
         ) from exc
 
 
-def _set_usd_xform_translate(
-    *,
-    UsdGeom: Any,
-    Gf: Any,
-    prim: Any,
-    translate: tuple[float, float, float],
-) -> dict[str, str]:
-    value = Gf.Vec3d(*translate)
-    xformable_type = getattr(UsdGeom, "Xformable", None)
-    if callable(xformable_type):
-        xformable = xformable_type(prim)
-        try:
-            ordered_ops = list(xformable.GetOrderedXformOps())
-        except Exception:
-            ordered_ops = []
-        for op in ordered_ops:
-            get_name = getattr(op, "GetOpName", None)
-            if callable(get_name) and str(get_name()) == "xformOp:translate":
-                _set_xform_op_value(op, value)
-                return {"method": "existing_xformOp_translate", "xform_op": str(get_name())}
-        type_translate = getattr(getattr(UsdGeom, "XformOp", None), "TypeTranslate", None)
-        if type_translate is not None:
-            for op in ordered_ops:
-                get_type = getattr(op, "GetOpType", None)
-                is_inverse = getattr(op, "IsInverseOp", None)
-                if callable(get_type) and get_type() == type_translate:
-                    if callable(is_inverse) and is_inverse():
-                        continue
-                    get_name = getattr(op, "GetOpName", None)
-                    op_name = str(get_name()) if callable(get_name) else "translate"
-                    _set_xform_op_value(op, value)
-                    return {"method": "existing_translate_op", "xform_op": op_name}
-        add_translate_op = getattr(xformable, "AddTranslateOp", None)
-        if callable(add_translate_op):
-            op = add_translate_op()
-            _set_xform_op_value(op, value)
-            get_name = getattr(op, "GetOpName", None)
-            op_name = str(get_name()) if callable(get_name) else "xformOp:translate"
-            return {"method": "added_xformOp_translate", "xform_op": op_name}
-
-    common_api_type = getattr(UsdGeom, "XformCommonAPI", None)
-    if callable(common_api_type):
-        result = common_api_type(prim).SetTranslate(value)
-        if result is False:
-            raise RuntimeError("USD XformCommonAPI refused xformOp:translate value")
-        return {"method": "xform_common_api", "xform_op": "xform_common_api"}
-    raise RuntimeError("USD prim has no translate-authoring API")
-
-
-def _set_xform_op_value(op: Any, value: Any) -> None:
-    set_value = getattr(op, "Set", None)
-    if not callable(set_value):
-        raise RuntimeError("USD translate op does not expose Set")
-    result = set_value(value)
-    if result is False:
-        raise RuntimeError("USD translate op refused authored value")
-
-
 def _semantic_pose_target_position(
     *,
     support_id: str,
@@ -2881,195 +2328,12 @@ def _apply_scene_index_semantic_labels(
     sim_utils: Any,
     scene_index_diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    get_current_stage = getattr(stage_utils, "get_current_stage", None)
-    add_labels = getattr(sim_utils, "add_labels", None)
-    if not callable(get_current_stage) or not callable(add_labels):
-        return {
-            "status": "unavailable",
-            "applied_count": 0,
-            "failed_count": 0,
-            "missing_prim_count": 0,
-            "gprim_label_count": 0,
-            "mesh_label_count": 0,
-            "target_samples": [],
-            "reason": "Isaac semantic label utilities were unavailable.",
-        }
-    stage = get_current_stage()
-    if stage is None:
-        return {
-            "status": "unavailable",
-            "applied_count": 0,
-            "failed_count": 0,
-            "missing_prim_count": 0,
-            "gprim_label_count": 0,
-            "mesh_label_count": 0,
-            "target_samples": [],
-            "reason": "No current Isaac stage was available for semantic labels.",
-        }
-    index = _dict(scene_index_diagnostics)
-    entries = [
-        *(_dict(index.get("object_index")).values()),
-        *(_dict(index.get("receptacle_index")).values()),
-    ]
-    applied = 0
-    labeled_prim_count = 0
-    descendant_label_count = 0
-    gprim_label_count = 0
-    mesh_label_count = 0
-    missing = 0
-    failed: list[dict[str, str]] = []
-    target_samples: list[dict[str, str]] = []
-    for raw_entry in entries:
-        entry = _dict(raw_entry)
-        prim_path = str(entry.get("usd_prim_path") or "")
-        if not prim_path:
-            continue
-        prim = stage.GetPrimAtPath(prim_path)
-        if not prim or not prim.IsValid():
-            missing += 1
-            continue
-        labels = _scene_index_semantic_labels(entry, prim_path)
-        try:
-            targets = _semantic_label_target_prims(prim)
-            for target in targets:
-                for instance_name, label in labels.items():
-                    add_labels(target, labels=[label], instance_name=instance_name, overwrite=True)
-                labeled_prim_count += 1
-                if target != prim:
-                    descendant_label_count += 1
-                classification = _semantic_label_target_classification(target)
-                if classification["is_gprim"]:
-                    gprim_label_count += 1
-                if classification["type_name"] == "Mesh":
-                    mesh_label_count += 1
-                if len(target_samples) < 20:
-                    target_samples.append(
-                        {
-                            "source_prim_path": prim_path,
-                            "target_prim_path": classification["path"],
-                            "target_type": classification["type_name"],
-                            "target_kind": classification["kind"],
-                        }
-                    )
-            applied += 1
-        except Exception as exc:  # pragma: no cover - defensive around Isaac extension APIs
-            failed.append({"prim_path": prim_path, "error": str(exc)})
-    status = "applied" if applied and not failed else "partial" if applied else "unavailable"
-    return {
-        "schema": "isaac_scene_index_semantic_label_application_v1",
-        "status": status,
-        "applied_count": applied,
-        "labeled_prim_count": labeled_prim_count,
-        "descendant_label_count": descendant_label_count,
-        "gprim_label_count": gprim_label_count,
-        "mesh_label_count": mesh_label_count,
-        "failed_count": len(failed),
-        "missing_prim_count": missing,
-        "requested_prim_count": len(entries),
-        "failed": failed[:10],
-        "target_samples": target_samples,
-        "label_instances": ["class", "kind", "usd_prim_path"],
-        "reason": (
-            "Scene-index USD prims were labeled for Isaac camera segmentation."
-            if applied
-            else "No scene-index USD prims were labeled for Isaac camera segmentation."
-        ),
-    }
-
-
-def _semantic_label_target_classification(prim: Any) -> dict[str, Any]:
-    try:
-        from pxr import UsdGeom
-    except Exception:
-        UsdGeom = None
-
-    try:
-        path = str(prim.GetPath())
-    except Exception:
-        path = str(getattr(prim, "path", "") or "")
-    try:
-        type_name = str(prim.GetTypeName() or "")
-    except Exception:
-        type_name = str(getattr(prim, "type_name", "") or "")
-    is_gprim = False
-    if UsdGeom is not None:
-        try:
-            is_gprim = bool(prim.IsA(UsdGeom.Gprim))
-        except Exception:
-            is_gprim = False
-    if not is_gprim and type_name in {"Mesh", "Cube", "Sphere", "Capsule", "Cone", "Cylinder"}:
-        is_gprim = True
-    kind = "gprim" if is_gprim else "prim"
-    if type_name:
-        kind = f"{kind}:{type_name}"
-    return {
-        "path": path,
-        "type_name": type_name,
-        "kind": kind,
-        "is_gprim": is_gprim,
-    }
-
-
-def _semantic_label_target_prims(prim: Any) -> list[Any]:
-    try:
-        from pxr import Usd, UsdGeom
-    except Exception:
-        return [prim]
-
-    targets = _semantic_label_target_prims_once(prim, Usd=Usd, UsdGeom=UsdGeom)
-    if any(_prim_is_gprim(target, UsdGeom=UsdGeom) for target in targets):
-        return targets
-    try:
-        prim.Load()
-    except Exception:
-        return targets
-    return _semantic_label_target_prims_once(prim, Usd=Usd, UsdGeom=UsdGeom)
-
-
-def _semantic_label_target_prims_once(prim: Any, *, Usd: Any, UsdGeom: Any) -> list[Any]:
-    targets = [prim]
-    for descendant in Usd.PrimRange(prim):
-        if descendant == prim:
-            continue
-        if _prim_is_gprim(descendant, UsdGeom=UsdGeom):
-            targets.append(descendant)
-    return targets
-
-
-def _prim_is_gprim(prim: Any, *, UsdGeom: Any) -> bool:
-    try:
-        return bool(prim.IsA(UsdGeom.Gprim))
-    except Exception:
-        return False
-
-
-def _semantic_label_application_not_requested() -> dict[str, Any]:
-    return {
-        "schema": "isaac_scene_index_semantic_label_application_v1",
-        "status": "not_requested",
-        "applied_count": 0,
-        "labeled_prim_count": 0,
-        "descendant_label_count": 0,
-        "gprim_label_count": 0,
-        "mesh_label_count": 0,
-        "failed_count": 0,
-        "missing_prim_count": 0,
-        "requested_prim_count": 0,
-        "failed": [],
-        "target_samples": [],
-        "label_instances": [],
-        "reason": "Segmentation was not requested.",
-    }
-
-
-def _scene_index_semantic_labels(entry: dict[str, Any], prim_path: str) -> dict[str, str]:
-    category = str(entry.get("category") or entry.get("public_label") or Path(prim_path).name)
-    kind = str(entry.get("kind") or "scene_prim")
-    return {
-        "class": category,
-        "kind": kind,
-        "usd_prim_path": prim_path,
-    }
+    return apply_scene_index_semantic_labels(
+        stage_utils=stage_utils,
+        sim_utils=sim_utils,
+        scene_index_diagnostics=scene_index_diagnostics,
+        target_prim_resolver=_semantic_label_target_prims,
+    )
 
 
 def _camera_segmentation_view_diagnostics(
@@ -4728,225 +3992,15 @@ def _apply_isaac_capture_quality_overrides(
     isaac_exposure_bias: float | None = None,
     isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
-    mutation: dict[str, Any] = {
-        "schema": "isaac_capture_quality_settings_mutation_v1",
-        "settings_mutation_attempted": False,
-        "default_render_settings_changed": False,
-        "settings": {},
-    }
-    if (
-        isaac_aa_op is None
-        and isaac_tonemap_op is None
-        and isaac_exposure_bias is None
-        and isaac_colorcorr_gain is None
-    ):
-        mutation["status"] = "not_requested"
-        return mutation
-    mutation["settings_mutation_attempted"] = True
-    if settings is None:
-        mutation["status"] = "settings_api_unavailable"
-        if isaac_aa_op is not None:
-            mutation["settings"]["anti_aliasing"] = {
-                "name": "anti_aliasing",
-                "status": "not_available",
-                "value": None,
-                "requested_value": int(isaac_aa_op),
-                "setting_path": "",
-                "candidate_paths": list(ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"]),
-                "default_render_settings_changed": False,
-            }
-        if isaac_tonemap_op is not None:
-            mutation["settings"]["tonemap_operator"] = {
-                "name": "tonemap_operator",
-                "status": "not_available",
-                "value": None,
-                "requested_value": int(isaac_tonemap_op),
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["operator"]
-                ),
-                "default_render_settings_changed": False,
-            }
-        if isaac_exposure_bias is not None:
-            mutation["settings"]["exposure_bias"] = {
-                "name": "exposure_bias",
-                "status": "not_available",
-                "value": None,
-                "requested_value": float(isaac_exposure_bias),
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["exposure_bias"]
-                ),
-                "default_render_settings_changed": False,
-            }
-        if isaac_colorcorr_gain is not None:
-            mutation["settings"]["colorcorr_enabled"] = {
-                "name": "colorcorr_enabled",
-                "status": "not_available",
-                "value": None,
-                "requested_value": True,
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["enabled"]
-                ),
-                "default_render_settings_changed": False,
-            }
-            mutation["settings"]["colorcorr_gain"] = {
-                "name": "colorcorr_gain",
-                "status": "not_available",
-                "value": None,
-                "requested_value": list(isaac_colorcorr_gain),
-                "setting_path": "",
-                "candidate_paths": list(
-                    ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["gain"]
-                ),
-                "default_render_settings_changed": False,
-            }
-        return mutation
-    if isaac_aa_op is not None:
-        row = _set_isaac_setting(
-            settings,
-            ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"],
-            int(isaac_aa_op),
-            name="anti_aliasing",
-        )
-        mutation["settings"]["anti_aliasing"] = row
-    if isaac_tonemap_op is not None:
-        row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["operator"],
-            int(isaac_tonemap_op),
-            name="tonemap_operator",
-        )
-        mutation["settings"]["tonemap_operator"] = row
-    if isaac_exposure_bias is not None:
-        row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["exposure_bias"],
-            float(isaac_exposure_bias),
-            name="exposure_bias",
-        )
-        mutation["settings"]["exposure_bias"] = row
-    if isaac_colorcorr_gain is not None:
-        enabled_row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["enabled"],
-            True,
-            name="colorcorr_enabled",
-        )
-        mutation["settings"]["colorcorr_enabled"] = enabled_row
-        gain_row = _set_isaac_setting(
-            settings,
-            ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["gain"],
-            list(isaac_colorcorr_gain),
-            name="colorcorr_gain",
-        )
-        mutation["settings"]["colorcorr_gain"] = gain_row
-    statuses = [
-        str(row.get("status") or "")
-        for row in _dict(mutation.get("settings")).values()
-        if isinstance(row, dict)
-    ]
-    mutation["default_render_settings_changed"] = any(status == "applied" for status in statuses)
-    if any(status == "applied" for status in statuses):
-        mutation["status"] = "applied"
-    elif statuses:
-        mutation["status"] = ",".join(statuses)
-    else:
-        mutation["status"] = "not_available"
-    return mutation
-
-
-def _restore_isaac_capture_quality_overrides(
-    *,
-    settings: Any | None,
-    mutation: dict[str, Any],
-) -> dict[str, Any]:
-    if not mutation.get("settings_mutation_attempted"):
-        mutation["restore_status"] = "not_needed"
-        return mutation
-    if settings is None:
-        mutation["restore_status"] = "settings_api_unavailable"
-        return mutation
-    restored_any = False
-    failed_any = False
-    for row in _dict(mutation.get("settings")).values():
-        if not isinstance(row, dict) or row.get("status") != "applied":
-            continue
-        path = str(row.get("setting_path") or "")
-        if not path:
-            continue
-        try:
-            settings.set(path, row.get("previous_value"))
-        except Exception as exc:
-            row["restore_status"] = "failed"
-            row["restore_error"] = str(exc)
-            failed_any = True
-            continue
-        row["restore_status"] = "restored"
-        row["restored_value"] = _json_safe_setting_value(row.get("previous_value"))
-        restored_any = True
-    if failed_any:
-        mutation["restore_status"] = "restore_failed"
-    elif restored_any:
-        mutation["restore_status"] = "restored"
-    else:
-        mutation["restore_status"] = "not_needed"
-    return mutation
-
-
-def _set_isaac_setting(
-    settings: Any,
-    candidate_paths: tuple[str, ...],
-    requested_value: Any,
-    *,
-    name: str,
-) -> dict[str, Any]:
-    paths = list(candidate_paths)
-    for path in candidate_paths:
-        try:
-            previous_value = settings.get(path)
-        except Exception:
-            continue
-        if previous_value is None:
-            continue
-        try:
-            settings.set(path, requested_value)
-        except Exception as exc:
-            return {
-                "name": name,
-                "status": "set_failed",
-                "value": _json_safe_setting_value(previous_value),
-                "previous_value": _json_safe_setting_value(previous_value),
-                "requested_value": _json_safe_setting_value(requested_value),
-                "setting_path": path,
-                "candidate_paths": paths,
-                "default_render_settings_changed": False,
-                "error": str(exc),
-            }
-        try:
-            new_value = settings.get(path)
-        except Exception:
-            new_value = requested_value
-        return {
-            "name": name,
-            "status": "applied",
-            "value": _json_safe_setting_value(new_value),
-            "previous_value": _json_safe_setting_value(previous_value),
-            "requested_value": _json_safe_setting_value(requested_value),
-            "setting_path": path,
-            "candidate_paths": paths,
-            "default_render_settings_changed": True,
-        }
-    return {
-        "name": name,
-        "status": "not_available",
-        "value": None,
-        "requested_value": _json_safe_setting_value(requested_value),
-        "setting_path": "",
-        "candidate_paths": paths,
-        "default_render_settings_changed": False,
-    }
+    return apply_isaac_capture_quality_overrides(
+        settings=settings,
+        setting_paths=ISAAC_NATIVE_RENDER_SETTING_PATHS,
+        capture_quality_fields=ISAAC_CAPTURE_QUALITY_SETTING_FIELDS,
+        isaac_aa_op=isaac_aa_op,
+        isaac_tonemap_op=isaac_tonemap_op,
+        isaac_exposure_bias=isaac_exposure_bias,
+        isaac_colorcorr_gain=isaac_colorcorr_gain,
+    )
 
 
 def _isaac_settings_interface() -> Any | None:
@@ -4986,16 +4040,6 @@ def _isaac_setting_value(settings: Any | None, candidate_paths: tuple[str, ...])
         "setting_path": "",
         "candidate_paths": paths,
     }
-
-
-def _json_safe_setting_value(value: Any) -> Any:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, list | tuple):
-        return [_json_safe_setting_value(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): _json_safe_setting_value(item) for key, item in value.items()}
-    return str(value)
 
 
 def _camera_render_product_paths(camera: Any) -> list[str]:
@@ -7051,6 +6095,27 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
     )
 
 
+def _locations_command(_: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    return {"ok": True, "tool": "locations", "final_locations": state["locations"]}
+
+
+_STATE_COMMANDS: dict[str, _IsaacWorkerCommand] = {
+    "locations": _locations_command,
+    "snapshot": write_snapshot,
+    "robot_views": write_robot_views,
+    "camera_views": write_camera_views,
+    "observe": observe,
+    "navigate_to_object": navigate_to_object,
+    "navigate_to_receptacle": navigate_to_receptacle,
+    "pick": pick,
+    "open_receptacle": open_receptacle,
+    "place": lambda args, state: place(args, state, relation="on"),
+    "place_inside": lambda args, state: place(args, state, relation="inside"),
+    "close_receptacle": close_receptacle,
+    "done": done,
+}
+
+
 def _robot_view_camera_control_contract(
     state: dict[str, Any],
     *,
@@ -7290,144 +6355,29 @@ def _real_semantic_pose_robot_view_images(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
-    runtime = _dict(state.get("runtime"))
-    scene_usd = str(state.get("scene_usd") or "")
-    if runtime.get("runtime_mode") != "real" or not scene_usd or not Path(scene_usd).is_file():
-        return {}
-    try:
-        capture_kwargs = {
-            "state": state,
-            "scene_usd": Path(scene_usd),
-            "view_paths": target_images,
-            "width": width,
-            "height": height,
-            "focus_object_id": focus_object_id,
-            "focus_receptacle_id": focus_receptacle_id,
-        }
-        if render_settle_frames:
-            capture_kwargs["render_settle_frames"] = render_settle_frames
-        if isaac_aa_op is not None:
-            capture_kwargs["isaac_aa_op"] = isaac_aa_op
-        if isaac_tonemap_op is not None:
-            capture_kwargs["isaac_tonemap_op"] = isaac_tonemap_op
-        if isaac_exposure_bias is not None:
-            capture_kwargs["isaac_exposure_bias"] = isaac_exposure_bias
-        if isaac_colorcorr_gain is not None:
-            capture_kwargs["isaac_colorcorr_gain"] = isaac_colorcorr_gain
-        color_profile_override = _dict(state.get("robot_view_color_profile_override"))
-        if color_profile_override:
-            capture_kwargs["color_profile_override"] = color_profile_override
-        capture = capture_semantic_pose_robot_views(**capture_kwargs)
-    except Exception as exc:
-        state.setdefault("mapping_gaps", []).append(
-            {
-                "area": "semantic_pose_robot_view_rerender",
-                "status": "blocked_capability",
-                "source": scene_usd,
-                "detail": str(exc),
-            }
-        )
-        write_state_from_state_arg(state)
-        return {}
-    images = {
-        key: str(value)
-        for key, value in _dict(capture.get("robot_view_images")).items()
-        if key in ROBOT_VIEW_KEYS and value
-    }
-    if not _has_required_robot_view_images(images):
-        return {}
-    semantic_pose_stage_application = _dict(capture.get("semantic_pose_stage_application"))
-    robot_pose_stage_application = _dict(capture.get("robot_pose_stage_application"))
-    semantic_pose_rendered = semantic_pose_stage_application.get("rendered_to_usd") is True
-    robot_pose_rendered = robot_pose_stage_application.get("status") == "applied"
-    if not (semantic_pose_rendered or robot_pose_rendered):
-        state.setdefault("mapping_gaps", []).append(
-            {
-                "area": "semantic_pose_robot_view_rerender",
-                "status": "blocked_capability",
-                "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
-                "detail": (
-                    "Isaac produced robot-view images, but semantic pose state was not "
-                    "applied to the USD stage, so the images are not accepted as "
-                    "semantic-pose-synced robot-view evidence."
-                ),
-                "semantic_pose_stage_application": semantic_pose_stage_application,
-                "robot_pose_stage_application": robot_pose_stage_application,
-            }
-        )
-        write_state_from_state_arg(state)
-        return {}
-    mounted_head_camera = bool(capture.get("robot_view_uses_mounted_head_camera"))
-    state["robot_view_images"] = images
-    state["robot_view_provenance"] = _semantic_pose_robot_view_provenance(
-        mounted_head_camera=mounted_head_camera,
-        head_camera_equivalent=not mounted_head_camera,
+    return real_semantic_pose_robot_view_images(
+        SemanticPoseRobotViewRequest(
+            state=state,
+            target_images=target_images,
+            width=width,
+            height=height,
+            render_settle_frames=render_settle_frames,
+            isaac_aa_op=isaac_aa_op,
+            isaac_tonemap_op=isaac_tonemap_op,
+            isaac_exposure_bias=isaac_exposure_bias,
+            isaac_colorcorr_gain=isaac_colorcorr_gain,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
+        ),
+        hooks=SemanticPoseRobotViewHooks(
+            capture_semantic_pose_robot_views=capture_semantic_pose_robot_views,
+            has_required_robot_view_images=_has_required_robot_view_images,
+            semantic_pose_robot_view_provenance=_semantic_pose_robot_view_provenance,
+            write_state_from_state_arg=write_state_from_state_arg,
+        ),
+        real_robot_view_rerender_method=REAL_ROBOT_VIEW_RERENDER_METHOD,
+        isaac_rby1m_head_camera_prim=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
     )
-    state["semantic_pose_view_capture"] = {
-        "schema": "isaac_semantic_pose_robot_view_capture_v1",
-        "capture_method": REAL_ROBOT_VIEW_RERENDER_METHOD,
-        "scene_usd": scene_usd,
-        "rendered_to_usd": True,
-        "render_steps": int(capture.get("render_steps") or 0),
-        "render_settle_frames": int(capture.get("render_settle_frames") or 0),
-        "canonical_camera_control": False,
-        "robot_mounted_head_camera": mounted_head_camera,
-        "head_camera_equivalent": not mounted_head_camera,
-        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
-        "robot_stage": _dict(capture.get("robot_stage")),
-        "semantic_pose_stage_application": semantic_pose_stage_application,
-        "robot_pose_stage_application": robot_pose_stage_application,
-        "camera_diagnostics": _dict(capture.get("camera_diagnostics")),
-        "lighting_profile": _dict(capture.get("lighting_profile")),
-        "lighting_diagnostics": _dict(capture.get("lighting_diagnostics")),
-        "color_profile": _dict(capture.get("color_profile")),
-        "color_management": _dict(capture.get("color_management")),
-        "native_render_diagnostics": _dict(capture.get("native_render_diagnostics")),
-    }
-    state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
-    state["robot_view_color_management"] = _dict(capture.get("color_management"))
-    state["robot_view_camera_diagnostics"] = _dict(capture.get("camera_diagnostics"))
-    state["native_render_diagnostics"] = _dict(capture.get("native_render_diagnostics"))
-    state["robot_view_lighting_profile"] = _dict(capture.get("lighting_profile"))
-    state["robot_view_lighting_diagnostics"] = _dict(capture.get("lighting_diagnostics"))
-    state.pop("canonical_robot_view_camera_control_request", None)
-    state.pop("canonical_robot_view_camera_control_capture", None)
-    mapping_gaps = [
-        item
-        for item in state.get("mapping_gaps", [])
-        if not (isinstance(item, dict) and item.get("area") == "robot_view_variants")
-    ]
-    mapping_gaps.append(
-        {
-            "area": "robot_view_variants",
-            "status": "real_rendering_proven",
-            "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
-            "detail": (
-                "Robot-view images were recaptured from the loaded USD scene after "
-                "applying backend semantic pose state. FPV uses the imported RBY1M "
-                "mounted head camera when the robot USD import artifact is present; "
-                "otherwise it is explicitly marked as a head-camera equivalent. "
-                "Chase/map remain auxiliary report views. This is semantic pose "
-                "report evidence, not planner-backed or physics-backed "
-                "manipulation proof."
-            ),
-        }
-    )
-    state["mapping_gaps"] = mapping_gaps
-    semantic_pose_state = _dict(state.get("semantic_pose_state"))
-    semantic_pose_state["rendered_to_usd"] = True
-    semantic_pose_state["semantic_pose_view_capture"] = dict(state["semantic_pose_view_capture"])
-    if robot_pose_rendered:
-        semantic_pose_state["robot_pose_rendered_to_usd"] = True
-    semantic_pose_state["evidence_note"] = (
-        "Semantic cleanup primitives still update backend JSON pose/articulation state "
-        "and are not planner-backed manipulation proof. The current report robot-view "
-        "images were recaptured from Isaac after applying that semantic pose state to "
-        "the loaded USD stage."
-    )
-    state["semantic_pose_state"] = semantic_pose_state
-    write_state_from_state_arg(state)
-    return images
 
 
 def _robot_view_focus(

@@ -13,7 +13,7 @@ from roboclaws.agents.provider_timing_contract import (
     PROVIDER_REQUEST_METRIC_SCHEMA,
     PROVIDER_REQUEST_METRICS_FILENAME,
 )
-from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 
 REPORT_PERFORMANCE_SCHEMA = "roboclaws_report_performance_metrics_v1"
 MODEL_CALL_METRIC_SCHEMA = "roboclaws_model_call_metric_v1"

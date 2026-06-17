@@ -424,14 +424,7 @@ run dispatch_target agent_engine mode="" *overrides:
           seeds="7"
         fi
         if [[ "$implementation_task_name" == "semantic-map-build" && "$driver" == "codex" ]]; then
-          case "$backend" in
-            agibot_gdk|auto|molmospaces_subprocess|isaaclab_subprocess)
-              ;;
-            *)
-              echo "error: household-world.map-build codex-cli unsupported backend '$backend' (expected molmospaces_subprocess|isaaclab_subprocess|agibot_gdk)" >&2
-              exit 1
-              ;;
-          esac
+          backend="$(.venv/bin/python -m roboclaws.launch.backends map-build-codex-implementation-backend "$backend" --context "household-world.map-build codex-cli")"
         fi
         if [[ "$backend" == "agibot_molmospaces_sim" ]]; then
           if [[ "$driver" != "direct" ]]; then

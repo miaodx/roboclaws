@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import binascii
 import json
 import os
 import socket
@@ -12,19 +11,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-VISUAL_GROUNDING_REQUEST_SCHEMA = "visual_grounding_request_v1"
-VISUAL_GROUNDING_RESPONSE_SCHEMA = "visual_grounding_response_v1"
-VISUAL_GROUNDING_PIPELINE_SCHEMA = "visual_grounding_pipeline_v1"
+from roboclaws.household.visual_grounding_contract import (
+    VISUAL_GROUNDING_PIPELINE_SCHEMA,
+    VISUAL_GROUNDING_REQUEST_SCHEMA,
+    VISUAL_GROUNDING_RESPONSE_SCHEMA,
+    VisualGroundingContractError,
+    validate_visual_grounding_request,
+    validate_visual_grounding_response,
+)
+
 SIM_VISUAL_GROUNDING_PIPELINE_ID = "sim"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 DEFAULT_VISUAL_GROUNDING_TIMEOUT_S = 20.0
 EXTERNAL_VISUAL_GROUNDING_PROVENANCE = "external_visual_grounding_service"
 
 _ENDPOINT_PATH = "/v1/visual-grounding/candidates"
-
-
-class VisualGroundingContractError(ValueError):
-    """The service request or response did not match the public HTTP contract."""
 
 
 @dataclass(frozen=True)
@@ -293,123 +294,6 @@ def pipeline_summary_from_response(
         "failure_message": str(error.get("message") or "") if status == "failed" else "",
         "auth_mode": response_auth_mode,
     }
-
-
-def validate_visual_grounding_request(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        raise VisualGroundingContractError("visual grounding request must be an object")
-    if payload.get("schema") != VISUAL_GROUNDING_REQUEST_SCHEMA:
-        raise VisualGroundingContractError("visual grounding request schema mismatch")
-    for field in ("run_id", "observation_id", "waypoint_id", "room_id"):
-        if not isinstance(payload.get(field), str):
-            raise VisualGroundingContractError(f"{field} must be a string")
-    image = payload.get("image")
-    if not isinstance(image, dict):
-        raise VisualGroundingContractError("image must be an object")
-    if not isinstance(image.get("bytes_base64"), str):
-        raise VisualGroundingContractError("image.bytes_base64 must be a string")
-    try:
-        if image.get("bytes_base64"):
-            base64.b64decode(image["bytes_base64"], validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise VisualGroundingContractError("image.bytes_base64 is not valid base64") from exc
-    for field in ("width", "height"):
-        if not isinstance(image.get(field), int):
-            raise VisualGroundingContractError(f"image.{field} must be an integer")
-    if not isinstance(payload.get("category_hints"), list):
-        raise VisualGroundingContractError("category_hints must be a list")
-    if not isinstance(payload.get("fixture_hints"), list):
-        raise VisualGroundingContractError("fixture_hints must be a list")
-    pipeline_request = payload.get("pipeline_request")
-    if not isinstance(pipeline_request, dict) or not str(pipeline_request.get("pipeline_id") or ""):
-        raise VisualGroundingContractError("pipeline_request.pipeline_id is required")
-    return payload
-
-
-def validate_visual_grounding_response(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        raise VisualGroundingContractError("visual grounding response must be an object")
-    if payload.get("schema") != VISUAL_GROUNDING_RESPONSE_SCHEMA:
-        raise VisualGroundingContractError("visual grounding response schema mismatch")
-    status = str(payload.get("status") or "")
-    if status not in {"ok", "failed"}:
-        raise VisualGroundingContractError("visual grounding status must be ok or failed")
-    pipeline = payload.get("pipeline")
-    if not isinstance(pipeline, dict) or not str(pipeline.get("pipeline_id") or ""):
-        raise VisualGroundingContractError("pipeline.pipeline_id is required")
-    stages = pipeline.get("stages")
-    if not isinstance(stages, list) or not stages:
-        raise VisualGroundingContractError("pipeline.stages must be a non-empty list")
-    for stage in stages:
-        if not isinstance(stage, dict):
-            raise VisualGroundingContractError("pipeline stage must be an object")
-        if not str(stage.get("stage") or ""):
-            raise VisualGroundingContractError("pipeline stage name is required")
-        stage.setdefault("status", "ok" if status == "ok" else "failed")
-        stage.setdefault("latency_ms", 0)
-    candidates = payload.get("candidates")
-    if not isinstance(candidates, list):
-        raise VisualGroundingContractError("candidates must be a list")
-    if status == "failed" and candidates:
-        raise VisualGroundingContractError(
-            "failed visual grounding response must not include candidates"
-        )
-    for candidate in candidates:
-        _validate_visual_grounding_candidate(candidate)
-    if status == "failed":
-        error = payload.get("error")
-        if not isinstance(error, dict) or not str(error.get("reason") or ""):
-            raise VisualGroundingContractError("failed response requires error.reason")
-    return payload
-
-
-def _validate_visual_grounding_candidate(candidate: Any) -> None:
-    if not isinstance(candidate, dict):
-        raise VisualGroundingContractError("candidate must be an object")
-    if not str(candidate.get("category") or ""):
-        raise VisualGroundingContractError("candidate.category is required")
-    region = candidate.get("image_region")
-    if not isinstance(region, dict):
-        raise VisualGroundingContractError("candidate.image_region must be an object")
-    region_type = str(region.get("type") or "")
-    if region_type not in {"bbox", "point", "verbal_region"}:
-        raise VisualGroundingContractError(
-            "candidate.image_region.type must be bbox, point, or verbal_region"
-        )
-    value = region.get("value")
-    if region_type == "bbox":
-        _validate_number_list(value, expected=4, normalized=True, field="bbox")
-    elif region_type == "point":
-        _validate_number_list(value, expected=2, normalized=True, field="point")
-    elif not str(value or "").strip():
-        raise VisualGroundingContractError("verbal_region value is required")
-    confidence = candidate.get("confidence")
-    if confidence is not None:
-        try:
-            confidence_value = float(confidence)
-        except (TypeError, ValueError) as exc:
-            raise VisualGroundingContractError("candidate.confidence must be numeric") from exc
-        if confidence_value < 0 or confidence_value > 1:
-            raise VisualGroundingContractError("candidate.confidence must be in [0, 1]")
-
-
-def _validate_number_list(
-    value: Any,
-    *,
-    expected: int,
-    normalized: bool,
-    field: str,
-) -> None:
-    if not isinstance(value, list) or len(value) != expected:
-        raise VisualGroundingContractError(f"{field} must be a list of {expected} numbers")
-    numbers: list[float] = []
-    for item in value:
-        try:
-            numbers.append(float(item))
-        except (TypeError, ValueError) as exc:
-            raise VisualGroundingContractError(f"{field} values must be numeric") from exc
-    if normalized and any(number < 0.0 or number > 1.0 for number in numbers):
-        raise VisualGroundingContractError(f"{field} values must be normalized to [0, 1]")
 
 
 def _raw_observation_image_path(

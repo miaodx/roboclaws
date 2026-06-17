@@ -2,9 +2,56 @@ from __future__ import annotations
 
 import pytest
 
+from roboclaws.launch.backends import (
+    cleanup_implementation_backend_ids,
+    map_build_codex_implementation_backend_ids,
+    normalize_cleanup_implementation_backend,
+    normalize_map_build_codex_implementation_backend,
+)
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.launch.environment_setup_metadata import ENVIRONMENT_SETUP_METADATA_ENV
 from roboclaws.launch.runners import export_env_from_overrides
+
+
+def test_launch_backend_catalog_exposes_private_implementation_choices() -> None:
+    assert cleanup_implementation_backend_ids() == (
+        "api_semantic_synthetic",
+        "molmospaces_subprocess",
+        "isaaclab_subprocess",
+    )
+    assert map_build_codex_implementation_backend_ids() == (
+        "auto",
+        "molmospaces_subprocess",
+        "isaaclab_subprocess",
+        "agibot_gdk",
+    )
+
+
+def test_launch_backend_catalog_normalizes_command_layer_backend_values() -> None:
+    assert normalize_cleanup_implementation_backend("auto") is None
+    assert normalize_cleanup_implementation_backend("") is None
+    assert normalize_cleanup_implementation_backend("isaaclab_subprocess") == (
+        "isaaclab_subprocess"
+    )
+    assert (
+        normalize_map_build_codex_implementation_backend(
+            "agibot_gdk",
+            context="household-world.map-build codex-cli",
+        )
+        == "agibot_gdk"
+    )
+
+    with pytest.raises(ValueError, match="unsupported backend 'agibot_gdk'"):
+        normalize_cleanup_implementation_backend("agibot_gdk")
+
+    with pytest.raises(
+        ValueError,
+        match="household-world.map-build codex-cli unsupported backend 'api_semantic_synthetic'",
+    ):
+        normalize_map_build_codex_implementation_backend(
+            "api_semantic_synthetic",
+            context="household-world.map-build codex-cli",
+        )
 
 
 def test_cleanup_surface_exposes_setup_overrides_but_dispatches_private_count() -> None:

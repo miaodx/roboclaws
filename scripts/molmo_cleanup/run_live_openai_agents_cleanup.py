@@ -41,7 +41,7 @@ from roboclaws.household.realworld_mcp_server import (
     ROBOT_VIEW_CAPTURE_POLICIES,
     ROBOT_VIEW_CAPTURE_POLICY_FULL,
 )
-from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
@@ -60,6 +60,18 @@ from roboclaws.launch.evaluation import (
 from roboclaws.reports.live_performance import (
     extract_model_call_metrics,
     write_model_call_metrics_jsonl,
+)
+from scripts.molmo_cleanup.openai_agents_budget import (
+    raw_fpv_budget_failure as _raw_fpv_budget_failure,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    model_input_filter_metrics as _model_input_filter_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    model_racing_observability_metrics as _model_racing_observability_metrics,
+)
+from scripts.molmo_cleanup.openai_agents_metrics import (
+    model_service_fallback_metrics as _model_service_fallback_metrics,
 )
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
@@ -517,18 +529,10 @@ class LiveOpenAIAgentsCleanupRunner:
         result = None
         attempts: list[dict[str, Any]] = []
         while True:
-            preflight_failure = _budget_failure_from_run_state(
-                self.run_dir,
-                self.live_timing,
-                self.agent_sdk_perf_profile,
+            self._raise_agent_sdk_budget_failure_if_any(
+                attempt_index=attempt_index,
+                stage="before",
             )
-            if preflight_failure is not None:
-                self.live_timing["agent_sdk_budget_terminal"] = preflight_failure.status_fields()
-                raise LiveAgentRunFailure(
-                    f"OpenAI Agents SDK budget guard stopped before attempt {attempt_index}: "
-                    f"{preflight_failure.reason}",
-                    preflight_failure,
-                )
             if attempt_index:
                 self._write_status("running-openai-agents-continuation")
             request = self._sdk_request(prompt=prompt, attempt_index=attempt_index)
@@ -540,18 +544,10 @@ class LiveOpenAIAgentsCleanupRunner:
                 break
             if (self.run_dir / "run_result.json").is_file():
                 break
-            budget_failure = _budget_failure_from_run_state(
-                self.run_dir,
-                self.live_timing,
-                self.agent_sdk_perf_profile,
+            self._raise_agent_sdk_budget_failure_if_any(
+                attempt_index=attempt_index,
+                stage="after",
             )
-            if budget_failure is not None:
-                self.live_timing["agent_sdk_budget_terminal"] = budget_failure.status_fields()
-                raise LiveAgentRunFailure(
-                    f"OpenAI Agents SDK budget guard stopped after attempt {attempt_index}: "
-                    f"{budget_failure.reason}",
-                    budget_failure,
-                )
             continuation_prompt = recovery_policy.continuation_prompt(
                 original_prompt=self.initial_kickoff_prompt,
                 result=result,
@@ -602,6 +598,21 @@ class LiveOpenAIAgentsCleanupRunner:
                 "OpenAI Agents SDK turn ended without done after "
                 f"{len(attempts)} OpenAI Agents SDK invocation(s)"
             )
+
+    def _raise_agent_sdk_budget_failure_if_any(self, *, attempt_index: int, stage: str) -> None:
+        budget_failure = _budget_failure_from_run_state(
+            self.run_dir,
+            self.live_timing,
+            self.agent_sdk_perf_profile,
+        )
+        if budget_failure is None:
+            return
+        self.live_timing["agent_sdk_budget_terminal"] = budget_failure.status_fields()
+        raise LiveAgentRunFailure(
+            f"OpenAI Agents SDK budget guard stopped {stage} attempt {attempt_index}: "
+            f"{budget_failure.reason}",
+            budget_failure,
+        )
 
     def _sdk_request(self, *, prompt: str, attempt_index: int) -> LiveAgentRequest:
         artifact_paths = {
@@ -1854,171 +1865,6 @@ def _context_budget_failure(
     )
 
 
-def _raw_fpv_budget_failure(
-    run_dir: Path,
-    timing: dict[str, Any],
-    profile: dict[str, Any],
-) -> LiveAgentFailure | None:
-    if str(timing.get("evidence_lane") or timing.get("profile") or "") != "camera-raw-fpv":
-        return None
-    candidate_budget = _int_or_none(profile.get("raw_fpv_candidate_budget"))
-    repeated_failure_limit = _int_or_none(profile.get("raw_fpv_repeated_failure_limit"))
-    observe_budget = _int_or_none(profile.get("max_observe_per_waypoint"))
-    if candidate_budget is None and observe_budget is None and repeated_failure_limit is None:
-        return None
-    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
-    if not trace_events:
-        return None
-    metrics = _raw_fpv_budget_metrics(trace_events)
-    reasons: list[str] = []
-    if repeated_failure_limit is not None:
-        repeated_failures = [
-            item
-            for item in metrics["repeated_failure_fingerprints"]
-            if int(item.get("count") or 0) >= repeated_failure_limit
-        ]
-        if repeated_failures:
-            metrics["repeated_failure_limit"] = repeated_failure_limit
-            metrics["repeated_failure_limit_hits"] = repeated_failures[:12]
-            reasons.append("raw_fpv_repeated_candidate_failure")
-    if candidate_budget is not None and metrics["candidate_attempt_count"] >= candidate_budget:
-        reasons.append("raw_fpv_candidate_budget_exhausted")
-    if observe_budget is not None:
-        over_budget = {
-            waypoint_id: count
-            for waypoint_id, count in metrics["observe_count_by_waypoint"].items()
-            if waypoint_id and count > observe_budget
-        }
-        if over_budget:
-            metrics["observe_over_budget_by_waypoint"] = dict(sorted(over_budget.items()))
-            reasons.append("raw_fpv_observe_budget_exhausted")
-    if not reasons:
-        return None
-    reason = "raw_fpv_repeated_candidate_failure"
-    if "raw_fpv_repeated_candidate_failure" not in reasons:
-        reason = "raw_fpv_candidate_budget_exhausted"
-    if (
-        "raw_fpv_repeated_candidate_failure" not in reasons
-        and "raw_fpv_candidate_budget_exhausted" not in reasons
-    ):
-        reason = "raw_fpv_observe_budget_exhausted"
-    detail = json.dumps(
-        {
-            "schema": "agent_sdk_raw_fpv_budget_terminal_v1",
-            "profile_id": profile.get("profile_id") or "baseline",
-            "reasons": reasons,
-            "raw_fpv_candidate_budget": candidate_budget,
-            "raw_fpv_repeated_failure_limit": repeated_failure_limit,
-            "max_observe_per_waypoint": observe_budget,
-            **metrics,
-        },
-        sort_keys=True,
-    )
-    return LiveAgentFailure(
-        reason,
-        retryable=False,
-        resume_available=False,
-        detail=detail,
-    )
-
-
-def _raw_fpv_budget_metrics(trace_events: list[dict[str, Any]]) -> dict[str, Any]:
-    candidate_attempts: list[dict[str, str]] = []
-    observe_count_by_waypoint: dict[str, int] = {}
-    failure_fingerprints: dict[str, int] = {}
-    failure_fingerprint_details: dict[str, dict[str, str]] = {}
-    for event in trace_events:
-        tool = str(event.get("tool") or "")
-        event_type = str(event.get("event") or "")
-        if tool == "observe" and event_type == "response":
-            response = event.get("response") if isinstance(event.get("response"), dict) else {}
-            waypoint_id = _waypoint_from_response(response)
-            observe_count_by_waypoint[waypoint_id] = (
-                observe_count_by_waypoint.get(waypoint_id, 0) + 1
-            )
-            continue
-        if tool not in {"navigate_to_visual_candidate", "declare_visual_candidates"}:
-            continue
-        request = event.get("request") if isinstance(event.get("request"), dict) else {}
-        response = event.get("response") if isinstance(event.get("response"), dict) else {}
-        source_id = str(
-            request.get("source_observation_id")
-            or request.get("observation_id")
-            or response.get("observation_id")
-            or response.get("source_observation_id")
-            or ""
-        )
-        if not source_id and "raw_fpv" not in json.dumps(event, sort_keys=True, ensure_ascii=True):
-            continue
-        category = str(request.get("category") or response.get("category") or "")
-        region = _region_fingerprint(request.get("image_region"))
-        candidate_id = str(response.get("candidate_id") or response.get("object_id") or "")
-        failure_reason = str(
-            response.get("error_reason")
-            or response.get("failure_reason")
-            or response.get("status")
-            or ""
-        )
-        if event_type == "request":
-            candidate_attempts.append(
-                {
-                    "source_observation_id": source_id,
-                    "category": category,
-                    "region": region,
-                    "candidate_id": candidate_id,
-                }
-            )
-        if event_type == "response" and failure_reason:
-            fingerprint = "|".join((source_id, category, region, candidate_id, failure_reason))
-            failure_fingerprints[fingerprint] = failure_fingerprints.get(fingerprint, 0) + 1
-            failure_fingerprint_details.setdefault(
-                fingerprint,
-                {
-                    "source_observation_id": source_id,
-                    "category": category,
-                    "region": region,
-                    "candidate_id": candidate_id,
-                    "failure_reason": failure_reason,
-                },
-            )
-    repeated_failures = [
-        {
-            "fingerprint": key,
-            "count": count,
-            **failure_fingerprint_details.get(key, {}),
-        }
-        for key, count in sorted(failure_fingerprints.items())
-        if count > 1
-    ][:12]
-    return {
-        "candidate_attempt_count": len(candidate_attempts),
-        "candidate_attempts_sample": candidate_attempts[-12:],
-        "observe_count_by_waypoint": dict(sorted(observe_count_by_waypoint.items())),
-        "repeated_failure_fingerprints": repeated_failures,
-    }
-
-
-def _waypoint_from_response(response: dict[str, Any]) -> str:
-    waypoint_id = str(response.get("waypoint_id") or "")
-    if waypoint_id:
-        return waypoint_id
-    raw_payload = response.get("raw_fpv_observation")
-    raw = raw_payload if isinstance(raw_payload, dict) else {}
-    return str(raw.get("waypoint_id") or "unknown")
-
-
-def _region_fingerprint(value: Any) -> str:
-    if isinstance(value, dict):
-        region_type = str(value.get("type") or "")
-        region_value = value.get("value")
-        if isinstance(region_value, list):
-            compact = ",".join(str(item) for item in region_value[:4])
-        else:
-            compact = str(region_value or "")
-        return f"{region_type}:{compact}"[:120]
-    return str(value or "")[:120]
-
-
 def _compact_continuation_prompt(
     run_dir: Path,
     *,
@@ -2740,419 +2586,6 @@ def _openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
         "tool_error_count": sum(tool_error_classifications.values()),
         "tool_error_classifications": dict(sorted(tool_error_classifications.items())),
         "tool_error_messages_sample": tool_error_messages,
-    }
-
-
-def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
-    events = [
-        event
-        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
-        for event in _read_jsonl_path(path)
-        if event.get("schema") == "openai_agents_model_service_fallback_v1"
-    ]
-    if not events:
-        return {
-            "available": False,
-            "source": "openai_agents_model_service_fallback_events",
-            "limitations": ["model_service_fallback_events_missing"],
-        }
-
-    event_counts: dict[str, int] = {}
-    failure_classes: dict[str, int] = {}
-    provider_reasons: dict[str, int] = {}
-    attempted_models: set[str] = set()
-    attempted_provider_profiles: set[str] = set()
-    attempted_wire_apis: set[str] = set()
-    retry_delay_s_total = 0.0
-    retry_delay_count = 0
-    retry_exhausted = False
-    final_outcomes: dict[str, int] = {}
-    for event in events:
-        event_type = str(event.get("event") or "")
-        if event_type:
-            event_counts[event_type] = event_counts.get(event_type, 0) + 1
-        model = str(event.get("model") or "")
-        if model:
-            attempted_models.add(model)
-        provider_profile = str(event.get("provider_profile") or "")
-        if provider_profile:
-            attempted_provider_profiles.add(provider_profile)
-        wire_api = str(event.get("wire_api") or "")
-        if wire_api:
-            attempted_wire_apis.add(wire_api)
-        if event_type == "model_service_failure":
-            failure_class = str(event.get("failure_class") or "")
-            if failure_class:
-                failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
-            provider_reason = str(event.get("provider_reason") or "")
-            if provider_reason:
-                provider_reasons[provider_reason] = provider_reasons.get(provider_reason, 0) + 1
-        delay = _float_or_none(event.get("retry_delay_s"))
-        if delay is not None:
-            retry_delay_s_total += delay
-            retry_delay_count += 1
-        if event.get("retry_exhausted") is True:
-            retry_exhausted = True
-        final_outcome = str(event.get("final_outcome") or "")
-        if final_outcome:
-            final_outcomes[final_outcome] = final_outcomes.get(final_outcome, 0) + 1
-
-    return {
-        "available": True,
-        "source": "openai_agents_model_service_fallback_events",
-        "limitations": [],
-        "attempt_event_count": event_counts.get("model_service_attempt", 0),
-        "retry_scheduled_count": event_counts.get("model_service_retry_scheduled", 0),
-        "failure_event_count": event_counts.get("model_service_failure", 0),
-        "success_event_count": event_counts.get("model_service_success", 0),
-        "failure_classes": dict(sorted(failure_classes.items())),
-        "provider_reasons": dict(sorted(provider_reasons.items())),
-        "attempted_models": sorted(attempted_models),
-        "attempted_provider_profiles": sorted(attempted_provider_profiles),
-        "attempted_wire_apis": sorted(attempted_wire_apis),
-        "retry_delay_s_total": _round_duration(retry_delay_s_total),
-        "retry_delay_count": retry_delay_count,
-        "retry_exhausted": retry_exhausted,
-        "final_outcomes": dict(sorted(final_outcomes.items())),
-        "privacy_note": (
-            "Fallback metrics retain attempt counts, provider/model ids, failure classes, "
-            "retry delays, and outcomes only. Raw prompts, model text, credentials, and "
-            "tool payload bodies are not persisted."
-        ),
-    }
-
-
-def _model_racing_observability_metrics(run_dir: Path) -> dict[str, Any]:
-    events = [
-        event
-        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
-        for event in _read_jsonl_path(path)
-        if event.get("schema") == "openai_agents_model_racing_observability_v1"
-    ]
-    if not events:
-        return {
-            "available": False,
-            "source": "openai_agents_model_racing_observability_events",
-            "limitations": ["model_racing_observability_events_missing"],
-        }
-
-    event_counts: dict[str, int] = {}
-    attempted_models: set[str] = set()
-    attempted_provider_profiles: set[str] = set()
-    attempted_wire_apis: set[str] = set()
-    methods: set[str] = set()
-    racing_modes: set[str] = set()
-    arm_ids: set[str] = set()
-    call_indexes: set[int] = set()
-    final_outcomes: dict[str, int] = {}
-    failure_classes: dict[str, int] = {}
-    provider_reasons: dict[str, int] = {}
-    elapsed_s_total = 0.0
-    max_elapsed_s = 0.0
-    winner_count = 0
-    cancelled_count = 0
-    cancellation_observed_count = 0
-    loser_billing_unknown_count = 0
-    racing_enabled = False
-    racing_multiplier = 1.0
-    max_arm_count = 1
-    usage_available_count = 0
-    usage_missing_count = 0
-    total_input_tokens = 0
-    total_cached_input_tokens = 0
-    total_uncached_input_tokens = 0
-    total_output_tokens = 0
-    total_reasoning_tokens = 0
-    for event in events:
-        event_type = str(event.get("event") or "")
-        if event_type:
-            event_counts[event_type] = event_counts.get(event_type, 0) + 1
-        model = str(event.get("model") or "")
-        if model:
-            attempted_models.add(model)
-        provider_profile = str(event.get("provider_profile") or "")
-        if provider_profile:
-            attempted_provider_profiles.add(provider_profile)
-        wire_api = str(event.get("wire_api") or "")
-        if wire_api:
-            attempted_wire_apis.add(wire_api)
-        method = str(event.get("method") or "")
-        if method:
-            methods.add(method)
-        racing_mode = str(event.get("racing_mode") or "")
-        if racing_mode:
-            racing_modes.add(racing_mode)
-        arm_id = str(event.get("arm_id") or "")
-        if arm_id:
-            arm_ids.add(arm_id)
-        call_index = _int_or_none(event.get("call_index"))
-        if call_index is not None:
-            call_indexes.add(call_index)
-        final_outcome = str(event.get("final_outcome") or "")
-        if final_outcome:
-            final_outcomes[final_outcome] = final_outcomes.get(final_outcome, 0) + 1
-        failure_class = str(event.get("failure_class") or "")
-        if failure_class:
-            failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
-        provider_reason = str(event.get("provider_reason") or "")
-        if provider_reason:
-            provider_reasons[provider_reason] = provider_reasons.get(provider_reason, 0) + 1
-        elapsed = _float_or_none(event.get("elapsed_s"))
-        if elapsed is not None:
-            elapsed_s_total += elapsed
-            max_elapsed_s = max(max_elapsed_s, elapsed)
-        if event.get("winner") is True:
-            winner_count += 1
-        if event.get("cancelled") is True:
-            cancelled_count += 1
-        if event.get("cancellation_observed") is True:
-            cancellation_observed_count += 1
-        if event.get("loser_billing_unknown") is True:
-            loser_billing_unknown_count += 1
-        usage = event.get("usage_summary") if isinstance(event.get("usage_summary"), dict) else {}
-        if usage:
-            if usage.get("usage_available") is True:
-                usage_available_count += 1
-                total_input_tokens += _int_or_none(usage.get("input_tokens")) or 0
-                total_cached_input_tokens += _int_or_none(usage.get("cached_input_tokens")) or 0
-                total_uncached_input_tokens += _int_or_none(usage.get("uncached_input_tokens")) or 0
-                total_output_tokens += _int_or_none(usage.get("output_tokens")) or 0
-                total_reasoning_tokens += _int_or_none(usage.get("reasoning_tokens")) or 0
-            else:
-                usage_missing_count += 1
-        racing_enabled = racing_enabled or bool(event.get("racing_enabled"))
-        racing_multiplier = max(
-            racing_multiplier,
-            _float_or_none(event.get("racing_multiplier")) or 1.0,
-        )
-        max_arm_count = max(max_arm_count, _int_or_none(event.get("arm_count")) or 1)
-
-    return {
-        "available": True,
-        "source": "openai_agents_model_racing_observability_events",
-        "limitations": [],
-        "event_count": len(events),
-        "event_counts": dict(sorted(event_counts.items())),
-        "call_count": len(call_indexes),
-        "arm_count": len(arm_ids),
-        "max_arm_count_per_call": max_arm_count,
-        "racing_enabled": racing_enabled,
-        "racing_multiplier": racing_multiplier,
-        "winner_count": winner_count,
-        "cancelled_count": cancelled_count,
-        "cancellation_observed_count": cancellation_observed_count,
-        "loser_billing_unknown_count": loser_billing_unknown_count,
-        "elapsed_s_total": _round_duration(elapsed_s_total),
-        "max_elapsed_s": _round_duration(max_elapsed_s),
-        "usage_available_count": usage_available_count,
-        "usage_missing_count": usage_missing_count,
-        "total_input_tokens": total_input_tokens,
-        "total_cached_input_tokens": total_cached_input_tokens,
-        "total_uncached_input_tokens": total_uncached_input_tokens,
-        "total_output_tokens": total_output_tokens,
-        "total_reasoning_tokens": total_reasoning_tokens,
-        "methods": sorted(methods),
-        "racing_modes": sorted(racing_modes),
-        "final_outcomes": dict(sorted(final_outcomes.items())),
-        "failure_classes": dict(sorted(failure_classes.items())),
-        "provider_reasons": dict(sorted(provider_reasons.items())),
-        "attempted_models": sorted(attempted_models),
-        "attempted_provider_profiles": sorted(attempted_provider_profiles),
-        "attempted_wire_apis": sorted(attempted_wire_apis),
-        "privacy_note": (
-            "Racing observability metrics retain arm lifecycle counts, timing, provider/model "
-            "ids, cancellation/winner flags, and usage-availability fields only. Raw prompts, "
-            "model text, tool payload bodies, credentials, and private truth are not persisted."
-        ),
-    }
-
-
-def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
-    events = [
-        event
-        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
-        for event in _read_jsonl_path(path)
-        if event.get("schema") == "openai_agents_model_input_filter_v1"
-    ]
-    if not events:
-        return {
-            "available": False,
-            "source": "openai_agents_model_input_filter_events",
-            "limitations": ["model_input_filter_events_missing"],
-        }
-
-    attempted_models: set[str] = set()
-    attempted_provider_profiles: set[str] = set()
-    attempted_wire_apis: set[str] = set()
-    input_bytes_before = 0
-    input_bytes_after = 0
-    input_bytes_reduced = 0
-    compacted_item_count = 0
-    unchanged_item_count = 0
-    repeated_item_count = 0
-    metric_map_output_count = 0
-    repeated_metric_map_output_count = 0
-    metric_map_delta_compacted_count = 0
-    metric_map_bytes_before = 0
-    metric_map_bytes_after = 0
-    metric_map_bytes_reduced = 0
-    raw_fpv_image_item_count = 0
-    raw_fpv_image_retained_count = 0
-    raw_fpv_image_evicted_count = 0
-    raw_fpv_image_bytes_before = 0
-    raw_fpv_image_bytes_after = 0
-    raw_fpv_image_bytes_reduced = 0
-    raw_fpv_image_memory_enabled = False
-    raw_fpv_image_memory_modes: set[str] = set()
-    camera_grounded_history_item_count = 0
-    camera_grounded_history_retained_count = 0
-    camera_grounded_history_compacted_count = 0
-    camera_grounded_history_bytes_before = 0
-    camera_grounded_history_bytes_after = 0
-    camera_grounded_history_bytes_reduced = 0
-    camera_grounded_history_enabled = False
-    camera_grounded_history_modes: set[str] = set()
-    max_input_bytes_before = 0
-    max_input_bytes_after = 0
-    max_input_bytes_reduced = 0
-    enabled = False
-    modes: set[str] = set()
-    for event in events:
-        model = str(event.get("model") or "")
-        if model:
-            attempted_models.add(model)
-        provider_profile = str(event.get("provider_profile") or "")
-        if provider_profile:
-            attempted_provider_profiles.add(provider_profile)
-        wire_api = str(event.get("wire_api") or "")
-        if wire_api:
-            attempted_wire_apis.add(wire_api)
-        config = event.get("config") if isinstance(event.get("config"), dict) else {}
-        enabled = enabled or bool(config.get("enabled"))
-        mode = str(config.get("mode") or "")
-        if mode:
-            modes.add(mode)
-        metrics = event.get("metrics") if isinstance(event.get("metrics"), dict) else {}
-        before = _int_or_none(metrics.get("input_bytes_before")) or 0
-        after = _int_or_none(metrics.get("input_bytes_after")) or 0
-        reduced = _int_or_none(metrics.get("input_bytes_reduced")) or 0
-        input_bytes_before += before
-        input_bytes_after += after
-        input_bytes_reduced += reduced
-        compacted_item_count += _int_or_none(metrics.get("compacted_item_count")) or 0
-        unchanged_item_count += _int_or_none(metrics.get("unchanged_item_count")) or 0
-        repeated_item_count += _int_or_none(metrics.get("repeated_item_count")) or 0
-        metric_map_output_count += _int_or_none(metrics.get("metric_map_output_count")) or 0
-        repeated_metric_map_output_count += (
-            _int_or_none(metrics.get("repeated_metric_map_output_count")) or 0
-        )
-        metric_map_delta_compacted_count += (
-            _int_or_none(metrics.get("metric_map_delta_compacted_count")) or 0
-        )
-        metric_map_bytes_before += _int_or_none(metrics.get("metric_map_bytes_before")) or 0
-        metric_map_bytes_after += _int_or_none(metrics.get("metric_map_bytes_after")) or 0
-        metric_map_bytes_reduced += _int_or_none(metrics.get("metric_map_bytes_reduced")) or 0
-        raw_fpv_image_item_count += _int_or_none(metrics.get("raw_fpv_image_item_count")) or 0
-        raw_fpv_image_retained_count += (
-            _int_or_none(metrics.get("raw_fpv_image_retained_count")) or 0
-        )
-        raw_fpv_image_evicted_count += _int_or_none(metrics.get("raw_fpv_image_evicted_count")) or 0
-        raw_fpv_image_bytes_before += _int_or_none(metrics.get("raw_fpv_image_bytes_before")) or 0
-        raw_fpv_image_bytes_after += _int_or_none(metrics.get("raw_fpv_image_bytes_after")) or 0
-        raw_fpv_image_bytes_reduced += _int_or_none(metrics.get("raw_fpv_image_bytes_reduced")) or 0
-        raw_fpv_image_memory_enabled = raw_fpv_image_memory_enabled or bool(
-            metrics.get("raw_fpv_image_memory_enabled")
-        )
-        raw_fpv_mode = str(metrics.get("raw_fpv_image_memory_mode") or "")
-        if raw_fpv_mode:
-            raw_fpv_image_memory_modes.add(raw_fpv_mode)
-        camera_grounded_history_item_count += (
-            _int_or_none(metrics.get("camera_grounded_history_item_count")) or 0
-        )
-        camera_grounded_history_retained_count += (
-            _int_or_none(metrics.get("camera_grounded_history_retained_count")) or 0
-        )
-        camera_grounded_history_compacted_count += (
-            _int_or_none(metrics.get("camera_grounded_history_compacted_count")) or 0
-        )
-        camera_grounded_history_bytes_before += (
-            _int_or_none(metrics.get("camera_grounded_history_bytes_before")) or 0
-        )
-        camera_grounded_history_bytes_after += (
-            _int_or_none(metrics.get("camera_grounded_history_bytes_after")) or 0
-        )
-        camera_grounded_history_bytes_reduced += (
-            _int_or_none(metrics.get("camera_grounded_history_bytes_reduced")) or 0
-        )
-        camera_grounded_history_enabled = camera_grounded_history_enabled or bool(
-            metrics.get("camera_grounded_history_enabled")
-        )
-        camera_grounded_mode = str(metrics.get("camera_grounded_history_mode") or "")
-        if camera_grounded_mode:
-            camera_grounded_history_modes.add(camera_grounded_mode)
-        max_input_bytes_before = max(max_input_bytes_before, before)
-        max_input_bytes_after = max(max_input_bytes_after, after)
-        max_input_bytes_reduced = max(max_input_bytes_reduced, reduced)
-
-    return {
-        "available": True,
-        "source": "openai_agents_model_input_filter_events",
-        "limitations": [],
-        "event_count": len(events),
-        "enabled": enabled,
-        "modes": sorted(modes),
-        "attempted_models": sorted(attempted_models),
-        "attempted_provider_profiles": sorted(attempted_provider_profiles),
-        "attempted_wire_apis": sorted(attempted_wire_apis),
-        "compacted_item_count": compacted_item_count,
-        "unchanged_item_count": unchanged_item_count,
-        "repeated_item_count": repeated_item_count,
-        "metric_map_output_count": metric_map_output_count,
-        "repeated_metric_map_output_count": repeated_metric_map_output_count,
-        "metric_map_delta_compacted_count": metric_map_delta_compacted_count,
-        "metric_map_bytes_before": metric_map_bytes_before,
-        "metric_map_bytes_after": metric_map_bytes_after,
-        "metric_map_bytes_reduced": metric_map_bytes_reduced,
-        "metric_map_byte_reduction_ratio": _ratio(
-            metric_map_bytes_reduced,
-            metric_map_bytes_before,
-        ),
-        "raw_fpv_image_memory_enabled": raw_fpv_image_memory_enabled,
-        "raw_fpv_image_memory_modes": sorted(raw_fpv_image_memory_modes),
-        "raw_fpv_image_item_count": raw_fpv_image_item_count,
-        "raw_fpv_image_retained_count": raw_fpv_image_retained_count,
-        "raw_fpv_image_evicted_count": raw_fpv_image_evicted_count,
-        "raw_fpv_image_bytes_before": raw_fpv_image_bytes_before,
-        "raw_fpv_image_bytes_after": raw_fpv_image_bytes_after,
-        "raw_fpv_image_bytes_reduced": raw_fpv_image_bytes_reduced,
-        "raw_fpv_image_byte_reduction_ratio": _ratio(
-            raw_fpv_image_bytes_reduced,
-            raw_fpv_image_bytes_before,
-        ),
-        "camera_grounded_history_enabled": camera_grounded_history_enabled,
-        "camera_grounded_history_modes": sorted(camera_grounded_history_modes),
-        "camera_grounded_history_item_count": camera_grounded_history_item_count,
-        "camera_grounded_history_retained_count": camera_grounded_history_retained_count,
-        "camera_grounded_history_compacted_count": camera_grounded_history_compacted_count,
-        "camera_grounded_history_bytes_before": camera_grounded_history_bytes_before,
-        "camera_grounded_history_bytes_after": camera_grounded_history_bytes_after,
-        "camera_grounded_history_bytes_reduced": camera_grounded_history_bytes_reduced,
-        "camera_grounded_history_byte_reduction_ratio": _ratio(
-            camera_grounded_history_bytes_reduced,
-            camera_grounded_history_bytes_before,
-        ),
-        "input_bytes_before": input_bytes_before,
-        "input_bytes_after": input_bytes_after,
-        "input_bytes_reduced": input_bytes_reduced,
-        "input_byte_reduction_ratio": _ratio(input_bytes_reduced, input_bytes_before),
-        "max_input_bytes_before": max_input_bytes_before,
-        "max_input_bytes_after": max_input_bytes_after,
-        "max_input_bytes_reduced": max_input_bytes_reduced,
-        "privacy_note": (
-            "Model-input filter metrics retain aggregate counts, byte sizes, mode, provider, "
-            "wire API, and model ids only. Raw prompts, model text, tool payload bodies, "
-            "credentials, and private truth are not persisted."
-        ),
     }
 
 

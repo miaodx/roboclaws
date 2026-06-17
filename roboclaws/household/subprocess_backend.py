@@ -20,6 +20,13 @@ from roboclaws.household.types import (
     PrivateScoringManifest,
     TargetRule,
 )
+from roboclaws.household.worker_runner import (
+    parse_last_json_object,
+    run_json_worker_once,
+    worker_env,
+    worker_timeout_s,
+)
+from roboclaws.household.worker_runner import read_process_stderr as _read_process_stderr
 
 MOLMOSPACES_SUBPROCESS_BACKEND = "molmospaces_subprocess"
 DEFAULT_MOLMOSPACES_PYTHON = Path(sys.executable)
@@ -38,6 +45,8 @@ WORKER_SCRIPT = (
     / "molmospaces_subprocess_worker.py"
 )
 PERSISTENT_WORKER_DISABLED_VALUES = {"0", "false", "no", "off"}
+
+_parse_last_json_object = parse_last_json_object
 
 
 class MolmoSpacesSubprocessBackend:
@@ -297,40 +306,17 @@ class MolmoSpacesSubprocessBackend:
         return self._run_worker_once(command, *args)
 
     def _run_worker_once(self, command: str, *args: str) -> dict[str, Any]:
-        if not self.python_executable.is_file():
-            raise RuntimeError(
-                "MolmoSpaces Python runtime is missing: "
-                f"{self.python_executable}. Set ROBOCLAWS_MOLMOSPACES_PYTHON."
-            )
-        worker_env = _worker_env()
-        timeout_s = _worker_timeout_s(command)
-        worker_command = [
-            str(self.python_executable),
-            str(WORKER_SCRIPT),
-            "--state-path",
-            str(self.state_path),
-            command,
-            *args,
-        ]
-        try:
-            completed = subprocess.run(
-                worker_command,
-                check=False,
-                capture_output=True,
-                text=True,
-                env=worker_env,
-                timeout=timeout_s,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                f"MolmoSpaces subprocess worker timed out ({command}, {timeout_s:g}s)"
-            ) from exc
-        if completed.returncode != 0:
-            raise RuntimeError(
-                "MolmoSpaces subprocess worker failed "
-                f"({command}, exit {completed.returncode}): {completed.stderr.strip()}"
-            )
-        return _parse_last_json_object(completed.stdout)
+        return run_json_worker_once(
+            worker_name="MolmoSpaces",
+            python_executable=self.python_executable,
+            missing_runtime_hint="Set ROBOCLAWS_MOLMOSPACES_PYTHON.",
+            worker_script=WORKER_SCRIPT,
+            state_path=self.state_path,
+            command=command,
+            args=args,
+            env=_worker_env(),
+            timeout_s=_worker_timeout_s(command),
+        )
 
     def _run_persistent_worker(self, command: str, *args: str) -> dict[str, Any]:
         if not self.python_executable.is_file():
@@ -500,32 +486,24 @@ class MolmoSpacesSubprocessBackend:
             process.wait(timeout=5.0)
 
 
-def _parse_last_json_object(stdout: str) -> dict[str, Any]:
-    for line in reversed(stdout.splitlines()):
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        payload = json.loads(line)
-        if isinstance(payload, dict):
-            return payload
-    raise RuntimeError(f"MolmoSpaces worker returned no JSON object: {stdout!r}")
-
-
 def _worker_env() -> dict[str, str]:
-    env = os.environ.copy()
-    if "MUJOCO_GL" not in env:
-        env["MUJOCO_GL"] = env.get(
-            "ROBOCLAWS_MOLMOSPACES_MUJOCO_GL",
-            DEFAULT_MOLMOSPACES_MUJOCO_GL,
-        )
-    return env
+    return worker_env(
+        defaults={
+            "MUJOCO_GL": os.environ.get(
+                "ROBOCLAWS_MOLMOSPACES_MUJOCO_GL",
+                DEFAULT_MOLMOSPACES_MUJOCO_GL,
+            )
+        }
+    )
 
 
 def _worker_timeout_s(command: str) -> float:
-    override = os.environ.get("ROBOCLAWS_MOLMOSPACES_WORKER_TIMEOUT_S")
-    if override:
-        return float(override)
-    return WORKER_TIMEOUTS_S.get(command, DEFAULT_WORKER_TIMEOUT_S)
+    return worker_timeout_s(
+        command=command,
+        override_env_var="ROBOCLAWS_MOLMOSPACES_WORKER_TIMEOUT_S",
+        command_timeouts=WORKER_TIMEOUTS_S,
+        default_timeout_s=DEFAULT_WORKER_TIMEOUT_S,
+    )
 
 
 def _persistent_worker_enabled() -> bool:
@@ -546,15 +524,6 @@ def _worker_kwargs_from_args(command: str, args: tuple[str, ...]) -> dict[str, s
         kwargs[key] = args[index + 1]
         index += 2
     return kwargs
-
-
-def _read_process_stderr(process: subprocess.Popen[str]) -> str:
-    if process.stderr is None:
-        return ""
-    try:
-        return process.stderr.read()
-    except Exception:
-        return ""
 
 
 def _scenario_from_worker_payload(
