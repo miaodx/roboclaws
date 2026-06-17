@@ -27,7 +27,9 @@ Last proven evidence:
 - `python scripts/maps/auto_align_b1_map12_scene_topdown.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --manual-draft docs/status/active/b1-map12-scene-correspondences-draft.json --output-dir output/b1-map12/auto-alignment-probe-tracked-draft`
   writes `auto_alignment_status=candidate_seed_only`. The contour seed fails
   against the manual draft anchors with mean residual `2.152082 m` and max
-  residual `2.595962 m`, so it must not be promoted.
+  residual `2.595962 m`. The semantic label/partition center search also fails;
+  its best candidate has mean residual `7.891215 m` and max `11.003484 m`.
+  Neither automatic route can be promoted.
 - `docs/status/active/b1-map12-scene-correspondences-draft.json` snapshots the
   seven operator-picked manual draft anchors from the ignored `tmp/` export so
   the local probe is reproducible. The anchors intentionally remain

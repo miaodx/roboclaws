@@ -43,10 +43,12 @@ locally. Automatic contour alignment against the cropped B1 Gaussian top-down
 was attempted with
 `scripts/maps/auto_align_b1_map12_scene_topdown.py`; it remains
 `candidate_seed_only` because residuals against the manual draft anchors are
-mean `2.152082 m` and max `2.595962 m`. A tracked manual draft snapshot now
-lives at `docs/status/active/b1-map12-scene-correspondences-draft.json`. The
-explicit verification-only manual fallback passes global rigid alignment with
-mean residual `0.352908 m` and max `0.502064 m`, but it uses synthetic
+mean `2.152082 m` and max `2.595962 m`. The same probe now also tries semantic
+label/partition center matching; that candidate is worse, with best mean
+residual `7.891215 m` and max `11.003484 m`. A tracked manual draft snapshot
+now lives at `docs/status/active/b1-map12-scene-correspondences-draft.json`.
+The explicit verification-only manual fallback passes global rigid alignment
+with mean residual `0.352908 m` and max `0.502064 m`, but it uses synthetic
 area/partition ids and must not be committed as the final accepted
 correspondence asset.
 

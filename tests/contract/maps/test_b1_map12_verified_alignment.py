@@ -12,6 +12,7 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     readiness_artifact_with_alignment,
     validate_readiness_artifact,
 )
+from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
 from scripts.maps.fit_b1_map12_scene_alignment import (
     B1_MAP12_ALIGNMENT_RESIDUALS_SCHEMA,
     B1_MAP12_CORRESPONDENCES_SCHEMA,
@@ -533,6 +534,83 @@ def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
     assert suggestion["suggestion_status"] == "strong_candidate_needs_review"
     assert suggestion["recommended_navigation_area_id"] == "area_a"
     assert suggestion["recommended_asset_partition_id"] == "partition_a"
+
+
+def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:
+    review_manifest = {
+        "labels": [
+            {
+                "label_id": "room_a",
+                "map_area_id": "area_a",
+                "scene_partition_id": "partition_a",
+                "review_status": "accepted",
+                "geometry": {
+                    "type": "map_polygon",
+                    "points": [
+                        {"x": 0.0, "y": 0.0},
+                        {"x": 2.0, "y": 0.0},
+                        {"x": 2.0, "y": 2.0},
+                        {"x": 0.0, "y": 2.0},
+                    ],
+                },
+            },
+            {
+                "label_id": "room_b",
+                "map_area_id": "area_b",
+                "scene_partition_id": "partition_b",
+                "review_status": "accepted",
+                "geometry": {
+                    "type": "map_polygon",
+                    "points": [
+                        {"x": 4.0, "y": 0.0},
+                        {"x": 6.0, "y": 0.0},
+                        {"x": 6.0, "y": 2.0},
+                        {"x": 4.0, "y": 2.0},
+                    ],
+                },
+            },
+        ]
+    }
+    scene_diagnostic = {
+        "partitions": [
+            {
+                "partition_id": "partition_a",
+                "scene_frame_bounds": {
+                    "min_x": 10.0,
+                    "min_y": 20.0,
+                    "max_x": 12.0,
+                    "max_y": 22.0,
+                },
+            },
+            {
+                "partition_id": "partition_b",
+                "scene_frame_bounds": {
+                    "min_x": 14.0,
+                    "min_y": 20.0,
+                    "max_x": 16.0,
+                    "max_y": 22.0,
+                },
+            },
+        ]
+    }
+    manual_anchors = [
+        {"map_xy": [1.0, 1.0], "scene_xyz": [11.0, 21.0, 0.0]},
+        {"map_xy": [5.0, 1.0], "scene_xyz": [15.0, 21.0, 0.0]},
+        {"map_xy": [3.0, 2.0], "scene_xyz": [13.0, 22.0, 0.0]},
+        {"map_xy": [2.0, -1.0], "scene_xyz": [12.0, 19.0, 0.0]},
+        {"map_xy": [6.0, 3.0], "scene_xyz": [16.0, 23.0, 0.0]},
+        {"map_xy": [0.0, 0.0], "scene_xyz": [10.0, 20.0, 0.0]},
+    ]
+
+    packet = semantic_label_partition_candidates(
+        review_manifest=review_manifest,
+        scene_diagnostic=scene_diagnostic,
+        manual_anchors=manual_anchors,
+    )
+
+    assert packet["status"] == "candidate_seed_only"
+    assert packet["best_candidate"]["manual_draft_passes_thresholds"] is True
+    assert packet["best_candidate"]["transform"]["candidate_status"] == "candidate_seed_only"
 
 
 def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(

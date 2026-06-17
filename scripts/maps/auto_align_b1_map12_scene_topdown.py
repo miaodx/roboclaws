@@ -34,6 +34,10 @@ DEFAULT_SCENE_TOPDOWN_RENDER = Path(
     "output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json"
 )
 DEFAULT_MANUAL_DRAFT = Path("tmp/b1-map12-scene-correspondences.draft.json")
+DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
+DEFAULT_SCENE_DIAGNOSTIC = Path(
+    "output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json"
+)
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/auto-alignment-probe")
 
 
@@ -47,6 +51,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--map-bundle", type=Path, default=DEFAULT_MAP_BUNDLE)
     parser.add_argument("--scene-topdown-render", type=Path, default=DEFAULT_SCENE_TOPDOWN_RENDER)
     parser.add_argument("--manual-draft", type=Path, default=DEFAULT_MANUAL_DRAFT)
+    parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--scene-diagnostic", type=Path, default=DEFAULT_SCENE_DIAGNOSTIC)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     return parser.parse_args(argv)
 
@@ -57,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle=args.map_bundle,
         scene_topdown_render=args.scene_topdown_render,
         manual_draft=args.manual_draft,
+        review_manifest=args.review_manifest,
+        scene_diagnostic=args.scene_diagnostic,
         output_dir=args.output_dir,
     )
     errors = validate_auto_alignment_probe(packet)
@@ -85,6 +93,8 @@ def build_auto_alignment_probe(
     map_bundle: Path,
     scene_topdown_render: Path,
     manual_draft: Path,
+    review_manifest: Path,
+    scene_diagnostic: Path,
     output_dir: Path,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -96,6 +106,11 @@ def build_auto_alignment_probe(
         output_dir=output_dir,
     )
     manual = manual_draft_reference(manual_draft, auto_transform=auto["transform"])
+    semantic_candidates = semantic_label_partition_candidates(
+        review_manifest=load_json_file(review_manifest, "review manifest"),
+        scene_diagnostic=load_json_file(scene_diagnostic, "scene diagnostic"),
+        manual_anchors=manual.get("anchors") or [],
+    )
     write_probe_preview(
         manual.get("anchors") or [],
         auto_transform=auto["transform"],
@@ -107,15 +122,29 @@ def build_auto_alignment_probe(
         "map_bundle": str(map_bundle),
         "scene_topdown_render": str(scene_topdown_render),
         "manual_draft": str(manual_draft),
+        "review_manifest": str(review_manifest),
+        "scene_diagnostic": str(scene_diagnostic),
         "contract_note": (
-            "Automatic contour alignment is a candidate seed only. It must not be promoted "
-            "to accepted correspondences or verified alignment unless residual gates pass."
+            "Automatic contour and semantic label alignment are candidate seeds only. "
+            "They must not be promoted to accepted correspondences or verified alignment "
+            "unless residual gates pass and the result is reviewed."
         ),
         "auto_alignment_status": auto["status"],
         "auto_contour_candidate": auto,
+        "semantic_label_partition_candidates": semantic_candidates,
+        "best_automatic_candidate": best_automatic_candidate(auto, manual, semantic_candidates),
         "manual_draft_reference": manual,
         "preview": str(output_dir / "auto_vs_manual_residuals.png"),
     }
+
+
+def load_json_file(path: Path, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} missing: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def load_map_context(map_bundle: Path) -> dict[str, Any]:
@@ -185,6 +214,244 @@ def contour_alignment_candidate(
         },
         "manual_draft_evaluation": manual_eval,
     }
+
+
+def semantic_label_partition_candidates(
+    *,
+    review_manifest: dict[str, Any],
+    scene_diagnostic: dict[str, Any],
+    manual_anchors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    pairs = semantic_center_pairs(review_manifest, scene_diagnostic)
+    if len(pairs) < 2:
+        return {
+            "status": "insufficient_semantic_pairs",
+            "method": "map_label_center_to_scene_partition_center_search",
+            "pair_count": len(pairs),
+            "pairs": pairs,
+            "candidates": [],
+        }
+    source = np.array([pair["map_xy"] for pair in pairs], dtype=float)
+    target = np.array([pair["scene_xy"] for pair in pairs], dtype=float)
+    all_pair_candidate = semantic_candidate_payload("all_semantic_pairs_similarity", source, target)
+    all_pair_candidate["pairs"] = pairs
+    all_pair_candidate["manual_draft_residual_metrics"] = transform_manual_metrics(
+        manual_anchors,
+        all_pair_candidate["transform"],
+    )
+    all_pair_candidate["manual_draft_passes_thresholds"] = residual_metrics_pass(
+        all_pair_candidate["manual_draft_residual_metrics"]
+    )
+    search_candidates = semantic_combination_search(pairs, manual_anchors)
+    candidates = [all_pair_candidate, *search_candidates]
+    best = min(
+        candidates,
+        key=lambda item: (
+            item["manual_draft_residual_metrics"].get("mean_residual_m", math.inf),
+            item["manual_draft_residual_metrics"].get("max_residual_m", math.inf),
+        ),
+    )
+    return {
+        "status": "candidate_seed_only",
+        "method": "map_label_center_to_scene_partition_center_search",
+        "pair_count": len(pairs),
+        "pairs": pairs,
+        "best_candidate": best,
+        "candidates": candidates,
+        "thresholds": {
+            "mean_residual_m": GLOBAL_MEAN_THRESHOLD_M,
+            "max_residual_m": GLOBAL_MAX_THRESHOLD_M,
+        },
+    }
+
+
+def semantic_center_pairs(
+    review_manifest: dict[str, Any],
+    scene_diagnostic: dict[str, Any],
+) -> list[dict[str, Any]]:
+    partitions = {
+        str(partition.get("partition_id") or ""): partition
+        for partition in scene_diagnostic.get("partitions") or []
+        if isinstance(partition, dict)
+    }
+    pairs = []
+    for label in review_manifest.get("labels") or []:
+        if not isinstance(label, dict):
+            continue
+        status = str(label.get("review_status") or "")
+        if status not in {"accepted", "blocked_shared_area", "draft"}:
+            continue
+        geometry = label.get("geometry")
+        if not isinstance(geometry, dict) or geometry.get("type") != "map_polygon":
+            continue
+        scene_partition_id = str(label.get("scene_partition_id") or "")
+        partition = partitions.get(scene_partition_id)
+        if not partition:
+            continue
+        map_xy = polygon_centroid(geometry.get("points") or [])
+        bounds = partition.get("scene_frame_bounds") if isinstance(partition, dict) else {}
+        scene_xy = bounds_center(bounds if isinstance(bounds, dict) else {})
+        if map_xy is None or scene_xy is None:
+            continue
+        pairs.append(
+            {
+                "label_id": str(label.get("label_id") or ""),
+                "review_status": status,
+                "map_area_id": str(label.get("map_area_id") or ""),
+                "scene_partition_id": scene_partition_id,
+                "map_xy": map_xy,
+                "scene_xy": scene_xy,
+            }
+        )
+    return pairs
+
+
+def semantic_combination_search(
+    pairs: list[dict[str, Any]],
+    manual_anchors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    candidates = []
+    pair_count = len(pairs)
+    for first in range(pair_count - 1):
+        for second in range(first + 1, pair_count):
+            selected = [pairs[first], pairs[second]]
+            candidates.append(fit_semantic_pair_subset(selected, manual_anchors))
+            for third in range(second + 1, pair_count):
+                selected = [pairs[first], pairs[second], pairs[third]]
+                candidates.append(fit_semantic_pair_subset(selected, manual_anchors))
+    return sorted(
+        candidates,
+        key=lambda item: (
+            item["manual_draft_residual_metrics"].get("mean_residual_m", math.inf),
+            item["manual_draft_residual_metrics"].get("max_residual_m", math.inf),
+        ),
+    )[:10]
+
+
+def fit_semantic_pair_subset(
+    pairs: list[dict[str, Any]],
+    manual_anchors: list[dict[str, Any]],
+) -> dict[str, Any]:
+    source = np.array([pair["map_xy"] for pair in pairs], dtype=float)
+    target = np.array([pair["scene_xy"] for pair in pairs], dtype=float)
+    payload = semantic_candidate_payload(
+        f"{len(pairs)}_semantic_pair_similarity",
+        source,
+        target,
+    )
+    payload["pairs"] = pairs
+    payload["manual_draft_residual_metrics"] = transform_manual_metrics(
+        manual_anchors,
+        payload["transform"],
+    )
+    payload["manual_draft_passes_thresholds"] = residual_metrics_pass(
+        payload["manual_draft_residual_metrics"]
+    )
+    return payload
+
+
+def semantic_candidate_payload(
+    method: str,
+    source: np.ndarray,
+    target: np.ndarray,
+) -> dict[str, Any]:
+    transform = fit_similarity_transform(source, target)
+    predicted = apply_transform_array(source, transform)
+    residuals = np.linalg.norm(predicted - target, axis=1)
+    transform["source"] = f"auto_semantic_{method}"
+    transform["candidate_status"] = "candidate_seed_only"
+    return {
+        "method": method,
+        "transform": transform,
+        "semantic_pair_residual_metrics": residual_metrics([float(value) for value in residuals]),
+        "manual_draft_residual_metrics": {},
+        "manual_draft_passes_thresholds": False,
+    }
+
+
+def transform_manual_metrics(
+    manual_anchors: list[dict[str, Any]],
+    transform: dict[str, Any],
+) -> dict[str, Any]:
+    anchors = [anchor for anchor in manual_anchors if valid_draft_anchor(anchor)]
+    if not anchors:
+        return {}
+    source = np.array([anchor["map_xy"] for anchor in anchors], dtype=float)
+    target = np.array([[anchor["scene_xyz"][0], anchor["scene_xyz"][1]] for anchor in anchors])
+    predicted = apply_transform_array(source, transform)
+    residuals = np.linalg.norm(predicted - target, axis=1)
+    return residual_metrics([float(value) for value in residuals])
+
+
+def residual_metrics_pass(metrics: dict[str, Any]) -> bool:
+    return (
+        bool(metrics)
+        and float(metrics["mean_residual_m"]) <= GLOBAL_MEAN_THRESHOLD_M
+        and float(metrics["max_residual_m"]) <= GLOBAL_MAX_THRESHOLD_M
+    )
+
+
+def polygon_centroid(points: list[Any]) -> list[float] | None:
+    xy = [
+        (float(point["x"]), float(point["y"]))
+        for point in points
+        if isinstance(point, dict) and "x" in point and "y" in point
+    ]
+    if not xy:
+        return None
+    return [
+        round(sum(point[0] for point in xy) / len(xy), 6),
+        round(sum(point[1] for point in xy) / len(xy), 6),
+    ]
+
+
+def bounds_center(bounds: dict[str, Any]) -> list[float] | None:
+    required = {"min_x", "max_x", "min_y", "max_y"}
+    if not required.issubset(bounds):
+        return None
+    return [
+        round((float(bounds["min_x"]) + float(bounds["max_x"])) / 2.0, 6),
+        round((float(bounds["min_y"]) + float(bounds["max_y"])) / 2.0, 6),
+    ]
+
+
+def best_automatic_candidate(
+    contour: dict[str, Any],
+    manual: dict[str, Any],
+    semantic: dict[str, Any],
+) -> dict[str, Any]:
+    contour_metrics = manual.get("auto_contour_transform_residual_metrics") or {}
+    contour_summary = {
+        "source": "auto_contour_candidate",
+        "status": "candidate_seed_only",
+        "manual_draft_residual_metrics": contour_metrics,
+        "manual_draft_passes_thresholds": bool(
+            manual.get("auto_contour_transform_passes_thresholds")
+        ),
+        "transform": contour.get("transform") or {},
+    }
+    semantic_best = semantic.get("best_candidate") if isinstance(semantic, dict) else None
+    candidates = [contour_summary]
+    if isinstance(semantic_best, dict):
+        candidates.append(
+            {
+                "source": "semantic_label_partition_candidate",
+                "status": "candidate_seed_only",
+                "manual_draft_residual_metrics": semantic_best.get("manual_draft_residual_metrics")
+                or {},
+                "manual_draft_passes_thresholds": bool(
+                    semantic_best.get("manual_draft_passes_thresholds")
+                ),
+                "transform": semantic_best.get("transform") or {},
+            }
+        )
+    return min(
+        candidates,
+        key=lambda item: (
+            item["manual_draft_residual_metrics"].get("mean_residual_m", math.inf),
+            item["manual_draft_residual_metrics"].get("max_residual_m", math.inf),
+        ),
+    )
 
 
 def map_known_mask(image: np.ndarray) -> np.ndarray:
