@@ -322,6 +322,14 @@
         <input type="checkbox" data-layer="driveableWays" checked />
         Driveable ways
       </label>
+      <label class="layer-toggle">
+        <input type="checkbox" data-layer="memoryNavGoals" checked />
+        Memory nav goals
+      </label>
+      <label class="layer-toggle">
+        <input type="checkbox" data-layer="memoryObjects" checked />
+        Memory objects
+      </label>
     </div>
 
     <h2>Labels</h2>
@@ -330,8 +338,10 @@
     <h2>Selected</h2>
     <div id="editor"></div>
 
-    <h2>Scene Evidence</h2>
-    <div id="sceneEvidence"></div>
+    <section id="sceneEvidenceSection" hidden>
+      <h2>Scene Evidence</h2>
+      <div id="sceneEvidence"></div>
+    </section>
 
     <h2>Export</h2>
     <div class="toolbar export">
@@ -358,11 +368,14 @@ const state = {
   mode: "select",
   shapes: JSON.parse(JSON.stringify(PACKET.shapes || [])),
   semanticLayers: cloneSemanticLayers(PACKET.semantic_map_layers || {}),
+  navigationMemoryLayer: cloneNavigationMemoryLayer(PACKET.navigation_memory_layer || {}),
   layers: {
     rooms: true,
     fixtures: true,
     waypoints: true,
-    driveableWays: true
+    driveableWays: true,
+    memoryNavGoals: true,
+    memoryObjects: true
   },
   selectedId: null,
   draftPolygon: [],
@@ -379,6 +392,13 @@ function cloneSemanticLayers(layers) {
     fixtures: layers.fixtures || [],
     inspection_waypoints: layers.inspection_waypoints || [],
     driveable_ways: layers.driveable_ways || []
+  }));
+}
+
+function cloneNavigationMemoryLayer(layer) {
+  return JSON.parse(JSON.stringify({
+    source: layer.source || "",
+    items: layer.items || []
   }));
 }
 
@@ -622,6 +642,14 @@ function rotateSemanticLayersAround(center, angleRad) {
       way.to_center = rotatePointAround(way.to_center, center, angleRad);
     }
   });
+  (state.navigationMemoryLayer.items || []).forEach((item) => {
+    if (item.pose) {
+      item.pose = rotatePoseAround(item.pose, center, angleRad);
+    }
+    if (item.nav_goal) {
+      item.nav_goal = rotatePoseAround(item.nav_goal, center, angleRad);
+    }
+  });
 }
 
 function applyGlobalTilt() {
@@ -724,6 +752,9 @@ function draw() {
   if (state.layers.waypoints) {
     drawWaypoints();
   }
+  if (state.layers.memoryNavGoals || state.layers.memoryObjects) {
+    drawNavigationMemory();
+  }
   drawDraftPolygon();
 }
 
@@ -781,6 +812,45 @@ function drawWaypoints() {
     ctx.fill();
     ctx.stroke();
     drawSmallLabel(waypoint.label || waypoint.waypoint_id, center, "#7c4a03", 9, -10);
+  });
+  ctx.restore();
+}
+
+function drawNavigationMemory() {
+  const items = state.navigationMemoryLayer.items || [];
+  ctx.save();
+  items.forEach((item) => {
+    const pose = item.pose ? worldToPixel(item.pose) : null;
+    const navGoal = item.nav_goal ? worldToPixel(item.nav_goal) : null;
+    if (state.layers.memoryNavGoals && state.layers.memoryObjects && pose && navGoal) {
+      ctx.strokeStyle = "rgba(124, 58, 237, 0.58)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(navGoal.x, navGoal.y);
+      ctx.lineTo(pose.x, pose.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (state.layers.memoryNavGoals && navGoal) {
+      ctx.fillStyle = "#7c3aed";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(navGoal.x, navGoal.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    if (state.layers.memoryObjects && pose) {
+      ctx.fillStyle = "#db2777";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(pose.x - 5, pose.y - 5, 10, 10);
+      ctx.fill();
+      ctx.stroke();
+      drawSmallLabel(item.label || item.id, pose, "#9d174d", 9, -8);
+    }
   });
   ctx.restore();
 }
@@ -1132,6 +1202,7 @@ function renderEditor() {
 }
 
 function renderSceneEvidence() {
+  document.getElementById("sceneEvidenceSection").hidden = !PACKET.scene_evidence;
   const panel = document.getElementById("sceneEvidence");
   const shape = selectedShape();
   if (!shape) {
@@ -1255,7 +1326,8 @@ function renderMeta() {
     resolution: ${PACKET.map.resolution_m} m/px<br />
     labels: ${state.shapes.length}<br />
     fixtures: ${(state.semanticLayers.fixtures || []).length}<br />
-    waypoints: ${(state.semanticLayers.inspection_waypoints || []).length}
+    waypoints: ${(state.semanticLayers.inspection_waypoints || []).length}<br />
+    navigation memory: ${(state.navigationMemoryLayer.items || []).length}
   `;
 }
 
@@ -1342,6 +1414,7 @@ document.getElementById("downloadJson").addEventListener("click", () => {
 document.getElementById("loadInitial").addEventListener("click", () => {
   state.shapes = JSON.parse(JSON.stringify(PACKET.shapes || []));
   state.semanticLayers = cloneSemanticLayers(PACKET.semantic_map_layers || {});
+  state.navigationMemoryLayer = cloneNavigationMemoryLayer(PACKET.navigation_memory_layer || {});
   state.selectedId = state.shapes[0]?.shape_id || null;
   state.draftPolygon = [];
   renderAll();
