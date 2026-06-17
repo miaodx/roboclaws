@@ -3690,6 +3690,56 @@ def test_openai_agents_perf_profile_accepts_matching_cli_and_env(monkeypatch) ->
     assert profile["source"] == "cli+environment"
 
 
+def test_openai_agents_perf_profile_rejects_conflicting_cli_and_env_settings(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE", "repeat_full_prompt")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "10")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S", "1.5")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING", "0")
+
+    conflict_cases = [
+        (
+            {"continuation_mode": "state_summary_only"},
+            "conflicting OpenAI Agents SDK setting continuation_mode",
+        ),
+        ({"max_turns": 11}, "conflicting OpenAI Agents SDK setting max_turns"),
+        (
+            {"model_service_retry_sleep_s": 2.0},
+            "conflicting OpenAI Agents SDK setting model_service_retry_sleep_s",
+        ),
+        ({"model_racing": True}, "conflicting OpenAI Agents SDK setting model_racing"),
+    ]
+
+    for overrides, expected_error in conflict_cases:
+        with pytest.raises(ValueError, match=expected_error):
+            _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
+
+
+def test_openai_agents_perf_profile_accepts_matching_cli_and_env_settings(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE", "state_summary_only")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "9")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S", "1.5")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING", "yes")
+
+    profile = _resolve_agent_sdk_perf_profile(
+        _openai_agents_perf_profile_base_args(
+            agent_sdk_perf_profile="custom",
+            continuation_mode="state_summary_only",
+            max_turns=9,
+            model_service_retry_sleep_s=1.5,
+            model_racing=True,
+        )
+    )
+
+    assert profile["continuation_mode"] == "state_summary_only"
+    assert profile["max_turns"] == 9
+    assert profile["model_service_retry_sleep_s"] == 1.5
+    assert profile["model_racing_observability"]["enabled"] is True
+
+
 def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     gpt = _resolve_agent_sdk_perf_profile(

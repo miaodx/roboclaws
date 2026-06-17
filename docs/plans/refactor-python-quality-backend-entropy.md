@@ -169,6 +169,17 @@ closed hard-ceiling owner split. Continue the dedicated fail-aloud/env cleanup
 stream before returning to Candidate D profile-owner extraction or other
 hard-ceiling splits.
 
+Implementation refresh on 2026-06-17 extended that fail-aloud rule to the
+shared OpenAI Agents SDK profile setting helpers. String, integer,
+positive-integer, float, and boolean SDK profile knobs now reject CLI/env
+conflicts while preserving the current `just` recipe pattern where environment
+values are passed through to CLI arguments with the same resolved value. This
+closes the broadest known ambiguity in the Agent SDK perf-profile helper family
+without extracting the profile owner yet. The next fail-aloud cleanup should
+pick a new bounded fallback family by fresh audit evidence; if no stronger
+silent-fallback candidate appears, return to the Candidate D runner-side
+profile-owner extraction as the next P1 hard-ceiling slice.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and

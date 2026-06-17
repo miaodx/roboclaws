@@ -43,6 +43,17 @@ logs before choosing the next slice.
   fail-aloud runtime configuration cleanup. Proof: focused OpenAI Agents perf
   profile tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: OpenAI Agents SDK profile setting helpers now reject ambiguous
+  CLI/env conflicts across string, integer, positive-integer, float, and boolean
+  knobs while still accepting the launch recipe's env-to-CLI pass-through when
+  both sources resolve to the same value. This covers continuation mode,
+  turn/context/budget limits, model-service retry settings, model racing, image
+  memory, camera-grounded history, composite tools, and robot-view capture
+  policy through the shared helper layer. Owning layers: Agent Engines And
+  Provider Profiles plus Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud runtime configuration cleanup. Proof: focused OpenAI Agents perf
+  profile tests, ruff, format check, py_compile, and ratchet.
+
 - 2026-06-14: Backend facade started. `CleanupBackendSession` gained backend
   id/runtime-artifact attachment, shared backend construction, and common
   direct/MCP metadata attachment. Proof: focused backend/MCP tests and ratchet.

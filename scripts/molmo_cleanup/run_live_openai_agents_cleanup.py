@@ -306,7 +306,13 @@ def _env_bool(name: str, *, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
         return default
-    return raw.strip().lower() not in {"0", "false", "no", "off"}
+    return _bool_setting_value(raw)
+
+
+def _bool_setting_value(raw: object) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1566,7 +1572,11 @@ def _string_setting(
     default: str,
     allowed: set[str],
 ) -> str:
-    value = str(getattr(args, attr, "") or os.environ.get(env_name, "") or default).strip()
+    arg_raw = getattr(args, attr, "")
+    env_raw = os.environ.get(env_name, "")
+    value = str(arg_raw or env_raw or default).strip()
+    if arg_raw and env_raw and str(arg_raw).strip() != str(env_raw).strip():
+        _raise_setting_conflict(attr, env_name, str(arg_raw).strip(), str(env_raw).strip())
     if value not in allowed:
         raise ValueError(f"unsupported OpenAI Agents SDK {attr.replace('_', '-')} '{value}'")
     return value
@@ -1581,8 +1591,14 @@ def _int_setting(
     allow_none: bool = False,
 ) -> int | None:
     raw = getattr(args, attr, None)
+    env_raw = os.environ.get(env_name)
+    if raw is not None and env_raw not in {None, ""}:
+        value = int(raw)
+        env_value = int(env_raw)
+        if value != env_value:
+            _raise_setting_conflict(attr, env_name, value, env_value)
+        raw = value
     if raw is None:
-        env_raw = os.environ.get(env_name)
         raw = env_raw if env_raw not in {None, ""} else default
     if raw is None:
         if allow_none:
@@ -1602,8 +1618,14 @@ def _positive_int_setting(
     default: int,
 ) -> int:
     raw = getattr(args, attr, None)
+    env_raw = os.environ.get(env_name)
+    if raw is not None and env_raw not in {None, ""}:
+        value = int(raw)
+        env_value = int(env_raw)
+        if value != env_value:
+            _raise_setting_conflict(attr, env_name, value, env_value)
+        raw = value
     if raw is None:
-        env_raw = os.environ.get(env_name)
         raw = env_raw if env_raw not in {None, ""} else default
     value = int(raw)
     if value < 1:
@@ -1619,8 +1641,14 @@ def _float_setting(
     default: float,
 ) -> float:
     raw = getattr(args, attr, None)
+    env_raw = os.environ.get(env_name)
+    if raw is not None and env_raw not in {None, ""}:
+        value = float(raw)
+        env_value = float(env_raw)
+        if value != env_value:
+            _raise_setting_conflict(attr, env_name, value, env_value)
+        raw = value
     if raw is None:
-        env_raw = os.environ.get(env_name)
         raw = env_raw if env_raw not in {None, ""} else default
     value = float(raw)
     if value < 0:
@@ -1636,15 +1664,27 @@ def _bool_arg_setting(
     default: bool,
 ) -> bool:
     raw = getattr(args, attr, None)
+    env_raw = os.environ.get(env_name)
+    if raw is not None and env_raw not in {None, ""}:
+        value = _bool_setting_value(raw)
+        env_value = _bool_setting_value(env_raw)
+        if value != env_value:
+            _raise_setting_conflict(attr, env_name, value, env_value)
+        raw = value
     if raw is None:
-        env_raw = os.environ.get(env_name)
         if env_raw not in {None, ""}:
             raw = env_raw
     if raw is None:
         return default
-    if isinstance(raw, bool):
-        return raw
-    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+    return _bool_setting_value(raw)
+
+
+def _raise_setting_conflict(attr: str, env_name: str, arg_value: object, env_value: object) -> None:
+    cli_name = f"--{attr.replace('_', '-')}"
+    raise ValueError(
+        f"conflicting OpenAI Agents SDK setting {attr}: "
+        f"{cli_name}={arg_value!r} and {env_name}={env_value!r}"
+    )
 
 
 def _validate_context_limits(profile: dict[str, Any]) -> None:
