@@ -34,6 +34,15 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: B1 / Map 12 `--skip-existing --b1-camera-artifact <path>` now
+  skips only when existing preview metadata records real Isaac camera previews
+  from the same requested artifact path. Stale camera previews from a different
+  artifact are regenerated from the supplied artifact instead of being treated
+  as current evidence. Metric: ratchet reports 13 complexity rows and 76
+  oversized modules after the prior slice and 77 with this regression test
+  added. Proof: focused operator-console preview tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 / Map 12 static preview generation no longer carries forward
   stale Isaac runtime FPV/chase previews when no fresh `--b1-camera-artifact` is
   supplied. The renderer now removes stale camera preview files and rewrites

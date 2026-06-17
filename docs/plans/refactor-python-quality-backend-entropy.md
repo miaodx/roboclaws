@@ -604,6 +604,14 @@ camera artifact. Fresh Isaac camera preview promotion remains explicit through
 `--b1-camera-artifact`. Proof passed with focused operator-console preview
 tests, ruff, format check, py_compile, `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 closed the adjacent B1 camera-artifact
+skip-cache false-green. `--skip-existing --b1-camera-artifact <path>` now
+skips only when existing metadata records real Isaac camera previews from that
+same artifact path; stale previews from another artifact are regenerated from
+the requested artifact instead of being treated as current. Proof passed with
+focused operator-console preview tests, ruff, format check, py_compile,
+`git diff --check`, and ratchet.
+
 ### T: Unnecessary Unit-Test Pruning
 
 Severity: P2 by default; P1 only when tests create false confidence for a public

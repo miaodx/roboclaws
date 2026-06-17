@@ -366,7 +366,10 @@ def render_b1_map12_preview(
                 camera_artifact is not None
                 and fpv_path.exists()
                 and chase_path.exists()
-                and _b1_metadata_has_real_camera_previews(metadata_path)
+                and _b1_metadata_has_real_camera_previews(
+                    metadata_path,
+                    camera_artifact=camera_artifact,
+                )
             )
         )
     ):
@@ -512,12 +515,35 @@ def _b1_metadata_has_no_camera_previews(path: Path) -> bool:
     return "fpv" not in views and "chase" not in views
 
 
-def _b1_metadata_has_real_camera_previews(path: Path) -> bool:
+def _b1_metadata_has_real_camera_previews(
+    path: Path,
+    *,
+    camera_artifact: Path | None = None,
+) -> bool:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
+    if camera_artifact is not None and not _b1_metadata_camera_artifact_matches(
+        payload,
+        camera_artifact=camera_artifact,
+    ):
+        return False
     return _b1_metadata_payload_has_real_camera_previews(payload)
+
+
+def _b1_metadata_camera_artifact_matches(
+    payload: dict[str, Any],
+    *,
+    camera_artifact: Path,
+) -> bool:
+    artifact = payload.get("camera_preview_artifact")
+    if not isinstance(artifact, dict):
+        return False
+    raw_path = str(artifact.get("path") or "").strip()
+    if not raw_path:
+        return False
+    return Path(raw_path).resolve() == camera_artifact.resolve()
 
 
 def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bool:
