@@ -258,7 +258,6 @@
         "span_y_m": 9.806,
         "topdown_azimuth_deg": 90.0
       },
-      "semantic_map_fallback": false,
       "view": "topdown_scene_render",
       "waypoint_id": "generated_exploration_001"
     }

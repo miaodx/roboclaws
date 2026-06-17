@@ -294,7 +294,7 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["chase"]["view"] == "chase_camera"
         assert metadata["views"]["chase"]["image_diagnostics"]["visual_status"] == "reviewable"
         assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
-        assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
+        assert "semantic_map_fallback" not in metadata["views"]["topdown"]
         assert "semantic_projection" not in metadata["views"]["map"]
         assert "scene_alignment" not in metadata["views"]["map"]
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]

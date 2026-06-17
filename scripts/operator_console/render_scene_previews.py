@@ -918,7 +918,6 @@ def _preview_metadata(
                 "provenance": "mujoco_camera_control_canonical_eye_target",
                 "alignment_status": "mujoco_scene_rendered",
                 "scene_alignment": scene_alignment,
-                "semantic_map_fallback": False,
                 "image_diagnostics": _image_diagnostics(topdown_path),
             },
         },
@@ -1028,7 +1027,6 @@ def _b1_map12_preview_metadata(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),
                 "display_frame": semantics.get("display_frame"),
-                "semantic_map_fallback": False,
                 "image_diagnostics": _image_diagnostics(map_path),
             },
             "topdown": {
@@ -1038,7 +1036,6 @@ def _b1_map12_preview_metadata(
                 "alignment_status": str(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),
-                "semantic_map_fallback": False,
                 "room_count": len(rooms),
                 "review_label_count": len(review_labels),
                 "inspection_waypoint_count": len(waypoints),

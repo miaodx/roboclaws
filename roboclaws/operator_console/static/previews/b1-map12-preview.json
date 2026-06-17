@@ -84,7 +84,6 @@
       },
       "path": "b1-map12-map.png",
       "provenance": "compiled_vendor_map12_runtime_preview_png",
-      "semantic_map_fallback": false,
       "view": "source_map_preview"
     },
     "topdown": {
@@ -124,7 +123,6 @@
       "provenance": "compiled_b1_map12_review_labels_topdown_png",
       "review_label_count": 3,
       "room_count": 3,
-      "semantic_map_fallback": false,
       "view": "review_label_topdown"
     }
   },

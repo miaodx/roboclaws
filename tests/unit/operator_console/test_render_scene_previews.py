@@ -146,7 +146,7 @@ def test_preview_metadata_marks_topdown_as_rendered_scene_not_map_fallback(
     assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
     assert metadata["views"]["topdown"]["camera_pose"]["azimuth"] == pytest.approx(90.0)
     assert metadata["views"]["topdown"]["scene_alignment"] == scene_alignment
-    assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
+    assert "semantic_map_fallback" not in metadata["views"]["topdown"]
     assert metadata["views"]["topdown"]["path"].endswith("-topdown.png")
     assert metadata["views"]["topdown"]["image_diagnostics"]["visual_status"] == "low_detail"
 
