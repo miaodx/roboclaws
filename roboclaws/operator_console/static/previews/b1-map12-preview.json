@@ -3,7 +3,7 @@
   "camera_preview_artifact": {
     "accepted_candidate_count": 8,
     "candidate_count": 8,
-    "path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-oracle-labels/0615_1857/seed-7/run_result.json",
+    "path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-public-labels/0615_1857/seed-7/run_result.json",
     "schema": "realworld_cleanup_v1",
     "selected_action": "observe",
     "selected_label": "0001_observe",
@@ -59,7 +59,7 @@
       "policy_note": "Chase is report evidence, not agent-facing policy input.",
       "provenance": "isaac_runtime_report_chase_camera",
       "source": "robot_relative_camera_follower",
-      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-oracle-labels/0615_1857/seed-7/robot_views/0001_observe.chase.png",
+      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-public-labels/0615_1857/seed-7/robot_views/0001_observe.chase.png",
       "view": "chase_camera",
       "waypoint_id": ""
     },
@@ -102,7 +102,7 @@
       "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
       "robot_mounted": true,
       "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
-      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-oracle-labels/0615_1857/seed-7/robot_views/0001_observe.fpv.png",
+      "source_path": "output/operator-console/runs/20260615-185701-b1-map12-isaaclab-open-task-codex-cli-world-public-labels/0615_1857/seed-7/robot_views/0001_observe.fpv.png",
       "view": "raw_fpv",
       "waypoint_id": ""
     },

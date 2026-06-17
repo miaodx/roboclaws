@@ -662,8 +662,7 @@ def _normalized_evidence_lane(value: str) -> str:
     if lane not in AGIBOT_SEMANTIC_MAP_BUILD_LANES:
         raise ValueError(
             f"unsupported Agibot intent=map-build evidence lane {lane!r}; "
-            "expected smoke|world-oracle-labels|world-public-labels|"
-            "camera-grounded-labels|camera-raw-fpv"
+            "expected smoke|world-public-labels|camera-grounded-labels|camera-raw-fpv"
         )
     return lane
 

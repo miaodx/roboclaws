@@ -104,7 +104,7 @@ deterministic client with an operator-approved ROS/Nav2 action client.
 Use the MolmoSpaces world-label report before hardware:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
@@ -112,14 +112,14 @@ For a live Codex cleanup rehearsal with the supported local runtime, set
 `codex-env` route, then run:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
 ```
 
 For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
 the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-public-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
   scenario_setup=relocate-cleanup-related-objects \
@@ -147,7 +147,7 @@ uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
   output/molmo/codex-gpt55-nav2-report/<stamp> \
   --expect-backend molmospaces_subprocess \
   --expect-policy codex_agent \
-  --expect-profile world-oracle-labels \
+  --expect-profile world-public-labels \
   --expect-seeds 7 \
   --min-generated-mess-count 5 \
   --require-agent-driven \

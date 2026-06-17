@@ -428,6 +428,8 @@ def _normalize_fixture_category_label(value: Any) -> str:
     text = str(value or "").strip().lower()
     compact = _norm(text)
     aliases = {
+        "kitchen sink": "sink",
+        "kitchensink": "sink",
         "tvstand": "tvstand",
         "tv stand": "tvstand",
         "shelvingunit": "shelvingunit",

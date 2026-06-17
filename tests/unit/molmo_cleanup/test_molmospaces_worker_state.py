@@ -42,6 +42,47 @@ def test_init_state_builds_init_envelope_with_injected_hooks(
     assert written_state["room_outlines"] == [{"room_id": "room_1"}]
 
 
+def test_init_state_seeds_robot_pose_for_targetless_open_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    from scripts.molmo_cleanup.molmospaces_worker_state import init_state
+
+    _install_fake_molmospaces_modules(tmp_path, monkeypatch)
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    robot_dir = tmp_path / "robots" / "rby1m"
+    robot_dir.mkdir(parents=True)
+    (robot_dir / "rby1m.xml").write_text("<mujoco/>", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    model = SimpleNamespace(nbody=1, ngeom=2, njnt=3, nq=4)
+    data = SimpleNamespace(qpos=[0.1, 0.2, 0.3, 0.4])
+    pose = {
+        "x": 1.0,
+        "y": 2.0,
+        "theta": 0.5,
+        "pose_source": "unit_initial_receptacle",
+    }
+    hooks = _init_hooks(scene_xml=scene_xml, model=model, data=data, robot_pose=pose)
+
+    init_state(
+        state_path=state_path,
+        seed=7,
+        scene_source="procthor-10k-val",
+        scene_index=3,
+        include_robot=True,
+        generated_mess_count=0,
+        hooks=hooks,
+    )
+
+    written_state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert written_state["current_receptacle_id"] == "sink_01"
+    assert written_state["robot_pose"] == pose
+    assert written_state["robot_trajectory"] == [pose]
+    assert written_state["qpos"] == [0.1, 0.2, 0.3, 0.4]
+
+
 def _install_fake_molmospaces_modules(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -71,6 +112,7 @@ def _init_hooks(
     scene_xml: Path,
     model: SimpleNamespace,
     data: SimpleNamespace,
+    robot_pose: dict[str, object] | None = None,
 ):
     from scripts.molmo_cleanup.molmospaces_worker_state import MolmoInitHooks
 
@@ -103,7 +145,7 @@ def _init_hooks(
         },
         refresh_object_positions=lambda *_args: None,
         robot_camera_names=lambda _model: [],
-        robot_pose_near_receptacle=lambda *_args: {},
+        robot_pose_near_receptacle=lambda *_args: dict(robot_pose or {}),
         robot_result_payload=lambda *_args: {},
         robot_xml_name=lambda robot_name: f"{robot_name}.xml",
         scenario_id=lambda **_kwargs: "molmospaces-unit-1",

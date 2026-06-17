@@ -248,13 +248,11 @@ def _prehardware_perception_mode(profile: str) -> str:
         return RAW_FPV_ONLY_MODE
     if profile == "camera-grounded-labels":
         return CAMERA_MODEL_POLICY_MODE
-    if profile == "world-oracle-labels":
-        return VISIBLE_OBJECT_DETECTIONS_MODE
     if profile == "world-public-labels":
         return VISIBLE_OBJECT_DETECTIONS_MODE
     raise ValueError(
         f"unsupported Agibot MolmoSpaces pre-hardware lane {profile!r} "
-        "(expected world-oracle-labels|world-public-labels|camera-raw-fpv|camera-grounded-labels)"
+        "(expected world-public-labels|camera-raw-fpv|camera-grounded-labels)"
     )
 
 
@@ -1582,7 +1580,7 @@ def _run_result(
         "execution_backend": EXECUTION_BACKEND,
         "navigation_backend": NAVIGATION_BACKEND,
         "runtime": runtime,
-        "evidence_lane": "world-oracle-labels",
+        "evidence_lane": "world-public-labels",
         "simulated": True,
         "physical_robot": False,
         "agent_driven": False,
@@ -1672,7 +1670,7 @@ def _run_result(
             "confidence_layer": report_title,
             "rehearsal_mode": rehearsal_mode,
             "runtime": runtime,
-            "evidence_lane": "world-oracle-labels",
+            "evidence_lane": "world-public-labels",
             "simulated": True,
             "physical_robot": False,
             "execution_backend": EXECUTION_BACKEND,

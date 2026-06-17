@@ -22,9 +22,9 @@ AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera
 AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
-B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
-MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-public-labels"
+MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-public-labels"
 
 
 def test_world_catalog_exposes_scene_first_console_choices() -> None:
@@ -184,7 +184,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "cleanup",
             "codex-cli",
             "codex-env",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         (
             "molmospaces/val_0",
@@ -192,7 +192,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "cleanup",
             "claude-code",
             "mimo-anthropic",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         (
             "molmospaces/val_0",
@@ -200,7 +200,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "cleanup",
             "openai-agents-sdk",
             "codex-env",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         (
             "molmospaces/val_0",
@@ -208,7 +208,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "map-build",
             "codex-cli",
             "codex-env",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         (
             "molmospaces/val_0",
@@ -216,7 +216,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "open-ended",
             "codex-cli",
             "codex-env",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         (
             "molmospaces/val_2",
@@ -224,7 +224,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "open-ended",
             "codex-cli",
             "codex-env",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
         (
             "agibot-g2/map-12",
@@ -240,7 +240,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "open-ended",
             "codex-cli",
             "codex-env",
-            "world-oracle-labels",
+            "world-public-labels",
         ),
     }
     validate_supported_routes_against_catalog()
@@ -248,7 +248,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
 
 def test_openai_agents_route_payload_lists_provider_profiles() -> None:
     route = get_selection(
-        "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels"
+        "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-public-labels"
     )
     payload = route.to_payload()
 
@@ -258,6 +258,7 @@ def test_openai_agents_route_payload_lists_provider_profiles() -> None:
         "mify",
         "minimax",
         "mimo-openai-chat",
+        "mimo-inside",
         "kimi-openai-chat",
     ]
     route_by_profile = {route["provider_profile"]: route for route in payload["provider_routes"]}
@@ -275,7 +276,6 @@ def test_openclaw_agent_engine_marks_validation_required() -> None:
 def test_console_exposes_all_supported_household_evidence_lanes() -> None:
     lanes = tuple(lane["id"] for lane in list_evidence_lanes())
     assert lanes == (
-        "world-oracle-labels",
         "world-public-labels",
         "camera-grounded-labels",
         "camera-raw-fpv",
@@ -296,7 +296,7 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
     grounded = get_selection(
         "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"
     )
-    assert "camera_labeler=sim-projected-labels" in grounded.launch_default_overrides
+    assert "camera_labeler=grounding-dino" in grounded.launch_default_overrides
     agibot_grounded = get_selection(AGIBOT_CODEX_MAP_BUILD)
     assert "camera_labeler=grounding-dino" in agibot_grounded.launch_default_overrides
 
@@ -304,12 +304,12 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
 def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) -> None:
     enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
-        assert f"{world_id}::mujoco::map-build::direct-runner::world-oracle-labels" in enabled_ids
+        assert f"{world_id}::mujoco::map-build::direct-runner::world-public-labels" in enabled_ids
     for world_id in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
-        assert f"{world_id}::mujoco::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+        assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in enabled_ids
 
     val0 = get_selection(MUJOCO_CODEX_CLEANUP)
-    val5 = get_selection("molmospaces/val_5::mujoco::cleanup::codex-cli::world-oracle-labels")
+    val5 = get_selection("molmospaces/val_5::mujoco::cleanup::codex-cli::world-public-labels")
 
     assert "scene_index=0" in val0.launch_default_overrides
     assert "map_bundle=none" not in val0.launch_default_overrides
@@ -338,21 +338,21 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     assert not any(route_id.startswith("molmospaces/val_6::") for route_id in all_ids)
     assert not any(route_id.startswith("molmospaces/val_8::") for route_id in all_ids)
 
-    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" not in all_ids
-    assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels" not in all_ids
+    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-public-labels" not in all_ids
+    assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-public-labels" not in all_ids
 
-    assert "molmospaces/val_2::mujoco::cleanup::codex-cli::world-oracle-labels" in disabled
+    assert "molmospaces/val_2::mujoco::cleanup::codex-cli::world-public-labels" in disabled
     assert (
         "at least 5 generated cleanup targets"
-        in disabled["molmospaces/val_2::mujoco::cleanup::codex-cli::world-oracle-labels"]
+        in disabled["molmospaces/val_2::mujoco::cleanup::codex-cli::world-public-labels"]
     )
     assert not any(
         "::isaaclab::" in route_id for route_id in all_ids if route_id.startswith("molmospaces/")
     )
-    assert "molmospaces/val_2::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
-    assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_2::mujoco::map-build::codex-cli::world-public-labels" in enabled_ids
+    assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-public-labels" in enabled_ids
     assert (
-        "molmospaces/val_0::mujoco::open-task::openai-agents-sdk::world-oracle-labels"
+        "molmospaces/val_0::mujoco::open-task::openai-agents-sdk::world-public-labels"
         in enabled_ids
     )
 
@@ -363,7 +363,7 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
             route.backend_id == "mujoco"
             and route.intent_id == "cleanup"
             and route.agent_engine_id == "codex-cli"
-            and route.evidence_lane == "world-oracle-labels"
+            and route.evidence_lane == "world-public-labels"
         )
     }
     assert enabled_mujoco_cleanup_worlds == set(MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS)
@@ -397,7 +397,7 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
     )
     assert (
         "Map-build"
-        in reasons["molmospaces/val_0::mujoco::map-build::claude-code::world-oracle-labels"]
+        in reasons["molmospaces/val_0::mujoco::map-build::claude-code::world-public-labels"]
     )
     b1_camera_grounded = "b1-map12::isaaclab::open-task::codex-cli::camera-grounded-labels"
     assert "not wired yet" in reasons[b1_camera_grounded]
@@ -456,7 +456,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         "preset=cleanup",
         "agent_engine=codex-cli",
     ]
-    assert "evidence_lane=world-oracle-labels" in argv
+    assert "evidence_lane=world-public-labels" in argv
     assert "provider_profile=codex-env" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
@@ -479,7 +479,7 @@ def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -
     argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
     assert "evidence_lane=camera-grounded-labels" in argv
-    assert "camera_labeler=sim-projected-labels" in argv
+    assert "camera_labeler=grounding-dino" in argv
 
 
 def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:

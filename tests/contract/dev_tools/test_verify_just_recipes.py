@@ -195,8 +195,8 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
 
     expected_calls = (
         'just molmo::household-world-impl "{{driver}}" "{{profile}}"',
-        "just molmo::household-world-impl direct world-oracle-labels",
-        "just molmo::household-world-impl mcp-smoke world-oracle-labels",
+        "just molmo::household-world-impl direct world-public-labels",
+        "just molmo::household-world-impl mcp-smoke world-public-labels",
         "just molmo::household-world-impl direct camera-raw-fpv",
         'just molmo::household-world-impl codex-live "{{profile}}"',
         'just molmo::household-world-impl claude-live "{{profile}}"',

@@ -78,12 +78,12 @@ def checker_flags_for_household_intent(
         return tuple(flags)
     if intent_id == "cleanup" and profile in {
         "smoke",
-        "world-oracle-labels",
+        "world-public-labels",
         "camera-grounded-labels",
         "camera-raw-fpv",
     }:
         flags.append("--require-clean-agent-run")
-    if intent_id == "cleanup" and profile == "world-oracle-labels":
+    if intent_id == "cleanup" and profile == "world-public-labels":
         flags.extend(
             (
                 "--require-waypoint-honesty",

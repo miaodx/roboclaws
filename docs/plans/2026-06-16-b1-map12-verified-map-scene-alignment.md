@@ -13,8 +13,10 @@ source:
 related_context:
   - ARCHITECTURE.md
   - STATUS.md
-  - assets/maps/b1-map12-room-semantics/semantics.json
-  - assets/maps/b1-map12-room-semantics/room_semantic_overlay.json
+  - docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md
+  - assets/maps/agibot-robot-map-12/semantics.json
+  - assets/maps/b1-map12-alignment-review.json
+  - assets/maps/b1-map12-scene-correspondences.json
   - scripts/isaac_lab_cleanup/check_b1_map12_readiness.py
   - scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py
   - tests/contract/maps/test_b1_map12_digital_twin_readiness.py
@@ -149,8 +151,8 @@ area, but it must not populate `scene_xyz`, mark an anchor accepted, or count
 toward residual evidence.
 
 Draft annotations should live under `output/` while they are being reviewed.
-Once accepted, the reviewed manifest should be committed as a map-bundle asset
-at `assets/maps/b1-map12-room-semantics/scene_correspondences.json`.
+Once accepted, the reviewed manifest should be committed as a standalone asset
+at `assets/maps/b1-map12-scene-correspondences.json`.
 Only human/operator-reviewed picks may use `review_status=accepted`.
 Model-generated or script-generated anchor candidates must remain
 `review_status=proposed` until reviewed.
@@ -308,7 +310,7 @@ them before claiming `verified` requires an explicit plan update.
 
 ## Suggested Files
 
-- `assets/maps/b1-map12-room-semantics/scene_correspondences.json`
+- `assets/maps/b1-map12-scene-correspondences.json`
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
@@ -320,8 +322,8 @@ them before claiming `verified` requires an explicit plan update.
 
 ```bash
 python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences assets/maps/b1-map12-room-semantics/scene_correspondences.json \
-  --map-bundle assets/maps/b1-map12-room-semantics \
+  --correspondences assets/maps/b1-map12-scene-correspondences.json \
+  --map-bundle assets/maps/agibot-robot-map-12 \
   --output-dir output/b1-map12/alignment
 
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
@@ -423,8 +425,9 @@ Entity budget:
   `scene_map_correspondence_v1`, cross-environment map parity tests, and
   `scene-gaussian-map-alignment` evidence vocabulary.
 - remove/merge: none.
-- new: correspondence manifest schema, `scene_correspondences.json` after
-  review, transform fitter script, residual artifact, focused contract test;
+- new: correspondence manifest schema,
+  `assets/maps/b1-map12-scene-correspondences.json` after review, transform
+  fitter script, residual artifact, focused contract test;
   these are necessary because bbox fit has poor observed quality and cannot be
   reused as a verified baseline.
 - expansion triggers: custom annotation UI, object-level USD binding,
@@ -436,11 +439,13 @@ Context:
 - must-read: this plan, `docs/human/domain.md`,
   `docs/plans/refactor-reduce-entropy-b1-map12-digital-twin.md`,
   `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`,
+  `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`,
   `skills/scene-gaussian-map-alignment/SKILL.md`,
   `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`,
   `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`,
-  `assets/maps/b1-map12-room-semantics/semantics.json`,
-  `assets/maps/b1-map12-room-semantics/room_semantic_overlay.json`.
+  `assets/maps/agibot-robot-map-12/semantics.json`,
+  `assets/maps/b1-map12-alignment-review.json`,
+  `assets/maps/b1-map12-scene-correspondences.json`.
 - useful: existing operator-console B1 preview artifacts and any current
   `output/b1-map12/**` readiness/navigation reports.
 - avoid-unless-needed: historical MolmoSpaces Isaac parity plans, raw provider
@@ -482,8 +487,8 @@ Verification:
 
   ```bash
   python scripts/maps/fit_b1_map12_scene_alignment.py \
-    --correspondences assets/maps/b1-map12-room-semantics/scene_correspondences.json \
-    --map-bundle assets/maps/b1-map12-room-semantics \
+    --correspondences assets/maps/b1-map12-scene-correspondences.json \
+    --map-bundle assets/maps/agibot-robot-map-12 \
     --output-dir output/b1-map12/alignment
 
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \

@@ -518,6 +518,28 @@ def test_static_app_hides_pause_until_a_route_supports_it() -> None:
     assert "els.pauseButton.disabled = !pauseAvailable" in app
 
 
+def test_static_app_wires_manual_relative_navigation_controls() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="manual-control-panel"' in html
+    assert 'id="manual-control-status"' in html
+    for action in ("forward", "back", "left", "right", "turn-left", "turn-right", "observe"):
+        assert f'data-control-action="{action}"' in html
+    assert "MANUAL_CONTROL_STEP_M = 0.25" in app
+    assert "MANUAL_CONTROL_TURN_DEG = 15" in app
+    assert 'action: "navigate_to_relative_pose"' in app
+    assert 'return { action: "observe" }' in app
+    assert "/control" in app
+    assert "supports_relative_navigation_control" in app
+    assert "relative_navigation_control_available" in app
+    assert "operator moves are recorded as assisted interventions".lower() in app.lower()
+    assert ".manual-control-panel" in css
+    assert ".manual-control-grid" in css
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in css
+
+
 def test_static_app_opens_images_in_large_dialog() -> None:
     html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")

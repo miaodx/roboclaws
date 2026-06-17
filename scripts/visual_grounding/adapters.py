@@ -16,18 +16,12 @@ from roboclaws.household.visual_grounding import (
     VISUAL_GROUNDING_RESPONSE_SCHEMA,
     validate_visual_grounding_response,
 )
-from scripts.visual_grounding.serve_fake_visual_grounding import (
-    contract_fake_stages_for_pipeline,
-    contract_fake_visual_grounding_response,
-)
 
 ADAPTER_MODE_AUTO = "auto"
-ADAPTER_MODE_CONTRACT_FAKE = "contract-fake"
 ADAPTER_MODE_REAL = "real"
 ADAPTER_MODE_UNAVAILABLE = "unavailable"
-CONTRACT_FAKE_PIPELINE_ID = "contract-fake"
-FAKE_HTTP_PIPELINE_ID = "fake-http"
 REAL_ROUTER_PIPELINE_ID = "real-router"
+DEFAULT_PIPELINE_ID = "grounding-dino"
 ADAPTER_CATALOG_SCHEMA = "visual_grounding_adapter_catalog_v1"
 
 
@@ -53,14 +47,6 @@ class AdapterSpec:
 
 
 ADAPTER_SPECS: dict[str, AdapterSpec] = {
-    "fake-http": AdapterSpec(
-        producer_id="fake-http",
-        role="contract_fake",
-        status="available",
-        model_id="deterministic-public-metadata",
-        optional_extra="",
-        setup_hint="Built in for CI-safe visual-grounding contract tests.",
-    ),
     "grounding-dino": AdapterSpec(
         producer_id="grounding-dino",
         role="proposer",
@@ -129,18 +115,6 @@ def visual_grounding_service_response(
             configured_pipeline_id=configured_pipeline_id,
             requested_pipeline_id=requested_pipeline_id,
         )
-    if should_use_contract_fake(
-        configured_pipeline_id=configured_pipeline_id,
-        effective_pipeline_id=selected_pipeline_id,
-        adapter_mode=adapter_mode,
-    ):
-        response = contract_fake_visual_grounding_response(
-            payload=payload,
-            pipeline_id=selected_pipeline_id,
-            latency_ms=latency_ms,
-        )
-        return validate_visual_grounding_response(response)
-
     if adapter_mode == ADAPTER_MODE_REAL:
         return real_adapter_response(
             payload=payload,
@@ -158,12 +132,10 @@ def visual_grounding_service_response(
 def visual_grounding_adapter_catalog() -> dict[str, Any]:
     return {
         "schema": ADAPTER_CATALOG_SCHEMA,
-        "contract_fake_pipeline_id": CONTRACT_FAKE_PIPELINE_ID,
         "real_router_pipeline_id": REAL_ROUTER_PIPELINE_ID,
-        "default_pipeline_id": FAKE_HTTP_PIPELINE_ID,
+        "default_pipeline_id": DEFAULT_PIPELINE_ID,
         "adapter_modes": [
             ADAPTER_MODE_AUTO,
-            ADAPTER_MODE_CONTRACT_FAKE,
             ADAPTER_MODE_REAL,
             ADAPTER_MODE_UNAVAILABLE,
         ],
@@ -173,14 +145,6 @@ def visual_grounding_adapter_catalog() -> dict[str, Any]:
 
 
 def adapter_runtime_status(producer_id: str) -> dict[str, Any]:
-    if producer_id == "fake-http":
-        return {
-            "status": "available",
-            "checks": [],
-            "auth_mode": "none",
-            "model_weights_verified": True,
-            "message": "Built-in deterministic contract adapter is available.",
-        }
     if producer_id == "grounding-dino":
         checks = _module_checks("torch", "transformers")
         return _dependency_runtime_status(
@@ -277,9 +241,9 @@ def effective_pipeline_id(
 ) -> str:
     configured = str(configured_pipeline_id or "").strip()
     requested = str(requested_pipeline_id or "").strip()
-    if configured in {CONTRACT_FAKE_PIPELINE_ID, REAL_ROUTER_PIPELINE_ID}:
-        return requested or FAKE_HTTP_PIPELINE_ID
-    return configured or requested or FAKE_HTTP_PIPELINE_ID
+    if configured == REAL_ROUTER_PIPELINE_ID:
+        return requested or DEFAULT_PIPELINE_ID
+    return configured or requested or DEFAULT_PIPELINE_ID
 
 
 def pipeline_request_is_allowed(
@@ -288,26 +252,11 @@ def pipeline_request_is_allowed(
     requested_pipeline_id: str,
     effective_pipeline_id: str,
 ) -> bool:
-    if configured_pipeline_id in {CONTRACT_FAKE_PIPELINE_ID, REAL_ROUTER_PIPELINE_ID}:
+    if configured_pipeline_id == REAL_ROUTER_PIPELINE_ID:
         return True
     if not requested_pipeline_id:
         return True
     return requested_pipeline_id == effective_pipeline_id
-
-
-def should_use_contract_fake(
-    *,
-    configured_pipeline_id: str,
-    effective_pipeline_id: str,
-    adapter_mode: str,
-) -> bool:
-    if adapter_mode == ADAPTER_MODE_CONTRACT_FAKE:
-        return True
-    if adapter_mode == ADAPTER_MODE_UNAVAILABLE:
-        return False
-    return configured_pipeline_id == CONTRACT_FAKE_PIPELINE_ID or (
-        effective_pipeline_id == FAKE_HTTP_PIPELINE_ID
-    )
 
 
 def real_adapter_response(
@@ -796,40 +745,39 @@ def adapter_unavailable_response(
     adapter_mode: str,
     latency_ms: int,
 ) -> dict[str, Any]:
-    stages = []
-    required_adapters = []
-    for stage in contract_fake_stages_for_pipeline(pipeline_id, latency_ms):
-        producer_id = str(stage.get("producer_id") or "")
-        spec = ADAPTER_SPECS.get(producer_id)
-        unavailable_stage = dict(stage)
-        unavailable_stage["status"] = "adapter_unavailable"
-        unavailable_stage["version"] = "adapter-stub-v1"
-        if spec is not None:
-            unavailable_stage["model_id"] = spec.model_id
-            unavailable_stage["optional_extra"] = spec.optional_extra
-        stages.append(unavailable_stage)
-        required_adapters.append(_required_adapter_record(stage, spec))
+    producer_id = str(pipeline_id or DEFAULT_PIPELINE_ID)
+    spec = ADAPTER_SPECS.get(producer_id)
+    stage = {
+        "stage": "proposer",
+        "producer_id": producer_id,
+        "model_id": spec.model_id if spec is not None else "",
+        "status": "adapter_unavailable",
+        "version": "adapter-unavailable-v1",
+        "latency_ms": latency_ms,
+    }
+    if spec is not None:
+        stage["optional_extra"] = spec.optional_extra
     response = {
         "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
         "status": "failed",
         "pipeline": {
             "pipeline_id": pipeline_id,
-            "stages": stages,
+            "stages": [stage],
         },
         "candidates": [],
         "error": {
             "reason": "adapter_unavailable",
             "message": (
                 f"visual grounding adapter for '{pipeline_id}' is not installed; "
-                "install the optional sidecar adapter or run with "
-                "--adapter-mode contract-fake for contract tests"
+                "install the optional sidecar adapter or run with --adapter-mode real "
+                "in an environment with the selected model dependencies and weights."
             ),
         },
         "diagnostics": {
             "schema": "visual_grounding_diagnostics_v1",
             "diagnostic_mode": "adapter_registry_stub",
             "adapter_mode": adapter_mode,
-            "required_adapters": required_adapters,
+            "required_adapters": [_required_adapter_record(stage, spec)],
             "raw_proposals": [],
             "rejected_proposals": [],
             "private_truth_included": False,

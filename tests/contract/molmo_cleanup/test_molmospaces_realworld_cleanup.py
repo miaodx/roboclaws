@@ -363,7 +363,7 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
     command = (
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=codex-cli "
-        "provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 "
+        "provider_profile=codex-env evidence_lane=world-public-labels seed=7 "
         "scenario_setup=relocate-cleanup-related-objects relocation_count=5 "
         "robot_views=on "
         f"runtime_map_prior={prior} "
@@ -388,11 +388,11 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
         "intent=cleanup",
         "agent_engine=codex-cli",
         "provider_profile=codex-env",
-        "evidence_lane=world-oracle-labels",
+        "evidence_lane=world-public-labels",
         f"output_dir={tmp_path}",
     ):
         assert arg in report
-    assert "household-cleanup direct world-oracle-labels" not in report
+    assert "household-cleanup direct world-public-labels" not in report
 
 
 def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) -> None:
@@ -462,7 +462,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         include_robot=True,
         record_robot_views=True,
         generated_mess_count=1,
-        evidence_lane="world-oracle-labels",
+        evidence_lane="world-public-labels",
         map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
         require_map_bundle=True,
     )
@@ -616,7 +616,7 @@ def _assert_isaac_fake_checker_contract(
         expect_task=None,
         expect_backend="isaaclab_subprocess",
         expect_policy="deterministic_sweep_baseline",
-        expect_profile="world-oracle-labels",
+        expect_profile="world-public-labels",
         min_generated_mess_count=1,
         require_robot_views=True,
         require_advisory_scoring=True,
@@ -643,7 +643,7 @@ def _assert_isaac_fake_checker_contract(
             expect_task=None,
             expect_backend="isaaclab_subprocess",
             expect_policy="deterministic_sweep_baseline",
-            expect_profile="world-oracle-labels",
+            expect_profile="world-public-labels",
             min_generated_mess_count=1,
             require_robot_views=True,
             require_isaac_runtime=True,

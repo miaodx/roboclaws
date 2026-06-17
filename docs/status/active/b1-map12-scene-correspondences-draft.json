@@ -1,0 +1,37 @@
+{
+  "schema": "b1_map12_scene_correspondences_v1",
+  "source_map_frame": "robot_map_12_map",
+  "target_scene_frame": "b1_rebuilt_scene_usd_world",
+  "bbox_seed_policy": "known_poor_seed_only",
+  "scene_projection_policy": {
+    "horizontal_axes": [
+      "x",
+      "z"
+    ],
+    "up_axis": "y",
+    "source": "usd_stage_up_axis_and_robot_pose_convention"
+  },
+  "review_lifecycle": {
+    "draft_location": "docs/status/active/b1-map12-scene-correspondences-draft.json",
+    "accepted_asset_location": "assets/maps/b1-map12-room-semantics/scene_correspondences.json",
+    "accepted_anchor_rule": "Only human/operator-reviewed picks may use review_status=accepted.",
+    "bbox_seed_rule": "The bbox-fit overlay may seed coarse visual search only; it must not prefill accepted scene coordinates."
+  },
+  "anchors": [
+    {
+      "anchor_id": "draft_central_floor_doorway_example",
+      "anchor_type": "door_center",
+      "navigation_area_id": "central_floor",
+      "asset_partition_id": "meeting_room_b",
+      "map_xy": null,
+      "scene_xyz": null,
+      "evidence": {
+        "map_image": "",
+        "scene_image": "",
+        "operator_note": "Replace with explicit map pick and explicit scene pick during review."
+      },
+      "confidence": 0.0,
+      "review_status": "proposed"
+    }
+  ]
+}

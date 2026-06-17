@@ -64,7 +64,7 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
             "backend=mujoco",
             "intent=map-build",
             "agent_engine=direct-runner",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
     b1 = resolve_surface_launch(
@@ -74,7 +74,7 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
             "backend=isaaclab",
             "agent_engine=codex-cli",
             "prompt=inspect the digital twin",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
 
@@ -101,7 +101,7 @@ def test_molmospaces_world_rejects_public_isaac_backend() -> None:
                 "backend=isaaclab",
                 "intent=map-build",
                 "agent_engine=direct-runner",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
             ]
         )
 
@@ -117,7 +117,7 @@ def test_cleanup_surface_exposes_setup_overrides_but_dispatches_private_count() 
             "intent=cleanup",
             "agent_engine=codex-cli",
             "provider_profile=codex-env",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
             "seed=7",
             "scenario_setup=relocate-cleanup-related-objects",
             "relocation_count=3",
@@ -147,7 +147,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             "intent=map-build",
             "agent_engine=codex-cli",
             "provider_profile=codex-env",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
     open_ended = resolve_surface_launch(
@@ -158,7 +158,7 @@ def test_household_non_cleanup_intents_default_to_baseline_setup() -> None:
             "intent=open-ended",
             "agent_engine=codex-cli",
             "provider_profile=codex-env",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
             "prompt=帮我找遥控器",
         ]
     )
@@ -198,7 +198,7 @@ def test_surface_rejects_old_public_generated_mess_count() -> None:
                 "backend=mujoco",
                 "intent=cleanup",
                 "agent_engine=codex-cli",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
                 "generated_mess_count=3",
             ]
         )
@@ -213,7 +213,7 @@ def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
             "intent=cleanup",
             "agent_engine=openai-agents-sdk",
             "provider_profile=mimo-openai-chat",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
 
@@ -242,7 +242,7 @@ def test_provider_profile_env_export_uses_agent_engine_catalog(
             "intent=cleanup",
             f"agent_engine={agent_engine}",
             f"provider_profile={provider_profile}",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
 
@@ -261,7 +261,7 @@ def test_responses_agent_engines_accept_minimax_provider_profile(agent_engine: s
             "intent=cleanup",
             f"agent_engine={agent_engine}",
             "provider_profile=minimax",
-            "evidence_lane=world-oracle-labels",
+            "evidence_lane=world-public-labels",
         ]
     )
 
@@ -294,7 +294,7 @@ def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
                 "intent=cleanup",
                 "agent_engine=codex-cli",
                 "provider_profile=mimo-openai-chat",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
             ]
         )
 
@@ -331,7 +331,7 @@ def test_baseline_rejects_active_relocation_count() -> None:
                 "backend=mujoco",
                 "intent=cleanup",
                 "agent_engine=codex-cli",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
                 "scenario_setup=baseline",
                 "relocation_count=3",
             ]
@@ -347,7 +347,7 @@ def test_invalid_relocation_count_is_rejected() -> None:
                 "backend=mujoco",
                 "intent=cleanup",
                 "agent_engine=codex-cli",
-                "evidence_lane=world-oracle-labels",
+                "evidence_lane=world-public-labels",
                 "scenario_setup=relocate-loose-objects",
                 "relocation_count=-1",
             ]

@@ -235,7 +235,7 @@ def _semantic_map_prior_row(
         "backend=mujoco",
         "intent=map-build",
         "agent_engine=direct-runner",
-        "evidence_lane=world-oracle-labels",
+        "evidence_lane=world-public-labels",
         "scenario_setup=baseline",
         f"seed={seed}",
         f"output_dir={row_output_dir}",
@@ -251,7 +251,7 @@ def _semantic_map_prior_row(
         axes={
             "map_mode": "offline-prior-build",
             "agent_route": "direct",
-            "evidence_lane": "world-oracle-labels",
+            "evidence_lane": "world-public-labels",
         },
         env={},
         required_env=(),

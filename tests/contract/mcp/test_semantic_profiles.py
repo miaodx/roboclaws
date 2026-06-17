@@ -85,6 +85,7 @@ def test_household_world_profile_is_task_neutral_and_world_only() -> None:
         "adjust_camera",
         "declare_visual_candidates",
         "navigate_to_waypoint",
+        "navigate_to_relative_pose",
     }
     assert public_names.isdisjoint(
         {

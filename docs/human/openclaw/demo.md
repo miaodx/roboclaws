@@ -6,7 +6,7 @@ household cleanup. It uses the household launch contract, but it is not part of
 the normal public engine list until an off-work-network Gateway proof is green:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openclaw-gateway evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=openclaw-gateway evidence_lane=world-public-labels
 ```
 
 For setup, network guard rules, and Gateway lifecycle commands, use

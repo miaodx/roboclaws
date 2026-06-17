@@ -29,9 +29,9 @@ uses fresh MolmoSpaces target-focused FPV frames from 10 scene indices and
 private MuJoCo segmentation boxes; on that benchmark, base-recall has slightly
 higher visible-object bbox recall than tiny-recall.
 
-Keep `camera_labeler=sim-projected-labels` as the deterministic control
-baseline. Keep
-`yoloe` as the ultra-fast speed lane, now with cleanup-family prompt expansion
+Keep `world-public-labels` as the deterministic structured-world baseline for
+CI/smoke work; do not use simulator projection as the current camera-grounded
+control. Keep `yoloe` as the ultra-fast speed lane, now with cleanup-family prompt expansion
 enabled by default, but do not make it the default until recall improves. The
 best tested YOLOE speed config is:
 
@@ -52,7 +52,7 @@ offline/on-demand labeling use case.
 
 The 2026-05-27 live Codex rerun with the current DINO base-recall sidecar
 changed the live-agent readout: Codex + `grounding-dino` matched
-`world-oracle-labels`
+the historical privileged structured-label control
 on final cleanup quality for the scene-0 seed-7 task, but took longer because
 it produced many unresolved camera declarations. Treat that as a pass for the
 current DINO base lane, not proof that camera labels are cheaper than the
@@ -88,7 +88,7 @@ visual labeler cannot produce useful visible movable-object labels.
 
 Success/latency conclusion: keep `grounding-dino` base-recall as the default
 real `camera-grounded-labels` camera-labeler pipeline. For live-agent comparison,
-`world-oracle-labels` remains the privileged sim/API control,
+`world-public-labels` is the current structured-world baseline,
 `camera-grounded-labels` + DINO base is the current real camera-label pass, and
 pure `camera-raw-fpv` should be
 treated as a baseline/ablation lane rather than the real-robot production path.

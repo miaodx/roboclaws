@@ -47,8 +47,8 @@ just --list agent
 Current public examples:
 
 ```bash
-just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-public-labels
 just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 just agent::verify ci-required
 ```

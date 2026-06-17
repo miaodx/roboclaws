@@ -33,6 +33,11 @@ artifact layer, report rendering, static map bundles, and contract tests.
 Next step: Pick a later display-only rectification or true room-boundary tracing
 slice only after a new plan; no implementation blocker remains for the first
 slice.
+Supersession note: the B1 / Map 12 room-semantics merged bundle referenced by
+this implemented parity slice is superseded for current B1 digital-twin product
+work by `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`.
+Current B1 work should use raw Map12 plus the thin review/runtime contract, not
+`assets/maps/b1-map12-room-semantics` as a canonical source.
 Open questions: None before execution. The exact serialized field locations and
 test fixture edits are implementation details inside the approved contract.
 Parked: Full B1 object/receptacle USD segmentation and manipulation parity.
@@ -340,10 +345,11 @@ Severity: P2
 Materiality: real workflow friction
 Owner: `$intuitive-tests`
 
-The cross-environment gate should first compare checked-in static bundles:
+The original cross-environment gate compared checked-in static bundles:
 
 - `assets/maps/agibot-robot-map-12`
-- `assets/maps/b1-map12-room-semantics`
+- `assets/maps/b1-map12-room-semantics` (historical B1 merged bundle;
+  superseded for current product work)
 - `assets/maps/molmospaces-procthor-val-0-7`
 
 Live Agibot, Isaac, and simulator runs can become later eval rows. Starting
@@ -468,7 +474,7 @@ Scope:
   `transform_source`, `evidence_artifacts`, and optional `map_polygon`.
 - Update static bundles and generators for
   `assets/maps/agibot-robot-map-12`,
-  `assets/maps/b1-map12-room-semantics`, and
+  `assets/maps/b1-map12-room-semantics` (historical implementation artifact), and
   `assets/maps/molmospaces-procthor-val-0-7`.
 - Update report / preview rendering so UI previews are labeled
   raw/source-map aligned and semantic polygons tilt with the base map when the
@@ -505,8 +511,10 @@ Context:
   `tests/contract/maps/`.
 - useful:
   `assets/maps/agibot-robot-map-12/semantics.json`,
-  `assets/maps/b1-map12-room-semantics/semantics.json`,
-  `assets/maps/b1-map12-room-semantics/room_semantic_overlay.json`,
+  `assets/maps/b1-map12-room-semantics/semantics.json` for historical
+  implementation evidence only,
+  `assets/maps/b1-map12-room-semantics/room_semantic_overlay.json` for
+  historical implementation evidence only,
   `assets/maps/molmospaces-procthor-val-0-7/semantics.json`,
   `scripts/maps/check_bundle.py`,
   `scripts/maps/export_agibot_map_bundle.py`,
@@ -540,7 +548,7 @@ Verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/maps/test_actionable_semantic_map_snapshot.py tests/contract/maps/test_agibot_map_bundle_export.py tests/contract/maps/test_scene_room_semantic_overlay.py tests/contract/maps/test_cross_environment_semantic_map_parity.py -q`.
 - integration:
   `.venv/bin/python scripts/maps/check_bundle.py assets/maps/agibot-robot-map-12`,
-  `.venv/bin/python scripts/maps/check_bundle.py assets/maps/b1-map12-room-semantics`,
+  `.venv/bin/python scripts/maps/check_bundle.py assets/maps/b1-map12-room-semantics` (historical evidence for this implemented slice),
   `.venv/bin/python scripts/maps/check_bundle.py assets/maps/molmospaces-procthor-val-0-7`,
   `just agent::harness agent-validation recommend plan=docs/plans/2026-06-15-cross-environment-semantic-map-parity.md budget=focused`,
   `just agent::harness agent-validation execute plan=docs/plans/2026-06-15-cross-environment-semantic-map-parity.md budget=focused`.
@@ -577,6 +585,9 @@ Shipped contract:
   spatial contract metadata, and `navigation_area` polygons instead of
   room-boundary claims. `assets/maps/molmo-cleanup-default-7` was normalized
   because existing contract tests use it as a fixture.
+  The B1 room-semantics bundle is historical evidence for this implemented
+  parity slice and is superseded as a current product source by the thin
+  review/runtime contract.
 - B1 scene partition binding uses explicit `scene_map_correspondence_v1`
   records instead of implicit list order.
 - Report and bundle previews render raw/source map orientation and label that
@@ -591,7 +602,7 @@ Verification evidence:
 - `ruff format --check roboclaws/maps roboclaws/household/agibot_map_bundle.py roboclaws/household/report.py scripts/maps scripts/operator_console tests/contract/maps`
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/maps/test_actionable_semantic_map_snapshot.py tests/contract/maps/test_agibot_map_bundle_export.py tests/contract/maps/test_scene_room_semantic_overlay.py tests/contract/maps/test_cross_environment_semantic_map_parity.py -q`
 - `.venv/bin/python scripts/maps/check_bundle.py assets/maps/agibot-robot-map-12`
-- `.venv/bin/python scripts/maps/check_bundle.py assets/maps/b1-map12-room-semantics`
+- `.venv/bin/python scripts/maps/check_bundle.py assets/maps/b1-map12-room-semantics` (historical evidence for this implemented slice)
 - `.venv/bin/python scripts/maps/check_bundle.py assets/maps/molmospaces-procthor-val-0-7`
 - `just agent::harness agent-validation execute changed_file=roboclaws/maps/spatial_contract.py changed_file=roboclaws/maps/bundle.py changed_file=roboclaws/maps/bundle_validation.py changed_file=roboclaws/maps/project.py changed_file=roboclaws/maps/room_semantics.py changed_file=roboclaws/maps/actionable_snapshot.py changed_file=roboclaws/household/agibot_map_bundle.py changed_file=roboclaws/household/report.py changed_file=tests/contract/maps/test_cross_environment_semantic_map_parity.py budget=focused output_dir=output/agent-validation-matrix/20260615T-map-parity-changed-files-execute`
   passed and produced

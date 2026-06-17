@@ -29,13 +29,6 @@ class EvidenceLaneCompatibility:
 
 
 EVIDENCE_LANE_REQUIREMENTS: dict[str, EvidenceLaneRequirement] = {
-    "world-oracle-labels": EvidenceLaneRequirement(
-        lane_id="world-oracle-labels",
-        requires_agent_image_input=False,
-        text_only_allowed=True,
-        external_visual_producer="structured-world-labels",
-        notes="Best cheap text-model control lane.",
-    ),
     "world-public-labels": EvidenceLaneRequirement(
         lane_id="world-public-labels",
         requires_agent_image_input=False,

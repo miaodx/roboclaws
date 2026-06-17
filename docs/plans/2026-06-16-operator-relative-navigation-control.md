@@ -1,9 +1,9 @@
 ---
 plan_scope: operator-relative-navigation-control
-status: DRAFT
+status: IMPLEMENTED
 created: 2026-06-16
 last_reviewed: 2026-06-16
-implementation_allowed: false
+implementation_allowed: true
 source:
   - user request for operator UI buttons to move/turn the robot during debugging
   - user decision to add a new reusable relative navigation interface instead of reusing waypoint navigation
@@ -465,7 +465,7 @@ just agent::eval recommend plan=docs/plans/2026-06-16-operator-relative-navigati
 
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: IMPLEMENTED
 
 Task source: mixed user prompt + plan
 
@@ -576,5 +576,76 @@ it by default.
 
 ## Recommended Next Action
 
-Run `$intuitive-preflight` on this plan to lock execution scope, acceptance
-criteria, exact file targets, and stop gates before implementation.
+Use the Manual Control panel in `just console::run` for active MolmoSpaces and
+B1 Map 12 Isaac debugging. Keep future physical movement, continuous control,
+and arbitrary MCP proxying behind separate review.
+
+## Shipped Evidence
+
+Implemented and dogfooded on 2026-06-16 in the local checkout.
+
+What shipped:
+
+- Added public MCP capability `navigate_to_relative_pose` through
+  `household_world` profile metadata, semantic tool dispatch,
+  `RealWorldCleanupContract`, `CleanupBackendSession`, MolmoSpaces/MuJoCo
+  worker routing, and B1 Isaac worker routing.
+- Added Operator Console `POST /api/runs/<run_id>/control` with an allowlist
+  for `navigate_to_relative_pose` and `observe`.
+- Added Manual Control UI buttons, route/state gating, latest-result display,
+  and operator attribution artifacts:
+  `operator_control.jsonl`, `operator_interventions.json`, and
+  `operator_state.json.latest_operator_control`.
+- Kept operator movement classified as assisted evidence:
+  `operator_interventions.assisted=true` and
+  `autonomous_behavior_proof=false`.
+- Fixed live dogfood regressions found during validation:
+  targetless Molmo open-task runs now initialize robot pose when
+  `include_robot` is true, and relative-navigation responses strip private
+  backend pose fields before returning `backend_pose_mutation`.
+
+Focused deterministic verification:
+
+```bash
+uv sync --extra dev
+node --check roboclaws/operator_console/static/app.js
+.venv/bin/python -m py_compile roboclaws/household/realworld_contract.py scripts/molmo_cleanup/molmospaces_worker_state.py roboclaws/operator_console/control.py roboclaws/operator_console/server.py roboclaws/operator_console/state.py roboclaws/operator_console/routes.py
+ruff check roboclaws/operator_console/control.py roboclaws/operator_console/routes.py roboclaws/operator_console/server.py roboclaws/operator_console/state.py roboclaws/household/realworld_contract.py roboclaws/household/realworld_mcp_semantic_tools.py roboclaws/household/backend_contract.py roboclaws/mcp/profiles.py scripts/molmo_cleanup/molmospaces_worker_state.py scripts/molmo_cleanup/molmospaces_worker_cli.py scripts/molmo_cleanup/molmospaces_worker_protocol.py scripts/molmo_cleanup/molmospaces_actions.py scripts/isaac_lab_cleanup/isaac_worker_cli.py scripts/isaac_lab_cleanup/isaac_worker_commands.py tests/unit/molmo_cleanup/test_molmospaces_worker_state.py tests/unit/molmo_cleanup/test_relative_navigation_worker_routing.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/unit/molmo_cleanup/test_molmospaces_worker_state.py tests/unit/molmo_cleanup/test_relative_navigation_worker_routing.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/mcp/test_semantic_profiles.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_operator_console.py::test_operator_console_control_endpoint_is_allowlisted_and_records_operator_rows tests/unit/operator_console/test_operator_console.py::test_operator_console_control_endpoint_rejects_unsupported_route tests/unit/operator_console/test_operator_console.py::test_operator_console_control_endpoint_rejects_terminal_run tests/unit/operator_console/test_static_assets.py::test_static_app_wires_manual_relative_navigation_controls
+```
+
+Live dogfood proof:
+
+- MolmoSpaces/MuJoCo:
+  `output/operator-console/runs/20260616-191632-molmospaces-val_0-mujoco-open-task-codex-cli-world-public-labels`
+  contains operator `navigate_to_relative_pose` and `observe` rows, both `ok`,
+  with nested `0616_1916/seed-7/trace.jsonl` containing two
+  `navigate_to_relative_pose` events and two `observe` events.
+- B1 Map 12 Isaac:
+  `output/operator-console/runs/20260616-191804-b1-map12-isaaclab-open-task-codex-cli-world-public-labels`
+  contains operator `navigate_to_relative_pose` and `observe` rows, both `ok`,
+  with nested `0616_1918/seed-7/trace.jsonl` containing two
+  `navigate_to_relative_pose` events and two `observe` events.
+
+Verification caveat:
+
+- Full `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console`
+  still fails in
+  `test_operator_console_routes_endpoint_exposes_evidence_lane_matrix` on an
+  existing route evidence-lane matrix expectation unrelated to relative
+  navigation control. The control-specific console tests above pass.
+
+Cleanup state after dogfood:
+
+- `output/operator-console/locks/` is empty.
+- No process is listening on `127.0.0.1:8765` after stopping the dogfood
+  console.
+
+## Remaining Work
+
+- Physical robot relative movement remains blocked until a separate safety
+  gate, localization/command-enable check, E-stop status, and local proof exist.
+- Continuous joystick/WebSocket driving remains out of scope.
+- Arbitrary browser-to-MCP proxying remains rejected by ADR-0144.

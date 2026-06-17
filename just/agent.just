@@ -214,12 +214,12 @@ run dispatch_target agent_engine mode="" *overrides:
     }
 
     if [[ "$dispatch_surface" == "household-world" ]]; then
-      profile="${mode:-$(get profile "$(get evidence_lane world-oracle-labels)")}"
+      profile="${mode:-$(get profile "$(get evidence_lane world-public-labels)")}"
       case "$profile" in
-        smoke|world-oracle-labels|world-public-labels|camera-raw-fpv|camera-grounded-labels)
+        smoke|world-public-labels|camera-raw-fpv|camera-grounded-labels)
           ;;
         *)
-          echo "error: unsupported household-world evidence_lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
+          echo "error: unsupported household-world evidence_lane '$profile' (expected smoke|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
           exit 1
           ;;
       esac
@@ -275,7 +275,7 @@ run dispatch_target agent_engine mode="" *overrides:
     esac
     if [[ "$dispatch_surface" == "household-world" ]]; then
       if [[ "$profile" == "smoke" ]]; then
-        report_rerun_parts+=("run_preset=smoke" "evidence_lane=world-oracle-labels")
+        report_rerun_parts+=("run_preset=smoke" "evidence_lane=world-public-labels")
       else
         report_rerun_parts+=("evidence_lane=$profile")
       fi
@@ -316,9 +316,6 @@ run dispatch_target agent_engine mode="" *overrides:
         fi
 
         case "$profile" in
-          world-oracle-labels)
-            default_output_dir="output/household/${household_run_path}/${driver}-report"
-            ;;
           smoke)
             default_output_dir="output/household/${household_run_path}/${driver}-smoke"
             ;;
@@ -326,11 +323,7 @@ run dispatch_target agent_engine mode="" *overrides:
             default_output_dir="output/household/${household_run_path}/${driver}-${profile}"
             ;;
         esac
-        if [[ ( "$dispatch_intent" == "cleanup" || "$dispatch_intent" == "open-ended" ) && "$driver" == "direct" && "$profile" == "world-oracle-labels" ]]; then
-          default_seeds="1 2 3"
-        else
-          default_seeds="7"
-        fi
+        default_seeds="7"
         seeds="$(get seeds "$(get seed "$default_seeds")")"
         output_dir="$(get output_dir "$default_output_dir")"
         if [[ "$dispatch_intent" == "map-build" ]]; then
@@ -390,10 +383,7 @@ run dispatch_target agent_engine mode="" *overrides:
               exit 1
             fi
             case "$camera_labeler" in
-              sim-projected-labels)
-                visual_grounding="sim"
-                ;;
-              grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake)
+              grounding-dino|yoloe|omdet-turbo|yolo-world)
                 visual_grounding="$camera_labeler"
                 ;;
               *)
@@ -514,7 +504,7 @@ run dispatch_target agent_engine mode="" *overrides:
               sim_args+=(--include-robot --record-robot-views)
               ;;
             auto|"")
-              if [[ "$runtime" == "molmospaces-subprocess" && "$profile" != "world-oracle-labels" ]]; then
+              if [[ "$runtime" == "molmospaces-subprocess" ]]; then
                 sim_args+=(--include-robot --record-robot-views)
               fi
               ;;

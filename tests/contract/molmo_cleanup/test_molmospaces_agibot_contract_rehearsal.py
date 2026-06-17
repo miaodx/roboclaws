@@ -91,7 +91,7 @@ def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
 
     assert result["confidence_layer"] == CONFIDENCE_LAYER
     assert run_result["report_title"] == CONFIDENCE_LAYER
-    assert run_result["evidence_lane"] == "world-oracle-labels"
+    assert run_result["evidence_lane"] == "world-public-labels"
     assert run_result["simulated"] is True
     assert run_result["physical_robot"] is False
     assert run_result["execution_backend"] == EXECUTION_BACKEND

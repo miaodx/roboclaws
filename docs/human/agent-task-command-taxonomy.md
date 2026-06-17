@@ -83,7 +83,7 @@ recipes answer "how do we execute this low-level proof?"
 Household cleanup/map-build routes use `evidence_lane` to describe what the
 agent sees:
 
-- `world-oracle-labels`
+- `world-public-labels`
 - `world-public-labels`
 - `camera-raw-fpv`
 - `camera-grounded-labels` with `camera_labeler=<labeler>`

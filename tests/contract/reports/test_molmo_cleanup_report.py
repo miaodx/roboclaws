@@ -150,7 +150,7 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     command = (
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=codex-cli "
-        "provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 "
+        "provider_profile=codex-env evidence_lane=world-public-labels seed=7 "
         "scenario_setup=relocate-cleanup-related-objects relocation_count=5 "
         "robot_views=on "
         f"runtime_map_prior={prior} "
@@ -159,7 +159,7 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     monkeypatch.setenv(
         "ROBOCLAWS_REPORT_RERUN_COMMAND",
         "just run::surface surface=household-world agent_engine=direct-runner "
-        "intent=cleanup evidence_lane=world-oracle-labels seed=7",
+        "intent=cleanup evidence_lane=world-public-labels seed=7",
     )
     run_result = {
         "cleanup_status": score.status,
@@ -184,7 +184,7 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     assert "provider_profile=codex-env" in html
     assert f"runtime_map_prior={prior}" in html
     assert run_result["rerun_command"] == command
-    assert "household-cleanup direct world-oracle-labels" not in html
+    assert "household-cleanup direct world-public-labels" not in html
 
 
 def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:

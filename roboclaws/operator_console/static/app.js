@@ -20,6 +20,7 @@ const state = {
   setupSelectionKey: "",
   messupStatusKey: "",
   syncAxesFromRoute: false,
+  manualControlPending: false,
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -32,6 +33,8 @@ const EVIDENCE_STRIP_DEFAULT_HEIGHT = 280;
 const EVIDENCE_STRIP_MIN_HEIGHT = 160;
 const EVIDENCE_STRIP_MAX_HEIGHT = 620;
 const MAIN_CONTENT_MIN_HEIGHT = 360;
+const MANUAL_CONTROL_STEP_M = 0.25;
+const MANUAL_CONTROL_TURN_DEG = 15;
 
 const els = {
   appShell: document.querySelector(".app-shell"),
@@ -83,6 +86,9 @@ const els = {
   pauseButton: document.getElementById("pause-button"),
   stopButton: document.getElementById("stop-button"),
   emergencyButton: document.getElementById("emergency-button"),
+  manualControlPanel: document.getElementById("manual-control-panel"),
+  manualControlStatus: document.getElementById("manual-control-status"),
+  manualControlButtons: Array.from(document.querySelectorAll("[data-control-action]")),
   phaseValue: document.getElementById("phase-value"),
   backendLockValue: document.getElementById("backend-lock-value"),
   cameraAngleValue: document.getElementById("camera-angle-value"),
@@ -217,6 +223,9 @@ function bindEvents() {
   els.latestResultButton.addEventListener("click", attachLatestResult);
   els.refreshTasksButton.addEventListener("click", refreshRuntimeTasks);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
+  els.manualControlButtons.forEach((button) => {
+    button.addEventListener("click", () => postManualControl(button.dataset.controlAction || ""));
+  });
   els.stopButton.addEventListener("click", () => {
     confirmAction({
       title: "Stop Run",
@@ -523,7 +532,7 @@ function selectedCombinationFromAxes() {
   const backendId = els.backendInput.value;
   const intentId = els.intentInput.value || state.selectedIntent;
   const agentEngineId = els.agentEngineInput.value;
-  const evidenceLane = els.evidenceLaneInput.value || "world-oracle-labels";
+  const evidenceLane = els.evidenceLaneInput.value || "world-public-labels";
   const axisCandidates = combinationsForWorld(worldId).filter(
     (item) =>
       item.backend_id === backendId &&
@@ -1748,6 +1757,7 @@ function renderRunState(payload) {
   renderViews(payload.latest_view_assets || {}, route);
   renderEvents(payload);
   renderControls(payload);
+  renderManualControl(payload);
   renderOperatorInput(state.selectedRoute);
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   renderOperatorMode(payload);
@@ -1802,6 +1812,74 @@ function renderControls(payload) {
   els.emergencyButton.disabled = !controls.emergency_stop_required;
 }
 
+function renderManualControl(payload = state.activeState || {}) {
+  if (!els.manualControlPanel) {
+    return;
+  }
+  const controls = payload.controls || {};
+  const supports = Boolean(controls.supports_relative_navigation_control);
+  const available = Boolean(controls.relative_navigation_control_available);
+  const hasRun = Boolean(state.activeRunId);
+  els.manualControlPanel.hidden = !hasRun && !supports;
+  const disabled = state.manualControlPending || !hasRun || !available;
+  for (const button of els.manualControlButtons) {
+    button.disabled = disabled;
+  }
+  els.manualControlStatus.textContent = manualControlStatusText(payload, controls, available);
+}
+
+function manualControlStatusText(payload, controls, available) {
+  if (state.manualControlPending) {
+    return "Manual control request is in flight.";
+  }
+  const latest = payload.latest_operator_control || {};
+  const response = latest.response || {};
+  const action = latest.action || "";
+  if (latest.error) {
+    return `Manual control failed: ${latest.error}`;
+  }
+  if (response.error_reason || response.status === "blocked_capability") {
+    return `Manual control blocked: ${response.error_reason || response.status}.`;
+  }
+  if (response.applied_delta) {
+    return `Last operator move: ${relativeDeltaText(response.applied_delta)}; observe again before using visual evidence.`;
+  }
+  if (action === "observe") {
+    return "Last operator action: observe.";
+  }
+  if (!state.activeRunId) {
+    return "Attach or start a supported active run to use manual control.";
+  }
+  if (!controls.supports_relative_navigation_control) {
+    return "This route does not expose relative navigation control.";
+  }
+  if (!available) {
+    return "Manual control is unavailable after this run reaches a terminal state.";
+  }
+  return "Ready. Operator moves are recorded as assisted interventions.";
+}
+
+function relativeDeltaText(delta) {
+  const parts = [];
+  const forward = Number(delta.forward_m || 0);
+  const lateral = Number(delta.lateral_m || 0);
+  const yaw = Number(delta.yaw_delta_deg || 0);
+  if (forward) {
+    parts.push(`${formatSigned(forward)} m forward`);
+  }
+  if (lateral) {
+    parts.push(`${formatSigned(lateral)} m lateral`);
+  }
+  if (yaw) {
+    parts.push(`${formatSigned(yaw)} deg yaw`);
+  }
+  return parts.length ? parts.join(", ") : "no movement applied";
+}
+
+function formatSigned(value) {
+  return `${value > 0 ? "+" : ""}${Number(value).toFixed(Math.abs(value) < 1 ? 2 : 1)}`;
+}
+
 function renderOperatorMode(payload = state.activeState || {}) {
   document.querySelectorAll(".operator-mode").forEach((button) => {
     button.classList.toggle("active", button.dataset.operatorMode === state.operatorMode);
@@ -1838,6 +1916,63 @@ async function sendOperatorMessage() {
   els.promptCount.textContent = "0 / 2000";
   els.startHelp.textContent = operatorMessageResultText(result);
   pollState();
+}
+
+async function postManualControl(action) {
+  if (!state.activeRunId || state.manualControlPending) {
+    return;
+  }
+  const payload = manualControlPayload(action);
+  if (!payload) {
+    els.manualControlStatus.textContent = `Unsupported manual control: ${action || "unknown"}.`;
+    return;
+  }
+  state.manualControlPending = true;
+  renderManualControl(state.activeState || {});
+  const result = await fetchJson(
+    `/api/runs/${encodeURIComponent(state.activeRunId)}/control`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  state.manualControlPending = false;
+  if (result.error) {
+    els.manualControlStatus.textContent = result.error;
+    renderManualControl(state.activeState || {});
+    return;
+  }
+  els.manualControlStatus.textContent = manualControlResultText(result);
+  await pollState();
+}
+
+function manualControlPayload(action) {
+  const zero = { forward_m: 0, lateral_m: 0, yaw_delta_deg: 0 };
+  const byAction = {
+    forward: { ...zero, forward_m: MANUAL_CONTROL_STEP_M },
+    back: { ...zero, forward_m: -MANUAL_CONTROL_STEP_M },
+    left: { ...zero, lateral_m: MANUAL_CONTROL_STEP_M },
+    right: { ...zero, lateral_m: -MANUAL_CONTROL_STEP_M },
+    "turn-left": { ...zero, yaw_delta_deg: MANUAL_CONTROL_TURN_DEG },
+    "turn-right": { ...zero, yaw_delta_deg: -MANUAL_CONTROL_TURN_DEG },
+  };
+  if (action === "observe") {
+    return { action: "observe" };
+  }
+  const delta = byAction[action];
+  return delta ? { action: "navigate_to_relative_pose", ...delta } : null;
+}
+
+function manualControlResultText(result) {
+  const response = result.response || {};
+  if (response.applied_delta) {
+    return `Operator move recorded: ${relativeDeltaText(response.applied_delta)}.`;
+  }
+  if (result.action === "observe") {
+    return "Operator observe recorded.";
+  }
+  return `Operator control recorded: ${result.action || "control"}.`;
 }
 
 function operatorMessageResultText(result) {
@@ -2197,6 +2332,7 @@ function detachRunAfterStop(result) {
   state.activeRouteId = "";
   els.eventList.textContent =
     result.terminal_reason || result.phase || "Run stopped; backend lock released.";
+  renderManualControl({});
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
 }
 

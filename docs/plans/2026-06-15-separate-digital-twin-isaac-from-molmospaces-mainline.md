@@ -40,6 +40,12 @@ Reviewed by `intuitive-reduce-entropy` and `grill-with-docs-batch`; accepted
 grill decisions are recorded below. Execution via `intuitive-refactor` finished
 on 2026-06-15.
 
+Supersession note: this plan's B1 route preservation predates the thin
+B1 / Map 12 review/runtime contract. Current B1 product work should preserve
+`world=b1-map12 backend=isaaclab`, but must not preserve
+`map_bundle=b1-map12-room-semantics`; see
+`docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`.
+
 ## Goal
 
 Reduce backend entropy without breaking the active digital-twin route:
@@ -275,8 +281,9 @@ Update tests to encode the new contract:
 - Operator console has no normal MolmoSpaces Isaac product routes.
 - Public MolmoSpaces `backend=isaaclab` launch is rejected with an expected
   backend list that does not include Isaac.
-- Public B1 `backend=isaaclab` launch resolves and preserves B1 defaults such
-  as `map_bundle=b1-map12-room-semantics` and `isaac_scene_usd_path=...`.
+- Public B1 `backend=isaaclab` launch resolves and preserves current B1
+  digital-twin defaults. The old `map_bundle=b1-map12-room-semantics` default is
+  superseded by the thin B1 / Map 12 review/runtime contract.
 - Generic `agent::run household-world.cleanup ... backend=isaaclab_subprocess`
   and `agent::run household-world.map-build ... backend=isaaclab_subprocess`
   are rejected for MolmoSpaces worlds.

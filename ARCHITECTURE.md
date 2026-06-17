@@ -168,8 +168,8 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline seed=7
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=relocate-cleanup-related-objects seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino scenario_setup=baseline seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels scenario_setup=relocate-cleanup-related-objects seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 just console::run
@@ -182,13 +182,12 @@ household worlds expose `backend=mujoco`; `backend=isaaclab` is current for
 For household runs, callers pass the cleanup input/evidence lane explicitly as
 `evidence_lane=...`.
 `evidence_lane` decides what the agent sees. Supported current lanes are
-`world-oracle-labels`, `world-public-labels`, `camera-grounded-labels`, and
-`camera-raw-fpv`. `camera-grounded-labels` additionally requires
-`camera_labeler=...`, such as `sim-projected-labels` for the deterministic
-camera-projected control producer or `grounding-dino` for the default real
-open-vocabulary bbox proposer. `camera_labeler` is invalid for world-label and
-raw-FPV lanes. The `smoke` token remains a cheap synthetic preset, not an
-evidence lane.
+`world-public-labels`, `camera-grounded-labels`, and `camera-raw-fpv`.
+`camera-grounded-labels` additionally requires `camera_labeler=...`; the
+default deployment-like producer is `grounding-dino`, with `yoloe`,
+`yolo-world`, and `omdet-turbo` available for comparison. `camera_labeler` is
+invalid for world-label and raw-FPV lanes. The `smoke` token remains a cheap
+synthetic preset, not an evidence lane.
 
 Cleanup lanes do not select online/offline map behavior. The default
 start-of-run map context is the Base Navigation Map: occupancy geometry,

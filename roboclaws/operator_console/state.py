@@ -104,6 +104,8 @@ def derive_operator_state(
     interaction_state = operator_message_state(root, run_dir)
     normalized_status = _status_from_phase(phase, checker, terminal_reason)
     controls_terminal = _control_terminal_state(phase, normalized_status, terminal_reason)
+    supports_relative_control = bool(route.supports_relative_navigation_control) if route else False
+    relative_control_available = bool(supports_relative_control and not controls_terminal)
     stop_available = _stop_available(
         root=root,
         run_id=run_id,
@@ -142,12 +144,16 @@ def derive_operator_state(
         "agent_kickoff_prompt": prompt_preview.get("agent_kickoff_prompt") or "",
         "operator_session_id": status.get("operator_session_id") or "",
         "operator_messages": interaction_state,
+        "latest_operator_control": status.get("latest_operator_control") or {},
+        "operator_interventions": status.get("operator_interventions") or {},
         "controls": {
             "next_goal_available": controls_terminal,
             "steer_available": bool(route.supports_operator_steer)
             if route and not controls_terminal
             else False,
             "supports_operator_steer": bool(route.supports_operator_steer) if route else False,
+            "relative_navigation_control_available": relative_control_available,
+            "supports_relative_navigation_control": supports_relative_control,
             "pause_available": bool(route.pause_supported) if route else False,
             "stop_available": stop_available,
             "emergency_stop_required": bool(route.emergency_stop_required) if route else False,
@@ -536,6 +542,8 @@ def _wrapper_artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Console Launch Log", "console-launch.log", "log"),
         ("Operator State", "operator_state.json", "json"),
         ("Operator Messages", "operator_messages.jsonl", "jsonl"),
+        ("Operator Control", "operator_control.jsonl", "jsonl"),
+        ("Operator Interventions", "operator_interventions.json", "json"),
     )
     links: list[ArtifactLink] = []
     for label, name, kind in specs:

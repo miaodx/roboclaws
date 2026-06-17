@@ -187,7 +187,13 @@ def _resolve_launch(
         agent_engine=agent_engine,
         provider_profile=provider_profile,
     )
-    evidence_mode, profile, report, overrides = _resolve_evidence_mode(surface, raw_mode, overrides)
+    evidence_mode, profile, report, overrides = _resolve_evidence_mode(
+        surface,
+        intent,
+        preset,
+        raw_mode,
+        overrides,
+    )
     if profile and profile != "smoke":
         lane_compatibility = evidence_lane_compatibility(
             evidence_lane=profile,
@@ -421,6 +427,8 @@ def _without_override(overrides: tuple[str, ...], key: str) -> tuple[str, ...]:
 
 def _resolve_evidence_mode(
     surface: TaskSurfaceSpec,
+    intent: TaskIntentSpec,
+    preset: TaskPresetSpec | None,
     raw_mode: str,
     overrides: tuple[str, ...],
 ) -> tuple[str, str | None, str | None, tuple[str, ...]]:
@@ -428,8 +436,7 @@ def _resolve_evidence_mode(
         if _override_value(overrides, "profile") is not None:
             raise LaunchError(
                 "profile= is no longer a public run::surface argument",
-                "use evidence_lane=world-oracle-labels|world-public-labels|"
-                "camera-grounded-labels|camera-raw-fpv",
+                "use evidence_lane=world-public-labels|camera-grounded-labels|camera-raw-fpv",
             )
         run_preset = _override_value(overrides, "run_preset")
         if run_preset and run_preset != "smoke":
@@ -438,9 +445,15 @@ def _resolve_evidence_mode(
         if evidence_lane == "smoke":
             raise LaunchError(
                 "smoke is not an evidence lane",
-                "use run_preset=smoke with evidence_lane=world-oracle-labels",
+                "use run_preset=smoke with evidence_lane=world-public-labels",
             )
-        profile = evidence_lane or surface.default_profile
+        profile, overrides = _default_household_evidence_mode(
+            surface=surface,
+            intent=intent,
+            preset=preset,
+            evidence_lane=evidence_lane,
+            overrides=overrides,
+        )
         if profile not in surface.supported_profiles:
             raise LaunchError(
                 f"unsupported household-world evidence_lane '{raw_mode}'",
@@ -468,6 +481,27 @@ def _resolve_evidence_mode(
     if report not in surface.supported_reports:
         raise LaunchError(f"unsupported report '{report}'", "expected visual|minimal")
     return report, None, report, overrides
+
+
+def _default_household_evidence_mode(
+    *,
+    surface: TaskSurfaceSpec,
+    intent: TaskIntentSpec,
+    preset: TaskPresetSpec | None,
+    evidence_lane: str | None,
+    overrides: tuple[str, ...],
+) -> tuple[str | None, tuple[str, ...]]:
+    if evidence_lane:
+        return evidence_lane, overrides
+    if (
+        surface.surface_id == "household-world"
+        and intent.intent_id == "map-build"
+        and (preset is None or preset.preset_id == "map-build")
+    ):
+        if _override_value(overrides, "camera_labeler") is None:
+            overrides = (*overrides, "camera_labeler=grounding-dino")
+        return "camera-grounded-labels", overrides
+    return surface.default_profile, overrides
 
 
 def _resolve_provider_profile(

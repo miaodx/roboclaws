@@ -18,7 +18,6 @@ SYNTHETIC_BACKEND = "api_semantic_synthetic"
 ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
 
 SMOKE_PROFILE = "smoke"
-WORLD_ORACLE_LABELS_LANE = "world-oracle-labels"
 WORLD_PUBLIC_LABELS_LANE = "world-public-labels"
 CAMERA_GROUNDED_LABELS_LANE = "camera-grounded-labels"
 CAMERA_RAW_FPV_LANE = "camera-raw-fpv"
@@ -26,33 +25,22 @@ PHYSICAL_ROBOT_EVIDENCE_LANE = "physical-robot-evidence"
 AGIBOT_SDK_RUNNER_BACKEND = "agibot_sdk_runner"
 AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
 
-# Compatibility names for existing Python call sites. The public values are the
-# evidence-lane names above.
-WORLD_LABELS_PROFILE = WORLD_ORACLE_LABELS_LANE
-WORLD_LABELS_SANITIZED_PROFILE = WORLD_PUBLIC_LABELS_LANE
+WORLD_PUBLIC_LABELS_PROFILE = WORLD_PUBLIC_LABELS_LANE
 CAMERA_RAW_PROFILE = CAMERA_RAW_FPV_LANE
 CAMERA_LABELS_PROFILE = CAMERA_GROUNDED_LABELS_LANE
 
-SIM_PROJECTED_LABELS_CAMERA_LABELER = "sim-projected-labels"
 CAMERA_LABELERS: tuple[str, ...] = (
-    SIM_PROJECTED_LABELS_CAMERA_LABELER,
     "grounding-dino",
     "yoloe",
     "omdet-turbo",
     "yolo-world",
-    "fake-http",
-    "contract-fake",
 )
 
-_CAMERA_LABELER_TO_VISUAL_GROUNDING_PIPELINE = {
-    SIM_PROJECTED_LABELS_CAMERA_LABELER: "sim",
-}
-_VISUAL_GROUNDING_PIPELINE_TO_CAMERA_LABELER = {
-    "sim": SIM_PROJECTED_LABELS_CAMERA_LABELER,
-}
+_CAMERA_LABELER_TO_VISUAL_GROUNDING_PIPELINE: dict[str, str] = {}
+_VISUAL_GROUNDING_PIPELINE_TO_CAMERA_LABELER: dict[str, str] = {}
 
 ISAAC_COMPATIBLE_PROFILES = frozenset(
-    {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE, CAMERA_RAW_PROFILE}
+    {WORLD_PUBLIC_LABELS_PROFILE, CAMERA_RAW_PROFILE}
 )
 
 WORLD_LABELS_INPUT = "world_labels"
@@ -126,58 +114,31 @@ class CleanupProfile:
 _PROFILES: dict[str, CleanupProfile] = {
     SMOKE_PROFILE: CleanupProfile(
         profile=SMOKE_PROFILE,
-        evidence_lane=WORLD_ORACLE_LABELS_LANE,
+        evidence_lane=WORLD_PUBLIC_LABELS_LANE,
         preset=SMOKE_PROFILE,
-        agent_input=WORLD_LABELS_INPUT,
+        agent_input=SANITIZED_WORLD_LABELS_INPUT,
         input_provenance=SYNTHETIC_CONTRACT_PROVENANCE,
         world_backend=SYNTHETIC_CONTRACT_BACKEND,
         report=SEMANTIC_REPORT,
         verifiers=(CONTRACT_ONLY_VERIFIER,),
         backend=SYNTHETIC_BACKEND,
         perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
-        detection_exposure_policy=WORLD_LABELS_DETECTION_POLICY,
+        detection_exposure_policy=SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
         include_robot=False,
         record_robot_views=False,
         requires_clean_success=True,
-        summary="Cheap deterministic contract sanity with synthetic world labels.",
-        model_input_note=(
-            "The agent receives structured world labels from the synthetic contract; "
-            "this preset is not a visual or image-reasoning claim."
-        ),
-    ),
-    WORLD_LABELS_PROFILE: CleanupProfile(
-        profile=WORLD_LABELS_PROFILE,
-        evidence_lane=WORLD_ORACLE_LABELS_LANE,
-        preset="",
-        agent_input=WORLD_LABELS_INPUT,
-        input_provenance=SIMULATOR_STATE_PROVENANCE,
-        world_backend=MOLMOSPACES_SIM_BACKEND,
-        report=ROBOT_VIEW_REPORT,
-        verifiers=(
-            CLEANUP_SUCCESS_VERIFIER,
-            ROBOT_VIEW_HONESTY_VERIFIER,
-            REAL_ROBOT_ALIGNMENT_VERIFIER,
-        ),
-        backend=MOLMOSPACES_SUBPROCESS_BACKEND,
-        perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
-        detection_exposure_policy=WORLD_LABELS_DETECTION_POLICY,
-        include_robot=True,
-        record_robot_views=True,
-        requires_clean_success=True,
         summary=(
-            "World-oracle structured-label cleanup evidence lane upper bound with RBY1M "
-            "robot-view report artifacts."
+            "Cheap deterministic contract sanity with synthetic Public structured labels."
         ),
         model_input_note=(
-            "The agent receives observed object handles, structured labels, and "
-            "cleanup-ready destination hints from simulator state. "
-            "FPV, chase, map, and verification images are report evidence, not "
-            "model input for this lane. This lane does not select online/offline "
-            "map behavior; use map_mode and runtime_map_prior for that."
+            "The agent receives sanitized structured world labels from the synthetic "
+            "contract; candidate destinations, cleanup recommendations, and "
+            "placement-tool hints are withheld. This preset is not a visual or "
+            "image-reasoning claim."
         ),
     ),
-    WORLD_LABELS_SANITIZED_PROFILE: CleanupProfile(
-        profile=WORLD_LABELS_SANITIZED_PROFILE,
+    WORLD_PUBLIC_LABELS_PROFILE: CleanupProfile(
+        profile=WORLD_PUBLIC_LABELS_PROFILE,
         evidence_lane=WORLD_PUBLIC_LABELS_LANE,
         preset="",
         agent_input=SANITIZED_WORLD_LABELS_INPUT,
@@ -267,7 +228,6 @@ _PROFILES: dict[str, CleanupProfile] = {
 
 def cleanup_evidence_lane_names() -> tuple[str, ...]:
     return (
-        WORLD_ORACLE_LABELS_LANE,
         WORLD_PUBLIC_LABELS_LANE,
         CAMERA_GROUNDED_LABELS_LANE,
         CAMERA_RAW_FPV_LANE,
@@ -354,7 +314,7 @@ def infer_evidence_lane_name(
     if perception_mode == CAMERA_MODEL_POLICY_MODE:
         return CAMERA_LABELS_PROFILE
     if backend in {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}:
-        return WORLD_LABELS_PROFILE
+        return WORLD_PUBLIC_LABELS_PROFILE
     return SMOKE_PROFILE
 
 
@@ -388,21 +348,10 @@ def evidence_lane_metadata_for_run(
     if profile.profile in ISAAC_COMPATIBLE_PROFILES and backend == ISAACLAB_SUBPROCESS_BACKEND:
         metadata["backend"] = backend
         metadata["world_backend"] = ISAAC_SIM_BACKEND
-        if profile.profile == WORLD_LABELS_PROFILE:
+        if profile.profile == WORLD_PUBLIC_LABELS_PROFILE:
             metadata["summary"] = (
-                "Structured-label cleanup input lane with Isaac Lab semantic-pose "
+                "Public structured-label cleanup baseline with Isaac Lab semantic-pose "
                 "backend artifacts."
-            )
-            metadata["model_input_note"] = (
-                "The agent receives observed object handles and structured labels. "
-                "Isaac FPV, chase, and verification images are report evidence, not "
-                "model input for this lane. This lane does not select online/offline "
-                "map behavior; use map_mode and runtime_map_prior for that."
-            )
-        elif profile.profile == WORLD_LABELS_SANITIZED_PROFILE:
-            metadata["summary"] = (
-                "Sanitized structured-label cleanup ablation with Isaac Lab "
-                "semantic-pose backend artifacts."
             )
             metadata["model_input_note"] = (
                 "The agent receives run-local observed object handles, categories, "
@@ -421,9 +370,7 @@ def evidence_lane_metadata_for_run(
                 "public image evidence. Structured labels remain withheld before declaration."
             )
     metadata["record_robot_views"] = bool(record_robot_views)
-    if profile.profile in {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE} and (
-        not record_robot_views
-    ):
+    if profile.profile == WORLD_PUBLIC_LABELS_PROFILE and not record_robot_views:
         metadata["report"] = SEMANTIC_REPORT
         metadata["model_input_note"] = (
             metadata["model_input_note"]
@@ -514,7 +461,7 @@ def validate_evidence_lane_metadata(
     else:
         assert metadata.get("backend") == expected["backend"], metadata
         assert metadata.get("world_backend") == expected["world_backend"], metadata
-    if profile.profile in {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE}:
+    if profile.profile == WORLD_PUBLIC_LABELS_PROFILE:
         assert metadata.get("report") in {ROBOT_VIEW_REPORT, SEMANTIC_REPORT}, metadata
     else:
         assert metadata.get("report") == expected["report"], metadata

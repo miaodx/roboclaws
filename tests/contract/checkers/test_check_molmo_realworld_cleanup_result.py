@@ -2887,7 +2887,7 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
     )
     result["camera_model_policy_evidence"]["visual_grounding_pipeline_id"] = "manual"
     result["camera_model_policy_evidence"]["visual_grounding_pipeline_ids"] = [
-        "fake-http",
+        "grounding-dino",
         "manual",
     ]
     result["camera_model_policy_evidence"]["events"].append(manual_event)
@@ -2911,8 +2911,8 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
     checker._assert_camera_model_policy(
         result,
         tmp_path,
-        "Camera Labeler Evidence Raw FPV Observations fake-http manual Overlay",
-        expect_pipeline_id="fake-http",
+        "Camera Labeler Evidence Raw FPV Observations grounding-dino manual Overlay",
+        expect_pipeline_id="grounding-dino",
     )
 
 
@@ -2967,8 +2967,8 @@ def test_checker_requires_external_visual_grounding_bbox_overlay(tmp_path: Path)
     checker._assert_camera_model_policy(
         result,
         tmp_path,
-        "Camera Labeler Evidence Raw FPV Observations fake-http Overlay",
-        expect_pipeline_id="fake-http",
+        "Camera Labeler Evidence Raw FPV Observations grounding-dino Overlay",
+        expect_pipeline_id="grounding-dino",
     )
 
 
@@ -2985,8 +2985,8 @@ def test_checker_rejects_external_visual_grounding_bbox_without_overlay(
         checker._assert_camera_model_policy(
             result,
             tmp_path,
-            "Camera Labeler Evidence Raw FPV Observations fake-http Overlay",
-            expect_pipeline_id="fake-http",
+            "Camera Labeler Evidence Raw FPV Observations grounding-dino Overlay",
+            expect_pipeline_id="grounding-dino",
         )
 
 
@@ -3411,12 +3411,12 @@ def test_checker_rejects_agent_view_private_leak(tmp_path: Path) -> None:
 def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, object]:
     pipeline = {
         "schema": "visual_grounding_pipeline_v1",
-        "pipeline_id": "fake-http",
+        "pipeline_id": "grounding-dino",
         "status": "ok",
         "stages": [
             {
                 "stage": "proposer",
-                "producer_id": "fake-http",
+                "producer_id": "grounding-dino",
                 "model_id": "fake",
                 "status": "ok",
                 "latency_ms": 1,
@@ -3441,7 +3441,7 @@ def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, obje
         "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
         "confidence": 0.8,
         "producer_type": "external_visual_grounding_service",
-        "producer_id": "fake-http",
+        "producer_id": "grounding-dino",
         "grounding_status": "resolved",
         "grounding_confidence": 0.8,
         "grounding_basis": "single public camera-context object matched",
@@ -3459,7 +3459,7 @@ def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, obje
         "waypoint_id": "wp_kitchen_01",
         "room_id": "kitchen",
         "producer_type": "external_visual_grounding_service",
-        "producer_id": "fake-http",
+        "producer_id": "grounding-dino",
         "candidate_count": 1,
         "registered_observed_handles": ["observed_001"],
         "visual_grounding_pipeline": pipeline,
@@ -3480,8 +3480,8 @@ def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, obje
             "perception_mode": CAMERA_MODEL_POLICY_MODE,
             "enabled": True,
             "model_provenance": "external_visual_grounding_service",
-            "visual_grounding_pipeline_id": "fake-http",
-            "visual_grounding_pipeline_ids": ["fake-http"],
+            "visual_grounding_pipeline_id": "grounding-dino",
+            "visual_grounding_pipeline_ids": ["grounding-dino"],
             "visual_grounding_failure_count": 0,
             "event_count": 1,
             "candidate_count": 1,
@@ -4682,6 +4682,20 @@ def _seed7_cleanup_bindings(anchor_probe: dict[str, object]) -> list[dict[str, o
 
 
 def _candidate_fixture_id_for_object(result: dict[str, object], object_id: str) -> str:
+    for item in result.get("semantic_substeps", []):
+        if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:
+            continue
+        candidate_fixture_id = str(item.get("target_receptacle_id") or "")
+        if candidate_fixture_id:
+            return candidate_fixture_id
+    primitive_evidence = result.get("cleanup_primitive_evidence")
+    primitive_evidence = primitive_evidence if isinstance(primitive_evidence, dict) else {}
+    for item in primitive_evidence.get("objects", []):
+        if not isinstance(item, dict) or str(item.get("object_id") or "") != object_id:
+            continue
+        candidate_fixture_id = str(item.get("target_receptacle_id") or "")
+        if candidate_fixture_id:
+            return candidate_fixture_id
     agent_view = result.get("agent_view") if isinstance(result.get("agent_view"), dict) else {}
     worklist = agent_view.get("cleanup_worklist") if isinstance(agent_view, dict) else {}
     for item in worklist.get("objects", []) if isinstance(worklist, dict) else []:
@@ -4689,6 +4703,12 @@ def _candidate_fixture_id_for_object(result: dict[str, object], object_id: str) 
             candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
             if candidate_fixture_id:
                 return candidate_fixture_id
+            for option in item.get("destination_options") or []:
+                if not isinstance(option, dict):
+                    continue
+                candidate_fixture_id = str(option.get("candidate_fixture_id") or "")
+                if candidate_fixture_id:
+                    return candidate_fixture_id
     raise AssertionError(f"expected candidate fixture for {object_id}")
 
 

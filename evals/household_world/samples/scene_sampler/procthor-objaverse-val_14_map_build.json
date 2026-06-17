@@ -4,7 +4,7 @@
   ],
   "backend": "mujoco",
   "camera_labeler": "not_applicable",
-  "evidence_lane": "world-oracle-labels",
+  "evidence_lane": "world-public-labels",
   "goal_contract_hash": "unavailable",
   "grader_config": {
     "min_generated_exploration_candidates": 1,
@@ -28,7 +28,7 @@
   "intent": "map-build",
   "launch_overrides": {
     "agent_engine": "direct-runner",
-    "evidence_lane": "world-oracle-labels",
+    "evidence_lane": "world-public-labels",
     "scenario_setup": "baseline",
     "scene_index": 14,
     "scene_source": "procthor-objaverse-val",

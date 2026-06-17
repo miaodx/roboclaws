@@ -9,7 +9,7 @@ import pytest
 
 from roboclaws.household.backend import ApiSemanticCleanupBackend
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.profiles import WORLD_LABELS_PROFILE
+from roboclaws.household.profiles import WORLD_PUBLIC_LABELS_PROFILE
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     MINIMAL_MAP_MODE,
@@ -70,6 +70,20 @@ def _fastmcp_tool_names(server: Any) -> set[str]:
 def _assert_run_evidence_lane(run_result: dict[str, Any], expected: str) -> None:
     assert run_result["evidence_lane"] == expected
     assert run_result["evidence_lane_metadata"]["evidence_lane"] == expected
+
+
+def _first_destination_option_from_done(server: Any, object_id: str) -> dict[str, Any]:
+    done = server.call_tool("done", reason="probe public destination options")
+    pending = [
+        dict(item)
+        for blocker in (done.get("completion") or {}).get("blockers") or []
+        if blocker.get("type") == "pending_cleanup_candidates"
+        for item in blocker.get("pending_cleanup_candidates") or []
+    ]
+    item = next(item for item in pending if item.get("object_id") == object_id)
+    options = item.get("destination_options") or []
+    assert options, item
+    return dict(options[0])
 
 
 def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: Path) -> None:
@@ -170,7 +184,7 @@ def test_realworld_mcp_tool_files_are_layered_by_capability(tmp_path: Path) -> N
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        evidence_lane=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
     )
     try:
         assert _fastmcp_tool_names(server) == semantic | atomic | {
@@ -179,6 +193,45 @@ def test_realworld_mcp_tool_files_are_layered_by_capability(tmp_path: Path) -> N
         }
     finally:
         server.close()
+
+
+def test_realworld_mcp_relative_pose_tool_traces_request_and_response(tmp_path: Path) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
+    )
+    try:
+        response = server.call_tool(
+            "navigate_to_relative_pose",
+            forward_m=0.25,
+            lateral_m=0.0,
+            yaw_delta_deg=15.0,
+        )
+    finally:
+        server.close()
+
+    assert response["tool"] == "navigate_to_relative_pose"
+    assert response["requires_reobserve"] is True
+    assert response["requested_delta"] == {
+        "forward_m": 0.25,
+        "lateral_m": 0.0,
+        "yaw_delta_deg": 15.0,
+    }
+    trace_events = [
+        json.loads(line)
+        for line in (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    assert any(
+        event.get("event") == "request" and event.get("tool") == "navigate_to_relative_pose"
+        for event in trace_events
+    )
+    assert any(
+        event.get("event") == "response" and event.get("tool") == "navigate_to_relative_pose"
+        for event in trace_events
+    )
 
 
 def test_realworld_mcp_operator_messages_pending_hint_and_seen(tmp_path: Path) -> None:
@@ -315,7 +368,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     command = (
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=codex-cli "
-        "provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 "
+        "provider_profile=codex-env evidence_lane=world-public-labels seed=7 "
         "scenario_setup=relocate-cleanup-related-objects relocation_count=5 "
         "robot_views=on "
         f"runtime_map_prior={prior} "
@@ -324,13 +377,15 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     monkeypatch.setenv(
         "ROBOCLAWS_REPORT_RERUN_COMMAND",
         "just run::surface surface=household-world agent_engine=direct-runner "
-        "intent=cleanup evidence_lane=world-oracle-labels seed=7",
+        "intent=cleanup evidence_lane=world-public-labels seed=7",
     )
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         rerun_command=command,
+        task_prompt="report rerun command smoke",
+        goal_contract=_open_ended_goal_contract("report rerun command smoke"),
     )
     try:
         smoke._drive_public_sweep(server)
@@ -341,8 +396,9 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert run_result["rerun_command"] == command
-    assert command in report
-    assert "household-cleanup direct world-oracle-labels" not in report
+    assert run_result["task_intent"] == "open-ended"
+    assert "MolmoSpaces Cleanup Pilot" in report
+    assert "household-cleanup direct world-public-labels" not in report
 
 
 def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
@@ -397,7 +453,9 @@ def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
             for item in agent_view["cleanup_worklist"]["objects"]
             if item["object_id"] == observed["object_id"]
         )
-        target_anchor_id = worklist_item["candidate_fixture_id"]
+        target_anchor_id = _first_destination_option_from_done(
+            server, str(observed["object_id"])
+        )["candidate_fixture_id"]
         server.call_tool("navigate_to_object", object_id=observed["object_id"])
         server.call_tool("pick", object_id=observed["object_id"])
         navigation = server.call_tool("navigate_to_receptacle", fixture_id=target_anchor_id)
@@ -446,7 +504,7 @@ def test_realworld_mcp_rejects_removed_cleanup_composite(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        evidence_lane=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
     )
     try:
         removed_tool = "clean_observed_object"
@@ -469,7 +527,7 @@ def test_realworld_mcp_rejects_removed_fixture_hints_tool(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        evidence_lane=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
     )
     try:
         assert "fixture_hints" not in _fastmcp_tool_names(server)
@@ -776,7 +834,7 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_requires_complete_live_chains(
 def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chain_gate(
     tmp_path: Path,
 ) -> None:
-    scenario = _empty_cleanup_scenario("mcp-world-oracle-labels-readiness-policy-test")
+    scenario = _empty_cleanup_scenario("mcp-world-public-labels-readiness-policy-test")
     backend = MolmoSpacesSubprocessBackend(scenario)
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
@@ -786,7 +844,7 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
         policy="codex_agent",
         agent_driven=True,
         record_robot_views=True,
-        evidence_lane=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
     )
     try:
         assert "cleanup_worklist" not in _fastmcp_tool_names(server)
@@ -795,13 +853,13 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
         for waypoint in metric_map["inspection_waypoints"]:
             server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
             server.call_tool("observe")
-        done = server.call_tool("done", reason="world-oracle-labels sweep complete")
+        done = server.call_tool("done", reason="world-public-labels sweep complete")
         run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
     finally:
         server.close()
 
     assert done["ok"] is True
-    _assert_run_evidence_lane(run_result, WORLD_LABELS_PROFILE)
+    _assert_run_evidence_lane(run_result, WORLD_PUBLIC_LABELS_PROFILE)
     assert run_result["perception_mode"] != RAW_FPV_ONLY_MODE
     assert run_result["requested_generated_mess_count"] == 5
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] == 0
@@ -870,6 +928,8 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
         base_contract=base_contract,
         port=0,
         record_robot_views=True,
+        task_prompt="record robot view timeline",
+        goal_contract=_open_ended_goal_contract("record robot view timeline"),
     )
     try:
         smoke._drive_public_sweep(server)
@@ -880,16 +940,15 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
 
-    assert done["cleanup_status"] in {"success", "partial_success"}
+    assert done["cleanup_status"] == "failed"
+    assert run_result["cleanup_status_role"] == "advisory"
     assert run_result["view_variant"] == "molmospaces-rby1m-fpv-map-chase-verify"
     assert run_result["robot_view_camera_control"]["schema"] == (
         "robot_view_camera_control_summary_v1"
     )
     assert run_result["robot_view_camera_control"]["same_pose_api"] is False
     assert run_result["robot_view_steps"][0]["action"] == "before"
-    assert any(
-        step["semantic_phase"] == "navigate_to_object" for step in run_result["robot_view_steps"]
-    )
+    assert any(step["action"] == "observe" for step in run_result["robot_view_steps"])
     assert "Robot View Timeline" in report_text
     assert "Robot-view camera" in report_text
 

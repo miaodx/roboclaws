@@ -21,17 +21,15 @@ from roboclaws.household.visual_grounding import (  # noqa: E402
 )
 from scripts.visual_grounding.adapters import (  # noqa: E402
     ADAPTER_MODE_AUTO,
-    ADAPTER_MODE_CONTRACT_FAKE,
     ADAPTER_MODE_REAL,
     ADAPTER_MODE_UNAVAILABLE,
-    FAKE_HTTP_PIPELINE_ID,
+    DEFAULT_PIPELINE_ID,
     REAL_ROUTER_PIPELINE_ID,
     visual_grounding_adapter_catalog,
     visual_grounding_service_response,
 )
-from scripts.visual_grounding.serve_fake_visual_grounding import (  # noqa: E402
-    ENDPOINT,
-)
+
+ENDPOINT = "/v1/visual-grounding/candidates"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -46,27 +44,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=18880)
     parser.add_argument(
         "--pipeline",
-        default=os.environ.get("VISUAL_GROUNDING_PIPELINE_ID", FAKE_HTTP_PIPELINE_ID),
+        default=os.environ.get("VISUAL_GROUNDING_PIPELINE_ID", DEFAULT_PIPELINE_ID),
         help=(
-            "Configured pipeline id. Use 'contract-fake' to let requests select "
-            "any fake contract pipeline through one service instance, or "
-            f"'{REAL_ROUTER_PIPELINE_ID}' to route requested pipelines through "
-            "real adapters from one local sidecar."
+            f"Configured detector pipeline id, or '{REAL_ROUTER_PIPELINE_ID}' "
+            "to route requested detector pipelines through one local sidecar."
         ),
     )
     parser.add_argument(
         "--adapter-mode",
         choices=(
             ADAPTER_MODE_AUTO,
-            ADAPTER_MODE_CONTRACT_FAKE,
             ADAPTER_MODE_REAL,
             ADAPTER_MODE_UNAVAILABLE,
         ),
         default=os.environ.get("VISUAL_GROUNDING_ADAPTER_MODE", ADAPTER_MODE_AUTO),
         help=(
-            "auto serves fake-http/contract-fake but reports real adapters as "
-            "unavailable; contract-fake fakes the configured/requested pipeline; "
-            "real loads optional sidecar model adapters."
+            "auto reports adapters according to local model readiness; "
+            "real loads optional sidecar model adapters; unavailable forces "
+            "explicit missing-sidecar responses."
         ),
     )
     parser.add_argument("--latency-ms", type=int, default=3)
@@ -100,7 +95,7 @@ def make_handler(
                 self._write_json(
                     400,
                     visual_grounding_failure_response(
-                        pipeline_id=pipeline_id or FAKE_HTTP_PIPELINE_ID,
+                        pipeline_id=pipeline_id or DEFAULT_PIPELINE_ID,
                         reason="bad_request",
                         message=str(exc),
                         latency_ms=0,

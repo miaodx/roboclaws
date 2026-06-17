@@ -20,9 +20,12 @@ from roboclaws.maps.rasterize import load_pgm
 
 READINESS_SCHEMA = "b1_map12_digital_twin_readiness_v1"
 NAVIGATION_SMOKE_SCHEMA = "b1_map12_navigation_smoke_v1"
+ALIGNMENT_RESIDUALS_SCHEMA = "b1_map12_scene_alignment_residuals_v1"
 SEMANTIC_SOURCE = "robot_map_12_navigation_memory_overlay"
 SEMANTIC_USD_BLOCKED = "blocked_until_segmentation_or_manifest"
 NAVIGATION_PROVENANCE = "isaac_b1_map12_navigation_smoke"
+KNOWN_POOR_BBOX_SEED_POLICY = "known_poor_seed_only"
+KNOWN_POOR_BBOX_SEED_SOURCE = "known_poor_bbox_seed"
 DEFAULT_B1_SCENE_USD = Path("storey_1/scene_gs.usda")
 DEFAULT_B1_MESH_SCENE_USD = Path("storey_1/scene.usd")
 DEFAULT_B1_SCENE_BASE_USD = Path("storey_1/configuration/scene_base.usd")
@@ -51,6 +54,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "the output readiness artifact may claim robot_navigation_supported=true."
         ),
     )
+    parser.add_argument(
+        "--alignment-artifact",
+        type=Path,
+        help=(
+            "Optional B1 / Map 12 reviewed-correspondence residual artifact. "
+            "Only passing residual evidence can promote map-scene alignment status."
+        ),
+    )
     parser.add_argument("--require-navigation-success", action="store_true")
     return parser.parse_args(argv)
 
@@ -58,6 +69,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     payload = build_readiness_artifact(args.b1_root, args.map12_root)
+    if args.alignment_artifact is not None:
+        alignment_payload = json.loads(args.alignment_artifact.read_text(encoding="utf-8"))
+        payload = readiness_artifact_with_alignment(
+            payload,
+            alignment_payload,
+            alignment_artifact_path=args.alignment_artifact,
+        )
     navigation_payload: dict[str, Any] | None = None
     if args.navigation_artifact is not None:
         navigation_payload = json.loads(args.navigation_artifact.read_text(encoding="utf-8"))
@@ -256,6 +274,68 @@ def readiness_artifact_with_navigation(
     payload["navigation_artifact"] = (
         str(navigation_artifact_path) if navigation_artifact_path else ""
     )
+    return payload
+
+
+def readiness_artifact_with_alignment(
+    readiness: dict[str, Any],
+    alignment: dict[str, Any],
+    *,
+    alignment_artifact_path: Path | None = None,
+) -> dict[str, Any]:
+    payload = json.loads(json.dumps(readiness))
+    alignment_errors = validate_alignment_residual_artifact(alignment)
+    residual = _dict(alignment.get("residual_evidence"))
+    area_alignment = [
+        item for item in alignment.get("area_alignment") or [] if isinstance(item, dict)
+    ]
+    payload["alignment_artifact"] = str(alignment_artifact_path) if alignment_artifact_path else ""
+    payload["alignment_validation"] = {
+        "status": "passed" if not alignment_errors else "failed",
+        "errors": alignment_errors,
+    }
+    payload["residual_evidence"] = {
+        "status": residual.get("status") or "not_available",
+        "matched_anchor_count": int(residual.get("matched_anchor_count") or 0),
+        "mean_residual_m": residual.get("mean_residual_m"),
+        "median_residual_m": residual.get("median_residual_m"),
+        "p90_residual_m": residual.get("p90_residual_m"),
+        "max_residual_m": residual.get("max_residual_m"),
+        "source": residual.get("source") or "",
+        "transform_source": residual.get("transform_source") or "",
+        "artifact": str(alignment_artifact_path) if alignment_artifact_path else "",
+    }
+    map12_overlay = payload.setdefault("map12_overlay", {})
+    map12_overlay["residual_evidence"] = payload["residual_evidence"]
+    map12_overlay["bbox_seed_policy"] = KNOWN_POOR_BBOX_SEED_POLICY
+    map12_overlay["verified_transform"] = alignment.get("selected_transform") or {}
+    payload["area_alignment"] = area_alignment
+    if alignment_errors:
+        payload["map12_overlay_status"] = "candidate"
+        payload["map12_to_b1_usd_transform_status"] = "unverified"
+        map12_overlay["status"] = "candidate"
+        map12_overlay["transform_status"] = "unverified"
+        payload["readiness_alignment_status"] = "alignment_artifact_invalid"
+        return payload
+    if alignment.get("global_alignment_status") == "verified":
+        payload["map12_overlay_status"] = "verified"
+        payload["map12_to_b1_usd_transform_status"] = "verified"
+        map12_overlay["status"] = "verified"
+        map12_overlay["transform_status"] = "verified"
+        payload["readiness_alignment_status"] = "global_verified"
+        return payload
+    if any(item.get("alignment_status") == "verified" for item in area_alignment):
+        payload["map12_overlay_status"] = "candidate"
+        payload["map12_to_b1_usd_transform_status"] = "area_verified_only"
+        map12_overlay["status"] = "candidate"
+        map12_overlay["transform_status"] = "area_verified_only"
+        payload["readiness_alignment_status"] = "area_verified_only"
+        return payload
+    payload["map12_overlay_status"] = "candidate"
+    payload["map12_to_b1_usd_transform_status"] = "unverified"
+    map12_overlay["status"] = "candidate"
+    map12_overlay["transform_status"] = "unverified"
+    payload["readiness_alignment_status"] = "alignment_candidate"
     return payload
 
 
@@ -480,6 +560,8 @@ def build_overlay_report(
     b1_depth = max(float(b1_max[1]) - float(b1_min[1]), 1e-6)
     transform = {
         "method": "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds",
+        "source": KNOWN_POOR_BBOX_SEED_SOURCE,
+        "bbox_seed_policy": KNOWN_POOR_BBOX_SEED_POLICY,
         "scale_x": b1_width / source_width,
         "scale_y": b1_depth / source_depth,
         "translate_x": float(b1_min[0]) - float(source_min[0]) * (b1_width / source_width),
@@ -500,6 +582,7 @@ def build_overlay_report(
     return {
         "status": "candidate" if len(candidate_waypoints) >= 2 else "blocked",
         "transform_status": "unverified",
+        "bbox_seed_policy": KNOWN_POOR_BBOX_SEED_POLICY,
         "semantic_source": SEMANTIC_SOURCE,
         "source_bounds": source_bounds,
         "target_bounds": scene_bounds,
@@ -565,6 +648,58 @@ def validate_readiness_artifact(
         "overlay status must be candidate, verified, or blocked",
         errors,
     )
+    _require(
+        payload.get("map12_to_b1_usd_transform_status")
+        in {"unverified", "verified", "blocked", "area_verified_only"},
+        "map-scene transform status must be unverified, verified, blocked, or area_verified_only",
+        errors,
+    )
+    map12_overlay = _dict(payload.get("map12_overlay"))
+    if map12_overlay:
+        _require(
+            map12_overlay.get("bbox_seed_policy") == KNOWN_POOR_BBOX_SEED_POLICY,
+            "bbox seed must be labeled known_poor_seed_only",
+            errors,
+        )
+        transform = _dict(map12_overlay.get("transform"))
+        if transform:
+            _require(
+                transform.get("source") == KNOWN_POOR_BBOX_SEED_SOURCE,
+                "bbox-fit transform must be labeled known_poor_bbox_seed",
+                errors,
+            )
+    if payload.get("map12_overlay_status") == "verified":
+        residual = _dict(payload.get("residual_evidence"))
+        _require(
+            residual.get("status") == "available",
+            "verified overlay requires residual evidence",
+            errors,
+        )
+        _require(
+            int(residual.get("matched_anchor_count") or 0) >= 6,
+            "verified overlay requires at least six matched anchors",
+            errors,
+        )
+        _require(
+            residual.get("transform_source") != KNOWN_POOR_BBOX_SEED_SOURCE,
+            "verified overlay must not use known-poor bbox seed",
+            errors,
+        )
+        verified_transform = _dict(map12_overlay.get("verified_transform"))
+        _require(
+            verified_transform.get("source") != KNOWN_POOR_BBOX_SEED_SOURCE
+            and verified_transform.get("method")
+            != "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds",
+            "verified overlay cannot use the bbox-fit transform as its verified transform",
+            errors,
+        )
+    if payload.get("map12_to_b1_usd_transform_status") == "area_verified_only":
+        area_rows = [item for item in payload.get("area_alignment") or [] if isinstance(item, dict)]
+        _require(
+            any(item.get("alignment_status") == "verified" for item in area_rows),
+            "area_verified_only requires at least one verified area alignment",
+            errors,
+        )
     if payload.get("static_precheck_only") is True:
         _require(
             payload.get("robot_navigation_supported") is not True,
@@ -589,6 +724,64 @@ def validate_readiness_artifact(
         )
     elif require_navigation_success:
         errors.append("robot_navigation_supported is not true")
+    return errors
+
+
+def validate_alignment_residual_artifact(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _require(
+        payload.get("schema") == ALIGNMENT_RESIDUALS_SCHEMA,
+        "unexpected alignment residual schema",
+        errors,
+    )
+    _require(
+        payload.get("bbox_seed_policy") == KNOWN_POOR_BBOX_SEED_POLICY,
+        "alignment artifact must label bbox seed as known_poor_seed_only",
+        errors,
+    )
+    _require(
+        payload.get("manipulation_supported") is False,
+        "alignment artifact must not claim manipulation support",
+        errors,
+    )
+    _require(
+        payload.get("object_receptacle_usd_binding_status") == "blocked_out_of_scope",
+        "alignment artifact must keep object/receptacle USD binding blocked",
+        errors,
+    )
+    residual = _dict(payload.get("residual_evidence"))
+    selected_transform = _dict(payload.get("selected_transform"))
+    if payload.get("global_alignment_status") == "verified":
+        _require(
+            residual.get("status") == "available",
+            "verified alignment requires available residual evidence",
+            errors,
+        )
+        _require(
+            int(residual.get("matched_anchor_count") or 0) >= 6,
+            "verified alignment requires at least six matched anchors",
+            errors,
+        )
+        _require(
+            residual.get("transform_source") != KNOWN_POOR_BBOX_SEED_SOURCE,
+            "verified alignment must not use known-poor bbox seed",
+            errors,
+        )
+        _require(
+            selected_transform.get("source") != KNOWN_POOR_BBOX_SEED_SOURCE
+            and selected_transform.get("method")
+            != "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds",
+            "verified alignment transform must not come from bbox-fit seed",
+            errors,
+        )
+    for area in payload.get("area_alignment") or []:
+        if not isinstance(area, dict) or area.get("alignment_status") != "verified":
+            continue
+        _require(
+            int(area.get("matched_anchor_count") or 0) >= 3,
+            "verified area alignment requires at least three accepted anchors",
+            errors,
+        )
     return errors
 
 

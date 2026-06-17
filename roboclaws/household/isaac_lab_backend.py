@@ -366,6 +366,23 @@ class IsaacLabSubprocessBackend:
             json.dumps(waypoint, sort_keys=True),
         )
 
+    def navigate_to_relative_pose(
+        self,
+        *,
+        forward_m: float = 0.0,
+        lateral_m: float = 0.0,
+        yaw_delta_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        return self._run_worker(
+            "navigate_to_relative_pose",
+            "--forward-m",
+            str(float(forward_m)),
+            "--lateral-m",
+            str(float(lateral_m)),
+            "--yaw-delta-deg",
+            str(float(yaw_delta_deg)),
+        )
+
     def pick(self, object_id: str) -> dict[str, Any]:
         return self._run_worker("pick", "--object-id", object_id)
 

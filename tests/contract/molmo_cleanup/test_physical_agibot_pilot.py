@@ -458,7 +458,7 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
     evidence = _camera_model_policy_evidence(
         [],
         perception_mode="camera_model_policy",
-        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_pipeline_id="grounding-dino",
         raw_observations=[
             {
                 "schema": "raw_fpv_observation_v1",
@@ -495,7 +495,7 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
     event = evidence["events"][0]
     assert grounding_client.last_request is not None
     assert grounding_client.last_request["observation_id"] == "agibot_observe_001"
-    assert grounding_client.last_request["pipeline_request"]["pipeline_id"] == "fake-http"
+    assert grounding_client.last_request["pipeline_request"]["pipeline_id"] == "grounding-dino"
     assert grounding_client.last_request["fixture_hints"][0]["fixture_id"] == "sofa_01"
     assert evidence["candidate_count"] == 1
     assert evidence["visual_grounding_failure_count"] == 0
@@ -511,7 +511,7 @@ def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
         run_dir=tmp_path / "run",
         context_json=COMPLETED_CONTEXT_FIXTURE,
         evidence_lane="camera-grounded-labels",
-        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_pipeline_id="grounding-dino",
         visual_grounding_timeout_s=9.5,
     )
 
@@ -679,7 +679,7 @@ def _robot_map_9_context() -> dict:
 
 
 class _StaticAgibotVisualGroundingClient:
-    pipeline_id = "fake-http"
+    pipeline_id = "grounding-dino"
 
     def __init__(self) -> None:
         self.last_request: dict | None = None

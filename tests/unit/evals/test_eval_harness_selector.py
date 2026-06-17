@@ -57,7 +57,7 @@ def test_cleanup_skill_change_selects_cleanup_suite_and_live_codex_eval(
     assert codex_row["row_kind"] == "live_agent_eval"
     assert codex_row["axes"]["agent_engine"] == "codex-cli"
     assert codex_row["axes"]["provider_profile"] == "codex-env"
-    assert codex_row["axes"]["evidence_lane"] == "world-oracle-labels"
+    assert codex_row["axes"]["evidence_lane"] == "world-public-labels"
     assert "live_execution=run" in codex_row["command"]
     assert codex_row["status"] == "not_run"
 
@@ -135,7 +135,7 @@ def test_map_build_change_selects_map_build_suite_and_cleanup_consumer_prior(
     )
 
     rows = _selected_rows(manifest)
-    assert rows["direct-map-build-world-oracle"]["axes"]["intent"] == "map-build"
+    assert rows["direct-map-build-world-public"]["axes"]["intent"] == "map-build"
     assert rows["direct-cleanup-runtime-prior-consumer"]["axes"]["runtime_map_prior"] == "required"
     assert rows["map-build-consumer-eval-suite"]["row_kind"] == "eval_suite"
 
@@ -215,7 +215,7 @@ def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path
         output_dir=tmp_path,
     )
     rows = _selected_rows(manifest)
-    map_row = rows["direct-map-build-world-oracle"]
+    map_row = rows["direct-map-build-world-public"]
     prior = Path(map_row["row_dir"]) / "run" / "seed-7" / "runtime_metric_map.json"
     prior.parent.mkdir(parents=True)
     prior.write_text('{"schema":"runtime_metric_map_v1"}\n', encoding="utf-8")
