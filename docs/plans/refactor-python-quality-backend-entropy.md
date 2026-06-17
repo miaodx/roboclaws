@@ -60,6 +60,18 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 60` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 aligned OpenAI Agents SDK
+  performance-profile integer parsing with the fail-aloud runtime config
+  contract. Malformed integer env/direct settings such as
+  `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET`, and non-positive
+  positive-only settings such as `max_turns`, now produce actionable
+  `OpenAI Agents SDK setting ...` errors instead of raw conversion failures or
+  terse constraint messages. Behavior-change class: fail-aloud
+  runner/provider-profile configuration; valid integer defaults, matching
+  CLI/env values, existing conflicts, and profile output schemas are unchanged.
+  The ratchet remains 0 complexity rows and 79 oversized modules;
+  `openai_agents_perf_profile.py` is 800 lines and stays below the oversized
+  threshold.
 - Follow-up implementation refresh on 2026-06-18 moved OpenAI Agents SDK
   runner-side MCP client-session timeout default/env validation into
   `openai_agents_perf_profile.py`. Malformed

@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK performance-profile integer parsing now uses
+  the same fail-aloud setting style as the runtime config paths. Malformed
+  integer env/direct settings such as
+  `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET`, and non-positive
+  positive-only settings such as `max_turns`, produce actionable
+  `OpenAI Agents SDK setting ...` errors instead of raw conversion failures or
+  terse constraint messages. Behavior-change class: fail-aloud
+  runner/provider-profile configuration; valid integer defaults, matching
+  CLI/env values, existing conflicts, and profile output schemas are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `openai_agents_perf_profile.py` is 800 lines and stays below the oversized
+  threshold. Proof: focused OpenAI Agents live runtime/profile tests,
+  touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: OpenAI Agents SDK runner-side MCP client-session timeout
   default/env validation moved into `openai_agents_perf_profile.py`. Malformed
   `ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S`, negative direct

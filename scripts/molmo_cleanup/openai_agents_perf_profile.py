@@ -690,8 +690,8 @@ def _int_setting(
     raw = getattr(args, attr, None)
     env_raw = os.environ.get(env_name)
     if raw is not None and env_raw not in {None, ""}:
-        value = int(raw)
-        env_value = int(env_raw)
+        value = _number_setting_value(attr, raw, int, "an integer")
+        env_value = _number_setting_value(attr, env_raw, int, "an integer")
         if value != env_value:
             _raise_setting_conflict(attr, env_name, value, env_value)
         raw = value
@@ -701,9 +701,9 @@ def _int_setting(
         if allow_none:
             return None
         raise ValueError(f"{attr} is required")
-    value = int(raw)
+    value = _number_setting_value(attr, raw, int, "an integer")
     if value < 0:
-        raise ValueError(f"{attr} must be non-negative")
+        raise ValueError(f"OpenAI Agents SDK setting {attr} must be non-negative, got {raw!r}")
     return value
 
 
@@ -717,16 +717,16 @@ def _positive_int_setting(
     raw = getattr(args, attr, None)
     env_raw = os.environ.get(env_name)
     if raw is not None and env_raw not in {None, ""}:
-        value = int(raw)
-        env_value = int(env_raw)
+        value = _number_setting_value(attr, raw, int, "an integer")
+        env_value = _number_setting_value(attr, env_raw, int, "an integer")
         if value != env_value:
             _raise_setting_conflict(attr, env_name, value, env_value)
         raw = value
     if raw is None:
         raw = env_raw if env_raw not in {None, ""} else default
-    value = int(raw)
+    value = _number_setting_value(attr, raw, int, "an integer")
     if value < 1:
-        raise ValueError(f"{attr} must be >= 1")
+        raise ValueError(f"OpenAI Agents SDK setting {attr} must be positive, got {raw!r}")
     return value
 
 
@@ -740,25 +740,25 @@ def _float_setting(
     raw = getattr(args, attr, None)
     env_raw = os.environ.get(env_name)
     if raw is not None and env_raw not in {None, ""}:
-        value = _float_setting_value(attr, raw)
-        env_value = _float_setting_value(attr, env_raw)
+        value = _number_setting_value(attr, raw, float, "a non-negative number")
+        env_value = _number_setting_value(attr, env_raw, float, "a non-negative number")
         if value != env_value:
             _raise_setting_conflict(attr, env_name, value, env_value)
         raw = value
     if raw is None:
         raw = env_raw if env_raw not in {None, ""} else default
-    value = _float_setting_value(attr, raw)
+    value = _number_setting_value(attr, raw, float, "a non-negative number")
     if value < 0:
         raise ValueError(f"{attr} must be non-negative")
     return _round_duration(value)
 
 
-def _float_setting_value(attr: str, raw: object) -> float:
+def _number_setting_value(attr: str, raw: object, parser: Any, expected: str) -> Any:
     try:
-        return float(raw)
+        return parser(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"OpenAI Agents SDK setting {attr} must be a non-negative number, got {raw!r}"
+            f"OpenAI Agents SDK setting {attr} must be {expected}, got {raw!r}"
         ) from exc
 
 

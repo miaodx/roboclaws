@@ -3988,6 +3988,40 @@ def test_openai_agents_perf_profile_rejects_negative_mcp_timeout(monkeypatch) ->
         )
 
 
+def test_openai_agents_perf_profile_rejects_invalid_integer_env(monkeypatch) -> None:
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET", "many")
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting raw_fpv_candidate_budget must be an integer",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(raw_fpv_candidate_budget=None)
+        )
+
+
+def test_openai_agents_perf_profile_rejects_invalid_direct_integer(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting raw_fpv_candidate_budget must be an integer",
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(raw_fpv_candidate_budget="many")
+        )
+
+
+def test_openai_agents_perf_profile_rejects_non_positive_max_turns(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting max_turns must be positive",
+    ):
+        _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(max_turns=0))
+
+
 def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     gpt = _resolve_agent_sdk_perf_profile(
