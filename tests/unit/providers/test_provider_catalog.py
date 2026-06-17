@@ -15,6 +15,7 @@ from roboclaws.agents.provider_registry import (
     provider_route_spec,
     required_env_keys,
     resolve_model,
+    route_base_url,
     route_capabilities_for_engine,
 )
 from roboclaws.core.provider_factory import create_provider
@@ -88,6 +89,25 @@ def test_kimi_openai_chat_defaults_to_current_code_model() -> None:
 
     assert route.default_model_id == "kimi-k2.7-code"
     assert route.status_for_engine("openai-agents-sdk") == ROUTE_EXPERIMENTAL
+
+
+def test_provider_routes_accept_adjacent_base_url_env_overrides() -> None:
+    assert provider_route_spec("mimo-anthropic").base_url_env == "MIMO_ANTHROPIC_BASE_URL"
+    assert (
+        route_base_url(
+            provider_route_spec("mimo-anthropic"),
+            env={"MIMO_ANTHROPIC_BASE_URL": "https://mimo.example/anthropic"},
+        )
+        == "https://mimo.example/anthropic"
+    )
+    assert provider_route_spec("kimi-anthropic").base_url_env == "KIMI_ANTHROPIC_BASE_URL"
+    assert (
+        route_base_url(
+            provider_route_spec("kimi-anthropic"),
+            env={"KIMI_ANTHROPIC_BASE_URL": "https://kimi.example/coding/"},
+        )
+        == "https://kimi.example/coding/"
+    )
 
 
 def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None:

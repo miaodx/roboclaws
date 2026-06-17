@@ -14,15 +14,11 @@ from roboclaws.mcp.profiles import (
     HOUSEHOLD_EPISODE_PROFILE,
     HOUSEHOLD_MANIPULATION_PROFILE,
     HOUSEHOLD_WORLD_PROFILE,
-    MOLMOSPACES_CLEANUP_PROFILE,
-    REAL_ROBOT_CLEANUP_PROFILE,
     ContractProfile,
     ToolDescriptor,
     assert_public_profile_metadata_safe,
     contract_profile,
     contract_profile_names,
-    legacy_contract_profile_metadata,
-    legacy_contract_profile_names,
     validate_contract_profile,
 )
 
@@ -60,13 +56,10 @@ def test_contract_profile_registry_contains_only_task_neutral_capability_profile
     )
 
 
-def test_legacy_cleanup_shaped_profiles_are_metadata_only() -> None:
-    assert legacy_contract_profile_names() == (
-        MOLMOSPACES_CLEANUP_PROFILE,
-        REAL_ROBOT_CLEANUP_PROFILE,
-    )
+@pytest.mark.parametrize("profile_id", ("molmospaces_cleanup_v1", "real_robot_cleanup_v1"))
+def test_cleanup_shaped_profiles_are_removed(profile_id: str) -> None:
     with pytest.raises(ValueError, match="unsupported MCP contract profile"):
-        contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
+        contract_profile(profile_id)
 
 
 def test_household_world_profile_is_task_neutral_and_world_only() -> None:
@@ -115,55 +108,6 @@ def test_household_cleanup_skill_capabilities_are_composed_not_copied() -> None:
     assert "pick" not in world.public_tool_names()
     assert {"pick", "place", "navigate_to_receptacle"} <= set(manipulation.public_tool_names())
     assert lifecycle.public_tool_names() == ("check_operator_messages", "done")
-
-
-def test_legacy_molmo_profile_metadata_omits_private_evaluator_terms() -> None:
-    metadata = legacy_contract_profile_metadata(MOLMOSPACES_CLEANUP_PROFILE)
-    payload = json.dumps(metadata, sort_keys=True).lower()
-
-    for forbidden in ("generated_mess_set", "acceptable_destination", "private_manifest"):
-        assert forbidden not in payload
-    assert "scene_objects" not in payload
-    assert {tool["name"] for tool in metadata["public_tools"]} >= {
-        "metric_map",
-        "observe",
-        "pick",
-        "place",
-        "done",
-    }
-    assert metadata["backend_variants"] == ["api_semantic_synthetic", "molmospaces_subprocess"]
-
-
-def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
-    metadata = legacy_contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE)
-    tools = {tool["name"]: tool for tool in metadata["public_tools"]}
-
-    assert {
-        "metric_map",
-        "navigate_to_room",
-        "navigate_to_waypoint",
-        "observe",
-        "adjust_camera",
-        "declare_visual_candidates",
-        "navigate_to_visual_candidate",
-        "inspect_visible_object",
-        "resolve_target_query",
-        "navigate_to_object",
-        "navigate_to_receptacle",
-        "done",
-    } <= set(tools)
-    assert metadata["backend"] == "physical_robot"
-    assert metadata["backend_variants"] == ["nav2_ros2", "agibot_gdk"]
-    assert "scene_objects" not in json.dumps(metadata)
-    assert "goto" not in tools
-    assert "nav2_action" in tools["navigate_to_waypoint"]["provenance"]
-    assert "agibot_gdk_normal_navi" in tools["navigate_to_waypoint"]["provenance"]
-    assert "agibot_gdk_normal_navi" in tools["navigate_to_receptacle"]["provenance"]
-    assert "agibot_gdk_map_context" in tools["metric_map"]["provenance"]
-    assert "nav2_action" in tools["navigate_to_visual_candidate"]["provenance"]
-    assert "camera_artifact" in tools["declare_visual_candidates"]["provenance"]
-    for tool_name in {"pick", "place", "place_inside", "open_receptacle", "close_receptacle"}:
-        assert tools[tool_name]["provenance"] == ["blocked_capability"]
 
 
 def test_profile_validation_rejects_privileged_public_tool() -> None:
@@ -226,8 +170,7 @@ def test_register_profile_tools_helper_registers_selected_public_tools() -> None
 def test_router_rejects_unknown_profile_with_allowed_ids() -> None:
     with pytest.raises(
         ValueError,
-        match="allowed profiles: household_world_v1, household_manipulation_v1, "
-        "household_episode_v1",
+        match="allowed profiles: household_world, household_manipulation, household_episode",
     ):
         load_contract_profile("missing_profile")
 

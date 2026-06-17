@@ -6,14 +6,14 @@
   "role": "scene_map_alignment",
   "status": "active",
   "mcp": {
-    "profiles": ["household_world_v1"],
+    "profiles": ["household_world"],
     "required_tools": [],
     "optional_tools": [],
     "privileged_tools": [],
     "boundary_notes": "This skill operates at the offline scene/map artifact boundary. It may prepare evidence for household-world runs, but alignment judgment and report labeling stay outside public robot capabilities until a stable MCP contract exists."
   },
   "capability_requirements": {
-    "profiles": ["household_world_v1"],
+    "profiles": ["household_world"],
     "backend_variants": ["isaaclab_subprocess", "agibot_gdk", "artifact_only"],
     "notes": "The workflow can consume B1/Map12-style assets, future Gaussian scene drops, Isaac render smoke artifacts, and exported robot map bundles."
   },

@@ -1,6 +1,6 @@
 # ADR-0140: Use Eval Suites As First-Class Architecture Layer
 
-Status: Accepted
+Status: Accepted, amended by ADR-0141
 
 Date: 2026-06-15
 
@@ -78,3 +78,10 @@ readable for report and map compatibility.
   stable.
 - Existing `just run::surface`, `agent-validation-matrix`, and harness recipes
   remain valid in their own layers.
+
+## Amendment
+
+ADR-0141 supersedes this ADR's maintainer-facade wording for the separate
+`agent-validation-matrix` entrypoint. Eval suites remain first-class benchmark
+artifacts, but current maintained orchestration flows through `eval-harness`
+and `just agent::eval recommend|execute|suite|promote-regression`.

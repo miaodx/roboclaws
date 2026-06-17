@@ -34,8 +34,8 @@ from roboclaws.household.planner_proof_quality import (
 from roboclaws.household.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 from roboclaws.household.profiles import (
     WORLD_LABELS_PROFILE,
-    cleanup_profile,
-    validate_cleanup_profile_metadata,
+    evidence_lane,
+    validate_evidence_lane_metadata,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -590,7 +590,7 @@ def _assert_artifacts_and_report_core(
         assert path.stat().st_size > 0, path
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
     if opts["expect_profile"] is not None:
-        _assert_cleanup_profile(data, report_text, opts["expect_profile"])
+        _assert_evidence_lane(data, report_text, opts["expect_profile"])
     assert "Agent View" in report_text, report_text[:500]
     assert "Private Evaluation" in report_text, report_text[:500]
     assert "Score" in report_text, report_text[:500]
@@ -791,18 +791,17 @@ def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
     assert int(counts.get("scene_objects:request") or 0) == 0, (counts, data)
 
 
-def _assert_cleanup_profile(
+def _assert_evidence_lane(
     data: dict[str, Any],
     report_text: str,
     expected_profile: str,
 ) -> None:
-    profile = cleanup_profile(expected_profile)
+    profile = evidence_lane(expected_profile)
     assert data.get("evidence_lane") == profile.evidence_lane, data
-    assert data.get("cleanup_profile") == profile.evidence_lane, data
-    metadata = data.get("cleanup_profile_metadata") or {}
-    validate_cleanup_profile_metadata(
+    metadata = data.get("evidence_lane_metadata") or data.get("cleanup_profile_metadata") or {}
+    validate_evidence_lane_metadata(
         metadata,
-        expected_profile=profile.profile,
+        expected_evidence_lane=profile.profile,
         expected_backend=data.get("backend"),
         expected_perception_mode=data.get("perception_mode"),
     )
@@ -986,16 +985,16 @@ def _is_live_semantic_map_build(data: dict[str, Any]) -> bool:
         str(data.get("task_intent") or ""),
     }
     return (
-        bool({"semantic-map-build", "map-build"} & task_identity)
+        bool({"household-world.map-build", "map-build"} & task_identity)
         and int(trace.get("cleanup_action_count") or 0) == 0
         and str(trace.get("loop_style") or "") == "scan_only"
     )
 
 
 def _assert_live_semantic_map_build_scan_only(data: dict[str, Any]) -> None:
-    assert (
-        data.get("task_name") == "semantic-map-build" or data.get("task_intent") == "map-build"
-    ), data
+    assert data.get("task_name") == "household-world.map-build" or data.get(
+        "task_intent"
+    ) == "map-build", data
     trace = data.get("cleanup_policy_trace") or {}
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
     assert trace.get("loop_style") == "scan_only", trace

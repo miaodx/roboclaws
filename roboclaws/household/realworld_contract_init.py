@@ -26,21 +26,18 @@ def validate_contract_options(
 
 def init_profile_and_acceptance(
     target: Any,
-    cleanup_profile: str | None,
+    evidence_lane: str | None,
     public_acceptance_config: dict[str, Any] | None,
 ) -> None:
     helpers = _contract_helpers()
-    target.cleanup_profile = (
-        str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
+    target.evidence_lane = (
+        str(evidence_lane or "").strip().lower().replace("_", "-") if evidence_lane else ""
     )
     target.public_acceptance_config = helpers._public_acceptance_config(public_acceptance_config)
     target.task_intent = helpers.normalize_household_intent(
         target.public_acceptance_config.get("task_intent")
     )
-    target.task_intent_mode = helpers.normalize_task_intent_mode(
-        target.public_acceptance_config.get("task_intent_mode")
-    )
-    target.sanitize_world_labels = target.cleanup_profile == helpers.WORLD_LABELS_SANITIZED_PROFILE
+    target.sanitize_world_labels = target.evidence_lane == helpers.WORLD_LABELS_SANITIZED_PROFILE
     target.visible_detection_exposure_policy = (
         helpers.SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
         if target.sanitize_world_labels

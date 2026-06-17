@@ -48,8 +48,10 @@ from roboclaws.household.realworld_mcp_server import (
 )
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_DEFAULT,
-    normalize_task_intent_mode,
+    household_intent_from_args as _household_intent,
+)
+from roboclaws.household.task_intent import (
+    household_task_name_from_args as _household_run_id,
 )
 from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
@@ -322,9 +324,8 @@ class LiveOpenAIAgentsCleanupRunner:
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
             "surface": "household-world",
-            "intent": _intent_for_task_name(getattr(args, "task_name", "")),
-            "task_name": getattr(args, "task_name", ""),
-            "task_intent_mode": _task_intent_mode_for_timing(args),
+            "intent": _household_intent(args),
+            "task_name": _household_run_id(args),
             "evidence_lane": getattr(args, "profile", ""),
             "profile": getattr(args, "profile", ""),
             "backend": getattr(args, "backend", ""),
@@ -582,7 +583,7 @@ class LiveOpenAIAgentsCleanupRunner:
                 }
             )
         return LiveAgentRequest(
-            task_name=self.args.task_name,
+            run_id=_household_run_id(self.args),
             skill_name=self.skill_name,
             kickoff_prompt=prompt,
             mcp_server=LiveAgentMCPServer(name="cleanup", url=self.args.client_url),
@@ -611,9 +612,8 @@ class LiveOpenAIAgentsCleanupRunner:
                 "sdk_run_config": self.agent_sdk_perf_profile["sdk_run_config"],
                 "skill_context": self.skill_context,
                 "surface": "household-world",
-                "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
-                "task_name": getattr(self.args, "task_name", ""),
-                "task_intent_mode": _task_intent_mode_for_timing(self.args),
+                "intent": _household_intent(self.args),
+                "task_name": _household_run_id(self.args),
                 "evidence_lane": getattr(self.args, "profile", ""),
             },
             artifact_paths=artifact_paths,
@@ -634,14 +634,13 @@ class LiveOpenAIAgentsCleanupRunner:
     def _check_result(self) -> None:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
-        task_name = getattr(self.args, "task_name", "household-cleanup")
-        task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+        task_name = _household_run_id(self.args)
+        task_intent = _household_intent(self.args)
         open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
             checker_visual_args = without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
-            task_name=task_name,
             task_intent=task_intent,
             open_ended_task=open_ended_task,
         )
@@ -1650,10 +1649,9 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
         camera_grounded_composite_tools=composite_tools,
     ):
         return original
-    task_name = str(getattr(args, "task_name", "") or "")
-    intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+    intent = _household_intent(args)
     can_render = (
-        task_name == "household-cleanup"
+        intent == "cleanup"
         and mode in {"compact", "raw_fpv_compact"}
         and lane in {"world-public-labels", "camera-grounded-labels", "camera-raw-fpv"}
     )
@@ -1665,7 +1663,6 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
             lane,
             task=str(getattr(args, "task", "") or ""),
             target_cleanup_count=target_cleanup_count,
-            task_intent_mode=str(getattr(args, "task_intent_mode", "") or TASK_INTENT_MODE_DEFAULT),
             intent=intent,
             goal_contract=None,
             prompt_mode=mode,
@@ -1871,7 +1868,8 @@ def _compact_continuation_state(
         "schema": "compact_agent_state_v1",
         "surface": goal_contract.get("surface") or "household-world",
         "intent": goal_contract.get("intent") or "cleanup",
-        "evidence_lane": _trace_field(trace_events, "cleanup_profile"),
+        "evidence_lane": _trace_field(trace_events, "evidence_lane")
+        or _trace_field(trace_events, "cleanup_profile"),
         "goal_summary": goal_contract.get("normalized_goal") or "",
         "agent_sdk_perf_profile_id": profile.get("profile_id") or "baseline",
         "completed_waypoints": completed_waypoints[-32:],
@@ -2148,25 +2146,9 @@ def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict
     return breakdown
 
 
-def _intent_for_task_name(task_name: str) -> str:
-    task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
-    if task_intent:
-        return task_intent
-    if task_name == "semantic-map-build":
-        return "map-build"
-    return "cleanup"
-
-
-def _task_intent_mode_for_timing(args: Any) -> str:
-    return normalize_task_intent_mode(
-        getattr(args, "task_intent_mode", "") or TASK_INTENT_MODE_DEFAULT
-    )
-
-
 def _task_aware_continuation_suffix(args: Any) -> str:
-    task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+    task_intent = _household_intent(args)
     intent = household_intent_id_for_checker(
-        task_name=str(getattr(args, "task_name", "") or "household-cleanup"),
         task_intent=task_intent,
         open_ended_task=task_intent == "open-ended",
     )
@@ -2213,7 +2195,6 @@ def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
         "surface": timing.get("surface", ""),
         "intent": timing.get("intent", ""),
         "task_name": timing.get("task_name", ""),
-        "task_intent_mode": timing.get("task_intent_mode", ""),
         "runtime": timing.get("runtime", ""),
         "provider_profile": timing.get("provider_profile", ""),
         "wire_api": timing.get("wire_api", ""),

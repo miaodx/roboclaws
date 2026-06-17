@@ -22,6 +22,8 @@ from roboclaws.household.planner_task_feasibility import grasp_feasibility_signa
 from roboclaws.household.report_sections_agent import (
     agent_view_section,
     cleanup_policy_trace_section,
+    evidence_lane_badges,
+    evidence_lane_note,
     real_robot_readiness_section,
 )
 from roboclaws.household.report_sections_grasp_cache import (
@@ -173,7 +175,7 @@ def _cleanup_report_sections(
                 [
                     _confidence_layer_note(run_result),
                     _realworld_contract_note(run_result),
-                    _cleanup_profile_note(run_result),
+                    evidence_lane_note(run_result),
                     map_evidence_refresh_summary_section(run_result),
                     _before_after_section(
                         before_snapshot=before_snapshot,
@@ -575,7 +577,7 @@ def _cleanup_summary_section(
           {_badge("Restored", restored_summary)}
           {_badge("Generated mess", _generated_mess_summary(run_result))}
           {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
-          {_cleanup_profile_badges(run_result)}
+          {evidence_lane_badges(run_result, _badge)}
           {_badge("Agent driven", run_result.get("agent_driven", False))}
           {_badge("Provenance", run_result["primitive_provenance"])}
           {_badge("MCP server", run_result.get("mcp_server", "none"))}
@@ -832,25 +834,6 @@ def _robot_view_camera_badges(run_result: dict[str, Any]) -> str:
     )
 
 
-def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:
-    metadata = run_result.get("cleanup_profile_metadata") or {}
-    if not metadata:
-        return ""
-    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
-    return "".join(
-        (
-            _badge(
-                "Evidence lane",
-                metadata.get("evidence_lane", run_result.get("evidence_lane", "")),
-            ),
-            _badge("Camera labeler", camera_labeler) if camera_labeler else "",
-            _badge("Agent input", metadata.get("agent_input", "")),
-            _badge("Input provenance", metadata.get("input_provenance", "")),
-            _badge("Report", metadata.get("report", "")),
-        )
-    )
-
-
 def _confidence_layer_badges(run_result: dict[str, Any]) -> str:
     layer = run_result.get("confidence_layer")
     if not layer:
@@ -895,33 +878,6 @@ def _confidence_layer_note(run_result: dict[str, Any]) -> str:
         note = f"{note}: {summary}"
     if next_layer:
         note = f"{note} Next confidence layer: {next_layer}."
-    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
-
-
-def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
-    metadata = run_result.get("cleanup_profile_metadata") or {}
-    if not metadata:
-        return ""
-    evidence_lane = metadata.get("evidence_lane", run_result.get("evidence_lane", "unknown"))
-    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
-    verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
-    labeler_note = (
-        f"Camera labeler: {camera_labeler}. "
-        if camera_labeler
-        else "Camera labeler: not applicable. "
-    )
-    note = (
-        f"Cleanup evidence lane {evidence_lane}: {metadata.get('summary', '')} "
-        "evidence_lane selects what the agent receives. camera_labeler applies only "
-        "to camera-grounded-labels and selects how camera labels are produced. "
-        f"{labeler_note}"
-        "Map shape and map priors are controlled separately by map_mode and "
-        "runtime_map_prior. "
-        f"Agent input: {metadata.get('agent_input', 'unknown')}; "
-        f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
-        f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "
-        f"{metadata.get('model_input_note', '')}"
-    )
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
@@ -4025,7 +3981,7 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
         intro = (
             "One simulated Roboclaws run is written in Agibot-shaped backend stages. "
             "The rows map preflight, observe, waypoint navigation, and blocked "
-            "manipulation artifacts back to the same real_robot_cleanup_v1 public "
+            "manipulation artifacts back to the same household public "
             "tool contract. This validates contract shape and evidence plumbing; "
             "it is not Agibot Map Visual Dry Run, not Agibot SDK Dry Run, not "
             "semantic cleanup mock evidence, and not real Agibot GDK execution."
@@ -4042,7 +3998,7 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
         intro = (
             "One Roboclaws pilot run is replayed through three SDK-owned backend "
             "stages. The table maps each backend artifact back to the public "
-            "real_robot_cleanup_v1 tool it supports, so these rows read as "
+            "household tool it supports, so these rows read as "
             "evidence for the same cleanup-shaped run rather than separate tasks. "
             "Dry-run rows are reviewable rehearsal evidence, not physical PNC "
             "execution proof."
@@ -4223,7 +4179,7 @@ def _map_contract_note(bundle: dict[str, Any]) -> str:
     elif "molmospaces" in source.lower():
         prefix = (
             "This map bundle is not a real Agibot GDK map; it is a MolmoSpaces public "
-            "semantic map rendered through the Agibot-shaped real_robot_cleanup_v1 "
+            "semantic map rendered through the Agibot-shaped household "
             "map contract."
         )
     else:

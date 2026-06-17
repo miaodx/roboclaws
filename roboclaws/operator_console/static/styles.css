@@ -160,12 +160,18 @@ button:not(:disabled):hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-variant-numeric: tabular-nums;
   min-width: 0;
+  overflow: hidden;
+}
+
+.run-meta > * {
+  flex: 0 0 auto;
 }
 
 #run-title {
+  flex: 1 1 auto;
   font-size: 16px;
   font-weight: 500;
   color: var(--text);
@@ -185,8 +191,15 @@ button:not(:disabled):hover {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  min-width: max-content;
+}
+
+.global-controls button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .route-rail,
@@ -901,6 +914,22 @@ dialog pre {
   .global-controls,
   .view-modes {
     flex-wrap: wrap;
+  }
+
+  .global-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .run-meta {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  #run-title {
+    flex-basis: 100%;
   }
 
   .route-rail,

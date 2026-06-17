@@ -1,0 +1,53 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "eval-harness",
+  "summary": "Select and execute relevant deterministic, product, eval-suite, live-agent eval, and regression-promotion rows.",
+  "abstraction_level": "agent_skill",
+  "role": "eval_orchestration",
+  "status": "active",
+  "mcp": {
+    "profiles": [],
+    "required_tools": [],
+    "optional_tools": [],
+    "privileged_tools": [],
+    "boundary_notes": "This skill orchestrates existing public product routes, eval suites, and private runner mechanics. It does not expose robot capabilities or private evaluator truth."
+  },
+  "capability_requirements": {
+    "profiles": [],
+    "backend_variants": [
+      "molmospaces_subprocess",
+      "isaaclab_subprocess",
+      "agibot_gdk"
+    ],
+    "notes": "Selected rows may require household world, manipulation, episode, visual-grounding, live coding-agent, Agent SDK, eval-suite, or simulator runtime support depending on matched signals."
+  },
+  "scripts": [
+    {
+      "path": "scripts/select_eval_harness.py",
+      "kind": "selector",
+      "summary": "Builds an auditable eval-harness manifest from plan text, git diff files, and explicit axis overrides."
+    },
+    {
+      "path": "scripts/run_eval_harness.py",
+      "kind": "runner",
+      "summary": "Writes JSON/Markdown/HTML eval-harness manifests and optionally executes selected rows."
+    }
+  ],
+  "evidence_outputs": [
+    "eval_harness.json",
+    "eval_harness.md",
+    "eval_harness.html",
+    "rows/<row-id>/stdout.log",
+    "rows/<row-id>/stderr.log",
+    "evals/<suite-id>/<stamp>/eval_results.json",
+    "evals/<suite-id>/<stamp>/eval_report.html"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "selection rules become hard to audit from deterministic source signals",
+      "eval orchestration starts moving task behavior out of task skills",
+      "multiple repos need the same eval-harness manifest contract"
+    ],
+    "promote_to_mcp_when": []
+  }
+}

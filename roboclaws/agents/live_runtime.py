@@ -23,7 +23,7 @@ class LiveAgentMCPServer:
 class LiveAgentRequest:
     """Inputs that are owned by the launcher/runtime boundary, not the task strategy."""
 
-    task_name: str
+    run_id: str
     skill_name: str
     kickoff_prompt: str
     mcp_server: LiveAgentMCPServer
@@ -40,8 +40,8 @@ class LiveAgentRequest:
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if not self.task_name:
-            raise ValueError("LiveAgentRequest.task_name is required")
+        if not self.run_id:
+            raise ValueError("LiveAgentRequest.run_id is required")
         if not self.skill_name:
             raise ValueError("LiveAgentRequest.skill_name is required")
         if not self.mcp_server.name:

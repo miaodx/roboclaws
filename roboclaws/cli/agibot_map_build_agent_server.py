@@ -18,7 +18,7 @@ from roboclaws.household.agibot_map_build_mcp_server import (
 from roboclaws.household.profiles import (
     CAMERA_GROUNDED_LABELS_LANE,
     camera_labeler_names,
-    cleanup_profile_names,
+    evidence_lane_names,
 )
 
 
@@ -41,7 +41,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--real-movement-enabled", action="store_true")
     parser.add_argument(
         "--evidence-lane",
-        choices=cleanup_profile_names(),
+        choices=evidence_lane_names(),
         default=CAMERA_GROUNDED_LABELS_LANE,
     )
     parser.add_argument(

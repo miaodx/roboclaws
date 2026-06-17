@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TextIO
 
-from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT
 from roboclaws.household.visual_backend_slots import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     VisualBackendSlotError,
@@ -189,9 +188,9 @@ def add_household_cleanup_live_runner_args(
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
-    parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--task-surface", default="household-world")
+    parser.add_argument("--intent", default="cleanup")
     parser.add_argument("--skill-name", default="molmo-realworld-cleanup")
-    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     if policy_default is None:
         parser.add_argument("--policy", required=True)
     else:

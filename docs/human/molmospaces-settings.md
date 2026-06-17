@@ -55,9 +55,9 @@ for fast contract checks, but it has no robot camera timeline.
 
 ## Semantic Contract Profile
 
-`household_world_v1` is the task-neutral MCP contract profile for household
-world evidence. Cleanup skills compose it with `household_manipulation_v1` and
-`household_episode_v1` when they need tools such as `navigate_to_object`,
+`household_world` is the task-neutral MCP contract profile for household
+world evidence. Cleanup skills compose it with `household_manipulation` and
+`household_episode` when they need tools such as `navigate_to_object`,
 `pick`, `place`, and `done`; the user's instruction, for example "clean the
 room", remains a Task Prompt that the agent plans over those capabilities.
 
@@ -505,14 +505,14 @@ MolmoSpaces backend. If an interactive Codex tmux session is active or the
 requested MCP port is busy, the launcher fails instead of silently starting
 another simulator on a different port.
 
-Adaptive validation matrix runs may select multiple visual cleanup rows:
+Eval-harness runs may select multiple visual cleanup rows:
 
 ```bash
-just agent::harness agent-validation execute \
-  plan=docs/plans/2026-06-11-agent-validation-matrix-skill.md
+just agent::eval execute \
+  plan=docs/plans/2026-06-15-eval-harness-skill-entrypoint.md
 ```
 
-The matrix records relevant rows and reports local runtime blockers honestly.
+The harness records relevant rows and reports local runtime blockers honestly.
 Live Codex Molmo cleanup remains single-session by launcher policy; if one row
 is active, later live Codex rows are blocked rather than moved to a hidden port
 or silently replaced by a cheaper substitute.

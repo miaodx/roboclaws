@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household import profiles as evidence_profiles
 from roboclaws.household.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.household.agibot_map_defaults import DEFAULT_AGIBOT_CONFIDENCE_LAYER
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
@@ -14,10 +15,7 @@ from roboclaws.household.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.household.report import render_cleanup_report, write_state_snapshot
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.types import CleanupScenario
-from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, legacy_contract_profile_metadata
 
-AGIBOT_SDK_RUNNER_BACKEND = "agibot_sdk_runner"
-AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
 AGIBOT_GDK_NORMAL_NAVI_PROVENANCE = "agibot_gdk_normal_navi"
 AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE = "agibot_gdk_relative_move"
 AGIBOT_HEAD_COLOR_CAMERA_PROVENANCE = "agibot_gdk_head_color_camera"
@@ -531,13 +529,13 @@ def run_physical_agibot_cleanup_pilot(
     run_result = {
         "schema": PHYSICAL_AGIBOT_PILOT_SCHEMA,
         "contract": REALWORLD_CONTRACT,
-        "cleanup_profile": REAL_ROBOT_CLEANUP_PROFILE,
-        "cleanup_profile_metadata": legacy_contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE),
-        "backend": AGIBOT_SDK_RUNNER_BACKEND,
-        "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
+        "evidence_lane": evidence_profiles.PHYSICAL_ROBOT_EVIDENCE_LANE,
+        "evidence_lane_metadata": evidence_profiles.agibot_gdk_evidence_metadata(),
+        "backend": evidence_profiles.AGIBOT_SDK_RUNNER_BACKEND,
+        "backend_variant": evidence_profiles.AGIBOT_GDK_BACKEND_VARIANT,
         "policy": PHYSICAL_AGIBOT_PILOT_POLICY,
         "agent_driven": False,
-        "mcp_server": "roboclaws_real_robot_cleanup_v1_cli_boundary",
+        "mcp_server": "roboclaws_physical_robot_evidence_cli_boundary",
         "scenario_id": scenario.scenario_id,
         "task_prompt": scenario.task,
         "seed": scenario.seed,
@@ -601,7 +599,7 @@ def run_physical_agibot_cleanup_pilot(
         "nav2_map_bundle": nav2_map_bundle,
         "agibot_sdk_runner": {
             "schema": "agibot_sdk_runner_boundary_v1",
-            "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
+            "backend_variant": evidence_profiles.AGIBOT_GDK_BACKEND_VARIANT,
             "runner_script": str(adapter.runner_script),
             "agibot_map_artifact_dir": str(agibot_map_artifact_dir or ""),
             "real_movement_enabled": real_movement_enabled,
@@ -707,7 +705,7 @@ def _readiness_payload(
         else "physical_agibot_navigation_pilot_rehearsal",
         "real_robot_ready": False,
         "navigation_perception_ready": complete,
-        "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
+        "backend_variant": evidence_profiles.AGIBOT_GDK_BACKEND_VARIANT,
         "movement_enabled": real_movement_enabled,
         "map_bundle_schema": metric_map.get("schema", ""),
         "map_bundle_fields_present": _map_fields_present(metric_map),
@@ -742,7 +740,7 @@ def _readiness_payload(
         "human_takeover_stop": _human_takeover_stop_required(observation, navigation),
         "public_contract_note": (
             "AgiBot Navigation + Perception Pilot: Roboclaws keeps the public "
-            "real_robot_cleanup_v1 tools stable while SDK runner artifacts own "
+            "household tool boundary stable while SDK runner artifacts own "
             "backend-specific GDK evidence."
         ),
     }

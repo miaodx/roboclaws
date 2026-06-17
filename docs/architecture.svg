@@ -1,18 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="980" viewBox="0 0 1280 980" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1120" viewBox="0 0 1280 1120" role="img" aria-labelledby="title desc">
   <title id="title">Roboclaws current architecture</title>
-  <desc id="desc">Layered architecture diagram showing public runnable tasks, agent skills, reusable capability profiles, stable MCP tools, backend variants including real robots, and visible artifacts.</desc>
+  <desc id="desc">Layered architecture diagram showing the current Roboclaws contract from open-ended goals and runnable surfaces through skills, agent engines, capability profiles, MCP tools, thin runtime adapters, backend runtimes, artifacts, reports, and eval suites.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#f7fbff"/>
-      <stop offset="52%" stop-color="#f2f8f5"/>
+      <stop offset="48%" stop-color="#f3f8f1"/>
       <stop offset="100%" stop-color="#fff8ed"/>
     </linearGradient>
     <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#0f766e"/>
-      <stop offset="100%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.14"/>
+    <linearGradient id="guard" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="100%" stop-color="#fef2f2"/>
+    </linearGradient>
+    <filter id="shadow" x="-8%" y="-8%" width="116%" height="125%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#0f172a" flood-opacity="0.13"/>
     </filter>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L9,3 L0,6 Z" fill="#475569"/>
@@ -20,121 +24,163 @@
     <style>
       .title { font: 700 34px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
       .subtitle { font: 500 15px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
-      .level { font: 700 14px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .08em; }
-      .card-title { font: 700 17px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .level { font: 800 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .08em; }
+      .card-title { font: 700 16px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
       .card-text { font: 500 12.5px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
-      .small { font: 600 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #64748b; }
-      .band { fill: rgba(255,255,255,.58); stroke: #dbe6ef; stroke-width: 1; rx: 24; }
-      .card { fill: #ffffff; stroke: #d7e2ea; stroke-width: 1.2; rx: 16; filter: url(#shadow); }
-      .chip { fill: #eef6ff; stroke: #bfd7f2; stroke-width: 1; rx: 12; }
-      .ok-chip { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1; rx: 12; }
-      .warn-chip { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1; rx: 12; }
-      .line { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
-      .soft-line { stroke: #94a3b8; stroke-width: 1.8; fill: none; marker-end: url(#arrow); stroke-dasharray: 6 6; }
-      .core-card { fill: url(#core); stroke: #0f766e; stroke-width: 1.2; rx: 18; filter: url(#shadow); }
-      .core-title { font: 800 19px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
-      .core-text { font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; fill: #dff7ff; }
+      .small { font: 650 11.5px system-ui, -apple-system, Segoe UI, sans-serif; fill: #64748b; }
+      .band { fill: rgba(255,255,255,.62); stroke: #dbe6ef; stroke-width: 1; rx: 22; }
+      .card { fill: #ffffff; stroke: #d7e2ea; stroke-width: 1.15; rx: 12; filter: url(#shadow); }
+      .core-card { fill: url(#core); stroke: #0f766e; stroke-width: 1.2; rx: 13; filter: url(#shadow); }
+      .core-title { font: 800 16px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+      .core-text { font: 600 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #dff7ff; }
+      .chip { fill: #eef6ff; stroke: #bfd7f2; stroke-width: 1; rx: 10; }
+      .ok-chip { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1; rx: 10; }
+      .warn-chip { fill: url(#guard); stroke: #fed7aa; stroke-width: 1; rx: 10; }
+      .line { stroke: #64748b; stroke-width: 2.1; fill: none; marker-end: url(#arrow); }
+      .soft-line { stroke: #94a3b8; stroke-width: 1.7; fill: none; marker-end: url(#arrow); stroke-dasharray: 6 6; }
     </style>
   </defs>
 
-  <rect width="1280" height="980" fill="url(#bg)"/>
-  <text x="58" y="64" class="title">Roboclaws Architecture</text>
-  <text x="58" y="92" class="subtitle">Runnable tasks select skills. Skills require reusable capability profiles and call stable MCP tools. Backends include simulation and real robots.</text>
+  <rect width="1280" height="1120" fill="url(#bg)"/>
+  <text x="58" y="62" class="title">Roboclaws Architecture</text>
+  <text x="58" y="90" class="subtitle">Open goals become runnable surfaces. Skills own strategy. MCP exposes bounded robot capabilities. Thin adapters bind runtime plumbing.</text>
 
-  <rect x="46" y="122" width="1188" height="120" class="band"/>
-  <rect x="46" y="274" width="1188" height="128" class="band"/>
-  <rect x="46" y="434" width="1188" height="162" class="band"/>
-  <rect x="46" y="628" width="1188" height="130" class="band"/>
-  <rect x="46" y="790" width="1188" height="92" class="band"/>
-  <rect x="46" y="914" width="1188" height="42" class="band"/>
+  <rect x="44" y="120" width="1192" height="100" class="band"/>
+  <rect x="44" y="248" width="1192" height="104" class="band"/>
+  <rect x="44" y="380" width="1192" height="104" class="band"/>
+  <rect x="44" y="512" width="1192" height="104" class="band"/>
+  <rect x="44" y="644" width="1192" height="104" class="band"/>
+  <rect x="44" y="776" width="1192" height="104" class="band"/>
+  <rect x="44" y="908" width="1192" height="108" class="band"/>
+  <rect x="44" y="1038" width="1192" height="62" class="band"/>
 
-  <text x="70" y="151" class="level">LEVEL 1 - PUBLIC RUNNABLE TASKS</text>
-  <text x="70" y="303" class="level">LEVEL 2 - AGENT SKILLS AND STRATEGY</text>
-  <text x="70" y="463" class="level">LEVEL 3 - CAPABILITY PROFILES AND MCP TOOLS</text>
-  <text x="70" y="657" class="level">LEVEL 4 - BACKEND VARIANTS</text>
-  <text x="70" y="819" class="level">LEVEL 5 - MAPS, REPORTS, AND EVIDENCE</text>
-  <text x="70" y="940" class="level">REAL-ROBOT DEPLOYMENT RULE</text>
+  <text x="68" y="147" class="level">1. OPEN-ENDED GOAL - RUNNABLE SURFACE / WORLD / BACKEND / INTENT / PRESET</text>
+  <text x="68" y="275" class="level">2. AGENT SKILL - STRATEGY LIVES HERE</text>
+  <text x="68" y="407" class="level">3. AGENT ENGINE AND PROVIDER PROFILE</text>
+  <text x="68" y="539" class="level">4. CAPABILITY PROFILE REQUIREMENTS</text>
+  <text x="68" y="671" class="level">5. MCP CAPABILITY CONTRACT AND TOOLS</text>
+  <text x="68" y="803" class="level">6. THIN RUNTIME / SERVER ADAPTER</text>
+  <text x="68" y="935" class="level">7. BACKEND RUNTIME / ARTIFACTS / EVAL SUITES</text>
+  <text x="68" y="1062" class="level">ARCHITECTURE GUARDRAIL</text>
 
-  <rect x="86" y="174" width="206" height="44" class="card"/>
-  <text x="108" y="202" class="card-title">ai2thor-nav</text>
-  <rect x="330" y="174" width="206" height="44" class="card"/>
-  <text x="352" y="202" class="card-title">photo-chairs</text>
-  <rect x="574" y="164" width="230" height="64" class="core-card"/>
-  <text x="598" y="190" class="core-title">semantic-map-build</text>
-  <text x="598" y="211" class="core-text">runtime metric map snapshot</text>
-  <rect x="842" y="164" width="230" height="64" class="core-card"/>
-  <text x="866" y="190" class="core-title">household-cleanup</text>
-  <text x="866" y="211" class="core-text">cleanup report and gates</text>
+  <rect x="84" y="162" width="248" height="42" class="core-card"/>
+  <text x="106" y="187" class="core-title">surface=household-world</text>
+  <text x="106" y="200" class="core-text">prompt=... or preset=...</text>
+  <rect x="364" y="162" width="190" height="42" class="card"/>
+  <text x="386" y="187" class="card-title">preset=map-build</text>
+  <rect x="586" y="162" width="184" height="42" class="card"/>
+  <text x="608" y="187" class="card-title">preset=cleanup</text>
+  <rect x="802" y="162" width="250" height="42" class="card"/>
+  <text x="824" y="187" class="card-title">surface=planner-proof</text>
+  <rect x="1084" y="162" width="110" height="42" class="chip"/>
+  <text x="1102" y="187" class="small">just run::surface</text>
 
-  <rect x="92" y="326" width="238" height="54" class="card"/>
-  <text x="114" y="352" class="card-title">navigator skill</text>
-  <text x="114" y="371" class="card-text">move, observe, done loop</text>
-  <rect x="372" y="326" width="238" height="54" class="card"/>
-  <text x="394" y="352" class="card-title">photo capture skill</text>
-  <text x="394" y="371" class="card-text">locate, navigate, archive</text>
-  <rect x="652" y="326" width="238" height="54" class="card"/>
-  <text x="674" y="352" class="card-title">map builder skill</text>
-  <text x="674" y="371" class="card-text">observe, sweep, snapshot</text>
-  <rect x="932" y="326" width="238" height="54" class="card"/>
-  <text x="954" y="352" class="card-title">cleanup skill</text>
-  <text x="954" y="371" class="card-text">navigate -> pick -> place</text>
+  <rect x="84" y="292" width="222" height="44" class="card"/>
+  <text x="106" y="316" class="card-title">open household skill</text>
+  <text x="106" y="332" class="card-text">goal, evidence, completion</text>
+  <rect x="338" y="292" width="202" height="44" class="card"/>
+  <text x="360" y="316" class="card-title">map builder skill</text>
+  <text x="360" y="332" class="card-text">observe, sweep, snapshot</text>
+  <rect x="572" y="292" width="202" height="44" class="card"/>
+  <text x="594" y="316" class="card-title">cleanup skill</text>
+  <text x="594" y="332" class="card-text">navigate - pick - place</text>
+  <rect x="806" y="292" width="206" height="44" class="card"/>
+  <text x="828" y="316" class="card-title">planner-proof skill</text>
+  <text x="828" y="332" class="card-text">bounded proof handoff</text>
+  <rect x="1044" y="292" width="150" height="44" class="ok-chip"/>
+  <text x="1062" y="316" class="small">Prompt policy and</text>
+  <text x="1062" y="332" class="small">recovery loops</text>
 
-  <rect x="82" y="492" width="244" height="70" class="core-card"/>
-  <text x="106" y="520" class="core-title">Capability profiles</text>
-  <text x="106" y="544" class="core-text">required by skills, not copied</text>
-  <rect x="366" y="486" width="210" height="82" class="card"/>
-  <text x="388" y="514" class="card-title">household_world_v1</text>
-  <text x="388" y="538" class="card-text">map, fixture hints, observe,</text>
-  <text x="388" y="557" class="card-text">bounded waypoint navigation</text>
-  <rect x="616" y="486" width="220" height="82" class="card"/>
-  <text x="638" y="514" class="card-title">manipulation profile</text>
-  <text x="638" y="538" class="card-text">pick, place, open, close</text>
-  <text x="638" y="557" class="card-text">or blocked capability</text>
-  <rect x="876" y="486" width="264" height="82" class="card"/>
-  <text x="898" y="514" class="card-title">Stable MCP tools</text>
-  <text x="898" y="538" class="card-text">metric_map, observe, navigate,</text>
-  <text x="898" y="557" class="card-text">declare candidates, pick/place</text>
+  <rect x="84" y="424" width="176" height="44" class="card"/>
+  <text x="106" y="448" class="card-title">direct-runner</text>
+  <text x="106" y="464" class="card-text">deterministic path</text>
+  <rect x="292" y="424" width="160" height="44" class="card"/>
+  <text x="314" y="448" class="card-title">codex-cli</text>
+  <text x="314" y="464" class="card-text">coding agent</text>
+  <rect x="484" y="424" width="166" height="44" class="card"/>
+  <text x="506" y="448" class="card-title">claude-code</text>
+  <text x="506" y="464" class="card-text">coding agent</text>
+  <rect x="682" y="424" width="204" height="44" class="card"/>
+  <text x="704" y="448" class="card-title">openai-agents-sdk</text>
+  <text x="704" y="464" class="card-text">active stabilization</text>
+  <rect x="918" y="424" width="276" height="44" class="warn-chip"/>
+  <text x="936" y="448" class="small">OpenClaw / Hermes-style frameworks</text>
+  <text x="936" y="464" class="small">later clients after lower routes stabilize</text>
 
-  <rect x="88" y="684" width="168" height="36" class="chip"/>
-  <text x="110" y="707" class="small">mock / fake HTTP</text>
-  <rect x="298" y="684" width="168" height="36" class="chip"/>
-  <text x="320" y="707" class="small">AI2-THOR</text>
-  <rect x="508" y="684" width="168" height="36" class="chip"/>
-  <text x="530" y="707" class="small">MolmoSpaces</text>
-  <rect x="718" y="684" width="168" height="36" class="chip"/>
-  <text x="740" y="707" class="small">Agibot G2</text>
-  <rect x="928" y="684" width="168" height="36" class="chip"/>
-  <text x="950" y="707" class="small">ROS2 / Nav2</text>
+  <rect x="84" y="556" width="246" height="44" class="core-card"/>
+  <text x="106" y="580" class="core-title">household_world</text>
+  <text x="106" y="596" class="core-text">map, observe, navigate context</text>
+  <rect x="362" y="556" width="242" height="44" class="card"/>
+  <text x="384" y="580" class="card-title">household_episode</text>
+  <text x="384" y="596" class="card-text">open task and map-build lifecycle</text>
+  <rect x="636" y="556" width="270" height="44" class="card"/>
+  <text x="658" y="580" class="card-title">household_manipulation</text>
+  <text x="658" y="596" class="card-text">pick, place, open, close when proven</text>
+  <rect x="938" y="556" width="256" height="44" class="ok-chip"/>
+  <text x="956" y="580" class="small">Profiles compose requirements</text>
+  <text x="956" y="596" class="small">and do not copy task strategy</text>
 
-  <rect x="88" y="840" width="212" height="24" class="chip"/>
-  <text x="110" y="857" class="small">runtime_metric_map.json</text>
-  <rect x="338" y="840" width="190" height="24" class="chip"/>
-  <text x="360" y="857" class="small">agent_view.json</text>
-  <rect x="566" y="840" width="170" height="24" class="chip"/>
-  <text x="588" y="857" class="small">trace.jsonl</text>
-  <rect x="774" y="840" width="180" height="24" class="chip"/>
-  <text x="796" y="857" class="small">report.html</text>
-  <rect x="992" y="840" width="174" height="24" class="chip"/>
-  <text x="1014" y="857" class="small">proof bundles</text>
+  <rect x="84" y="688" width="192" height="44" class="core-card"/>
+  <text x="106" y="712" class="core-title">MCP tools</text>
+  <text x="106" y="728" class="core-text">bounded public robot API</text>
+  <rect x="308" y="688" width="146" height="44" class="chip"/>
+  <text x="330" y="712" class="small">observe / map</text>
+  <text x="330" y="728" class="small">metric evidence</text>
+  <rect x="486" y="688" width="154" height="44" class="chip"/>
+  <text x="508" y="712" class="small">navigate / done</text>
+  <text x="508" y="728" class="small">lifecycle</text>
+  <rect x="672" y="688" width="158" height="44" class="chip"/>
+  <text x="694" y="712" class="small">pick / place</text>
+  <text x="694" y="728" class="small">manipulation</text>
+  <rect x="862" y="688" width="332" height="44" class="warn-chip"/>
+  <text x="880" y="712" class="small">No hidden scorer truth, benchmark hints, or opaque</text>
+  <text x="880" y="728" class="small">task shortcut belongs in the MCP/server surface</text>
 
-  <text x="306" y="934" class="card-text">Physical runs reuse the same task, skill, profile, and MCP tool shape.</text>
-  <text x="306" y="952" class="card-text">They differ by backend variant, provenance, safety gates, and blocked-capability status.</text>
+  <rect x="84" y="820" width="206" height="44" class="core-card"/>
+  <text x="106" y="844" class="core-title">Thin adapters</text>
+  <text x="106" y="860" class="core-text">transport and lifecycle only</text>
+  <rect x="322" y="820" width="174" height="44" class="chip"/>
+  <text x="344" y="844" class="small">launch catalog</text>
+  <text x="344" y="860" class="small">axis lowering</text>
+  <rect x="528" y="820" width="174" height="44" class="chip"/>
+  <text x="550" y="844" class="small">live_runtime</text>
+  <text x="550" y="860" class="small">request/result</text>
+  <rect x="734" y="820" width="174" height="44" class="chip"/>
+  <text x="756" y="844" class="small">agent_server</text>
+  <text x="756" y="860" class="small">target lifecycle</text>
+  <rect x="940" y="820" width="254" height="44" class="chip"/>
+  <text x="962" y="844" class="small">operator console and eval live bridge</text>
+  <text x="962" y="860" class="small">locks, ports, run dirs, polling</text>
 
-  <path class="line" d="M690 228 L770 326"/>
-  <path class="line" d="M958 228 L1052 326"/>
-  <path class="soft-line" d="M189 218 L211 326"/>
-  <path class="soft-line" d="M433 218 L491 326"/>
+  <rect x="84" y="952" width="180" height="44" class="card"/>
+  <text x="106" y="976" class="card-title">MuJoCo / Molmo</text>
+  <text x="106" y="992" class="card-text">current household default</text>
+  <rect x="296" y="952" width="154" height="44" class="card"/>
+  <text x="318" y="976" class="card-title">Isaac Lab</text>
+  <text x="318" y="992" class="card-text">explicit gate</text>
+  <rect x="482" y="952" width="154" height="44" class="card"/>
+  <text x="504" y="976" class="card-title">Agibot GDK</text>
+  <text x="504" y="992" class="card-text">backend variant</text>
+  <rect x="668" y="952" width="154" height="44" class="card"/>
+  <text x="690" y="976" class="card-title">ROS2 / Nav2</text>
+  <text x="690" y="992" class="card-text">future robot path</text>
+  <rect x="854" y="944" width="340" height="60" class="core-card"/>
+  <text x="876" y="968" class="core-title">Artifacts, reports, eval suites</text>
+  <text x="876" y="984" class="core-text">trace, agent_view, runtime map, report.html,</text>
+  <text x="876" y="1000" class="core-text">eval_results, pass@k/pass^k, model metrics</text>
 
-  <path class="line" d="M770 380 L488 486"/>
-  <path class="line" d="M1052 380 L488 486"/>
-  <path class="line" d="M1052 380 L726 486"/>
-  <path class="line" d="M204 562 L172 684"/>
-  <path class="line" d="M488 568 L592 684"/>
-  <path class="line" d="M726 568 L802 684"/>
-  <path class="line" d="M1008 568 L1012 684"/>
+  <text x="68" y="1084" class="card-text">Every addition names its owning architecture layer before implementation.</text>
+  <text x="660" y="1084" class="card-text">Retired historical routes: AI2-THOR direct demos, VLM Direct, route-card demos.</text>
 
-  <path class="soft-line" d="M172 720 L194 840"/>
-  <path class="soft-line" d="M592 720 L431 840"/>
-  <path class="soft-line" d="M802 720 L864 840"/>
-  <path class="soft-line" d="M1012 720 L1079 840"/>
+  <path class="line" d="M208 204 L195 292"/>
+  <path class="line" d="M459 204 L439 292"/>
+  <path class="line" d="M678 204 L673 292"/>
+  <path class="line" d="M927 204 L909 292"/>
+  <path class="line" d="M641 336 L641 424"/>
+  <path class="line" d="M641 468 L641 556"/>
+  <path class="line" d="M641 600 L641 688"/>
+  <path class="line" d="M641 732 L641 820"/>
+  <path class="line" d="M641 864 L641 952"/>
+  <path class="soft-line" d="M1118 336 L1118 424"/>
+  <path class="soft-line" d="M1028 732 L1028 820"/>
 </svg>

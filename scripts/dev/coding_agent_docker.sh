@@ -62,9 +62,9 @@ normalized_skill_names() {
 }
 
 prepare_isolated_workspace() {
-  local task_name="$1"
+  local run_id="$1"
   local skills_csv="$2"
-  local workspace_dir="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${repo_root}/.tmp/coding-agent-workspaces/${task_name}}"
+  local workspace_dir="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${repo_root}/.tmp/coding-agent-workspaces/${run_id}}"
   local task_dir="${workspace_dir}/task"
 
   mkdir -p "${task_dir}" "${workspace_dir}/skills"
@@ -141,13 +141,13 @@ run_cli() {
   local user_mode="${ROBOCLAWS_CODE_AGENT_DOCKER_USER:-host}"
   local add_host="${ROBOCLAWS_CODE_AGENT_DOCKER_ADD_HOST:-1}"
   local isolate_workspace="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-0}}"
-  local task_name="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-}"
+  local run_id="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${ROBOCLAWS_CODE_AGENT_DOCKER_RUN_ID:-}}"
   local mounted_skills="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-}"
   if [[ "${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-0}" == "1" ]]; then
-    task_name="${task_name:-semantic-map-build}"
+    run_id="${run_id:-household-world.map-build}"
     mounted_skills="${mounted_skills:-molmo-realworld-cleanup}"
   fi
-  task_name="${task_name:-task}"
+  run_id="${run_id:-task}"
   local disable_codex_system_skills="${ROBOCLAWS_CODE_AGENT_DOCKER_DISABLE_CODEX_SYSTEM_SKILLS:-${isolate_workspace}}"
   local container_workdir="${cwd}"
   local workspace_mount_args=()
@@ -158,7 +158,7 @@ run_cli() {
       exit 1
     fi
     local isolated_workspace
-    isolated_workspace="$(prepare_isolated_workspace "${task_name}" "${mounted_skills}")"
+    isolated_workspace="$(prepare_isolated_workspace "${run_id}" "${mounted_skills}")"
     container_workdir="${ROBOCLAWS_CODE_AGENT_DOCKER_CONTAINER_WORKDIR:-/workspace/task}"
     workspace_mount_args=(-v "${isolated_workspace}:/workspace")
     local skill

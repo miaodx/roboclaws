@@ -145,7 +145,7 @@ def test_cleanup_report_prefers_recorded_rerun_command(
         tmp_path / "after.png",
         title="After",
     )
-    prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
+    prior = "output/household/household-world/map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=codex-cli "

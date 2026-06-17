@@ -61,7 +61,7 @@ not part of the household preset migration.
 - Public no-preset household examples should use `prompt=...` and omit
   `intent=open-ended`.
 - Operator-console no-preset route ids use `open-task` as the selector segment.
-- Validation matrix gates include no-preset Codex and OpenAI Agents SDK
-  household open-task rows, plus preset-based cleanup and map-build rows.
+- Eval-harness rows include no-preset Codex and OpenAI Agents SDK household
+  open-task rows, plus preset-based cleanup and map-build rows.
 - Historical docs and ADR-0136 remain accurate as the prior intermediate
   decision, but active launch guidance follows this ADR.

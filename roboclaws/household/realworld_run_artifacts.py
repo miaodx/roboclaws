@@ -27,7 +27,7 @@ from roboclaws.household.planner_cleanup_bridge import planner_cleanup_bridge_ev
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
 from roboclaws.household.profiles import (
     camera_labeler_from_visual_grounding_pipeline,
-    cleanup_profile_metadata_for_run,
+    evidence_lane_metadata_for_run,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -76,7 +76,7 @@ class RealWorldRunArtifactInputs:
     map_mode: str
     runtime_map_prior: dict[str, Any] | None
     runtime_map_prior_path: str | Path | None
-    cleanup_profile: str | None
+    evidence_lane: str | None
     perception_mode: str
     record_robot_views: bool
     selected_bundle_dir: Path | None
@@ -320,8 +320,7 @@ def _attach_profile_metadata(
     if profile_metadata is None:
         return
     run_result["evidence_lane"] = profile_metadata["evidence_lane"]
-    run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
-    run_result["cleanup_profile_metadata"] = profile_metadata
+    run_result["evidence_lane_metadata"] = profile_metadata
 
 
 def _attach_robot_view_metadata(
@@ -406,10 +405,10 @@ def _primitive_evidence(
 
 
 def _profile_metadata(inputs: RealWorldRunArtifactInputs) -> dict[str, Any] | None:
-    if inputs.cleanup_profile is None:
+    if inputs.evidence_lane is None:
         return None
-    return cleanup_profile_metadata_for_run(
-        profile_name=inputs.cleanup_profile,
+    return evidence_lane_metadata_for_run(
+        evidence_lane_name=inputs.evidence_lane,
         backend=inputs.backend,
         perception_mode=inputs.perception_mode,
         record_robot_views=inputs.record_robot_views,

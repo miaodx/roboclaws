@@ -674,8 +674,8 @@ def _skill_name(sample: EvalSample) -> str:
 
 def _mcp_profile(sample: EvalSample) -> str:
     if sample.intent == "cleanup":
-        return "household_world_v1+household_manipulation_v1"
-    return "household_world_v1+household_episode_v1"
+        return "household_world+household_manipulation"
+    return "household_world+household_episode"
 
 
 def _tool_surface(sample: EvalSample) -> tuple[str, ...]:

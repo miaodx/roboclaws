@@ -1,6 +1,6 @@
 ---
 plan_scope: eval-harness-skill-entrypoint
-status: Reviewed - grill batch accepted, ready for implementation
+status: Implemented
 created: 2026-06-15
 last_reviewed: 2026-06-15
 implementation_allowed: true
@@ -620,3 +620,63 @@ request revision.
 Use durable `intuitive-flow` for implementation. This is a cross-cutting
 command, skill, docs, and tests change with live-provider guard semantics; it
 is too broad for a one-off direct edit.
+
+## Implementation Evidence
+
+Status: Implemented - deterministic gates pass; focused execute proof ran
+selected live-agent eval rows and exposed live-agent failures or blockers
+instead of downgrading them to deterministic success.
+
+Shipped changes:
+
+- Added ADR-0141, making `eval-harness` the maintainer orchestration facade and
+  amending ADR-0140's separate validation-matrix wording.
+- Replaced `skills/agent-validation-matrix/` with `skills/eval-harness/`.
+- Added `roboclaws_eval_harness_manifest_v1` rows for deterministic gates,
+  product runs, eval suites, live-agent evals, and blocked/skipped/failure
+  rationale.
+- Extended `just agent::eval` / `roboclaws.evals.cli` with
+  `recommend` and `execute`; direct `suite=...` and `promote-regression`
+  remain under the same facade.
+- Removed the active `just agent::harness agent-validation ...` route with no
+  compatibility shim.
+- Updated active docs, agent guidance, skill docs, command tests, selector
+  parity tests, manifest/redaction tests, and output paths.
+
+Verification evidence:
+
+- `ruff check .` passed.
+- `git diff --check` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals` passed.
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools` passed.
+- After the final aggregate-classification/reporting fix,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/evals/test_eval_harness_manifest.py tests/unit/evals/test_eval_harness_selector.py`
+  passed.
+- Existing suite proofs passed:
+  - `just agent::eval suite=smoke_regression budget=smoke stamp=20260615_verify_smoke`
+  - `just agent::eval suite=map_build_consumer budget=smoke stamp=20260615_verify_map`
+  - `just agent::eval suite=cleanup_capability budget=smoke stamp=20260615_verify_cleanup`
+- Focused recommend proofs wrote
+  `output/eval-harness/20260615_plan_recommend/eval_harness.json` with selected
+  deterministic, product, eval-suite, and live-agent eval rows. The final
+  patched recommend proof wrote
+  `output/eval-harness/20260615_plan_recommend_after_render_fix/eval_harness.json`.
+- Final focused execute proof wrote
+  `output/eval-harness/20260615_plan_execute_after_render_fix/eval_harness.json`
+  and
+  `output/eval-harness/20260615_plan_execute_after_render_fix/eval_harness.html`.
+  It selected 13 rows: deterministic gates, direct product rows, and direct
+  eval-suite rows passed; selected live-agent rows ran or recorded explicit
+  live blockers. `codex-cleanup-live-eval` and
+  `openai-agents-sdk-open-task-live-eval` ran and recorded
+  `outcome=failed` with `failure_class=harness_bug_unclassified`; the
+  `codex-cleanup-camera-raw-fpv-live-product` row recorded
+  `status=blocked`, `outcome=blocked`, and
+  `blocker_category=environment_blocked`. The harness exited nonzero because
+  failed live eval aggregates are now treated as failed harness outcomes even
+  when the suite subprocess itself exits 0.
+- The final `eval_harness.md` / `.html` reports show row `Outcome` and
+  `Failure class`, so failed aggregates are visible in the review surface and
+  not hidden behind execution-state `status=ran`.
+- A redaction grep over the final top-level `eval_harness.json` and
+  `eval_harness.md` found no private scorer truth or provider secret matches.

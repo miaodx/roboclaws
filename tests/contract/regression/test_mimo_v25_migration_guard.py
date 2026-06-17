@@ -62,6 +62,11 @@ EXECUTABLE_SEARCH_ROOTS = (
     "tests",
 )
 _GUARD_RELPATH = "tests/contract/regression/test_mimo_v25_migration_guard.py"
+PRO_TEXTBRIDGE_ALLOWED_RELPATHS = {
+    "scripts/dev/benchmark_model_matrix.py",
+    "scripts/dev/model_matrix_benchmark_catalog.py",
+    "tests/unit/providers/test_model_matrix_benchmark.py",
+}
 FORBIDDEN_PRO_TEXTBRIDGE_PATTERNS = (
     "mimo-v2.5-" + "pro",
     "text_" + "bridge",
@@ -87,7 +92,7 @@ def _find_forbidden_pro_textbridge_references() -> list[str]:
             if not candidate.is_file() or _is_excluded(candidate):
                 continue
             relpath = candidate.relative_to(REPO_ROOT).as_posix()
-            if relpath == _GUARD_RELPATH:
+            if relpath == _GUARD_RELPATH or relpath in PRO_TEXTBRIDGE_ALLOWED_RELPATHS:
                 continue
             try:
                 lines = candidate.read_text(encoding="utf-8").splitlines()

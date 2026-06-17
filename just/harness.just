@@ -2,7 +2,6 @@
 #
 # Preferred entrypoints:
 # - just harness::molmo-cleanup-codex-perf  live Codex cleanup performance lane
-# - just harness::agent-validation  adaptive validation matrix from plan/diff signals
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
 # - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
@@ -63,7 +62,7 @@ molmo-cleanup-codex-perf *overrides:
       fi
       printf -v "$key" '%s' "$value"
     done
-    cmd=(just molmo::household-cleanup-impl codex-live world-oracle-labels \
+    cmd=(just molmo::household-world-impl codex-live world-oracle-labels \
       "$seed" "$output_dir" "$task" "$generated_mess_count" "$host" "$port" \
       "$map_bundle" "skill" "$robot_views")
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
@@ -76,56 +75,10 @@ molmo-cleanup-codex-perf *overrides:
     fi
     exec "${cmd[@]}"
 
-# Adaptive agent validation matrix from plan/diff signals.
-agent-validation mode="recommend" *overrides:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mode="{{mode}}"
-    mode="${mode#mode=}"
-    case "$mode" in
-      recommend|execute)
-        ;;
-      *)
-        echo "error: unsupported agent-validation mode '$mode' (expected recommend or execute)" >&2
-        exit 1
-        ;;
-    esac
-    args=("$mode")
-    for override in {{overrides}}; do
-      [[ -z "$override" ]] && continue
-      if [[ "$override" != *=* ]]; then
-        echo "error: override '$override' is not key=value" >&2
-        exit 1
-      fi
-      key="${override%%=*}"
-      value="${override#*=}"
-      key="${key#--}"
-      key="${key//-/_}"
-      case "$key" in
-        budget|plan|since|changed_file|agent_engine|provider_profile|evidence_lane|camera_labeler|output_dir)
-          ;;
-        *)
-          echo "error: unsupported override key '$key'" >&2
-          exit 1
-          ;;
-      esac
-      args+=("--${key//_/-}" "$value")
-    done
-    python_bin="${ROBOCLAWS_PYTHON:-}"
-    if [[ -z "$python_bin" ]]; then
-      if [[ -x ".venv/bin/python" ]]; then
-        python_bin=".venv/bin/python"
-      elif command -v python3 >/dev/null 2>&1; then
-        python_bin="python3"
-      else
-        python_bin="python"
-      fi
-    fi
-    "$python_bin" skills/agent-validation-matrix/scripts/run_validation_matrix.py "${args[@]}"
-
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited
-# to metric map, room-level fixture hints, and robot-local observed handles.
+# to metric map, preflight room context artifacts, and robot-local observed
+# handles.
 # Phase 15 requests 10 hidden generated objects by default.
 # It also records RBY1M robot views so report.html has the current visual
 # review surface.
@@ -160,8 +113,9 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
       "${run_root}"
 
 # ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
-# contract through MCP tools: metric_map, fixture_hints, waypoint observe, and
-# observed object handles. It intentionally does not expose scene_objects.
+# contract through MCP tools: metric_map, waypoint observe, and observed object
+# handles. Fixture hints may exist as preflight artifacts, but are not exposed as
+# callable MCP tools. It intentionally does not expose scene_objects.
 molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp-harness" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -956,7 +910,7 @@ molmo-isaac-cleanup-smoke *overrides:
       --seed "$seed" \
       --task "$task" \
       --backend isaaclab_subprocess \
-      --cleanup-profile world-oracle-labels \
+      --evidence-lane world-oracle-labels \
       --fixture-hint-mode room_only \
       --generated-mess-count "$generated_mess_count" \
       --scene-source "$scene_source" \
