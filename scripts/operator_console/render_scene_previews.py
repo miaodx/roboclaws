@@ -615,54 +615,13 @@ def _promote_b1_camera_previews(
             "artifact_path": str(camera_artifact),
             "reason": str(exc),
         }
-    candidates = _b1_camera_preview_candidates(payload, artifact_path=camera_artifact)
-    evaluated: list[dict[str, Any]] = []
-    for candidate in candidates:
-        fpv_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("fpv"))
-        chase_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("chase"))
-        candidate_result = {
-            "label": candidate.get("label"),
-            "action": candidate.get("action"),
-            "waypoint_id": candidate.get("waypoint_id"),
-            "source_kind": candidate.get("source_kind"),
-            "fpv_source": str(fpv_source) if fpv_source is not None else "",
-            "chase_source": str(chase_source) if chase_source is not None else "",
-        }
-        provenance_errors = _b1_camera_preview_provenance_errors(payload, candidate)
-        if provenance_errors:
-            candidate_result["status"] = "provenance_rejected"
-            candidate_result["provenance_errors"] = provenance_errors
-            evaluated.append(candidate_result)
-            continue
-        if fpv_source is None or chase_source is None:
-            candidate_result["status"] = "missing_view_path"
-            evaluated.append(candidate_result)
-            continue
-        if not fpv_source.is_file() or not chase_source.is_file():
-            candidate_result["status"] = "missing_view_file"
-            evaluated.append(candidate_result)
-            continue
-        fpv_diagnostics = _image_diagnostics(fpv_source)
-        chase_diagnostics = _image_diagnostics(chase_source)
-        errors = [
-            *(f"fpv: {error}" for error in _b1_camera_preview_quality_errors(fpv_diagnostics)),
-            *(f"chase: {error}" for error in _b1_camera_preview_quality_errors(chase_diagnostics)),
-        ]
-        candidate_result["fpv_diagnostics"] = fpv_diagnostics
-        candidate_result["chase_diagnostics"] = chase_diagnostics
-        candidate_result["quality_errors"] = errors
-        if errors:
-            candidate_result["status"] = "quality_rejected"
-            evaluated.append(candidate_result)
-            continue
-        candidate_result["status"] = "accepted"
-        candidate_result["score"] = _b1_camera_preview_score(fpv_diagnostics) + (
-            _b1_camera_preview_score(chase_diagnostics) * 0.75
-        )
-        candidate_result["camera_control_contract"] = candidate.get("camera_control_contract")
-        evaluated.append(candidate_result)
-
-    accepted = [item for item in evaluated if item.get("status") == "accepted"]
+    candidate_results = _evaluate_b1_camera_preview_candidates(
+        payload=payload,
+        camera_artifact=camera_artifact,
+    )
+    candidates = candidate_results["candidates"]
+    evaluated = candidate_results["evaluated"]
+    accepted = candidate_results["accepted"]
     if not accepted:
         return {
             "status": "no_usable_camera_pair",
@@ -753,6 +712,89 @@ def _promote_b1_camera_previews(
                 "image_diagnostics": _image_diagnostics(chase_path),
             },
         },
+    }
+
+
+def _evaluate_b1_camera_preview_candidates(
+    *,
+    payload: dict[str, Any],
+    camera_artifact: Path,
+) -> dict[str, Any]:
+    candidates = _b1_camera_preview_candidates(payload, artifact_path=camera_artifact)
+    evaluated = [
+        _evaluate_b1_camera_preview_candidate(
+            payload=payload,
+            camera_artifact=camera_artifact,
+            candidate=candidate,
+        )
+        for candidate in candidates
+    ]
+    accepted = [item for item in evaluated if item.get("status") == "accepted"]
+    return {"candidates": candidates, "evaluated": evaluated, "accepted": accepted}
+
+
+def _evaluate_b1_camera_preview_candidate(
+    *,
+    payload: dict[str, Any],
+    camera_artifact: Path,
+    candidate: dict[str, Any],
+) -> dict[str, Any]:
+    fpv_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("fpv"))
+    chase_source = _resolve_b1_artifact_view_path(camera_artifact, candidate.get("chase"))
+    candidate_result = {
+        "label": candidate.get("label"),
+        "action": candidate.get("action"),
+        "waypoint_id": candidate.get("waypoint_id"),
+        "source_kind": candidate.get("source_kind"),
+        "fpv_source": str(fpv_source) if fpv_source is not None else "",
+        "chase_source": str(chase_source) if chase_source is not None else "",
+    }
+    provenance_errors = _b1_camera_preview_provenance_errors(payload, candidate)
+    if provenance_errors:
+        return {
+            **candidate_result,
+            "status": "provenance_rejected",
+            "provenance_errors": provenance_errors,
+        }
+    if fpv_source is None or chase_source is None:
+        return {**candidate_result, "status": "missing_view_path"}
+    if not fpv_source.is_file() or not chase_source.is_file():
+        return {**candidate_result, "status": "missing_view_file"}
+    return _evaluate_b1_camera_preview_quality(
+        candidate=candidate,
+        candidate_result=candidate_result,
+        fpv_source=fpv_source,
+        chase_source=chase_source,
+    )
+
+
+def _evaluate_b1_camera_preview_quality(
+    *,
+    candidate: dict[str, Any],
+    candidate_result: dict[str, Any],
+    fpv_source: Path,
+    chase_source: Path,
+) -> dict[str, Any]:
+    fpv_diagnostics = _image_diagnostics(fpv_source)
+    chase_diagnostics = _image_diagnostics(chase_source)
+    errors = [
+        *(f"fpv: {error}" for error in _b1_camera_preview_quality_errors(fpv_diagnostics)),
+        *(f"chase: {error}" for error in _b1_camera_preview_quality_errors(chase_diagnostics)),
+    ]
+    result = {
+        **candidate_result,
+        "fpv_diagnostics": fpv_diagnostics,
+        "chase_diagnostics": chase_diagnostics,
+        "quality_errors": errors,
+    }
+    if errors:
+        return {**result, "status": "quality_rejected"}
+    return {
+        **result,
+        "status": "accepted",
+        "score": _b1_camera_preview_score(fpv_diagnostics)
+        + (_b1_camera_preview_score(chase_diagnostics) * 0.75),
+        "camera_control_contract": candidate.get("camera_control_contract"),
     }
 
 

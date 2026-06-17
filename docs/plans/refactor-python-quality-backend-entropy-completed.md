@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: B1 camera preview candidate evaluation moved out of
+  `_promote_b1_camera_previews()` into focused helpers for candidate
+  diagnostics and accepted-score calculation. The promotion function keeps
+  artifact readability, highest-score selection, image writes, and promoted
+  metadata assembly. Behavior-change class: internal cleanup. Metric: ratchet
+  reports 11 complexity rows and 77 oversized modules; the remaining B1 preview
+  PLR0915 row is cleared, while `render_scene_previews.py` remains oversized at
+  1377 lines. Proof: focused operator-console preview/static tests, ruff,
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 preview cache/stale policy moved out of
   `render_b1_map12_preview()` into focused helpers for stale camera-preview
   deletion and `--skip-existing` eligibility. Runtime bundle compilation,

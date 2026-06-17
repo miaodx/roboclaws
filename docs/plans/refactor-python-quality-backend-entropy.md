@@ -621,6 +621,16 @@ in the main renderer. Behavior is unchanged; the C901 row for
 operator-console preview/static tests, ruff, format check, py_compile,
 `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 split B1 camera preview candidate
+evaluation out of `_promote_b1_camera_previews()`. Candidate discovery,
+provenance rejection, missing-view diagnostics, quality rejection, accepted
+score calculation, and evaluated-candidate payloads now live in focused helpers;
+the promotion function keeps artifact readability, highest-score selection,
+image writes, and promoted metadata assembly. Behavior is unchanged and the B1
+preview PLR0915 row is cleared. Proof passed with focused operator-console
+preview/static tests, ruff, format check, py_compile, `git diff --check`, and
+ratchet.
+
 ### T: Unnecessary Unit-Test Pruning
 
 Severity: P2 by default; P1 only when tests create false confidence for a public
