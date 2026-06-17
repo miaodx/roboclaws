@@ -48,12 +48,10 @@ DEFAULT_CONTRAST_RUN_DIRS = (
     Path("output/household/household-cleanup/codex-camera-labels/0606_1227/seed-7"),
 )
 DEFAULT_RUNTIME_MAP_PRIOR = Path(
-    "output/household/direct-map-build/direct-camera-grounded-labels/"
-    "seed-7/runtime_metric_map.json"
+    "output/household/direct-map-build/direct-camera-grounded-labels/seed-7/runtime_metric_map.json"
 )
 DEFAULT_OUTPUT_ROOT = Path("output/molmo/raw-fpv-perception-probe")
 DEFAULT_MODEL = "gpt-5.5"
-DEFAULT_CODEX_BASE_URL = "https://api.openai.com/v1"
 
 SCREEN_GRID_REGIONS = (
     "upper_left",
@@ -1640,8 +1638,10 @@ def _call_responses_api(
 def _provider_config(provider: str) -> dict[str, Any]:
     if provider != "codex-router-responses":
         return {"error": {"type": "unsupported_provider", "provider": provider}}
-    base_url = os.environ.get("CODEX_BASE_URL", DEFAULT_CODEX_BASE_URL)
+    base_url = os.environ.get("CODEX_BASE_URL", "")
     api_key = os.environ.get("CODEX_API_KEY", "")
+    if not base_url:
+        return {"error": {"type": "missing_env", "env": "CODEX_BASE_URL"}}
     if not api_key:
         return {"error": {"type": "missing_env", "env": "CODEX_API_KEY"}}
     return {"base_url": base_url, "api_key": api_key}

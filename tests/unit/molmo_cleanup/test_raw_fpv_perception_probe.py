@@ -406,6 +406,7 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
     public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
     calls: list[dict[str, object]] = []
 
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
     monkeypatch.setenv("CODEX_API_KEY", "test-key")
 
     def fake_call_responses_api(**kwargs):
@@ -455,6 +456,28 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
     assert len(predictions[frames[0].frame_id]["labels"]) == 1
     assert len(predictions[frames[1].frame_id]["labels"]) == 1
     assert predictions[frames[2].frame_id]["labels"] == []
+
+
+def test_raw_fpv_visual_labeler_requires_codex_base_url(monkeypatch) -> None:
+    probe = _load_module()
+
+    monkeypatch.delenv("CODEX_BASE_URL", raising=False)
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+
+    assert probe._provider_config("codex-router-responses") == {
+        "error": {"type": "missing_env", "env": "CODEX_BASE_URL"}
+    }
+
+
+def test_raw_fpv_visual_labeler_requires_codex_api_key(monkeypatch) -> None:
+    probe = _load_module()
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+
+    assert probe._provider_config("codex-router-responses") == {
+        "error": {"type": "missing_env", "env": "CODEX_API_KEY"}
+    }
 
 
 def test_raw_fpv_visual_labeler_scores_split_visible_quality(tmp_path: Path) -> None:

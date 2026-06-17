@@ -54,6 +54,14 @@ logs before choosing the next slice.
   fail-aloud runtime configuration cleanup. Proof: focused OpenAI Agents perf
   profile tests, ruff, format check, py_compile, and ratchet.
 
+- 2026-06-17: RAW-FPV visual-labeler provider config now requires explicit
+  `CODEX_BASE_URL` in addition to `CODEX_API_KEY` for
+  `codex-router-responses`; it no longer silently defaults to
+  `https://api.openai.com/v1`. Owning layers: Agent Engines And Provider
+  Profiles plus Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud provider/base-url cleanup. Proof: focused RAW-FPV visual-labeler
+  provider tests, ruff, format check, py_compile, and ratchet.
+
 - 2026-06-14: Backend facade started. `CleanupBackendSession` gained backend
   id/runtime-artifact attachment, shared backend construction, and common
   direct/MCP metadata attachment. Proof: focused backend/MCP tests and ratchet.

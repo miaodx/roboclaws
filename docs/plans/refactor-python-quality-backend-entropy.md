@@ -180,6 +180,16 @@ pick a new bounded fallback family by fresh audit evidence; if no stronger
 silent-fallback candidate appears, return to the Candidate D runner-side
 profile-owner extraction as the next P1 hard-ceiling slice.
 
+Implementation refresh on 2026-06-17 closed a RAW-FPV visual-labeler provider
+fallback: `codex-router-responses` now requires explicit `CODEX_BASE_URL` plus
+`CODEX_API_KEY` instead of silently using `https://api.openai.com/v1` when the
+base URL is missing. This aligns the probe/eval route with the current Codex
+router contract and keeps missing provider setup visible as a `missing_env`
+status. Proof passed with focused RAW-FPV visual-labeler provider tests, ruff,
+format check, py_compile, and ratchet. Continue only with new fail-aloud
+families that have similarly clear false-confidence risk; otherwise return to
+Candidate D profile-owner extraction.
+
 ## Operating Rules
 
 - Two-document contract: this file is the only active plan, and
