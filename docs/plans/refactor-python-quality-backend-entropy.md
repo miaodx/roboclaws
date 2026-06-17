@@ -96,8 +96,16 @@ again.
   complexity rows and 77 oversized modules;
   `realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools` is cleared
   from the complexity list.
+- Follow-up implementation refresh on 2026-06-18 split cleanup-checker
+  fixture-id lookup out of `_candidate_fixture_id_for_object()` into local
+  helpers for semantic substeps, cleanup primitive evidence, agent-view
+  worklist rows, and destination options. Behavior-change class: test-only
+  cleanup; checker semantics and fixture artifacts are unchanged. The ratchet
+  reports 3 complexity rows and 77 oversized modules;
+  `test_check_molmo_realworld_cleanup_result.py::_candidate_fixture_id_for_object`
+  is cleared from the complexity list.
 
-- 4 Ruff complexity violations and 77 oversized modules remain.
+- 3 Ruff complexity violations and 77 oversized modules remain.
 - Largest P1 production hard-ceiling files are
   `roboclaws/household/realworld_contract.py` at 2846,
   and `roboclaws/household/scene_camera_comparison.py` at 2830.
@@ -157,9 +165,8 @@ again.
   unless it crosses 2000 lines again or regains source-prep, candidate-profile,
   prefilter, or scanner-admission ownership drift.
 - Current complexity rows are P2 unless paired with hard-ceiling work:
-  operator-console tests and a cleanup checker helper. They should not hide
-  while a file-size slice improves, but they are not the default next P1 unless
-  the active product focus changes.
+  operator-console tests. They should not hide while a file-size slice improves,
+  but they are not the default next P1 unless the active product focus changes.
 
 Current closure snapshot:
 
@@ -1000,9 +1007,9 @@ be claimed without an explicit local run.
   `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
   Keep this to preview rendering; runtime-bundle and label-tool validation rows
   are cleared.
-- Behavior tests: operator-console scene-preview/control/static-asset tests and
-  cleanup-checker fixture lookup remain P2 fixture-builder work. Do not split
-  large tests only for line count.
+- Behavior tests: operator-console scene-preview/control/static-asset tests
+  remain P2 fixture-builder work. Cleanup-checker fixture lookup is cleared.
+  Do not split large tests only for line count.
 - MCP/prompt: `realworld_mcp_semantic_tools.py::register_semantic_cleanup_tools`
   and `prompt_preview.py::_goal_contract` are cleared. Reopen only if MCP
   semantic registration or prompt-preview goal-contract helpers regain direct

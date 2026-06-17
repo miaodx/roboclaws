@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Cleanup-checker fixture-id lookup moved semantic-substep,
+  cleanup-primitive, agent-view worklist, and destination-option lookup out of
+  `_candidate_fixture_id_for_object()` into local fixture-vocabulary helpers.
+  Behavior-change class: test-only cleanup; checker semantics and fixture
+  artifacts are unchanged. Metric: ratchet reports 3 complexity rows and 77
+  oversized modules, and
+  `test_check_molmo_realworld_cleanup_result.py::_candidate_fixture_id_for_object`
+  dropped from the complexity list. Proof: focused cleanup checker contract
+  tests, ruff, format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Semantic cleanup MCP registration moved map/navigation,
   observation, visual-grounding, and target-resolution tool registration out of
   `register_semantic_cleanup_tools()` into focused capability-local helpers.
