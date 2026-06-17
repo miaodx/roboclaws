@@ -226,5 +226,7 @@ def test_provider_registry_cli_dispatches_route_and_json_commands(
     assert "codex-router-responses" in output.read_text(encoding="utf-8")
     assert _main(["default-model", "minimax-responses"]) == 0
     assert capsys.readouterr().out.strip() == "MiniMax-M3"
+    assert _main(["model-id", "minimax-highspeed"]) == 0
+    assert capsys.readouterr().out.strip() == "MiniMax-M2.7-highspeed"
     assert _main(["supports-engine", "minimax-responses", "openai-agents-sdk"]) == 0
     assert _main(["supports-engine", "mimo-tp-openai-chat", "codex-cli"]) == 1

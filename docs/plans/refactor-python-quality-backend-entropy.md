@@ -719,6 +719,20 @@ and base-url/key precedence are unchanged. Proof passed with focused provider
 catalog and operator-console provider/readiness tests, ruff, format check,
 py_compile, `git diff --check`, and ratchet.
 
+Implementation refresh on 2026-06-18 extended explicit model-override
+validation to the coding-agent shell helper path. `provider_registry.py` now
+exposes a `model-id` lookup command, and `scripts/dev/coding_agent_env.sh`
+resolves `ROBOCLAWS_CODEX_MODEL` / `ROBOCLAWS_CODE_AGENT_MODEL` through that
+catalog for non-system provider routes before building Codex launcher args.
+Unknown model env overrides now fail before launch config generation instead
+of being passed through as plausible provider settings; known aliases such as
+`minimax-highspeed` continue to normalize to their catalog model id. Behavior
+change class: fail-aloud env cleanup; provider profiles, route defaults,
+system Claude behavior, key/base-url precedence, and public launch axes are
+unchanged. Proof passed with focused provider catalog and dev-tool shell
+helper tests, ruff, format check, `bash -n`, py_compile, `git diff --check`,
+and ratchet.
+
 Implementation refresh on 2026-06-18 closed the parked operator-console
 route-fixture drift that followed the provider-env slice. The operator-console
 route registry now tracks the current source-aware MolmoSpaces catalog:

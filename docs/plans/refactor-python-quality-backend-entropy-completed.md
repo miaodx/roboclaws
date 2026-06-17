@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Coding-agent shell helpers now fail aloud for explicit unknown
+  model overrides before launch config generation. `provider_registry.py`
+  exposes a `model-id` lookup command, and `scripts/dev/coding_agent_env.sh`
+  resolves `ROBOCLAWS_CODEX_MODEL` / `ROBOCLAWS_CODE_AGENT_MODEL` through the
+  catalog for non-system provider routes. Known aliases such as
+  `minimax-highspeed` still normalize to their catalog model id; omitted model
+  input still uses route defaults. Behavior-change class: fail-aloud env
+  cleanup; provider profiles, route defaults, system Claude behavior,
+  key/base-url precedence, and public launch axes are unchanged. Metric:
+  ratchet remains at 0 complexity rows and 79 oversized modules. Proof:
+  focused provider catalog and dev-tool shell helper tests, touched-file ruff
+  and format check, `bash -n`, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Provider readiness now fails aloud for explicit unknown model
   overrides. `provider_readiness()` no longer reports `ok=true` with
   `model_family=unknown` when required provider env vars are present; unknown

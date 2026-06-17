@@ -763,6 +763,7 @@ def _build_registry_parser() -> argparse.ArgumentParser:
             "default-model",
             "json",
             "key-env",
+            "model-id",
             "public-profile",
             "supports-engine",
             "wire-api",
@@ -806,6 +807,10 @@ def _provider_route_command_text(command: str, route: ProviderRouteSpec) -> str:
     raise ValueError(f"unsupported provider route command: {command}")
 
 
+def _model_command_text(model_name: str) -> str:
+    return resolve_model(model_name).model_id
+
+
 def _supports_engine_exit_code(
     route: ProviderRouteSpec,
     agent_engine: str,
@@ -822,7 +827,12 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
 
     if not args.route_id:
-        parser.error("route_id is required")
+        parser.error(
+            "model_id is required" if args.command == "model-id" else "route_id is required"
+        )
+    if args.command == "model-id":
+        print(_model_command_text(args.route_id))
+        return 0
     route = provider_route_spec(args.route_id)
     if args.command == "supports-engine":
         if not args.agent_engine:
