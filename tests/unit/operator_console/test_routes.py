@@ -5,19 +5,28 @@ from pathlib import Path
 
 import pytest
 
+import roboclaws.operator_console.routes as route_registry
 from roboclaws.launch.agent_engines import agent_engine_spec
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS
 from roboclaws.operator_console.launcher import ConsoleLaunchError, build_launch_argv
 from roboclaws.operator_console.routes import (
     MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS,
     MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS,
-    get_route,
     get_selection,
     list_console_combinations,
     list_evidence_lanes,
     list_worlds,
     validate_supported_routes_against_catalog,
 )
+
+AGIBOT_CODEX_CLEANUP = "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
+AGIBOT_CODEX_MAP_BUILD = (
+    "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+)
+B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"
+ISAAC_CODEX_CLEANUP = "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_CLEANUP = "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+MUJOCO_CODEX_MAP_BUILD = "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
 
 
 def test_world_catalog_exposes_scene_first_console_choices() -> None:
@@ -245,17 +254,16 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
         assert f"molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::map-build::codex-cli::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::map-build::direct-runner::{lane}" in enabled_ids
-        assert f"molmospaces/val_0::mujoco::open-ended::codex-cli::{lane}" in enabled_ids
-        assert f"molmospaces/val_1::mujoco::open-ended::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::open-task::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::open-task::openai-agents-sdk::{lane}" in enabled_ids
+        assert f"molmospaces/val_1::mujoco::open-task::codex-cli::{lane}" in enabled_ids
         assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
 
     grounded = get_selection(
         "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"
     )
     assert "camera_labeler=sim-projected-labels" in grounded.launch_default_overrides
-    agibot_grounded = get_selection(
-        "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
-    )
+    agibot_grounded = get_selection(AGIBOT_CODEX_MAP_BUILD)
     assert "camera_labeler=grounding-dino" in agibot_grounded.launch_default_overrides
 
 
@@ -266,7 +274,7 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
     for world_id in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
         assert f"{world_id}::mujoco::cleanup::codex-cli::world-oracle-labels" in enabled_ids
 
-    val0 = get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels")
+    val0 = get_selection(MUJOCO_CODEX_CLEANUP)
     val9 = get_selection("molmospaces/val_9::mujoco::cleanup::codex-cli::world-oracle-labels")
 
     assert "scene_index=0" in val0.launch_default_overrides
@@ -303,13 +311,12 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     )
     assert "molmospaces/val_1::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
     assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
-    assert "molmospaces/val_1::mujoco::open-ended::codex-cli::world-oracle-labels" in enabled_ids
-    assert "molmospaces/val_2::mujoco::open-ended::codex-cli::world-oracle-labels" in enabled_ids
-    val0_openai_open_ended = (
-        "molmospaces/val_0::mujoco::open-ended::openai-agents-sdk::world-oracle-labels"
+    assert "molmospaces/val_1::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_2::mujoco::open-task::codex-cli::world-oracle-labels" in enabled_ids
+    assert (
+        "molmospaces/val_0::mujoco::open-task::openai-agents-sdk::world-oracle-labels"
+        in enabled_ids
     )
-    assert val0_openai_open_ended in disabled
-    assert "OpenAI Agents SDK is not proven" in disabled[val0_openai_open_ended]
 
     enabled_mujoco_cleanup_worlds = {
         route.world_id
@@ -358,7 +365,7 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
     assert disabled
     reasons = {route.id: route.disabled_reason for route in disabled}
     assert (
-        reasons["agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"]
+        reasons[AGIBOT_CODEX_CLEANUP]
         == "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
     assert (
@@ -372,18 +379,10 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
 
 
 def test_payload_exposes_orthogonal_ui_metadata() -> None:
-    mujoco = get_selection(
-        "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-    ).to_payload()
-    isaac = get_selection(
-        "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-    ).to_payload()
-    agibot = get_selection(
-        "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
-    ).to_payload()
-    b1 = get_selection(
-        "b1-map12::isaaclab::open-ended::codex-cli::world-oracle-labels"
-    ).to_payload()
+    mujoco = get_selection(MUJOCO_CODEX_CLEANUP).to_payload()
+    isaac = get_selection(ISAAC_CODEX_CLEANUP).to_payload()
+    agibot = get_selection(AGIBOT_CODEX_MAP_BUILD).to_payload()
+    b1 = get_selection(B1_CODEX_OPEN_TASK).to_payload()
 
     assert mujoco["world_id"] == "molmospaces/val_0"
     assert mujoco["backend_id"] == "mujoco"
@@ -407,22 +406,17 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert "robot_views=on" in b1["argv_preview"]
 
 
-def test_legacy_route_lookup_is_display_only_wrapper() -> None:
-    route = get_route("codex-mujoco-cleanup")
-    payload = route.to_payload()
+def test_legacy_route_api_stays_removed() -> None:
+    assert not hasattr(route_registry, "ConsoleRoute")
+    assert not hasattr(route_registry, "get_route")
+    assert not hasattr(route_registry, "list_console_routes")
 
-    assert payload["legacy_route_id"] == "codex-mujoco-cleanup"
-    assert payload["world_id"] == "molmospaces/val_0"
-    assert payload["agent_engine_id"] == "codex-cli"
-
-
-def test_legacy_route_ids_do_not_resolve_as_launch_selections() -> None:
     with pytest.raises(KeyError):
         get_selection("codex-mujoco-cleanup")
 
 
 def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
-    selection = get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels")
+    selection = get_selection(MUJOCO_CODEX_CLEANUP)
     argv = build_launch_argv(
         selection,
         root=tmp_path,
@@ -436,7 +430,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         "surface=household-world",
         "world=molmospaces/val_0",
         "backend=mujoco",
-        "intent=cleanup",
+        "preset=cleanup",
         "agent_engine=codex-cli",
     ]
     assert "evidence_lane=world-oracle-labels" in argv
@@ -446,12 +440,10 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
 
 
 def test_map_build_launch_defaults_to_baseline_scenario_setup(tmp_path) -> None:
-    selection = get_selection(
-        "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
-    )
+    selection = get_selection(MUJOCO_CODEX_MAP_BUILD)
     argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
-    assert "intent=map-build" in argv
+    assert "preset=map-build" in argv
     assert "scenario_setup=baseline" in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
     assert not any(item.startswith("generated_mess_count=") for item in argv)
@@ -468,10 +460,11 @@ def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -
 
 
 def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
-    selection = get_selection("b1-map12::isaaclab::open-ended::codex-cli::world-oracle-labels")
+    selection = get_selection(B1_CODEX_OPEN_TASK)
     argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
-    assert "intent=open-ended" in argv
+    assert not any(item.startswith("intent=") for item in argv)
+    assert not any(item.startswith("preset=") for item in argv)
     assert "backend=isaaclab" in argv
     assert "scenario_setup=baseline" in argv
     assert "map_bundle=b1-map12-room-semantics" in argv
@@ -481,8 +474,6 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
 
 
 def test_prompt_rejected_for_unsupported_selection(tmp_path) -> None:
-    selection = get_selection(
-        "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
-    )
+    selection = get_selection(AGIBOT_CODEX_CLEANUP)
     with pytest.raises(ConsoleLaunchError, match="custom prompt"):
         build_launch_argv(selection, root=tmp_path, run_id="run-1", prompt="unsafe")

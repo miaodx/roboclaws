@@ -16,7 +16,6 @@ AI agents should also read these docs when they need human-facing context.
 - [Technical design](technical-design.md)
 - [MolmoSpaces settings](molmospaces-settings.md)
 - [MolmoSpaces visual grounding results](molmospaces-visual-grounding-results.md)
-- [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)
 - [Model matrix](model-matrix.md)
 - [Model route verdicts](model-route-verdicts.yaml)
 
@@ -40,3 +39,10 @@ human review surface:
 - `docs/retrospectives/` - shipped history
 - `docs/status/active/` - parallel work notes
 - `docs/ai/` - implementation evidence, experiments, and agent-only runbooks
+
+## Historical / Superseded
+
+These records are useful when auditing why older command shapes changed, but
+they are not first-read guidance for current runs:
+
+- [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)

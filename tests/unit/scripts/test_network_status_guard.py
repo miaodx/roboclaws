@@ -303,6 +303,12 @@ def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_pat
 
 def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
     assert not (JUST_DIR / "appliance.just").exists()
+    assert not (REPO_ROOT / "Dockerfile.railway").exists()
+    assert not (REPO_ROOT / "railway.toml").exists()
+    assert not (REPO_ROOT / "deploy" / "railway").exists()
+    assert not (REPO_ROOT / "scripts" / "appliance").exists()
+    assert not (REPO_ROOT / "scripts" / "appliance-run-interactive.sh").exists()
+    assert not (REPO_ROOT / "scripts" / "appliance_control_ui_smoke.py").exists()
 
     openclaw_guarded_files = (
         JUST_DIR / "openclaw.just",

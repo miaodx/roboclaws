@@ -8,8 +8,9 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws has completed the household-world launch contract saturation:
-`surface=household-world` with `intent=map-build`, `cleanup`, and
-`open-ended`, plus the `surface=planner-proof` confidence route. The
+`surface=household-world` now defaults to the no-preset open household task
+contract, with `preset=map-build` and `preset=cleanup` for standard jobs, plus
+the `surface=planner-proof` confidence route. The
 AI2-THOR/direct-VLM public-surface retirement is implemented and verified; the
 active code, docs, tests, skills, CI, and public command facade now center on
 household-world / planner-proof.
@@ -30,10 +31,10 @@ backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 ## Next Action
 
 Use the canonical launch shape for new work:
-`just run::surface surface=household-world ... intent=map-build|cleanup` or a
-household prompt that infers `intent=open-ended`. Pick the next implementation
-task from `TODOS.md`, `docs/plans/`, or the issue tracker rather than reopening
-the completed launch-contract or VLM-sidecar retirement work.
+`just run::surface surface=household-world ... prompt=...` for open tasks, or
+`preset=map-build|cleanup` for standard jobs. Pick the next implementation task
+from `TODOS.md`, `docs/plans/`, or the issue tracker rather than reopening the
+completed launch-contract or VLM-sidecar retirement work.
 
 ## Current Blocker
 

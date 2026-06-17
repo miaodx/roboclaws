@@ -48,7 +48,7 @@ CI. Removing them saves little and makes `main` depend on local discipline.
 
 Use the existing command surfaces directly when they fit:
 
-- `just run::surface ...` for user-facing surface/intent execution.
+- `just run::surface ...` for user-facing surface/preset execution.
 - `just agent::verify ...` for confidence gates.
 - `just dev::test ...` for pytest marker slices.
 - `just harness::*` or lower private modules only for maintainer debugging and
@@ -64,8 +64,8 @@ Do not add a `ci::*` wrapper merely to rename an existing `run::surface` or
 ## Required Coverage For New Surfaces And Intents
 
 When adding a public surface or intent such as
-`surface=household-world intent=map-build` or
-`surface=household-world intent=cleanup`, required CI should prove its public
+`surface=household-world preset=map-build` or
+`surface=household-world preset=cleanup`, required CI should prove its public
 contract with deterministic inputs:
 
 - command routing accepts the documented `just run::surface` shape
@@ -110,8 +110,8 @@ gate when it requires any of the following:
 | --- | --- | --- |
 | `lint-and-mock` | required PR gate | `just agent::verify ci-required` |
 | `household-route-contracts` | required PR gate, usually inside `lint-and-mock` | `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/operator_console` |
-| `household-map-build` | required or advisory main gate depending on runtime cost | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels ...` |
-| `molmo-live-cleanup` | opt-in expensive gate | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels ...` or the live matrix script |
+| `household-map-build` | required or advisory main gate depending on runtime cost | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels ...` |
+| `molmo-live-cleanup` | opt-in expensive gate | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels ...` or the live matrix script |
 | `planner-proof` | local-only or manual expensive gate | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` |
 | `publish-pages` | required main gate | no single facade today; keep focused tests for Pages assembly constraints |
 
@@ -120,7 +120,7 @@ gate when it requires any of the following:
 - Pages assembly is job-shaped and does not yet have a single local facade.
   Focused tests should model its important constraints, such as running helper
   scripts without project site-packages.
-- `surface=household-world intent=map-build` should have deterministic
+- `surface=household-world preset=map-build` should have deterministic
   required contract coverage for command routing and `runtime_metric_map.json`
   shape, independent of real Agibot, Isaac, or live-agent proof.
 - New backends should not automatically expand required CI. Add a cheap adapter

@@ -33,8 +33,8 @@ use this file as the canonical implementation source and closeout ledger.
 Roboclaws currently proves household cleanup through a MolmoSpaces/MuJoCo
 backend. That path is good for stable scene state, current upstream benchmark
 compatibility, and visible cleanup reports, but the visual result is limited by
-MuJoCo's renderer choices. MuJoCo Filament can improve some images, but local
-comparison did not show a clear enough win to make it the default.
+MuJoCo's renderer choices. Prior renderer-only alternatives did not show a
+clear enough task-evidence win to justify active support.
 
 MolmoSpaces also publishes assets for Isaac Sim / Isaac Lab through USD, and
 Isaac can provide a more realistic renderer and richer sensor outputs. However,

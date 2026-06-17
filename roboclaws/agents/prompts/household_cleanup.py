@@ -26,6 +26,7 @@ COMMON_PREFIX = (
 )
 
 CUSTOM_PREFIX = (
+    "Use the bundled household-open-task skill instructions. "
     "Use the MCP tools as a bounded household robot capability surface. " + TOOL_PROTOCOL_PREFIX
 )
 
@@ -73,9 +74,9 @@ HOUSEHOLD_CLEANUP_TASK_PREFIX = (
     "This run is surface=household-world intent=cleanup. User task: {task}. "
 )
 OPEN_ENDED_HOUSEHOLD_TASK_PREFIX = (
-    "This run is surface=household-world intent=open-ended. "
-    "The following operator task is authoritative and overrides the default cleanup "
-    "task: {task}. When this wrapper and the operator task conflict, follow the "
+    "This run is surface=household-world with no task preset. "
+    "The following operator task is authoritative: {task}. When this wrapper "
+    "and the operator task conflict, follow the "
     "operator task subject to public tool safety and error responses. "
 )
 DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
@@ -136,8 +137,8 @@ def _with_task(
 
 def _open_ended_scope_suffix() -> str:
     return (
-        " In intent=open-ended mode, do not infer additional cleanup goals from "
-        "cleanup implementation details."
+        " In the no-preset household open-task mode, do not infer additional "
+        "cleanup goals from cleanup implementation details."
     )
 
 

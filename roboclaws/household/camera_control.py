@@ -28,7 +28,7 @@ DEFAULT_SCENE_PROBE_LENS = {
 DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
     "profile_id": "scene_probe_balanced_review_light_v1",
     "source": (
-        "Default scene-camera light rig for MuJoCo/Isaac/Genesis review. It uses one "
+        "Default scene-camera light rig for MuJoCo/Isaac review. It uses one "
         "canonical shadow-casting key role plus low ambient readability light, disables "
         "authored candidate-lane scene lights for comparison, and keeps fill off by default."
     ),
@@ -46,8 +46,6 @@ DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
             "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
             "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
             "isaac_dome_intensity": 120.0,
-            "genesis_ambient_light": [0.37, 0.37, 0.37],
-            "genesis_background_color": [0.04, 0.08, 0.12],
         },
         "fill": {"enabled": False},
         "authored_scene_lights_policy": "disabled_for_comparison",
@@ -57,7 +55,6 @@ DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
                 "key_rotation_deg": CANONICAL_SCENE_KEY_LIGHT_ROTATION_DEG,
                 "existing_light_intensity_scale": 0.0,
             },
-            "genesis": {"key_intensity": 3.0},
         },
     },
 }
@@ -66,8 +63,8 @@ SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
     **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     "profile_id": "scene_probe_shadow_parity_probe_v1",
     "source": (
-        "Shadow-parity probe for MuJoCo/Isaac/Genesis scene-camera review. This is "
-        "not the default fill profile: it enables Genesis shadows, reduces Isaac "
+        "Shadow-parity probe for MuJoCo/Isaac scene-camera review. This is "
+        "not the default fill profile: it reduces Isaac "
         "dome fill, and adds an Isaac key light so bed/floor/wall cast-shadow "
         "behavior can be reviewed against MuJoCo."
     ),
@@ -91,7 +88,6 @@ SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
                 "key_rotation_deg": CANONICAL_SCENE_KEY_LIGHT_ROTATION_DEG,
                 "existing_light_intensity_scale": 0.0,
             },
-            "genesis": {"key_intensity": 3.0},
         },
     },
 }
@@ -315,12 +311,6 @@ def scene_light_rig_roles(rig: dict[str, Any]) -> dict[str, Any]:
         rig.get("backend_overrides") if isinstance(rig.get("backend_overrides"), dict) else {}
     )
     isaac = overrides.get("isaac") if isinstance(overrides.get("isaac"), dict) else {}
-    genesis = overrides.get("genesis") if isinstance(overrides.get("genesis"), dict) else {}
-    fill_lights = (
-        fill.get("genesis_directional_lights")
-        if isinstance(fill.get("genesis_directional_lights"), list)
-        else []
-    )
     return {
         "schema": rig.get("schema"),
         "frame": rig.get("frame"),
@@ -329,12 +319,10 @@ def scene_light_rig_roles(rig: dict[str, Any]) -> dict[str, Any]:
         "key_direction": key.get("direction"),
         "ambient_enabled": bool(ambient.get("enabled")),
         "fill_enabled": bool(fill.get("enabled")),
-        "fill_directional_light_count": len(fill_lights),
         "authored_scene_lights_policy": rig.get("authored_scene_lights_policy"),
         "isaac_key_intensity": isaac.get("key_intensity"),
         "isaac_dome_intensity": ambient.get("isaac_dome_intensity"),
         "isaac_existing_light_intensity_scale": isaac.get("existing_light_intensity_scale"),
-        "genesis_key_intensity": genesis.get("key_intensity"),
     }
 
 
@@ -402,13 +390,11 @@ def _scene_light_rig(value: Any) -> dict[str, Any]:
         raw.get("backend_overrides") if isinstance(raw.get("backend_overrides"), dict) else {}
     )
     isaac = overrides.get("isaac") if isinstance(overrides.get("isaac"), dict) else {}
-    genesis = overrides.get("genesis") if isinstance(overrides.get("genesis"), dict) else {}
     default_ambient = default["ambient"]
     default_key = default["key"]
     default_fill = default["fill"]
     default_overrides = default["backend_overrides"]
     default_isaac = default_overrides["isaac"]
-    default_genesis = default_overrides["genesis"]
     return {
         "schema": str(raw.get("schema") or SCENE_LIGHT_RIG_SCHEMA),
         "frame": str(raw.get("frame") or default["frame"]),
@@ -431,21 +417,9 @@ def _scene_light_rig(value: Any) -> dict[str, Any]:
             "isaac_dome_intensity": float(
                 ambient.get("isaac_dome_intensity", default_ambient["isaac_dome_intensity"])
             ),
-            "genesis_ambient_light": _vec3(
-                ambient.get("genesis_ambient_light"),
-                default=default_ambient["genesis_ambient_light"],
-            ),
-            "genesis_background_color": _vec3(
-                ambient.get("genesis_background_color"),
-                default=default_ambient["genesis_background_color"],
-            ),
         },
         "fill": {
             "enabled": bool(fill.get("enabled", default_fill["enabled"])),
-            "genesis_directional_lights": _directional_lights(
-                fill.get("genesis_directional_lights"),
-                default=default_fill.get("genesis_directional_lights") or [],
-            ),
         },
         "authored_scene_lights_policy": str(
             raw.get("authored_scene_lights_policy") or default["authored_scene_lights_policy"]
@@ -462,11 +436,6 @@ def _scene_light_rig(value: Any) -> dict[str, Any]:
                         "existing_light_intensity_scale",
                         default_isaac["existing_light_intensity_scale"],
                     )
-                ),
-            },
-            "genesis": {
-                "key_intensity": float(
-                    genesis.get("key_intensity", default_genesis["key_intensity"])
                 ),
             },
         },

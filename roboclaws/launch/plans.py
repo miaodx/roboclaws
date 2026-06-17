@@ -20,6 +20,7 @@ class LaunchPlan:
     argv: tuple[str, ...]
     surface: str
     intent: str
+    preset: str | None
     world: str
     backend: str
     implementation_backend: str
@@ -33,6 +34,7 @@ class LaunchPlan:
     report: str | None
     prompt_id: str
     checker_id: str
+    skill_name: str
     mcp_server_id: str
     required_capabilities: tuple[str, ...]
     required_artifacts: tuple[str, ...]

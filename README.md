@@ -30,7 +30,7 @@ bounded public robot capability surface.
 | Principle | Practice |
 | --- | --- |
 | Start from open-ended goals | A user asks for work such as "clean the room" or "take useful photos"; an agent selects or creates a skill to do it. |
-| Keep surfaces and intents separate | Public commands use `run::surface` with named `surface=...` and `intent=...` axes for parameters, reports, and acceptance gates. |
+| Keep surfaces and presets separate | Public commands use `run::surface` with named `surface=...`, natural-language `prompt=...`, and optional `preset=...` entries for repeated jobs. |
 | Keep strategy in skills | Skills own prompt strategy, scripts, examples, checks, and task-specific loops such as photo capture or cleanup. |
 | Keep MCP bounded | MCP tools expose semantic robot capabilities like observe, move, pick, place, and done; they should not hide a whole task behind one opaque call. |
 | Profile public capabilities | Semantic profiles describe reusable capability environments that skills can require; profiles compose by requirement, not by copying another profile's tools. |
@@ -42,7 +42,7 @@ The working abstraction ladder is:
 
 ```text
 open-ended goal
-  -> runnable surface and intent
+  -> runnable surface and optional preset
   -> agent skill
   -> capability profile requirements
   -> MCP capability tools
@@ -50,11 +50,11 @@ open-ended goal
 ```
 
 Default decision: improve or add a skill when behavior changes; add or rename a
-surface or intent only when the public command, parameters, report shape, or
-acceptance gates change. Promote behavior into MCP only when multiple skills
-need it, the input/output shape is stable, public/private boundaries are clear,
-and traces can preserve the important substeps. The detailed profile and skill
-reference is
+surface only when the domain contract changes; add a `preset=` row when a known
+task needs its own skill, capabilities, report, or gates. Promote behavior into
+MCP only when multiple skills need it, the input/output shape is stable,
+public/private boundaries are clear, and traces can preserve the important
+substeps. The detailed profile and skill reference is
 [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ## Run Demos With Just
@@ -69,12 +69,12 @@ The `dev` extra includes the standard MolmoSpaces/MuJoCo CPU runtime used by
 local cleanup demos. Isaac Lab remains intentionally isolated in
 `.venv-isaaclab/`; use the Isaac preflight harness when testing that backend.
 
-The public command grammar is named-parameter only. Public launches name the
-operator-facing surface, world or scene, backend runtime, task intent, and agent
-engine separately:
+The public command grammar is named-parameter only. Public household launches
+name the operator-facing surface, world or scene, backend runtime, optional task
+preset, and agent engine separately:
 
 ```bash
-just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [key=value ...]
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [preset=<preset>] [prompt=<goal>] [key=value ...]
 ```
 
 For full command routing, profiles, and maintainer-only recipes, read
@@ -87,7 +87,7 @@ standalone browser console, run:
 just console::run
 ```
 
-The console uses the same world/backend/intent/agent-engine catalog for local
+The console uses the same world/backend/preset/agent-engine catalog for local
 coding-agent runs; it does not accept arbitrary browser-submitted shell
 commands.
 
@@ -100,10 +100,10 @@ Pages republishes from successful `main` runs.
 
 | Demo | What it proves | Run it locally | Live CI report |
 | --- | --- | --- | --- |
-| Semantic map build | A no-cleanup sweep starts from the Base Navigation Map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Actionable Semantic Map Snapshot contract. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline` | Local artifact today. |
-| Household cleanup | A cleanup agent tidies a relocated household setup from Base Navigation Map context while private scoring stays hidden. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
+| Semantic map build | A no-cleanup sweep starts from the Base Navigation Map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Actionable Semantic Map Snapshot contract. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline` | Local artifact today. |
+| Household cleanup | A cleanup agent tidies a relocated household setup from Base Navigation Map context while private scoring stays hidden. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
 | Open-ended household goal | A coding agent receives a user goal, builds or uses household evidence, and declares task-level completion without cleanup-specific terminal scoring. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"` | Local artifact today. |
-| Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
+| Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
 | Planner proof | A household cleanup run can hand off planner proof requests for local manipulation evidence without changing the public cleanup contract. | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` | Local artifact today. |
 | Agent operator console | Standalone local browser console for supported Codex, Claude Code, and experimental OpenAI Agents SDK household routes with backend locks, launch-axis gates, live state, and artifact links. | `just console::run` | Local-only operator surface. |
 | Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |

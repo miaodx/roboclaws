@@ -16,15 +16,15 @@ uv sync --extra dev
 Use `just run::surface` for normal runs:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
 ```
 
 For map-only work:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
 ```
 
 The launch catalog resolves world, backend, intent, provider profile, goal

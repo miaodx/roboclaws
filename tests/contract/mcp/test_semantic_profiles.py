@@ -21,6 +21,8 @@ from roboclaws.mcp.profiles import (
     assert_public_profile_metadata_safe,
     contract_profile,
     contract_profile_names,
+    legacy_contract_profile_metadata,
+    legacy_contract_profile_names,
     validate_contract_profile,
 )
 
@@ -50,14 +52,21 @@ def _handlers(profile_id: str) -> dict[str, Any]:
     }
 
 
-def test_contract_profile_registry_contains_backend_domain_profiles() -> None:
+def test_contract_profile_registry_contains_only_task_neutral_capability_profiles() -> None:
     assert contract_profile_names() == (
         HOUSEHOLD_WORLD_PROFILE,
         HOUSEHOLD_MANIPULATION_PROFILE,
         HOUSEHOLD_EPISODE_PROFILE,
+    )
+
+
+def test_legacy_cleanup_shaped_profiles_are_metadata_only() -> None:
+    assert legacy_contract_profile_names() == (
         MOLMOSPACES_CLEANUP_PROFILE,
         REAL_ROBOT_CLEANUP_PROFILE,
     )
+    with pytest.raises(ValueError, match="unsupported MCP contract profile"):
+        contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
 
 
 def test_household_world_profile_is_task_neutral_and_world_only() -> None:
@@ -108,12 +117,11 @@ def test_household_cleanup_skill_capabilities_are_composed_not_copied() -> None:
     assert lifecycle.public_tool_names() == ("check_operator_messages", "done")
 
 
-def test_legacy_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
-    profile = contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
-    metadata = profile.metadata()
+def test_legacy_molmo_profile_metadata_omits_private_evaluator_terms() -> None:
+    metadata = legacy_contract_profile_metadata(MOLMOSPACES_CLEANUP_PROFILE)
     payload = json.dumps(metadata, sort_keys=True).lower()
 
-    for forbidden in profile.privacy_exclusions:
+    for forbidden in ("generated_mess_set", "acceptable_destination", "private_manifest"):
         assert forbidden not in payload
     assert "scene_objects" not in payload
     assert {tool["name"] for tool in metadata["public_tools"]} >= {
@@ -127,8 +135,7 @@ def test_legacy_molmo_profile_public_metadata_omits_private_evaluator_terms() ->
 
 
 def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
-    profile = contract_profile(REAL_ROBOT_CLEANUP_PROFILE)
-    metadata = profile.metadata()
+    metadata = legacy_contract_profile_metadata(REAL_ROBOT_CLEANUP_PROFILE)
     tools = {tool["name"]: tool for tool in metadata["public_tools"]}
 
     assert {
@@ -184,7 +191,7 @@ def test_profile_validation_rejects_privileged_public_tool() -> None:
 
 
 def test_public_profile_safety_rejects_private_terms_in_serialized_metadata() -> None:
-    profile = contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
+    profile = contract_profile(HOUSEHOLD_WORLD_PROFILE)
     unsafe_metadata = profile.metadata() | {"debug": "generated_mess_set"}
 
     with pytest.raises(ValueError, match="private exclusion terms"):
@@ -208,11 +215,11 @@ def test_register_profile_tools_helper_registers_selected_public_tools() -> None
 
     registered = register_profile_tools(
         fake_mcp,
-        profile_id=MOLMOSPACES_CLEANUP_PROFILE,
-        handlers=_handlers(MOLMOSPACES_CLEANUP_PROFILE),
+        profile_id=HOUSEHOLD_EPISODE_PROFILE,
+        handlers=_handlers(HOUSEHOLD_EPISODE_PROFILE),
     )
 
-    assert set(registered) == set(contract_profile(MOLMOSPACES_CLEANUP_PROFILE).public_tool_names())
+    assert set(registered) == set(contract_profile(HOUSEHOLD_EPISODE_PROFILE).public_tool_names())
     assert set(fake_mcp.tools) == set(registered)
 
 
@@ -220,8 +227,7 @@ def test_router_rejects_unknown_profile_with_allowed_ids() -> None:
     with pytest.raises(
         ValueError,
         match="allowed profiles: household_world_v1, household_manipulation_v1, "
-        "household_episode_v1, molmospaces_cleanup_v1, "
-        "real_robot_cleanup_v1",
+        "household_episode_v1",
     ):
         load_contract_profile("missing_profile")
 

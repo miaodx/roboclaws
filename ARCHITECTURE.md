@@ -2,11 +2,11 @@
 
 Roboclaws is a thin robotics demo repo. Its architecture goal is not to hide
 robot work behind one opaque tool; it is to make every run reviewable through
-public surface/intent inputs, MCP tool traces, maps, reports, and
+public surface, prompt/preset inputs, MCP tool traces, maps, reports, and
 private-evaluation boundaries.
 
 For commands, start with [`README.md`](README.md). For the
-surface/intent/skill/profile model, read
+surface/preset/skill/profile model, read
 [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ![Architecture diagram](docs/architecture.svg)
@@ -17,7 +17,7 @@ The current human-facing layers are:
 
 ```text
 Open-ended goal
-  -> Runnable Surface, World / Scene, and Intent
+  -> Runnable Surface, World / Scene, and optional Preset
   -> Backend Runtime
   -> Agent Skill
   -> Agent Engine and Provider Profile
@@ -26,10 +26,10 @@ Open-ended goal
   -> Artifacts and reports
 ```
 
-- **Runnable Surfaces And Intents** are public run contracts such as
-  `surface=household-world intent=map-build`,
-  `surface=household-world intent=cleanup`,
-  `surface=household-world intent=open-ended`, and
+- **Runnable Surfaces And Presets** are public run contracts such as
+  `surface=household-world prompt=...`,
+  `surface=household-world preset=map-build`,
+  `surface=household-world preset=cleanup`, and
   `surface=planner-proof intent=planner-proof`. They own command names,
   parameters, report shape, and acceptance gates.
 - **Worlds / Scenes** are operator-facing rooms, maps, or digital twins such as
@@ -41,9 +41,10 @@ Open-ended goal
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
   (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  `direct-runner`, or `openclaw-gateway`) from
-  the model/key route (`provider_profile=codex-env`, `mify`,
-  `mimo-anthropic`, and related profiles).
+  or `direct-runner`) from the model/key route (`provider_profile=codex-env`,
+  `mify`, `mimo-anthropic`, and related profiles).
+  `openclaw-gateway` is registered only as a validation-required maintainer
+  route until off-work-network Gateway proof is green.
 - **Capability Profiles** define reusable capability environments. Skills
   require profiles; profiles should not be copied into task-specific supersets.
 - **MCP Tools** are the stable public robot interface: observe, navigate, map,
@@ -81,7 +82,7 @@ Key pieces:
   server processes behind `python -m roboclaws.cli.agent_server ...`.
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
-  request schema used by MuJoCo, Isaac, and opt-in Genesis scene probes.
+  request schema used by MuJoCo and Isaac scene probes.
 - `roboclaws/household/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.
@@ -92,12 +93,14 @@ Key pieces:
 
 The clean-slate direction is:
 
-- `surface=household-world intent=map-build` produces Runtime Metric Map
+- `surface=household-world preset=map-build` produces Runtime Metric Map
   snapshots, which can be wrapped as an Actionable Semantic Map Snapshot for
   downstream task consumption.
-- `surface=household-world intent=cleanup` runs cleanup.
+- `surface=household-world preset=cleanup` runs cleanup.
+- `surface=household-world prompt=...` runs the no-preset household open-task
+  contract with agent-declared completion and public evidence.
 - The canonical map flow is minimal-first: start from occupancy/free-space
-  navigation context, run `intent=map-build`, then feed the resulting
+  navigation context, run `preset=map-build`, then feed the resulting
   `runtime_metric_map.json` or `actionable_semantic_map_snapshot.json` to
   cleanup with `runtime_map_prior=...` when a prior sweep is useful.
 - Offline Agibot `navigation_memory.json` conversion happens at the map-artifact
@@ -118,8 +121,8 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline seed=7
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=relocate-cleanup-related-objects seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=relocate-cleanup-related-objects seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 just console::run
@@ -144,10 +147,10 @@ Actionable Semantic Map Snapshot prior. Historical `minimal` / `rich` map
 artifacts may still be readable, but current product docs should not ask
 operators or agents to choose those modes.
 
-The clean-slate household public shape is `surface=household-world` plus
-explicit intents. `intent=map-build` produces Runtime Metric Map evidence,
+The clean-slate household public shape is `surface=household-world` plus a
+natural-language prompt or an optional preset. `preset=map-build` produces Runtime Metric Map evidence,
 `actionable_semantic_map_snapshot_v1` is the canonical downstream artifact
-contract, and `intent=cleanup` consumes household-world evidence for cleanup.
+contract, and `preset=cleanup` consumes household-world evidence for cleanup.
 Older task/profile names such as `semantic-map-build`, `household-cleanup`,
 and Molmo-specific profile names are legacy compatibility details, not the
 canonical task layer.
@@ -161,13 +164,14 @@ and scenario setup all resolve through the public launch catalog.
 
 `roboclaws/mcp/profiles.py` defines current MCP capability metadata. The
 household head is `household_world_v1`, composed with
-`household_manipulation_v1` and `household_episode_v1` for cleanup skills.
+`household_episode_v1` for no-preset open tasks and map-build, and with
+`household_manipulation_v1` for cleanup skills.
 Older backend/domain ids such as `molmospaces_cleanup_v1` and
 `real_robot_cleanup_v1` remain legacy compatibility details.
 
 Going forward:
 
-- Add a new runnable surface or intent by adding a domain `tasks.py` spec and
+- Add a new runnable surface or preset by adding a domain `tasks.py` spec and
   registering it in `roboclaws/launch/catalog.py`; keep behavior in the domain
   package.
 - Add a new world or scene in `roboclaws/launch/worlds.py`, and expose only

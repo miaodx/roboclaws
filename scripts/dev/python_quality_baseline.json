@@ -1,0 +1,2494 @@
+{
+  "generated_by": "scripts/dev/check_python_quality_ratchet.py",
+  "pylint_too_many_lines": {
+    "files": [
+      {
+        "lines": 2774,
+        "max_module_lines": 800,
+        "path": "roboclaws/agents/drivers/openai_agents_live.py"
+      },
+      {
+        "lines": 2359,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/agibot_contract_rehearsal.py"
+      },
+      {
+        "lines": 1260,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/agibot_map_build_mcp_server.py"
+      },
+      {
+        "lines": 1191,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/agibot_sdk_runner.py"
+      },
+      {
+        "lines": 2187,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/planner_proof_requests.py"
+      },
+      {
+        "lines": 1182,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/planner_task_feasibility.py"
+      },
+      {
+        "lines": 1520,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/realworld_cleanup.py"
+      },
+      {
+        "lines": 6942,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/realworld_contract.py"
+      },
+      {
+        "lines": 1491,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/realworld_mcp_server.py"
+      },
+      {
+        "lines": 8607,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/report.py"
+      },
+      {
+        "lines": 6796,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/scene_camera_comparison.py"
+      },
+      {
+        "lines": 846,
+        "max_module_lines": 800,
+        "path": "roboclaws/household/semantic_timeline.py"
+      },
+      {
+        "lines": 821,
+        "max_module_lines": 800,
+        "path": "roboclaws/maps/actionable_snapshot.py"
+      },
+      {
+        "lines": 857,
+        "max_module_lines": 800,
+        "path": "roboclaws/maps/bundle.py"
+      },
+      {
+        "lines": 1113,
+        "max_module_lines": 800,
+        "path": "roboclaws/operator_console/launcher.py"
+      },
+      {
+        "lines": 851,
+        "max_module_lines": 800,
+        "path": "roboclaws/operator_console/routes.py"
+      },
+      {
+        "lines": 1036,
+        "max_module_lines": 800,
+        "path": "roboclaws/operator_console/state.py"
+      },
+      {
+        "lines": 1530,
+        "max_module_lines": 800,
+        "path": "roboclaws/reports/live_performance.py"
+      },
+      {
+        "lines": 8685,
+        "max_module_lines": 800,
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py"
+      },
+      {
+        "lines": 1059,
+        "max_module_lines": 800,
+        "path": "scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py"
+      },
+      {
+        "lines": 990,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py"
+      },
+      {
+        "lines": 3221,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
+      },
+      {
+        "lines": 4018,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py"
+      },
+      {
+        "lines": 989,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py"
+      },
+      {
+        "lines": 896,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py"
+      },
+      {
+        "lines": 860,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_live_claude_cleanup.py"
+      },
+      {
+        "lines": 1198,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_live_codex_cleanup.py"
+      },
+      {
+        "lines": 3701,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py"
+      },
+      {
+        "lines": 3014,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py"
+      },
+      {
+        "lines": 830,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py"
+      },
+      {
+        "lines": 1969,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py"
+      },
+      {
+        "lines": 5844,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py"
+      },
+      {
+        "lines": 3381,
+        "max_module_lines": 800,
+        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py"
+      },
+      {
+        "lines": 825,
+        "max_module_lines": 800,
+        "path": "scripts/operator_console/render_scene_previews.py"
+      },
+      {
+        "lines": 1793,
+        "max_module_lines": 800,
+        "path": "scripts/visual_grounding/adapters.py"
+      },
+      {
+        "lines": 1566,
+        "max_module_lines": 800,
+        "path": "scripts/visual_grounding/run_visual_grounding_benchmark.py"
+      },
+      {
+        "lines": 841,
+        "max_module_lines": 800,
+        "path": "skills/agent-validation-matrix/scripts/select_validation_matrix.py"
+      },
+      {
+        "lines": 911,
+        "max_module_lines": 800,
+        "path": "skills/visual-result-showcase/scripts/render_household_cleanup_showcase.py"
+      },
+      {
+        "lines": 1007,
+        "max_module_lines": 800,
+        "path": "tests/contract/agibot/test_agibot_map_context_scripts.py"
+      },
+      {
+        "lines": 1578,
+        "max_module_lines": 800,
+        "path": "tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py"
+      },
+      {
+        "lines": 1105,
+        "max_module_lines": 800,
+        "path": "tests/contract/checkers/test_check_molmo_planner_proof_bundle_runner_result.py"
+      },
+      {
+        "lines": 4671,
+        "max_module_lines": 800,
+        "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py"
+      },
+      {
+        "lines": 3113,
+        "max_module_lines": 800,
+        "path": "tests/contract/dev_tools/test_task_agent_just_recipes.py"
+      },
+      {
+        "lines": 3057,
+        "max_module_lines": 800,
+        "path": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py"
+      },
+      {
+        "lines": 1286,
+        "max_module_lines": 800,
+        "path": "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py"
+      },
+      {
+        "lines": 1972,
+        "max_module_lines": 800,
+        "path": "tests/contract/molmo_cleanup/test_scene_camera_comparison.py"
+      },
+      {
+        "lines": 990,
+        "max_module_lines": 800,
+        "path": "tests/contract/openclaw/test_openclaw_bootstrap.py"
+      },
+      {
+        "lines": 3369,
+        "max_module_lines": 800,
+        "path": "tests/contract/reports/test_molmo_cleanup_report.py"
+      },
+      {
+        "lines": 834,
+        "max_module_lines": 800,
+        "path": "tests/contract/visual_grounding/test_visual_grounding_benchmark.py"
+      },
+      {
+        "lines": 4570,
+        "max_module_lines": 800,
+        "path": "tests/unit/agents/test_live_runtime.py"
+      },
+      {
+        "lines": 888,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py"
+      },
+      {
+        "lines": 1388,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_ci_live_reports.py"
+      },
+      {
+        "lines": 4707,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py"
+      },
+      {
+        "lines": 1751,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py"
+      },
+      {
+        "lines": 1820,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_molmo_planner_proof_requests.py"
+      },
+      {
+        "lines": 1115,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py"
+      },
+      {
+        "lines": 2942,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py"
+      },
+      {
+        "lines": 2110,
+        "max_module_lines": 800,
+        "path": "tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py"
+      },
+      {
+        "lines": 806,
+        "max_module_lines": 800,
+        "path": "tests/unit/operator_console/test_launcher.py"
+      },
+      {
+        "lines": 914,
+        "max_module_lines": 800,
+        "path": "tests/unit/operator_console/test_state.py"
+      },
+      {
+        "lines": 1775,
+        "max_module_lines": 800,
+        "path": "tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py"
+      }
+    ],
+    "max_module_lines": 800,
+    "note": "Pylint-compatible too-many-lines ratchet. Existing files over 800 lines are baselined; new oversize files or line-count growth fail."
+  },
+  "ruff_complexity": {
+    "rules": [
+      "C901",
+      "PLR0912",
+      "PLR0915"
+    ],
+    "violations": [
+      {
+        "code": "C901",
+        "key": "roboclaws/agents/drivers/openai_agents_live.py|C901|_camera_grounded_history_info",
+        "limit": 10,
+        "message": "`_camera_grounded_history_info` is too complex (11 > 10)",
+        "path": "roboclaws/agents/drivers/openai_agents_live.py",
+        "row": 904,
+        "symbol": "_camera_grounded_history_info",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/agents/drivers/openai_agents_live.py|C901|_unwrap_mcp_text_content_payload",
+        "limit": 10,
+        "message": "`_unwrap_mcp_text_content_payload` is too complex (12 > 10)",
+        "path": "roboclaws/agents/drivers/openai_agents_live.py",
+        "row": 1145,
+        "symbol": "_unwrap_mcp_text_content_payload",
+        "value": 12
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/agents/drivers/openai_agents_live.py|PLR0915|_run_openai_agents",
+        "limit": 50,
+        "message": "Too many statements (56 > 50)",
+        "path": "roboclaws/agents/drivers/openai_agents_live.py",
+        "row": 142,
+        "symbol": "_run_openai_agents",
+        "value": 56
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/agents/live_runtime.py|C901|LiveAgentResult.to_live_status_payload",
+        "limit": 10,
+        "message": "`to_live_status_payload` is too complex (11 > 10)",
+        "path": "roboclaws/agents/live_runtime.py",
+        "row": 143,
+        "symbol": "LiveAgentResult.to_live_status_payload",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/cli/household_agent_server.py|C901|run_molmo_realworld_cleanup_agent_server",
+        "limit": 10,
+        "message": "`run_molmo_realworld_cleanup_agent_server` is too complex (17 > 10)",
+        "path": "roboclaws/cli/household_agent_server.py",
+        "row": 279,
+        "symbol": "run_molmo_realworld_cleanup_agent_server",
+        "value": 17
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/cli/household_agent_server.py|PLR0912|run_molmo_realworld_cleanup_agent_server",
+        "limit": 12,
+        "message": "Too many branches (18 > 12)",
+        "path": "roboclaws/cli/household_agent_server.py",
+        "row": 279,
+        "symbol": "run_molmo_realworld_cleanup_agent_server",
+        "value": 18
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/cli/household_agent_server.py|PLR0915|run_molmo_realworld_cleanup_agent_server",
+        "limit": 50,
+        "message": "Too many statements (67 > 50)",
+        "path": "roboclaws/cli/household_agent_server.py",
+        "row": 279,
+        "symbol": "run_molmo_realworld_cleanup_agent_server",
+        "value": 67
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/agibot_contract_rehearsal.py|C901|_run_cleanup_action_rehearsal",
+        "limit": 10,
+        "message": "`_run_cleanup_action_rehearsal` is too complex (11 > 10)",
+        "path": "roboclaws/household/agibot_contract_rehearsal.py",
+        "row": 1293,
+        "symbol": "_run_cleanup_action_rehearsal",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/agibot_contract_rehearsal.py|C901|run_molmospaces_agibot_contract_rehearsal",
+        "limit": 10,
+        "message": "`run_molmospaces_agibot_contract_rehearsal` is too complex (13 > 10)",
+        "path": "roboclaws/household/agibot_contract_rehearsal.py",
+        "row": 70,
+        "symbol": "run_molmospaces_agibot_contract_rehearsal",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/agibot_contract_rehearsal.py|PLR0912|run_molmospaces_agibot_contract_rehearsal",
+        "limit": 12,
+        "message": "Too many branches (15 > 12)",
+        "path": "roboclaws/household/agibot_contract_rehearsal.py",
+        "row": 70,
+        "symbol": "run_molmospaces_agibot_contract_rehearsal",
+        "value": 15
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/agibot_contract_rehearsal.py|PLR0915|run_molmospaces_agibot_contract_rehearsal",
+        "limit": 50,
+        "message": "Too many statements (96 > 50)",
+        "path": "roboclaws/household/agibot_contract_rehearsal.py",
+        "row": 70,
+        "symbol": "run_molmospaces_agibot_contract_rehearsal",
+        "value": 96
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/agibot_map_build_mcp_server.py|C901|AgibotSemanticMapBuildMCPServer._dispatch_tool",
+        "limit": 10,
+        "message": "`_dispatch_tool` is too complex (12 > 10)",
+        "path": "roboclaws/household/agibot_map_build_mcp_server.py",
+        "row": 325,
+        "symbol": "AgibotSemanticMapBuildMCPServer._dispatch_tool",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/agibot_map_build_mcp_server.py|C901|AgibotSemanticMapBuildMCPServer._register_tools",
+        "limit": 10,
+        "message": "`_register_tools` is too complex (16 > 10)",
+        "path": "roboclaws/household/agibot_map_build_mcp_server.py",
+        "row": 196,
+        "symbol": "AgibotSemanticMapBuildMCPServer._register_tools",
+        "value": 16
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/camera_control.py|C901|_color_profile",
+        "limit": 10,
+        "message": "`_color_profile` is too complex (13 > 10)",
+        "path": "roboclaws/household/camera_control.py",
+        "row": 445,
+        "symbol": "_color_profile",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/cleanup_routine.py|C901|run_cleanup_routine",
+        "limit": 10,
+        "message": "`run_cleanup_routine` is too complex (12 > 10)",
+        "path": "roboclaws/household/cleanup_routine.py",
+        "row": 35,
+        "symbol": "run_cleanup_routine",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/generated_mess.py|C901|select_generated_mess_targets",
+        "limit": 10,
+        "message": "`select_generated_mess_targets` is too complex (12 > 10)",
+        "path": "roboclaws/household/generated_mess.py",
+        "row": 20,
+        "symbol": "select_generated_mess_targets",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/generated_mess.py|C901|targets_from_generated_mess_manifest",
+        "limit": 10,
+        "message": "`targets_from_generated_mess_manifest` is too complex (12 > 10)",
+        "path": "roboclaws/household/generated_mess.py",
+        "row": 173,
+        "symbol": "targets_from_generated_mess_manifest",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/grasp_cache_generation.py|C901|run_grasp_cache_generation",
+        "limit": 10,
+        "message": "`run_grasp_cache_generation` is too complex (11 > 10)",
+        "path": "roboclaws/household/grasp_cache_generation.py",
+        "row": 26,
+        "symbol": "run_grasp_cache_generation",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/grasp_pose_policy_cache.py|C901|run_grasp_pose_policy_cache_generation",
+        "limit": 10,
+        "message": "`run_grasp_pose_policy_cache_generation` is too complex (14 > 10)",
+        "path": "roboclaws/household/grasp_pose_policy_cache.py",
+        "row": 33,
+        "symbol": "run_grasp_pose_policy_cache_generation",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/grasp_pose_policy_cache.py|PLR0912|run_grasp_pose_policy_cache_generation",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/grasp_pose_policy_cache.py",
+        "row": 33,
+        "symbol": "run_grasp_pose_policy_cache_generation",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/isaac_lab_backend.py|C901|IsaacLabSubprocessBackend.__init__",
+        "limit": 10,
+        "message": "`__init__` is too complex (14 > 10)",
+        "path": "roboclaws/household/isaac_lab_backend.py",
+        "row": 47,
+        "symbol": "IsaacLabSubprocessBackend.__init__",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/isaac_lab_backend.py|PLR0912|IsaacLabSubprocessBackend.__init__",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/isaac_lab_backend.py",
+        "row": 47,
+        "symbol": "IsaacLabSubprocessBackend.__init__",
+        "value": 13
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/physical_nav2_pilot.py|PLR0915|run_physical_nav2_cleanup_pilot",
+        "limit": 50,
+        "message": "Too many statements (64 > 50)",
+        "path": "roboclaws/household/physical_nav2_pilot.py",
+        "row": 86,
+        "symbol": "run_physical_nav2_cleanup_pilot",
+        "value": 64
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/planner_proof_requests.py|C901|_discovered_runtime_aliases_by_source_request",
+        "limit": 10,
+        "message": "`_discovered_runtime_aliases_by_source_request` is too complex (11 > 10)",
+        "path": "roboclaws/household/planner_proof_requests.py",
+        "row": 1439,
+        "symbol": "_discovered_runtime_aliases_by_source_request",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/planner_proof_requests.py|C901|_prior_fallback_candidate_filters_by_source_request",
+        "limit": 10,
+        "message": "`_prior_fallback_candidate_filters_by_source_request` is too complex (14 > 10)",
+        "path": "roboclaws/household/planner_proof_requests.py",
+        "row": 1517,
+        "symbol": "_prior_fallback_candidate_filters_by_source_request",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/planner_proof_requests.py|PLR0912|_prior_fallback_candidate_filters_by_source_request",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/planner_proof_requests.py",
+        "row": 1517,
+        "symbol": "_prior_fallback_candidate_filters_by_source_request",
+        "value": 13
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/planner_proof_requests.py|PLR0915|_prior_fallback_candidate_filters_by_source_request",
+        "limit": 50,
+        "message": "Too many statements (52 > 50)",
+        "path": "roboclaws/household/planner_proof_requests.py",
+        "row": 1517,
+        "symbol": "_prior_fallback_candidate_filters_by_source_request",
+        "value": 52
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/realworld_cleanup.py|C901|_maybe_clean_visible_object",
+        "limit": 10,
+        "message": "`_maybe_clean_visible_object` is too complex (12 > 10)",
+        "path": "roboclaws/household/realworld_cleanup.py",
+        "row": 1167,
+        "symbol": "_maybe_clean_visible_object",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/realworld_cleanup.py|C901|run_realworld_cleanup",
+        "limit": 10,
+        "message": "`run_realworld_cleanup` is too complex (39 > 10)",
+        "path": "roboclaws/household/realworld_cleanup.py",
+        "row": 271,
+        "symbol": "run_realworld_cleanup",
+        "value": 39
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/realworld_cleanup.py|PLR0912|run_realworld_cleanup",
+        "limit": 12,
+        "message": "Too many branches (42 > 12)",
+        "path": "roboclaws/household/realworld_cleanup.py",
+        "row": 271,
+        "symbol": "run_realworld_cleanup",
+        "value": 42
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/realworld_cleanup.py|PLR0915|run_realworld_cleanup",
+        "limit": 50,
+        "message": "Too many statements (168 > 50)",
+        "path": "roboclaws/household/realworld_cleanup.py",
+        "row": 271,
+        "symbol": "run_realworld_cleanup",
+        "value": 168
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/realworld_contract.py|C901|RealWorldCleanupContract._runtime_public_semantic_anchors",
+        "limit": 10,
+        "message": "`_runtime_public_semantic_anchors` is too complex (13 > 10)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 2314,
+        "symbol": "RealWorldCleanupContract._runtime_public_semantic_anchors",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/realworld_contract.py|C901|RealWorldCleanupContract.declare_visual_candidates",
+        "limit": 10,
+        "message": "`declare_visual_candidates` is too complex (12 > 10)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 1010,
+        "symbol": "RealWorldCleanupContract.declare_visual_candidates",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/realworld_contract.py|C901|_inspection_waypoints_from_bundle_projection",
+        "limit": 10,
+        "message": "`_inspection_waypoints_from_bundle_projection` is too complex (11 > 10)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 6065,
+        "symbol": "_inspection_waypoints_from_bundle_projection",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/realworld_contract.py|C901|cleanup_policy_trace_from_events",
+        "limit": 10,
+        "message": "`cleanup_policy_trace_from_events` is too complex (17 > 10)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 5441,
+        "symbol": "cleanup_policy_trace_from_events",
+        "value": 17
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/realworld_contract.py|PLR0912|cleanup_policy_trace_from_events",
+        "limit": 12,
+        "message": "Too many branches (18 > 12)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 5441,
+        "symbol": "cleanup_policy_trace_from_events",
+        "value": 18
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/realworld_contract.py|PLR0915|RealWorldCleanupContract.__init__",
+        "limit": 50,
+        "message": "Too many statements (89 > 50)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 240,
+        "symbol": "RealWorldCleanupContract.__init__",
+        "value": 89
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/realworld_contract.py|PLR0915|cleanup_policy_trace_from_events",
+        "limit": 50,
+        "message": "Too many statements (64 > 50)",
+        "path": "roboclaws/household/realworld_contract.py",
+        "row": 5441,
+        "symbol": "cleanup_policy_trace_from_events",
+        "value": 64
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/realworld_mcp_server.py|PLR0915|RealWorldMolmoCleanupMCPServer.__init__",
+        "limit": 50,
+        "message": "Too many statements (57 > 50)",
+        "path": "roboclaws/household/realworld_mcp_server.py",
+        "row": 185,
+        "symbol": "RealWorldMolmoCleanupMCPServer.__init__",
+        "value": 57
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/realworld_mcp_server.py|PLR0915|RealWorldMolmoCleanupMCPServer._finalize_done",
+        "limit": 50,
+        "message": "Too many statements (74 > 50)",
+        "path": "roboclaws/household/realworld_mcp_server.py",
+        "row": 510,
+        "symbol": "RealWorldMolmoCleanupMCPServer._finalize_done",
+        "value": 74
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/report.py|C901|_action_evidence_summary",
+        "limit": 10,
+        "message": "`_action_evidence_summary` is too complex (16 > 10)",
+        "path": "roboclaws/household/report.py",
+        "row": 7463,
+        "symbol": "_action_evidence_summary",
+        "value": 16
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/report.py|C901|_grasp_cache_availability_preflight_section",
+        "limit": 10,
+        "message": "`_grasp_cache_availability_preflight_section` is too complex (11 > 10)",
+        "path": "roboclaws/household/report.py",
+        "row": 3134,
+        "symbol": "_grasp_cache_availability_preflight_section",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/report.py|C901|runtime_timing_from_trace",
+        "limit": 10,
+        "message": "`runtime_timing_from_trace` is too complex (13 > 10)",
+        "path": "roboclaws/household/report.py",
+        "row": 1159,
+        "symbol": "runtime_timing_from_trace",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/report.py|PLR0912|_action_evidence_summary",
+        "limit": 12,
+        "message": "Too many branches (15 > 12)",
+        "path": "roboclaws/household/report.py",
+        "row": 7463,
+        "symbol": "_action_evidence_summary",
+        "value": 15
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/report.py|PLR0915|runtime_timing_from_trace",
+        "limit": 50,
+        "message": "Too many statements (56 > 50)",
+        "path": "roboclaws/household/report.py",
+        "row": 1159,
+        "symbol": "runtime_timing_from_trace",
+        "value": 56
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/scene_camera_comparison.py|C901|_mujoco_render_contract_from_xml",
+        "limit": 10,
+        "message": "`_mujoco_render_contract_from_xml` is too complex (13 > 10)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 3801,
+        "symbol": "_mujoco_render_contract_from_xml",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/scene_camera_comparison.py|C901|_render_source_snippet",
+        "limit": 10,
+        "message": "`_render_source_snippet` is too complex (14 > 10)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 4478,
+        "symbol": "_render_source_snippet",
+        "value": 14
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/scene_camera_comparison.py|C901|_room_scale_contract_from_capture",
+        "limit": 10,
+        "message": "`_room_scale_contract_from_capture` is too complex (13 > 10)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 1322,
+        "symbol": "_room_scale_contract_from_capture",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/scene_camera_comparison.py|C901|_view_usd_prim_path",
+        "limit": 10,
+        "message": "`_view_usd_prim_path` is too complex (11 > 10)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 3627,
+        "symbol": "_view_usd_prim_path",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/scene_camera_comparison.py|C901|render_scene_camera_comparison_report",
+        "limit": 10,
+        "message": "`render_scene_camera_comparison_report` is too complex (12 > 10)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 346,
+        "symbol": "render_scene_camera_comparison_report",
+        "value": 12
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/scene_camera_comparison.py|PLR0912|_render_source_snippet",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 4478,
+        "symbol": "_render_source_snippet",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/scene_camera_comparison.py|PLR0912|_room_scale_contract_from_capture",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 1322,
+        "symbol": "_room_scale_contract_from_capture",
+        "value": 13
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/household/scene_camera_comparison.py|PLR0915|run_scene_camera_comparison",
+        "limit": 50,
+        "message": "Too many statements (55 > 50)",
+        "path": "roboclaws/household/scene_camera_comparison.py",
+        "row": 169,
+        "symbol": "run_scene_camera_comparison",
+        "value": 55
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/semantic_timeline.py|C901|semantic_substeps",
+        "limit": 10,
+        "message": "`semantic_substeps` is too complex (14 > 10)",
+        "path": "roboclaws/household/semantic_timeline.py",
+        "row": 420,
+        "symbol": "semantic_substeps",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/semantic_timeline.py|PLR0912|semantic_substeps",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/semantic_timeline.py",
+        "row": 420,
+        "symbol": "semantic_substeps",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/target_query.py|C901|_required_next_tool",
+        "limit": 10,
+        "message": "`_required_next_tool` is too complex (11 > 10)",
+        "path": "roboclaws/household/target_query.py",
+        "row": 206,
+        "symbol": "_required_next_tool",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/visual_grounding.py|C901|HttpVisualGroundingClient.request_candidates",
+        "limit": 10,
+        "message": "`request_candidates` is too complex (11 > 10)",
+        "path": "roboclaws/household/visual_grounding.py",
+        "row": 67,
+        "symbol": "HttpVisualGroundingClient.request_candidates",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/visual_grounding.py|C901|_validate_visual_grounding_candidate",
+        "limit": 10,
+        "message": "`_validate_visual_grounding_candidate` is too complex (11 > 10)",
+        "path": "roboclaws/household/visual_grounding.py",
+        "row": 366,
+        "symbol": "_validate_visual_grounding_candidate",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/visual_grounding.py|C901|validate_visual_grounding_request",
+        "limit": 10,
+        "message": "`validate_visual_grounding_request` is too complex (14 > 10)",
+        "path": "roboclaws/household/visual_grounding.py",
+        "row": 298,
+        "symbol": "validate_visual_grounding_request",
+        "value": 14
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/household/visual_grounding.py|C901|validate_visual_grounding_response",
+        "limit": 10,
+        "message": "`validate_visual_grounding_response` is too complex (14 > 10)",
+        "path": "roboclaws/household/visual_grounding.py",
+        "row": 329,
+        "symbol": "validate_visual_grounding_response",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/visual_grounding.py|PLR0912|validate_visual_grounding_request",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/visual_grounding.py",
+        "row": 298,
+        "symbol": "validate_visual_grounding_request",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/household/visual_grounding.py|PLR0912|validate_visual_grounding_response",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/household/visual_grounding.py",
+        "row": 329,
+        "symbol": "validate_visual_grounding_response",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/launch/catalog.py|C901|_overrides_with_surface_context",
+        "limit": 10,
+        "message": "`_overrides_with_surface_context` is too complex (11 > 10)",
+        "path": "roboclaws/launch/catalog.py",
+        "row": 547,
+        "symbol": "_overrides_with_surface_context",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/launch/runners.py|C901|export_env_from_overrides",
+        "limit": 10,
+        "message": "`export_env_from_overrides` is too complex (12 > 10)",
+        "path": "roboclaws/launch/runners.py",
+        "row": 23,
+        "symbol": "export_env_from_overrides",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/maps/bundle.py|C901|_normalize_room_only_fixture_poses",
+        "limit": 10,
+        "message": "`_normalize_room_only_fixture_poses` is too complex (11 > 10)",
+        "path": "roboclaws/maps/bundle.py",
+        "row": 567,
+        "symbol": "_normalize_room_only_fixture_poses",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/maps/bundle.py|C901|validate_nav2_map_bundle",
+        "limit": 10,
+        "message": "`validate_nav2_map_bundle` is too complex (29 > 10)",
+        "path": "roboclaws/maps/bundle.py",
+        "row": 294,
+        "symbol": "validate_nav2_map_bundle",
+        "value": 29
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/maps/bundle.py|PLR0912|validate_nav2_map_bundle",
+        "limit": 12,
+        "message": "Too many branches (29 > 12)",
+        "path": "roboclaws/maps/bundle.py",
+        "row": 294,
+        "symbol": "validate_nav2_map_bundle",
+        "value": 29
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/maps/bundle.py|PLR0915|validate_nav2_map_bundle",
+        "limit": 50,
+        "message": "Too many statements (85 > 50)",
+        "path": "roboclaws/maps/bundle.py",
+        "row": 294,
+        "symbol": "validate_nav2_map_bundle",
+        "value": 85
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/launcher.py|C901|_docker_container_ids_with_mount",
+        "limit": 10,
+        "message": "`_docker_container_ids_with_mount` is too complex (13 > 10)",
+        "path": "roboclaws/operator_console/launcher.py",
+        "row": 942,
+        "symbol": "_docker_container_ids_with_mount",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/launcher.py|C901|_validate_env_overrides",
+        "limit": 10,
+        "message": "`_validate_env_overrides` is too complex (13 > 10)",
+        "path": "roboclaws/operator_console/launcher.py",
+        "row": 531,
+        "symbol": "_validate_env_overrides",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/launcher.py|C901|build_launch_argv",
+        "limit": 10,
+        "message": "`build_launch_argv` is too complex (12 > 10)",
+        "path": "roboclaws/operator_console/launcher.py",
+        "row": 118,
+        "symbol": "build_launch_argv",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/launcher.py|C901|route_readiness",
+        "limit": 10,
+        "message": "`route_readiness` is too complex (20 > 10)",
+        "path": "roboclaws/operator_console/launcher.py",
+        "row": 285,
+        "symbol": "route_readiness",
+        "value": 20
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/operator_console/launcher.py|PLR0912|route_readiness",
+        "limit": 12,
+        "message": "Too many branches (22 > 12)",
+        "path": "roboclaws/operator_console/launcher.py",
+        "row": 285,
+        "symbol": "route_readiness",
+        "value": 22
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/operator_console/launcher.py|PLR0915|route_readiness",
+        "limit": 50,
+        "message": "Too many statements (75 > 50)",
+        "path": "roboclaws/operator_console/launcher.py",
+        "row": 285,
+        "symbol": "route_readiness",
+        "value": 75
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/server.py|C901|ConsoleRequestHandler.do_GET",
+        "limit": 10,
+        "message": "`do_GET` is too complex (23 > 10)",
+        "path": "roboclaws/operator_console/server.py",
+        "row": 59,
+        "symbol": "ConsoleRequestHandler.do_GET",
+        "value": 23
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/server.py|C901|ConsoleRequestHandler.do_POST",
+        "limit": 10,
+        "message": "`do_POST` is too complex (15 > 10)",
+        "path": "roboclaws/operator_console/server.py",
+        "row": 203,
+        "symbol": "ConsoleRequestHandler.do_POST",
+        "value": 15
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/operator_console/server.py|PLR0912|ConsoleRequestHandler.do_GET",
+        "limit": 12,
+        "message": "Too many branches (22 > 12)",
+        "path": "roboclaws/operator_console/server.py",
+        "row": 59,
+        "symbol": "ConsoleRequestHandler.do_GET",
+        "value": 22
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/operator_console/server.py|PLR0912|ConsoleRequestHandler.do_POST",
+        "limit": 12,
+        "message": "Too many branches (14 > 12)",
+        "path": "roboclaws/operator_console/server.py",
+        "row": 203,
+        "symbol": "ConsoleRequestHandler.do_POST",
+        "value": 14
+      },
+      {
+        "code": "PLR0915",
+        "key": "roboclaws/operator_console/server.py|PLR0915|ConsoleRequestHandler.do_GET",
+        "limit": 50,
+        "message": "Too many statements (57 > 50)",
+        "path": "roboclaws/operator_console/server.py",
+        "row": 59,
+        "symbol": "ConsoleRequestHandler.do_GET",
+        "value": 57
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/state.py|C901|_camera_angle_summary",
+        "limit": 10,
+        "message": "`_camera_angle_summary` is too complex (16 > 10)",
+        "path": "roboclaws/operator_console/state.py",
+        "row": 227,
+        "symbol": "_camera_angle_summary",
+        "value": 16
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/operator_console/state.py|C901|_run_result_success",
+        "limit": 10,
+        "message": "`_run_result_success` is too complex (14 > 10)",
+        "path": "roboclaws/operator_console/state.py",
+        "row": 721,
+        "symbol": "_run_result_success",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/operator_console/state.py|PLR0912|_camera_angle_summary",
+        "limit": 12,
+        "message": "Too many branches (16 > 12)",
+        "path": "roboclaws/operator_console/state.py",
+        "row": 227,
+        "symbol": "_camera_angle_summary",
+        "value": 16
+      },
+      {
+        "code": "PLR0912",
+        "key": "roboclaws/operator_console/state.py|PLR0912|_run_result_success",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "roboclaws/operator_console/state.py",
+        "row": 721,
+        "symbol": "_run_result_success",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "roboclaws/reports/live_performance.py|C901|_estimate_model_work_s",
+        "limit": 10,
+        "message": "`_estimate_model_work_s` is too complex (12 > 10)",
+        "path": "roboclaws/reports/live_performance.py",
+        "row": 571,
+        "symbol": "_estimate_model_work_s",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/agibot/generate_metric_map_from_context.py|C901|_coordinate_bounds",
+        "limit": 10,
+        "message": "`_coordinate_bounds` is too complex (11 > 10)",
+        "path": "scripts/agibot/generate_metric_map_from_context.py",
+        "row": 417,
+        "symbol": "_coordinate_bounds",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/agibot/generate_metric_map_from_context.py|C901|validate_context",
+        "limit": 10,
+        "message": "`validate_context` is too complex (18 > 10)",
+        "path": "scripts/agibot/generate_metric_map_from_context.py",
+        "row": 75,
+        "symbol": "validate_context",
+        "value": 18
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/agibot/generate_metric_map_from_context.py|PLR0912|validate_context",
+        "limit": 12,
+        "message": "Too many branches (18 > 12)",
+        "path": "scripts/agibot/generate_metric_map_from_context.py",
+        "row": 75,
+        "symbol": "validate_context",
+        "value": 18
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/dev/probe_mify_v25_image.py|PLR0915|main",
+        "limit": 50,
+        "message": "Too many statements (53 > 50)",
+        "path": "scripts/dev/probe_mify_v25_image.py",
+        "row": 34,
+        "symbol": "main",
+        "value": 53
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py|C901|validate",
+        "limit": 10,
+        "message": "`validate` is too complex (11 > 10)",
+        "path": "scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py",
+        "row": 70,
+        "symbol": "validate",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py|C901|_decision",
+        "limit": 10,
+        "message": "`_decision` is too complex (12 > 10)",
+        "path": "scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py",
+        "row": 141,
+        "symbol": "_decision",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py|C901|_parse_urdf_tree",
+        "limit": 10,
+        "message": "`_parse_urdf_tree` is too complex (13 > 10)",
+        "path": "scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py",
+        "row": 436,
+        "symbol": "_parse_urdf_tree",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_apply_isaac_capture_quality_overrides",
+        "limit": 10,
+        "message": "`_apply_isaac_capture_quality_overrides` is too complex (13 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 4723,
+        "symbol": "_apply_isaac_capture_quality_overrides",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_apply_scene_index_semantic_labels",
+        "limit": 10,
+        "message": "`_apply_scene_index_semantic_labels` is too complex (13 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 2878,
+        "symbol": "_apply_scene_index_semantic_labels",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_capture_isaac_lab_camera_views",
+        "limit": 10,
+        "message": "`_capture_isaac_lab_camera_views` is too complex (15 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 2088,
+        "symbol": "_capture_isaac_lab_camera_views",
+        "value": 15
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_real_semantic_pose_robot_view_images",
+        "limit": 10,
+        "message": "`_real_semantic_pose_robot_view_images` is too complex (12 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 7279,
+        "symbol": "_real_semantic_pose_robot_view_images",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_set_usd_xform_translate",
+        "limit": 10,
+        "message": "`_set_usd_xform_translate` is too complex (12 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 2784,
+        "symbol": "_set_usd_xform_translate",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|_usd_support_surface_union",
+        "limit": 10,
+        "message": "`_usd_support_surface_union` is too complex (11 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 1371,
+        "symbol": "_usd_support_surface_union",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|main",
+        "limit": 10,
+        "message": "`main` is too complex (17 > 10)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 389,
+        "symbol": "main",
+        "value": 17
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0912|_apply_isaac_capture_quality_overrides",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 4723,
+        "symbol": "_apply_isaac_capture_quality_overrides",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0912|_capture_isaac_lab_camera_views",
+        "limit": 12,
+        "message": "Too many branches (16 > 12)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 2088,
+        "symbol": "_capture_isaac_lab_camera_views",
+        "value": 16
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0912|main",
+        "limit": 12,
+        "message": "Too many branches (18 > 12)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 389,
+        "symbol": "main",
+        "value": 18
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|_capture_isaac_lab_camera_views",
+        "limit": 50,
+        "message": "Too many statements (85 > 50)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 2088,
+        "symbol": "_capture_isaac_lab_camera_views",
+        "value": 85
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|_capture_isaac_lab_scene_camera_views",
+        "limit": 50,
+        "message": "Too many statements (55 > 50)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 2524,
+        "symbol": "_capture_isaac_lab_scene_camera_views",
+        "value": 55
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|_real_semantic_pose_robot_view_images",
+        "limit": 50,
+        "message": "Too many statements (54 > 50)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 7279,
+        "symbol": "_real_semantic_pose_robot_view_images",
+        "value": 54
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|parse_args",
+        "limit": 50,
+        "message": "Too many statements (53 > 50)",
+        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+        "row": 235,
+        "symbol": "parse_args",
+        "value": 53
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py|C901|_rewrite_texture_scale_inputs",
+        "limit": 10,
+        "message": "`_rewrite_texture_scale_inputs` is too complex (11 > 10)",
+        "path": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py",
+        "row": 267,
+        "symbol": "_rewrite_texture_scale_inputs",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py|C901|make_material_response_probe_usd",
+        "limit": 10,
+        "message": "`make_material_response_probe_usd` is too complex (12 > 10)",
+        "path": "scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py",
+        "row": 86,
+        "symbol": "make_material_response_probe_usd",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py|C901|_assert_probe_result",
+        "limit": 10,
+        "message": "`_assert_probe_result` is too complex (51 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
+        "row": 68,
+        "symbol": "_assert_probe_result",
+        "value": 51
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py|PLR0912|_assert_probe_result",
+        "limit": 12,
+        "message": "Too many branches (50 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
+        "row": 68,
+        "symbol": "_assert_probe_result",
+        "value": 50
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py|PLR0915|_assert_probe_result",
+        "limit": 50,
+        "message": "Too many statements (140 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
+        "row": 68,
+        "symbol": "_assert_probe_result",
+        "value": 140
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_grasp_cache_availability_preflight",
+        "limit": 10,
+        "message": "`_assert_grasp_cache_availability_preflight` is too complex (12 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 805,
+        "symbol": "_assert_grasp_cache_availability_preflight",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_grasp_cache_generation_preflight",
+        "limit": 10,
+        "message": "`_assert_grasp_cache_generation_preflight` is too complex (15 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 865,
+        "symbol": "_assert_grasp_cache_generation_preflight",
+        "value": 15
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_proof_request_selection",
+        "limit": 10,
+        "message": "`_assert_proof_request_selection` is too complex (43 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 308,
+        "symbol": "_assert_proof_request_selection",
+        "value": 43
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_proof_result_summary",
+        "limit": 10,
+        "message": "`_assert_proof_result_summary` is too complex (47 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 515,
+        "symbol": "_assert_proof_result_summary",
+        "value": 47
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|C901|_assert_runner_result",
+        "limit": 10,
+        "message": "`_assert_runner_result` is too complex (16 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 59,
+        "symbol": "_assert_runner_result",
+        "value": 16
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0912|_assert_grasp_cache_generation_preflight",
+        "limit": 12,
+        "message": "Too many branches (14 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 865,
+        "symbol": "_assert_grasp_cache_generation_preflight",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0912|_assert_proof_request_selection",
+        "limit": 12,
+        "message": "Too many branches (42 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 308,
+        "symbol": "_assert_proof_request_selection",
+        "value": 42
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0912|_assert_proof_result_summary",
+        "limit": 12,
+        "message": "Too many branches (46 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 515,
+        "symbol": "_assert_proof_result_summary",
+        "value": 46
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0912|_assert_runner_result",
+        "limit": 12,
+        "message": "Too many branches (16 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 59,
+        "symbol": "_assert_runner_result",
+        "value": 16
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0915|_assert_proof_request_selection",
+        "limit": 50,
+        "message": "Too many statements (90 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 308,
+        "symbol": "_assert_proof_request_selection",
+        "value": 90
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0915|_assert_proof_result_summary",
+        "limit": 50,
+        "message": "Too many statements (113 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 515,
+        "symbol": "_assert_proof_result_summary",
+        "value": 113
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py|PLR0915|_assert_runner_result",
+        "limit": 50,
+        "message": "Too many statements (58 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
+        "row": 59,
+        "symbol": "_assert_runner_result",
+        "value": 58
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_agibot_semantic_map_build_result",
+        "limit": 10,
+        "message": "`_assert_agibot_semantic_map_build_result` is too complex (14 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 628,
+        "symbol": "_assert_agibot_semantic_map_build_result",
+        "value": 14
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_isaac_runtime",
+        "limit": 10,
+        "message": "`_assert_isaac_runtime` is too complex (20 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1596,
+        "symbol": "_assert_isaac_runtime",
+        "value": 20
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_public_agent_view",
+        "limit": 10,
+        "message": "`_assert_public_agent_view` is too complex (14 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1027,
+        "symbol": "_assert_public_agent_view",
+        "value": 14
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_result",
+        "limit": 10,
+        "message": "`_assert_result` is too complex (48 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 314,
+        "symbol": "_assert_result",
+        "value": 48
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_runtime_metric_map",
+        "limit": 10,
+        "message": "`_assert_runtime_metric_map` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1139,
+        "symbol": "_assert_runtime_metric_map",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|C901|_assert_waypoint_honesty",
+        "limit": 10,
+        "message": "`_assert_waypoint_honesty` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 2871,
+        "symbol": "_assert_waypoint_honesty",
+        "value": 11
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0912|_assert_agibot_semantic_map_build_result",
+        "limit": 12,
+        "message": "Too many branches (14 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 628,
+        "symbol": "_assert_agibot_semantic_map_build_result",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0912|_assert_isaac_runtime",
+        "limit": 12,
+        "message": "Too many branches (21 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1596,
+        "symbol": "_assert_isaac_runtime",
+        "value": 21
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0912|_assert_public_agent_view",
+        "limit": 12,
+        "message": "Too many branches (15 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1027,
+        "symbol": "_assert_public_agent_view",
+        "value": 15
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0912|_assert_result",
+        "limit": 12,
+        "message": "Too many branches (50 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 314,
+        "symbol": "_assert_result",
+        "value": 50
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0912|_assert_waypoint_honesty",
+        "limit": 12,
+        "message": "Too many branches (14 > 12)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 2871,
+        "symbol": "_assert_waypoint_honesty",
+        "value": 14
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_agibot_g2_hardware_semantic_map_build",
+        "limit": 50,
+        "message": "Too many statements (53 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 818,
+        "symbol": "_assert_agibot_g2_hardware_semantic_map_build",
+        "value": 53
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_agibot_semantic_map_build_result",
+        "limit": 50,
+        "message": "Too many statements (67 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 628,
+        "symbol": "_assert_agibot_semantic_map_build_result",
+        "value": 67
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_isaac_runtime",
+        "limit": 50,
+        "message": "Too many statements (104 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1596,
+        "symbol": "_assert_isaac_runtime",
+        "value": 104
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_minimal_map",
+        "limit": 50,
+        "message": "Too many statements (59 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1292,
+        "symbol": "_assert_minimal_map",
+        "value": 59
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_public_agent_view",
+        "limit": 50,
+        "message": "Too many statements (71 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1027,
+        "symbol": "_assert_public_agent_view",
+        "value": 71
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_result",
+        "limit": 50,
+        "message": "Too many statements (138 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 314,
+        "symbol": "_assert_result",
+        "value": 138
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_runtime_metric_map",
+        "limit": 50,
+        "message": "Too many statements (61 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 1139,
+        "symbol": "_assert_runtime_metric_map",
+        "value": 61
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|_assert_waypoint_honesty",
+        "limit": 50,
+        "message": "Too many statements (72 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 2871,
+        "symbol": "_assert_waypoint_honesty",
+        "value": 72
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py|PLR0915|parse_args",
+        "limit": 50,
+        "message": "Too many statements (57 > 50)",
+        "path": "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "row": 88,
+        "symbol": "parse_args",
+        "value": 57
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py|C901|_label_full_trace",
+        "limit": 10,
+        "message": "`_label_full_trace` is too complex (13 > 10)",
+        "path": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py",
+        "row": 431,
+        "symbol": "_label_full_trace",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py|PLR0912|_label_full_trace",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "scripts/molmo_cleanup/generate_raw_fpv_private_labels.py",
+        "row": 431,
+        "symbol": "_label_full_trace",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|C901|main",
+        "limit": 10,
+        "message": "`main` is too complex (18 > 10)",
+        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+        "row": 56,
+        "symbol": "main",
+        "value": 18
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|C901|run_state_command",
+        "limit": 10,
+        "message": "`run_state_command` is too complex (16 > 10)",
+        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+        "row": 268,
+        "symbol": "run_state_command",
+        "value": 16
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|PLR0912|main",
+        "limit": 12,
+        "message": "Too many branches (19 > 12)",
+        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+        "row": 56,
+        "symbol": "main",
+        "value": 19
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|PLR0912|run_state_command",
+        "limit": 12,
+        "message": "Too many branches (16 > 12)",
+        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+        "row": 268,
+        "symbol": "run_state_command",
+        "value": 16
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py|PLR0915|main",
+        "limit": 50,
+        "message": "Too many statements (106 > 50)",
+        "path": "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+        "row": 56,
+        "symbol": "main",
+        "value": 106
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py|C901|main",
+        "limit": 10,
+        "message": "`main` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py",
+        "row": 79,
+        "symbol": "main",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|C901|LiveOpenAIAgentsCleanupRunner._run_sdk_agent",
+        "limit": 10,
+        "message": "`_run_sdk_agent` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 507,
+        "symbol": "LiveOpenAIAgentsCleanupRunner._run_sdk_agent",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|C901|_model_racing_observability_metrics",
+        "limit": 10,
+        "message": "`_model_racing_observability_metrics` is too complex (21 > 10)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 2825,
+        "symbol": "_model_racing_observability_metrics",
+        "value": 21
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|C901|_model_service_fallback_metrics",
+        "limit": 10,
+        "message": "`_model_service_fallback_metrics` is too complex (13 > 10)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 2746,
+        "symbol": "_model_service_fallback_metrics",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|C901|_raw_fpv_budget_failure",
+        "limit": 10,
+        "message": "`_raw_fpv_budget_failure` is too complex (12 > 10)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 1857,
+        "symbol": "_raw_fpv_budget_failure",
+        "value": 12
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|PLR0912|_model_racing_observability_metrics",
+        "limit": 12,
+        "message": "Too many branches (21 > 12)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 2825,
+        "symbol": "_model_racing_observability_metrics",
+        "value": 21
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|PLR0915|_model_input_filter_metrics",
+        "limit": 50,
+        "message": "Too many statements (91 > 50)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 2970,
+        "symbol": "_model_input_filter_metrics",
+        "value": 91
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py|PLR0915|_model_racing_observability_metrics",
+        "limit": 50,
+        "message": "Too many statements (88 > 50)",
+        "path": "scripts/molmo_cleanup/run_live_openai_agents_cleanup.py",
+        "row": 2825,
+        "symbol": "_model_racing_observability_metrics",
+        "value": 88
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_apply_task_sampler_failure_diagnostics_adapter",
+        "limit": 10,
+        "message": "`_apply_task_sampler_failure_diagnostics_adapter` is too complex (12 > 10)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 1733,
+        "symbol": "_apply_task_sampler_failure_diagnostics_adapter",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_configure_exact_cleanup_task",
+        "limit": 10,
+        "message": "`_configure_exact_cleanup_task` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 1493,
+        "symbol": "_configure_exact_cleanup_task",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_install_grasp_collision_diagnostics",
+        "limit": 10,
+        "message": "`_install_grasp_collision_diagnostics` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 1928,
+        "symbol": "_install_grasp_collision_diagnostics",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|C901|_write_probe_result",
+        "limit": 10,
+        "message": "`_write_probe_result` is too complex (16 > 10)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 2781,
+        "symbol": "_write_probe_result",
+        "value": 16
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0912|_write_probe_result",
+        "limit": 12,
+        "message": "Too many branches (16 > 12)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 2781,
+        "symbol": "_write_probe_result",
+        "value": 16
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0915|_apply_task_sampler_failure_diagnostics_adapter",
+        "limit": 50,
+        "message": "Too many statements (68 > 50)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 1733,
+        "symbol": "_apply_task_sampler_failure_diagnostics_adapter",
+        "value": 68
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0915|_execute_policy_probe",
+        "limit": 50,
+        "message": "Too many statements (59 > 50)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 1249,
+        "symbol": "_execute_policy_probe",
+        "value": 59
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py|PLR0915|_write_probe_result",
+        "limit": 50,
+        "message": "Too many statements (51 > 50)",
+        "path": "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
+        "row": 2781,
+        "symbol": "_write_probe_result",
+        "value": 51
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py|C901|score_variant",
+        "limit": 10,
+        "message": "`score_variant` is too complex (19 > 10)",
+        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py",
+        "row": 686,
+        "symbol": "score_variant",
+        "value": 19
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py|PLR0912|score_variant",
+        "limit": 12,
+        "message": "Too many branches (18 > 12)",
+        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py",
+        "row": 686,
+        "symbol": "score_variant",
+        "value": 18
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py|PLR0915|score_variant",
+        "limit": 50,
+        "message": "Too many statements (72 > 50)",
+        "path": "scripts/molmo_cleanup/run_raw_fpv_perception_probe.py",
+        "row": 686,
+        "symbol": "score_variant",
+        "value": 72
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_material_response_probe_history",
+        "limit": 10,
+        "message": "`_material_response_probe_history` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
+        "row": 3967,
+        "symbol": "_material_response_probe_history",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_object_gate_classification",
+        "limit": 10,
+        "message": "`_object_gate_classification` is too complex (12 > 10)",
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
+        "row": 2302,
+        "symbol": "_object_gate_classification",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_texture_material_target_summary",
+        "limit": 10,
+        "message": "`_texture_material_target_summary` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
+        "row": 4222,
+        "symbol": "_texture_material_target_summary",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_tone_color_probe_history",
+        "limit": 10,
+        "message": "`_tone_color_probe_history` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
+        "row": 4052,
+        "symbol": "_tone_color_probe_history",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|C901|_usd_preview_surface_material_model_check",
+        "limit": 10,
+        "message": "`_usd_preview_surface_material_model_check` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
+        "row": 4309,
+        "symbol": "_usd_preview_surface_material_model_check",
+        "value": 11
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py|PLR0915|run_comparison",
+        "limit": 50,
+        "message": "Too many statements (76 > 50)",
+        "path": "scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py",
+        "row": 261,
+        "symbol": "run_comparison",
+        "value": 76
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/summarize_live_run.py|C901|_print_timing",
+        "limit": 10,
+        "message": "`_print_timing` is too complex (13 > 10)",
+        "path": "scripts/molmo_cleanup/summarize_live_run.py",
+        "row": 488,
+        "symbol": "_print_timing",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|C901|_combined_material_light_default_gate_check",
+        "limit": 10,
+        "message": "`_combined_material_light_default_gate_check` is too complex (11 > 10)",
+        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
+        "row": 1398,
+        "symbol": "_combined_material_light_default_gate_check",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|C901|_prepared_scale_square_default_gate_check",
+        "limit": 10,
+        "message": "`_prepared_scale_square_default_gate_check` is too complex (13 > 10)",
+        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
+        "row": 1238,
+        "symbol": "_prepared_scale_square_default_gate_check",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|C901|_view_specific_prepared_scale_square_tone_gate_check",
+        "limit": 10,
+        "message": "`_view_specific_prepared_scale_square_tone_gate_check` is too complex (13 > 10)",
+        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
+        "row": 1528,
+        "symbol": "_view_specific_prepared_scale_square_tone_gate_check",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|PLR0912|_prepared_scale_square_default_gate_check",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
+        "row": 1238,
+        "symbol": "_prepared_scale_square_default_gate_check",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py|PLR0912|_view_specific_prepared_scale_square_tone_gate_check",
+        "limit": 12,
+        "message": "Too many branches (14 > 12)",
+        "path": "scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py",
+        "row": 1528,
+        "symbol": "_view_specific_prepared_scale_square_tone_gate_check",
+        "value": 14
+      },
+      {
+        "code": "C901",
+        "key": "scripts/openclaw/tail-openclaw-chat.py|C901|_fmt_content",
+        "limit": 10,
+        "message": "`_fmt_content` is too complex (12 > 10)",
+        "path": "scripts/openclaw/tail-openclaw-chat.py",
+        "row": 130,
+        "symbol": "_fmt_content",
+        "value": 12
+      },
+      {
+        "code": "C901",
+        "key": "scripts/openclaw/tail-openclaw-chat.py|C901|main",
+        "limit": 10,
+        "message": "`main` is too complex (11 > 10)",
+        "path": "scripts/openclaw/tail-openclaw-chat.py",
+        "row": 197,
+        "symbol": "main",
+        "value": 11
+      },
+      {
+        "code": "C901",
+        "key": "scripts/operator_console/render_scene_previews.py|C901|_render_semantic_map_preview",
+        "limit": 10,
+        "message": "`_render_semantic_map_preview` is too complex (13 > 10)",
+        "path": "scripts/operator_console/render_scene_previews.py",
+        "row": 491,
+        "symbol": "_render_semantic_map_preview",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "scripts/visual_grounding/adapters.py|C901|_yolo_candidates_from_model",
+        "limit": 10,
+        "message": "`_yolo_candidates_from_model` is too complex (11 > 10)",
+        "path": "scripts/visual_grounding/adapters.py",
+        "row": 1268,
+        "symbol": "_yolo_candidates_from_model",
+        "value": 11
+      },
+      {
+        "code": "PLR0915",
+        "key": "scripts/visual_grounding/run_visual_grounding_benchmark.py|PLR0915|_score_predictions",
+        "limit": 50,
+        "message": "Too many statements (60 > 50)",
+        "path": "scripts/visual_grounding/run_visual_grounding_benchmark.py",
+        "row": 500,
+        "symbol": "_score_predictions",
+        "value": 60
+      },
+      {
+        "code": "C901",
+        "key": "skills/agent-validation-matrix/scripts/select_validation_matrix.py|C901|_detect_signals",
+        "limit": 10,
+        "message": "`_detect_signals` is too complex (14 > 10)",
+        "path": "skills/agent-validation-matrix/scripts/select_validation_matrix.py",
+        "row": 265,
+        "symbol": "_detect_signals",
+        "value": 14
+      },
+      {
+        "code": "PLR0912",
+        "key": "skills/agent-validation-matrix/scripts/select_validation_matrix.py|PLR0912|_detect_signals",
+        "limit": 12,
+        "message": "Too many branches (13 > 12)",
+        "path": "skills/agent-validation-matrix/scripts/select_validation_matrix.py",
+        "row": 265,
+        "symbol": "_detect_signals",
+        "value": 13
+      },
+      {
+        "code": "C901",
+        "key": "tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py|C901|_write_report_files",
+        "limit": 10,
+        "message": "`_write_report_files` is too complex (16 > 10)",
+        "path": "tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py",
+        "row": 47,
+        "symbol": "_write_report_files",
+        "value": 16
+      },
+      {
+        "code": "PLR0912",
+        "key": "tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py|PLR0912|_write_report_files",
+        "limit": 12,
+        "message": "Too many branches (15 > 12)",
+        "path": "tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py",
+        "row": 47,
+        "symbol": "_write_report_files",
+        "value": 15
+      },
+      {
+        "code": "C901",
+        "key": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py|C901|_add_isaac_robot_view_step",
+        "limit": 10,
+        "message": "`_add_isaac_robot_view_step` is too complex (13 > 10)",
+        "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py",
+        "row": 4042,
+        "symbol": "_add_isaac_robot_view_step",
+        "value": 13
+      },
+      {
+        "code": "PLR0912",
+        "key": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py|PLR0912|_add_isaac_robot_view_step",
+        "limit": 12,
+        "message": "Too many branches (16 > 12)",
+        "path": "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py",
+        "row": 4042,
+        "symbol": "_add_isaac_robot_view_step",
+        "value": 16
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/dev_tools/test_code_just_recipes.py|PLR0915|test_pinned_coding_agent_docker_toolchain_is_the_ci_source",
+        "limit": 50,
+        "message": "Too many statements (59 > 50)",
+        "path": "tests/contract/dev_tools/test_code_just_recipes.py",
+        "row": 82,
+        "symbol": "test_pinned_coding_agent_docker_toolchain_is_the_ci_source",
+        "value": 59
+      },
+      {
+        "code": "C901",
+        "key": "tests/contract/dev_tools/test_task_agent_just_recipes.py|C901|surface_args_from_legacy_task_args",
+        "limit": 10,
+        "message": "`surface_args_from_legacy_task_args` is too complex (12 > 10)",
+        "path": "tests/contract/dev_tools/test_task_agent_just_recipes.py",
+        "row": 235,
+        "symbol": "surface_args_from_legacy_task_args",
+        "value": 12
+      },
+      {
+        "code": "PLR0912",
+        "key": "tests/contract/dev_tools/test_task_agent_just_recipes.py|PLR0912|surface_args_from_legacy_task_args",
+        "limit": 12,
+        "message": "Too many branches (14 > 12)",
+        "path": "tests/contract/dev_tools/test_task_agent_just_recipes.py",
+        "row": 235,
+        "symbol": "surface_args_from_legacy_task_args",
+        "value": 14
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py|PLR0915|test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates",
+        "limit": 50,
+        "message": "Too many statements (65 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py",
+        "row": 908,
+        "symbol": "test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates",
+        "value": 65
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py|PLR0915|test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance",
+        "limit": 50,
+        "message": "Too many statements (62 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py",
+        "row": 308,
+        "symbol": "test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance",
+        "value": 62
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py|PLR0915|test_realworld_mcp_smoke_writes_agent_artifacts",
+        "limit": 50,
+        "message": "Too many statements (52 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py",
+        "row": 512,
+        "symbol": "test_realworld_mcp_smoke_writes_agent_artifacts",
+        "value": 52
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py|PLR0915|test_realworld_cleanup_demo_can_run_isaaclab_fake_backend",
+        "limit": 50,
+        "message": "Too many statements (84 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
+        "row": 387,
+        "symbol": "test_realworld_cleanup_demo_can_run_isaaclab_fake_backend",
+        "value": 84
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py|PLR0915|test_realworld_cleanup_demo_writes_public_private_artifacts",
+        "limit": 50,
+        "message": "Too many statements (56 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py",
+        "row": 96,
+        "symbol": "test_realworld_cleanup_demo_writes_public_private_artifacts",
+        "value": 56
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py|PLR0915|test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace",
+        "limit": 50,
+        "message": "Too many statements (57 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_physical_agibot_pilot.py",
+        "row": 324,
+        "symbol": "test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace",
+        "value": 57
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/molmo_cleanup/test_scene_camera_comparison.py|PLR0915|test_scene_camera_comparison_report_is_render_only_and_side_by_side",
+        "limit": 50,
+        "message": "Too many statements (97 > 50)",
+        "path": "tests/contract/molmo_cleanup/test_scene_camera_comparison.py",
+        "row": 640,
+        "symbol": "test_scene_camera_comparison_report_is_render_only_and_side_by_side",
+        "value": 97
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/reports/test_molmo_cleanup_report.py|PLR0915|test_cleanup_report_renders_robot_visual_timeline",
+        "limit": 50,
+        "message": "Too many statements (56 > 50)",
+        "path": "tests/contract/reports/test_molmo_cleanup_report.py",
+        "row": 213,
+        "symbol": "test_cleanup_report_renders_robot_visual_timeline",
+        "value": 56
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/reports/test_molmo_cleanup_report.py|PLR0915|test_planner_manipulation_probe_report_uses_shared_underlay",
+        "limit": 50,
+        "message": "Too many statements (93 > 50)",
+        "path": "tests/contract/reports/test_molmo_cleanup_report.py",
+        "row": 2780,
+        "symbol": "test_planner_manipulation_probe_report_uses_shared_underlay",
+        "value": 93
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/contract/reports/test_molmo_cleanup_report.py|PLR0915|test_planner_proof_bundle_runner_report_renders_commands",
+        "limit": 50,
+        "message": "Too many statements (117 > 50)",
+        "path": "tests/contract/reports/test_molmo_cleanup_report.py",
+        "row": 1832,
+        "symbol": "test_planner_proof_bundle_runner_report_renders_commands",
+        "value": 117
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/agents/test_live_runtime.py|PLR0915|test_openai_agents_cleanup_runner_invokes_sdk_then_checker",
+        "limit": 50,
+        "message": "Too many statements (57 > 50)",
+        "path": "tests/unit/agents/test_live_runtime.py",
+        "row": 1837,
+        "symbol": "test_openai_agents_cleanup_runner_invokes_sdk_then_checker",
+        "value": 57
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/agents/test_live_runtime.py|PLR0915|test_openai_agents_perf_profiles_resolve_known_defaults",
+        "limit": 50,
+        "message": "Too many statements (80 > 50)",
+        "path": "tests/unit/agents/test_live_runtime.py",
+        "row": 3466,
+        "symbol": "test_openai_agents_perf_profiles_resolve_known_defaults",
+        "value": 80
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/agents/test_provider_timing_proxy.py|PLR0915|_proxy_streaming_case",
+        "limit": 50,
+        "message": "Too many statements (58 > 50)",
+        "path": "tests/unit/agents/test_provider_timing_proxy.py",
+        "row": 33,
+        "symbol": "_proxy_streaming_case",
+        "value": 58
+      },
+      {
+        "code": "C901",
+        "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|C901|test_isaac_head_camera_robot_pose_application_uses_shared_pose",
+        "limit": 10,
+        "message": "`test_isaac_head_camera_robot_pose_application_uses_shared_pose` is too complex (17 > 10)",
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py",
+        "row": 1690,
+        "symbol": "test_isaac_head_camera_robot_pose_application_uses_shared_pose",
+        "value": 17
+      },
+      {
+        "code": "C901",
+        "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|C901|test_isaac_scene_camera_capture_applies_color_profile",
+        "limit": 10,
+        "message": "`test_isaac_scene_camera_capture_applies_color_profile` is too complex (16 > 10)",
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py",
+        "row": 666,
+        "symbol": "test_isaac_scene_camera_capture_applies_color_profile",
+        "value": 16
+      },
+      {
+        "code": "C901",
+        "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|C901|test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local",
+        "limit": 10,
+        "message": "`test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local` is too complex (14 > 10)",
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py",
+        "row": 1862,
+        "symbol": "test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local",
+        "value": 14
+      },
+      {
+        "code": "C901",
+        "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|C901|test_isaac_semantic_pose_stage_application_updates_existing_translate_op",
+        "limit": 10,
+        "message": "`test_isaac_semantic_pose_stage_application_updates_existing_translate_op` is too complex (18 > 10)",
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py",
+        "row": 1949,
+        "symbol": "test_isaac_semantic_pose_stage_application_updates_existing_translate_op",
+        "value": 18
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|PLR0915|test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose",
+        "limit": 50,
+        "message": "Too many statements (109 > 50)",
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py",
+        "row": 33,
+        "symbol": "test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose",
+        "value": 109
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py|PLR0915|test_isaac_lab_real_worker_views_recapture_semantic_pose_state",
+        "limit": 50,
+        "message": "Too many statements (75 > 50)",
+        "path": "tests/unit/molmo_cleanup/test_isaac_lab_backend.py",
+        "row": 3449,
+        "symbol": "test_isaac_lab_real_worker_views_recapture_semantic_pose_state",
+        "value": 75
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py|PLR0915|test_robot_camera_object_parity_audit_covers_unselected_objects",
+        "limit": 50,
+        "message": "Too many statements (56 > 50)",
+        "path": "tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py",
+        "row": 2006,
+        "symbol": "test_robot_camera_object_parity_audit_covers_unselected_objects",
+        "value": 56
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py|PLR0915|test_robot_camera_render_contract_diagnostics_reports_light_shadow_delta",
+        "limit": 50,
+        "message": "Too many statements (52 > 50)",
+        "path": "tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py",
+        "row": 752,
+        "symbol": "test_robot_camera_render_contract_diagnostics_reports_light_shadow_delta",
+        "value": 52
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/operator_console/test_static_assets.py|PLR0915|test_static_app_has_route_specific_field_groups",
+        "limit": 50,
+        "message": "Too many statements (113 > 50)",
+        "path": "tests/unit/operator_console/test_static_assets.py",
+        "row": 20,
+        "symbol": "test_static_app_has_route_specific_field_groups",
+        "value": 113
+      },
+      {
+        "code": "PLR0915",
+        "key": "tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py|PLR0915|test_runner_writes_dry_run_manifest_and_report_from_inline_requests",
+        "limit": 50,
+        "message": "Too many statements (55 > 50)",
+        "path": "tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py",
+        "row": 30,
+        "symbol": "test_runner_writes_dry_run_manifest_and_report_from_inline_requests",
+        "value": 55
+      }
+    ]
+  },
+  "schema": "roboclaws_python_quality_ratchet_v1"
+}

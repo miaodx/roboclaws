@@ -21,6 +21,7 @@ def print_launch_trace(plan: LaunchPlan) -> None:
         f"world={plan.world}",
         f"backend={plan.backend}",
         f"intent={plan.intent}",
+        f"preset={plan.preset or ''}",
         f"agent_engine={plan.agent_engine}",
         f"provider_profile={plan.provider_profile or ''}",
         f"runner_class={plan.internal_runner_class}",
@@ -31,6 +32,7 @@ def print_launch_trace(plan: LaunchPlan) -> None:
         f"report={plan.report or ''}",
         f"prompt={plan.prompt_id}",
         f"checker={plan.checker_id}",
+        f"skill={plan.skill_name}",
         f"goal={plan.goal_contract.normalized_goal}",
         f"target={shlex.join(plan.argv)}",
     )

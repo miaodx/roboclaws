@@ -38,10 +38,10 @@ claude_full_permission_args := "--dangerously-skip-permissions --permission-mode
 default:
     @just --list molmo
 
-# Explicit cleanup evidence-lane runner. The recipe parameter remains named
-# `profile` for positional Just compatibility; public callers should pass the
-# new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" goal_contract_json="" goal_contract_path="":
+# Private household-world cleanup implementation runner. Public callers should
+# enter through `run::surface`; maintainers should enter through `agent::run`.
+[private]
+household-cleanup-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" skill_name="" goal_contract_json="" goal_contract_path="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -71,12 +71,12 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_name="{{task_name}}"
     operator_messages_path="{{operator_messages_path}}"
     task_intent_mode="{{task_intent_mode}}"
+    skill_name="{{skill_name}}"
     goal_contract_json="{{goal_contract_json}}"
     goal_contract_path="{{goal_contract_path}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
-    # the first axes so `just molmo::cleanup driver=direct profile=smoke`
-    # stays usable for operators.
+    # the first axes so maintainer callers can use key=value style.
     driver="${driver#driver=}"
     profile="${profile#profile=}"
     seeds="${seeds#seeds=}"
@@ -112,18 +112,49 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_intent_mode="${task_intent_mode#task_intent_mode=}"
     task_intent_mode="${task_intent_mode#task-intent-mode=}"
     task_intent_mode="${task_intent_mode:-default_cleanup}"
+    skill_name="${skill_name#skill_name=}"
+    skill_name="${skill_name#skill-name=}"
+    skill_name="${skill_name:-${ROBOCLAWS_TASK_SKILL:-}}"
     goal_contract_json="${goal_contract_json#goal_contract_json=}"
     goal_contract_json="${goal_contract_json#goal-contract-json=}"
     goal_contract_path="${goal_contract_path#goal_contract_path=}"
     goal_contract_path="${goal_contract_path#goal-contract-path=}"
     goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"
     goal_contract_path="${goal_contract_path:-${ROBOCLAWS_GOAL_CONTRACT_PATH:-}}"
+    if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
+      trace_args=(
+        "$driver" "$profile" "$seeds" "$output_dir" "$task"
+        "$generated_mess_count" "$host" "$port" "$map_bundle"
+        "$cleanup_routine" "$robot_views" "$camera_labeler"
+        "$visual_grounding_timeout_s" "$semantic_sweep"
+        "$runtime_map_prior" "$backend_override" "$map_mode"
+        "$scene_source" "$scene_index" "$isaac_scene_usd_path"
+        "$min_generated_mess_count_override" "$generated_mess_object_ids"
+        "$task_name" "$operator_messages_path" "$task_intent_mode"
+      )
+      if [[ -n "$skill_name" || -n "$goal_contract_json" || -n "$goal_contract_path" ]]; then
+        trace_args+=("$skill_name" "$goal_contract_json" "$goal_contract_path")
+      fi
+      printf 'just\tmolmo::household-cleanup-impl'
+      for arg in "${trace_args[@]}"; do
+        printf '\t%s' "$arg"
+      done
+      printf '\n'
+      exit 0
+    fi
     task_intent="${ROBOCLAWS_TASK_INTENT:-}"
     if [[ -z "$task_intent" ]]; then
       case "$task_name" in
         semantic-map-build) task_intent="map-build" ;;
         *) task_intent="cleanup" ;;
       esac
+    fi
+    if [[ -z "$skill_name" ]]; then
+      if [[ "$task_name" == "semantic-map-build" || "$task_intent" == "open-ended" ]]; then
+        skill_name="household-open-task"
+      else
+        skill_name="molmo-realworld-cleanup"
+      fi
     fi
     open_ended_intent="false"
     if [[ "$task_intent" == "open-ended" ]]; then
@@ -574,7 +605,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           claude_bin="$PWD/${docker_shim_dir}/claude"
           export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
         prompt_cleanup_count="$generated_mess_count"
@@ -709,6 +740,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --skill-name "$skill_name"
             --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
@@ -757,7 +789,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \
             ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS \
             ROBOCLAWS_ISAACLAB_PYTHON ROBOCLAWS_ISAACLAB_RUNTIME_MODE \
-            ROBOCLAWS_REPORT_RERUN_COMMAND
+            ROBOCLAWS_REPORT_RERUN_COMMAND ROBOCLAWS_TASK_INTENT ROBOCLAWS_TASK_PRESET ROBOCLAWS_TASK_SKILL
           do
             if [[ -n "${!env_name:-}" ]]; then
               tmux_env_args+=(-e "${env_name}=${!env_name}")
@@ -800,6 +832,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
+            --task-name "$task_name"
+            --skill-name "$skill_name"
             --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
@@ -854,6 +888,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --skill-name "$skill_name"
             --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
@@ -1126,27 +1161,28 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
 
 # Cheap default: deterministic MCP smoke on the synthetic backend.
 quick-check driver="mcp-smoke" profile="smoke" seed="7" output_dir="output/molmo/quick-check" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "{{driver}}" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-cleanup-impl "{{driver}}" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Canonical human review report: direct cleanup, real MolmoSpaces/RBY1M visuals.
 review-report seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "direct" "world-oracle-labels" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-cleanup-impl direct world-oracle-labels "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Deterministic ADR-0003 MCP tool smoke with real MolmoSpaces/RBY1M visuals.
 mcp-smoke-report seed="7" output_dir="output/molmo/mcp-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "mcp-smoke" "world-oracle-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-cleanup-impl mcp-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # OpenClaw-shaped/policy-labeled smoke with real MolmoSpaces/RBY1M visuals.
+[private]
 openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "openclaw-smoke" "world-oracle-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-cleanup-impl openclaw-smoke world-oracle-labels "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Raw camera-input evidence report. This proves camera artifact plumbing, not cleanup success.
 camera-raw-fpv-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "direct" "camera-raw-fpv" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::household-cleanup-impl direct camera-raw-fpv "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
 codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
-    just molmo::cleanup "codex-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+    just molmo::household-cleanup-impl codex-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
 status path="":
@@ -1159,7 +1195,7 @@ status path="":
 
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
 claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
-    just molmo::cleanup "claude-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+    just molmo::household-cleanup-impl claude-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Local rehearsal for the opt-in hosted Molmo live CI job.
 ci-rehearsal entry="kimi-k2.6" dry_run="":
@@ -1265,93 +1301,12 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
     "$python_bin" scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
+[private]
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" port="18788":
-    just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"
-
-# Fast render-only comparison: current MuJoCo vs Python 3.11 MolmoSpaces Filament.
-renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/renderer-comparison" scene_source="procthor-10k-val" scene_index="0" robot_name="rby1m" focus_sample_count="4" render_width="540" render_height="360":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    seed="{{seed}}"
-    generated_mess_count="{{generated_mess_count}}"
-    output_dir="{{output_dir}}"
-    scene_source="{{scene_source}}"
-    scene_index="{{scene_index}}"
-    robot_name="{{robot_name}}"
-    focus_sample_count="{{focus_sample_count}}"
-    render_width="{{render_width}}"
-    render_height="{{render_height}}"
-    seed="${seed#seed=}"
-    generated_mess_count="${generated_mess_count#generated_mess_count=}"
-    output_dir="${output_dir#output_dir=}"
-    scene_source="${scene_source#scene_source=}"
-    scene_index="${scene_index#scene_index=}"
-    robot_name="${robot_name#robot_name=}"
-    focus_sample_count="${focus_sample_count#focus_sample_count=}"
-    render_width="${render_width#render_width=}"
-    render_height="${render_height#render_height=}"
-
-    standard_python="${ROBOCLAWS_MOLMOSPACES_STANDARD_PYTHON:-.venv/bin/python}"
-    filament_python="${ROBOCLAWS_MOLMOSPACES_FILAMENT_PYTHON:-.venv-molmospaces-filament/bin/python}"
-    filament_setup_command=(
-      'UV_PROJECT_ENVIRONMENT="$PWD/.venv-molmospaces-filament" \'
-      '  uv sync --project sidecars/molmospaces-filament \'
-      '  --python /home/mi/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/bin/python3.11 \'
-      '  --index-strategy unsafe-best-match'
-      'uv pip install --python .venv-molmospaces-filament/bin/python \'
-      '  --default-index https://pypi.org/simple \'
-      '  --index https://test.pypi.org/simple/ \'
-      '  --index-strategy unsafe-best-match \'
-      '  --reinstall-package mujoco-filament mujoco-filament==3.5.1'
-    )
-    if [[ ! -x "$standard_python" ]]; then
-      echo "error: missing standard MolmoSpaces runtime: ${standard_python}" >&2
-      echo "       run: uv sync --extra dev" >&2
-      exit 1
-    fi
-    if [[ ! -x "$filament_python" ]]; then
-      echo "error: missing Filament MolmoSpaces runtime: ${filament_python}" >&2
-      echo "       setup command:" >&2
-      printf '       %s\n' "${filament_setup_command[@]}" >&2
-      exit 1
-    fi
-    filament_probe="$(
-      "$filament_python" -c 'import importlib.metadata as m; import molmo_spaces, mujoco; print(mujoco.__version__ + "\t" + m.version("mujoco-filament"))' 2>/dev/null
-    )" || {
-      echo "error: incomplete Filament MolmoSpaces runtime: ${filament_python}" >&2
-      echo "       expected imports failed: mujoco, molmo_spaces" >&2
-      echo "       setup command:" >&2
-      printf '       %s\n' "${filament_setup_command[@]}" >&2
-      exit 1
-    }
-    mujoco_import_version="${filament_probe%%$'\t'*}"
-    filament_dist_version="${filament_probe#*$'\t'}"
-    if [[ "$mujoco_import_version" != "$filament_dist_version" ]]; then
-      echo "error: incomplete Filament MolmoSpaces runtime: ${filament_python}" >&2
-      echo "       mujoco imports version ${mujoco_import_version}, but mujoco-filament is ${filament_dist_version}" >&2
-      echo "       reinstall mujoco-filament after uv sync so it owns the top-level mujoco module" >&2
-      echo "       setup command:" >&2
-      printf '       %s\n' "${filament_setup_command[@]}" >&2
-      exit 1
-    fi
-
-    stamp="$({{timestamp_cmd}})"
-    run_dir="${output_dir}/${stamp}"
-    .venv/bin/python scripts/molmo_cleanup/run_molmospaces_renderer_comparison.py \
-      --output-dir "$run_dir" \
-      --standard-python "$standard_python" \
-      --filament-python "$filament_python" \
-      --seed "$seed" \
-      --generated-mess-count "$generated_mess_count" \
-      --scene-source "$scene_source" \
-      --scene-index "$scene_index" \
-      --robot-name "$robot_name" \
-      --focus-sample-count "$focus_sample_count" \
-      --render-width "$render_width" \
-      --render-height "$render_height"
+    just molmo::household-cleanup-impl openclaw-live "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" 0.0.0.0 "{{port}}"
 
 # Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.
-scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda" render_width="960" render_height="640" genesis="off" lighting_profile="default":
+scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda" render_width="960" render_height="640" lighting_profile="default":
     #!/usr/bin/env bash
     set -euo pipefail
     seed="{{seed}}"
@@ -1362,7 +1317,6 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     scene_usd_path="{{scene_usd_path}}"
     render_width="{{render_width}}"
     render_height="{{render_height}}"
-    genesis="{{genesis}}"
     lighting_profile="{{lighting_profile}}"
     raw_args=(
       "$seed"
@@ -1373,7 +1327,6 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
       "$scene_usd_path"
       "$render_width"
       "$render_height"
-      "$genesis"
       "$lighting_profile"
     )
     seed="${seed#seed=}"
@@ -1384,7 +1337,6 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     scene_usd_path="${scene_usd_path#scene_usd_path=}"
     render_width="${render_width#render_width=}"
     render_height="${render_height#render_height=}"
-    genesis="${genesis#genesis=}"
     lighting_profile="${lighting_profile#lighting_profile=}"
     for override in "${raw_args[@]}"; do
       case "$override" in
@@ -1396,7 +1348,6 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
         scene_usd_path=*) scene_usd_path="${override#scene_usd_path=}" ;;
         render_width=*) render_width="${override#render_width=}" ;;
         render_height=*) render_height="${override#render_height=}" ;;
-        genesis=*) genesis="${override#genesis=}" ;;
         lighting_profile=*) lighting_profile="${override#lighting_profile=}" ;;
       esac
     done
@@ -1408,12 +1359,10 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     if [[ "$scene_usd_path" == *=* && "${scene_usd_path%%=*}" != "scene_usd_path" ]]; then scene_usd_path="output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda"; fi
     if [[ "$render_width" == *=* && "${render_width%%=*}" != "render_width" ]]; then render_width="960"; fi
     if [[ "$render_height" == *=* && "${render_height%%=*}" != "render_height" ]]; then render_height="640"; fi
-    if [[ "$genesis" == *=* && "${genesis%%=*}" != "genesis" ]]; then genesis="off"; fi
     if [[ "$lighting_profile" == *=* && "${lighting_profile%%=*}" != "lighting_profile" ]]; then lighting_profile="default"; fi
 
     molmospaces_python="${ROBOCLAWS_MOLMOSPACES_PYTHON:-.venv/bin/python}"
     isaac_python="${ROBOCLAWS_ISAACLAB_PYTHON:-.venv-isaaclab/bin/python}"
-    genesis_python="${ROBOCLAWS_GENESIS_PYTHON:-.venv-genesis/bin/python}"
     if [[ ! -x "$molmospaces_python" ]]; then
       echo "error: missing MolmoSpaces runtime: ${molmospaces_python}" >&2
       echo "       run: uv sync --extra dev" >&2
@@ -1422,11 +1371,6 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     if [[ ! -x "$isaac_python" ]]; then
       echo "error: missing Isaac Lab runtime: ${isaac_python}" >&2
       echo "       create .venv-isaaclab/ or set ROBOCLAWS_ISAACLAB_PYTHON" >&2
-      exit 1
-    fi
-    if [[ "$genesis" == "on" && ! -x "$genesis_python" ]]; then
-      echo "error: missing Genesis runtime: ${genesis_python}" >&2
-      echo "       create .venv-genesis/ or set ROBOCLAWS_GENESIS_PYTHON" >&2
       exit 1
     fi
     if [[ ! -f "$scene_usd_path" ]]; then
@@ -1447,8 +1391,6 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
       --scene-index "$scene_index" \
       --molmospaces-python "$molmospaces_python" \
       --isaac-python "$isaac_python" \
-      --genesis "$genesis" \
-      --genesis-python "$genesis_python" \
       --render-width "$render_width" \
       --render-height "$render_height" \
       --lighting-profile "$lighting_profile"

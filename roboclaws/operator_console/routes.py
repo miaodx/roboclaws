@@ -85,6 +85,7 @@ class ConsoleLaunchSelection:
     provider_profile: str | None
     evidence_lane: str
     scenario_setup: str
+    preset_id: str = ""
     enabled: bool = True
     unsupported_reason: str = ""
     required_overrides: tuple[str, ...] = ()
@@ -101,7 +102,7 @@ class ConsoleLaunchSelection:
             (
                 self.world_id,
                 self.backend_id,
-                self.intent_id,
+                self.preset_id or "open-task",
                 self.agent_engine_id,
                 self.evidence_lane,
             )
@@ -156,12 +157,13 @@ class ConsoleLaunchSelection:
             f"surface={self.surface}",
             f"world={self.world_id}",
             f"backend={self.backend_id}",
-            f"intent={self.intent_id}",
             f"agent_engine={self.agent_engine_id}",
             f"evidence_lane={self.evidence_lane}",
             f"scenario_setup={self.scenario_setup}",
             *self.launch_default_overrides,
         ]
+        if self.preset_id:
+            args.insert(3, f"preset={self.preset_id}")
         if self.provider_profile:
             args.append(f"provider_profile={self.provider_profile}")
         return args
@@ -179,6 +181,8 @@ class ConsoleLaunchSelection:
             "backend_label": backend.label,
             "intent_id": self.intent_id,
             "intent": self.intent_id,
+            "preset_id": self.preset_id,
+            "preset": self.preset_id,
             "agent_engine_id": self.agent_engine_id,
             "agent_engine_label": engine.label,
             "agent_engine_availability": engine.availability,
@@ -226,108 +230,11 @@ class ConsoleLaunchSelection:
             "intent_options": [_intent_option(self.intent_id)],
             "default_intent": self.intent_id,
             "supported_intents": [self.intent_id],
+            "preset_options": [_preset_option(self.preset_id)] if self.preset_id else [],
+            "default_preset": self.preset_id,
+            "supported_presets": [self.preset_id] if self.preset_id else [],
         }
         return payload
-
-
-@dataclass(frozen=True)
-class ConsoleRoute:
-    """Legacy display wrapper for older route-id history records."""
-
-    id: str
-    label: str
-    selection: ConsoleLaunchSelection
-
-    def to_payload(self) -> dict[str, Any]:
-        payload = self.selection.to_payload()
-        payload["selection_id"] = self.selection.id
-        payload["legacy_route_id"] = self.id
-        payload["id"] = self.id
-        payload["label"] = self.label
-        return payload
-
-    @property
-    def surface(self) -> str:
-        return self.selection.surface
-
-    @property
-    def intent(self) -> str:
-        return self.selection.intent_id
-
-    @property
-    def driver(self) -> str:
-        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].dispatch_runner
-
-    @property
-    def driver_label(self) -> str:
-        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].label
-
-    @property
-    def profile(self) -> str:
-        return self.selection.evidence_lane
-
-    @property
-    def backend(self) -> str:
-        return self.selection.backend.implementation_backend
-
-    @property
-    def default_overrides(self) -> tuple[str, ...]:
-        return self.selection.default_overrides
-
-    @property
-    def launch_default_overrides(self) -> tuple[str, ...]:
-        return self.selection.launch_default_overrides
-
-    @property
-    def required_overrides(self) -> tuple[str, ...]:
-        return self.selection.required_overrides
-
-    @property
-    def gates(self) -> tuple[RouteGate, ...]:
-        return self.selection.gates
-
-    @property
-    def enabled(self) -> bool:
-        return self.selection.enabled
-
-    @property
-    def disabled_reason(self) -> str:
-        return self.selection.disabled_reason
-
-    @property
-    def lock_name(self) -> str:
-        return self.selection.lock_name
-
-    @property
-    def supports_prompt(self) -> bool:
-        return self.selection.supports_prompt
-
-    @property
-    def supports_operator_steer(self) -> bool:
-        return self.selection.supports_operator_steer
-
-    @property
-    def pause_supported(self) -> bool:
-        return self.selection.pause_supported
-
-    @property
-    def emergency_stop_required(self) -> bool:
-        return self.selection.emergency_stop_required
-
-    @property
-    def resource_kind(self) -> str:
-        return self.selection.resource_kind
-
-    @property
-    def checker_id(self) -> str:
-        return self.selection.checker_id
-
-    @property
-    def task_prompt_default(self) -> str:
-        return self.selection.task_prompt_default
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.selection, name)
 
 
 PROVIDER_KEY_GATE = RouteGate(
@@ -442,23 +349,6 @@ def get_selection(selection_id: str) -> ConsoleLaunchSelection:
         if selection.id == selection_id:
             return selection
     raise KeyError(selection_id)
-
-
-def list_console_routes(*, include_disabled: bool = True) -> tuple[ConsoleRoute, ...]:
-    """Return legacy route wrappers for old callers."""
-
-    routes = tuple(_LEGACY_ROUTE_BY_ID.values())
-    if include_disabled:
-        return routes
-    return tuple(route for route in routes if route.selection.enabled)
-
-
-def get_route(route_id: str) -> ConsoleRoute:
-    route = _LEGACY_ROUTE_BY_ID.get(route_id)
-    if route:
-        return route
-    selection = get_selection(route_id)
-    return ConsoleRoute(id=selection.id, label=selection.label, selection=selection)
 
 
 def validate_supported_routes_against_catalog() -> None:
@@ -588,6 +478,19 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 "mujoco",
                 "open-ended",
                 "codex-cli",
+                "codex-env",
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=common_gates,
+                default_overrides=("seed=7",),
+                supports_operator_steer=True,
+            )
+        )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "mujoco",
+                "open-ended",
+                "openai-agents-sdk",
                 "codex-env",
                 scenario_setup=ENVIRONMENT_SETUP_BASELINE,
                 gates=common_gates,
@@ -752,15 +655,6 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 "Map-build is currently proven for Codex CLI and direct runner only."
             ),
         ),
-        _selection(
-            "molmospaces/val_0",
-            "mujoco",
-            "open-ended",
-            "openai-agents-sdk",
-            "codex-env",
-            enabled=False,
-            unsupported_reason="OpenAI Agents SDK is not proven for open-ended household runs yet.",
-        ),
     )
 
 
@@ -843,6 +737,7 @@ def _selection(
         if intent_id == "cleanup"
         else ENVIRONMENT_SETUP_BASELINE
     )
+    preset_id = intent_id if intent_id in {"cleanup", "map-build"} else ""
     return ConsoleLaunchSelection(
         world_id=world_id,
         backend_id=backend_id,
@@ -851,6 +746,7 @@ def _selection(
         provider_profile=provider_profile,
         evidence_lane=evidence_lane,
         scenario_setup=setup,
+        preset_id=preset_id,
         enabled=enabled,
         unsupported_reason=unsupported_reason,
         required_overrides=required_overrides,
@@ -914,71 +810,6 @@ def _lane_selections(
     return tuple(rows)
 
 
-_LEGACY_ROUTE_BY_ID: dict[str, ConsoleRoute] = {
-    "codex-mujoco-cleanup": ConsoleRoute(
-        id="codex-mujoco-cleanup",
-        label="MolmoSpaces val_0 / MuJoCo / Cleanup / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "claude-mujoco-cleanup": ConsoleRoute(
-        id="claude-mujoco-cleanup",
-        label="MolmoSpaces val_0 / MuJoCo / Cleanup / Claude Code",
-        selection=get_selection(
-            "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
-        ),
-    ),
-    "codex-isaac-cleanup": ConsoleRoute(
-        id="codex-isaac-cleanup",
-        label="MolmoSpaces val_0 / Isaac Lab / Cleanup / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "claude-isaac-cleanup": ConsoleRoute(
-        id="claude-isaac-cleanup",
-        label="MolmoSpaces val_0 / Isaac Lab / Cleanup / Claude Code",
-        selection=get_selection(
-            "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
-        ),
-    ),
-    "codex-agibot-g2-map-build": ConsoleRoute(
-        id="codex-agibot-g2-map-build",
-        label="Agibot G2 Map 12 / Agibot GDK / Map Build / Codex CLI",
-        selection=get_selection(
-            "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
-        ),
-    ),
-    "codex-mujoco-map-build": ConsoleRoute(
-        id="codex-mujoco-map-build",
-        label="MolmoSpaces val_0 / MuJoCo / Map Build / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "codex-isaac-map-build": ConsoleRoute(
-        id="codex-isaac-map-build",
-        label="MolmoSpaces val_0 / Isaac Lab / Map Build / Codex CLI",
-        selection=get_selection(
-            "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
-        ),
-    ),
-    "codex-b1-map12-open-ended": ConsoleRoute(
-        id="codex-b1-map12-open-ended",
-        label="B1 / Map 12 / Isaac Lab / Open-ended / Codex CLI",
-        selection=get_selection("b1-map12::isaaclab::open-ended::codex-cli::world-oracle-labels"),
-    ),
-    "agibot-g2-cleanup": ConsoleRoute(
-        id="agibot-g2-cleanup",
-        label="Agibot G2 Map 12 / Agibot GDK / Cleanup / Codex CLI",
-        selection=get_selection(
-            "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
-        ),
-    ),
-}
-
-
 def _intent_option(intent_id: str) -> dict[str, str]:
     spec = TASK_INTENT_SPECS.get(intent_id)
     if spec is None:
@@ -1001,6 +832,14 @@ def _intent_option(intent_id: str) -> dict[str, str]:
         "evaluation_policy": spec.evaluation_policy,
         "done_readiness_policy": spec.done_readiness_policy,
         "checker_policy": spec.checker_policy,
+    }
+
+
+def _preset_option(preset_id: str) -> dict[str, str]:
+    return {
+        "id": preset_id,
+        "label": _intent_label(preset_id),
+        "intent_id": preset_id,
     }
 
 

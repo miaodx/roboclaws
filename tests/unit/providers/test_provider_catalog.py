@@ -6,6 +6,7 @@ from roboclaws.agents.provider_registry import (
     ROUTE_BLOCKED,
     ROUTE_CAP_UNKNOWN,
     ROUTE_DEGRADED,
+    ROUTE_EXPERIMENTAL,
     ROUTE_HEALTHY,
     model_aliases,
     model_supports_images,
@@ -37,6 +38,7 @@ def test_provider_registry_exposes_aliases_without_duplicate_source() -> None:
     assert aliases["nvidia"] == "meta/llama-4-maverick-17b-128e-instruct"
     assert aliases["mimo"] == "mimo-v2.5"
     assert aliases["mimo-v2.5"] == "mimo-v2.5"
+    assert aliases["kimi-code"] == "kimi-k2.7-code"
     assert "mimo-v2.5-" + "pro" not in aliases
     assert "mimo-" + "omni" not in aliases
     assert "mimo-v2-" + "omni" not in aliases
@@ -79,6 +81,13 @@ def test_registry_marks_mify_codex_degraded_but_supported() -> None:
     assert route.status_for_engine("codex-cli") == ROUTE_DEGRADED
     assert route.wire_api == "responses"
     assert route.default_model_id == "xiaomi/mimo-v2.5"
+
+
+def test_kimi_openai_chat_defaults_to_current_code_model() -> None:
+    route = provider_route_spec("kimi-openai-chat")
+
+    assert route.default_model_id == "kimi-k2.7-code"
+    assert route.status_for_engine("openai-agents-sdk") == ROUTE_EXPERIMENTAL
 
 
 def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None:

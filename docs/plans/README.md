@@ -107,7 +107,6 @@ aid, not a source of truth for current priority.
 - [Runtime Render State Parity](refactor-runtime-render-state-parity.md)
 - [Scene Camera Material Vs Light Diagnostic](scene-camera-material-vs-light-diagnostic.md)
 - [Genesis Scene-Camera Backend Lane](genesis-scene-camera-backend-lane.md)
-- [MolmoSpaces Filament Renderer Comparison](molmospaces-filament-renderer-comparison.md)
 - [MolmoSpaces HTTP Visual Grounding Service](molmospaces-http-visual-grounding-service.md)
 - [Visual Grounding GPU Sidecar Benchmark](visual-grounding-gpu-sidecar-benchmark.md)
 - [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)

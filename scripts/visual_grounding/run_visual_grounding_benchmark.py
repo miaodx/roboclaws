@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ranking = _rank_pipelines(pipeline_results)
     recommendation = ranking[0] if ranking else {}
-    promotion_recommendation = _promotion_recommendation(pipeline_results, ranking)
+    detector_probe_recommendation = _detector_probe_recommendation(pipeline_results, ranking)
     result = {
         "schema": RESULT_SCHEMA,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
             "score": recommendation.get("score", 0.0),
             "reason": _recommendation_reason(recommendation),
         },
-        "promotion_recommendation": promotion_recommendation,
+        "detector_probe_recommendation": detector_probe_recommendation,
         "artifacts": {
             "predictions_jsonl": predictions_path.name,
             "report_html": "visual_grounding_benchmark_report.html",
@@ -782,7 +782,7 @@ def _family_under_sampled_reason(rows: list[dict[str, Any]], successful_count: i
     return f"fewer than two successful configs ({successful_count})"
 
 
-def _promotion_recommendation(
+def _detector_probe_recommendation(
     pipeline_results: list[dict[str, Any]],
     ranking: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -850,7 +850,7 @@ def _promotion_recommendation(
         level == "real_detector_sidecar" for level in non_sim_evidence_levels
     )
     return {
-        "schema": "visual_grounding_promotion_recommendation_v1",
+        "schema": "visual_grounding_detector_probe_recommendation_v1",
         "policy": {
             "control_pipeline_id": "sim",
             "max_proposer_only_pipelines": 1,
@@ -862,7 +862,7 @@ def _promotion_recommendation(
         "evidence_levels": evidence_levels,
         "real_stage_provenance_present": real_stage_provenance_present,
         "selected_real_stage_provenance_complete": selected_real_stage_provenance_complete,
-        "requires_real_stage_provenance_before_promotion": (
+        "requires_real_stage_provenance_before_probe": (
             not selected_real_stage_provenance_complete
         ),
         "rationale": (
@@ -918,17 +918,20 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
     telemetry_rows = "\n".join(
         _telemetry_report_rows(pipeline) for pipeline in result.get("pipelines") or []
     )
-    promotion_rows = "\n".join(_promotion_report_rows(result.get("promotion_recommendation") or {}))
+    detector_probe_rows = "\n".join(
+        _detector_probe_report_rows(result.get("detector_probe_recommendation") or {})
+    )
     family_rows = "\n".join(
         _family_sweep_report_rows(row) for row in result.get("family_sweep") or []
     )
-    promotion = result.get("promotion_recommendation") or {}
-    promotion_gate_text = (
-        f"Real stage provenance present: {promotion.get('real_stage_provenance_present', False)}. "
+    detector_probe = result.get("detector_probe_recommendation") or {}
+    detector_probe_gate_text = (
+        "Real stage provenance present: "
+        f"{detector_probe.get('real_stage_provenance_present', False)}. "
         "Selected real-stage provenance complete: "
-        f"{promotion.get('selected_real_stage_provenance_complete', False)}. "
-        "Requires real stage provenance before promotion: "
-        f"{promotion.get('requires_real_stage_provenance_before_promotion', True)}."
+        f"{detector_probe.get('selected_real_stage_provenance_complete', False)}. "
+        "Requires real detector-sidecar provenance before full cleanup probe: "
+        f"{detector_probe.get('requires_real_stage_provenance_before_probe', True)}."
     )
     private_note = (
         "Per-item private label details included."
@@ -975,10 +978,10 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
     The recommended full-cleanup probe set is capped to the sim control and one
     detector-only proposer pipeline.
   </p>
-  <p>{escape(promotion_gate_text)}</p>
+  <p>{escape(detector_probe_gate_text)}</p>
   <table>
     <tr><th>Slot</th><th>Pipeline</th><th>Evidence level</th><th>Reason</th></tr>
-    {promotion_rows}
+    {detector_probe_rows}
   </table>
   <h2>Visual Grounding Quality</h2>
   <p>{escape(private_note)}</p>
@@ -1069,10 +1072,10 @@ def _telemetry_report_rows(pipeline: dict[str, Any]) -> str:
     )
 
 
-def _promotion_report_rows(promotion: dict[str, Any]) -> str:
+def _detector_probe_report_rows(detector_probe: dict[str, Any]) -> str:
     rows = []
-    evidence_levels = promotion.get("evidence_levels") or {}
-    for row in promotion.get("selected") or []:
+    evidence_levels = detector_probe.get("evidence_levels") or {}
+    for row in detector_probe.get("selected") or []:
         pipeline_id = str(row.get("pipeline_id") or "")
         evidence_level = (
             "control" if pipeline_id == "sim" else str(evidence_levels.get(pipeline_id) or "")

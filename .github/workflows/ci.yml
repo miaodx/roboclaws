@@ -157,6 +157,43 @@ jobs:
           path: output/molmo/ci-live-published/${{ matrix.model_entry }}/**
           if-no-files-found: warn
 
+  model-provider-health:
+    name: Model provider health
+    runs-on: ubuntu-latest
+    needs: lint-and-mock
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python dependencies
+        run: uv sync --extra dev
+
+      - name: Check configured provider routes
+        env:
+          CODEX_BASE_URL: ${{ secrets.CODEX_BASE_URL }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY }}
+          XM_LLM_API_KEY: ${{ secrets.XM_LLM_API_KEY }}
+          XM_LLM_BASE_URL: ${{ secrets.XM_LLM_BASE_URL }}
+          MM_BASE_URL: ${{ secrets.MM_BASE_URL }}
+          MM_API_KEY: ${{ secrets.MM_API_KEY }}
+          MIMO_TP_KEY: ${{ secrets.MIMO_TP_KEY }}
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          NV_API_KEY: ${{ secrets.NV_API_KEY }}
+        run: |
+          .venv/bin/python scripts/dev/check_model_providers.py \
+            --mode all \
+            --dotenv "" \
+            --require-all
+
   publish-pages:
     name: Publish reports to GitHub Pages
     needs: [lint-and-mock, molmo-live-cleanup]

@@ -31,7 +31,6 @@ from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import (
     ConsoleLaunchSelection,
-    ConsoleRoute,
     accepted_isaac_preflight,
     get_selection,
 )
@@ -63,26 +62,27 @@ class LaunchRequest:
     operator_session_id: str = ""
     parent_run_id: str = ""
     next_goal_packet: dict[str, Any] | None = None
-    route_id: str = ""
     selection_id_override: str = ""
 
     @property
     def selection_id(self) -> str:
         if self.world_id and self.backend_id and self.intent_id and self.agent_engine_id:
             lane = self.evidence_lane or "world-oracle-labels"
+            task_selector = (
+                self.intent_id if self.intent_id in {"cleanup", "map-build"} else "open-task"
+            )
             return "::".join(
                 (
                     self.world_id,
                     self.backend_id,
-                    self.intent_id,
+                    task_selector,
                     self.agent_engine_id,
                     lane,
                 )
             )
-        if self.route_id and not self.selection_id_override:
+        if not self.selection_id_override:
             raise ConsoleLaunchError(
-                f"legacy route_id {self.route_id!r} is display-only; "
-                "launch with world/backend/intent/agent_engine/evidence_lane or selection_id"
+                "launch requires world/backend/intent/agent_engine/evidence_lane or selection_id"
             )
         return self.selection_id_override
 
@@ -106,9 +106,7 @@ def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str,
     return env_map
 
 
-def provider_key_present(
-    route: ConsoleLaunchSelection | ConsoleRoute, env: dict[str, str] | None = None
-) -> bool:
+def provider_key_present(route: ConsoleLaunchSelection, env: dict[str, str] | None = None) -> bool:
     env_map = os.environ if env is None else env
     if route.agent_engine_id == "claude-code":
         return _claude_provider_status(env_map)["ok"]
@@ -118,7 +116,7 @@ def provider_key_present(
 
 
 def build_launch_argv(
-    route: ConsoleLaunchSelection | ConsoleRoute,
+    route: ConsoleLaunchSelection,
     *,
     root: Path,
     run_id: str,
@@ -128,48 +126,51 @@ def build_launch_argv(
 ) -> list[str]:
     """Build a fixed argv list for a console route."""
 
-    selection = route.selection if isinstance(route, ConsoleRoute) else route
-    selected_intent = str(intent or selection.intent_id)
+    selected_intent = str(intent or route.intent_id)
+    selected_preset = route.preset_id if selected_intent == route.intent_id else ""
     request_overrides = _normalized_launch_overrides(
-        selection,
+        route,
         overrides or {},
         selected_intent=selected_intent,
     )
-    _validate_override_keys(selection, request_overrides)
+    _validate_override_keys(route, request_overrides)
     output_dir = console_output_root(root) / "runs" / run_id
     overridden_keys = set(request_overrides)
     if request_overrides.get("scenario_setup") == ENVIRONMENT_SETUP_BASELINE:
         overridden_keys.add("relocation_count")
     default_overrides = [
         item
-        for item in selection.launch_default_overrides
+        for item in route.launch_default_overrides
         if _override_key(item) not in overridden_keys
     ]
     args = [
-        f"surface={selection.surface}",
-        f"world={selection.world_id}",
-        f"backend={selection.backend_id}",
-        f"intent={selected_intent}",
-        f"agent_engine={selection.agent_engine_id}",
-        f"evidence_lane={selection.evidence_lane}",
-        f"scenario_setup={request_overrides.pop('scenario_setup', selection.scenario_setup)}",
+        f"surface={route.surface}",
+        f"world={route.world_id}",
+        f"backend={route.backend_id}",
+        f"agent_engine={route.agent_engine_id}",
+        f"evidence_lane={route.evidence_lane}",
+        f"scenario_setup={request_overrides.pop('scenario_setup', route.scenario_setup)}",
         *default_overrides,
     ]
-    provider_profile = request_overrides.pop("provider_profile", selection.provider_profile or "")
+    if selected_preset:
+        args.insert(3, f"preset={selected_preset}")
+    elif selected_intent != "open-ended":
+        args.insert(3, f"intent={selected_intent}")
+    provider_profile = request_overrides.pop("provider_profile", route.provider_profile or "")
     if provider_profile:
         args.append(f"provider_profile={provider_profile}")
     args.append(f"output_dir={output_dir}")
-    for key in selection.required_overrides:
+    for key in route.required_overrides:
         value = request_overrides.get(key)
         if not value:
             raise ConsoleLaunchError(f"missing required route parameter: {key}")
         args.append(f"{key}={value}")
     for key in sorted(request_overrides):
-        if key in selection.required_overrides:
+        if key in route.required_overrides:
             continue
         args.append(f"{key}={request_overrides[key]}")
     if prompt:
-        if not selection.supports_prompt:
+        if not route.supports_prompt:
             raise ConsoleLaunchError(
                 "This route cannot accept a custom prompt safely. Use the default task prompt."
             )
@@ -281,16 +282,9 @@ def start_console_run(
     return state
 
 
-def _selected_intent(route: ConsoleRoute, intent: str = "") -> str:
-    try:
-        return route.selected_intent(intent)
-    except ValueError as exc:
-        raise ConsoleLaunchError(str(exc)) from exc
-
-
 def route_readiness(
     root: Path,
-    route: ConsoleLaunchSelection | ConsoleRoute,
+    route: ConsoleLaunchSelection,
     *,
     overrides: dict[str, str] | None = None,
     env_overrides: dict[str, str] | None = None,
@@ -299,21 +293,20 @@ def route_readiness(
 ) -> dict[str, Any]:
     """Return route gate state used by both API and UI."""
 
-    selection = route.selection if isinstance(route, ConsoleRoute) else route
-    if not selection.enabled:
+    if not route.enabled:
         return {
             "can_start": False,
-            "blocker": selection.disabled_reason,
+            "blocker": route.disabled_reason,
             "blocker_kind": "unavailable",
             "gates": [],
         }
 
-    env_map = _apply_env_overrides(selection, load_repo_dotenv(root, env), env_overrides or {})
+    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
     gate_map = gates or {}
     gate_rows: list[dict[str, Any]] = []
     blocker = ""
-    lock = ResourceLock(root, selection.lock_name)
+    lock = ResourceLock(root, route.lock_name)
     lock_state = lock.read()
     if _release_terminal_owner_lock(root, lock_state):
         lock_state = lock.read()
@@ -331,7 +324,7 @@ def route_readiness(
         blocker_kind = "locked"
     else:
         blocker_kind = ""
-    for gate in selection.gates:
+    for gate in route.gates:
         ok = True
         message = "Ready"
         evidence = ""
@@ -339,12 +332,10 @@ def route_readiness(
         severity = gate.severity
         blocks_start = gate.required
         if gate.kind == "provider_key":
-            provider_status = _provider_status(selection, env_map)
+            provider_status = _provider_status(route, env_map)
             ok = provider_status["ok"]
             if not ok:
-                label = (
-                    selection.to_payload().get("agent_engine_label") or selection.agent_engine_id
-                )
+                label = route.to_payload().get("agent_engine_label") or route.agent_engine_id
                 message = str(provider_status["message"] or f"No {label} provider route found.")
                 kind = "needs_provider"
             elif provider_status.get("capability_blocker"):
@@ -417,7 +408,7 @@ def route_readiness(
         "blocker_kind": blocker_kind,
         "lock": lock_state.to_payload(),
         "attachable_run": attachable_run,
-        "provider": _provider_status(selection, env_map),
+        "provider": _provider_status(route, env_map),
         "gates": gate_rows,
     }
 
@@ -453,10 +444,7 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     return state
 
 
-def _validate_override_keys(
-    route: ConsoleLaunchSelection | ConsoleRoute, overrides: dict[str, str]
-) -> None:
-    selection = route.selection if isinstance(route, ConsoleRoute) else route
+def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, str]) -> None:
     allowed = {
         "seed",
         "seeds",
@@ -494,18 +482,17 @@ def _validate_override_keys(
             )
         if key == "relocation_count":
             _parse_nonnegative_int(value, key)
-    for key in selection.required_overrides:
+    for key in route.required_overrides:
         if key not in allowed:
             raise ConsoleLaunchError(f"route registry uses unsupported parameter: {key}")
 
 
 def _normalized_launch_overrides(
-    route: ConsoleLaunchSelection | ConsoleRoute,
+    route: ConsoleLaunchSelection,
     overrides: dict[str, str],
     *,
     selected_intent: str,
 ) -> dict[str, str]:
-    selection = route.selection if isinstance(route, ConsoleRoute) else route
     normalized = {str(key): str(value) for key, value in overrides.items()}
     if "generated_mess_count" in normalized:
         raise ConsoleLaunchError(
@@ -514,17 +501,17 @@ def _normalized_launch_overrides(
         )
     default_map = {
         _override_key(item): item.split("=", 1)[1]
-        for item in selection.launch_default_overrides
+        for item in route.launch_default_overrides
         if "=" in item
     }
     setup = str(
         normalized.get("scenario_setup")
         or (
             default_map.get("scenario_setup")
-            if selected_intent == selection.intent_id
+            if selected_intent == route.intent_id
             else ENVIRONMENT_SETUP_BASELINE
         )
-        or selection.scenario_setup
+        or route.scenario_setup
     )
     if setup not in ENVIRONMENT_SETUP_OPTIONS:
         allowed_values = "|".join(ENVIRONMENT_SETUP_OPTIONS)
@@ -541,11 +528,8 @@ def _normalized_launch_overrides(
     return normalized
 
 
-def _validate_env_overrides(
-    route: ConsoleLaunchSelection | ConsoleRoute, env_overrides: dict[str, str]
-) -> None:
-    selection = route.selection if isinstance(route, ConsoleRoute) else route
-    if env_overrides and selection.agent_engine_id not in {
+def _validate_env_overrides(route: ConsoleLaunchSelection, env_overrides: dict[str, str]) -> None:
+    if env_overrides and route.agent_engine_id not in {
         "codex-cli",
         "claude-code",
         "openai-agents-sdk",
@@ -556,37 +540,37 @@ def _validate_env_overrides(
             raise ConsoleLaunchError(f"unsupported provider override: {key}")
         if "\x00" in value or "\n" in value or "\r" in value:
             raise ConsoleLaunchError(f"invalid control character in provider override: {key}")
-        if key == "ROBOCLAWS_CODEX_PROVIDER" and selection.agent_engine_id not in {
+        if key == "ROBOCLAWS_CODEX_PROVIDER" and route.agent_engine_id not in {
             "codex-cli",
             "openai-agents-sdk",
         }:
             raise ConsoleLaunchError("Codex provider override is only supported for Codex routes")
-        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and selection.agent_engine_id != "claude-code":
+        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and route.agent_engine_id != "claude-code":
             raise ConsoleLaunchError("Claude provider override is only supported for Claude routes")
         if key == "ROBOCLAWS_CODEX_PROVIDER":
             try:
-                route = provider_route_spec(value)
+                route_spec = provider_route_spec(value)
             except KeyError:
-                route = None
-            if route is None or selection.agent_engine_id not in route.supported_engines:
-                expected = ", ".join(selection.to_payload()["supported_provider_profiles"])
+                route_spec = None
+            if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
+                expected = ", ".join(route.to_payload()["supported_provider_profiles"])
                 raise ConsoleLaunchError(
                     f"unsupported Codex provider override: {value}; expected {expected}"
                 )
         if key == "ROBOCLAWS_CLAUDE_PROVIDER":
             try:
-                route = provider_route_spec(value)
+                route_spec = provider_route_spec(value)
             except KeyError:
-                route = None
-            if route is None or selection.agent_engine_id not in route.supported_engines:
-                expected = ", ".join(selection.to_payload()["supported_provider_profiles"])
+                route_spec = None
+            if route_spec is None or route.agent_engine_id not in route_spec.supported_engines:
+                expected = ", ".join(route.to_payload()["supported_provider_profiles"])
                 raise ConsoleLaunchError(
                     f"unsupported Claude provider override: {value}; expected {expected}"
                 )
 
 
 def _apply_env_overrides(
-    route: ConsoleLaunchSelection | ConsoleRoute,
+    route: ConsoleLaunchSelection,
     env_map: dict[str, str],
     env_overrides: dict[str, str],
 ) -> dict[str, str]:
@@ -607,32 +591,29 @@ def _public_env_overrides(env_overrides: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _provider_status(
-    route: ConsoleLaunchSelection | ConsoleRoute, env_map: dict[str, str]
-) -> dict[str, Any]:
-    selection = route.selection if isinstance(route, ConsoleRoute) else route
-    if selection.agent_engine_id == "codex-cli":
+def _provider_status(route: ConsoleLaunchSelection, env_map: dict[str, str]) -> dict[str, Any]:
+    if route.agent_engine_id == "codex-cli":
         return _with_evidence_lane_compatibility(
-            selection,
+            route,
             _codex_provider_status(env_map),
         )
-    if selection.agent_engine_id == "openai-agents-sdk":
+    if route.agent_engine_id == "openai-agents-sdk":
         return _with_evidence_lane_compatibility(
-            selection,
+            route,
             _openai_agents_provider_status(env_map),
         )
-    if selection.agent_engine_id == "claude-code":
+    if route.agent_engine_id == "claude-code":
         return _with_evidence_lane_compatibility(
-            selection,
+            route,
             _claude_provider_status(env_map),
         )
     return {
-        "agent_engine": selection.agent_engine_id,
+        "agent_engine": route.agent_engine_id,
         "provider": "",
         "model": "",
         "required_env": [],
         "missing_env": [],
-        "ok": provider_key_present(selection, env_map),
+        "ok": provider_key_present(route, env_map),
         "message": "",
     }
 
@@ -730,8 +711,12 @@ def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | Non
     )
     return {
         "run_id": str(state.get("run_id") or lock_state.owner_run_id),
-        "selection_id": str(route_payload.get("selection_id") or launch_payload.get("id") or ""),
-        "route_id": str(route_payload.get("id") or ""),
+        "selection_id": str(
+            route_payload.get("selection_id")
+            or launch_payload.get("id")
+            or route_payload.get("id")
+            or ""
+        ),
         "route_label": str(route_payload.get("label") or "Agent run"),
         "phase": str(live_status.get("phase") or state.get("phase") or "running"),
         "run_dir": str(state.get("run_dir") or run_dir),
@@ -1115,7 +1100,7 @@ def _tcp_port_free(host: str, port: int) -> bool:
         return True
 
 
-def _new_run_id(route: ConsoleLaunchSelection | ConsoleRoute) -> str:
+def _new_run_id(route: ConsoleLaunchSelection) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     return f"{timestamp}-{_safe_run_id_suffix(route.id)}"
 

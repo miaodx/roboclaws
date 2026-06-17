@@ -68,7 +68,7 @@ _Avoid_: Private target map, source map rewrite
 
 **Actionable Semantic Map Snapshot**:
 The canonical downstream semantic-map artifact. Online
-`surface=household-world intent=map-build` Runtime Metric Map output and
+`surface=household-world preset=map-build` Runtime Metric Map output and
 offline Agibot `navigation_memory.json` conversion both produce this shape:
 source map reference, runtime map payload, public anchors, materialized
 inspection waypoints, materialized fixture or receptacle candidates,

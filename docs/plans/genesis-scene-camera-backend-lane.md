@@ -1,6 +1,6 @@
 ---
 refactor_scope: genesis-scene-camera-visual-fidelity
-status: CONTINUE
+status: PARK
 accepted_severities:
   - P0
   - P1
@@ -10,13 +10,18 @@ last_verified: 2026-06-04
 
 # Genesis Scene-Camera Backend Lane
 
-**Status:** CONTINUE
+**Status:** PARK
 **Created:** 2026-06-04
 **Source:** Genesis World submodule addition and follow-up discussion about
 adding Genesis as a backend variant like the Isaac path.
 **Workflow:** `intuitive-flow` discussion plus `grill-with-docs-batch`
 alignment. Keep this as the pre-GSD source of truth until it is promoted into a
 phase or implemented directly as a scoped comparison slice.
+
+**Retirement note, 2026-06-14:** the active Genesis scene-camera lane was
+retired during the reduce-entropy cleanup. This file remains historical
+evidence for the renderer experiment; current scene-camera work uses MuJoCo and
+Isaac only.
 
 ## Problem
 
