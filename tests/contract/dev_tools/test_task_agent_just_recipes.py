@@ -1503,6 +1503,17 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
     assert 'map_bundle_dir="$b1_runtime_map_bundle_dir"' in b1_branch
 
 
+def test_b1_isaac_route_uses_b1_robot_consumption_checker_gate() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    isaac_branch = molmo_text.split(
+        'if [[ "$profile" == "world-public-labels" && "$backend" == "isaaclab_subprocess" ]]',
+        1,
+    )[1].split('    fi\n    if [[ "$cleanup_routine"', 1)[0]
+
+    assert "--require-b1-robot-consumption-proof" in isaac_branch
+    assert "--require-real-robot-alignment" not in isaac_branch
+
+
 def test_household_cleanup_routes_agibot_backend_to_physical_pilot_cli() -> None:
     route = trace_household_cleanup_run(
         "direct",

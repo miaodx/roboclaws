@@ -212,6 +212,11 @@ Last proven evidence:
 - The operator console artifact list now exposes both wrapper-level files, so a
   B1 console run can show the canonical prior even when the live attempt
   evidence lives in a nested timestamp/seed directory.
+- B1 / Isaac product checks now use a B1-specific
+  `--require-b1-robot-consumption-proof` gate. That gate reads the run-local
+  copied `map_bundle/semantics.json` and requires
+  `digital_twin_capabilities.robot_consumption_proof.status=robot_navigation_verified`;
+  it does not reuse the older RBY1M real-robot readiness gate.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer

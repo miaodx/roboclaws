@@ -364,7 +364,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       fi
       checker_visual_args=(
         --require-waypoint-honesty
-        --require-real-robot-alignment
+        --require-b1-robot-consumption-proof
         --min-semantic-accepted-count "$isaac_min_semantic_accepted_count"
         --min-sweep-coverage 1.0
       )
