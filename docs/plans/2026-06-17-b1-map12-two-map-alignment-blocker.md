@@ -1,17 +1,19 @@
 ---
 plan_scope: b1-map12-two-map-alignment-blocker
-status: Active unfinished plan; geometry/navigation proof completed, robot-facing consumer exposure and semantics remain
+status: Active P0-only plan; geometry/navigation proof completed, robot-facing consumer exposure and B1_floor2_slow visual-route selection remain
 created: 2026-06-17
 last_reviewed: 2026-06-18
 implementation_allowed: true
 source:
   - user request to make two-map alignment the blocking issue for usable digital twin
   - user decision that Map12 agibot and navigation_memory are the fixed baseline
-  - user decision to use 2rd_floor_seperated first for registration and B1_floor2_slow later for visual/open tasks
+  - user decision to use 2rd_floor_seperated first for registration
+  - user decision on 2026-06-18 to evaluate B1_floor2_slow in P0 as the preferred visual/render route when verified
 related_context:
   - STATUS.md
   - docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md
   - docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md
+  - docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md
   - vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot
   - vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json
   - data/robot-data-lab/scene-engine/data/2rd_floor_seperated/
@@ -26,9 +28,11 @@ related_context:
 The B1 digital twin is only partially usable as a robot-consumable asset. The
 Gaussian/scene asset frame is now aligned to the Map12 navigation frame, and
 preview-grade residual-backed robot pose application has passed. The remaining
-problem is making that verified B1 map context reach robot-facing consumers in
-the same strict shape as simulator Runtime Map Prior input, while keeping
-unreviewed room/object semantics blocked.
+P0 problem is making that verified B1 map context reach robot-facing consumers
+in the same strict shape as simulator Runtime Map Prior input, and selecting an
+honest visual/render scene route for Gaussian observation evidence. Unreviewed
+room/object semantics stay blocked and are tracked separately in
+`docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 Map12 already has two mutually consistent baseline inputs:
 
@@ -46,19 +50,25 @@ poses and captures same-pose Isaac FPV/Chase evidence. Operator preview
 promotion from that artifact succeeds under
 `output/b1-map12/operator-preview-residual-overlay/`.
 
-Remaining execution status: compiled B1 bundles expose
+Remaining P0 execution status: compiled B1 bundles expose
 `digital_twin_capabilities` in `semantics.json`,
 `runtime_map_prior_snapshot.json`, `runtime_map_prior_targets.json`, and
 `b1_robot_consumption_manifest.json`, but the agent-visible MCP/runtime map
 consumer path still needs a focused proof that the robot/agent sees
 `robot_navigation_supported=true` plus blocked room/object/manipulation status
-from the explicitly supplied prior. Room/object projection still needs separate
-semantic anchors and is not part of the completed geometry/navigation proof.
-`scripts/maps/build_b1_map12_semantic_projection.py` is the strict room-label
-projection gate: with the current alignment-only manifest it must fail with
-`accepted semantic anchors are required before projecting room labels`, and it
-keeps object projection blocked instead of inferring object labels from room
-anchors.
+from the explicitly supplied prior. P0 should also evaluate whether
+`B1_floor2_slow/` can be registered to the same Map12 frame as a
+photorealistic visual/render route. If both `2rd_floor_seperated/` and
+`B1_floor2_slow/` are verified for the required same-pose render evidence,
+prefer `B1_floor2_slow/` for navigation/open-task visual rendering by default.
+If it is missing, malformed, or unverified, publish an explicit blocked status;
+do not silently fall back while claiming it is selected.
+
+Room/object projection still needs separate semantic anchors and is not part of
+P0. `scripts/maps/build_b1_map12_semantic_projection.py` must continue to fail
+with `accepted semantic anchors are required before projecting room labels` for
+the current alignment-only manifest, and object projection stays blocked instead
+of inferring object labels from room anchors.
 
 ## Confirmed Target
 
@@ -71,7 +81,10 @@ behave like a simulator scene from the robot/agent point of view:
 - **Render/observation layer**: after applying that pose, the runtime can render
   Gaussian/digital-twin views such as FPV, Chase, topdown, and any future
   task-required camera view so open-ended tasks can inspect the asset from the
-  robot's current pose.
+  robot's current pose. P0 should try `B1_floor2_slow/` as the preferred
+  photorealistic render scene once it is registered to the verified Map12 frame;
+  `2rd_floor_seperated/` remains the registration/semantic-label source unless
+  a later plan proves otherwise.
 - **Agent consumption layer**: the map, navigation capability, render
   capability, and blocked semantic/manipulation status are exposed through the
   same explicit runtime-prior / MCP / agent-visible context style as simulator
@@ -103,11 +116,12 @@ Still active here:
 
 - Preserve and expose B1 capability status through the robot-facing MCP/runtime
   map consumer path.
-- Keep room/object semantics blocked until accepted `anchor_role=semantic`
-  anchors exist.
-- Promote strict room semantic projection only from a verified projection
-  artifact.
-- Add object semantic anchors/projection later as a separate proof.
+- Name and expose render/observation capability status for same-pose
+  FPV/Chase/topdown evidence.
+- Evaluate and select `B1_floor2_slow/` as the default visual/render route when
+  it is verified against the same Map12 frame and same-pose evidence contract.
+- Keep room/object semantics blocked in P0; semantic follow-ups live in
+  `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 ## Decision
 
@@ -117,10 +131,12 @@ Use `2rd_floor_seperated/` first because it has split room/partition/object
 labels. Use those labels as scene-frame evidence and anchor hints. After a
 reviewed transform exists, project labels into Map12 as candidates.
 
-Keep `B1_floor2_slow/` out of the first registration loop. It is more
-photorealistic, but lacks the same split object labels. Bring it back after
-`2rd_floor_seperated` establishes the Map12 alignment, mainly for visual/open
-task background evidence.
+Keep `B1_floor2_slow/` out of the first semantic registration loop. It is more
+photorealistic, but lacks the same split object labels. In P0, bring it back as
+a visual/render route candidate only: register it to the already verified
+Map12/B1 frame, prove same-pose render evidence, and select it as the default
+visual route only when that proof passes. Do not use it to infer room labels,
+object labels, or accepted semantics.
 
 Coordinate contract for the first pass:
 
@@ -330,14 +346,18 @@ Remaining criteria:
   the verified B1 bundle while room semantics, object semantics, manipulation,
   planner-backed navigation, and physical-robot support remain blocked or out
   of scope.
+- The exposed capability context names render/observation readiness for
+  same-pose Gaussian/digital-twin FPV, Chase, and topdown evidence.
+- `B1_floor2_slow/` is either verified and selected as the default
+  photorealistic visual/render route, or explicitly blocked with a reason. A
+  missing or unverified `B1_floor2_slow/` route must not silently fall back to
+  `2rd_floor_seperated/` while claiming the slow route is selected.
 - No runtime consumer path auto-discovers generated `output/**` artifacts or
   silently substitutes missing/malformed B1 proof inputs.
 - The current seven alignment anchors never become room/object semantics.
-- Strict room semantic projection stays blocked until accepted
-  `anchor_role=semantic` room-interior anchors with real
-  `navigation_area_id` / `asset_partition_id` values are promoted.
-- Object semantic projection remains blocked until separate object-level
-  semantic anchors/proof exist.
+- Strict room semantic projection and object semantic projection remain blocked
+  in P0. Follow-up work lives in
+  `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 ## Non-Goals
 
@@ -346,6 +366,7 @@ Remaining criteria:
 - Do not use affine transform as production truth. Affine is diagnostic only.
 - Do not claim object/receptacle USD bindings or manipulation readiness.
 - Do not change public `household-world` command grammar or MCP tools.
+- Do not block P0 on human room semantic review.
 
 ## Implementation Slice
 
@@ -364,23 +385,29 @@ Active P0:
   state.
 - Expose that status through the agent-visible `runtime_metric_map` or adjacent
   map-context payload used by MCP/server artifacts.
+- Name render/observation capability status in the existing
+  `digital_twin_capabilities` / `capability_summary` surface. Prefer a sibling
+  proof field such as `render_observation_proof` instead of overloading
+  `robot_consumption_proof`.
+- Prove the existing MCP flow sees the status:
+  `metric_map -> navigate_to_waypoint -> observe`.
+- Evaluate `B1_floor2_slow/` as the P0 photorealistic visual route. Select it
+  by default only if it is registered to the same verified Map12 frame and
+  produces same-pose render evidence; otherwise expose an explicit blocked
+  visual-route status.
 - Add focused tests proving the agent can see verified B1 navigation capability
   and blocked room/object/manipulation status without accepting semantics.
 
-Active P1:
+Out of scope for this P0 plan:
 
-- Human-review `docs/status/active/b1-map12-semantic-anchor-review-packet.json`.
-- Promote only accepted `anchor_role=semantic` room-interior anchors through
-  `scripts/maps/promote_b1_map12_semantic_review_packet.py`.
-- Run `scripts/maps/build_b1_map12_semantic_projection.py` only after accepted
-  semantic anchors exist, then pass the resulting verified artifact explicitly
-  as `b1_semantic_projection_artifact=...` / `--semantic-projection-artifact`.
+- Human room-semantic anchor review.
+- Room semantic projection.
+- Object-level semantic anchors/projection proof.
+- Object/receptacle USD binding.
+- Public absolute `map_xy/yaw` MCP navigation tool.
 
-Active P2:
-
-- Add separate object-level semantic anchors and projection proof.
-- Register `B1_floor2_slow` to the same frame for later photorealistic
-  visual/open-task work.
+Those follow-ups are tracked in
+`docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 ## Verification
 
@@ -483,25 +510,27 @@ Scope:
   surface: residual-backed B1 pose application can produce same-pose
   Gaussian/digital-twin FPV, Chase, and topdown evidence without implying
   planner-backed or physical robot navigation.
-- P1: promote room semantics only from human-accepted `anchor_role=semantic`
-  room-interior anchors, then run strict semantic projection and consume the
-  verified projection artifact explicitly.
-- P2: add separate object-level semantic anchors/projection proof later.
+- P0: evaluate `B1_floor2_slow/` as the photorealistic visual/render route and
+  make it the default for navigation/open-task rendering only if its same-frame,
+  same-pose render proof passes. Otherwise expose a blocked status and keep the
+  verified P0 route honest.
 
 Non-goals: redo geometry alignment, rerun topdown/anchor review unless evidence
 is stale, auto-align maps, auto-accept semantic anchors, infer room/object labels
-from geometry anchors, commit generated `output/**`, add fallback/autodiscovery,
-change public command grammar, add a public MCP navigation tool, claim planner
-backing, claim physical robot support, or implement manipulation/object USD
-binding.
+from geometry anchors, human-review room semantic anchors, project room/object
+semantics, commit generated `output/**`, add fallback/autodiscovery, change
+public command grammar, add a public MCP navigation tool, claim planner backing,
+claim physical robot support, or implement manipulation/object USD binding.
 
 Entity budget: reuse=`runtime_map_prior_snapshot_v1`,
 `runtime_map_prior_targets.json`, `b1_robot_consumption_manifest.json`,
 `RealWorldCleanupContract.agent_view_payload()`, existing MCP live artifact
-writers, existing semantic review/projection scripts; remove/merge=do not keep
+writers, existing B1 render/navigation proof artifacts; remove/merge=do not keep
 `2026-06-16` as a second active implementation plan; new=at most a small helper
 for extracting/summarizing prior capabilities if needed to avoid duplicated
-payload logic; expansion triggers=new artifact schema, public tool/command,
+payload logic, plus a minimal visual-route status field for `B1_floor2_slow`
+selection if the existing capability surface cannot express it; expansion
+triggers=new artifact schema beyond capability fields, public tool/command,
 compatibility shim, semantic auto-promotion, manipulation/planner support.
 
 Context: must-read=`README.md`, `ARCHITECTURE.md`, `STATUS.md`, `AGENTS.md`,
@@ -525,17 +554,13 @@ Acceptance:
   for same-pose Gaussian/digital-twin FPV/Chase/topdown evidence, and blocked
   room/object/manipulation status; tests prove this without accepting semantic
   anchors or reading generated fallback paths.
-- SUCCESS for P1: after human-accepted semantic anchors exist, strict semantic
-  projection produces a verified artifact, product/open-task routes consume it
-  only through an explicit `b1_semantic_projection_artifact=...` path, and
-  proposed-only/alignment-only inputs remain rejected.
-- BLOCKED_NEEDS_DECISION: human must choose/accept semantic anchors before room
-  projection can become complete.
+- SUCCESS: `B1_floor2_slow/` has a documented visual-route status. If verified,
+  it is selected as the default photorealistic render route for
+  navigation/open-task views; if not verified, it is explicitly blocked and P0
+  does not claim it as selected.
 - BLOCKED_NEEDS_LOCAL_VALIDATION: full product proof that depends on local Isaac
   or operator-console browser review remains local/manual if changed behavior
   reaches those surfaces.
-- INTERMEDIATE_ONLY: P0 capability exposure may land without P1/P2 semantics if
-  tests prove navigation-ready plus semantics-blocked status honestly.
 - No regressions: no silent fallback, no backwards compatibility shim for old
   artifact names or call shapes, no `output/**` autodiscovery, geometry anchors
   remain geometry-only, semantic projection fails loudly until accepted semantic
@@ -545,11 +570,14 @@ Verification: deterministic=`ruff check` and `ruff format --check` on touched
 files plus focused pytest for runtime prior snapshot, B1 bundle,
 realworld contract/MCP server, and checker/console paths touched by the change;
 integration=compile/convert B1 bundle with explicit alignment/navigation proof
-artifacts when P0 changes prior consumption; product-run=B1 product/open-task or
-operator-console route with explicit `b1_alignment_artifact` and
+artifacts when P0 changes prior consumption; MCP proof=exercise or test the
+existing `metric_map -> navigate_to_waypoint -> observe` path against an
+explicit B1 runtime prior; visual-route proof=verify `B1_floor2_slow/` status
+and default selection or explicit blocked reason; product-run=B1 product/open
+task or operator-console route with explicit `b1_alignment_artifact` and
 `b1_navigation_artifact` when route behavior changes; local-live-manual=Isaac
 navigation smoke and browser/operator-console review only if execution changes
-pose/camera/console behavior; optional=semantic review packet dry-run before P1.
+pose/camera/console behavior.
 
 Execution: main=own scope, code changes, focused verification, commit, and final
 complete/blocked judgment; worker=none by default; worker-goal=none.
@@ -566,17 +594,13 @@ request revision.
 For the approved P0 slice, stop after the agent-visible MCP/runtime map context
 exposes B1 capability status from an explicitly supplied runtime prior and
 focused tests prove navigation-ready plus room/object/manipulation-blocked
-status without fallback or semantic promotion.
-
-For P1, stop if human-accepted semantic anchors are missing. Do not proceed to
-room semantic projection from proposed-only packets, alignment-only manifests,
-or generated suggestions.
-
-For P2, stop before object projection until a separate object-anchor acceptance
-contract exists.
+status without fallback or semantic promotion. Also stop after
+`B1_floor2_slow/` has an explicit P0 visual-route status: selected only if
+verified, otherwise blocked with reason.
 
 Do not broaden into public MCP tools, planner-backed navigation, physical robot
-support, manipulation, or fused semantic-map authoring without a new plan update.
+support, manipulation, room/object semantic projection, or fused semantic-map
+authoring without a new plan update.
 
 ## Implementation Status
 
@@ -594,7 +618,7 @@ support, manipulation, or fused semantic-map authoring without a new plan update
   from the explicit runtime prior must still be exposed to the robot-facing
   MCP/runtime map consumer, and room/object semantics remain blocked until
   separate semantic anchors are accepted.
-- P1 internal pose request contract is implemented:
+- Internal pose request contract is implemented:
   `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py` writes
   `b1_map12_waypoint_pose_requests_v1` artifacts from on-demand Map12
   waypoint ids or `map_xy/yaw` points. Globally verified residual-backed
@@ -746,22 +770,24 @@ Current gate:
 
 Next implementation slice:
 
-- Human-review `docs/status/active/b1-map12-semantic-anchor-review-packet.json`.
-  If selected room-interior points are valid, promote them through
-  `scripts/maps/promote_b1_map12_semantic_review_packet.py`, then run the
-  strict semantic projection script. Do not use the verification-only manifest,
-  bbox seed, proposed-only packet, or current alignment-only manifest as room
-  semantics.
+- Preserve and expose B1 `digital_twin_capabilities` / `capability_summary`
+  from an explicitly supplied `runtime_map_prior` into the agent-visible
+  MCP/runtime map context.
+- Name render/observation readiness in that capability surface for same-pose
+  Gaussian/digital-twin FPV, Chase, and topdown evidence.
+- Prove the existing MCP path sees the B1 status through
+  `metric_map -> navigate_to_waypoint -> observe`.
+- Evaluate `B1_floor2_slow/` as the P0 photorealistic visual/render route. If
+  it is registered to the same verified Map12 frame and produces same-pose
+  render evidence, select it by default for navigation/open-task views. If not,
+  expose a blocked visual-route status and do not claim it as selected.
 - For product/open-task runs that need the robot-consumption proof inside the
   map bundle, pass explicit `b1_alignment_artifact=...` and
   `b1_navigation_artifact=...` overrides rather than relying on generated
   `output/` discovery.
-- After the strict semantic projection artifact exists, product/open-task runs
-  may also pass explicit `b1_semantic_projection_artifact=...` to carry verified
-  room semantics in the runtime bundle. Do not pass proposed-only packets or
-  current alignment-only manifests as room semantics.
-- Add separate object-level semantic anchors later before projecting object
-  labels.
+- Do not human-review room semantic anchors or run semantic projection in this
+  P0 slice. Those follow-ups live in
+  `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 Latest deterministic evidence:
 
@@ -828,6 +854,8 @@ Known incomplete state:
 - Object semantic projection and object/receptacle binding remain blocked.
 - Manipulation, planner-backed navigation, physical robot navigation, and new
   public MCP navigation tools remain out of scope for this plan.
+- `B1_floor2_slow/` has not yet been verified as the selected P0
+  photorealistic visual/render route.
 - A narrow consumer-chain gap was found just before pausing: the compiled B1
   prior carries `digital_twin_capabilities`, but
   `RealWorldCleanupContract` currently extracts prior observed objects,
@@ -844,8 +872,12 @@ Recommended first slice for the new context:
 2. Expose existing B1 `digital_twin_capabilities` / `capability_summary` from
    an explicitly supplied `runtime_map_prior` into the agent-visible
    `runtime_metric_map` or adjacent map-context payload.
-3. Add focused contract/MCP tests proving the agent can see
+3. Add render/observation readiness to the same capability surface and cover it
+   in focused tests.
+4. Evaluate `B1_floor2_slow/` as the default visual/render route, with explicit
+   selected or blocked status.
+5. Add focused contract/MCP tests proving the agent can see
    `robot_navigation_supported=true` while room/object/manipulation capability
    status remains blocked.
-4. Do not touch generated `output/**`, do not add fallback/autodiscovery, and do
+6. Do not touch generated `output/**`, do not add fallback/autodiscovery, and do
    not infer room or object labels from the seven alignment anchors.

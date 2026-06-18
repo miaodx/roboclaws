@@ -58,17 +58,21 @@ geometry source, and alignment status. B1 scene partition labels bind through
 `scene_map_correspondence_v1` instead of list order, and reports label
 raw/source-map aligned previews.
 
-The B1 / Map 12 digital-twin map input contract now uses vendor raw Map12 plus a
-seed/review placeholder manifest instead of the deleted authored merged map bundle.
-Product and operator-preview routes compile a generated runtime bundle from
+The B1 / Map 12 digital-twin map input contract now has accepted geometry
+alignment and preview-grade residual-backed robot pose/render proof. Product
+and operator-preview routes compile a generated runtime bundle from
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
-`assets/maps/b1-map12-alignment-review.json`, and the raw scene root before
-passing map context to lower-level consumers. No final operator-authored room
-semantic manifest exists yet; manual room labels and residual-backed
-scene-map correspondences still need review before they can be treated as
-accepted semantics. The active blocking plan for making the B1 digital twin
-usable is `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
+`assets/maps/b1-map12-alignment-review.json`, explicit alignment/navigation
+proof artifacts, and the raw scene root before passing map context to
+lower-level consumers. The active P0 plan for making the B1 digital twin usable
+is `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: expose B1
+capability status from an explicit runtime prior into agent-visible MCP/runtime
+map context, name render/observation readiness, prove the existing
+`metric_map -> navigate_to_waypoint -> observe` path, and evaluate
+`B1_floor2_slow/` as the default photorealistic visual route when verified.
+Room/object semantic projection is a non-P0 follow-up in
+`docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 The implemented non-cleanup eval support plan is
 `docs/plans/2026-06-15-non-cleanup-eval-support.md`. The implemented
@@ -89,12 +93,17 @@ thin review/runtime contract is
 
 ## Next Action
 
-Pick the next repo maintenance or product slice. The eval-driven architecture,
-non-cleanup eval support, and sim map surface simplification plans are
-implemented; remaining broader live-provider and OpenClaw proofs are
-environment-dependent validation items, not active implementation blockers.
+Execute the P0 slice in
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: preserve B1
+`digital_twin_capabilities` / `capability_summary` from an explicitly supplied
+`runtime_map_prior` into the agent-visible MCP/runtime map context, add
+render/observation readiness, prove the existing waypoint-based MCP path, and
+evaluate `B1_floor2_slow/` as the default visual/render route only if verified.
 
 ## Current Blocker
+
+No current human blocker for the B1 P0 digital-twin navigation/render slice.
+Room semantic review is not required for P0 and is parked in the follow-up plan.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
@@ -138,6 +147,8 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`
 - Active B1 / Map 12 two-map alignment blocker:
   `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
+- B1 / Map 12 semantic and public-navigation follow-ups:
+  `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`
 - Implemented VLM-sidecar/OpenClaw status cleanup:
   `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Implemented AI2-THOR/direct-VLM retirement record:

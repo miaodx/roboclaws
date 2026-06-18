@@ -296,70 +296,34 @@ operator-selected Map12 `map_xy/yaw` points inside verified global coverage, as
 long as the points are useful interior navigation/viewpoints rather than
 alignment-corner anchors.
 
-Next implementation step: human-review
-`docs/status/active/b1-map12-semantic-anchor-review-packet.json`. If those room
-interior points are valid, change selected anchors to `review_status=accepted`
-and promote them through the strict review-packet promoter before running
-`scripts/maps/build_b1_map12_semantic_projection.py`. Room projection should
-remain blocked until that promotion exists; object projection remains a later
-semantic-anchor proof. Keep the navigation-smoke and operator-preview artifact
-path as the accepted first robot-consumption proof.
+Next implementation step: execute the P0 consumer-chain slice in
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`. Expose B1
+`digital_twin_capabilities` / `capability_summary` from an explicitly supplied
+`runtime_map_prior` into agent-visible MCP/runtime map context, name
+render/observation readiness, prove the existing
+`metric_map -> navigate_to_waypoint -> observe` path, and evaluate
+`B1_floor2_slow/` as the default photorealistic visual/render route only if it
+is verified. Room semantic projection should remain blocked in P0; object
+projection remains a later semantic-anchor proof.
 
 Next command/artifact:
 
 ```bash
-python scripts/maps/auto_align_b1_map12_scene_topdown.py \
-  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json \
-  --manual-draft docs/status/active/b1-map12-scene-correspondences-draft.json \
-  --output-dir output/b1-map12/auto-alignment-probe-tracked-draft
-
-python scripts/maps/render_b1_map12_correspondence_review.py \
-  --correspondences assets/maps/b1-map12-scene-correspondences.json \
-  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json \
-  --output-dir output/b1-map12/correspondence-review
-
-python scripts/maps/promote_b1_map12_manual_draft_for_verification.py \
-  --draft docs/status/active/b1-map12-scene-correspondences-draft.json \
-  --output output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json
-
-python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
-  --draft docs/status/active/b1-map12-scene-correspondences-draft.json \
-  --review-manifest assets/maps/b1-map12-alignment-review.json \
-  --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json \
-  --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json \
-  --review-packet-output output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
-  --review-report-output output/b1-map12/manual-draft-anchor-semantic-review.html
-
-python scripts/maps/promote_b1_map12_semantic_review_packet.py \
-  --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json \
-  --output assets/maps/b1-map12-scene-correspondences.json \
-  --check
-
-python scripts/maps/check_b1_map12_semantic_review_packet_fit.py \
-  --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json \
-  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/alignment-accepted-fit-check
-
-python scripts/maps/promote_b1_map12_semantic_review_packet.py \
-  --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json \
-  --output assets/maps/b1-map12-scene-correspondences.json
-
-python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences assets/maps/b1-map12-scene-correspondences.json \
-  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/alignment
+/goal execute docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md with intuitive-flow
 ```
 
-Stop condition: geometry alignment and preview-grade runtime navigation proof
-are verified. Do not claim room/area labels, object labels, manipulation,
-planner-backed navigation, physical robot support, or public MCP navigation
-until separate accepted semantic anchors and dedicated proof artifacts exist.
+Stop condition: P0 stops after agent-visible MCP/runtime map context exposes B1
+navigation and render/observation capability status from an explicit
+`runtime_map_prior`, `B1_floor2_slow/` has selected-or-blocked visual-route
+status, and focused tests prove room/object/manipulation remain blocked. Do not
+claim room/area labels, object labels, manipulation, planner-backed navigation,
+physical robot support, or public absolute `map_xy/yaw` navigation until
+separate follow-up proof artifacts exist.
 
-No-touch scope: no public surface changes, no MCP contract changes, no object
-or receptacle USD binding, no manipulation or planner-backed navigation claim,
-and no threshold relaxation without a plan update.
+No-touch scope: no generated `output/**` commits, no fallback/autodiscovery, no
+room/object semantic promotion, no public surface or MCP contract change, no
+object or receptacle USD binding, no manipulation or planner-backed navigation
+claim, and no threshold relaxation without a plan update.
 
 Parked work:
 
@@ -383,14 +347,19 @@ Pause handoff for fresh context on 2026-06-18:
   product/operator-console routes, B1 robot-consumption manifest, canonical
   runtime prior snapshot, compact prior targets with capability summary, and
   B1-specific checker proof.
-- Still not proven: accepted room semantic anchors, strict room semantic
-  projection, object semantic projection, object/receptacle binding,
-  manipulation, planner-backed navigation, physical robot support, or a public
-  MCP navigation tool.
+- Still not proven in P0: B1 capability status reaching the agent-visible
+  MCP/runtime map context from an explicit runtime prior, render/observation
+  readiness in that context, existing MCP-path proof, and `B1_floor2_slow/`
+  default visual-route selection. Non-P0 follow-ups remain accepted room
+  semantic anchors, strict room semantic projection, object semantic projection,
+  object/receptacle binding, manipulation, planner-backed navigation, physical
+  robot support, or a public MCP navigation tool.
 - Fresh-context first implementation slice: inspect the runtime-prior consumer
   chain and expose B1 `digital_twin_capabilities` / `capability_summary` from
   an explicitly supplied `runtime_map_prior` into agent-visible MCP/runtime map
-  context. Expected files to inspect first are
+  context, add render/observation readiness, prove the existing waypoint-based
+  MCP path, and evaluate `B1_floor2_slow/` as selected-or-blocked visual route.
+  Expected files to inspect first are
   `roboclaws/household/realworld_contract_init.py`,
   `roboclaws/household/realworld_contract_payloads.py`,
   `roboclaws/household/realworld_runtime_map_contract.py`, and
