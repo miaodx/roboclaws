@@ -126,6 +126,20 @@ logs before choosing the next slice.
   focused scene-camera comparison contract tests, touched-file ruff and format
   check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: B1 / Map 12 waypoint-capture render dimensions now fail aloud.
+  The waypoint capture CLI rejects non-positive `--width` / `--height` values
+  at argument parsing time instead of passing invalid dimensions into
+  deterministic camera requests and optional old/new Gaussian scene capture
+  subprocesses. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 waypoint capture configuration; default
+  dimensions, valid positive dimensions, waypoint/extra-point selection,
+  approximate bbox transform metadata, capture manifest schema, and capture
+  routing are unchanged. Metric: ratchet remains at 0 complexity rows and
+  79 oversized modules; `capture_b1_map12_waypoint_views.py` is 605 lines and
+  `test_b1_map12_waypoint_capture.py` is 101 lines. Proof: focused B1 waypoint
+  capture unit tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 scene topdown and operator preview render dimensions now fail
   aloud. The Gaussian topdown, scene topdown diagnostic, and operator-console
   scene preview CLIs reject non-positive `--width` / `--height` values at

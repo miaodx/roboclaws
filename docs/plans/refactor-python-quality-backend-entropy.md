@@ -136,6 +136,18 @@ again.
   `scene_camera_comparison.py` is 2011 lines and
   `test_scene_camera_comparison.py` is 2085 lines. Do not prune or split tests
   outside an `$intuitive-tests` pass.
+- Follow-up implementation refresh on 2026-06-18 closed one B1 / Map 12
+  waypoint-capture render-dimension false-green. The waypoint capture CLI now
+  rejects non-positive `--width` / `--height` values at argument parsing time
+  instead of passing invalid dimensions into deterministic camera requests and
+  optional old/new Gaussian scene capture subprocesses. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 waypoint
+  capture configuration; default dimensions, valid positive dimensions,
+  waypoint/extra-point selection, approximate bbox transform metadata, capture
+  manifest schema, and capture routing are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules;
+  `capture_b1_map12_waypoint_views.py` is 605 lines and
+  `test_b1_map12_waypoint_capture.py` is 101 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one B1 scene topdown
   and operator-preview render-dimension false-green. The Gaussian topdown,
   scene topdown diagnostic, and operator-console scene preview CLIs now reject
