@@ -274,6 +274,8 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
     b1_preview_files = sorted(path.name for path in preview_dir.glob("b1-map12-*.png"))
     assert b1_preview_files == [
+        "b1-map12-chase.png",
+        "b1-map12-fpv.png",
         "b1-map12-map.png",
         "b1-map12-topdown.png",
     ]
@@ -299,16 +301,21 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
-    for view_name in ("map", "topdown"):
+    for view_name in ("fpv", "map", "chase", "topdown"):
         path = preview_dir / f"b1-map12-{view_name}.png"
         assert path.is_file()
         assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert "fpv" not in b1_metadata["views"]
-    assert "chase" not in b1_metadata["views"]
+    assert b1_metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert b1_metadata["scene_usd_path"] == (
+        "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
+    )
+    assert b1_metadata["views"]["fpv"]["view"] == "raw_fpv"
+    assert b1_metadata["views"]["chase"]["view"] == "chase_camera"
+    assert "source_artifact_sha256" in b1_metadata["camera_preview_artifact"]
+    assert "path" not in b1_metadata["camera_preview_artifact"]
     assert b1_metadata["views"]["topdown"]["view"] == "review_label_topdown"
     assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()

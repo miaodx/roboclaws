@@ -79,9 +79,17 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
         },
     }
     assert worlds["b1-map12"]["preview_assets"] == {
+        "fpv": {
+            "path": "/previews/b1-map12-fpv.png",
+            "href": "/previews/b1-map12-fpv.png",
+        },
         "map": {
             "path": "/previews/b1-map12-map.png",
             "href": "/previews/b1-map12-map.png",
+        },
+        "chase": {
+            "path": "/previews/b1-map12-chase.png",
+            "href": "/previews/b1-map12-chase.png",
         },
         "topdown": {
             "path": "/previews/b1-map12-topdown.png",
@@ -157,7 +165,7 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
         assert "scene_alignment" not in metadata["views"]["map"]
 
 
-def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
+def test_b1_map12_scene_preview_has_v1_runtime_camera_provenance() -> None:
     preview_root = (
         Path(__file__).resolve().parents[3] / "roboclaws/operator_console/static/previews"
     )
@@ -167,12 +175,23 @@ def test_b1_map12_scene_preview_has_static_digital_twin_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
-    assert "fpv" not in metadata["views"]
-    assert "chase" not in metadata["views"]
+    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["scene_usd_path"] == (
+        "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
+    )
     assert metadata["map_bundle"] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
     assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
+    assert metadata["camera_preview_artifact"]["schema"] == "b1_map12_navigation_smoke_v1"
+    assert metadata["camera_preview_artifact"]["source_artifact_name"] == "navigation_smoke.json"
+    assert "path" not in metadata["camera_preview_artifact"]
+    assert metadata["views"]["fpv"]["provenance"] == ("isaac_runtime_robot_mounted_head_camera_fpv")
+    assert metadata["views"]["fpv"]["robot_mounted"] is True
+    assert not str(metadata["views"]["fpv"].get("source_artifact_view", "")).startswith("/")
+    assert "source_path" not in metadata["views"]["fpv"]
+    assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
+    assert not str(metadata["views"]["chase"].get("source_artifact_view", "")).startswith("/")
+    assert "source_path" not in metadata["views"]["chase"]
     assert metadata["views"]["map"]["view"] == "source_map_preview"
     assert metadata["views"]["map"]["provenance"] == "compiled_vendor_map12_runtime_preview_png"
     assert metadata["views"]["topdown"]["view"] == "review_label_topdown"
@@ -550,7 +569,7 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
         assert "robot_views=on" in argv
         assert (
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "2rd_floor_seperated/storey_1/scene_gs.usda"
+            "B1_floor2_slow/usda/F2_all/default.usda"
         ) in argv
         assert f"b1_alignment_artifact={alignment_artifact}" in argv
         assert f"b1_navigation_artifact={navigation_artifact}" in argv

@@ -13,7 +13,10 @@ from roboclaws.maps.runtime_prior_snapshot import (
     runtime_metric_map_from_prior_artifact,
     runtime_prior_snapshot_from_nav2_cleanup_bundle,
 )
-from scripts.isaac_lab_cleanup.check_b1_map12_readiness import NAVIGATION_PROVENANCE
+from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+    NAVIGATION_PROVENANCE,
+)
 from scripts.maps.compile_b1_map12_runtime_bundle import (
     B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
     B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
@@ -272,7 +275,7 @@ def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
         runtime_map["digital_twin_capabilities"]["render_observation_proof"][
             "default_visual_route"
         ]["selected"]
-        is False
+        is True
     )
     assert snapshot["inspection_waypoints"]
     assert snapshot["public_semantic_anchors"]
@@ -288,9 +291,9 @@ def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
     assert materialized["capability_summary"]["same_pose_chase_supported"] is True
     assert materialized["capability_summary"]["same_pose_topdown_supported"] is True
     assert materialized["capability_summary"]["default_visual_route_status"] == (
-        "blocked_missing_verified_b1_floor2_slow_render_proof"
+        "selected_verified_same_pose_render_route"
     )
-    assert materialized["capability_summary"]["default_visual_route_selected"] is False
+    assert materialized["capability_summary"]["default_visual_route_selected"] is True
     assert materialized["capability_summary"]["room_semantics_supported"] is False
     assert materialized["capability_summary"]["object_projection_status"] == (
         "blocked_until_object_semantic_anchors"
@@ -455,6 +458,13 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
     return {
         "schema": "b1_map12_navigation_smoke_v1",
         "status": "passed",
+        "b1_scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+        "visual_route": {
+            "scene_id": "B1_floor2_slow",
+            "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            "selected": True,
+            "status": "same_pose_render_verified",
+        },
         "robot_navigation_supported": True,
         "robot_navigation_provenance": NAVIGATION_PROVENANCE,
         "navigation_provenance": "kinematic_pose_driven",
@@ -473,6 +483,7 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
         "waypoint_evidence": [
             {
                 "waypoint_id": "wp_1",
+                "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
                 "robot_pose": {
                     "frame": "b1_rebuilt_scene_usd_world_candidate",
                     "x": -4.0,
@@ -487,6 +498,7 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
             },
             {
                 "waypoint_id": "wp_2",
+                "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
                 "robot_pose": {
                     "frame": "b1_rebuilt_scene_usd_world_candidate",
                     "x": -2.0,

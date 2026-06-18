@@ -115,11 +115,13 @@ WORLD_SPECS: dict[str, WorldSpec] = {
             "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
             "b1_alignment_review=assets/maps/b1-map12-alignment-review.json",
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "2rd_floor_seperated/storey_1/scene_gs.usda",
+            "B1_floor2_slow/usda/F2_all/default.usda",
             "robot_views=on",
         ),
         preview_assets=(
+            ("fpv", "/previews/b1-map12-fpv.png"),
             ("map", "/previews/b1-map12-map.png"),
+            ("chase", "/previews/b1-map12-chase.png"),
             ("topdown", "/previews/b1-map12-topdown.png"),
         ),
     ),

@@ -450,11 +450,11 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
         "/previews/molmospaces-procthor-objaverse-val-10-chase.png"
     )
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == "/previews/b1-map12-map.png"
+    assert worlds["b1-map12"]["preview_assets"]["fpv"]["href"] == "/previews/b1-map12-fpv.png"
+    assert worlds["b1-map12"]["preview_assets"]["chase"]["href"] == ("/previews/b1-map12-chase.png")
     assert worlds["b1-map12"]["preview_assets"]["topdown"]["href"] == (
         "/previews/b1-map12-topdown.png"
     )
-    assert "fpv" not in worlds["b1-map12"]["preview_assets"]
-    assert "chase" not in worlds["b1-map12"]["preview_assets"]
     assert (
         worlds[world_id]["preview_assets"]["topdown"]["href"]
         != (worlds[world_id]["preview_assets"]["map"]["href"])
@@ -554,8 +554,8 @@ def _assert_registered_scene_preview_assets(registered_previews: set[str]) -> No
     assert "molmospaces-procthor-objaverse-val-10-map.png" in registered_previews
     assert "molmospaces-procthor-objaverse-val-10-preview.json" in registered_previews
     assert "b1-map12-map.png" in registered_previews
-    assert "b1-map12-fpv.png" not in registered_previews
-    assert "b1-map12-chase.png" not in registered_previews
+    assert "b1-map12-fpv.png" in registered_previews
+    assert "b1-map12-chase.png" in registered_previews
     assert "b1-map12-preview.json" in registered_previews
     assert "molmospaces-val_6-map.png" not in registered_previews
     assert "molmospaces-val_8-map.png" not in registered_previews
@@ -568,6 +568,8 @@ def _assert_scene_preview_png_assets(base_url: str) -> None:
         "molmospaces-procthor-objaverse-val-10-topdown.png",
         "molmospaces-procthor-objaverse-val-10-chase.png",
         "b1-map12-map.png",
+        "b1-map12-fpv.png",
+        "b1-map12-chase.png",
     ):
         with urllib.request.urlopen(f"{base_url}/previews/{asset_name}") as response:
             assert response.headers["Content-Type"] == "image/png"
@@ -582,9 +584,9 @@ def _assert_scene_preview_json_assets(base_url: str) -> None:
         assert preview["views"]["chase"]["view"] == "chase_camera"
     with urllib.request.urlopen(f"{base_url}/previews/b1-map12-preview.json") as response:
         preview = json.loads(response.read().decode("utf-8"))
-        assert preview["renderer"] == "static_b1_map12_digital_twin_overview"
-        assert "fpv" not in preview["views"]
-        assert "chase" not in preview["views"]
+        assert preview["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+        assert preview["views"]["fpv"]["view"] == "raw_fpv"
+        assert preview["views"]["chase"]["view"] == "chase_camera"
 
 
 def _assert_scene_preview_rejects_invalid_paths(base_url: str) -> None:

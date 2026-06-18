@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -289,7 +290,9 @@ def test_b1_map12_preview_promotes_real_isaac_camera_artifact(
         assert (tmp_path / f"b1-map12-{view_name}.png").is_file()
     metadata = json.loads((tmp_path / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
-    assert metadata["camera_preview_artifact"]["path"] == str(artifact)
+    assert metadata["camera_preview_artifact"]["source_artifact_name"] == "run_result.json"
+    assert metadata["camera_preview_artifact"]["source_artifact_sha256"] == _file_sha256(artifact)
+    assert "path" not in metadata["camera_preview_artifact"]
     assert metadata["camera_preview_artifact"]["alignment_artifact"] == str(
         run_dir / "alignment_residuals.json"
     )
@@ -906,7 +909,11 @@ def test_b1_map12_skip_existing_requires_matching_camera_artifact(
 
     assert result["status"] == "rendered"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert metadata["camera_preview_artifact"]["path"] == str(new_artifact)
+    assert metadata["camera_preview_artifact"]["source_artifact_name"] == "run_result.json"
+    assert metadata["camera_preview_artifact"]["source_artifact_sha256"] == _file_sha256(
+        new_artifact
+    )
+    assert "path" not in metadata["camera_preview_artifact"]
     assert metadata["camera_preview_artifact"]["selected_label"] == "fresh_observe"
     assert metadata["views"]["fpv"]["label"] == "fresh_observe"
     assert metadata["views"]["chase"]["label"] == "fresh_observe"
@@ -1090,6 +1097,10 @@ def _write_stale_b1_real_camera_preview_metadata(
         encoding="utf-8",
     )
     return metadata_path
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _write_b1_camera_artifact(run_dir: Path, *, label: str) -> Path:

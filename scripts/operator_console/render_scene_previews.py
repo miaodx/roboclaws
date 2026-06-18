@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import math
 import shutil
@@ -46,7 +47,7 @@ B1_RUNTIME_PREVIEW_BUNDLE_DIR = Path(
     "output/operator-console-scene-previews/b1-map12-runtime-map-bundle"
 )
 B1_SCENE_USD_PATH = Path(
-    "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
+    "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
 )
 
 
@@ -586,8 +587,18 @@ def _b1_metadata_camera_artifact_matches(
         return False
     raw_path = str(artifact.get("path") or "").strip()
     if not raw_path:
-        return False
+        artifact_hash = str(artifact.get("source_artifact_sha256") or "").strip()
+        if artifact_hash:
+            return camera_artifact.is_file() and artifact_hash == _file_sha256(camera_artifact)
+        return str(artifact.get("source_artifact_name") or "").strip() == camera_artifact.name
     return Path(raw_path).resolve() == camera_artifact.resolve()
+
+
+def _portable_b1_artifact_view_ref(*, artifact_path: Path, view_path: Path) -> str:
+    try:
+        return view_path.relative_to(artifact_path.parent).as_posix()
+    except ValueError:
+        return view_path.name
 
 
 def _b1_metadata_payload_has_real_camera_previews(payload: dict[str, Any]) -> bool:
@@ -684,7 +695,9 @@ def _promote_b1_camera_previews(
         "status": "promoted",
         "selection_status": "selected_highest_scoring_real_isaac_camera_pair",
         "artifact": {
-            "path": str(camera_artifact),
+            "source_artifact_name": camera_artifact.name,
+            "source_artifact_sha256": _file_sha256(camera_artifact),
+            "source_artifact_status": "external_local_verification_artifact",
             "schema": payload.get("schema") or payload.get("contract") or "",
             "source_kind": selected.get("source_kind"),
             "selected_label": selected_label,
@@ -715,7 +728,10 @@ def _promote_b1_camera_previews(
                 "label": selected_label,
                 "camera": agent_facing_fpv.get("camera_prim_path") or "/World/robot_0/head_camera",
                 "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
-                "source_path": str(fpv_source),
+                "source_artifact_view": _portable_b1_artifact_view_ref(
+                    artifact_path=camera_artifact,
+                    view_path=fpv_source,
+                ),
                 "source": agent_facing_fpv.get("source")
                 or "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
                 "robot_mounted": agent_facing_fpv.get("robot_mounted", True),
@@ -736,7 +752,10 @@ def _promote_b1_camera_previews(
                 "label": selected_label,
                 "camera": report_chase.get("camera_prim_path") or "robot_relative_chase_camera",
                 "provenance": "isaac_runtime_report_chase_camera",
-                "source_path": str(chase_source),
+                "source_artifact_view": _portable_b1_artifact_view_ref(
+                    artifact_path=camera_artifact,
+                    view_path=chase_source,
+                ),
                 "source": report_chase.get("source") or "backend_local_report_chase_camera",
                 "policy_note": "Chase is report evidence, not agent-facing policy input.",
                 "image_diagnostics": _image_diagnostics(chase_path),
@@ -979,6 +998,14 @@ def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path |
     if candidate.exists():
         return candidate
     return path
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _b1_camera_preview_quality_errors(diagnostics: dict[str, Any]) -> list[str]:

@@ -30,6 +30,9 @@ KNOWN_POOR_BBOX_SEED_SOURCE = "known_poor_bbox_seed"
 DEFAULT_B1_SCENE_USD = Path("storey_1/scene_gs.usda")
 DEFAULT_B1_MESH_SCENE_USD = Path("storey_1/scene.usd")
 DEFAULT_B1_SCENE_BASE_USD = Path("storey_1/configuration/scene_base.usd")
+DEFAULT_B1_VISUAL_ROUTE_SCENE_USD = Path(
+    "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
+)
 DEFAULT_MAP12_NAV2 = Path("agibot/nav2.yaml")
 DEFAULT_MAP12_OCCUPANCY = Path("agibot/occupancy.pgm")
 DEFAULT_MAP12_MEMORY = Path("navigation_memory.json")
@@ -828,6 +831,11 @@ def validate_navigation_smoke_artifact(
         errors,
     )
     _require(
+        str(payload.get("b1_scene_usd") or "") == str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+        "navigation artifact must render the verified B1_floor2_slow visual route",
+        errors,
+    )
+    _require(
         str(payload.get("alignment_transform_source") or "") == "reviewed_correspondence_fit",
         "navigation artifact requires reviewed correspondence transform source",
         errors,
@@ -886,6 +894,11 @@ def validate_navigation_smoke_artifact(
         _require(
             str(item.get("alignment_transform_source") or "") == "reviewed_correspondence_fit",
             f"waypoint {index} requires reviewed correspondence transform source",
+            errors,
+        )
+        _require(
+            str(item.get("scene_usd") or "") == str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            f"waypoint {index} must render B1_floor2_slow visual route",
             errors,
         )
         _require(bool(views.get("fpv")), f"waypoint {index} missing FPV image", errors)

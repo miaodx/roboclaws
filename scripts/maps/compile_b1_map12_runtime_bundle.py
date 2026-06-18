@@ -14,9 +14,11 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 if __package__ in {None, ""}:
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+else:
+    REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
@@ -35,6 +37,7 @@ from roboclaws.maps.spatial_contract import (
     source_frame_spatial_contract,
 )
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (  # noqa: E402
+    DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
     validate_alignment_residual_artifact,
     validate_navigation_smoke_artifact,
@@ -56,6 +59,13 @@ DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/digital-twin-runtime")
+
+
+def _repo_relative_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -661,6 +671,10 @@ def verified_robot_consumption_proof(
             "status": "robot_navigation_verified",
             "navigation_status": "verified",
             "navigation_artifact": str(navigation_artifact_path),
+            "render_scene_usd": str(navigation.get("b1_scene_usd") or ""),
+            "visual_route": navigation.get("visual_route")
+            if isinstance(navigation.get("visual_route"), dict)
+            else {},
             "robot_navigation_supported": True,
             "robot_navigation_provenance": NAVIGATION_PROVENANCE,
             "navigation_waypoint_count": int(navigation.get("navigation_waypoint_count") or 0),
@@ -699,6 +713,8 @@ def render_observation_proof(robot_consumption_proof: dict[str, Any]) -> dict[st
         else {}
     )
     render_ready = navigation_ready and robot_view_ready
+    render_scene_usd = str(robot_consumption_proof.get("render_scene_usd") or "")
+    selected_v1_route = render_ready and render_scene_usd == str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD)
     return {
         "schema": "b1_map12_render_observation_proof_v1",
         "status": "same_pose_render_observation_verified"
@@ -717,11 +733,19 @@ def render_observation_proof(robot_consumption_proof: dict[str, Any]) -> dict[st
         "default_visual_route": {
             "scene_id": "B1_floor2_slow",
             "scene_root": "data/robot-data-lab/scene-engine/data/B1_floor2_slow",
-            "selected": False,
-            "status": "blocked_missing_verified_b1_floor2_slow_render_proof",
+            "scene_usd": str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
+            "selected": selected_v1_route,
+            "status": "selected_verified_same_pose_render_route"
+            if selected_v1_route
+            else "blocked_missing_verified_b1_floor2_slow_render_proof",
             "reason": (
-                "B1_floor2_slow has not been verified against the accepted Map12 frame "
-                "with same-pose FPV/Chase/topdown render evidence."
+                "B1_floor2_slow has verified same-pose FPV/Chase/topdown render evidence "
+                "for the accepted Map12 frame."
+                if selected_v1_route
+                else (
+                    "B1_floor2_slow has not been verified against the accepted Map12 "
+                    "frame with same-pose FPV/Chase/topdown render evidence."
+                )
             ),
         },
         "fallback_visual_route": {
@@ -938,7 +962,7 @@ def runtime_provenance(
         "schema": B1_MAP12_RUNTIME_PROVENANCE_SCHEMA,
         "generated_from_review_manifest": True,
         "generated_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
-        "compiler": Path(__file__).as_posix(),
+        "compiler": _repo_relative_path(Path(__file__)),
         "source_assets": {
             "map_bundle": str(map_bundle),
             "scene_root": str(scene_root),
@@ -1115,7 +1139,7 @@ def _runtime_semantics_payload(
             "generated_from_review_manifest": True,
             "b1_alignment_review_schema": B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
             "b1_alignment_review_source": str(review_manifest_path),
-            "b1_runtime_compiler": Path(__file__).as_posix(),
+            "b1_runtime_compiler": _repo_relative_path(Path(__file__)),
             "contains_private_scoring_truth": False,
             "contains_runtime_observations": False,
             "contains_verified_robot_consumption_proof": bool(

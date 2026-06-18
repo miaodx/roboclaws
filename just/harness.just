@@ -693,6 +693,7 @@ b1-map12-navigation-smoke *overrides:
     readiness_output=""
     alignment_artifact="output/b1-map12/alignment/alignment_residuals.json"
     waypoint_pose_requests=""
+    render_scene_usd="data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     stamp=""
     robot_name="rby1m"
     prepare_robot_usd="true"
@@ -709,7 +710,7 @@ b1-map12-navigation-smoke *overrides:
       key="${key//-/_}"
       case "$key" in
         runtime_python|b1_root|map12_root|output_dir|readiness_output|stamp|\
-        alignment_artifact|waypoint_pose_requests|\
+        alignment_artifact|waypoint_pose_requests|render_scene_usd|\
         robot_name|prepare_robot_usd|require_navigation_success|accept_nvidia_eula)
           ;;
         *)
@@ -742,7 +743,8 @@ b1-map12-navigation-smoke *overrides:
       scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py
       --readiness-artifact "$readiness_output" \
       --output-dir "$run_dir" \
-      --robot-name "$robot_name"
+      --robot-name "$robot_name" \
+      --render-scene-usd "$render_scene_usd"
     )
     if [[ -n "$waypoint_pose_requests" ]]; then
       smoke_args+=(--waypoint-pose-requests "$waypoint_pose_requests")
