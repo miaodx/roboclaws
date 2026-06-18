@@ -1,4 +1,6 @@
 {
+  "accepted_anchor_count": 7,
+  "accepted_manifest_mutated": false,
   "anchors": [
     {
       "anchor_id": "anchor_001",
@@ -233,13 +235,12 @@
     }
   ],
   "bbox_seed_policy": "known_poor_seed_only",
-  "promotion_policy": {
+  "policy": {
     "auto_accept": false,
-    "rejects_known_poor_bbox_seed": true,
-    "rejects_synthetic_manual_draft_ids": true,
-    "requires_review_status": "accepted",
-    "source_schema": "b1_map12_manual_anchor_semantic_review_packet_v1"
+    "note": "Operator accepted these anchors as geometry-only alignment anchors. They are not room semantic anchors.",
+    "review_required": true
   },
+  "proposed_anchor_count": 0,
   "scene_projection_policy": {
     "horizontal_axes": [
       "x",
@@ -248,8 +249,10 @@
     "source": "pending_operator_review_for_2rd_floor_seperated",
     "up_axis": "z"
   },
-  "schema": "b1_map12_scene_correspondences_v1",
+  "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
+  "source_draft": "docs/status/active/b1-map12-scene-correspondences-draft.json",
   "source_map_frame": "robot_map_12_map",
-  "source_review_packet": "docs/status/active/b1-map12-alignment-accepted-review-packet.json",
+  "status": "human_reviewed_alignment_only",
+  "strong_candidate_count": 0,
   "target_scene_frame": "b1_rebuilt_scene_usd_world"
 }

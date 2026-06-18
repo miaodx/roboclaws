@@ -1,25 +1,20 @@
 # B1 / Map 12 Verified Map-Scene Alignment
 
-Current blocker: final verified geometry alignment needs the seven manually
-picked B1/Map 12 correspondence anchors accepted as `anchor_role=alignment` in
-the committed manifest, then residual fitting on that committed manifest. Room
-and object label projection is a separate blocker: it needs additional
-`anchor_role=semantic` room-interior anchors with reviewed
-`navigation_area_id` / `asset_partition_id` values. The cropped B1 Gaussian
-top-down exists, the old misleading source-map top-down output was deleted
-locally, and automatic contour alignment was tried but failed the residual gate.
+Current status: B1 / Map 12 geometry alignment is now globally verified from
+the seven manually picked `anchor_role=alignment` anchors in the committed
+manifest. The official residual artifact reports `selected_transform_type=rigid_2d`,
+mean residual `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
+Room/object label projection is still separate and needs additional
+`anchor_role=semantic` room-interior anchors with reviewed `navigation_area_id`
+/ `asset_partition_id` values.
 
 Blocker fingerprint:
 
-- blocker_kind: `b1_map12_reviewed_correspondence_anchors`
-- root_cause_classification: external review evidence missing
-- last_decision_delta: rendered Gaussian scene top-down is now required for
-  correspondence review; label-inventory diagnostics are rejected, Z-up `x,y`
-  correspondence policy remains locked, and residual-backed waypoint
-  provenance checks/no-camera static preview gates remain in place. Internal
-  waypoint pose request artifacts now cover verified global or explicitly
-  verified local-area transforms, and the navigation report can display ready
-  and blocked pose-request rows for audit.
+- blocker_kind: `b1_map12_isaac_same_pose_camera_proof`
+- root_cause_classification: local Isaac runtime evidence pending
+- last_decision_delta: geometry alignment no longer blocks on room ids. The
+  committed manifest now contains seven accepted `anchor_role=alignment`
+  anchors and the official residual fitter verifies global alignment.
 
 Last proven evidence:
 
@@ -61,6 +56,21 @@ Last proven evidence:
   writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
   and residual evidence with mean `0.352908 m`, p90 `0.491765 m`, and max
   `0.502064 m`.
+- `python scripts/maps/promote_b1_map12_semantic_review_packet.py --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json --output assets/maps/b1-map12-scene-correspondences.json --check`
+  validates seven human-accepted geometry anchors without writing the committed
+  asset.
+- `python scripts/maps/check_b1_map12_semantic_review_packet_fit.py --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment-accepted-fit-check`
+  writes a non-mutating fit check with `global_alignment_status=verified` and
+  no validation errors.
+- `python scripts/maps/promote_b1_map12_semantic_review_packet.py --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json --output assets/maps/b1-map12-scene-correspondences.json`
+  writes the committed correspondence manifest with seven accepted
+  `anchor_role=alignment` anchors and blank semantic ids.
+- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment`
+  writes the official residual artifact with `status=global_verified`,
+  `global_alignment_status=verified`, `selected_transform_type=rigid_2d`, seven
+  matched anchors, mean residual `0.352908 m`, p90 `0.491765 m`, and max
+  residual `0.502064 m`. Preview overlays are under
+  `output/b1-map12/alignment/previews/`.
 - `python scripts/maps/render_b1_map12_label_tool.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --review-manifest assets/maps/b1-map12-alignment-review.json --output-dir output/b1-map12/label-tool`
   writes `output/b1-map12/label-tool/label_tool.html` and
   `label_tool_packet.json`. The HTML editor loads raw Map12 navigation layers,
@@ -79,10 +89,6 @@ Last proven evidence:
   `output/b1-map12/correspondence-review/map12_source_map.png` while preserving
   the vendor `occupancy.pgm` as `source_map.source_image` and using
   `nav2.yaml` origin/resolution for `map_xy` conversion.
-- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment`
-  writes `status=insufficient_reviewed_anchors`,
-  `global_alignment_status=candidate`, zero accepted anchors, residual
-  evidence unavailable, and `scene_projection_policy` locked to Z-up `x,y`.
 - `python scripts/operator_console/render_scene_previews.py --world b1-map12 --output-dir output/b1-map12/static-preview-proof`
   writes static B1 preview metadata with only `map` and `topdown` views; no
   `views.fpv`, no `views.chase`, and no corresponding camera preview files are
@@ -152,18 +158,17 @@ Last proven evidence:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py -q`
   pass for the distinct-applied-pose navigation smoke gate.
 
-Next hypothesis: once the seven manual geometry anchors are accepted as
-`anchor_role=alignment`, they can replace the verification-only manifest in
-`assets/maps/b1-map12-scene-correspondences.json` and preserve the same passing
-global residuals without weakening the threshold policy. Room label projection
-can be layered later from separate accepted `anchor_role=semantic` anchors.
+Next hypothesis: the verified global alignment can now feed
+`build_b1_map12_waypoint_pose_requests.py` for arbitrary Map12 waypoint ids or
+`map_xy/yaw` points, then local Isaac can apply at least two distinct B1 scene
+poses and capture same-pose FPV/Chase/topdown evidence.
 
-Next implementation step: have a human/operator edit
-`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, mark the
-seven geometry anchors `review_status=accepted` with `anchor_role=alignment`,
-run the strict promoter with `--check`, run the non-mutating fit check, then
-write the committed manifest and run the residual fitter. Add a second semantic
-anchor group only before projecting room/object labels.
+Next implementation step: run readiness against
+`output/b1-map12/alignment/alignment_residuals.json`, build two or more
+waypoint pose requests from Map12 points, run the B1 navigation smoke on local
+Isaac, then promote same-pose FPV/Chase preview metadata only from that
+residual-backed runtime camera artifact. Add semantic anchors later before
+projecting room/object labels.
 
 Next command/artifact:
 
@@ -192,19 +197,18 @@ python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
   --review-packet-output output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --review-report-output output/b1-map12/manual-draft-anchor-semantic-review.html
 
-# after a human/operator edits the review packet and accepts geometry anchors:
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
-  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json \
   --check
 
 python scripts/maps/check_b1_map12_semantic_review_packet_fit.py \
-  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/review-packet-fit-check
+  --output-dir output/b1-map12/alignment-accepted-fit-check
 
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
-  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --review-packet docs/status/active/b1-map12-alignment-accepted-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json
 
 python scripts/maps/fit_b1_map12_scene_alignment.py \
@@ -213,11 +217,11 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   --output-dir output/b1-map12/alignment
 ```
 
-Stop condition: do not mark B1 / Map 12 alignment verified until the committed
-correspondence manifest has at least six accepted anchors and the residual
-artifact passes the threshold policy. Do not use the bbox seed as accepted
-coordinate evidence. Do not mark room/area labels verified until separate
-accepted semantic anchors exist.
+Stop condition: geometry alignment is verified. Do not mark runtime navigation
+preview complete until at least two residual-backed Map12 point requests become
+distinct applied B1 poses and at least one same-pose FPV/Chase pair is promoted
+from Isaac runtime camera evidence. Do not mark room/area labels verified until
+separate accepted semantic anchors exist.
 
 No-touch scope: no public surface changes, no MCP contract changes, no object
 or receptacle USD binding, no manipulation or planner-backed navigation claim,
@@ -225,10 +229,9 @@ and no threshold relaxation without a plan update.
 
 Parked work:
 
-- Use `output/b1-map12/correspondence-review/correspondence_review.html` to drive
-  anchor review, then replace the placeholder
-  `assets/maps/b1-map12-scene-correspondences.json` with reviewed accepted
-  anchors after explicit operator map and scene picks.
+- Use `output/b1-map12/correspondence-review/correspondence_review.html` only if
+  more geometry anchors are needed. The first seven accepted alignment anchors
+  are already committed.
 - Use `output/b1-map12/label-tool/label_tool.html` when the current
   axis-aligned candidate room boxes are too crude. Exported label drafts still
   need an explicit review/merge step before replacing committed map semantics

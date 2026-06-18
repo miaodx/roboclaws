@@ -53,6 +53,15 @@ verification-only manual fallback passes global rigid alignment with mean
 residual `0.352908 m` and max `0.502064 m`, but it is geometry-only evidence
 and must not be treated as final room/area semantics.
 
+2026-06-18 follow-up: user confirmed using the seven manual points as
+`anchor_role=alignment` accepted geometry anchors. The committed manifest
+`assets/maps/b1-map12-scene-correspondences.json` now points to
+`docs/status/active/b1-map12-alignment-accepted-review-packet.json` and contains
+seven accepted geometry anchors with blank semantic ids. The official fitter
+run at `output/b1-map12/alignment/alignment_residuals.json` is
+`global_verified` with `selected_transform_type=rigid_2d`, mean residual
+`0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
+
 Semantic suggestion pass:
 `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` compares the manual
 anchors against the current Map12 review polygons and B1 scene partition bounds.
@@ -508,12 +517,11 @@ Success only if:
 
 ## Recommended Next Step
 
-Run the strict review-packet promotion path after marking the seven existing
-manual geometry picks as accepted `anchor_role=alignment`. It should write the
-committed correspondence manifest and rerun the fitter on
-`assets/maps/b1-map12-scene-correspondences.json`. Collect separate
-`anchor_role=semantic` room-interior points only before projecting room/object
-labels into Map12.
+Geometry alignment promotion is complete. Next, consume
+`output/b1-map12/alignment/alignment_residuals.json` from the 2026-06-17 runtime
+plan for readiness, waypoint pose requests, and local Isaac same-pose camera
+proof. Collect separate `anchor_role=semantic` room-interior points only before
+projecting room/object labels into Map12.
 
 ## Prerequisite Contract For 2026-06-17 Execution
 

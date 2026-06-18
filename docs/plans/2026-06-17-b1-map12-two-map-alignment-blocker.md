@@ -608,29 +608,25 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 
 Current gate:
 
-- `assets/maps/b1-map12-scene-correspondences.json` still has zero accepted
-  anchors. This is the correct blocked state until a human/operator accepts at
-  least six explicit `anchor_role=alignment` geometry anchors. The existing
-  seven corner/edge picks already carry that role in the tracked draft and do
-  not need room ids for global residual fitting.
-- The internal pose-request artifact and report-audit path exist, but they are
-  not production proof until they consume a residual artifact fitted from the
-  committed reviewed correspondence manifest.
-- The residual-backed transform from committed anchors, Isaac waypoint camera
-  proof, and FPV/Chase preview promotion remain unverified until reviewed
-  anchors and local Isaac runtime evidence exist.
+- `assets/maps/b1-map12-scene-correspondences.json` now contains seven accepted
+  `anchor_role=alignment` geometry anchors from
+  `docs/status/active/b1-map12-alignment-accepted-review-packet.json`.
+- `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment`
+  writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
+  mean residual `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
+- The internal pose-request artifact and report-audit path can now consume that
+  residual artifact. Isaac waypoint camera proof and FPV/Chase preview
+  promotion remain unverified until local Isaac runtime evidence exists.
 
 Next implementation slice:
 
-- Have a human/operator edit the review packet, mark the seven existing geometry
-  picks accepted as `anchor_role=alignment`, run the strict promotion gate with
-  `--check`, run the non-mutating fit check, then write
-  `assets/maps/b1-map12-scene-correspondences.json`. Add separate
-  `anchor_role=semantic` room-interior points later for room/object label
-  projection.
-- Rerun fitter, readiness, waypoint pose requests, navigation report, and then
-  local Isaac same-pose camera proof on that committed manifest. Do not use the
-  verification-only manifest or bbox seed as production evidence.
+- Run readiness against `output/b1-map12/alignment/alignment_residuals.json`,
+  build residual-backed waypoint pose requests for at least two Map12 points,
+  run local Isaac same-pose camera proof, and promote FPV/Chase preview metadata
+  only from that runtime evidence. Do not use the verification-only manifest or
+  bbox seed as production evidence.
+- Add separate `anchor_role=semantic` room-interior points later for room/object
+  label projection.
 
 Latest deterministic evidence:
 
