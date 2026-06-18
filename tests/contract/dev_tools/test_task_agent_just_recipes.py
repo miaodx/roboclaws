@@ -1504,6 +1504,22 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
     assert 'map_bundle_dir="$b1_runtime_map_bundle_dir"' in b1_branch
 
 
+def test_b1_live_agent_run_copies_robot_consumption_artifacts_to_seed_run_dir() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    live_run_setup = molmo_text.split('run_dir="${run_root}/seed-${seed}"', 1)[1].split(
+        'policy="${driver%-live}_agent"',
+        1,
+    )[0]
+
+    assert 'launch_world_id" == "b1-map12"' in live_run_setup
+    assert "b1_robot_consumption_manifest.json" in live_run_setup
+    assert "runtime_map_prior_snapshot.json" in live_run_setup
+    assert "runtime_map_prior_targets.json" in live_run_setup
+    assert 'cp "${output_dir}/${b1_run_artifact}" "${run_dir}/${b1_run_artifact}"' in (
+        live_run_setup
+    )
+
+
 def test_b1_isaac_route_uses_b1_robot_consumption_checker_gate() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     isaac_branch = molmo_text.split(

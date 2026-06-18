@@ -49,6 +49,7 @@ AGIBOT_CODEX_MAP_BUILD = (
     "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
 )
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
+B1_OPENAI_AGENTS_OPEN_TASK = "b1-map12::isaaclab::open-task::openai-agents-sdk::world-public-labels"
 MUJOCO_CLAUDE_OPEN_TASK = (
     "molmospaces/procthor-objaverse-val/0::mujoco::open-task::claude-code::world-public-labels"
 )
@@ -90,8 +91,13 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
         AGIBOT_CODEX_MAP_BUILD,
         MUJOCO_CODEX_MAP_BUILD,
         B1_CODEX_OPEN_TASK,
+        B1_OPENAI_AGENTS_OPEN_TASK,
     }
-    assert {route.agent_engine_id for route in supported} >= {"codex-cli", "claude-code"}
+    assert {route.agent_engine_id for route in supported} >= {
+        "codex-cli",
+        "claude-code",
+        "openai-agents-sdk",
+    }
     assert {route.lock_name for route in supported} == {
         "molmospaces_mujoco",
         "isaac_gpu",

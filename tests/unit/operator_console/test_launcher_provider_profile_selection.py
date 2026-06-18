@@ -17,6 +17,17 @@ from roboclaws.operator_console.routes import get_selection
 B1_CODEX_OPEN_TASK = "b1-map12::isaaclab::open-task::codex-cli::world-public-labels"
 
 
+def _b1_required_overrides(tmp_path: Path) -> dict[str, str]:
+    alignment_artifact = tmp_path / "alignment_residuals.json"
+    navigation_artifact = tmp_path / "navigation_smoke.json"
+    alignment_artifact.write_text("{}\n", encoding="utf-8")
+    navigation_artifact.write_text("{}\n", encoding="utf-8")
+    return {
+        "b1_alignment_artifact": str(alignment_artifact),
+        "b1_navigation_artifact": str(navigation_artifact),
+    }
+
+
 def _free_port() -> str:
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -47,7 +58,11 @@ def test_provider_gate_route_selection_overrides_ambient_provider_profile(tmp_pa
             "CODEX_API_KEY": "key",
             "ROBOCLAWS_PROVIDER_PROFILE": "mimo-mify-responses",
         },
-        overrides={"port": _free_port(), "provider_profile": "codex-router-responses"},
+        overrides={
+            "port": _free_port(),
+            "provider_profile": "codex-router-responses",
+            **_b1_required_overrides(tmp_path),
+        },
     )
 
     assert readiness["can_start"] is True
@@ -72,7 +87,7 @@ def test_start_console_run_uses_one_provider_profile_selection(tmp_path: Path) -
             LaunchRequest(
                 selection_id_override=route.id,
                 provider_profile="mimo-mify-responses",
-                overrides={"port": _free_port()},
+                overrides={"port": _free_port(), **_b1_required_overrides(tmp_path)},
             ),
             env={"XM_LLM_API_KEY": "key"},
         )
