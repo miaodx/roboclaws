@@ -769,4 +769,9 @@ b1-map12-navigation-smoke *overrides:
       report_args+=(--waypoint-pose-requests "$waypoint_pose_requests")
     fi
     .venv/bin/python "${report_args[@]}"
+    .venv/bin/python scripts/operator_console/render_scene_previews.py \
+      --world b1-map12 \
+      --b1-camera-artifact "${run_dir}/navigation_smoke.json" \
+      --output-dir "${run_dir}/operator-preview"
     echo "==> report: ${run_dir}/report.html"
+    echo "==> preview: ${run_dir}/operator-preview/b1-map12-preview.json"
