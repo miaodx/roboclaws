@@ -162,6 +162,14 @@ Last proven evidence:
   The earlier interrupted
   `output/b1-map12/navigation-smoke-harness/residual-overlay-harness/` directory
   is a partial run with zero-byte JSON files and is not evidence.
+- `python scripts/maps/build_b1_map12_semantic_anchor_review_packet.py --review-manifest assets/maps/b1-map12-alignment-review.json --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --output docs/status/active/b1-map12-semantic-anchor-review-packet.json`
+  writes three proposed `anchor_role=semantic` room-interior center anchors for
+  the currently accepted room labels. They use real `navigation_area_id` /
+  `asset_partition_id` values and scene points from the verified
+  `reviewed_correspondence_fit`, but remain `review_status=proposed` with
+  `accepted_anchor_count=0`. The strict promoter rejects the packet with
+  `review packet has no human-accepted anchors`, so it is a review input, not
+  accepted room/object semantics.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report before local Isaac camera proof exists.
@@ -219,11 +227,12 @@ operator-selected Map12 `map_xy/yaw` points inside verified global coverage, as
 long as the points are useful interior navigation/viewpoints rather than
 alignment-corner anchors.
 
-Next implementation step: keep the navigation-smoke and operator-preview
-artifact path as the accepted first proof. Add semantic anchors later before
-projecting room/object labels. If broader robot consumption is required next,
-wire this residual-backed pose-request path into the operator workflow instead
-of adding a new compatibility route.
+Next implementation step: human-review
+`docs/status/active/b1-map12-semantic-anchor-review-packet.json`. If those room
+interior points are valid, change selected anchors to `review_status=accepted`
+and promote them through the strict review-packet promoter before projecting
+room/object labels. Keep the navigation-smoke and operator-preview artifact path
+as the accepted first robot-consumption proof.
 
 Next command/artifact:
 

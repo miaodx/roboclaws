@@ -21,6 +21,9 @@ from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
     navigation_smoke_waypoints,
 )
 from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
+from scripts.maps.build_b1_map12_semantic_anchor_review_packet import (
+    build_semantic_anchor_review_packet,
+)
 from scripts.maps.fit_b1_map12_scene_alignment import (
     ALIGNMENT_ANCHOR_ROLE,
     B1_MAP12_ALIGNMENT_RESIDUALS_SCHEMA,
@@ -1035,6 +1038,84 @@ def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> 
     assert payload["anchors"][0]["navigation_area_id"]
     assert payload["anchors"][0]["asset_partition_id"]
     assert validate_correspondence_manifest(payload) == []
+
+
+def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors() -> None:
+    review_manifest = {
+        "schema": "b1_map12_alignment_review_v1",
+        "labels": [
+            {
+                "label_id": "meeting_room_b",
+                "map_area_id": "central_floor",
+                "scene_partition_id": "meeting_room_b",
+                "review_status": "accepted",
+                "room_label": "Open kitchen",
+                "category": "kitchen",
+                "geometry": {
+                    "type": "map_polygon",
+                    "frame_id": "map",
+                    "points": [
+                        {"x": -4.0, "y": -1.0},
+                        {"x": 2.0, "y": -1.0},
+                        {"x": 2.0, "y": 5.0},
+                        {"x": -4.0, "y": 5.0},
+                    ],
+                },
+            },
+            {
+                "label_id": "draft_label",
+                "map_area_id": "draft_area",
+                "scene_partition_id": "draft_partition",
+                "review_status": "draft",
+                "geometry": {
+                    "type": "map_polygon",
+                    "points": [
+                        {"x": 0.0, "y": 0.0},
+                        {"x": 1.0, "y": 0.0},
+                        {"x": 1.0, "y": 1.0},
+                    ],
+                },
+            },
+        ],
+    }
+    alignment = build_alignment_residuals(
+        correspondence_manifest(
+            anchors=[
+                alignment_anchor("a1", (0.0, 0.0), (1.0, 2.0)),
+                alignment_anchor("a2", (2.0, 0.0), (3.0, 2.0)),
+                alignment_anchor("a3", (0.0, 2.0), (1.0, 4.0)),
+                alignment_anchor("a4", (2.0, 2.0), (3.0, 4.0)),
+                alignment_anchor("a5", (1.0, 3.0), (2.0, 5.0)),
+                alignment_anchor("a6", (3.0, 1.0), (4.0, 3.0)),
+            ]
+        ),
+        map_bundle=Path("map12"),
+        output_dir=Path("output/test-b1-map12-semantic-anchor-review-packet"),
+    )
+
+    packet = build_semantic_anchor_review_packet(
+        review_manifest=review_manifest,
+        alignment=alignment,
+        review_manifest_path=Path("assets/maps/b1-map12-alignment-review.json"),
+        alignment_artifact_path=Path("output/b1-map12/alignment/alignment_residuals.json"),
+    )
+
+    assert packet["schema"] == "b1_map12_manual_anchor_semantic_review_packet_v1"
+    assert packet["status"] == "needs_human_review"
+    assert packet["accepted_anchor_count"] == 0
+    assert packet["proposed_anchor_count"] == 1
+    anchor = packet["anchors"][0]
+    assert anchor["anchor_role"] == SEMANTIC_ANCHOR_ROLE
+    assert anchor["review_status"] == "proposed"
+    assert anchor["navigation_area_id"] == "central_floor"
+    assert anchor["asset_partition_id"] == "meeting_room_b"
+    assert anchor["map_xy"] == pytest.approx([-1.0, 2.0])
+    assert anchor["scene_xyz"] == pytest.approx([0.0, 4.0, 0.0])
+    assert anchor["map_coordinate_source"] == "accepted_review_label_polygon_center"
+    assert anchor["scene_coordinate_source"] == "reviewed_correspondence_fit_projection"
+
+    with pytest.raises(PromotionError, match="no human-accepted anchors"):
+        build_reviewed_correspondence_manifest(packet)
 
 
 def test_strict_review_promotion_promotes_alignment_anchors_without_semantic_ids() -> None:
