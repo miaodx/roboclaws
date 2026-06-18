@@ -28,6 +28,7 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from roboclaws.agents.provider_registry import provider_readiness, resolve_model  # noqa: E402
 from roboclaws.household.raw_fpv_guidance import (  # noqa: E402
     RAW_FPV_CATEGORY_HINT,
     RAW_FPV_HIGH_CONFIDENCE_TARGETS,
@@ -895,9 +896,10 @@ def execute_provider_variant(
     predictions = {}
     variant_payload = (public_inputs.get("variants") or {}).get(variant_id) or {}
     requests = _provider_requests_for_variant(variant_id, variant_payload)
-    api_config = _provider_config(provider)
+    api_config = _provider_config(provider, model=model)
     if api_config.get("error"):
         return "provider_config_error", [api_config["error"]], predictions
+    resolved_model = str(api_config["model"])
     for request in requests:
         request_id = str(request.get("request_id") or "")
         image_paths = [Path(str(path)) for path in request.get("image_paths") or []]
@@ -907,7 +909,7 @@ def execute_provider_variant(
             response_payload = _call_responses_api(
                 base_url=str(api_config["base_url"]),
                 api_key=str(api_config["api_key"]),
-                model=model,
+                model=resolved_model,
                 prompt=prompt,
                 image_paths=image_paths,
                 timeout_s=timeout_s,
@@ -1636,16 +1638,43 @@ def _call_responses_api(
         raise RuntimeError(f"responses API returned HTTP {exc.code}: {message}") from exc
 
 
-def _provider_config(provider: str) -> dict[str, Any]:
+def _provider_config(provider: str, *, model: str) -> dict[str, Any]:
     if provider != "codex-router-responses":
         return {"error": {"type": "unsupported_provider", "provider": provider}}
+    readiness = provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile=provider,
+        model=model,
+        env=dict(os.environ),
+    )
+    if not readiness.get("ok"):
+        if str(readiness.get("model_family") or "") == "unknown":
+            return {
+                "error": {
+                    "type": "unknown_model",
+                    "provider": str(readiness.get("provider_profile") or provider),
+                    "model": str(readiness.get("model") or model),
+                    "message": str(readiness.get("message") or ""),
+                }
+            }
+        missing_env = list(readiness.get("missing_env") or [])
+        if missing_env:
+            return {"error": {"type": "missing_env", "env": str(missing_env[0])}}
+        return {
+            "error": {
+                "type": "provider_readiness_error",
+                "provider": provider,
+                "message": str(readiness.get("message") or ""),
+            }
+        }
+    resolved_model = resolve_model(str(readiness.get("model") or model)).model_id
     base_url = os.environ.get("CODEX_BASE_URL", "")
     api_key = os.environ.get("CODEX_API_KEY", "")
     if not base_url:
         return {"error": {"type": "missing_env", "env": "CODEX_BASE_URL"}}
     if not api_key:
         return {"error": {"type": "missing_env", "env": "CODEX_API_KEY"}}
-    return {"base_url": base_url, "api_key": api_key}
+    return {"base_url": base_url, "api_key": api_key, "model": resolved_model}
 
 
 def _write_provider_artifacts(

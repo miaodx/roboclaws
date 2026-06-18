@@ -60,6 +60,21 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV provider
+  model false-green. The RAW-FPV perception probe now validates
+  `codex-router-responses` model input through the provider registry before
+  request execution, rejects unknown explicit model ids as
+  `provider_config_error`, and resolves blank model input to the route default
+  `gpt-5.5`. Owner layer: Agent Engines And Provider Profiles. Behavior-change
+  class: fail-aloud probe provider configuration; missing provider env errors,
+  valid catalog models, provider route semantics, prompt privacy, scoring, and
+  report artifacts are unchanged. The ratchet remains 0 complexity rows and 79
+  oversized modules; `run_raw_fpv_perception_probe.py` is 1907 lines and
+  `test_raw_fpv_perception_probe.py` is 1493 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused RAW-FPV provider-model tests, full RAW-FPV perception probe test
+  file, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV perception
   probe explicit-input false-green. Explicit `--private-labels`,
   `--all-visible-labels`, and `--predictions` paths now fail before scoring

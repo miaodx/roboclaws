@@ -576,17 +576,125 @@ def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
         public_inputs=public_inputs,
         output_dir=tmp_path / "responses",
         provider="codex-router-responses",
-        model="test-model",
+        model="gpt-5.5",
         timeout_s=1.0,
     )
 
     assert status == "provider_ok"
     assert errors == []
     assert len(calls) == 1
+    assert calls[0]["model"] == "gpt-5.5"
     assert set(predictions) == {frame.frame_id for frame in frames}
     assert len(predictions[frames[0].frame_id]["labels"]) == 1
     assert len(predictions[frames[1].frame_id]["labels"]) == 1
     assert predictions[frames[2].frame_id]["labels"] == []
+
+
+def test_raw_fpv_visual_labeler_rejects_unknown_provider_model(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path, observation_ids=("raw_fpv_001",))
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=1,
+    )
+    public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
+    calls: list[dict[str, object]] = []
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+    monkeypatch.setattr(probe, "_call_responses_api", lambda **kwargs: calls.append(kwargs))
+
+    status, errors, predictions = probe.execute_provider_variant(
+        variant_id="raw_fpv_visual_labeler",
+        public_inputs=public_inputs,
+        output_dir=tmp_path / "responses",
+        provider="codex-router-responses",
+        model="not-in-provider-catalog",
+        timeout_s=1.0,
+    )
+
+    assert status == "provider_config_error"
+    assert predictions == {}
+    assert calls == []
+    assert errors == [
+        {
+            "type": "unknown_model",
+            "provider": "codex-router-responses",
+            "model": "not-in-provider-catalog",
+            "message": (
+                "unknown model 'not-in-provider-catalog' for provider_profile "
+                "codex-router-responses; add it to the provider registry or use a catalog model."
+            ),
+        }
+    ]
+
+
+def test_raw_fpv_visual_labeler_reports_unknown_model_before_missing_env(monkeypatch) -> None:
+    probe = _load_module()
+
+    monkeypatch.delenv("CODEX_BASE_URL", raising=False)
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+
+    assert probe._provider_config("codex-router-responses", model="not-in-provider-catalog") == {
+        "error": {
+            "type": "unknown_model",
+            "provider": "codex-router-responses",
+            "model": "not-in-provider-catalog",
+            "message": (
+                "unknown model 'not-in-provider-catalog' for provider_profile "
+                "codex-router-responses; add it to the provider registry or use a catalog model."
+            ),
+        }
+    }
+
+
+def test_raw_fpv_visual_labeler_uses_provider_default_for_blank_model(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path, observation_ids=("raw_fpv_001",))
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=1,
+    )
+    public_inputs = probe.build_public_inputs(frames, runtime_map_prior={}, max_candidates=3)
+    calls: list[dict[str, object]] = []
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+
+    def fake_call_responses_api(**kwargs):
+        calls.append(kwargs)
+        return {
+            "output_text": json.dumps(
+                {
+                    "schema": "raw_fpv_visual_labeler_response_v1",
+                    "labels": [],
+                }
+            )
+        }
+
+    monkeypatch.setattr(probe, "_call_responses_api", fake_call_responses_api)
+
+    status, errors, predictions = probe.execute_provider_variant(
+        variant_id="raw_fpv_visual_labeler",
+        public_inputs=public_inputs,
+        output_dir=tmp_path / "responses",
+        provider="codex-router-responses",
+        model="",
+        timeout_s=1.0,
+    )
+
+    assert status == "provider_ok"
+    assert errors == []
+    assert calls[0]["model"] == "gpt-5.5"
+    assert predictions[frames[0].frame_id]["labels"] == []
 
 
 def test_raw_fpv_visual_labeler_requires_codex_base_url(monkeypatch) -> None:
@@ -595,7 +703,7 @@ def test_raw_fpv_visual_labeler_requires_codex_base_url(monkeypatch) -> None:
     monkeypatch.delenv("CODEX_BASE_URL", raising=False)
     monkeypatch.setenv("CODEX_API_KEY", "test-key")
 
-    assert probe._provider_config("codex-router-responses") == {
+    assert probe._provider_config("codex-router-responses", model="gpt-5.5") == {
         "error": {"type": "missing_env", "env": "CODEX_BASE_URL"}
     }
 
@@ -606,7 +714,7 @@ def test_raw_fpv_visual_labeler_requires_codex_api_key(monkeypatch) -> None:
     monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
     monkeypatch.delenv("CODEX_API_KEY", raising=False)
 
-    assert probe._provider_config("codex-router-responses") == {
+    assert probe._provider_config("codex-router-responses", model="gpt-5.5") == {
         "error": {"type": "missing_env", "env": "CODEX_API_KEY"}
     }
 
