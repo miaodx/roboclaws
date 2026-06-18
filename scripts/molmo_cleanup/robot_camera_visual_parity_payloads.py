@@ -71,22 +71,33 @@ def capture_quality_probe_summary(payload: dict[str, Any]) -> dict[str, Any]:
     )
     native = _dict(_dict(native_source).get("primary")) or native_source
     native_capture_quality = _dict(native.get("capture_quality_settings"))
-    explicit = _dict(payload.get("capture_quality_probe"))
-    render_resolution = _dict(explicit.get("render_resolution_requested")) or {
-        "width": scene.get("render_width"),
-        "height": scene.get("render_height"),
-    }
-    saved_resolution = _dict(explicit.get("render_resolution_saved")) or {
-        "width": scene.get("saved_report_width") or scene.get("render_width"),
-        "height": scene.get("saved_report_height") or scene.get("render_height"),
-    }
-    metric_resolution = _dict(explicit.get("metric_resolution")) or {
-        "width": scene.get("metric_width") or saved_resolution.get("width"),
-        "height": scene.get("metric_height") or saved_resolution.get("height"),
-    }
-    render_resolution = _clean_resolution(render_resolution)
-    saved_resolution = _clean_resolution(saved_resolution) or render_resolution
-    metric_resolution = _clean_resolution(metric_resolution) or saved_resolution
+    raw_explicit = payload.get("capture_quality_probe")
+    if "capture_quality_probe" in payload and not isinstance(raw_explicit, dict):
+        raise ValueError("capture_quality_probe must be an object")
+    explicit = _dict(raw_explicit)
+    render_resolution = _resolution_from_explicit_or_scene(
+        explicit,
+        "render_resolution_requested",
+        scene,
+        width_field="render_width",
+        height_field="render_height",
+    )
+    saved_resolution = _resolution_from_explicit_or_scene(
+        explicit,
+        "render_resolution_saved",
+        scene,
+        width_field="saved_report_width",
+        height_field="saved_report_height",
+        default=render_resolution,
+    )
+    metric_resolution = _resolution_from_explicit_or_scene(
+        explicit,
+        "metric_resolution",
+        scene,
+        width_field="metric_width",
+        height_field="metric_height",
+        default=saved_resolution,
+    )
     saved_mode = str(explicit.get("saved_image_mode") or "")
     if not saved_mode:
         saved_mode = (
@@ -324,15 +335,66 @@ def _has_requested_quality_setting(capture_quality: dict[str, Any]) -> bool:
     return False
 
 
-def _clean_resolution(value: dict[str, Any]) -> dict[str, int]:
-    try:
-        width = int(value.get("width"))
-        height = int(value.get("height"))
-    except (TypeError, ValueError):
-        return {}
-    if width <= 0 or height <= 0:
-        return {}
-    return {"width": width, "height": height}
+def _resolution_from_explicit_or_scene(
+    explicit: dict[str, Any],
+    explicit_field: str,
+    scene: dict[str, Any],
+    *,
+    width_field: str,
+    height_field: str,
+    default: dict[str, int] | None = None,
+) -> dict[str, int]:
+    if explicit_field in explicit:
+        explicit_resolution = explicit.get(explicit_field)
+        if not isinstance(explicit_resolution, dict):
+            raise ValueError(f"{explicit_field} must be an object with width and height")
+        return _required_resolution(explicit_resolution, field_name=explicit_field)
+    width = scene.get(width_field)
+    height = scene.get(height_field)
+    if (
+        _is_unspecified_dimension(width)
+        and _is_unspecified_dimension(height)
+        and default is not None
+    ):
+        return default
+    if _is_unspecified_dimension(width) != _is_unspecified_dimension(height):
+        raise ValueError(f"scene.{width_field} and scene.{height_field} must be set together")
+    return _required_resolution(
+        {"width": width, "height": height},
+        field_name=f"scene.{width_field}/{height_field}",
+    )
+
+
+def _required_resolution(value: dict[str, Any], *, field_name: str) -> dict[str, int]:
+    return {
+        "width": _positive_int(value.get("width"), field_name=f"{field_name}.width"),
+        "height": _positive_int(value.get("height"), field_name=f"{field_name}.height"),
+    }
+
+
+def _positive_int(value: Any, *, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, float):
+        if not value.is_integer():
+            raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+        parsed = int(value)
+    elif isinstance(value, str):
+        try:
+            parsed = int(value.strip())
+        except ValueError:
+            raise ValueError(f"{field_name} must be a positive integer; got {value!r}") from None
+    else:
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be a positive integer; got {value!r}")
+    return parsed
+
+
+def _is_unspecified_dimension(value: Any) -> bool:
+    return value is None or value == ""
 
 
 def _object_category_key(value: Any) -> str:

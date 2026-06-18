@@ -60,6 +60,24 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed the adjacent
+  visual-parity capture-quality summary false-green. The visual-parity summary
+  payload owner now rejects missing, malformed, bool, non-integer,
+  non-positive, explicit-non-object, or half-specified capture-quality
+  resolutions instead of erasing bad values into empty resolution metadata and
+  still ranking the row as probe evidence. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud manifest/report summary
+  configuration; valid explicit capture-quality probes, valid legacy scene
+  dimension inference, saved/metric dimension inheritance, report rendering,
+  probe ranking, and native-render metadata classification are unchanged. The
+  ratchet remains 0 complexity rows and 79 oversized modules;
+  `robot_camera_visual_parity_payloads.py` is 411 lines,
+  `summarize_robot_camera_visual_parity.py` is 1976 lines, and
+  `test_robot_camera_visual_parity_summary.py` is 2262 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused visual-parity capture-quality tests, full visual-parity
+  summary test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one robot-camera
   capture-quality legacy-manifest false-green. Refresh-report-only capture
   quality inference now requires explicit legacy scene render dimensions and

@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Visual-parity capture-quality summary metadata now fails aloud.
+  The visual-parity summary payload owner rejects missing, malformed, bool,
+  non-integer, non-positive, explicit-non-object, or half-specified
+  capture-quality resolutions instead of erasing bad values into empty
+  resolution metadata and still ranking the row as probe evidence. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  manifest/report summary configuration; valid explicit capture-quality probes,
+  valid legacy scene dimension inference, saved/metric dimension inheritance,
+  report rendering, probe ranking, and native-render metadata classification
+  are unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `robot_camera_visual_parity_payloads.py` is 411 lines,
+  `summarize_robot_camera_visual_parity.py` is 1976 lines, and
+  `test_robot_camera_visual_parity_summary.py` is 2262 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused visual-parity capture-quality tests, full visual-parity
+  summary test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: Robot-camera capture-quality legacy manifests now fail aloud.
   Refresh-report-only capture-quality inference requires explicit legacy scene
   render dimensions and rejects missing, malformed, bool, or non-positive
