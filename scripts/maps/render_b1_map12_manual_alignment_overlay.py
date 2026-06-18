@@ -127,12 +127,19 @@ def render_overlay(
         "map_bundle": str(map_bundle),
         "alignment_artifact": str(alignment_artifact),
         "transform": transform,
+        "projection_policy": {
+            "source": "recorded_perspective_camera_projector",
+            "projector": "scene_projector_from_topdown_packet",
+            "z_plane": 0.0,
+            "forbidden_shortcut": "Do not map scene_xy_bounds linearly to image pixels.",
+        },
         "drawn_free_point_count": len(free_points),
         "drawn_occupied_point_count": len(occupied_points),
         "note": (
-            "Map12 occupancy is transformed with the manual draft rigid alignment and "
-            "projected into the cropped Gaussian top-down camera. The photo-like source "
-            "image is the Gaussian top-down. Blue=Map12 free, red=Map12 occupied."
+            "Map12 occupancy is transformed with the reviewed manual-anchor rigid alignment "
+            "and projected through the recorded Gaussian top-down perspective camera. The "
+            "photo-like source image is the Gaussian top-down. Blue=Map12 free, red=Map12 "
+            "occupied."
         ),
     }
     metadata_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -157,6 +164,10 @@ def verified_transform(alignment: dict[str, Any]) -> dict[str, Any]:
     if transform.get("type") != "rigid_2d":
         raise ValueError(
             f"manual overlay expects rigid_2d transform, got {transform.get('type')!r}"
+        )
+    if str(transform.get("source") or "") != "reviewed_correspondence_fit":
+        raise ValueError(
+            "manual overlay requires selected_transform.source=reviewed_correspondence_fit"
         )
     return transform
 

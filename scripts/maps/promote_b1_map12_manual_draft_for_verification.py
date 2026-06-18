@@ -78,7 +78,7 @@ def build_verification_manifest(
         "verification_only": True,
         "source_draft": source_draft.as_posix(),
         "notes": [
-            "Generated for local residual verification after automatic alignment failed.",
+            "Generated for local residual verification from proposed manual draft anchors.",
             "Do not commit this as assets/maps/b1-map12-scene-correspondences.json.",
             "Do not use alignment anchors as room semantic evidence.",
         ],

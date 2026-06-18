@@ -20,7 +20,6 @@ from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
     navigation_smoke_has_distinct_pose_evidence,
     navigation_smoke_waypoints,
 )
-from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
 from scripts.maps.build_b1_map12_semantic_anchor_review_packet import (
     build_semantic_anchor_review_packet,
 )
@@ -44,6 +43,9 @@ from scripts.maps.promote_b1_map12_semantic_review_packet import (
 from scripts.maps.render_b1_map12_correspondence_review import (
     build_review_packet,
     render_review_report,
+)
+from scripts.maps.render_b1_map12_manual_alignment_overlay import (
+    verified_transform as verified_overlay_transform,
 )
 from scripts.maps.render_b1_scene_gaussian_topdown import (
     TOPDOWN_RENDER_SCHEMA,
@@ -1538,83 +1540,6 @@ def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path
     assert "no human-accepted anchors" in completed.stderr
 
 
-def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:
-    review_manifest = {
-        "labels": [
-            {
-                "label_id": "room_a",
-                "map_area_id": "area_a",
-                "scene_partition_id": "partition_a",
-                "review_status": "accepted",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 0.0, "y": 0.0},
-                        {"x": 2.0, "y": 0.0},
-                        {"x": 2.0, "y": 2.0},
-                        {"x": 0.0, "y": 2.0},
-                    ],
-                },
-            },
-            {
-                "label_id": "room_b",
-                "map_area_id": "area_b",
-                "scene_partition_id": "partition_b",
-                "review_status": "accepted",
-                "geometry": {
-                    "type": "map_polygon",
-                    "points": [
-                        {"x": 4.0, "y": 0.0},
-                        {"x": 6.0, "y": 0.0},
-                        {"x": 6.0, "y": 2.0},
-                        {"x": 4.0, "y": 2.0},
-                    ],
-                },
-            },
-        ]
-    }
-    scene_diagnostic = {
-        "partitions": [
-            {
-                "partition_id": "partition_a",
-                "scene_frame_bounds": {
-                    "min_x": 10.0,
-                    "min_y": 20.0,
-                    "max_x": 12.0,
-                    "max_y": 22.0,
-                },
-            },
-            {
-                "partition_id": "partition_b",
-                "scene_frame_bounds": {
-                    "min_x": 14.0,
-                    "min_y": 20.0,
-                    "max_x": 16.0,
-                    "max_y": 22.0,
-                },
-            },
-        ]
-    }
-    manual_anchors = [
-        {"map_xy": [1.0, 1.0], "scene_xyz": [11.0, 21.0, 0.0]},
-        {"map_xy": [5.0, 1.0], "scene_xyz": [15.0, 21.0, 0.0]},
-        {"map_xy": [3.0, 2.0], "scene_xyz": [13.0, 22.0, 0.0]},
-        {"map_xy": [2.0, -1.0], "scene_xyz": [12.0, 19.0, 0.0]},
-        {"map_xy": [6.0, 3.0], "scene_xyz": [16.0, 23.0, 0.0]},
-        {"map_xy": [0.0, 0.0], "scene_xyz": [10.0, 20.0, 0.0]},
-    ]
-
-    packet = semantic_label_partition_candidates(
-        review_manifest=review_manifest,
-        scene_diagnostic=scene_diagnostic,
-        manual_anchors=manual_anchors,
-    )
-
-    assert packet["status"] == "candidate_seed_only"
-    assert packet["best_candidate"]["manual_draft_passes_thresholds"] is True
-    assert packet["best_candidate"]["transform"]["candidate_status"] == "candidate_seed_only"
-
-
 def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
     tmp_path: Path,
 ) -> None:
@@ -1654,6 +1579,19 @@ def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(
         "up_axis": "z",
     }
     assert packet["export_manifest_template"]["anchors"] == []
+
+
+def test_manual_alignment_overlay_rejects_non_reviewed_transform_source() -> None:
+    alignment = {
+        "global_alignment_status": "verified",
+        "selected_transform": {
+            "type": "rigid_2d",
+            "source": "auto_contour_min_area_rect_similarity_seed",
+        },
+    }
+
+    with pytest.raises(ValueError, match="reviewed_correspondence_fit"):
+        verified_overlay_transform(alignment)
 
 
 def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Path) -> None:

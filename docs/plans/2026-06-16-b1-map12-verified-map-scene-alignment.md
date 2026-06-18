@@ -62,19 +62,15 @@ Do not use it as proof that room semantics are accepted.
 
 2026-06-18 update: the misleading old source-map-frame
 `output/b1-map12/runtime-delete-smoke/review_labels_topdown.png` was deleted
-locally. Automatic contour alignment against the cropped B1 Gaussian top-down
-was attempted with
-`scripts/maps/auto_align_b1_map12_scene_topdown.py`; it remains
-`candidate_seed_only` because residuals against the manual draft anchors are
-mean `2.152082 m` and max `2.595962 m`. The same probe now also tries semantic
-label/partition center matching; that candidate is worse, with best mean
-residual `7.891215 m` and max `11.003484 m`. A tracked manual draft snapshot
-now lives at `docs/status/active/b1-map12-scene-correspondences-draft.json`.
-The seven manual picks are explicit `anchor_role=alignment` geometry anchors;
-they should not be re-clicked or forced to carry room semantics. The explicit
-verification-only manual fallback passes global rigid alignment with mean
-residual `0.352908 m` and max `0.502064 m`, but it is geometry-only evidence
-and must not be treated as final room/area semantics.
+locally. Automatic contour and semantic-center alignment probes were attempted
+and rejected; those scripts are now retired so they cannot be mistaken for
+accepted evidence. A tracked manual draft snapshot now lives at
+`docs/status/active/b1-map12-scene-correspondences-draft.json`. The seven manual
+picks are explicit `anchor_role=alignment` geometry anchors; they should not be
+re-clicked or forced to carry room semantics. The explicit verification-only
+manual fallback passes global rigid alignment with mean residual `0.352908 m`
+and max `0.502064 m`, but it is geometry-only evidence and must not be treated
+as final room/area semantics.
 
 2026-06-18 follow-up: user confirmed using the seven manual points as
 `anchor_role=alignment` accepted geometry anchors. The committed manifest
@@ -490,7 +486,6 @@ them before claiming `verified` requires an explicit plan update.
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
-- `scripts/maps/auto_align_b1_map12_scene_topdown.py`
 - `scripts/maps/check_b1_map12_semantic_review_packet_fit.py`
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py`

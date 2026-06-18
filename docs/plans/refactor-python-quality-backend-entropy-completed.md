@@ -309,6 +309,9 @@ logs before choosing the next slice.
   check, py_compile, `git diff --check`, and ratchet.
 
 - 2026-06-18: B1 / Map 12 waypoint-capture render dimensions now fail aloud.
+  Superseded on 2026-06-19: the approximate bbox waypoint-capture path was
+  retired; current B1 / Map12 review uses manual anchors plus the recorded
+  top-down camera projector.
   The waypoint capture CLI rejects non-positive `--width` / `--height` values
   at argument parsing time instead of passing invalid dimensions into
   deterministic camera requests and optional old/new Gaussian scene capture
@@ -316,9 +319,9 @@ logs before choosing the next slice.
   Behavior-change class: fail-aloud B1 waypoint capture configuration; default
   dimensions, valid positive dimensions, waypoint/extra-point selection,
   approximate bbox transform metadata, capture manifest schema, and capture
-  routing are unchanged. Metric: ratchet remains at 0 complexity rows and
-  79 oversized modules; `capture_b1_map12_waypoint_views.py` is 605 lines and
-  `test_b1_map12_waypoint_capture.py` is 101 lines. Proof: focused B1 waypoint
+  routing are unchanged. Metric at the time: ratchet remained at 0 complexity
+  rows and 79 oversized modules; the later-retired waypoint capture path was
+  605 lines and its test was 101 lines. Proof: focused B1 waypoint
   capture unit tests, touched-file ruff and format check, py_compile,
   `git diff --check`, and ratchet.
 
