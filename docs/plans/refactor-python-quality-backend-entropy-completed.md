@@ -169,6 +169,21 @@ logs before choosing the next slice.
   operator preview tests, touched-file ruff and format check, py_compile,
   `git diff --check`, and ratchet.
 
+- 2026-06-18: B1 Gaussian topdown camera configuration now fails aloud. The
+  Gaussian topdown CLI and camera request builder reject non-positive/non-finite
+  camera height, non-positive or non-finite near-vertical camera Y offset,
+  non-finite target Z, and vertical FOV values outside 1-179 degrees instead of
+  writing invalid camera request geometry or silently flipping negative offsets
+  positive. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud B1 Gaussian topdown camera configuration; default camera
+  settings, valid custom positive settings, render dimensions, scene bounds,
+  NuRec crop handling, request/report schemas, and capture routing are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `render_b1_scene_gaussian_topdown.py` is 596 lines and
+  `test_b1_scene_gaussian_topdown.py` is 289 lines. Proof: focused B1 Gaussian
+  topdown contract tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: RAW-FPV perception probe numeric configuration now fails
   aloud. The probe CLI rejects non-positive `max_frames_per_source`,
   non-positive score thresholds, out-of-contract candidate limits, and
