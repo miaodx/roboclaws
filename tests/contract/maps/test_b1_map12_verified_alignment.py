@@ -174,6 +174,26 @@ def passing_anchors() -> list[dict[str, object]]:
     return anchors
 
 
+def semantic_review_packet(*, anchors: list[dict[str, object]]) -> dict[str, object]:
+    packet = correspondence_manifest(anchors=anchors)
+    accepted_count = sum(anchor.get("review_status") == "accepted" for anchor in anchors)
+    proposed_count = sum(anchor.get("review_status") == "proposed" for anchor in anchors)
+    packet.update(
+        {
+            "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
+            "status": "human_reviewed" if accepted_count else "needs_human_review",
+            "accepted_manifest_mutated": False,
+            "accepted_anchor_count": accepted_count,
+            "proposed_anchor_count": proposed_count,
+            "policy": {
+                "auto_accept": False,
+                "review_required": True,
+            },
+        }
+    )
+    return packet
+
+
 def test_manifest_rejects_accepted_anchor_from_known_poor_bbox_seed() -> None:
     anchor = accepted_anchor(
         "bbox_seed_prefill",
@@ -919,17 +939,8 @@ def test_manual_anchor_semantic_review_report_is_read_only() -> None:
 
 
 def test_strict_semantic_review_promotion_rejects_proposed_packet() -> None:
-    packet = {
-        "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
-        "source_map_frame": "robot_map_12_map",
-        "target_scene_frame": "b1_rebuilt_scene_usd_world",
-        "bbox_seed_policy": "known_poor_seed_only",
-        "scene_projection_policy": {
-            "horizontal_axes": ["x", "y"],
-            "up_axis": "z",
-            "source": "2rd_floor_seperated_scene_topdown_policy",
-        },
-        "anchors": [
+    packet = semantic_review_packet(
+        anchors=[
             {
                 "anchor_id": "manual_draft_anchor",
                 "anchor_type": "operator_correspondence",
@@ -939,24 +950,22 @@ def test_strict_semantic_review_promotion_rejects_proposed_packet() -> None:
                 "scene_xyz": [1.0, 1.0, 0.0],
                 "review_status": "proposed",
             }
-        ],
-    }
+        ]
+    )
 
     with pytest.raises(PromotionError, match="no human-accepted anchors"):
         build_reviewed_correspondence_manifest(packet)
 
 
 def test_strict_semantic_review_promotion_rejects_partial_accepted_packet() -> None:
-    packet = correspondence_manifest(anchors=passing_anchors()[:5])
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet = semantic_review_packet(anchors=passing_anchors()[:5])
 
     with pytest.raises(PromotionError, match="at least 6 human-accepted anchors"):
         build_reviewed_correspondence_manifest(packet)
 
 
 def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> None:
-    packet = correspondence_manifest(anchors=passing_anchors())
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet = semantic_review_packet(anchors=passing_anchors())
     for anchor in packet["anchors"]:
         anchor["semantic_review"] = {
             "status": "needs_human_review",
@@ -990,8 +999,7 @@ def test_strict_semantic_review_promotion_rejects_missing_or_synthetic_ids(
 ) -> None:
     anchor = passing_anchors()[0]
     anchor[field] = value
-    packet = correspondence_manifest(anchors=[anchor])
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet = semantic_review_packet(anchors=[anchor])
 
     with pytest.raises(PromotionError, match=message):
         build_reviewed_correspondence_manifest(packet)
@@ -1000,16 +1008,35 @@ def test_strict_semantic_review_promotion_rejects_missing_or_synthetic_ids(
 def test_strict_semantic_review_promotion_rejects_bbox_seed_coordinates() -> None:
     anchor = passing_anchors()[0]
     anchor["scene_coordinate_source"] = "known_poor_bbox_seed"
-    packet = correspondence_manifest(anchors=[anchor])
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet = semantic_review_packet(anchors=[anchor])
 
     with pytest.raises(PromotionError, match="must not use bbox seed coordinates"):
         build_reviewed_correspondence_manifest(packet)
 
 
+@pytest.mark.parametrize(
+    ("packet_update", "message"),
+    [
+        ({"accepted_anchor_count": 0}, "accepted_anchor_count does not match accepted anchors"),
+        ({"proposed_anchor_count": 9}, "proposed_anchor_count does not match proposed anchors"),
+        ({"accepted_manifest_mutated": True}, "accepted_manifest_mutated=false"),
+        ({"policy": {"auto_accept": True, "review_required": True}}, "auto_accept=false"),
+        ({"policy": {"auto_accept": False, "review_required": False}}, "review_required=true"),
+    ],
+)
+def test_strict_semantic_review_promotion_rejects_inconsistent_packet_metadata(
+    packet_update: dict[str, object],
+    message: str,
+) -> None:
+    packet = semantic_review_packet(anchors=passing_anchors())
+    packet.update(packet_update)
+
+    with pytest.raises(PromotionError, match=message):
+        build_reviewed_correspondence_manifest(packet)
+
+
 def test_strict_semantic_review_promotion_check_mode_does_not_write(tmp_path: Path) -> None:
-    packet = correspondence_manifest(anchors=passing_anchors())
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet = semantic_review_packet(anchors=passing_anchors())
     packet_path = tmp_path / "review_packet.json"
     output_path = tmp_path / "b1-map12-scene-correspondences.json"
     packet_path.write_text(json.dumps(packet), encoding="utf-8")
@@ -1039,14 +1066,7 @@ def test_strict_semantic_review_promotion_check_mode_does_not_write(tmp_path: Pa
 def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
     tmp_path: Path,
 ) -> None:
-    packet = correspondence_manifest(anchors=[])
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
-    packet["anchors"] = [
-        {
-            **passing_anchors()[0],
-            "review_status": "proposed",
-        }
-    ]
+    packet = semantic_review_packet(anchors=[{**passing_anchors()[0], "review_status": "proposed"}])
     packet_path = tmp_path / "review_packet.json"
     packet_path.write_text(json.dumps(packet), encoding="utf-8")
 
@@ -1071,8 +1091,7 @@ def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
 def test_semantic_review_packet_fit_check_writes_preview_not_committed_manifest(
     tmp_path: Path,
 ) -> None:
-    packet = correspondence_manifest(anchors=passing_anchors())
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet = semantic_review_packet(anchors=passing_anchors())
     packet_path = tmp_path / "review_packet.json"
     output_dir = tmp_path / "fit-check"
     committed_path = tmp_path / "b1-map12-scene-correspondences.json"
@@ -1104,9 +1123,7 @@ def test_semantic_review_packet_fit_check_writes_preview_not_committed_manifest(
 
 
 def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path) -> None:
-    packet = correspondence_manifest(anchors=[])
-    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
-    packet["anchors"] = [{**passing_anchors()[0], "review_status": "proposed"}]
+    packet = semantic_review_packet(anchors=[{**passing_anchors()[0], "review_status": "proposed"}])
     packet_path = tmp_path / "review_packet.json"
     packet_path.write_text(json.dumps(packet), encoding="utf-8")
 

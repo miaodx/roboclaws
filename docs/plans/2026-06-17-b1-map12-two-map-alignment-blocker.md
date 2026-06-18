@@ -544,6 +544,10 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   sources, and auto-accepted suggestions. Its `--check` mode validates the same
   gate without writing the committed asset, and write mode strips review-only
   suggestion metadata from promoted anchors.
+- The same promotion gate now also rejects self-inconsistent review-packet
+  metadata: top-level accepted/proposed counts must match actual anchor
+  statuses, `accepted_manifest_mutated` must be false, and policy must keep
+  `auto_accept=false` plus `review_required=true`.
 - The semantic suggestion command now also emits
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
   for the human/operator to review candidate ids before editing the JSON packet.

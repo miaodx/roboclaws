@@ -103,6 +103,7 @@ def build_reviewed_correspondence_manifest(
         raise PromotionError(
             "review packet schema must be b1_map12_manual_anchor_semantic_review_packet_v1"
         )
+    validate_review_packet_metadata(packet)
     accepted = []
     for index, raw_anchor in enumerate(packet.get("anchors") or [], start=1):
         if not isinstance(raw_anchor, dict) or raw_anchor.get("review_status") != "accepted":
@@ -137,6 +138,31 @@ def build_reviewed_correspondence_manifest(
     if errors:
         raise PromotionError("; ".join(errors))
     return manifest
+
+
+def validate_review_packet_metadata(packet: dict[str, Any]) -> None:
+    anchors = [item for item in packet.get("anchors") or [] if isinstance(item, dict)]
+    actual_accepted = sum(item.get("review_status") == "accepted" for item in anchors)
+    actual_proposed = sum(item.get("review_status") == "proposed" for item in anchors)
+    if (
+        "accepted_anchor_count" in packet
+        and int(packet.get("accepted_anchor_count") or 0) != actual_accepted
+    ):
+        raise PromotionError("review packet accepted_anchor_count does not match accepted anchors")
+    if (
+        "proposed_anchor_count" in packet
+        and int(packet.get("proposed_anchor_count") or 0) != actual_proposed
+    ):
+        raise PromotionError("review packet proposed_anchor_count does not match proposed anchors")
+    if packet.get("accepted_manifest_mutated") is not False:
+        raise PromotionError(
+            "review packet must declare accepted_manifest_mutated=false before promotion"
+        )
+    policy = packet.get("policy") if isinstance(packet.get("policy"), dict) else {}
+    if policy.get("auto_accept") is not False:
+        raise PromotionError("review packet policy must declare auto_accept=false")
+    if policy.get("review_required") is not True:
+        raise PromotionError("review packet policy must declare review_required=true")
 
 
 def validate_accepted_anchor(anchor_id: str, anchor: dict[str, Any]) -> None:
