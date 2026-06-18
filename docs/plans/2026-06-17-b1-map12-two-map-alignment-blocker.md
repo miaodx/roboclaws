@@ -325,8 +325,14 @@ python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
   --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
   --output output/b1-map12/readiness/readiness.aligned.json
 
+python scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py \
+  --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
+  --points output/b1-map12/navigation-smoke/map12_points.json \
+  --output output/b1-map12/navigation-smoke/waypoint_pose_requests.json
+
 python scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py \
   --readiness-artifact output/b1-map12/readiness/readiness.aligned.json \
+  --waypoint-pose-requests output/b1-map12/navigation-smoke/waypoint_pose_requests.json \
   --output-dir output/b1-map12/navigation-smoke \
   --accept-nvidia-eula
 
@@ -480,6 +486,16 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - Implementation is still blocked until accepted anchors/residuals exist and
   local Isaac evidence proves the pose/camera path. Unsupported points must
   produce blocked artifacts, not fallback output.
+- P1 internal pose request contract is implemented:
+  `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py` writes
+  `b1_map12_waypoint_pose_requests_v1` artifacts from on-demand Map12
+  waypoint ids or `map_xy/yaw` points. Globally verified residual-backed
+  alignment produces B1 pose rows with coverage decisions; unverified
+  alignment, malformed points, or missing coverage produce blocked rows.
+- `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` can consume the
+  pose request artifact through `--waypoint-pose-requests`. A blocked request
+  artifact blocks smoke capture, and missing/seed-derived readiness waypoints
+  no longer act as a silent fallback.
 
 2026-06-17 update:
 
@@ -529,6 +545,9 @@ ruff format --check scripts/maps/render_b1_scene_gaussian_topdown.py scripts/map
 ruff check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py
 ruff format --check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/contract/maps/test_b1_scene_topdown_diagnostic.py
 ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_topdown_diagnostic.py -q
+ruff check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
+ruff format --check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q
 .venv-isaaclab/bin/python scripts/maps/render_b1_scene_topdown_diagnostic.py --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --output-dir output/b1-map12/scene-topdown-label-overlay
 python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment

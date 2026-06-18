@@ -7,10 +7,17 @@ from pathlib import Path
 
 import pytest
 
+from scripts.isaac_lab_cleanup.build_b1_map12_waypoint_pose_requests import (
+    build_pose_request_artifact,
+)
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     KNOWN_POOR_BBOX_SEED_SOURCE,
     readiness_artifact_with_alignment,
     validate_readiness_artifact,
+    validate_waypoint_pose_requests_artifact,
+)
+from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
+    navigation_smoke_waypoints,
 )
 from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
 from scripts.maps.fit_b1_map12_scene_alignment import (
@@ -241,6 +248,132 @@ def test_readiness_promotes_verified_only_from_residual_artifact(tmp_path: Path)
     assert merged["map12_to_b1_usd_transform_status"] == "verified"
     assert merged["residual_evidence"]["matched_anchor_count"] == 6
     assert validate_readiness_artifact(merged) == []
+
+
+def test_waypoint_pose_requests_convert_verified_global_map12_points(tmp_path: Path) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=passing_anchors()),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "manual_point_a", "x": -8.0, "y": 0.0, "yaw_deg": 90.0},
+            {"waypoint_id": "manual_point_b", "x": 1.0, "y": 4.0, "yaw": 0.25},
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "ready"
+    assert payload["waypoint_count"] == 2
+    assert payload["blocked_request_count"] == 0
+    assert payload["robot_navigation_supported"] is False
+    assert payload["planner_backed"] is False
+    assert payload["physical_robot"] is False
+    first = payload["waypoints"][0]
+    assert first["coverage_decision"]["status"] == "verified_global"
+    assert first["alignment_transform_source"] == "reviewed_correspondence_fit"
+    assert first["b1_pose"]["frame"] == "b1_rebuilt_scene_usd_world"
+    assert first["b1_pose"]["x"] == pytest.approx(-6.6)
+    assert first["b1_pose"]["y"] == pytest.approx(-8.0)
+    assert first["b1_pose"]["yaw_deg"] == pytest.approx(90.0)
+
+
+def test_waypoint_pose_requests_block_unverified_alignment_and_bad_point(
+    tmp_path: Path,
+) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=passing_anchors()[:3]),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "not_covered", "x": -8.0, "y": 0.0},
+            {"waypoint_id": "bad_point", "x": "not-a-number", "y": 1.0},
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "blocked"
+    assert payload["waypoint_count"] == 0
+    assert payload["blocked_request_count"] == 2
+    assert payload["blocked_requests"][0]["request_status"] == "blocked"
+    assert (
+        "alignment artifact must be globally verified" in payload["blocked_requests"][0]["reason"]
+    )
+    assert payload["blocked_requests"][1]["request_status"] == "blocked"
+
+
+def test_navigation_smoke_consumes_ready_pose_requests_and_blocks_bad_request_artifact(
+    tmp_path: Path,
+) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=passing_anchors()),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+    ready = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "manual_point_a", "x": -8.0, "y": 0.0},
+            {"waypoint_id": "manual_point_b", "x": 1.0, "y": 4.0},
+        ],
+    )
+    ready_path = tmp_path / "ready_pose_requests.json"
+    ready_path.write_text(json.dumps(ready), encoding="utf-8")
+
+    waypoints, blocker = navigation_smoke_waypoints(
+        readiness={},
+        waypoint_pose_requests=ready_path,
+    )
+
+    assert blocker == ""
+    assert [item["waypoint_id"] for item in waypoints] == ["manual_point_a", "manual_point_b"]
+
+    blocked = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[{"waypoint_id": "bad_point", "x": "not-a-number", "y": 1.0}],
+    )
+    blocked_path = tmp_path / "blocked_pose_requests.json"
+    blocked_path.write_text(json.dumps(blocked), encoding="utf-8")
+
+    waypoints, blocker = navigation_smoke_waypoints(
+        readiness={"map12_overlay": {"candidate_waypoints": ready["waypoints"]}},
+        waypoint_pose_requests=blocked_path,
+    )
+
+    assert waypoints == []
+    assert "point must contain finite x/y" in blocker
+
+    waypoints, blocker = navigation_smoke_waypoints(
+        readiness={
+            "map12_overlay": {
+                "candidate_waypoints": [
+                    {
+                        "waypoint_id": "bbox_seed_waypoint",
+                        "alignment_transform_source": KNOWN_POOR_BBOX_SEED_SOURCE,
+                        "alignment_artifact": "",
+                        "b1_pose": {"x": 0.0, "y": 0.0},
+                    }
+                ]
+            }
+        },
+        waypoint_pose_requests=None,
+    )
+
+    assert waypoints == []
+    assert "requires at least two residual-backed waypoint poses" in blocker
 
 
 def test_readiness_records_area_verified_only_when_global_fit_fails(tmp_path: Path) -> None:
