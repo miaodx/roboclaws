@@ -607,8 +607,7 @@ def load_probe_labels(
     else:
         label_paths = tuple(paths)
     for path in label_paths:
-        if not path.is_file():
-            continue
+        _require_input_file(path, purpose="RAW-FPV private label manifest")
         payload = _load_json(path)
         for item in payload.get("labels") or []:
             label = _label_from_payload(
@@ -663,8 +662,9 @@ def _dedupe_labels(labels: list[ProbeLabel]) -> list[ProbeLabel]:
 
 
 def load_predictions(path: Path | None) -> dict[str, dict[str, dict[str, Any]]]:
-    if path is None or not path.is_file():
+    if path is None:
         return {}
+    _require_input_file(path, purpose="RAW-FPV prediction manifest")
     payload = _load_json(path)
     rows = payload.get("predictions") or payload.get("runs") or []
     predictions: dict[str, dict[str, dict[str, Any]]] = {}
@@ -1818,6 +1818,11 @@ def _load_json_if_exists(path: Path) -> dict[str, Any]:
     if path and path.is_file():
         return _load_json(path)
     return {}
+
+
+def _require_input_file(path: Path, *, purpose: str) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(f"{purpose} does not exist: {path}")
 
 
 def _output_run_dir(output_root: Path, run_id: str) -> Path:

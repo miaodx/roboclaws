@@ -60,6 +60,22 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV perception
+  probe explicit-input false-green. Explicit `--private-labels`,
+  `--all-visible-labels`, and `--predictions` paths now fail before scoring
+  when the file is absent instead of being treated like omitted optional inputs
+  and producing truth-sparse or not-run offline reports. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud probe
+  configuration; omitted optional label/prediction inputs, valid scorer truth
+  loading, valid prediction loading, provider readiness errors, prompt privacy,
+  scoring, and report artifacts are unchanged. The ratchet remains 0
+  complexity rows and 79 oversized modules;
+  `run_raw_fpv_perception_probe.py` is 1878 lines and
+  `test_raw_fpv_perception_probe.py` is 1385 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused missing-input regression tests, full RAW-FPV perception probe test
+  file, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed the adjacent
   visual-parity capture-quality summary false-green. The visual-parity summary
   payload owner now rejects missing, malformed, bool, non-integer,

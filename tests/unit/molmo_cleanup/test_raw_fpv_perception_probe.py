@@ -342,6 +342,96 @@ def test_raw_fpv_probe_merges_multiple_private_label_manifests(tmp_path: Path) -
     ]
 
 
+def test_raw_fpv_probe_rejects_missing_private_label_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--private-labels",
+                    str(tmp_path / "missing_private_labels.json"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-labels",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV private label manifest does not exist" in str(exc)
+        assert "missing_private_labels.json" in str(exc)
+    else:  # pragma: no cover - missing explicit scorer truth should fail before scoring
+        raise AssertionError("expected missing private label manifest to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_missing_all_visible_label_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--all-visible-labels",
+                    str(tmp_path / "missing_visible_labels.json"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-visible-labels",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV private label manifest does not exist" in str(exc)
+        assert "missing_visible_labels.json" in str(exc)
+    else:  # pragma: no cover - missing explicit scorer truth should fail before scoring
+        raise AssertionError("expected missing all-visible label manifest to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_missing_prediction_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--predictions",
+                    str(tmp_path / "missing_predictions.json"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-predictions",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV prediction manifest does not exist" in str(exc)
+        assert "missing_predictions.json" in str(exc)
+    else:  # pragma: no cover - missing explicit offline predictions should fail before scoring
+        raise AssertionError("expected missing prediction manifest to fail aloud")
+
+
 def test_raw_fpv_probe_aliases_unique_sweep_frame_labels_by_observation_id(
     tmp_path: Path,
 ) -> None:
