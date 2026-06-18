@@ -100,7 +100,8 @@ Last proven evidence:
   committed correspondence manifest. Proposed-only rows, missing real semantic
   ids, fewer than six human-accepted anchors, synthetic `manual_draft_*` ids,
   bbox/seed coordinate sources, and auto-accepted suggestions are rejected
-  before writing output.
+  before writing output. `--check` validates the same gate without writing the
+  committed asset.
 - The same semantic suggestion command now writes
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only
   operator table showing each proposed anchor, candidate semantic ids, and
@@ -112,7 +113,8 @@ Last proven evidence:
 - `ruff check scripts/maps/promote_b1_map12_semantic_review_packet.py scripts/maps/suggest_b1_map12_manual_anchor_semantics.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
   `ruff format --check scripts/maps/promote_b1_map12_semantic_review_packet.py scripts/maps/suggest_b1_map12_manual_anchor_semantics.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
   and `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py -q`
-  pass for the strict promotion gate and read-only semantic review report.
+  pass for the strict promotion gate, `--check` mode, and read-only semantic
+  review report.
 
 Next hypothesis: once the seven manual anchors receive reviewed real
 `navigation_area_id` and `asset_partition_id` values, they can replace the
@@ -124,8 +126,8 @@ Next implementation step: have a human/operator edit
 six anchors `review_status=accepted`, and supply real `navigation_area_id` /
 `asset_partition_id` values. Use
 `output/b1-map12/manual-draft-anchor-semantic-review.html` as the read-only
-review aid, then run the strict promoter and residual fitter on the committed
-manifest.
+review aid, run the strict promoter with `--check`, then write the committed
+manifest and run the residual fitter.
 
 Next command/artifact:
 
@@ -155,6 +157,11 @@ python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
   --review-report-output output/b1-map12/manual-draft-anchor-semantic-review.html
 
 # after a human/operator edits the review packet and accepts real semantic ids:
+python scripts/maps/promote_b1_map12_semantic_review_packet.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --output assets/maps/b1-map12-scene-correspondences.json \
+  --check
+
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json

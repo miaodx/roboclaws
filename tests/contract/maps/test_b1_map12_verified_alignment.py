@@ -52,6 +52,9 @@ from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_read
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "fit_b1_map12_scene_alignment.py"
 REVIEW_SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_correspondence_review.py"
+PROMOTE_REVIEW_PACKET_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_semantic_review_packet.py"
+)
 RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 VENDOR_MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
@@ -962,6 +965,67 @@ def test_strict_semantic_review_promotion_rejects_bbox_seed_coordinates() -> Non
 
     with pytest.raises(PromotionError, match="must not use bbox seed coordinates"):
         build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_check_mode_does_not_write(tmp_path: Path) -> None:
+    packet = correspondence_manifest(anchors=passing_anchors())
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet_path = tmp_path / "review_packet.json"
+    output_path = tmp_path / "b1-map12-scene-correspondences.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_REVIEW_PACKET_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--output",
+            str(output_path),
+            "--check",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(completed.stdout)
+    assert summary["accepted_anchor_count"] == 6
+    assert summary["output_written"] is False
+    assert summary["output"] == ""
+    assert not output_path.exists()
+
+
+def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
+    tmp_path: Path,
+) -> None:
+    packet = correspondence_manifest(anchors=[])
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet["anchors"] = [
+        {
+            **passing_anchors()[0],
+            "review_status": "proposed",
+        }
+    ]
+    packet_path = tmp_path / "review_packet.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_REVIEW_PACKET_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--output",
+            str(tmp_path / "out.json"),
+            "--check",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "no human-accepted anchors" in completed.stderr
 
 
 def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:

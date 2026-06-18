@@ -508,7 +508,8 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   It writes the committed correspondence manifest only from human-accepted
   anchors with real semantic ids and rejects proposed-only rows, fewer than six
   accepted anchors, synthetic `manual_draft_*` ids, bbox/seed coordinate
-  sources, and auto-accepted suggestions.
+  sources, and auto-accepted suggestions. Its `--check` mode validates the same
+  gate without writing the committed asset.
 - The semantic suggestion command now also emits
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
   for the human/operator to review candidate ids before editing the JSON packet.
@@ -559,8 +560,8 @@ Next implementation slice:
 
 - Have a human/operator edit the semantic review packet, mark at least six
   anchors accepted, and supply real semantic ids. Use the static HTML review
-  report as a read-only aid, then run the strict promotion gate into
-  `assets/maps/b1-map12-scene-correspondences.json`.
+  report as a read-only aid, run the strict promotion gate with `--check`, then
+  write `assets/maps/b1-map12-scene-correspondences.json`.
 - Rerun fitter, readiness, waypoint pose requests, navigation report, and then
   local Isaac same-pose camera proof on that committed manifest. Do not use the
   verification-only synthetic manifest or bbox seed as production evidence.

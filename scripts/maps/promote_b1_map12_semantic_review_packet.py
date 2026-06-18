@@ -42,6 +42,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--review-packet", type=Path, default=DEFAULT_PACKET)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Validate the human-edited packet without writing the committed manifest.",
+    )
     return parser.parse_args(argv)
 
 
@@ -55,15 +60,19 @@ def main(argv: list[str] | None = None) -> int:
     except PromotionError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if not args.check:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     print(
         json.dumps(
             {
                 "schema": payload["schema"],
                 "accepted_anchor_count": len(payload["anchors"]),
                 "source_review_packet": payload["source_review_packet"],
-                "output": str(args.output),
+                "output": "" if args.check else str(args.output),
+                "output_written": not args.check,
             },
             sort_keys=True,
         )
