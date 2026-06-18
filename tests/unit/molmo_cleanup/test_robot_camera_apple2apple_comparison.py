@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image, ImageDraw
 
 from scripts.molmo_cleanup import robot_camera_apple2apple_camera_contract as camera_contract
@@ -315,6 +316,42 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
         metric_path = output_dir / location["metric_views"]["fpv"][backend]
         assert Image.open(saved_path).size == (6, 4)
         assert Image.open(metric_path).size == (3, 2)
+
+
+def test_robot_camera_capture_quality_infers_legacy_scene_dimensions() -> None:
+    manifest = {
+        "scene": {
+            "render_width": "12",
+            "render_height": "8",
+            "saved_report_width": 6,
+            "saved_report_height": 4,
+            "metric_width": 3,
+            "metric_height": 2,
+        }
+    }
+
+    probe = capture_quality.ensure_capture_quality_probe_manifest(manifest)
+
+    assert probe["status"] == "inferred_legacy_manifest"
+    assert probe["render_resolution_requested"] == {"width": 12, "height": 8}
+    assert probe["render_resolution_saved"] == {"width": 6, "height": 4}
+    assert probe["metric_resolution"] == {"width": 3, "height": 2}
+    assert manifest["capture_quality_probe"] is probe
+
+
+def test_robot_camera_capture_quality_rejects_missing_legacy_scene_dimensions() -> None:
+    with pytest.raises(
+        ValueError,
+        match="legacy comparison manifest scene.render_width is required",
+    ):
+        capture_quality.ensure_capture_quality_probe_manifest({"scene": {"render_height": 8}})
+
+
+def test_robot_camera_capture_quality_rejects_invalid_legacy_scene_dimensions() -> None:
+    with pytest.raises(ValueError, match="scene.render_width must be a positive integer"):
+        capture_quality.ensure_capture_quality_probe_manifest(
+            {"scene": {"render_width": False, "render_height": 8}}
+        )
 
 
 def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(

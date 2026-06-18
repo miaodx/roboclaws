@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Robot-camera capture-quality legacy manifests now fail aloud.
+  Refresh-report-only capture-quality inference requires explicit legacy scene
+  render dimensions and rejects missing, malformed, bool, or non-positive
+  dimensions instead of fabricating `540x360` proof metadata. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud legacy
+  manifest/report configuration; explicit current-run capture-quality probes,
+  valid legacy scene dimensions, saved/metric dimension inheritance, report
+  rendering, object-parity skipping, and renderer subprocess routing are
+  unchanged. Metric: ratchet remains at 0 complexity rows and 79 oversized
+  modules; `robot_camera_apple2apple_capture_quality.py` is 258 lines and
+  `test_robot_camera_apple2apple_comparison.py` is 3134 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera capture-quality and parser tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Shared camera-control request resolution now fails aloud.
   Camera-control request builders and normalizers reject missing, malformed,
   bool, or non-positive render dimensions instead of fabricating `1x1` render

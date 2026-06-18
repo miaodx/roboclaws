@@ -60,6 +60,21 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one robot-camera
+  capture-quality legacy-manifest false-green. Refresh-report-only capture
+  quality inference now requires explicit legacy scene render dimensions and
+  rejects missing, malformed, bool, or non-positive dimensions instead of
+  fabricating `540x360` proof metadata. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud legacy manifest/report
+  configuration; explicit current-run capture-quality probes, valid legacy
+  scene dimensions, saved/metric dimension inheritance, report rendering,
+  object-parity skipping, and renderer subprocess routing are unchanged. The
+  ratchet remains 0 complexity rows and 79 oversized modules;
+  `robot_camera_apple2apple_capture_quality.py` is 258 lines and
+  `test_robot_camera_apple2apple_comparison.py` is 3134 lines. The test file is
+  already oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused robot-camera capture-quality and parser tests, touched-file
+  ruff and format check, py_compile, `git diff --check`, and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one shared
   camera-control request-resolution false-green. Camera-control request
   builders and normalizers now reject missing, malformed, bool, or non-positive
