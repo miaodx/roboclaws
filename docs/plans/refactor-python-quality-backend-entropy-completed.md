@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: RAW-FPV perception probe private label manifests now fail aloud.
+  Explicit `--private-labels` and `--all-visible-labels` manifests require a
+  list of object rows with frame identity, object id, category, and bbox/coarse
+  locality instead of producing unhelpful attribute errors or silently
+  filtering malformed scorer truth out of the report. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud scorer-truth
+  input; omitted label inputs, valid hidden/all-visible labels, frame aliasing,
+  contrast-derived labels, offline scoring, provider execution, prompt privacy,
+  and report artifacts are unchanged. Metric: ratchet remains at 0 complexity
+  rows and 79 oversized modules; `run_raw_fpv_perception_probe.py` is 1950
+  lines and `test_raw_fpv_perception_probe.py` is 1677 lines. The test file
+  remains oversized; leave pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused malformed label-manifest tests, full RAW-FPV perception probe
+  test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: RAW-FPV perception probe prediction manifests now fail aloud.
   Explicit `--predictions` manifests require list rows, object rows, frame ids,
   and object responses instead of skipping malformed rows or fabricating empty

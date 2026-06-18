@@ -620,11 +620,18 @@ def load_probe_labels(
     for path in label_paths:
         _require_input_file(path, purpose="RAW-FPV private label manifest")
         payload = _load_json(path)
-        for item in payload.get("labels") or []:
+        rows = payload.get("labels", [])
+        if not isinstance(rows, list):
+            raise ValueError(
+                f"RAW-FPV private label manifest must contain a list in 'labels': {path}"
+            )
+        for index, item in enumerate(rows):
             label = _label_from_payload(
                 item,
                 private=True,
                 default_hidden_target=default_hidden_target,
+                row_index=index,
+                source_path=path,
             )
             if label.frame_id in frame_ids:
                 labels.append(label)
@@ -1297,8 +1304,30 @@ def _label_from_payload(
     *,
     private: bool,
     default_hidden_target: bool,
+    row_index: int,
+    source_path: Path,
 ) -> ProbeLabel:
+    if not isinstance(item, dict):
+        raise ValueError(f"RAW-FPV private label row {row_index} must be an object: {source_path}")
+    if not str(item.get("frame_id") or item.get("source_observation_id") or ""):
+        raise ValueError(
+            "RAW-FPV private label row "
+            f"{row_index} is missing frame_id or source_observation_id: {source_path}"
+        )
+    if not str(item.get("object_id") or ""):
+        raise ValueError(
+            f"RAW-FPV private label row {row_index} is missing object_id: {source_path}"
+        )
+    if not str(item.get("category") or ""):
+        raise ValueError(
+            f"RAW-FPV private label row {row_index} is missing category: {source_path}"
+        )
     bbox = _bbox_tuple(item.get("bbox") or item.get("image_bbox"))
+    if bbox is None and not item.get("coarse_regions"):
+        raise ValueError(
+            "RAW-FPV private label row "
+            f"{row_index} must include bbox/image_bbox or coarse_regions: {source_path}"
+        )
     coarse_regions = tuple(
         region
         for region in (item.get("coarse_regions") or _coarse_regions_from_bbox(bbox))

@@ -372,6 +372,88 @@ def test_raw_fpv_probe_rejects_missing_private_label_manifest(tmp_path: Path) ->
         raise AssertionError("expected missing private label manifest to fail aloud")
 
 
+def test_raw_fpv_probe_rejects_malformed_private_label_manifest_rows(
+    tmp_path: Path,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+
+    for name, payload, expected in (
+        (
+            "non_list_labels",
+            {"schema": "raw_fpv_private_label_manifest_v1", "labels": {"frame_id": "run/frame"}},
+            "must contain a list in 'labels'",
+        ),
+        (
+            "non_object_label",
+            {"schema": "raw_fpv_private_label_manifest_v1", "labels": ["not-a-label"]},
+            "label row 0 must be an object",
+        ),
+        (
+            "missing_frame_identity",
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "labels": [
+                    {
+                        "object_id": "private_plate_001",
+                        "category": "plate",
+                        "bbox": [0.1, 0.2, 0.2, 0.2],
+                    }
+                ],
+            },
+            "label row 0 is missing frame_id or source_observation_id",
+        ),
+        (
+            "missing_object_id",
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "labels": [
+                    {
+                        "frame_id": frames[0].frame_id,
+                        "category": "plate",
+                        "bbox": [0.1, 0.2, 0.2, 0.2],
+                    }
+                ],
+            },
+            "label row 0 is missing object_id",
+        ),
+        (
+            "missing_locality",
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "labels": [
+                    {
+                        "frame_id": frames[0].frame_id,
+                        "object_id": "private_plate_001",
+                        "category": "plate",
+                    }
+                ],
+            },
+            "label row 0 must include bbox/image_bbox or coarse_regions",
+        ),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+        try:
+            probe.load_probe_labels(
+                (path,),
+                frames=frames,
+                contrast_run_dirs=(),
+                default_hidden_target=True,
+            )
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert name in str(exc)
+        else:  # pragma: no cover - malformed explicit labels should fail aloud
+            raise AssertionError(f"expected malformed labels {name} to fail aloud")
+
+
 def test_raw_fpv_probe_rejects_missing_all_visible_label_manifest(tmp_path: Path) -> None:
     probe = _load_module()
     run_dir = _raw_run_dir(tmp_path)

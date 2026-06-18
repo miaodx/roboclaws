@@ -60,6 +60,22 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV private
+  label manifest false-green. Explicit `--private-labels` and
+  `--all-visible-labels` manifests now require a list of object rows with frame
+  identity, object id, category, and bbox/coarse locality instead of producing
+  unhelpful attribute errors or silently filtering malformed scorer truth out of
+  the report. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud scorer-truth input; omitted label inputs,
+  valid hidden/all-visible labels, frame aliasing, contrast-derived labels,
+  offline scoring, provider execution, prompt privacy, and report artifacts are
+  unchanged. The ratchet remains 0 complexity rows and 79 oversized modules;
+  `run_raw_fpv_perception_probe.py` is 1950 lines and
+  `test_raw_fpv_perception_probe.py` is 1677 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused malformed label-manifest tests, full RAW-FPV perception probe test
+  file, touched-file ruff and format check, py_compile, `git diff --check`,
+  and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV prediction
   manifest false-green. Explicit `--predictions` manifests now require list
   rows, object rows, frame ids, and object responses instead of skipping
