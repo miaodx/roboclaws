@@ -368,6 +368,10 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         --min-semantic-accepted-count "$isaac_min_semantic_accepted_count"
         --min-sweep-coverage 1.0
       )
+      if [[ -z "$b1_alignment_artifact" || -z "$b1_navigation_artifact" ]]; then
+        echo "error: B1 / Map 12 robot-consumption proof requires explicit b1_alignment_artifact and b1_navigation_artifact" >&2
+        exit 1
+      fi
       if [[ "$robot_views" != "off" && "$robot_views" != "false" && "$robot_views" != "0" ]]; then
         checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
       fi

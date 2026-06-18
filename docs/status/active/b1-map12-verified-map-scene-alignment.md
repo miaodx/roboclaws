@@ -217,6 +217,10 @@ Last proven evidence:
   copied `map_bundle/semantics.json` and requires
   `digital_twin_capabilities.robot_consumption_proof.status=robot_navigation_verified`;
   it does not reuse the older RBY1M real-robot readiness gate.
+- The B1 route fails before launch when that gate is active but
+  `b1_alignment_artifact` or `b1_navigation_artifact` is missing. This keeps
+  proof inputs explicit and avoids silently relying on generated `output/`
+  artifacts.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer

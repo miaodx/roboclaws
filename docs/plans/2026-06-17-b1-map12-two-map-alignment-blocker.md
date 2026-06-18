@@ -683,6 +683,10 @@ Current gate:
   `map_bundle/semantics.json` for a verified
   `digital_twin_capabilities.robot_consumption_proof`. It intentionally does
   not reuse the older RBY1M `--require-real-robot-alignment` gate.
+- When that gate is active, B1 product/open-task routes fail before launch
+  unless both `b1_alignment_artifact` and `b1_navigation_artifact` are passed
+  explicitly. Missing proof input is a blocker, not permission to auto-discover
+  generated `output/` files.
 - `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is expected until human-accepted
