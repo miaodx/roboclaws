@@ -568,6 +568,7 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
         ("Runtime Map Prior", "runtime_map_prior_snapshot.json", "json"),
+        ("Runtime Map Prior Targets", "runtime_map_prior_targets.json", "json"),
     )
     links: list[ArtifactLink] = []
     for label, name, kind in specs:
@@ -584,6 +585,8 @@ def _wrapper_artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Operator Messages", "operator_messages.jsonl", "jsonl"),
         ("Operator Control", "operator_control.jsonl", "jsonl"),
         ("Operator Interventions", "operator_interventions.json", "json"),
+        ("Runtime Map Prior", "runtime_map_prior_snapshot.json", "json"),
+        ("Runtime Map Prior Targets", "runtime_map_prior_targets.json", "json"),
     )
     links: list[ArtifactLink] = []
     for label, name, kind in specs:

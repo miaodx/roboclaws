@@ -209,6 +209,9 @@ Last proven evidence:
   `runtime_map_prior_targets.json` materialized-target summary. This is a
   visible run artifact only; it does not auto-feed generated `output/`
   artifacts back into the default route.
+- The operator console artifact list now exposes both wrapper-level files, so a
+  B1 console run can show the canonical prior even when the live attempt
+  evidence lives in a nested timestamp/seed directory.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer

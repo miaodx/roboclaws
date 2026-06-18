@@ -675,6 +675,9 @@ Current gate:
   explicit visible artifact from the freshly compiled bundle; it does not
   auto-discover older generated `output/` files or silently change the default
   `runtime_map_prior` input.
+- Operator-console state also lists those wrapper-level artifacts, so B1 runs
+  launched from the console can expose the canonical prior even when the active
+  live-attempt evidence is nested under a timestamp/seed directory.
 - `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is expected until human-accepted
