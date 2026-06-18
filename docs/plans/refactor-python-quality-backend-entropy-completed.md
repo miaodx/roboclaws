@@ -2,7 +2,7 @@
 refactor_scope: python-quality-backend-entropy
 status: COMPLETED_LEDGER
 active_plan: docs/plans/refactor-python-quality-backend-entropy.md
-last_compacted: 2026-06-17
+last_compacted: 2026-06-18
 ---
 
 # Completed Ledger: Python Quality And Backend Entropy
@@ -33,6 +33,15 @@ logs before choosing the next slice.
   the 800-line ratchet threshold.
 
 ## Completed Bundles
+
+- 2026-06-18: Active plan compaction completed. The active plan was rewritten
+  from an execution ledger mirror into a concise continuation control doc with
+  resume checklist, operating rules, slice selector, active candidates, proof
+  ladder, commit-note template, and stop condition. Completed slice detail stays
+  in this ledger. Owner layer: process documentation for the refactor stream.
+  Behavior-change class: docs/process cleanup only. Metric: active plan reduced
+  from 1861 lines to 385 lines. Proof: markdown diff review and
+  `git diff --check`.
 
 - 2026-06-18: Live eval product-route timeout configuration now fails aloud.
   Explicit `live_timeout_s` values must be positive finite seconds before the
