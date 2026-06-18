@@ -1955,8 +1955,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scene-index", type=int, default=1)
     parser.add_argument("--molmospaces-python", type=Path, default=Path(".venv/bin/python"))
     parser.add_argument("--isaac-python", type=Path, default=Path(".venv-isaaclab/bin/python"))
-    parser.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
-    parser.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
+    parser.add_argument("--render-width", type=_positive_int_arg, default=DEFAULT_RENDER_WIDTH)
+    parser.add_argument("--render-height", type=_positive_int_arg, default=DEFAULT_RENDER_HEIGHT)
     parser.add_argument(
         "--lighting-profile",
         default="default",
@@ -1993,6 +1993,18 @@ def main(argv: list[str] | None = None) -> int:
     for summary in failed_lane_summaries(manifest):
         print(f"  {summary}", file=sys.stderr)
     return 1
+
+
+def _positive_int_arg(value: str) -> int:
+    import argparse
+
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive integer; got {value!r}")
+    return parsed
 
 
 if __name__ == "__main__":

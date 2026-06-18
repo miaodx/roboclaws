@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -2001,6 +2002,50 @@ def test_molmospaces_view_specs_use_anchor_orbit_not_focus_camera_heuristic() ->
         "camera_orbit": {"distance_m": 4.4, "azimuth_deg": 90.0, "elevation_deg": 28.0},
     }
     assert "robot_pose" not in specs[0]
+
+
+def test_scene_camera_comparison_cli_rejects_non_positive_render_dimensions(
+    tmp_path: Path,
+) -> None:
+    script = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmospaces_scene_camera_comparison.py"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--scene-usd-path",
+            str(tmp_path / "missing.usda"),
+            "--output-dir",
+            str(tmp_path),
+            "--render-width",
+            "0",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--scene-usd-path",
+            str(tmp_path / "missing.usda"),
+            "--output-dir",
+            str(tmp_path),
+            "--render-height",
+            "-1",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "expected a positive integer" in completed.stderr
 
 
 def test_scene_camera_comparison_recipe_checks_prepared_usd_before_running(tmp_path: Path) -> None:

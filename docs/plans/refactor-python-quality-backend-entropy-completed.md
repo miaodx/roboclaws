@@ -110,6 +110,22 @@ logs before choosing the next slice.
   Proof: focused robot-camera apple-to-apple unit tests, touched-file ruff and
   format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: Scene-camera comparison render dimensions now fail aloud. The
+  scene-camera comparison CLI rejects non-positive `--render-width` /
+  `--render-height` values at argument parsing time instead of passing invalid
+  dimensions into the shared MuJoCo and Isaac scene-camera comparison artifact
+  pipeline. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud scene-camera comparison render
+  configuration; default dimensions, valid positive dimensions,
+  prepared-USD checks, generated-mess inputs, lighting-profile selection,
+  manifest/report schemas, and renderer routing are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules;
+  `scene_camera_comparison.py` is 2011 lines and
+  `test_scene_camera_comparison.py` is 2085 lines. The test file is already
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused scene-camera comparison contract tests, touched-file ruff and format
+  check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 scene topdown and operator preview render dimensions now fail
   aloud. The Gaussian topdown, scene topdown diagnostic, and operator-console
   scene preview CLIs reject non-positive `--width` / `--height` values at
