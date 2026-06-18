@@ -105,8 +105,8 @@ observed-object store.
 For `navigate_to_waypoint`, `navigate_to_object`, and
 `navigate_to_receptacle`, return navigation evidence fields:
 
-- `navigation_backend`: `api_semantic`, `sim_planner`, `nav2_action`,
-  `easynav_action`, or `blocked_capability`;
+- `navigation_backend`: `api_semantic`, `sim_planner`,
+  `agibot_gdk_normal_navi`, or `blocked_capability`;
 - `primitive_provenance`, using existing provenance vocabulary;
 - `goal_pose` when a map pose is known;
 - `pose_source`: `inspection_waypoint`, `fixture_semantic_map`,

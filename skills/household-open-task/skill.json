@@ -34,7 +34,7 @@
   },
   "capability_requirements": {
     "profiles": ["household_world", "household_manipulation", "household_episode"],
-    "backend_variants": ["api_semantic_synthetic", "molmospaces_subprocess", "nav2_ros2", "agibot_gdk"],
+    "backend_variants": ["api_semantic_synthetic", "molmospaces_subprocess", "agibot_gdk"],
     "notes": "Default surface=household-world open tasks require world evidence plus task lifecycle. Cleanup preset composes the separate manipulation-heavy cleanup skill."
   },
   "scripts": [],

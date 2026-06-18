@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from roboclaws.household.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.household.agibot_map_build_mcp_server import (
@@ -455,7 +456,7 @@ def test_agibot_map_build_camera_labels_call_external_grounding(
     grounding_client = _StaticAgibotVisualGroundingClient()
     camera_path = tmp_path / "subphases" / "02-observe" / "head_color.jpg"
     camera_path.parent.mkdir(parents=True)
-    camera_path.write_bytes(b"not-a-real-image")
+    Image.new("RGB", (16, 12), (120, 130, 140)).save(camera_path)
 
     evidence = _camera_model_policy_evidence(
         [],

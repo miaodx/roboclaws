@@ -203,8 +203,9 @@ loading path. Movable-object priors from any snapshot remain `needs_confirm`
 until current-run evidence observes them again.
 
 Backend variants such as `api_semantic_synthetic`, `molmospaces_subprocess`,
-`nav2_ros2`, and `agibot_gdk` are profile metadata/config. They are not new
-public task names or copied profile ids.
+and `agibot_gdk` are profile metadata/config. They are not new public task
+names or copied profile ids. ROS2/Nav2 is a future backend candidate, not an
+active profile variant.
 
 ### `household_manipulation` and `household_episode`
 
@@ -244,14 +245,15 @@ artifacts. New skills and MCP routers compose `household_world`,
 `household_manipulation`, and `household_episode` directly.
 
 `real_robot_cleanup_v1` is likewise a historical artifact metadata value for
-older Nav2/Agibot pilot reports. Active physical routes should describe required
+older physical-pilot reports. Active physical routes should describe required
 capabilities through the household world, manipulation, and episode profiles,
 with manipulation returning structured `blocked_capability` responses until
 physical proof exists.
 
-- `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
-  derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from
-  an SDK-exported agent view generated from operator-authored map context.
+- `metric_map` returns backend-neutral public map semantics. Sim and offline
+  map-artifact paths may derive this from a Nav2-shaped map bundle;
+  Agibot-backed runs derive it from an SDK-exported agent view generated from
+  operator-authored map context.
 - `metric_map` is the current map-reading path. The Base Navigation Map exposes
   occupancy/free-space context, generated candidates, and public room-category
   hints when available; Runtime Metric Map evidence adds observed anchors and
@@ -262,7 +264,7 @@ physical proof exists.
 - `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
   `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
   bounded physical navigation actions when enough public grounding is available.
-  Current provenance may be `nav2_action`, `agibot_gdk_normal_navi`, or
+  Current physical provenance may be `agibot_gdk_normal_navi` or
   `blocked_capability`.
 - `observe`, `adjust_camera`, `declare_visual_candidates`, and
   `inspect_visible_object` stay grounded in robot-camera artifacts.
@@ -301,9 +303,9 @@ Reusable strategy names belong in skills:
 - `molmo-realworld-cleanup`
 - `runtime-map-prior-conversion`
 
-Backend variants such as `molmospaces_subprocess`, `api_semantic_synthetic`,
-`agibot_g2`, or `ros2_nav2` should be profile metadata or run configuration,
-not the primary task or skill name.
+Backend variants such as `molmospaces_subprocess`, `api_semantic_synthetic`, or
+`agibot_gdk` should be profile metadata or run configuration, not the primary
+task or skill name.
 
 ### Compose Requirements, Do Not Copy Profiles
 

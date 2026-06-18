@@ -95,7 +95,6 @@ aid, not a source of truth for current priority.
 - [Agibot Robot Map 9 Dry-Run Rehearsal](agibot-robot-map-9-dry-run-rehearsal.md)
 - [Agibot Robot Map 9 Semantic Actions Rehearsal](agibot-robot-map-9-semantic-actions-rehearsal.md)
 - [MolmoSpaces Agibot Contract Rehearsal](molmospaces-agibot-contract-rehearsal.md)
-- [Real Robot Nav2 Cleanup Pilot](real-robot-nav2-cleanup-pilot.md)
 - [Agibot RAW_FPV Preflight](refactor-agibot-raw-fpv-preflight.md)
 - [B1 Map 12 Digital Twin Navigation Readiness](refactor-reduce-entropy-b1-map12-digital-twin.md)
 

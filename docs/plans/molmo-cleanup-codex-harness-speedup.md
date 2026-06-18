@@ -123,8 +123,8 @@ Secondary wins should come from:
 - Do not remove or weaken the `world-labels` visual proof report.
 - Do not make hosted CI launch live Codex.
 - Do not expose private generated mess truth or acceptable-destination tables.
-- Do not claim physical Nav2 execution or planner-backed manipulation from this
-  speedup pass.
+- Do not claim physical robot execution or planner-backed manipulation from
+  this speedup pass.
 - Do not optimize by skipping the waypoint-honest sweep required by the current
   checker.
 

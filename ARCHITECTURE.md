@@ -334,8 +334,10 @@ Real-robot work is incremental:
 4. Promote physical manipulation only when reports can show provenance, safety
    gates, and failure modes.
 
-Agibot G2 and ROS2/Nav2 should be backend variants under the same public
-task/profile shape, not separate robot-only task taxonomies.
+Agibot G2 is the current physical backend variant under the same public
+task/profile shape as simulator and digital-twin runs. ROS2/Nav2 remains a
+future backend candidate or historical proof path; do not advertise it as an
+active launch backend until a catalog route and real operator proof exist.
 
 ## Where To Look
 

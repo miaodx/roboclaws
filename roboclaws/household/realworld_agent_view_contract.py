@@ -80,7 +80,7 @@ def real_robot_readiness_from_events(
         "physical_navigation_pilot": False,
         "physical_cleanup_ready": False,
         "blocked_capabilities": [
-            "nav2_action_backend",
+            "physical_navigation_backend",
             "live_ros_graph",
             "planner_backed_cleanup_primitives",
         ],
