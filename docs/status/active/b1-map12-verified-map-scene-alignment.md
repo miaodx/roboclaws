@@ -105,6 +105,12 @@ Next hypothesis: once the seven manual anchors receive reviewed real
 verification-only synthetic ids in `assets/maps/b1-map12-scene-correspondences.json`
 and preserve the same passing residuals without weakening the threshold policy.
 
+Next implementation step: promote the human-edited semantic review packet only
+through a strict gate. Proposed-only rows, missing semantic ids, synthetic
+`manual_draft_*` ids, bbox/seed coordinate sources, and auto-accepted
+suggestions must be rejected before the committed correspondence manifest is
+written.
+
 Next command/artifact:
 
 ```bash

@@ -539,9 +539,22 @@ Current gate:
 - `assets/maps/b1-map12-scene-correspondences.json` still has zero accepted
   anchors. This is the correct blocked state until a human/operator reviews at
   least six anchors across at least three areas/partitions.
-- The residual-backed transform, Isaac waypoint camera proof, and FPV/Chase
-  preview promotion remain unimplemented/unverified until reviewed anchors and
-  local Isaac runtime evidence exist.
+- The internal pose-request artifact and report-audit path exist, but they are
+  not production proof until they consume a residual artifact fitted from the
+  committed reviewed correspondence manifest.
+- The residual-backed transform from committed anchors, Isaac waypoint camera
+  proof, and FPV/Chase preview promotion remain unverified until reviewed
+  anchors and local Isaac runtime evidence exist.
+
+Next implementation slice:
+
+- Promote a human-edited semantic review packet into
+  `assets/maps/b1-map12-scene-correspondences.json` only through the strict
+  review gate owned by
+  `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`.
+- Rerun fitter, readiness, waypoint pose requests, navigation report, and then
+  local Isaac same-pose camera proof on that committed manifest. Do not use the
+  verification-only synthetic manifest or bbox seed as production evidence.
 
 Latest deterministic evidence:
 

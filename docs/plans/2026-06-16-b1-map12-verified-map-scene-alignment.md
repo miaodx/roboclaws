@@ -62,6 +62,13 @@ not strong enough to auto-fill final `navigation_area_id` /
 non-mutating human-review packet that combines each manual pick with semantic
 candidates while keeping all anchors proposed and accepted anchor count at zero.
 
+2026-06-18 planning-loop clarification: this plan remains the prerequisite
+alignment evidence contract. It owns reviewed correspondences, real
+`navigation_area_id` / `asset_partition_id` semantics, residual thresholds, and
+readiness status. `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
+consumes a passing residual artifact for on-demand Map12 waypoint or `map_xy/yaw`
+requests, B1 scene pose application, and same-pose Isaac preview proof.
+
 ## Goal
 
 Promote the B1 / Map 12 digital twin from a weak candidate overlay to a
@@ -206,6 +213,14 @@ at `assets/maps/b1-map12-scene-correspondences.json`.
 Only human/operator-reviewed picks may use `review_status=accepted`.
 Model-generated or script-generated anchor candidates must remain
 `review_status=proposed` until reviewed.
+
+Strict promotion from the semantic review packet to the committed manifest is
+allowed only after a human/operator changes selected anchors to
+`review_status=accepted` and supplies real `navigation_area_id` and
+`asset_partition_id` values. The promotion path must reject proposed-only
+packets, missing semantic ids, synthetic `manual_draft_*` ids, bbox/seed
+coordinate sources, and any attempt to auto-accept suggestions. It must validate
+the final manifest before writing `assets/maps/b1-map12-scene-correspondences.json`.
 
 The checked-in correspondence manifest may remain empty as a fail-loud
 placeholder. Empty anchors mean no transform is verified and the fitter/review
@@ -406,6 +421,9 @@ values.
 Success only if:
 
 - a reviewable correspondence manifest exists with at least 6 accepted anchors;
+- accepted anchors have human-reviewed real `navigation_area_id` and
+  `asset_partition_id` values, not synthetic verification-only ids or
+  model-generated proposed suggestions;
 - bbox seed output is explicitly labeled `known_poor_seed_only`;
 - the transform fitter writes residual metrics and overlay previews;
 - readiness artifacts cannot claim verified alignment without residual evidence;
@@ -438,9 +456,12 @@ Success only if:
 
 ## Recommended Next Step
 
-Run preflight on this plan. The execution contract should start with the
-correspondence manifest schema, report/script anchor review workflow, and
-residual fitter before touching static map-bundle semantics.
+Add or run the strict review-packet promotion path for
+`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`. It should
+write the committed correspondence manifest only after explicit human acceptance
+with real semantic ids, then rerun the fitter on
+`assets/maps/b1-map12-scene-correspondences.json`. Until that passes, keep the
+verification-only synthetic manifest as test evidence only, not production proof.
 
 ## Preflight Contract
 
