@@ -677,22 +677,26 @@ def load_predictions(path: Path | None) -> dict[str, dict[str, dict[str, Any]]]:
         return {}
     _require_input_file(path, purpose="RAW-FPV prediction manifest")
     payload = _load_json(path)
-    rows = payload.get("predictions") or payload.get("runs") or []
+    rows = payload.get("predictions") if "predictions" in payload else payload.get("runs", [])
+    if not isinstance(rows, list):
+        raise ValueError(
+            f"RAW-FPV prediction manifest must contain a list in 'predictions' or 'runs': {path}"
+        )
     predictions: dict[str, dict[str, dict[str, Any]]] = {}
-    for row in rows:
+    for index, row in enumerate(rows):
         if not isinstance(row, dict):
-            continue
+            raise ValueError(f"RAW-FPV prediction row {index} must be an object: {path}")
         variant_id = str(row.get("variant_id") or "baseline_json")
         frame_id = str(row.get("frame_id") or "")
         if not frame_id:
-            continue
+            raise ValueError(f"RAW-FPV prediction row {index} is missing frame_id: {path}")
         response = row.get("response")
         if response is None:
             response = row.get("output")
         if isinstance(response, str):
             response = _json_object_from_text(response)
         if not isinstance(response, dict):
-            response = {"schema": RESPONSE_SCHEMA, "candidates": []}
+            raise ValueError(f"RAW-FPV prediction row {index} response must be an object: {path}")
         predictions.setdefault(variant_id, {})[frame_id] = response
     return predictions
 

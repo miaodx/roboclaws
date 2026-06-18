@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: RAW-FPV perception probe prediction manifests now fail aloud.
+  Explicit `--predictions` manifests require list rows, object rows, frame ids,
+  and object responses instead of skipping malformed rows or fabricating empty
+  candidate responses. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud probe prediction input; omitted
+  predictions, valid `predictions` and legacy `runs` rows, JSON-string response
+  parsing, offline scoring, provider execution, prompt privacy, and report
+  artifacts are unchanged. Metric: ratchet remains at 0 complexity rows and 79
+  oversized modules; `run_raw_fpv_perception_probe.py` is 1921 lines and
+  `test_raw_fpv_perception_probe.py` is 1595 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused malformed prediction-manifest tests, full RAW-FPV perception probe
+  test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: RAW-FPV perception probe source evidence now fails aloud.
   The probe fails before report generation when an explicit `--raw-run-dir` is
   missing or when all selected RAW-FPV source directories contain no usable FPV

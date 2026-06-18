@@ -432,6 +432,52 @@ def test_raw_fpv_probe_rejects_missing_prediction_manifest(tmp_path: Path) -> No
         raise AssertionError("expected missing prediction manifest to fail aloud")
 
 
+def test_raw_fpv_probe_rejects_malformed_prediction_manifest_rows(tmp_path: Path) -> None:
+    probe = _load_module()
+
+    for name, payload, expected in (
+        (
+            "non_list_rows",
+            {"schema": "raw_fpv_probe_predictions_v1", "predictions": {"frame_id": "raw_fpv_001"}},
+            "must contain a list in 'predictions' or 'runs'",
+        ),
+        (
+            "non_object_row",
+            {"schema": "raw_fpv_probe_predictions_v1", "predictions": ["not-a-row"]},
+            "prediction row 0 must be an object",
+        ),
+        (
+            "missing_frame",
+            {"schema": "raw_fpv_probe_predictions_v1", "predictions": [{"response": {}}]},
+            "prediction row 0 is missing frame_id",
+        ),
+        (
+            "non_object_response",
+            {
+                "schema": "raw_fpv_probe_predictions_v1",
+                "predictions": [
+                    {
+                        "variant_id": "baseline_json",
+                        "frame_id": "run/raw_fpv_001",
+                        "response": ["not-a-response-object"],
+                    }
+                ],
+            },
+            "prediction row 0 response must be an object",
+        ),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+        try:
+            probe.load_predictions(path)
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert name in str(exc)
+        else:  # pragma: no cover - malformed explicit predictions should fail aloud
+            raise AssertionError(f"expected malformed predictions {name} to fail aloud")
+
+
 def test_raw_fpv_probe_rejects_missing_raw_source_run_dir(tmp_path: Path) -> None:
     probe = _load_module()
 
