@@ -60,6 +60,28 @@ projection gate: with the current alignment-only manifest it must fail with
 keeps object projection blocked instead of inferring object labels from room
 anchors.
 
+## Confirmed Target
+
+The target is not just static alignment. The B1 / Map12 digital twin should
+behave like a simulator scene from the robot/agent point of view:
+
+- **Navigation layer**: a robot can use Map12 map context, choose a public
+  Map12 waypoint or explicit `map_xy/yaw`, convert it through the verified
+  alignment, and move/apply the corresponding B1 scene pose on demand.
+- **Render/observation layer**: after applying that pose, the runtime can render
+  Gaussian/digital-twin views such as FPV, Chase, topdown, and any future
+  task-required camera view so open-ended tasks can inspect the asset from the
+  robot's current pose.
+- **Agent consumption layer**: the map, navigation capability, render
+  capability, and blocked semantic/manipulation status are exposed through the
+  same explicit runtime-prior / MCP / agent-visible context style as simulator
+  assets, not through hidden scripts, stale generated outputs, or silent
+  fallback.
+
+Room/object semantic alignment improves open-ended task quality, but it is not
+a hard prerequisite for Map12-driven navigation plus Gaussian rendering.
+Semantic projection remains blocked until accepted semantic anchors exist.
+
 ## Completed Work Split
 
 Completed prerequisite evidence now lives in
@@ -444,9 +466,11 @@ Route: durable `$intuitive-flow` after approval. Main session can implement the
 first P0 slice directly if the diff stays narrow; use a delegated worker only
 for isolated read-only review or long local proof.
 
-Goal: Make the verified B1 / Map12 Gaussian asset reach robot-facing consumers
-through the same explicit Runtime Map Prior contract as simulator assets, while
-keeping unaccepted room/object semantics blocked.
+Goal: Make the verified B1 / Map12 Gaussian asset behave like a simulator scene
+for robot-facing consumers: Map12-driven on-demand navigation/pose application,
+Gaussian multi-view rendering from the applied pose, and explicit
+agent-visible runtime map capability status, while keeping unaccepted
+room/object semantics blocked.
 
 Scope:
 
@@ -455,6 +479,10 @@ Scope:
   MCP/runtime map context.
 - P0: add focused tests proving the agent-visible context reports verified B1
   robot navigation and blocked room/object/manipulation status.
+- P0: ensure the agent-visible contract names the currently proven render
+  surface: residual-backed B1 pose application can produce same-pose
+  Gaussian/digital-twin FPV, Chase, and topdown evidence without implying
+  planner-backed or physical robot navigation.
 - P1: promote room semantics only from human-accepted `anchor_role=semantic`
   room-interior anchors, then run strict semantic projection and consume the
   verified projection artifact explicitly.
@@ -493,9 +521,10 @@ Acceptance:
 
 - SUCCESS: an agent-visible MCP/runtime map payload built from an explicit B1
   runtime prior contains B1 capability status showing
-  `robot_navigation_supported=true` and blocked room/object/manipulation status;
-  tests prove this without accepting semantic anchors or reading generated
-  fallback paths.
+  `robot_navigation_supported=true`, a render/observation capability statement
+  for same-pose Gaussian/digital-twin FPV/Chase/topdown evidence, and blocked
+  room/object/manipulation status; tests prove this without accepting semantic
+  anchors or reading generated fallback paths.
 - SUCCESS for P1: after human-accepted semantic anchors exist, strict semantic
   projection produces a verified artifact, product/open-task routes consume it
   only through an explicit `b1_semantic_projection_artifact=...` path, and
