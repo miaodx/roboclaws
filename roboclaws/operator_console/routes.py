@@ -39,6 +39,10 @@ ISAAC_SUPPORTED_EVIDENCE_LANES = tuple(
 ISAAC_UNSUPPORTED_EVIDENCE_LANES = (CAMERA_GROUNDED_LABELS_LANE,)
 MOLMOSPACES_DEFAULT_CLEANUP_TARGET_COUNT = 5
 MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS: tuple[str, ...] = ()
+B1_ROBOT_PROOF_REQUIRED_OVERRIDES = (
+    "b1_alignment_artifact",
+    "b1_navigation_artifact",
+)
 
 
 @dataclass(frozen=True)
@@ -263,6 +267,18 @@ AGIBOT_ESTOP_GATE = RouteGate(
     severity="capability",
     help_text="Required only when real movement is enabled.",
 )
+B1_ALIGNMENT_ARTIFACT_GATE = RouteGate(
+    id="b1_alignment_artifact",
+    label="B1 alignment residual artifact attached",
+    kind="request_field",
+    help_text="Attach the explicit verified B1 / Map 12 alignment residual JSON.",
+)
+B1_NAVIGATION_ARTIFACT_GATE = RouteGate(
+    id="b1_navigation_artifact",
+    label="B1 navigation smoke artifact attached",
+    kind="request_field",
+    help_text="Attach the explicit verified B1 / Map 12 navigation smoke JSON.",
+)
 
 
 def list_worlds(*, include_hidden: bool = False) -> tuple[dict[str, Any], ...]:
@@ -373,7 +389,12 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             "codex-router-responses",
             evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            gates=common_gates,
+            gates=(
+                *common_gates,
+                B1_ALIGNMENT_ARTIFACT_GATE,
+                B1_NAVIGATION_ARTIFACT_GATE,
+            ),
+            required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
             default_overrides=("seed=7",),
             supports_operator_steer=True,
             supports_relative_navigation_control=True,
@@ -510,6 +531,7 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
             ),
             gates=_common_gates(),
+            required_overrides=B1_ROBOT_PROOF_REQUIRED_OVERRIDES,
             default_overrides=("seed=7",),
             supports_operator_steer=True,
         ),

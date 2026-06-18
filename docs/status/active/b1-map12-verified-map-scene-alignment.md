@@ -221,6 +221,10 @@ Last proven evidence:
   `b1_alignment_artifact` or `b1_navigation_artifact` is missing. This keeps
   proof inputs explicit and avoids silently relying on generated `output/`
   artifacts.
+- The operator console now mirrors that contract: B1 / Map 12 route metadata
+  lists `b1_alignment_artifact` and `b1_navigation_artifact` as required
+  overrides, readiness blocks without readable JSON paths, and launch passes the
+  supplied explicit paths through unchanged.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer

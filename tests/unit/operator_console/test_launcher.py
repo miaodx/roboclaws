@@ -64,14 +64,36 @@ def _free_port() -> str:
 
 
 def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> None:
+    alignment_artifact = tmp_path / "alignment_residuals.json"
+    navigation_artifact = tmp_path / "navigation_smoke.json"
     b1_map12 = route_readiness(
         tmp_path,
         get_selection(B1_CODEX_OPEN_TASK),
         overrides={"port": _free_port()},
         env=CODEX_ENV,
     )
+    assert b1_map12["can_start"] is False
+    assert b1_map12["blocker_kind"] == "needs_route_parameter"
+    assert {gate["id"] for gate in b1_map12["gates"]} == {
+        "provider_key",
+        "mcp_port_free",
+        "b1_alignment_artifact",
+        "b1_navigation_artifact",
+    }
+
+    alignment_artifact.write_text("{}", encoding="utf-8")
+    navigation_artifact.write_text("{}", encoding="utf-8")
+    b1_map12 = route_readiness(
+        tmp_path,
+        get_selection(B1_CODEX_OPEN_TASK),
+        overrides={
+            "port": _free_port(),
+            "b1_alignment_artifact": str(alignment_artifact),
+            "b1_navigation_artifact": str(navigation_artifact),
+        },
+        env=CODEX_ENV,
+    )
     assert b1_map12["can_start"] is True
-    assert {gate["id"] for gate in b1_map12["gates"]} == {"provider_key", "mcp_port_free"}
 
     context_path = tmp_path / "context.json"
     context_path.write_text("{}", encoding="utf-8")

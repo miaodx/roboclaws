@@ -687,6 +687,9 @@ Current gate:
   unless both `b1_alignment_artifact` and `b1_navigation_artifact` are passed
   explicitly. Missing proof input is a blocker, not permission to auto-discover
   generated `output/` files.
+- Operator-console B1 / Map 12 launch readiness follows the same rule and
+  requires explicit readable JSON paths for both proof artifacts before Start
+  Agent Run can become ready.
 - `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is expected until human-accepted

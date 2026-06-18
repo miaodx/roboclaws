@@ -448,6 +448,7 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
 
     assert b1["default_intent"] == "open-ended"
     assert b1["field_groups"] == ["common", "isaac"]
+    assert b1["required_overrides"] == ["b1_alignment_artifact", "b1_navigation_artifact"]
     assert "grounding" in b1["view_modes"]
     assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1["argv_preview"]
     assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1["argv_preview"]
@@ -509,7 +510,17 @@ def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -
 
 def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     selection = get_selection(B1_CODEX_OPEN_TASK)
-    argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
+    alignment_artifact = tmp_path / "alignment_residuals.json"
+    navigation_artifact = tmp_path / "navigation_smoke.json"
+    argv = build_launch_argv(
+        selection,
+        root=tmp_path,
+        run_id="run-1",
+        overrides={
+            "b1_alignment_artifact": str(alignment_artifact),
+            "b1_navigation_artifact": str(navigation_artifact),
+        },
+    )
 
     assert not any(item.startswith("intent=") for item in argv)
     assert not any(item.startswith("preset=") for item in argv)
@@ -522,7 +533,16 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
         "2rd_floor_seperated/storey_1/scene_gs.usda"
     ) in argv
+    assert f"b1_alignment_artifact={alignment_artifact}" in argv
+    assert f"b1_navigation_artifact={navigation_artifact}" in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
+
+
+def test_b1_map12_launch_requires_explicit_robot_proof_artifacts(tmp_path) -> None:
+    selection = get_selection(B1_CODEX_OPEN_TASK)
+
+    with pytest.raises(ConsoleLaunchError, match="b1_alignment_artifact"):
+        build_launch_argv(selection, root=tmp_path, run_id="run-1")
 
 
 def test_prompt_rejected_for_unsupported_selection(tmp_path) -> None:

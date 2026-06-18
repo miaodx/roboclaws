@@ -142,11 +142,13 @@ def _request_field_gate(
 ) -> GateEvaluation:
     del route, gate_map, provider_status, runtime_tasks
     raw_path = str(override_map.get(gate.id) or "").strip()
+    kind = _request_field_kind(gate.id)
+    label = str(getattr(gate, "label", None) or gate.id)
     if not raw_path:
         return GateEvaluation(
             ok=False,
-            message="Attach a completed Agibot map context JSON.",
-            kind="needs_agibot_context",
+            message=str(getattr(gate, "help_text", None) or f"Attach {label}."),
+            kind=kind,
             severity=gate.severity,
             blocks_start=gate.required,
         )
@@ -156,8 +158,8 @@ def _request_field_gate(
     if not context_path.is_file():
         return GateEvaluation(
             ok=False,
-            message=f"Agibot map context JSON was not found: {raw_path}",
-            kind="needs_agibot_context",
+            message=f"{label} was not found: {raw_path}",
+            kind=kind,
             severity=gate.severity,
             blocks_start=gate.required,
         )
@@ -166,8 +168,8 @@ def _request_field_gate(
     except (OSError, json.JSONDecodeError) as exc:
         return GateEvaluation(
             ok=False,
-            message=f"Agibot map context JSON is not readable JSON: {raw_path} ({exc})",
-            kind="needs_agibot_context",
+            message=f"{label} is not readable JSON: {raw_path} ({exc})",
+            kind=kind,
             severity=gate.severity,
             blocks_start=gate.required,
         )
@@ -176,6 +178,12 @@ def _request_field_gate(
         severity=gate.severity,
         blocks_start=gate.required,
     )
+
+
+def _request_field_kind(gate_id: str) -> str:
+    if gate_id == "context_json":
+        return "needs_agibot_context"
+    return "needs_route_parameter"
 
 
 def _operator_gate(
