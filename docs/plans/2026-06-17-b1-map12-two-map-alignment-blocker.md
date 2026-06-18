@@ -166,11 +166,16 @@ Each accepted anchor needs explicit:
 ```text
 map_xy
 scene_xyz
-asset_partition_id
-navigation_area_id
+anchor_role=alignment|semantic
 evidence note
 review_status=accepted
 ```
+
+For the current seven corner/edge picks, use `anchor_role=alignment`. They are
+geometry anchors only and do not need `asset_partition_id` /
+`navigation_area_id`. Add separate `anchor_role=semantic` room-interior points
+before projecting room names or object labels into Map12; those semantic points
+must carry real `asset_partition_id` and `navigation_area_id` values.
 
 5. Reuse the existing fitter:
 
@@ -434,9 +439,10 @@ Context:
   `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/`.
 - Required prerequisite:
   `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md` owns
-  human/operator accepted anchors, real semantic ids, residual thresholds, and
-  readiness status. This plan may not create runtime pose/camera proof from
-  draft anchors, bbox seeds, or proposed-only review packets.
+  human/operator accepted anchors, residual thresholds, and readiness status.
+  This plan may not create runtime pose/camera proof from draft anchors, bbox
+  seeds, or proposed-only review packets. Room/area label projection additionally
+  needs accepted `anchor_role=semantic` anchors with real semantic ids.
 - Avoid unless needed: broad `output/**`, historical retrospectives, and old
   B1 merged-bundle artifacts.
 
@@ -539,11 +545,12 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` implements the
   strict reviewed-anchor promotion gate owned by the 2026-06-16 alignment plan.
   It writes the committed correspondence manifest only from human-accepted
-  anchors with real semantic ids and rejects proposed-only rows, fewer than six
-  accepted anchors, synthetic `manual_draft_*` ids, bbox/seed coordinate
-  sources, and auto-accepted suggestions. Its `--check` mode validates the same
-  gate without writing the committed asset, and write mode strips review-only
-  suggestion metadata from promoted anchors.
+  anchors with explicit `anchor_role`, rejects proposed-only rows, fewer than
+  six accepted anchors, bbox/seed coordinate sources, and auto-accepted
+  suggestions, and requires real ids only for accepted `anchor_role=semantic`
+  anchors. Its `--check` mode validates the same gate without writing the
+  committed asset, and write mode strips review-only suggestion metadata from
+  promoted anchors.
 - The same promotion gate now also rejects self-inconsistent review-packet
   metadata: top-level accepted/proposed counts must match actual anchor
   statuses, `accepted_manifest_mutated` must be false, and policy must keep
@@ -602,8 +609,10 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 Current gate:
 
 - `assets/maps/b1-map12-scene-correspondences.json` still has zero accepted
-  anchors. This is the correct blocked state until a human/operator reviews at
-  least six anchors across at least three areas/partitions.
+  anchors. This is the correct blocked state until a human/operator accepts at
+  least six explicit `anchor_role=alignment` geometry anchors. The existing
+  seven corner/edge picks already carry that role in the tracked draft and do
+  not need room ids for global residual fitting.
 - The internal pose-request artifact and report-audit path exist, but they are
   not production proof until they consume a residual artifact fitted from the
   committed reviewed correspondence manifest.
@@ -613,14 +622,15 @@ Current gate:
 
 Next implementation slice:
 
-- Have a human/operator edit the semantic review packet, mark at least six
-  anchors accepted, and supply real semantic ids. Use the static HTML review
-  report as a read-only aid, run the strict promotion gate with `--check`, run
-  the non-mutating fit check, then write
-  `assets/maps/b1-map12-scene-correspondences.json`.
+- Have a human/operator edit the review packet, mark the seven existing geometry
+  picks accepted as `anchor_role=alignment`, run the strict promotion gate with
+  `--check`, run the non-mutating fit check, then write
+  `assets/maps/b1-map12-scene-correspondences.json`. Add separate
+  `anchor_role=semantic` room-interior points later for room/object label
+  projection.
 - Rerun fitter, readiness, waypoint pose requests, navigation report, and then
   local Isaac same-pose camera proof on that committed manifest. Do not use the
-  verification-only synthetic manifest or bbox seed as production evidence.
+  verification-only manifest or bbox seed as production evidence.
 
 Latest deterministic evidence:
 

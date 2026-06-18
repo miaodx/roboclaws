@@ -13,8 +13,11 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from scripts.maps.fit_b1_map12_scene_alignment import (  # noqa: E402
+    ALIGNMENT_ANCHOR_ROLE,
     B1_MAP12_CORRESPONDENCES_SCHEMA,
     MIN_GLOBAL_ACCEPTED_ANCHORS,
+    SEMANTIC_ANCHOR_ROLE,
+    anchor_role,
     anchor_uses_known_poor_seed,
     valid_xy,
     valid_xyz,
@@ -29,6 +32,7 @@ DEFAULT_OUTPUT = Path("assets/maps/b1-map12-scene-correspondences.json")
 PROMOTED_ANCHOR_FIELDS = (
     "anchor_id",
     "anchor_type",
+    "anchor_role",
     "navigation_area_id",
     "asset_partition_id",
     "map_xy",
@@ -170,18 +174,28 @@ def validate_accepted_anchor(anchor_id: str, anchor: dict[str, Any]) -> None:
         raise PromotionError(f"accepted anchor {anchor_id} needs explicit map_xy")
     if not valid_xyz(anchor.get("scene_xyz")):
         raise PromotionError(f"accepted anchor {anchor_id} needs explicit scene_xyz")
-    for field in ("navigation_area_id", "asset_partition_id"):
-        value = str(anchor.get(field) or "")
-        if not value:
-            raise PromotionError(f"accepted anchor {anchor_id} needs {field}")
-        if value.startswith("manual_draft_"):
-            raise PromotionError(f"accepted anchor {anchor_id} uses synthetic {field}: {value}")
+    role = anchor_role(anchor)
+    if not anchor.get("anchor_role"):
+        raise PromotionError(f"accepted anchor {anchor_id} needs anchor_role")
+    if role not in {ALIGNMENT_ANCHOR_ROLE, SEMANTIC_ANCHOR_ROLE}:
+        raise PromotionError(f"accepted anchor {anchor_id} has invalid anchor_role: {role}")
+    if role == SEMANTIC_ANCHOR_ROLE:
+        for field in ("navigation_area_id", "asset_partition_id"):
+            value = str(anchor.get(field) or "")
+            if not value:
+                raise PromotionError(f"accepted semantic anchor {anchor_id} needs {field}")
+            if value.startswith("manual_draft_"):
+                raise PromotionError(
+                    f"accepted semantic anchor {anchor_id} uses synthetic {field}: {value}"
+                )
     if anchor_uses_known_poor_seed(anchor):
         raise PromotionError(f"accepted anchor {anchor_id} must not use bbox seed coordinates")
 
 
 def promoted_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
-    return {field: anchor[field] for field in PROMOTED_ANCHOR_FIELDS if field in anchor}
+    promoted = {field: anchor[field] for field in PROMOTED_ANCHOR_FIELDS if field in anchor}
+    promoted["anchor_role"] = anchor_role(anchor)
+    return promoted
 
 
 if __name__ == "__main__":

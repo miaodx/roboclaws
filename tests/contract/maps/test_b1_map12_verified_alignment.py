@@ -22,8 +22,10 @@ from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
 )
 from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
 from scripts.maps.fit_b1_map12_scene_alignment import (
+    ALIGNMENT_ANCHOR_ROLE,
     B1_MAP12_ALIGNMENT_RESIDUALS_SCHEMA,
     B1_MAP12_CORRESPONDENCES_SCHEMA,
+    SEMANTIC_ANCHOR_ROLE,
     build_alignment_residuals,
     validate_alignment_residual_artifact,
     validate_correspondence_manifest,
@@ -91,6 +93,7 @@ def accepted_anchor(
     return {
         "anchor_id": anchor_id,
         "anchor_type": "door_center",
+        "anchor_role": SEMANTIC_ANCHOR_ROLE,
         "navigation_area_id": navigation_area_id,
         "asset_partition_id": asset_partition_id,
         "map_xy": [map_xy[0], map_xy[1]],
@@ -105,6 +108,22 @@ def accepted_anchor(
         "map_coordinate_source": "operator_map_pick",
         "scene_coordinate_source": "operator_scene_pick",
     }
+
+
+def alignment_anchor(
+    anchor_id: str,
+    map_xy: tuple[float, float],
+    scene_xy: tuple[float, float],
+) -> dict[str, object]:
+    anchor = accepted_anchor(
+        anchor_id,
+        map_xy,
+        scene_xy,
+        navigation_area_id="",
+        asset_partition_id="",
+    )
+    anchor["anchor_role"] = ALIGNMENT_ANCHOR_ROLE
+    return anchor
 
 
 def scene_topdown_render_packet(tmp_path: Path) -> Path:
@@ -257,6 +276,38 @@ def test_fitter_selects_simple_verified_similarity_transform(tmp_path: Path) -> 
     assert payload["residual_evidence"]["matched_anchor_count"] == 6
     assert payload["residual_evidence"]["max_residual_m"] == pytest.approx(0.0)
     assert payload["diagnostic_affine_transform"]["diagnostic_only"] is True
+
+
+def test_fitter_verifies_geometry_alignment_anchors_without_semantic_ids(
+    tmp_path: Path,
+) -> None:
+    anchors = []
+    for anchor in passing_anchors():
+        map_xy = anchor["map_xy"]
+        scene_xyz = anchor["scene_xyz"]
+        assert isinstance(map_xy, list)
+        assert isinstance(scene_xyz, list)
+        anchors.append(
+            alignment_anchor(
+                str(anchor["anchor_id"]),
+                (float(map_xy[0]), float(map_xy[1])),
+                (float(scene_xyz[0]), float(scene_xyz[1])),
+            )
+        )
+    manifest = correspondence_manifest(anchors=anchors)
+
+    payload = build_alignment_residuals(
+        manifest,
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+
+    assert validate_alignment_residual_artifact(payload) == []
+    assert payload["global_alignment_status"] == "verified"
+    assert payload["accepted_navigation_area_count"] == 0
+    assert payload["accepted_asset_partition_count"] == 0
+    assert payload["area_alignment"] == []
+    assert {row["anchor_role"] for row in payload["residuals"]} == {ALIGNMENT_ANCHOR_ROLE}
 
 
 def test_readiness_promotes_verified_only_from_residual_artifact(tmp_path: Path) -> None:
@@ -766,6 +817,7 @@ def test_review_packet_keeps_proposed_anchor_pending(tmp_path: Path) -> None:
     assert packet["review_status"] == "review_pending"
     assert packet["accepted_anchor_count"] == 0
     assert packet["fit_ready_anchor_count"] == 0
+    assert packet["anchors"][0]["anchor_role"] == ALIGNMENT_ANCHOR_ROLE
     assert packet["anchors"][0]["review_action"] == (
         "pick explicit map_xy and scene_xyz, then mark accepted after operator review"
     )
@@ -791,9 +843,10 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
 
     assert payload["verification_only"] is True
     assert payload["anchors"][0]["review_status"] == "accepted"
-    assert payload["anchors"][0]["navigation_area_id"] == "manual_draft_area_1"
-    assert payload["anchors"][0]["asset_partition_id"] == "manual_draft_region_1"
-    assert "not final room semantics" in payload["anchors"][0]["evidence"]["verification_note"]
+    assert payload["anchors"][0]["anchor_role"] == ALIGNMENT_ANCHOR_ROLE
+    assert payload["anchors"][0]["navigation_area_id"] == ""
+    assert payload["anchors"][0]["asset_partition_id"] == ""
+    assert "geometry only" in payload["anchors"][0]["evidence"]["verification_note"]
 
 
 def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
@@ -896,10 +949,11 @@ def test_manual_anchor_semantic_review_packet_keeps_anchors_proposed() -> None:
     assert packet["proposed_anchor_count"] == 1
     anchor = packet["anchors"][0]
     assert anchor["review_status"] == "proposed"
+    assert anchor["anchor_role"] == ALIGNMENT_ANCHOR_ROLE
     assert anchor["navigation_area_id"] == "area_a"
     assert anchor["asset_partition_id"] == "partition_a"
     assert anchor["semantic_review"]["status"] == "needs_human_review"
-    assert anchor["semantic_review"]["acceptance_instructions"].startswith("Human reviewer")
+    assert anchor["semantic_review"]["acceptance_instructions"].startswith("Use anchor_role")
 
 
 def test_manual_anchor_semantic_review_report_is_read_only() -> None:
@@ -983,6 +1037,40 @@ def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> 
     assert validate_correspondence_manifest(payload) == []
 
 
+def test_strict_review_promotion_promotes_alignment_anchors_without_semantic_ids() -> None:
+    anchors = []
+    for anchor in passing_anchors():
+        map_xy = anchor["map_xy"]
+        scene_xyz = anchor["scene_xyz"]
+        assert isinstance(map_xy, list)
+        assert isinstance(scene_xyz, list)
+        anchors.append(
+            alignment_anchor(
+                str(anchor["anchor_id"]),
+                (float(map_xy[0]), float(map_xy[1])),
+                (float(scene_xyz[0]), float(scene_xyz[1])),
+            )
+        )
+    packet = semantic_review_packet(anchors=anchors)
+
+    payload = build_reviewed_correspondence_manifest(packet)
+
+    assert len(payload["anchors"]) == 6
+    assert {anchor["anchor_role"] for anchor in payload["anchors"]} == {ALIGNMENT_ANCHOR_ROLE}
+    assert {anchor["navigation_area_id"] for anchor in payload["anchors"]} == {""}
+    assert {anchor["asset_partition_id"] for anchor in payload["anchors"]} == {""}
+    assert validate_correspondence_manifest(payload) == []
+
+
+def test_strict_review_promotion_rejects_accepted_anchor_without_role() -> None:
+    anchors = passing_anchors()
+    anchors[0].pop("anchor_role")
+    packet = semantic_review_packet(anchors=anchors)
+
+    with pytest.raises(PromotionError, match="needs anchor_role"):
+        build_reviewed_correspondence_manifest(packet)
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
@@ -997,18 +1085,18 @@ def test_strict_semantic_review_promotion_rejects_missing_or_synthetic_ids(
     value: str,
     message: str,
 ) -> None:
-    anchor = passing_anchors()[0]
-    anchor[field] = value
-    packet = semantic_review_packet(anchors=[anchor])
+    anchors = passing_anchors()
+    anchors[0][field] = value
+    packet = semantic_review_packet(anchors=anchors)
 
     with pytest.raises(PromotionError, match=message):
         build_reviewed_correspondence_manifest(packet)
 
 
 def test_strict_semantic_review_promotion_rejects_bbox_seed_coordinates() -> None:
-    anchor = passing_anchors()[0]
-    anchor["scene_coordinate_source"] = "known_poor_bbox_seed"
-    packet = semantic_review_packet(anchors=[anchor])
+    anchors = passing_anchors()
+    anchors[0]["scene_coordinate_source"] = "known_poor_bbox_seed"
+    packet = semantic_review_packet(anchors=anchors)
 
     with pytest.raises(PromotionError, match="must not use bbox seed coordinates"):
         build_reviewed_correspondence_manifest(packet)
@@ -1296,6 +1384,7 @@ def test_review_report_contains_two_map_picker_and_export_contract(tmp_path: Pat
     assert "b1-map12-scene-correspondences.draft.json" in html
     assert "map_xy" in html
     assert "scene_xyz" in html
+    assert "anchor_role" in html
     assert "scene_pick_policy" in html
     assert "rendered_gaussian_scene_topdown_ray_plane_pick" in html
 

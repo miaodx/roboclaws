@@ -1,10 +1,13 @@
 # B1 / Map 12 Verified Map-Scene Alignment
 
-Current blocker: final verified alignment still needs reviewed
-`navigation_area_id` / `asset_partition_id` semantics for the manually picked
-B1/Map 12 correspondence anchors. The cropped B1 Gaussian top-down exists, the
-old misleading source-map top-down output was deleted locally, and automatic
-contour alignment was tried but failed the residual gate.
+Current blocker: final verified geometry alignment needs the seven manually
+picked B1/Map 12 correspondence anchors accepted as `anchor_role=alignment` in
+the committed manifest, then residual fitting on that committed manifest. Room
+and object label projection is a separate blocker: it needs additional
+`anchor_role=semantic` room-interior anchors with reviewed
+`navigation_area_id` / `asset_partition_id` values. The cropped B1 Gaussian
+top-down exists, the old misleading source-map top-down output was deleted
+locally, and automatic contour alignment was tried but failed the residual gate.
 
 Blocker fingerprint:
 
@@ -35,12 +38,14 @@ Last proven evidence:
   Neither automatic route can be promoted.
 - `docs/status/active/b1-map12-scene-correspondences-draft.json` snapshots the
   seven operator-picked manual draft anchors from the ignored `tmp/` export so
-  the local probe is reproducible. The anchors intentionally remain
-  `review_status=proposed`; their room/area ids are not final semantics.
+  the local probe is reproducible. The anchors now explicitly declare
+  `anchor_role=alignment`; they intentionally remain `review_status=proposed`
+  until promotion, and their blank room/area ids are expected for geometry-only
+  alignment.
 - `python scripts/maps/promote_b1_map12_manual_draft_for_verification.py --draft docs/status/active/b1-map12-scene-correspondences-draft.json --output output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json`
   explicitly creates a verification-only accepted manifest for the manual
-  fallback. It uses synthetic area/partition ids only to exercise the residual
-  gate; do not commit it as the final accepted asset.
+  fallback. It uses `anchor_role=alignment` geometry anchors only; do not commit
+  it as the final accepted asset.
 - `python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py --draft docs/status/active/b1-map12-scene-correspondences-draft.json --review-manifest assets/maps/b1-map12-alignment-review.json --scene-diagnostic output/b1-map12/scene-topdown-label-overlay/scene_topdown_diagnostic.json --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json`
   writes review suggestions for real `navigation_area_id` /
   `asset_partition_id` values without mutating the accepted manifest. It found
@@ -99,13 +104,14 @@ Last proven evidence:
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report before local Isaac camera proof exists.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
-  strict promotion gate from a human-edited semantic review packet to the
-  committed correspondence manifest. Proposed-only rows, missing real semantic
-  ids, fewer than six human-accepted anchors, synthetic `manual_draft_*` ids,
-  bbox/seed coordinate sources, and auto-accepted suggestions are rejected
-  before writing output. `--check` validates the same gate without writing the
-  committed asset, and write mode strips review-only suggestion metadata from
-  promoted anchors.
+  strict promotion gate from a human-edited review packet to the committed
+  correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer
+  than six human-accepted anchors, bbox/seed coordinate sources, and
+  auto-accepted suggestions are rejected before writing output. Accepted
+  `alignment` anchors may keep blank semantic ids; accepted `semantic` anchors
+  require real ids and reject synthetic `manual_draft_*` values. `--check`
+  validates the same gate without writing the committed asset, and write mode
+  strips review-only suggestion metadata from promoted anchors.
 - The same semantic suggestion command now writes
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only
   operator table showing each proposed anchor, candidate semantic ids, and
@@ -146,18 +152,18 @@ Last proven evidence:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py -q`
   pass for the distinct-applied-pose navigation smoke gate.
 
-Next hypothesis: once the seven manual anchors receive reviewed real
-`navigation_area_id` and `asset_partition_id` values, they can replace the
-verification-only synthetic ids in `assets/maps/b1-map12-scene-correspondences.json`
-and preserve the same passing residuals without weakening the threshold policy.
+Next hypothesis: once the seven manual geometry anchors are accepted as
+`anchor_role=alignment`, they can replace the verification-only manifest in
+`assets/maps/b1-map12-scene-correspondences.json` and preserve the same passing
+global residuals without weakening the threshold policy. Room label projection
+can be layered later from separate accepted `anchor_role=semantic` anchors.
 
 Next implementation step: have a human/operator edit
-`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, mark at least
-six anchors `review_status=accepted`, and supply real `navigation_area_id` /
-`asset_partition_id` values. Use
-`output/b1-map12/manual-draft-anchor-semantic-review.html` as the read-only
-review aid, run the strict promoter with `--check`, run the non-mutating fit
-check, then write the committed manifest and run the residual fitter.
+`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, mark the
+seven geometry anchors `review_status=accepted` with `anchor_role=alignment`,
+run the strict promoter with `--check`, run the non-mutating fit check, then
+write the committed manifest and run the residual fitter. Add a second semantic
+anchor group only before projecting room/object labels.
 
 Next command/artifact:
 
@@ -186,7 +192,7 @@ python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
   --review-packet-output output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --review-report-output output/b1-map12/manual-draft-anchor-semantic-review.html
 
-# after a human/operator edits the review packet and accepts real semantic ids:
+# after a human/operator edits the review packet and accepts geometry anchors:
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json \
@@ -210,7 +216,8 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
 Stop condition: do not mark B1 / Map 12 alignment verified until the committed
 correspondence manifest has at least six accepted anchors and the residual
 artifact passes the threshold policy. Do not use the bbox seed as accepted
-coordinate evidence.
+coordinate evidence. Do not mark room/area labels verified until separate
+accepted semantic anchors exist.
 
 No-touch scope: no public surface changes, no MCP contract changes, no object
 or receptacle USD binding, no manipulation or planner-backed navigation claim,

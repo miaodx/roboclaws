@@ -18,6 +18,8 @@ if __package__ in {None, ""}:
 
 from roboclaws.maps.bundle_validation import parse_map_yaml
 from scripts.maps.fit_b1_map12_scene_alignment import (
+    ALIGNMENT_ANCHOR_ROLE,
+    anchor_role,
     anchor_uses_known_poor_seed,
     valid_xy,
     valid_xyz,
@@ -137,17 +139,26 @@ def build_review_packet(
 
 def review_anchor_row(anchor: dict[str, Any], *, index: int) -> dict[str, Any]:
     review_status = str(anchor.get("review_status") or "proposed")
+    has_role = bool(anchor.get("anchor_role"))
     has_map_pick = valid_xy(anchor.get("map_xy"))
     has_scene_pick = valid_xyz(anchor.get("scene_xyz"))
     uses_seed = anchor_uses_known_poor_seed(anchor)
-    fit_ready = review_status == "accepted" and has_map_pick and has_scene_pick and not uses_seed
+    fit_ready = (
+        review_status == "accepted"
+        and has_role
+        and has_map_pick
+        and has_scene_pick
+        and not uses_seed
+    )
     return {
         "index": index,
         "anchor_id": str(anchor.get("anchor_id") or f"anchor_{index:03d}"),
         "anchor_type": str(anchor.get("anchor_type") or ""),
+        "anchor_role": anchor_role(anchor),
         "navigation_area_id": str(anchor.get("navigation_area_id") or ""),
         "asset_partition_id": str(anchor.get("asset_partition_id") or ""),
         "review_status": review_status,
+        "has_role": has_role,
         "has_map_pick": has_map_pick,
         "has_scene_pick": has_scene_pick,
         "uses_known_poor_bbox_seed": uses_seed,
@@ -158,6 +169,7 @@ def review_anchor_row(anchor: dict[str, Any], *, index: int) -> dict[str, Any]:
         "evidence": anchor.get("evidence") if isinstance(anchor.get("evidence"), dict) else {},
         "review_action": review_action(
             review_status=review_status,
+            has_role=has_role,
             has_map_pick=has_map_pick,
             has_scene_pick=has_scene_pick,
             uses_seed=uses_seed,
@@ -168,6 +180,7 @@ def review_anchor_row(anchor: dict[str, Any], *, index: int) -> dict[str, Any]:
 def review_action(
     *,
     review_status: str,
+    has_role: bool,
     has_map_pick: bool,
     has_scene_pick: bool,
     uses_seed: bool,
@@ -176,6 +189,8 @@ def review_action(
         return "replace seed-derived coordinates with explicit operator map and scene picks"
     if review_status != "accepted":
         return "pick explicit map_xy and scene_xyz, then mark accepted after operator review"
+    if not has_role:
+        return "accepted anchors require anchor_role=alignment or anchor_role=semantic"
     if not has_map_pick or not has_scene_pick:
         return "accepted anchors require both map_xy and scene_xyz before fitting"
     return "ready_for_fit"
@@ -788,6 +803,7 @@ function addDraftAnchor() {
   const anchor = {
     anchor_id: document.getElementById("anchorId").value || nextAnchorId(),
     anchor_type: document.getElementById("anchorType").value || "operator_correspondence",
+    anchor_role: "alignment",
     navigation_area_id: document.getElementById("navigationAreaId").value || "",
     asset_partition_id: document.getElementById("assetPartitionId").value || "",
     map_xy: currentMapPick.map_xy,
@@ -862,7 +878,8 @@ def render_anchor_row(row: dict[str, Any], *, output_dir: Path) -> str:
     action_class = "warn" if not row.get("fit_ready") else ""
     anchor_cell = (
         f"<td><code>{escape(str(row['anchor_id']))}</code><br />"
-        f"{escape(str(row['anchor_type']))}</td>"
+        f"{escape(str(row['anchor_type']))}<br />"
+        f"{escape(str(row.get('anchor_role') or ALIGNMENT_ANCHOR_ROLE))}</td>"
     )
     area_cell = (
         f"<td>{escape(str(row['navigation_area_id']))}<br />"

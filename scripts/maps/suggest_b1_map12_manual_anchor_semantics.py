@@ -193,6 +193,7 @@ def build_semantic_review_packet(
         recommended_area = str(suggestion.get("recommended_navigation_area_id") or "")
         recommended_partition = str(suggestion.get("recommended_asset_partition_id") or "")
         candidate = dict(anchor)
+        candidate["anchor_role"] = str(anchor.get("anchor_role") or "alignment")
         candidate["review_status"] = "proposed"
         candidate["navigation_area_id"] = recommended_area
         candidate["asset_partition_id"] = recommended_partition
@@ -204,8 +205,9 @@ def build_semantic_review_packet(
             "map_candidates": map_candidates,
             "scene_candidates": scene_candidates,
             "acceptance_instructions": (
-                "Human reviewer must choose final navigation_area_id and asset_partition_id, "
-                "then change review_status to accepted before residual verification."
+                "Use anchor_role=alignment for geometry-only picks. Use anchor_role=semantic "
+                "only for room-interior label points with final navigation_area_id and "
+                "asset_partition_id, then change review_status to accepted."
             ),
         }
         anchors.append(candidate)

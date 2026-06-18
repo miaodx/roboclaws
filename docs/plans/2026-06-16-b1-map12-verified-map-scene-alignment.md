@@ -47,10 +47,11 @@ mean `2.152082 m` and max `2.595962 m`. The same probe now also tries semantic
 label/partition center matching; that candidate is worse, with best mean
 residual `7.891215 m` and max `11.003484 m`. A tracked manual draft snapshot
 now lives at `docs/status/active/b1-map12-scene-correspondences-draft.json`.
-The explicit verification-only manual fallback passes global rigid alignment
-with mean residual `0.352908 m` and max `0.502064 m`, but it uses synthetic
-area/partition ids and must not be committed as the final accepted
-correspondence asset.
+The seven manual picks are explicit `anchor_role=alignment` geometry anchors;
+they should not be re-clicked or forced to carry room semantics. The explicit
+verification-only manual fallback passes global rigid alignment with mean
+residual `0.352908 m` and max `0.502064 m`, but it is geometry-only evidence
+and must not be treated as final room/area semantics.
 
 Semantic suggestion pass:
 `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` compares the manual
@@ -63,13 +64,16 @@ non-mutating human-review packet that combines each manual pick with semantic
 candidates while keeping all anchors proposed and accepted anchor count at zero.
 `scripts/maps/promote_b1_map12_semantic_review_packet.py` now provides the
 strict promotion path from a human-edited packet into the committed
-correspondence manifest. It rejects proposed-only packets, missing real semantic
-ids, fewer than six human-accepted anchors, synthetic `manual_draft_*` ids,
-bbox/seed coordinate sources, and auto-accepted suggestions before validating
-the final manifest. Use `--check` first to validate a human-edited packet
-without writing the committed asset. Promotion strips review-only suggestion
-metadata such as `semantic_review` before writing the production correspondence
-manifest.
+correspondence manifest. Accepted anchors must declare `anchor_role`. Accepted
+`alignment` anchors require explicit picks and no bbox seed, but may leave
+`navigation_area_id` / `asset_partition_id` blank. Accepted `semantic` anchors
+additionally require real room/partition ids and reject synthetic
+`manual_draft_*` values. The promoter still rejects proposed-only packets, fewer
+than six human-accepted anchors, bbox/seed coordinate sources, and auto-accepted
+suggestions before validating the final manifest. Use `--check` first to
+validate a human-edited packet without writing the committed asset. Promotion
+strips review-only suggestion metadata such as `semantic_review` before writing
+the production correspondence manifest.
 The suggestion command also writes
 `output/b1-map12/manual-draft-anchor-semantic-review.html`, a static read-only
 HTML table for operator review of the proposed anchors and candidate semantic
@@ -169,6 +173,11 @@ This plan must not change:
 - `correspondence_anchor`: a named map-scene match such as a door center, wall
   corner, corridor turn, room entrance, fixed column, or room-area centroid that
   exists in both Map 12 and the B1 scene.
+- `anchor_role=alignment`: a geometry-only map-scene anchor used for global
+  residual fitting. It does not need room ids and does not prove room labels.
+- `anchor_role=semantic`: a room/area semantic anchor, preferably an
+  interior/centroid point, used for local area transforms and label projection.
+  It must carry reviewed `navigation_area_id` and `asset_partition_id` values.
 - `global_transform`: one map-to-scene transform applied to all verified
   anchors.
 - `area_transform`: a transform scoped to a named room or navigation area when
@@ -200,6 +209,7 @@ Add a first-class map-scene correspondence manifest, for example:
     {
       "anchor_id": "meeting_room_a_door_center",
       "anchor_type": "door_center",
+      "anchor_role": "semantic",
       "navigation_area_id": "west_corridor",
       "asset_partition_id": "meeting_room_a",
       "map_xy": [-5.5, 2.4],
@@ -230,13 +240,16 @@ Only human/operator-reviewed picks may use `review_status=accepted`.
 Model-generated or script-generated anchor candidates must remain
 `review_status=proposed` until reviewed.
 
-Strict promotion from the semantic review packet to the committed manifest is
-allowed only after a human/operator changes selected anchors to
-`review_status=accepted` and supplies real `navigation_area_id` and
-`asset_partition_id` values for at least six anchors. The promotion path must
-reject proposed-only packets, partial accepted packets, missing semantic ids,
-synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and any attempt to
-auto-accept suggestions. It must validate the final manifest before writing
+Strict promotion from the review packet to the committed manifest is allowed
+only after a human/operator changes selected anchors to `review_status=accepted`
+and each accepted anchor explicitly declares `anchor_role`. At least six
+accepted `alignment` anchors are enough for global residual fitting. Accepted
+`semantic` anchors are a separate room-label evidence group and must supply real
+`navigation_area_id` and `asset_partition_id` values. The promotion path must
+reject proposed-only packets, partial accepted packets, missing roles, missing
+semantic ids on `anchor_role=semantic`, synthetic `manual_draft_*` semantic ids,
+bbox/seed coordinate sources, and any attempt to auto-accept suggestions. It
+must validate the final manifest before writing
 `assets/maps/b1-map12-scene-correspondences.json`.
 
 The checked-in correspondence manifest may remain empty as a fail-loud
@@ -337,14 +350,16 @@ Initial thresholds are plan defaults and should be confirmed during review:
 
 - Minimum global anchors: 6 accepted anchors.
 - Minimum non-collinear anchors: 4.
-- Required spatial coverage: anchors must cover at least three navigation areas
-  or scene partitions.
+- Global fit no longer requires room/partition coverage, because corner/edge
+  alignment anchors are often not reliable room-label evidence. Spatial quality
+  is enforced by count, non-collinearity, and residual thresholds.
 - Global verified target: mean residual <= 0.75 m and max residual <= 1.5 m.
 - Area verified target: mean residual <= 0.5 m and max residual <= 1.0 m within
   the area.
-- Minimum area anchors: 3 accepted, non-collinear anchors for an independently
-  fitted area transform. If an area has fewer anchors, it may inherit a passing
-  global transform but must not claim an independent local transform.
+- Minimum area anchors: 3 accepted, non-collinear `anchor_role=semantic` anchors
+  for an independently fitted area transform. If an area has fewer anchors, it
+  may inherit a passing global transform but must not claim an independent local
+  transform.
 - Outliers: allowed only when explicitly excluded with a recorded reason.
 
 If the first annotation run shows these thresholds are unrealistic, update this
@@ -412,7 +427,7 @@ them before claiming `verified` requires an explicit plan update.
 ## Suggested Proof
 
 ```bash
-# after a human/operator edits the review packet and accepts real semantic ids:
+# after a human/operator edits the review packet and accepts geometry anchors:
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json \
@@ -445,18 +460,21 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   -q
 ```
 
-The old manual draft proof remains verification-only. The final production proof
-must use `assets/maps/b1-map12-scene-correspondences.json` after the anchors
-receive reviewed real `navigation_area_id` and `asset_partition_id` values.
+The old manual draft proof remains verification-only. The final production
+geometry proof must use `assets/maps/b1-map12-scene-correspondences.json` with
+accepted `anchor_role=alignment` anchors. Room/area label projection remains a
+second proof that needs separate accepted `anchor_role=semantic` anchors with
+real `navigation_area_id` and `asset_partition_id` values.
 
 ## Definition Of Done
 
 Success only if:
 
 - a reviewable correspondence manifest exists with at least 6 accepted anchors;
-- accepted anchors have human-reviewed real `navigation_area_id` and
-  `asset_partition_id` values, not synthetic verification-only ids or
-  model-generated proposed suggestions;
+- accepted geometry anchors declare `anchor_role=alignment`; accepted
+  room/label anchors declare `anchor_role=semantic` and have human-reviewed real
+  `navigation_area_id` and `asset_partition_id` values, not synthetic
+  verification-only ids or model-generated proposed suggestions;
 - bbox seed output is explicitly labeled `known_poor_seed_only`;
 - the transform fitter writes residual metrics and overlay previews;
 - readiness artifacts cannot claim verified alignment without residual evidence;
@@ -466,7 +484,7 @@ Success only if:
   artifact clearly says global alignment remains candidate;
 - per-area verified alignment is supported when global alignment is poor;
 - independently fitted per-area alignment requires at least 3 accepted,
-  non-collinear anchors for that area;
+  non-collinear `anchor_role=semantic` anchors for that area;
 - room/area semantic correspondence can become verified only with residual
   evidence;
 - object/receptacle USD binding, manipulation, and planner-backed navigation
@@ -476,8 +494,9 @@ Success only if:
 
 ## Blockers And Decisions
 
-- Need first accepted anchor set. Without human/operator-reviewed anchor
-  correspondences, verified alignment remains blocked.
+- Need first accepted alignment anchor set. Without human/operator-reviewed
+  geometry correspondences, verified global alignment remains blocked. Without
+  separate accepted semantic anchors, room/area label projection remains blocked.
 - If residuals are high, prefer area-level verified claims over weakening
   global thresholds.
 - Accepted annotation lifecycle: draft under `output/`; committed map-bundle
@@ -489,12 +508,12 @@ Success only if:
 
 ## Recommended Next Step
 
-Add or run the strict review-packet promotion path for
-`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`. It should
-write the committed correspondence manifest only after explicit human acceptance
-with real semantic ids, then rerun the fitter on
-`assets/maps/b1-map12-scene-correspondences.json`. Until that passes, keep the
-verification-only synthetic manifest as test evidence only, not production proof.
+Run the strict review-packet promotion path after marking the seven existing
+manual geometry picks as accepted `anchor_role=alignment`. It should write the
+committed correspondence manifest and rerun the fitter on
+`assets/maps/b1-map12-scene-correspondences.json`. Collect separate
+`anchor_role=semantic` room-interior points only before projecting room/object
+labels into Map12.
 
 ## Prerequisite Contract For 2026-06-17 Execution
 
@@ -507,20 +526,22 @@ Map12 waypoint or `map_xy/yaw` requests, B1 scene pose application, and
 same-pose Isaac preview proof.
 
 Goal: Provide the only valid residual-backed alignment evidence that downstream
-runtime pose application may consume. Verified claims require human/operator
-accepted correspondences, real semantic ids, and residual artifacts; poor bbox
-overlay remains only a known-poor visual-search seed.
+runtime pose application may consume. Verified geometry claims require
+human/operator accepted `anchor_role=alignment` correspondences and residual
+artifacts. Verified room/area semantic claims additionally require accepted
+`anchor_role=semantic` correspondences with real semantic ids. Poor bbox overlay
+remains only a known-poor visual-search seed.
 
 This contract owns:
 
 - B1 / Map 12 correspondence manifest schema and reviewed-asset lifecycle.
 - Separate map-coordinate and scene-coordinate picks for accepted anchors.
-- Strict promotion from a human-edited semantic review packet to
+- Strict promotion from a human-edited review packet to
   `assets/maps/b1-map12-scene-correspondences.json`.
 - Deterministic transform fitting, residual reports, global and per-area
   threshold policy, and readiness status.
-- Bbox-seed rejection, proposed-only review rejection, synthetic-id rejection,
-  and blocked object/manipulation/planner claims.
+- Bbox-seed rejection, proposed-only review rejection, role-specific semantic-id
+  rejection, and blocked object/manipulation/planner claims.
 
 This contract does not own:
 
@@ -533,9 +554,10 @@ This contract does not own:
 Acceptance for downstream consumption:
 
 - At least six anchors have `review_status=accepted`.
-- Accepted anchors have real human-reviewed `navigation_area_id` and
-  `asset_partition_id` values, not synthetic `manual_draft_*` ids or
-  model-generated suggestions.
+- Accepted geometry anchors declare `anchor_role=alignment`. Accepted semantic
+  anchors declare `anchor_role=semantic` and have real human-reviewed
+  `navigation_area_id` / `asset_partition_id` values, not synthetic
+  `manual_draft_*` ids or model-generated suggestions.
 - Bbox/seed coordinates do not populate accepted evidence and cannot count
   toward residual verification.
 - The fitter emits residuals and visual overlays.
