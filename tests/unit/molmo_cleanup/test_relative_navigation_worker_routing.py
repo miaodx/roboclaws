@@ -150,6 +150,61 @@ def test_molmospaces_worker_rejects_non_positive_render_dimensions() -> None:
         )
 
 
+def test_molmospaces_worker_cli_rejects_non_positive_render_dimensions() -> None:
+    parser = molmospaces_worker_cli.build_arg_parser(
+        default_render_width=540,
+        default_render_height=360,
+    )
+
+    for command, required_args, flag in (
+        (
+            "snapshot",
+            ["--output-path", "/tmp/snapshot.png", "--title", "snapshot"],
+            "--render-width",
+        ),
+        ("robot_views", ["--output-dir", "/tmp/views", "--label", "views"], "--render-height"),
+        ("camera_views", ["--output-dir", "/tmp/cameras"], "--render-width"),
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(
+                [
+                    "--state-path",
+                    "state.json",
+                    command,
+                    *required_args,
+                    flag,
+                    "0",
+                ]
+            )
+        assert exc_info.value.code == 2
+
+
+def test_molmospaces_worker_cli_accepts_positive_render_dimensions() -> None:
+    parser = molmospaces_worker_cli.build_arg_parser(
+        default_render_width=540,
+        default_render_height=360,
+    )
+
+    args = parser.parse_args(
+        [
+            "--state-path",
+            "state.json",
+            "robot_views",
+            "--output-dir",
+            "/tmp/views",
+            "--label",
+            "views",
+            "--render-width",
+            "64",
+            "--render-height",
+            "48",
+        ]
+    )
+
+    assert args.render_width == 64
+    assert args.render_height == 48
+
+
 def test_isaac_worker_cli_exposes_relative_pose_command() -> None:
     from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
 

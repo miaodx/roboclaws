@@ -73,6 +73,17 @@ again.
   79 oversized modules; `isaac_worker_cli.py` is 269 lines,
   `isaac_worker_outputs.py` is 429 lines, and
   `test_relative_navigation_worker_routing.py` is 247 lines.
+- Follow-up implementation refresh on 2026-06-18 closed one MolmoSpaces worker
+  render-dimension false-green. The worker CLI now rejects non-positive
+  snapshot/robot-view/camera-view `--render-width` / `--render-height` values
+  at argument parsing time instead of accepting invalid dimensions until worker
+  dispatch validation. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: fail-aloud MolmoSpaces worker render configuration;
+  default dimensions, valid positive dimensions, existing dispatch-layer
+  validation, worker command names, output packet schemas, and backend routing
+  are unchanged. The ratchet remains 0 complexity rows and 79 oversized
+  modules; `molmospaces_worker_cli.py` is 132 lines and
+  `test_relative_navigation_worker_routing.py` is 302 lines.
 - Follow-up implementation refresh on 2026-06-18 closed one B1 / Map 12
   navigation-smoke render-dimension false-green. The navigation-smoke CLI now
   rejects non-positive `--render-width` / `--render-height` values at argument

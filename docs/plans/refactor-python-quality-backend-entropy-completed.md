@@ -50,6 +50,19 @@ logs before choosing the next slice.
   worker-routing tests, `test_isaac_lab_backend.py`, touched-file ruff and
   format check, py_compile, `git diff --check`, and ratchet.
 
+- 2026-06-18: MolmoSpaces worker render dimensions now fail aloud. The worker
+  CLI rejects non-positive snapshot/robot-view/camera-view `--render-width` /
+  `--render-height` values at argument parsing time instead of accepting
+  invalid dimensions until worker dispatch validation. Owner layer: Backend
+  Runtime / Environment Primitive. Behavior-change class: fail-aloud
+  MolmoSpaces worker render configuration; default dimensions, valid positive
+  dimensions, existing dispatch-layer validation, worker command names, output
+  packet schemas, and backend routing are unchanged. Metric: ratchet remains at
+  0 complexity rows and 79 oversized modules; `molmospaces_worker_cli.py` is
+  132 lines and `test_relative_navigation_worker_routing.py` is 302 lines.
+  Proof: focused worker-routing tests, touched-file ruff and format check,
+  py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: B1 / Map 12 navigation-smoke render dimensions now fail aloud.
   The navigation-smoke CLI rejects non-positive `--render-width` /
   `--render-height` values at argument parsing time instead of passing invalid
