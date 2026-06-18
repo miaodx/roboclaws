@@ -559,6 +559,11 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - The same preview promotion gate also rejects camera artifacts that omit the
   waypoint id or mix FPV/Chase files from different view labels, so promoted
   FPV and Chase metadata always describe one same-waypoint evidence row.
+- `--skip-existing` for B1 previews now reuses camera preview metadata only
+  when it still carries the matching camera artifact path, same waypoint id,
+  residual alignment artifact, and `reviewed_correspondence_fit` transform
+  source. Incomplete stale camera metadata is rewritten to static map/topdown
+  preview and stale FPV/Chase files are removed.
 
 Current gate:
 

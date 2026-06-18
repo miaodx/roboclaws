@@ -790,6 +790,68 @@ def test_b1_map12_skip_existing_rewrites_missing_real_camera_files(
     assert "chase" not in metadata["views"]
 
 
+def test_b1_map12_skip_existing_rewrites_real_camera_metadata_without_alignment(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+    old_artifact = tmp_path / "old-run" / "run_result.json"
+    metadata_path = _write_stale_b1_real_camera_preview_metadata(
+        tmp_path,
+        artifact_path=old_artifact,
+    )
+
+    result = render_b1_map12_preview(
+        output_dir=tmp_path,
+        width=320,
+        height=200,
+        skip_existing=True,
+        camera_artifact=old_artifact,
+    )
+
+    assert result["status"] == "camera_preview_unavailable"
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert "fpv" not in metadata["views"]
+    assert "chase" not in metadata["views"]
+
+
+def test_b1_map12_skip_existing_keeps_complete_matching_camera_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import scripts.operator_console.render_scene_previews as render_scene_previews
+
+    bundle, review = _write_b1_preview_inputs(tmp_path)
+    _patch_b1_preview_inputs(render_scene_previews, monkeypatch, tmp_path, bundle, review)
+    artifact = tmp_path / "run" / "run_result.json"
+    alignment_artifact = tmp_path / "run" / "alignment_residuals.json"
+    metadata_path = _write_stale_b1_real_camera_preview_metadata(
+        tmp_path,
+        artifact_path=artifact,
+        waypoint_id="generated_exploration_002",
+        alignment_artifact=alignment_artifact,
+        alignment_transform_source="reviewed_correspondence_fit",
+    )
+
+    result = render_b1_map12_preview(
+        output_dir=tmp_path,
+        width=320,
+        height=200,
+        skip_existing=True,
+        camera_artifact=artifact,
+    )
+
+    assert result["status"] == "skipped"
+    assert result["metadata"] == str(metadata_path)
+    assert (tmp_path / "b1-map12-fpv.png").exists()
+    assert (tmp_path / "b1-map12-chase.png").exists()
+
+
 def test_b1_map12_static_preview_does_not_carry_forward_real_camera_previews(
     tmp_path: Path,
     monkeypatch,
@@ -981,7 +1043,11 @@ def _write_stale_b1_real_camera_preview_metadata(
     tmp_path: Path,
     *,
     artifact_path: Path,
+    waypoint_id: str = "",
+    alignment_artifact: Path | None = None,
+    alignment_transform_source: str = "",
 ) -> Path:
+    alignment_artifact_raw = str(alignment_artifact or "")
     Image.new("RGB", (16, 16), (10, 20, 30)).save(tmp_path / "b1-map12-map.png")
     Image.new("RGB", (16, 16), (30, 20, 10)).save(tmp_path / "b1-map12-topdown.png")
     Image.new("RGB", (16, 16), (120, 130, 140)).save(tmp_path / "b1-map12-fpv.png")
@@ -992,14 +1058,25 @@ def _write_stale_b1_real_camera_preview_metadata(
             {
                 "schema": PREVIEW_METADATA_SCHEMA,
                 "renderer": "static_b1_map12_with_isaac_runtime_camera_previews",
-                "camera_preview_artifact": {"path": str(artifact_path)},
+                "camera_preview_artifact": {
+                    "path": str(artifact_path),
+                    "selected_waypoint_id": waypoint_id,
+                    "alignment_artifact": alignment_artifact_raw,
+                    "alignment_transform_source": alignment_transform_source,
+                },
                 "views": {
                     "fpv": {
                         "path": "b1-map12-fpv.png",
+                        "waypoint_id": waypoint_id,
+                        "alignment_artifact": alignment_artifact_raw,
+                        "alignment_transform_source": alignment_transform_source,
                         "provenance": "isaac_runtime_robot_mounted_head_camera_fpv",
                     },
                     "chase": {
                         "path": "b1-map12-chase.png",
+                        "waypoint_id": waypoint_id,
+                        "alignment_artifact": alignment_artifact_raw,
+                        "alignment_transform_source": alignment_transform_source,
                         "provenance": "isaac_runtime_report_chase_camera",
                     },
                     "map": {"path": "b1-map12-map.png"},
