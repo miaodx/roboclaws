@@ -16,6 +16,7 @@ from roboclaws.maps.runtime_prior_snapshot import (
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import NAVIGATION_PROVENANCE
 from scripts.maps.compile_b1_map12_runtime_bundle import (
     B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
+    B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
     compile_runtime_bundle,
     review_manifest_errors,
     runtime_labels_from_review,
@@ -85,15 +86,25 @@ def test_runtime_compiler_uses_vendor_map12_and_review_labels(tmp_path: Path) ->
         "meeting_room_c",
     }
     assert (output_dir / "b1_runtime_provenance.json").is_file()
+    assert (output_dir / "b1_robot_consumption_manifest.json").is_file()
     assert (output_dir / "review_labels_topdown.png").is_file()
     proof = runtime_semantics["digital_twin_capabilities"]["robot_consumption_proof"]
     room_proof = runtime_semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]
+    manifest = json.loads(
+        (output_dir / "b1_robot_consumption_manifest.json").read_text(encoding="utf-8")
+    )
     assert proof["status"] == "blocked_missing_verified_alignment"
     assert proof["robot_navigation_supported"] is False
     assert room_proof["status"] == "blocked_missing_accepted_semantic_anchors"
     assert room_proof["room_semantics_supported"] is False
     assert room_proof["object_projection_status"] == "blocked_until_object_semantic_anchors"
     assert runtime_semantics["spatial_contract"]["alignment_status"] == "candidate"
+    assert manifest["schema"] == B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA
+    assert manifest["status"] == "blocked"
+    assert manifest["capabilities"]["robot_navigation"] is False
+    assert manifest["capabilities"]["room_semantics"] is False
+    assert manifest["capabilities"]["object_semantics"] is False
+    assert manifest["policy"]["no_output_directory_autodiscovery"] is True
 
 
 def test_runtime_compiler_materializes_verified_robot_consumption_proof(
@@ -119,8 +130,14 @@ def test_runtime_compiler_materializes_verified_robot_consumption_proof(
     runtime_semantics = json.loads((output_dir / "semantics.json").read_text(encoding="utf-8"))
     provenance = json.loads((output_dir / "b1_runtime_provenance.json").read_text(encoding="utf-8"))
     proof = runtime_semantics["digital_twin_capabilities"]["robot_consumption_proof"]
+    manifest = json.loads(
+        (output_dir / "b1_robot_consumption_manifest.json").read_text(encoding="utf-8")
+    )
 
     assert result["robot_navigation_supported"] is True
+    assert result["robot_consumption_manifest"] == str(
+        output_dir / "b1_robot_consumption_manifest.json"
+    )
     assert validate_nav2_map_bundle(output_dir).ok
     assert runtime_semantics["spatial_contract"]["alignment_status"] == "verified"
     assert proof["status"] == "robot_navigation_verified"
@@ -137,6 +154,12 @@ def test_runtime_compiler_materializes_verified_robot_consumption_proof(
     assert runtime_semantics["provenance"]["contains_runtime_observations"] is False
     assert runtime_semantics["provenance"]["contains_verified_robot_consumption_proof"] is True
     assert provenance["robot_consumption_proof"]["robot_navigation_supported"] is True
+    assert manifest["status"] == "robot_navigation_ready"
+    assert manifest["navigation"]["ready"] is True
+    assert manifest["navigation"]["waypoint_ids"] == ["wp_1", "wp_2"]
+    assert manifest["capabilities"]["robot_navigation"] is True
+    assert manifest["capabilities"]["room_semantics"] is False
+    assert manifest["blocked_capabilities"][0]["capability"] == "room_semantics"
 
 
 def test_runtime_compiler_materializes_verified_room_semantic_projection(
@@ -159,6 +182,9 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     runtime_semantics = json.loads((output_dir / "semantics.json").read_text(encoding="utf-8"))
     provenance = json.loads((output_dir / "b1_runtime_provenance.json").read_text(encoding="utf-8"))
     room_proof = runtime_semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]
+    manifest = json.loads(
+        (output_dir / "b1_robot_consumption_manifest.json").read_text(encoding="utf-8")
+    )
 
     assert result["room_semantics_supported"] is True
     assert validate_nav2_map_bundle(output_dir).ok
@@ -179,6 +205,11 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     assert room["semantic_anchor_count"] == 1
     assert room["source_anchor_ids"] == ["semantic_meeting_room_a"]
     assert runtime_semantics["inspection_waypoints"][0]["room_id"] == "meeting_room_a"
+    assert manifest["capabilities"]["room_semantics"] is True
+    assert manifest["semantics"]["room_projection_count"] == 1
+    assert manifest["semantics"]["object_projection_status"] == (
+        "blocked_until_object_semantic_anchors"
+    )
 
 
 def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(

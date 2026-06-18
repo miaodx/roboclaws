@@ -103,6 +103,10 @@ alignment and navigation artifacts and write a
 artifacts; callers must pass `b1_alignment_artifact=...` and
 `b1_navigation_artifact=...` explicitly when they want product/open-task runs to
 consume the verified robot-navigation proof.
+The compiled bundle also writes `b1_robot_consumption_manifest.json`, a stable
+downstream-consumer summary of robot navigation readiness, room/object semantic
+readiness, blocked capabilities, required bundle files, and the no-autodiscovery
+policy.
 The operator console now exposes the same requirement in route metadata and
 readiness: B1 / Map 12 console launches stay blocked until both explicit proof
 artifact paths are supplied.

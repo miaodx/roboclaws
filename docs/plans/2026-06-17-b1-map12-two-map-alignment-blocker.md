@@ -656,6 +656,10 @@ Current gate:
   bundle validates and reports `robot_navigation_supported=true`. The compiler
   does not auto-discover `output/` artifacts; callers must pass explicit paths,
   and missing, invalid, or mismatched artifacts fail loudly.
+- The compiled bundle writes `b1_robot_consumption_manifest.json` as the thin
+  robot-consumer status packet. It summarizes navigation readiness, room/object
+  semantic readiness, blocked capabilities, required bundle files, and the
+  no-autodiscovery policy without adding another fallback path.
 - The same compiler can now consume an explicit verified semantic projection
   artifact and write
   `digital_twin_capabilities.room_semantic_projection_proof` into
@@ -671,13 +675,15 @@ Current gate:
   `navigation_memory.json`, and compiled B1 digital-twin bundles.
 - The B1 product/open-task route now exports the compiled bundle into
   `runtime_map_prior_snapshot.json` and
-  `runtime_map_prior_targets.json` beside the run output. The export is an
+  `runtime_map_prior_targets.json` beside the run output, and copies
+  `b1_robot_consumption_manifest.json` to the run root. The export is an
   explicit visible artifact from the freshly compiled bundle; it does not
   auto-discover older generated `output/` files or silently change the default
   `runtime_map_prior` input.
 - Operator-console state also lists those wrapper-level artifacts, so B1 runs
-  launched from the console can expose the canonical prior even when the active
-  live-attempt evidence is nested under a timestamp/seed directory.
+  launched from the console can expose the canonical prior and robot-consumer
+  manifest even when the active live-attempt evidence is nested under a
+  timestamp/seed directory.
 - The B1 / Isaac checker path now uses
   `--require-b1-robot-consumption-proof`, which validates the run-local copied
   `map_bundle/semantics.json` for a verified

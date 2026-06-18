@@ -190,6 +190,11 @@ Last proven evidence:
   auto-discover `output/` artifacts: callers must pass explicit verified
   alignment/navigation artifact paths, and missing or mismatched artifacts fail
   loudly.
+- The compiler also writes `b1_robot_consumption_manifest.json` inside the
+  compiled bundle. This is a thin downstream-consumer summary of the already
+  verified proofs: robot navigation readiness, room semantic projection status,
+  object semantic status, manipulation status, required bundle files, and the
+  no-autodiscovery policy.
 - `scripts/maps/compile_b1_map12_runtime_bundle.py` also accepts explicit
   `--semantic-projection-artifact` /
   `b1_semantic_projection_artifact=...` inputs. When a strict projection
@@ -206,12 +211,14 @@ Last proven evidence:
   `navigation_memory.json` already use.
 - The B1 product route now exports that canonical prior next to the compiled
   bundle as `runtime_map_prior_snapshot.json`, plus the compact
-  `runtime_map_prior_targets.json` materialized-target summary. This is a
-  visible run artifact only; it does not auto-feed generated `output/`
-  artifacts back into the default route.
-- The operator console artifact list now exposes both wrapper-level files, so a
-  B1 console run can show the canonical prior even when the live attempt
-  evidence lives in a nested timestamp/seed directory.
+  `runtime_map_prior_targets.json` materialized-target summary, and copies the
+  B1 robot-consumption manifest to the run root. These are visible run
+  artifacts only; they do not auto-feed generated `output/` artifacts back into
+  the default route.
+- The operator console artifact list now exposes these wrapper-level files, so
+  a B1 console run can show both the canonical prior and the robot-consumption
+  manifest even when the live attempt evidence lives in a nested timestamp/seed
+  directory.
 - B1 / Isaac product checks now use a B1-specific
   `--require-b1-robot-consumption-proof` gate. That gate reads the run-local
   copied `map_bundle/semantics.json` and requires

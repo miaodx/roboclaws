@@ -1498,6 +1498,7 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
 
     assert "compile_b1_map12_runtime_bundle.py" in b1_branch
     assert "convert_nav2_cleanup_bundle.py" in b1_branch
+    assert "b1_robot_consumption_manifest.json" in b1_branch
     assert '--output "${output_dir}/runtime_map_prior_snapshot.json"' in b1_branch
     assert '--summary-json "${output_dir}/runtime_map_prior_targets.json"' in b1_branch
     assert 'map_bundle_dir="$b1_runtime_map_bundle_dir"' in b1_branch

@@ -500,6 +500,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       fi
       .venv/bin/python scripts/maps/compile_b1_map12_runtime_bundle.py \
         "${b1_compile_args[@]}" >/dev/null
+      cp "$b1_runtime_map_bundle_dir/b1_robot_consumption_manifest.json" \
+        "${output_dir}/b1_robot_consumption_manifest.json"
       .venv/bin/python scripts/maps/convert_nav2_cleanup_bundle.py \
         "$b1_runtime_map_bundle_dir" \
         --output "${output_dir}/runtime_map_prior_snapshot.json" \

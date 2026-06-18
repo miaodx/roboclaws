@@ -45,6 +45,7 @@ from scripts.maps.build_b1_map12_semantic_projection import (  # noqa: E402
 
 B1_MAP12_ALIGNMENT_REVIEW_SCHEMA = "b1_map12_alignment_review_v1"
 B1_MAP12_RUNTIME_PROVENANCE_SCHEMA = "b1_map12_runtime_bundle_provenance_v1"
+B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA = "b1_map12_robot_consumption_manifest_v1"
 ACCEPTED_REVIEW_STATUS = "accepted"
 RUNTIME_LABEL_STATUSES = frozenset({ACCEPTED_REVIEW_STATUS})
 REVIEW_ONLY_STATUSES = frozenset({"draft", "proposed", "blocked_shared_area"})
@@ -196,12 +197,24 @@ def compile_runtime_bundle(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    robot_consumption_manifest = b1_robot_consumption_manifest(
+        output_dir=output_dir,
+        robot_consumption_proof=proof,
+        room_semantic_projection_proof=room_semantics["proof"],
+        runtime_label_count=len(runtime_labels),
+        inspection_waypoint_count=len(semantics["inspection_waypoints"]),
+    )
+    (output_dir / "b1_robot_consumption_manifest.json").write_text(
+        json.dumps(robot_consumption_manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     runtime_validation = validate_nav2_map_bundle(output_dir)
     runtime_validation.raise_for_errors()
     return {
         "schema": B1_MAP12_RUNTIME_PROVENANCE_SCHEMA,
         "status": "compiled",
         "output_dir": str(output_dir),
+        "robot_consumption_manifest": str(output_dir / "b1_robot_consumption_manifest.json"),
         "runtime_label_count": len(runtime_labels),
         "robot_navigation_supported": proof["robot_navigation_supported"],
         "room_semantics_supported": room_semantics["proof"]["room_semantics_supported"],
@@ -209,6 +222,117 @@ def compile_runtime_bundle(
         "validation": runtime_validation.as_dict(),
         "provenance": str(output_dir / "b1_runtime_provenance.json"),
     }
+
+
+def b1_robot_consumption_manifest(
+    *,
+    output_dir: Path,
+    robot_consumption_proof: dict[str, Any],
+    room_semantic_projection_proof: dict[str, Any],
+    runtime_label_count: int,
+    inspection_waypoint_count: int,
+) -> dict[str, Any]:
+    navigation_ready = bool(robot_consumption_proof.get("robot_navigation_supported"))
+    room_semantics_ready = bool(room_semantic_projection_proof.get("room_semantics_supported"))
+    object_semantics_ready = bool(room_semantic_projection_proof.get("object_semantics_supported"))
+    return {
+        "schema": B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
+        "status": "robot_navigation_ready" if navigation_ready else "blocked",
+        "map_bundle": str(output_dir),
+        "consumer_contract": "nav2_cleanup_bundle_plus_runtime_map_prior_snapshot_v1",
+        "required_primary_artifacts": {
+            "map_yaml": "map.yaml",
+            "occupancy_image": "map.pgm",
+            "semantics": "semantics.json",
+            "robot_profile": "profiles/rby1m.yaml",
+            "costmap_params": "costmaps/rby1m.costmap_params.yaml",
+        },
+        "optional_product_artifacts": {
+            "runtime_map_prior_snapshot": "../runtime_map_prior_snapshot.json",
+            "runtime_map_prior_targets": "../runtime_map_prior_targets.json",
+        },
+        "navigation": {
+            "status": robot_consumption_proof.get("status"),
+            "ready": navigation_ready,
+            "alignment_status": robot_consumption_proof.get("alignment_status"),
+            "navigation_status": robot_consumption_proof.get("navigation_status"),
+            "alignment_artifact": robot_consumption_proof.get("alignment_artifact"),
+            "navigation_artifact": robot_consumption_proof.get("navigation_artifact"),
+            "robot_navigation_provenance": robot_consumption_proof.get(
+                "robot_navigation_provenance"
+            ),
+            "navigation_waypoint_count": robot_consumption_proof.get("navigation_waypoint_count"),
+            "waypoint_ids": list(robot_consumption_proof.get("waypoint_ids") or []),
+        },
+        "semantics": {
+            "runtime_label_count": int(runtime_label_count),
+            "room_semantics_ready": room_semantics_ready,
+            "room_semantic_projection_status": room_semantic_projection_proof.get("status"),
+            "semantic_projection_artifact": room_semantic_projection_proof.get(
+                "semantic_projection_artifact"
+            ),
+            "room_projection_count": room_semantic_projection_proof.get("room_projection_count"),
+            "object_semantics_ready": object_semantics_ready,
+            "object_projection_status": room_semantic_projection_proof.get(
+                "object_projection_status"
+            ),
+        },
+        "capabilities": {
+            "robot_navigation": navigation_ready,
+            "room_semantics": room_semantics_ready,
+            "object_semantics": object_semantics_ready,
+            "manipulation": bool(robot_consumption_proof.get("manipulation_supported")),
+        },
+        "blocked_capabilities": _blocked_consumption_capabilities(
+            robot_consumption_proof=robot_consumption_proof,
+            room_semantic_projection_proof=room_semantic_projection_proof,
+        ),
+        "inspection_waypoint_count": int(inspection_waypoint_count),
+        "policy": {
+            "explicit_alignment_artifact_required": True,
+            "explicit_navigation_artifact_required": True,
+            "explicit_semantic_projection_artifact_required_for_room_semantics": True,
+            "no_output_directory_autodiscovery": True,
+            "object_labels_are_not_inferred_from_room_anchors": True,
+        },
+    }
+
+
+def _blocked_consumption_capabilities(
+    *,
+    robot_consumption_proof: dict[str, Any],
+    room_semantic_projection_proof: dict[str, Any],
+) -> list[dict[str, Any]]:
+    blocked = []
+    if not robot_consumption_proof.get("robot_navigation_supported"):
+        blocked.append(
+            {
+                "capability": "robot_navigation",
+                "status": robot_consumption_proof.get("status"),
+            }
+        )
+    if not room_semantic_projection_proof.get("room_semantics_supported"):
+        blocked.append(
+            {
+                "capability": "room_semantics",
+                "status": room_semantic_projection_proof.get("status"),
+            }
+        )
+    if not room_semantic_projection_proof.get("object_semantics_supported"):
+        blocked.append(
+            {
+                "capability": "object_semantics",
+                "status": room_semantic_projection_proof.get("object_projection_status"),
+            }
+        )
+    if not robot_consumption_proof.get("manipulation_supported"):
+        blocked.append(
+            {
+                "capability": "manipulation",
+                "status": robot_consumption_proof.get("object_receptacle_usd_binding_status"),
+            }
+        )
+    return blocked
 
 
 def validate_review_manifest(
