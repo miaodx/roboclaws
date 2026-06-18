@@ -92,6 +92,9 @@ Last proven evidence:
   explicitly verified local-area transforms produce ready B1 pose rows;
   unverified, malformed, missing-area, or unknown-area requests produce
   blocked rows instead of fallback output.
+- `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` requires at
+  least two distinct applied B1 scene poses before setting
+  `robot_navigation_supported=true`; duplicate-pose camera rows stay blocked.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report before local Isaac camera proof exists.
@@ -129,6 +132,11 @@ Last proven evidence:
   `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_render_scene_previews.py -q`, and
   `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
   pass for the hardened B1 camera-preview provenance gate.
+- `ruff check scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
+  `ruff format --check scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py -q`, and
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py -q`
+  pass for the distinct-applied-pose navigation smoke gate.
 
 Next hypothesis: once the seven manual anchors receive reviewed real
 `navigation_area_id` and `asset_partition_id` values, they can replace the

@@ -180,7 +180,9 @@ def run_navigation_smoke(args: argparse.Namespace) -> int:
         result = json.loads(result_path.read_text(encoding="utf-8"))
         waypoint_evidence.append(result)
 
-    provisional_passed = len(waypoint_evidence) >= 2 and not child_failures
+    provisional_passed = (
+        navigation_smoke_has_distinct_pose_evidence(waypoint_evidence) and not child_failures
+    )
     artifact = {
         "schema": NAVIGATION_SMOKE_SCHEMA,
         "status": "passed" if provisional_passed else "blocked",
@@ -344,6 +346,22 @@ def navigation_smoke_waypoints(
             "artifact with reviewed-correspondence candidate waypoints"
         )
     return readiness_waypoints, ""
+
+
+def navigation_smoke_has_distinct_pose_evidence(waypoint_evidence: list[dict[str, Any]]) -> bool:
+    if len(waypoint_evidence) < 2:
+        return False
+    pose_keys = {
+        (
+            round(float(dict(item.get("robot_pose") or {}).get("x") or 0.0), 3),
+            round(float(dict(item.get("robot_pose") or {}).get("y") or 0.0), 3),
+        )
+        for item in waypoint_evidence
+        if isinstance(item, dict)
+        and item.get("robot_pose_applied") is True
+        and isinstance(item.get("robot_pose"), dict)
+    }
+    return len(pose_keys) >= 2
 
 
 def blocked_artifact(

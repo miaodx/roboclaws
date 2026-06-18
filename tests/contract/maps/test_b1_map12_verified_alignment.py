@@ -17,6 +17,7 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     validate_waypoint_pose_requests_artifact,
 )
 from scripts.isaac_lab_cleanup.run_b1_map12_navigation_smoke import (
+    navigation_smoke_has_distinct_pose_evidence,
     navigation_smoke_waypoints,
 )
 from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partition_candidates
@@ -514,6 +515,34 @@ def test_navigation_smoke_consumes_ready_pose_requests_and_blocks_bad_request_ar
 
     assert waypoints == []
     assert "requires at least two residual-backed waypoint poses" in blocker
+
+
+def test_navigation_smoke_pass_gate_requires_two_distinct_applied_poses() -> None:
+    first = {
+        "waypoint_id": "manual_point_a",
+        "robot_pose_applied": True,
+        "robot_pose": {"x": -4.0, "y": -8.0, "z": 0.0, "yaw_deg": 0.0},
+    }
+    duplicate = {
+        "waypoint_id": "manual_point_b",
+        "robot_pose_applied": True,
+        "robot_pose": {"x": -4.0, "y": -8.0, "z": 0.0, "yaw_deg": 90.0},
+    }
+    second = {
+        "waypoint_id": "manual_point_c",
+        "robot_pose_applied": True,
+        "robot_pose": {"x": -2.5, "y": -7.0, "z": 0.0, "yaw_deg": 90.0},
+    }
+
+    assert navigation_smoke_has_distinct_pose_evidence([first]) is False
+    assert navigation_smoke_has_distinct_pose_evidence([first, duplicate]) is False
+    assert navigation_smoke_has_distinct_pose_evidence([first, second]) is True
+    assert (
+        navigation_smoke_has_distinct_pose_evidence(
+            [first, {**second, "robot_pose_applied": False}]
+        )
+        is False
+    )
 
 
 def test_readiness_records_area_verified_only_when_global_fit_fails(tmp_path: Path) -> None:
