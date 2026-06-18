@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Shared camera-control request resolution now fails aloud.
+  Camera-control request builders and normalizers reject missing, malformed,
+  bool, or non-positive render dimensions instead of fabricating `1x1` render
+  requests for malformed payloads. Owner layer: Backend Runtime / Environment
+  Primitive, with artifact impact on MuJoCo/Isaac scene-probe request
+  execution. Behavior-change class: fail-aloud camera-control request
+  configuration; explicit valid overrides, valid request payloads, camera model
+  defaults, orbit/lens/lighting/color normalization, worker command routing,
+  and request artifact schemas are unchanged. Metric: ratchet remains at 0
+  complexity rows and 79 oversized modules; `camera_control.py` is 650 lines
+  and `test_camera_control.py` is 83 lines. Proof: focused camera-control unit
+  tests, selected MuJoCo/Isaac camera-control caller tests, touched-file ruff
+  and format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: Isaac worker render command numeric configuration now fails
   aloud. The worker CLI rejects non-positive snapshot/robot-view/camera-view
   render dimensions and negative robot-view settle frames at argument parsing

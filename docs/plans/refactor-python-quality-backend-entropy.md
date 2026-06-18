@@ -60,6 +60,20 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one shared
+  camera-control request-resolution false-green. Camera-control request
+  builders and normalizers now reject missing, malformed, bool, or non-positive
+  render dimensions instead of fabricating `1x1` render requests for malformed
+  payloads. Owner layer: Backend Runtime / Environment Primitive, with artifact
+  impact on MuJoCo/Isaac scene-probe request execution. Behavior-change class:
+  fail-aloud camera-control request configuration; explicit valid overrides,
+  valid request payloads, camera model defaults, orbit/lens/lighting/color
+  normalization, worker command routing, and request artifact schemas are
+  unchanged. The ratchet remains 0 complexity rows and 79 oversized modules;
+  `camera_control.py` is 650 lines and `test_camera_control.py` is 83 lines.
+  Proof: focused camera-control unit tests, selected MuJoCo/Isaac
+  camera-control caller tests, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one Isaac worker render
   command numeric-config false-green. The worker CLI now rejects non-positive
   snapshot/robot-view/camera-view render dimensions and negative robot-view
