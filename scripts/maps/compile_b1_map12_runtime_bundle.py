@@ -28,10 +28,16 @@ from roboclaws.maps.bundle_validation import parse_map_yaml
 from roboclaws.maps.rasterize import OccupancyGrid, load_pgm
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
+    ALIGNMENT_STATUS_VERIFIED,
     GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
     POLYGON_ROLE_NAVIGATION_AREA,
     normalize_spatial_rooms,
     source_frame_spatial_contract,
+)
+from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (  # noqa: E402
+    NAVIGATION_PROVENANCE,
+    validate_alignment_residual_artifact,
+    validate_navigation_smoke_artifact,
 )
 
 B1_MAP12_ALIGNMENT_REVIEW_SCHEMA = "b1_map12_alignment_review_v1"
@@ -56,6 +62,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--navigation-memory", type=Path, default=DEFAULT_NAVIGATION_MEMORY)
     parser.add_argument("--scene-root", type=Path, default=DEFAULT_SCENE_ROOT)
     parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--alignment-artifact", type=Path)
+    parser.add_argument("--navigation-artifact", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument(
         "--include-draft-labels",
@@ -71,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle=args.map_bundle,
         scene_root=args.scene_root,
         review_manifest_path=args.review_manifest,
+        alignment_artifact_path=args.alignment_artifact,
+        navigation_artifact_path=args.navigation_artifact,
         navigation_memory_path=args.navigation_memory,
         output_dir=args.output_dir,
         include_draft_labels=args.include_draft_labels,
@@ -84,6 +94,8 @@ def compile_runtime_bundle(
     map_bundle: Path,
     scene_root: Path,
     review_manifest_path: Path,
+    alignment_artifact_path: Path | None = None,
+    navigation_artifact_path: Path | None = None,
     navigation_memory_path: Path = DEFAULT_NAVIGATION_MEMORY,
     output_dir: Path,
     include_draft_labels: bool = False,
@@ -106,6 +118,10 @@ def compile_runtime_bundle(
         raise ValueError(f"scene root does not exist: {scene_root}")
     if not navigation_memory_path.is_file():
         raise ValueError(f"navigation memory missing: {navigation_memory_path}")
+    proof = verified_robot_consumption_proof(
+        alignment_artifact_path=alignment_artifact_path,
+        navigation_artifact_path=navigation_artifact_path,
+    )
 
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -142,6 +158,7 @@ def compile_runtime_bundle(
         runtime_labels=runtime_labels,
         waypoints=waypoints,
         navigation_memory_anchors=navigation_memory_anchors,
+        robot_consumption_proof=proof,
         frame_id=frame_id,
     )
     (output_dir / "semantics.json").write_text(
@@ -159,6 +176,7 @@ def compile_runtime_bundle(
         review=review,
         runtime_labels=runtime_labels,
         review_summary=review_summary,
+        robot_consumption_proof=proof,
         include_draft_labels=include_draft_labels,
     )
     (output_dir / "b1_runtime_provenance.json").write_text(
@@ -172,6 +190,7 @@ def compile_runtime_bundle(
         "status": "compiled",
         "output_dir": str(output_dir),
         "runtime_label_count": len(runtime_labels),
+        "robot_navigation_supported": proof["robot_navigation_supported"],
         "excluded_label_count": review_summary["excluded_label_count"],
         "validation": runtime_validation.as_dict(),
         "provenance": str(output_dir / "b1_runtime_provenance.json"),
@@ -422,6 +441,99 @@ def review_validation_summary(
     }
 
 
+def verified_robot_consumption_proof(
+    *,
+    alignment_artifact_path: Path | None,
+    navigation_artifact_path: Path | None,
+) -> dict[str, Any]:
+    if alignment_artifact_path is None and navigation_artifact_path is not None:
+        raise ValueError("navigation artifact requires --alignment-artifact")
+    proof = {
+        "schema": "b1_map12_robot_consumption_proof_v1",
+        "status": "blocked_missing_verified_alignment",
+        "alignment_status": "not_provided",
+        "navigation_status": "not_provided",
+        "alignment_artifact": "",
+        "navigation_artifact": "",
+        "robot_navigation_supported": False,
+        "robot_navigation_provenance": "pending_local_isaac_b1_map12_navigation_smoke",
+        "navigation_waypoint_count": 0,
+        "robot_view_evidence_status": "not_available",
+        "planner_backed": False,
+        "physical_robot": False,
+        "manipulation_supported": False,
+        "object_receptacle_usd_binding_status": "blocked_out_of_scope",
+        "policy": {
+            "requires_explicit_alignment_artifact": True,
+            "requires_explicit_navigation_artifact": True,
+            "rejects_missing_or_invalid_artifacts": True,
+            "no_output_directory_autodiscovery": True,
+        },
+    }
+    if alignment_artifact_path is None:
+        return proof
+
+    alignment_artifact_path = Path(alignment_artifact_path)
+    if not alignment_artifact_path.is_file():
+        raise ValueError(f"alignment artifact missing: {alignment_artifact_path}")
+    alignment = json.loads(alignment_artifact_path.read_text(encoding="utf-8"))
+    alignment_errors = validate_alignment_residual_artifact(alignment)
+    if alignment_errors:
+        raise ValueError("invalid alignment artifact: " + "; ".join(alignment_errors))
+    if alignment.get("global_alignment_status") != "verified":
+        raise ValueError("alignment artifact must be globally verified")
+    residual = (
+        alignment.get("residual_evidence")
+        if isinstance(alignment.get("residual_evidence"), dict)
+        else {}
+    )
+    proof.update(
+        {
+            "status": "verified_alignment_navigation_pending",
+            "alignment_status": "verified",
+            "alignment_artifact": str(alignment_artifact_path),
+            "alignment_transform_source": str(residual.get("transform_source") or ""),
+            "selected_transform_type": str(alignment.get("selected_transform_type") or ""),
+            "matched_anchor_count": int(residual.get("matched_anchor_count") or 0),
+            "mean_residual_m": residual.get("mean_residual_m"),
+            "p90_residual_m": residual.get("p90_residual_m"),
+            "max_residual_m": residual.get("max_residual_m"),
+        }
+    )
+    if navigation_artifact_path is None:
+        return proof
+
+    navigation_artifact_path = Path(navigation_artifact_path)
+    if not navigation_artifact_path.is_file():
+        raise ValueError(f"navigation artifact missing: {navigation_artifact_path}")
+    navigation = json.loads(navigation_artifact_path.read_text(encoding="utf-8"))
+    navigation_errors = validate_navigation_smoke_artifact(navigation, require_files=True)
+    if navigation_errors:
+        raise ValueError("invalid navigation artifact: " + "; ".join(navigation_errors))
+    if str(navigation.get("alignment_artifact") or "") != str(alignment_artifact_path):
+        raise ValueError("navigation artifact alignment_artifact must match --alignment-artifact")
+    if navigation.get("robot_navigation_supported") is not True:
+        raise ValueError("navigation artifact must claim robot_navigation_supported=true")
+    proof.update(
+        {
+            "status": "robot_navigation_verified",
+            "navigation_status": "verified",
+            "navigation_artifact": str(navigation_artifact_path),
+            "robot_navigation_supported": True,
+            "robot_navigation_provenance": NAVIGATION_PROVENANCE,
+            "navigation_waypoint_count": int(navigation.get("navigation_waypoint_count") or 0),
+            "robot_view_evidence_status": str(navigation.get("robot_view_evidence_status") or ""),
+            "navigation_provenance": str(navigation.get("navigation_provenance") or ""),
+            "waypoint_ids": [
+                str(item.get("waypoint_id") or "")
+                for item in navigation.get("waypoint_evidence") or []
+                if isinstance(item, dict)
+            ],
+        }
+    )
+    return proof
+
+
 def runtime_provenance(
     *,
     map_bundle: Path,
@@ -432,6 +544,7 @@ def runtime_provenance(
     review: dict[str, Any],
     runtime_labels: list[dict[str, Any]],
     review_summary: dict[str, Any],
+    robot_consumption_proof: dict[str, Any],
     include_draft_labels: bool,
 ) -> dict[str, Any]:
     source_files = [
@@ -460,6 +573,12 @@ def runtime_provenance(
         },
         "include_draft_labels": include_draft_labels,
         "runtime_label_count": len(runtime_labels),
+        "robot_consumption_proof": {
+            "status": robot_consumption_proof["status"],
+            "alignment_artifact": robot_consumption_proof["alignment_artifact"],
+            "navigation_artifact": robot_consumption_proof["navigation_artifact"],
+            "robot_navigation_supported": robot_consumption_proof["robot_navigation_supported"],
+        },
         "review_validation": review_summary,
         "public_contract_note": (
             "This generated bundle preserves raw Map12 navigation layers. Human review "
@@ -557,10 +676,16 @@ def _runtime_semantics_payload(
     runtime_labels: list[dict[str, Any]],
     waypoints: list[dict[str, Any]],
     navigation_memory_anchors: list[dict[str, Any]],
+    robot_consumption_proof: dict[str, Any],
     frame_id: str,
 ) -> dict[str, Any]:
     rooms = _rooms_from_review_labels(runtime_labels, frame_id=frame_id)
     room_waypoints = _room_waypoints_from_review_labels(runtime_labels, frame_id=frame_id)
+    alignment_status = (
+        ALIGNMENT_STATUS_VERIFIED
+        if robot_consumption_proof["alignment_status"] == "verified"
+        else ALIGNMENT_STATUS_CANDIDATE
+    )
     return {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": "agibot-robot-map-12",
@@ -571,7 +696,7 @@ def _runtime_semantics_payload(
         },
         "spatial_contract": source_frame_spatial_contract(
             frame_id=frame_id,
-            alignment_status=ALIGNMENT_STATUS_CANDIDATE,
+            alignment_status=alignment_status,
         ),
         "display_frame": None,
         "map_id": "agibot-robot-map-12_base_navigation_map",
@@ -583,6 +708,9 @@ def _runtime_semantics_payload(
         "inspection_waypoints": [*room_waypoints, *waypoints],
         "driveable_ways": _driveable_ways_from_rooms(rooms),
         "navigation_memory_anchors": navigation_memory_anchors,
+        "digital_twin_capabilities": {
+            "robot_consumption_proof": robot_consumption_proof,
+        },
         "review_labels": runtime_labels,
         "room_category_hints": _room_category_hints_from_review(runtime_labels),
         "provenance": {
@@ -595,6 +723,9 @@ def _runtime_semantics_payload(
             "b1_runtime_compiler": Path(__file__).as_posix(),
             "contains_private_scoring_truth": False,
             "contains_runtime_observations": False,
+            "contains_verified_robot_consumption_proof": bool(
+                robot_consumption_proof["robot_navigation_supported"]
+            ),
         },
     }
 

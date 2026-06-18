@@ -649,6 +649,13 @@ Current gate:
   residual artifact. The default navigation-smoke harness now passes with two
   residual-backed Map12 navigation-memory points and same-pose Isaac FPV/Chase
   evidence.
+- `scripts/maps/compile_b1_map12_runtime_bundle.py` can now consume explicit
+  verified alignment and navigation artifacts and write
+  `digital_twin_capabilities.robot_consumption_proof` into `semantics.json`.
+  With the accepted residual/navigation smoke artifacts, the compiled runtime
+  bundle validates and reports `robot_navigation_supported=true`. The compiler
+  does not auto-discover `output/` artifacts; callers must pass explicit paths,
+  and missing, invalid, or mismatched artifacts fail loudly.
 - `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is expected until human-accepted
@@ -662,6 +669,10 @@ Next implementation slice:
   strict semantic projection script. Do not use the verification-only manifest,
   bbox seed, proposed-only packet, or current alignment-only manifest as room
   semantics.
+- For product/open-task runs that need the robot-consumption proof inside the
+  map bundle, pass explicit `b1_alignment_artifact=...` and
+  `b1_navigation_artifact=...` overrides rather than relying on generated
+  `output/` discovery.
 - Add separate object-level semantic anchors later before projecting object
   labels.
 

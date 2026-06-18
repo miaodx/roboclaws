@@ -96,6 +96,13 @@ it exits non-zero with `accepted semantic anchors are required before projecting
 room labels`; this is expected until human-accepted `anchor_role=semantic`
 room-interior anchors are promoted. The projection artifact keeps object
 projection blocked and does not infer object labels from room anchors.
+`scripts/maps/compile_b1_map12_runtime_bundle.py` can consume explicit verified
+alignment and navigation artifacts and write a
+`digital_twin_capabilities.robot_consumption_proof` summary into the generated
+`semantics.json`. The default route does not auto-discover generated `output/`
+artifacts; callers must pass `b1_alignment_artifact=...` and
+`b1_navigation_artifact=...` explicitly when they want product/open-task runs to
+consume the verified robot-navigation proof.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real
@@ -621,6 +628,14 @@ Verification:
     --correspondences assets/maps/b1-map12-scene-correspondences.json \
     --review-manifest assets/maps/b1-map12-alignment-review.json \
     --output output/b1-map12/semantic-projection/semantic_projection.json
+
+  python scripts/maps/compile_b1_map12_runtime_bundle.py \
+    --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+    --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
+    --review-manifest assets/maps/b1-map12-alignment-review.json \
+    --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
+    --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json \
+    --output-dir output/b1-map12/digital-twin-runtime-proof-check
 
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
     --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \

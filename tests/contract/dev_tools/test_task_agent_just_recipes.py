@@ -1454,6 +1454,32 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "world=b1-map12" in target_trace
     assert "backend=isaaclab_subprocess" in target_trace
     assert "generated_mess_count=0" in target_trace
+    assert "b1_alignment_artifact=" not in target_trace
+    assert "b1_navigation_artifact=" not in target_trace
+
+
+def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() -> None:
+    route, plan_trace = trace_surface_run_with_plan(
+        "surface=household-world",
+        "world=b1-map12",
+        "backend=isaaclab",
+        "agent_engine=codex-cli",
+        "prompt=inspect the digital twin",
+        "evidence_lane=world-public-labels",
+        "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
+        "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json",
+    )
+
+    assert route[28] == "output/b1-map12/alignment/alignment_residuals.json"
+    assert route[29] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
+    target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
+    assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
+        target_trace
+    )
+    assert (
+        "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json"
+        in target_trace
+    )
 
 
 def test_household_cleanup_routes_agibot_backend_to_physical_pilot_cli() -> None:

@@ -182,6 +182,14 @@ Last proven evidence:
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report. The current accepted navigation-smoke proof includes
   local Isaac same-pose camera evidence.
+- `python scripts/maps/compile_b1_map12_runtime_bundle.py --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --review-manifest assets/maps/b1-map12-alignment-review.json --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --output-dir output/b1-map12/digital-twin-runtime-proof-check`
+  compiles a valid runtime Nav2 bundle with
+  `digital_twin_capabilities.robot_consumption_proof.status=robot_navigation_verified`,
+  `robot_navigation_supported=true`, and source-frame
+  `spatial_contract.alignment_status=verified`. The compiler does not
+  auto-discover `output/` artifacts: callers must pass explicit verified
+  alignment/navigation artifact paths, and missing or mismatched artifacts fail
+  loudly.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer
