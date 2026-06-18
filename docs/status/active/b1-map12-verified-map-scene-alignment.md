@@ -10,17 +10,22 @@ applies two Map12 navigation-memory points as B1 scene robot poses and captures
 same-pose FPV/Chase evidence. Room/object label projection is still separate
 and needs additional `anchor_role=semantic` room-interior anchors with reviewed
 `navigation_area_id` / `asset_partition_id` values.
+Agent-visible runtime-prior consumption now preserves B1
+`digital_twin_capabilities` plus `capability_summary` through
+`RealWorldCleanupContract` and the live MCP/runtime map payload. The same
+surface names render/observation readiness for same-pose FPV/Chase/topdown
+evidence and keeps `B1_floor2_slow` explicitly blocked as the default visual
+route until same-frame, same-pose render proof exists.
 
 Blocker fingerprint:
 
 - blocker_kind: `b1_map12_isaac_same_pose_camera_proof`
 - root_cause_classification: passed for preview-grade kinematic pose-driven
   Isaac robot-view proof
-- last_decision_delta: geometry alignment no longer blocks on room ids, and
-  local Isaac no longer blocks the first robot-consumption proof. The committed
-  manifest contains seven accepted `anchor_role=alignment` anchors, the
-  official residual fitter verifies global alignment, and two residual-backed
-  Map12 points now produce same-pose FPV/Chase evidence.
+- last_decision_delta: geometry alignment and the first robot-consumption proof
+  are no longer blockers, and the explicit runtime-prior consumer chain now
+  exposes B1 navigation/render capability status to agent-visible MCP/runtime
+  map context while preserving blocked room/object/manipulation status.
 
 Last proven evidence:
 
@@ -220,6 +225,14 @@ Last proven evidence:
   of the materialized-target summary can see verified B1 navigation status and
   blocked room/object/manipulation capability status without parsing the full
   snapshot.
+- `RealWorldCleanupContract` now preserves B1 `digital_twin_capabilities` from
+  an explicitly supplied raw `runtime_metric_map_v1` prior or
+  `runtime_map_prior_snapshot_v1` wrapper into the agent-visible
+  `runtime_metric_map`. Focused contract/MCP tests prove the
+  `metric_map -> navigate_to_waypoint -> observe` path can still see
+  `robot_navigation_supported=true`, render/observation readiness, blocked
+  `B1_floor2_slow` default visual-route status, and blocked
+  room/object/manipulation/planner/physical-robot status.
 - The operator console artifact list now exposes these wrapper-level files, so
   a B1 console run can show both the canonical prior and the robot-consumption
   manifest even when the live attempt evidence lives in a nested timestamp/seed
@@ -296,15 +309,23 @@ operator-selected Map12 `map_xy/yaw` points inside verified global coverage, as
 long as the points are useful interior navigation/viewpoints rather than
 alignment-corner anchors.
 
-Next implementation step: execute the P0 consumer-chain slice in
-`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`. Expose B1
-`digital_twin_capabilities` / `capability_summary` from an explicitly supplied
-`runtime_map_prior` into agent-visible MCP/runtime map context, name
-render/observation readiness, prove the existing
-`metric_map -> navigate_to_waypoint -> observe` path, and evaluate
-`B1_floor2_slow/` as the default photorealistic visual/render route only if it
-is verified. Room semantic projection should remain blocked in P0; object
-projection remains a later semantic-anchor proof.
+P0 consumer-chain status:
+
+- Closed: B1 `digital_twin_capabilities` / `capability_summary` from an
+  explicitly supplied `runtime_map_prior` reaches the agent-visible
+  MCP/runtime map context.
+- Closed: render/observation readiness is named in that capability surface for
+  same-pose Gaussian/digital-twin FPV, Chase, and topdown evidence.
+- Closed: focused tests prove the existing MCP path sees the B1 status through
+  `metric_map -> navigate_to_waypoint -> observe`.
+- Closed with explicit blocked status: `B1_floor2_slow/` is not selected as
+  the default visual/render route because no same-frame, same-pose render proof
+  exists yet; the capability surface reports
+  `blocked_missing_verified_b1_floor2_slow_render_proof`.
+- Still parked outside P0: human room-semantic anchor review, room semantic
+  projection, object semantic projection, object/receptacle binding,
+  manipulation, planner-backed navigation, physical robot support, and public
+  absolute `map_xy/yaw` MCP navigation.
 
 Next command/artifact:
 
@@ -312,11 +333,8 @@ Next command/artifact:
 /goal execute docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md with intuitive-flow
 ```
 
-Stop condition: P0 stops after agent-visible MCP/runtime map context exposes B1
-navigation and render/observation capability status from an explicit
-`runtime_map_prior`, `B1_floor2_slow/` has selected-or-blocked visual-route
-status, and focused tests prove room/object/manipulation remain blocked. Do not
-claim room/area labels, object labels, manipulation, planner-backed navigation,
+Stop condition: P0 consumer-chain implementation is closed. Do not claim
+room/area labels, object labels, manipulation, planner-backed navigation,
 physical robot support, or public absolute `map_xy/yaw` navigation until
 separate follow-up proof artifacts exist.
 
@@ -335,35 +353,20 @@ Parked work:
   need an explicit review/merge step before replacing committed map semantics
   or correspondence assets.
 
-Pause handoff for fresh context on 2026-06-18:
+Post-implementation note for fresh context on 2026-06-18:
 
-- Stop current implementation thread here. The worktree was clean before this
-  documentation update, and no product/runtime code was changed in the paused
-  turn.
 - Current goal remains: make the B1 / Map12 Gaussian asset consumable through
   the same robot-facing map-prior shape as simulator assets.
 - Already proven: reviewed geometry alignment, residual-backed B1 scene pose
   application, same-pose Isaac FPV/Chase proof, explicit B1 proof artifacts in
   product/operator-console routes, B1 robot-consumption manifest, canonical
-  runtime prior snapshot, compact prior targets with capability summary, and
-  B1-specific checker proof.
-- Still not proven in P0: B1 capability status reaching the agent-visible
-  MCP/runtime map context from an explicit runtime prior, render/observation
-  readiness in that context, existing MCP-path proof, and `B1_floor2_slow/`
-  default visual-route selection. Non-P0 follow-ups remain accepted room
-  semantic anchors, strict room semantic projection, object semantic projection,
-  object/receptacle binding, manipulation, planner-backed navigation, physical
-  robot support, or a public MCP navigation tool.
-- Fresh-context first implementation slice: inspect the runtime-prior consumer
-  chain and expose B1 `digital_twin_capabilities` / `capability_summary` from
-  an explicitly supplied `runtime_map_prior` into agent-visible MCP/runtime map
-  context, add render/observation readiness, prove the existing waypoint-based
-  MCP path, and evaluate `B1_floor2_slow/` as selected-or-blocked visual route.
-  Expected files to inspect first are
-  `roboclaws/household/realworld_contract_init.py`,
-  `roboclaws/household/realworld_contract_payloads.py`,
-  `roboclaws/household/realworld_runtime_map_contract.py`, and
-  `roboclaws/household/realworld_mcp_server.py`.
+  runtime prior snapshot, compact prior targets with capability summary,
+  agent-visible runtime-prior capability propagation, render/observation
+  readiness naming, and B1-specific checker proof.
+- Remaining non-P0 follow-ups are accepted room semantic anchors, strict room
+  semantic projection, object semantic projection, object/receptacle binding,
+  manipulation, planner-backed navigation, physical robot support, or a public
+  MCP navigation tool.
 - Strict no-touch constraints for resume: do not commit generated `output/**`;
   do not add fallback or output autodiscovery; do not treat
   `docs/status/active/b1-map12-semantic-anchor-review-packet.json` as accepted

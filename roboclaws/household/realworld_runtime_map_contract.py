@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 
@@ -120,6 +121,65 @@ def runtime_static_map_payload(
             dict(item) for item in metric_map.get("generated_exploration_candidates") or []
         ],
     }
+
+
+def runtime_prior_digital_twin_capabilities(
+    snapshot: dict[str, Any] | None,
+    *,
+    assert_no_forbidden_agent_view_keys: Any,
+) -> dict[str, Any]:
+    if not snapshot:
+        return {}
+    runtime_map = snapshot if isinstance(snapshot.get("digital_twin_capabilities"), dict) else {}
+    runtime_map = (
+        snapshot.get("runtime_metric_map")
+        if isinstance(snapshot.get("runtime_metric_map"), dict)
+        else runtime_map
+    )
+    source_map = (
+        snapshot.get("source_navigation_map")
+        if isinstance(snapshot.get("source_navigation_map"), dict)
+        else {}
+    )
+    capabilities = runtime_map.get("digital_twin_capabilities")
+    if not isinstance(capabilities, dict):
+        capabilities = source_map.get("digital_twin_capabilities")
+    if not isinstance(capabilities, dict):
+        return {}
+    payload = copy.deepcopy(capabilities)
+    assert_no_forbidden_agent_view_keys(payload)
+    return payload
+
+
+def digital_twin_capability_summary(capabilities: dict[str, Any]) -> dict[str, Any]:
+    robot_proof = _capability_block(capabilities, "robot_consumption_proof")
+    room_proof = _capability_block(capabilities, "room_semantic_projection_proof")
+    render_proof = _capability_block(capabilities, "render_observation_proof")
+    visual_route = _capability_block(render_proof, "default_visual_route")
+    return {
+        "robot_navigation_supported": bool(robot_proof.get("robot_navigation_supported")),
+        "robot_consumption_status": str(robot_proof.get("status") or ""),
+        "planner_backed_navigation_supported": bool(robot_proof.get("planner_backed")),
+        "physical_robot_supported": bool(robot_proof.get("physical_robot")),
+        "room_semantics_supported": bool(room_proof.get("room_semantics_supported")),
+        "room_semantics_status": str(room_proof.get("status") or ""),
+        "object_semantics_supported": bool(room_proof.get("object_semantics_supported")),
+        "object_projection_status": str(room_proof.get("object_projection_status") or ""),
+        "manipulation_supported": bool(robot_proof.get("manipulation_supported")),
+        "render_observation_supported": bool(render_proof.get("render_observation_supported")),
+        "render_observation_status": str(render_proof.get("status") or ""),
+        "same_pose_fpv_supported": bool(render_proof.get("same_pose_fpv_supported")),
+        "same_pose_chase_supported": bool(render_proof.get("same_pose_chase_supported")),
+        "same_pose_topdown_supported": bool(render_proof.get("same_pose_topdown_supported")),
+        "default_visual_route_status": str(visual_route.get("status") or ""),
+        "default_visual_route_scene": str(visual_route.get("scene_root") or ""),
+        "default_visual_route_selected": bool(visual_route.get("selected")),
+    }
+
+
+def _capability_block(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key) if isinstance(payload, dict) else {}
+    return value if isinstance(value, dict) else {}
 
 
 def runtime_observed_object_payload(

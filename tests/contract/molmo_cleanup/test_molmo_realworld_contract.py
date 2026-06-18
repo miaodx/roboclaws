@@ -992,6 +992,85 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
     _assert_no_forbidden_keys(runtime_map)
 
 
+def test_b1_runtime_prior_capabilities_are_agent_visible_through_mcp_flow() -> None:
+    prior_snapshot = {
+        "schema": "runtime_map_prior_snapshot_v1",
+        "runtime_metric_map": {
+            "schema": RUNTIME_METRIC_MAP_SCHEMA,
+            "rooms": [],
+            "public_semantic_anchors": [],
+            "observed_objects": [],
+            "digital_twin_capabilities": {
+                "robot_consumption_proof": {
+                    "status": "robot_navigation_verified",
+                    "robot_navigation_supported": True,
+                    "planner_backed": False,
+                    "physical_robot": False,
+                    "manipulation_supported": False,
+                    "object_receptacle_usd_binding_status": "blocked_out_of_scope",
+                },
+                "render_observation_proof": {
+                    "status": "same_pose_render_observation_verified",
+                    "render_observation_supported": True,
+                    "same_pose_fpv_supported": True,
+                    "same_pose_chase_supported": True,
+                    "same_pose_topdown_supported": True,
+                    "default_visual_route": {
+                        "scene_id": "B1_floor2_slow",
+                        "scene_root": "data/robot-data-lab/scene-engine/data/B1_floor2_slow",
+                        "selected": False,
+                        "status": "blocked_missing_verified_b1_floor2_slow_render_proof",
+                    },
+                },
+                "room_semantic_projection_proof": {
+                    "status": "blocked_missing_accepted_semantic_anchors",
+                    "room_semantics_supported": False,
+                    "object_semantics_supported": False,
+                    "object_projection_status": "blocked_until_object_semantic_anchors",
+                },
+            },
+        },
+    }
+    raw_prior = prior_snapshot["runtime_metric_map"]
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        runtime_map_prior=raw_prior,
+    )
+
+    metric_map = contract.metric_map()
+    waypoint = metric_map["inspection_waypoints"][0]
+    navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    runtime_map = contract.agent_view_payload()["runtime_metric_map"]
+    capabilities = runtime_map["digital_twin_capabilities"]
+    summary = runtime_map["capability_summary"]
+
+    assert navigation["ok"] is True
+    assert observation["ok"] is True
+    assert capabilities["robot_consumption_proof"]["robot_navigation_supported"] is True
+    assert summary["robot_navigation_supported"] is True
+    assert summary["render_observation_supported"] is True
+    assert summary["same_pose_fpv_supported"] is True
+    assert summary["same_pose_chase_supported"] is True
+    assert summary["same_pose_topdown_supported"] is True
+    assert summary["default_visual_route_status"] == (
+        "blocked_missing_verified_b1_floor2_slow_render_proof"
+    )
+    assert summary["default_visual_route_selected"] is False
+    assert summary["room_semantics_supported"] is False
+    assert summary["object_semantics_supported"] is False
+    assert summary["object_projection_status"] == "blocked_until_object_semantic_anchors"
+    assert summary["manipulation_supported"] is False
+    assert summary["planner_backed_navigation_supported"] is False
+    assert summary["physical_robot_supported"] is False
+    assert "rooms" in runtime_map
+    assert not any(
+        anchor.get("anchor_role") == "semantic"
+        for anchor in runtime_map.get("public_semantic_anchors") or []
+    )
+    _assert_no_forbidden_keys(runtime_map)
+
+
 def test_relative_pose_navigation_rejects_noop_and_out_of_bounds_requests() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 

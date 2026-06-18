@@ -652,6 +652,10 @@ def verified_robot_consumption_proof(
         raise ValueError("navigation artifact alignment_artifact must match --alignment-artifact")
     if navigation.get("robot_navigation_supported") is not True:
         raise ValueError("navigation artifact must claim robot_navigation_supported=true")
+    waypoint_evidence = [
+        item for item in navigation.get("waypoint_evidence") or [] if isinstance(item, dict)
+    ]
+    same_pose_views = _same_pose_view_support(waypoint_evidence)
     proof.update(
         {
             "status": "robot_navigation_verified",
@@ -662,14 +666,76 @@ def verified_robot_consumption_proof(
             "navigation_waypoint_count": int(navigation.get("navigation_waypoint_count") or 0),
             "robot_view_evidence_status": str(navigation.get("robot_view_evidence_status") or ""),
             "navigation_provenance": str(navigation.get("navigation_provenance") or ""),
-            "waypoint_ids": [
-                str(item.get("waypoint_id") or "")
-                for item in navigation.get("waypoint_evidence") or []
-                if isinstance(item, dict)
-            ],
+            "same_pose_views": same_pose_views,
+            "waypoint_ids": [str(item.get("waypoint_id") or "") for item in waypoint_evidence],
         }
     )
     return proof
+
+
+def _same_pose_view_support(waypoint_evidence: list[dict[str, Any]]) -> dict[str, bool]:
+    if not waypoint_evidence:
+        return {"fpv": False, "chase": False, "topdown": False}
+
+    def has_view(item: dict[str, Any], *view_names: str) -> bool:
+        views = item.get("views") if isinstance(item.get("views"), dict) else {}
+        return any(bool(views.get(view_name)) for view_name in view_names)
+
+    return {
+        "fpv": all(has_view(item, "fpv") for item in waypoint_evidence),
+        "chase": all(has_view(item, "chase") for item in waypoint_evidence),
+        "topdown": all(has_view(item, "topdown", "map") for item in waypoint_evidence),
+    }
+
+
+def render_observation_proof(robot_consumption_proof: dict[str, Any]) -> dict[str, Any]:
+    navigation_ready = bool(robot_consumption_proof.get("robot_navigation_supported"))
+    robot_view_ready = (
+        str(robot_consumption_proof.get("robot_view_evidence_status") or "") == "available"
+    )
+    same_pose_views = (
+        robot_consumption_proof.get("same_pose_views")
+        if isinstance(robot_consumption_proof.get("same_pose_views"), dict)
+        else {}
+    )
+    render_ready = navigation_ready and robot_view_ready
+    return {
+        "schema": "b1_map12_render_observation_proof_v1",
+        "status": "same_pose_render_observation_verified"
+        if render_ready
+        else "blocked_missing_verified_same_pose_render_evidence",
+        "render_observation_supported": render_ready,
+        "render_provenance": str(robot_consumption_proof.get("robot_navigation_provenance") or ""),
+        "navigation_artifact": str(robot_consumption_proof.get("navigation_artifact") or ""),
+        "alignment_artifact": str(robot_consumption_proof.get("alignment_artifact") or ""),
+        "same_pose_fpv_supported": render_ready and bool(same_pose_views.get("fpv")),
+        "same_pose_chase_supported": render_ready and bool(same_pose_views.get("chase")),
+        "same_pose_topdown_supported": render_ready and bool(same_pose_views.get("topdown")),
+        "view_evidence_status": str(
+            robot_consumption_proof.get("robot_view_evidence_status") or ""
+        ),
+        "default_visual_route": {
+            "scene_id": "B1_floor2_slow",
+            "scene_root": "data/robot-data-lab/scene-engine/data/B1_floor2_slow",
+            "selected": False,
+            "status": "blocked_missing_verified_b1_floor2_slow_render_proof",
+            "reason": (
+                "B1_floor2_slow has not been verified against the accepted Map12 frame "
+                "with same-pose FPV/Chase/topdown render evidence."
+            ),
+        },
+        "fallback_visual_route": {
+            "scene_id": "2rd_floor_seperated",
+            "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated",
+            "selected_as_default": False,
+            "status": "registration_source_only_for_p0",
+        },
+        "policy": {
+            "requires_explicit_same_pose_render_artifact": True,
+            "does_not_select_unverified_b1_floor2_slow": True,
+            "no_output_directory_autodiscovery": True,
+        },
+    }
 
 
 def verified_room_semantic_projection(
@@ -1037,6 +1103,7 @@ def _runtime_semantics_payload(
         "navigation_memory_anchors": navigation_memory_anchors,
         "digital_twin_capabilities": {
             "robot_consumption_proof": robot_consumption_proof,
+            "render_observation_proof": render_observation_proof(robot_consumption_proof),
             "room_semantic_projection_proof": room_semantic_projection["proof"],
         },
         "review_labels": runtime_labels,

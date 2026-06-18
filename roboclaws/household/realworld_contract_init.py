@@ -134,6 +134,12 @@ def init_runtime_state(target: Any, runtime_map_prior: dict[str, Any] | None) ->
             assert_no_forbidden_agent_view_keys=helpers._assert_no_forbidden_agent_view_keys,
         )
     )
+    target._runtime_prior_digital_twin_capabilities = (
+        realworld_runtime_map_contract.runtime_prior_digital_twin_capabilities(
+            runtime_map_prior,
+            assert_no_forbidden_agent_view_keys=helpers._assert_no_forbidden_agent_view_keys,
+        )
+    )
     target._public_anchor_ids_by_private_fixture_id = {}
     target._generated_inspection_waypoints = {}
     realworld_runtime_map_targets.seed_public_fixture_anchor_ids_from_prior_anchors(target)

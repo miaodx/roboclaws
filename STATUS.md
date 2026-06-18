@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -59,19 +59,19 @@ geometry source, and alignment status. B1 scene partition labels bind through
 raw/source-map aligned previews.
 
 The B1 / Map 12 digital-twin map input contract now has accepted geometry
-alignment and preview-grade residual-backed robot pose/render proof. Product
-and operator-preview routes compile a generated runtime bundle from
+alignment, preview-grade residual-backed robot pose/render proof, and
+agent-visible runtime-prior capability exposure. Product and operator-preview
+routes compile a generated runtime bundle from
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
 `assets/maps/b1-map12-alignment-review.json`, explicit alignment/navigation
 proof artifacts, and the raw scene root before passing map context to
-lower-level consumers. The active P0 plan for making the B1 digital twin usable
-is `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: expose B1
-capability status from an explicit runtime prior into agent-visible MCP/runtime
-map context, name render/observation readiness, prove the existing
-`metric_map -> navigate_to_waypoint -> observe` path, and evaluate
-`B1_floor2_slow/` as the default photorealistic visual route when verified.
-Room/object semantic projection is a non-P0 follow-up in
+lower-level consumers. The implemented P0 consumer-chain plan is
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: explicit B1
+runtime priors now expose `digital_twin_capabilities`, `capability_summary`,
+render/observation readiness, and blocked `B1_floor2_slow` default visual-route
+status through agent-visible MCP/runtime map context. Room/object semantic
+projection and public navigation extensions are follow-ups in
 `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`.
 
 The implemented non-cleanup eval support plan is
@@ -93,17 +93,16 @@ thin review/runtime contract is
 
 ## Next Action
 
-Execute the P0 slice in
-`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: preserve B1
-`digital_twin_capabilities` / `capability_summary` from an explicitly supplied
-`runtime_map_prior` into the agent-visible MCP/runtime map context, add
-render/observation readiness, prove the existing waypoint-based MCP path, and
-evaluate `B1_floor2_slow/` as the default visual/render route only if verified.
+Use `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md` for
+the next B1 / Map 12 work: accepted room-semantic anchors, strict room/object
+semantic projection, and any public navigation extension after a separate
+proof gate.
 
 ## Current Blocker
 
-No current human blocker for the B1 P0 digital-twin navigation/render slice.
-Room semantic review is not required for P0 and is parked in the follow-up plan.
+No current human blocker for the implemented B1 P0 digital-twin
+navigation/render consumer-chain slice. Room semantic review remains required
+before semantic projection follow-up work can be promoted.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on
