@@ -8,6 +8,11 @@ import pytest
 from PIL import Image
 
 from roboclaws.maps.bundle import validate_nav2_map_bundle
+from roboclaws.maps.runtime_prior_snapshot import (
+    materialize_runtime_prior_targets,
+    runtime_metric_map_from_prior_artifact,
+    runtime_prior_snapshot_from_nav2_cleanup_bundle,
+)
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import NAVIGATION_PROVENANCE
 from scripts.maps.compile_b1_map12_runtime_bundle import (
     B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
@@ -174,6 +179,53 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     assert room["semantic_anchor_count"] == 1
     assert room["source_anchor_ids"] == ["semantic_meeting_room_a"]
     assert runtime_semantics["inspection_waypoints"][0]["room_id"] == "meeting_room_a"
+
+
+def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
+    tmp_path: Path,
+) -> None:
+    alignment_path = tmp_path / "alignment_residuals.json"
+    navigation_path = tmp_path / "navigation_smoke.json"
+    alignment_path.write_text(json.dumps(_verified_alignment_artifact()), encoding="utf-8")
+    navigation_path.write_text(
+        json.dumps(_navigation_artifact(tmp_path, alignment_path=alignment_path)),
+        encoding="utf-8",
+    )
+    result = compile_runtime_bundle(
+        map_bundle=MAP12_BUNDLE,
+        scene_root=SCENE_ROOT,
+        review_manifest_path=REVIEW_MANIFEST,
+        alignment_artifact_path=alignment_path,
+        navigation_artifact_path=navigation_path,
+        output_dir=tmp_path / "runtime",
+    )
+
+    snapshot = runtime_prior_snapshot_from_nav2_cleanup_bundle(result["output_dir"])
+    materialized = materialize_runtime_prior_targets(snapshot)
+    runtime_map = runtime_metric_map_from_prior_artifact(snapshot)
+
+    assert snapshot["schema"] == "runtime_map_prior_snapshot_v1"
+    assert snapshot["producer"]["type"] == "offline_nav2_cleanup_bundle_conversion"
+    assert snapshot["contract"]["online_offline_equivalent_shape"] is True
+    assert snapshot["contract"]["private_truth_included"] is False
+    assert snapshot["source_navigation_map"]["source_type"] == "nav2_cleanup_bundle"
+    assert (
+        snapshot["source_navigation_map"]["digital_twin_capabilities"]["robot_consumption_proof"][
+            "robot_navigation_supported"
+        ]
+        is True
+    )
+    assert runtime_map["schema"] == "runtime_metric_map_v1"
+    assert (
+        runtime_map["digital_twin_capabilities"]["robot_consumption_proof"][
+            "robot_navigation_supported"
+        ]
+        is True
+    )
+    assert snapshot["inspection_waypoints"]
+    assert snapshot["public_semantic_anchors"]
+    assert materialized["actionable_waypoint_ids"]
+    assert materialized["fixture_candidates"] == []
 
 
 def test_runtime_compiler_rejects_missing_semantic_projection_artifact(

@@ -218,6 +218,146 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     return snapshot
 
 
+def runtime_prior_snapshot_from_nav2_cleanup_bundle(
+    bundle_dir: str | Path,
+    *,
+    producer: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Wrap a compiled Nav2 cleanup map bundle in the canonical prior contract."""
+
+    bundle_dir = Path(bundle_dir)
+    map_yaml_path = bundle_dir / "map.yaml"
+    occupancy_path = bundle_dir / "map.pgm"
+    semantics_path = bundle_dir / "semantics.json"
+    _require_file(map_yaml_path)
+    _require_file(occupancy_path)
+    _require_file(semantics_path)
+
+    map_yaml = parse_map_yaml(map_yaml_path.read_text(encoding="utf-8"))
+    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
+    origin = (origin + [0.0, 0.0, 0.0])[:3]
+    grid = load_pgm(
+        occupancy_path,
+        resolution_m=float(map_yaml.get("resolution") or 0.05),
+        origin_x=float(origin[0]),
+        origin_y=float(origin[1]),
+    )
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    if semantics.get("schema") != "nav2_cleanup_semantics_v1":
+        raise ValueError(
+            "compiled cleanup bundle semantics must use schema nav2_cleanup_semantics_v1"
+        )
+    rooms = copy.deepcopy(semantics.get("rooms") or [])
+    inspection_waypoints = [
+        _bundle_waypoint(waypoint)
+        for waypoint in semantics.get("inspection_waypoints") or []
+        if isinstance(waypoint, dict)
+    ]
+    anchors = [
+        _anchor_from_bundle_waypoint(waypoint, index=index)
+        for index, waypoint in enumerate(inspection_waypoints, start=1)
+    ]
+    runtime_metric_map = {
+        "schema": RUNTIME_METRIC_MAP_SCHEMA,
+        "contract": "realworld_cleanup_contract_v1",
+        "freshness": "offline_compiled_prior",
+        "map_mode": "minimal",
+        "minimal_map_mode": True,
+        "source_map_mutated": False,
+        "private_truth_included": False,
+        "static_map": {
+            "schema": "nav2_cleanup_bundle_source_map_v1",
+            "contains_runtime_observations": bool(
+                (semantics.get("provenance") or {}).get("contains_runtime_observations")
+            ),
+            "contains_private_scoring_truth": bool(
+                (semantics.get("provenance") or {}).get("contains_private_scoring_truth")
+            ),
+            "map_frame": _bundle_frame_id(semantics),
+            "map_id": str(semantics.get("map_id") or bundle_dir.name),
+            "artifact_paths": {
+                "nav2_yaml": "map.yaml",
+                "occupancy_grid": "map.pgm",
+                "semantics": "semantics.json",
+            },
+            "costmap": {
+                "resolution_m": grid.resolution_m,
+                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": _yaw(map_yaml)},
+                "width": grid.width,
+                "height": grid.height,
+                "occupancy_grid_artifact": "map.pgm",
+            },
+        },
+        "rooms": rooms,
+        "room_category_hints": copy.deepcopy(semantics.get("room_category_hints") or []),
+        "driveable_ways": copy.deepcopy(semantics.get("driveable_ways") or []),
+        "public_semantic_anchors": anchors,
+        "observed_objects": [],
+        "map_update_candidates": [],
+        "producer_summary": {
+            "observed_object_count": 0,
+            "producer_types": {},
+            "public_semantic_anchor_count": len(anchors),
+            "public_semantic_anchor_producer_types": {
+                "nav2_cleanup_bundle_conversion": len(anchors)
+            }
+            if anchors
+            else {},
+            "map_update_candidate_count": 0,
+        },
+        "digital_twin_capabilities": copy.deepcopy(
+            semantics.get("digital_twin_capabilities") or {}
+        ),
+        "public_contract_note": (
+            "Compiled Nav2 cleanup bundle conversion produces the same downstream "
+            "Runtime Metric Map payload used by online intent=map-build output. "
+            "It carries public map/waypoint context only; object priors require a "
+            "dedicated semantic projection artifact."
+        ),
+    }
+    snapshot = {
+        "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
+        "source_navigation_map": {
+            "schema": "nav2_cleanup_bundle_source_v1",
+            "map_id": str(semantics.get("map_id") or bundle_dir.name),
+            "source_type": "nav2_cleanup_bundle",
+            "source_root": str(bundle_dir),
+            "nav2_yaml": "map.yaml",
+            "occupancy_grid_artifact": "map.pgm",
+            "semantics": "semantics.json",
+            "rooms": rooms,
+            "room_category_hints": copy.deepcopy(semantics.get("room_category_hints") or []),
+            "digital_twin_capabilities": copy.deepcopy(
+                semantics.get("digital_twin_capabilities") or {}
+            ),
+            "source_hashes": _source_hashes(map_yaml_path, occupancy_path, semantics_path),
+            "source_map_mutated": False,
+        },
+        "runtime_metric_map": runtime_metric_map,
+        "public_semantic_anchors": anchors,
+        "inspection_waypoints": inspection_waypoints,
+        "fixture_candidates": [],
+        "producer": {
+            "type": "offline_nav2_cleanup_bundle_conversion",
+            "provenance": "nav2_cleanup_bundle",
+            "source_schema": str(semantics.get("schema") or ""),
+            "source_provenance": str((semantics.get("provenance") or {}).get("source") or ""),
+            **dict(producer or {}),
+        },
+        "contract": {
+            "schema": RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA,
+            "runtime_metric_map_schema": RUNTIME_METRIC_MAP_SCHEMA,
+            "online_offline_equivalent_shape": True,
+            "private_truth_included": False,
+            "source_map_mutated": False,
+            "movable_object_priors_require_current_run_confirmation": True,
+        },
+    }
+    snapshot["summary"] = _snapshot_summary(snapshot)
+    _assert_no_private_truth(snapshot)
+    return snapshot
+
+
 def runtime_metric_map_from_prior_artifact(payload: dict[str, Any] | None) -> dict[str, Any] | None:
     """Accept either raw runtime_metric_map.json or the canonical snapshot wrapper."""
 
@@ -344,6 +484,82 @@ def _anchor_from_navigation_memory_item(
         "evidence": evidence,
         "review_status": "needs_review" if classification_status == "needs_review" else "converted",
     }
+
+
+def _bundle_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
+    waypoint_id = str(waypoint.get("waypoint_id") or waypoint.get("id") or "")
+    return {
+        "waypoint_id": waypoint_id,
+        "frame_id": str(waypoint.get("frame_id") or "map"),
+        "x": _float(waypoint.get("x")),
+        "y": _float(waypoint.get("y")),
+        "yaw": _float(waypoint.get("yaw")),
+        "room_id": str(waypoint.get("room_id") or ""),
+        "label": str(waypoint.get("label") or waypoint_id),
+        "waypoint_source": str(waypoint.get("waypoint_source") or "nav2_cleanup_bundle"),
+        "actionability": _bundle_waypoint_actionability(waypoint),
+    }
+
+
+def _anchor_from_bundle_waypoint(waypoint: dict[str, Any], *, index: int) -> dict[str, Any]:
+    waypoint_id = str(waypoint.get("waypoint_id") or f"bundle_waypoint_{index:03d}")
+    anchor_id = f"anchor_{_safe_id(waypoint_id)}"
+    actionability = str(waypoint.get("actionability") or "actionable")
+    return {
+        "anchor_id": anchor_id,
+        "source_anchor_id": waypoint_id,
+        "anchor_type": "room_area" if waypoint.get("room_id") else "landmark",
+        "category": "room_area" if waypoint.get("room_id") else "navigation_waypoint",
+        "label": str(waypoint.get("label") or waypoint_id),
+        "room_id": str(waypoint.get("room_id") or ""),
+        "room_label": str(waypoint.get("label") or waypoint.get("room_id") or ""),
+        "waypoint_id": waypoint_id,
+        "pose": {
+            "x": _float(waypoint.get("x")),
+            "y": _float(waypoint.get("y")),
+            "yaw": _float(waypoint.get("yaw")),
+        },
+        "affordances": ["navigate", "observe"],
+        "aliases": [waypoint_id],
+        "producer_type": "nav2_cleanup_bundle_conversion",
+        "producer_id": "semantics.json",
+        "confidence": 0.8 if actionability == "actionable" else 0.5,
+        "freshness": "prior",
+        "classification_status": "map_prior",
+        "reachability_status": actionability,
+        "actionability": actionability,
+        "promotion_status": "materialized_static_anchor"
+        if actionability == "actionable"
+        else actionability,
+        "materialization": {
+            "waypoint": copy.deepcopy(waypoint),
+            "fixture_candidate": {
+                "enabled": False,
+                "reason": "compiled_bundle_waypoint_not_fixture_anchor",
+                "anchor_type": "room_area" if waypoint.get("room_id") else "landmark",
+            },
+        },
+        "evidence": {
+            "type": "nav2_cleanup_bundle_waypoint",
+            "source": "semantics.json",
+        },
+        "review_status": "converted",
+    }
+
+
+def _bundle_waypoint_actionability(waypoint: dict[str, Any]) -> str:
+    explicit = str(waypoint.get("actionability") or "")
+    if explicit:
+        return explicit
+    source = str(waypoint.get("waypoint_source") or "")
+    if source == "generated_exploration_candidate":
+        return "actionable"
+    return "observe_only"
+
+
+def _bundle_frame_id(semantics: dict[str, Any]) -> str:
+    frame_ids = semantics.get("frame_ids") if isinstance(semantics.get("frame_ids"), dict) else {}
+    return str(frame_ids.get("map") or "map")
 
 
 def _waypoint_from_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
@@ -741,11 +957,15 @@ def _anchor_actionability(anchor: dict[str, Any]) -> str:
 def _pose_dict(raw: dict[str, Any]) -> dict[str, float]:
     pose: dict[str, float] = {}
     for key in ("x", "y", "yaw"):
-        try:
-            pose[key] = round(float(raw.get(key) or 0.0), 6)
-        except (TypeError, ValueError):
-            pose[key] = 0.0
+        pose[key] = _float(raw.get(key))
     return pose
+
+
+def _float(value: Any) -> float:
+    try:
+        return round(float(value or 0.0), 6)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _confidence(item: dict[str, Any]) -> float:

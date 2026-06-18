@@ -19,12 +19,14 @@ from roboclaws.maps.runtime_prior_snapshot import (
     materialize_runtime_prior_targets,
     runtime_metric_map_from_prior_artifact,
     runtime_prior_snapshot_from_agibot_navigation_memory,
+    runtime_prior_snapshot_from_nav2_cleanup_bundle,
     runtime_prior_snapshot_from_runtime_metric_map,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROBOT_MAP_12_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "runtime_map_prior" / "robot_map_12"
 CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_agibot_navigation_memory.py"
+NAV2_BUNDLE_CONVERTER_PATH = REPO_ROOT / "scripts" / "maps" / "convert_nav2_cleanup_bundle.py"
 FORBIDDEN_PRIVATE_KEYS = {
     "acceptable_destination_sets",
     "generated_mess_set",
@@ -288,6 +290,47 @@ def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     assert "anchor_plastic_bottle_table_1" not in targets["actionable_fixture_ids"]
 
 
+def test_nav2_cleanup_bundle_converts_to_runtime_prior_snapshot_shape(tmp_path: Path) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+
+    snapshot = runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+    targets = materialize_runtime_prior_targets(snapshot)
+
+    assert snapshot["schema"] == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA
+    assert snapshot["producer"]["type"] == "offline_nav2_cleanup_bundle_conversion"
+    assert snapshot["source_navigation_map"]["source_type"] == "nav2_cleanup_bundle"
+    assert snapshot["runtime_metric_map"]["schema"] == "runtime_metric_map_v1"
+    assert (
+        snapshot["runtime_metric_map"]["digital_twin_capabilities"]["robot_consumption_proof"][
+            "robot_navigation_supported"
+        ]
+        is True
+    )
+    assert snapshot["contract"]["online_offline_equivalent_shape"] is True
+    assert snapshot["contract"]["private_truth_included"] is False
+    assert targets["actionable_waypoint_ids"] == ["room_a_center"]
+    assert targets["fixture_candidates"] == []
+    assert runtime_metric_map_from_prior_artifact(snapshot) == snapshot["runtime_metric_map"]
+    _assert_no_forbidden_keys(snapshot)
+
+
+def test_nav2_cleanup_bundle_converter_script_writes_snapshot_and_summary(
+    tmp_path: Path,
+) -> None:
+    converter = _load_module(NAV2_BUNDLE_CONVERTER_PATH, "convert_nav2_cleanup_bundle")
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    output = tmp_path / "runtime_map_prior_snapshot.json"
+    summary = tmp_path / "materialized_targets.json"
+
+    converter.main([str(bundle_dir), "--output", str(output), "--summary-json", str(summary)])
+
+    snapshot = json.loads(output.read_text(encoding="utf-8"))
+    targets = json.loads(summary.read_text(encoding="utf-8"))
+    assert snapshot["schema"] == RUNTIME_MAP_PRIOR_SNAPSHOT_SCHEMA
+    assert snapshot["producer"]["type"] == "offline_nav2_cleanup_bundle_conversion"
+    assert targets["actionable_waypoint_ids"] == ["room_a_center"]
+
+
 def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
     tmp_path: Path,
 ) -> None:
@@ -327,6 +370,78 @@ def _online_minimal_snapshot() -> dict:
         contract.agent_view_payload()["runtime_metric_map"],
         source_navigation_map=contract.metric_map(),
     )
+
+
+def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "map.yaml").write_text(
+        "\n".join(
+            [
+                "image: map.pgm",
+                "resolution: 0.05",
+                "origin: [0, 0, 0]",
+                "negate: 0",
+                "occupied_thresh: 0.65",
+                "free_thresh: 0.196",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (bundle_dir / "map.pgm").write_text(
+        "\n".join(["P2", "2 2", "255", "0 0", "0 0", ""]),
+        encoding="ascii",
+    )
+    semantics = {
+        "schema": "nav2_cleanup_semantics_v1",
+        "environment_id": "test-b1-map12",
+        "map_id": "test-b1-map12_base_navigation_map",
+        "frame_ids": {"map": "map", "base": "base_link", "camera": "camera"},
+        "rooms": [
+            {
+                "room_id": "room_a",
+                "room_label": "Room A",
+                "category": "meeting_room",
+                "polygon": [
+                    {"x": 0.0, "y": 0.0},
+                    {"x": 1.0, "y": 0.0},
+                    {"x": 1.0, "y": 1.0},
+                ],
+            }
+        ],
+        "room_category_hints": [
+            {
+                "room_id": "room_a",
+                "room_label": "Room A",
+                "category": "meeting_room",
+            }
+        ],
+        "inspection_waypoints": [
+            {
+                "waypoint_id": "room_a_center",
+                "frame_id": "map",
+                "x": 0.5,
+                "y": 0.5,
+                "yaw": 0.0,
+                "room_id": "room_a",
+                "label": "Room A",
+                "waypoint_source": "generated_exploration_candidate",
+            }
+        ],
+        "driveable_ways": [{"from_room_id": "room_a", "to_room_id": "room_a"}],
+        "digital_twin_capabilities": {
+            "robot_consumption_proof": {
+                "robot_navigation_supported": True,
+            }
+        },
+        "provenance": {
+            "source": "test_nav2_cleanup_bundle",
+            "contains_private_scoring_truth": False,
+            "contains_runtime_observations": False,
+        },
+    }
+    (bundle_dir / "semantics.json").write_text(json.dumps(semantics), encoding="utf-8")
+    return bundle_dir
 
 
 def _observe_until_anchor(

@@ -109,6 +109,11 @@ write `digital_twin_capabilities.room_semantic_projection_proof`. This remains
 blocked until accepted semantic anchors are promoted and the strict projection
 script produces a verified artifact; proposed packets and alignment-only
 manifests are not accepted as room semantics.
+Compiled B1/Nav2 cleanup bundles can now be exported to the canonical
+`runtime_map_prior_snapshot_v1` contract with
+`scripts/maps/convert_nav2_cleanup_bundle.py`, so downstream robot consumers can
+load B1 digital-twin map context through the same prior shape as simulator
+map-build output.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real

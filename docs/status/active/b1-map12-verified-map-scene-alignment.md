@@ -198,6 +198,12 @@ Last proven evidence:
   semantic labeling to verified. With the current proposed-only semantic review
   packet, this remains blocked; the compiler does not auto-discover projection
   output and does not infer object labels from room anchors.
+- `roboclaws.maps.runtime_prior_snapshot.runtime_prior_snapshot_from_nav2_cleanup_bundle`
+  and `scripts/maps/convert_nav2_cleanup_bundle.py` can convert a compiled B1
+  Nav2 cleanup bundle into the canonical `runtime_map_prior_snapshot_v1`
+  contract. This gives downstream robot consumers the same prior shape for
+  compiled B1 bundles that simulator map-build output and Agibot
+  `navigation_memory.json` already use.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer
@@ -231,6 +237,9 @@ Last proven evidence:
   passes.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
   passes for the pose-request and report-audit contract.
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_runtime_map_prior_snapshot.py tests/contract/maps/test_b1_map12_runtime_bundle.py -q`
+  passes for compiled B1 bundle -> canonical Runtime Map Prior Snapshot
+  conversion and B1 runtime-bundle proof gates.
 - `ruff check scripts/maps/promote_b1_map12_semantic_review_packet.py scripts/maps/suggest_b1_map12_manual_anchor_semantics.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
   `ruff format --check scripts/maps/promote_b1_map12_semantic_review_packet.py scripts/maps/suggest_b1_map12_manual_anchor_semantics.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
   and `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py -q`
