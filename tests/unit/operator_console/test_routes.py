@@ -91,10 +91,6 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "path": "/previews/b1-map12-chase.png",
             "href": "/previews/b1-map12-chase.png",
         },
-        "topdown": {
-            "path": "/previews/b1-map12-topdown.png",
-            "href": "/previews/b1-map12-topdown.png",
-        },
     }
     assert "ai2thor/FloorPlan201" not in worlds
     assert "ai2thor-games/FloorPlan201" not in worlds

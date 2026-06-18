@@ -272,13 +272,8 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert metadata_files == expected_metadata_files
     assert not any(name.startswith("molmospaces-val_6-") for name in molmospaces_preview_files)
     assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
-    b1_preview_files = sorted(path.name for path in preview_dir.glob("b1-map12-*.png"))
-    assert b1_preview_files == [
-        "b1-map12-chase.png",
-        "b1-map12-fpv.png",
-        "b1-map12-map.png",
-        "b1-map12-topdown.png",
-    ]
+    b1_preview_assets = dict(WORLD_SPECS["b1-map12"].preview_assets)
+    assert "topdown" not in b1_preview_assets
 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         preview_by_view = dict(WORLD_SPECS[world_id].preview_assets)
@@ -301,7 +296,7 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
-    for view_name in ("fpv", "map", "chase", "topdown"):
+    for view_name in ("fpv", "map", "chase"):
         path = preview_dir / f"b1-map12-{view_name}.png"
         assert path.is_file()
         assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")

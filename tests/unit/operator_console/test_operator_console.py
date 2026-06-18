@@ -452,9 +452,6 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == "/previews/b1-map12-map.png"
     assert worlds["b1-map12"]["preview_assets"]["fpv"]["href"] == "/previews/b1-map12-fpv.png"
     assert worlds["b1-map12"]["preview_assets"]["chase"]["href"] == ("/previews/b1-map12-chase.png")
-    assert worlds["b1-map12"]["preview_assets"]["topdown"]["href"] == (
-        "/previews/b1-map12-topdown.png"
-    )
     assert (
         worlds[world_id]["preview_assets"]["topdown"]["href"]
         != (worlds[world_id]["preview_assets"]["map"]["href"])
