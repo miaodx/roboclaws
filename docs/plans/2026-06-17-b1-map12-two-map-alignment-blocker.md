@@ -669,6 +669,12 @@ Current gate:
   `scripts/maps/convert_nav2_cleanup_bundle.py`. This gives downstream robot
   consumers one canonical prior shape for online sim maps, Agibot
   `navigation_memory.json`, and compiled B1 digital-twin bundles.
+- The B1 product/open-task route now exports the compiled bundle into
+  `runtime_map_prior_snapshot.json` and
+  `runtime_map_prior_targets.json` beside the run output. The export is an
+  explicit visible artifact from the freshly compiled bundle; it does not
+  auto-discover older generated `output/` files or silently change the default
+  `runtime_map_prior` input.
 - `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is expected until human-accepted
@@ -690,9 +696,6 @@ Next implementation slice:
   may also pass explicit `b1_semantic_projection_artifact=...` to carry verified
   room semantics in the runtime bundle. Do not pass proposed-only packets or
   current alignment-only manifests as room semantics.
-- Export `runtime_map_prior_snapshot.json` from the compiled B1 runtime bundle
-  when downstream cleanup/open-task consumers need the same map-prior contract
-  as simulator map-build output.
 - Add separate object-level semantic anchors later before projecting object
   labels.
 

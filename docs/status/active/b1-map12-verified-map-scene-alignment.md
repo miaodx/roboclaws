@@ -204,6 +204,11 @@ Last proven evidence:
   contract. This gives downstream robot consumers the same prior shape for
   compiled B1 bundles that simulator map-build output and Agibot
   `navigation_memory.json` already use.
+- The B1 product route now exports that canonical prior next to the compiled
+  bundle as `runtime_map_prior_snapshot.json`, plus the compact
+  `runtime_map_prior_targets.json` materialized-target summary. This is a
+  visible run artifact only; it does not auto-feed generated `output/`
+  artifacts back into the default route.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer
