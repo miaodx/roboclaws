@@ -60,6 +60,25 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
+  performance-profile numeric-config false-green. Enabled private profile
+  features now reject explicit non-positive
+  `model_racing_arm_count`, `raw_fpv_image_memory_retain`, and
+  `camera_grounded_history_retain` values instead of silently clamping them to
+  plausible defaults. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: fail-aloud SDK profile configuration; disabled
+  feature zero-count metadata, default enabled-profile counts, valid positive
+  overrides, CLI/env conflict checks, provider route/default selection, SDK
+  model settings, run config payloads, and live runtime behavior are unchanged.
+  Same-slice cleanup removed an unused private wire-API wrapper and consolidated
+  duplicated private-artifact policy strings without changing payload text. The
+  ratchet remains 0 complexity rows and 79 oversized modules;
+  `openai_agents_perf_profile.py` is 799 lines and
+  `test_live_runtime.py` is 5410 lines. The test file remains oversized; leave
+  pruning/splitting for an `$intuitive-tests` pass. Proof: focused
+  non-positive enabled-feature-count regression tests, full live-runtime unit
+  test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one RAW-FPV private
   label manifest false-green. Explicit `--private-labels` and
   `--all-visible-labels` manifests now require a list of object rows with frame

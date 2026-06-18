@@ -4352,6 +4352,39 @@ def test_openai_agents_perf_profile_rejects_non_positive_max_turns(monkeypatch) 
         _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(max_turns=0))
 
 
+@pytest.mark.parametrize(
+    ("overrides", "expected_error"),
+    [
+        (
+            {"model_racing": True, "model_racing_arm_count": 0},
+            "OpenAI Agents SDK setting model_racing_arm_count must be positive when "
+            "model_racing is enabled",
+        ),
+        (
+            {"raw_fpv_image_memory": True, "raw_fpv_image_memory_retain": 0},
+            "OpenAI Agents SDK setting raw_fpv_image_memory_retain must be positive when "
+            "raw_fpv_image_memory is enabled",
+        ),
+        (
+            {"camera_grounded_history_compaction": True, "camera_grounded_history_retain": 0},
+            "OpenAI Agents SDK setting camera_grounded_history_retain must be positive when "
+            "camera_grounded_history_compaction is enabled",
+        ),
+    ],
+)
+def test_openai_agents_perf_profile_rejects_non_positive_enabled_feature_counts(
+    monkeypatch,
+    overrides: dict[str, object],
+    expected_error: str,
+) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT", raising=False)
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN", raising=False)
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN", raising=False)
+
+    with pytest.raises(ValueError, match=expected_error):
+        _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
+
+
 def test_openai_agents_perf_profile_resolves_compact_and_racing_defaults(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
     gpt = _resolve_agent_sdk_perf_profile(

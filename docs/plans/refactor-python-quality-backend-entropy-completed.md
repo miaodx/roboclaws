@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: OpenAI Agents SDK performance-profile enabled feature counts now
+  fail aloud. Enabled private profile features reject explicit non-positive
+  `model_racing_arm_count`, `raw_fpv_image_memory_retain`, and
+  `camera_grounded_history_retain` values instead of silently clamping them to
+  plausible defaults. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: fail-aloud SDK profile configuration; disabled
+  feature zero-count metadata, default enabled-profile counts, valid positive
+  overrides, CLI/env conflict checks, provider route/default selection, SDK
+  model settings, run config payloads, and live runtime behavior are unchanged.
+  Same-slice cleanup removed an unused private wire-API wrapper and consolidated
+  duplicated private-artifact policy strings without changing payload text.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `openai_agents_perf_profile.py` is 799 lines and `test_live_runtime.py` is
+  5410 lines. The test file remains oversized; leave pruning/splitting for an
+  `$intuitive-tests` pass. Proof: focused non-positive enabled-feature-count
+  regression tests, full live-runtime unit test file, touched-file ruff and
+  format check, py_compile, `git diff --check`, and ratchet.
+
 - 2026-06-18: RAW-FPV perception probe private label manifests now fail aloud.
   Explicit `--private-labels` and `--all-visible-labels` manifests require a
   list of object rows with frame identity, object id, category, and bbox/coarse

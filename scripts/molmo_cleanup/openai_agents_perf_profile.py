@@ -52,6 +52,19 @@ RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET
 RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
 DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
+RAW_FPV_IMAGE_MEMORY_POLICY = (
+    "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts remain "
+    "complete"
+)
+CAMERA_GROUNDED_HISTORY_POLICY = (
+    "model-facing camera-grounded history compaction only; MCP traces, reports, and run "
+    "artifacts remain complete"
+)
+MODEL_RACING_OBSERVABILITY_POLICY = (
+    "records model-call arm lifecycle, winner/cancel fields, timing, provider/model ids, and "
+    "usage availability only; raw prompts, model text, tool payload bodies, credentials, and "
+    "private truth are not persisted"
+)
 
 
 def _bool_setting_value(raw: object) -> bool:
@@ -243,10 +256,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
                 "mode": "off",
                 "retained_full_frame_limit": 0,
                 "candidate_ids": [],
-                "private_artifact_policy": (
-                    "model-facing raw-FPV image memory only; MCP traces, reports, and "
-                    "image artifacts remain complete"
-                ),
+                "private_artifact_policy": RAW_FPV_IMAGE_MEMORY_POLICY,
             },
             "camera_grounded_history": {
                 "schema": "agent_sdk_camera_grounded_history_policy_v1",
@@ -254,10 +264,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
                 "mode": "off",
                 "retained_recent_outputs": 0,
                 "candidate_ids": [],
-                "private_artifact_policy": (
-                    "model-facing camera-grounded history compaction only; MCP traces, "
-                    "reports, and run artifacts remain complete"
-                ),
+                "private_artifact_policy": CAMERA_GROUNDED_HISTORY_POLICY,
             },
         },
         "camera_grounded_composite_tools": {
@@ -290,11 +297,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "loser_cancellation": "not_applicable_until_racing_enabled",
             "unknown_loser_billing": False,
             "hook": "OpenAI Agents SDK model request boundary",
-            "private_artifact_policy": (
-                "records model-call arm lifecycle, winner/cancel fields, timing, "
-                "provider/model ids, and usage availability only; raw prompts, model text, "
-                "tool payload bodies, credentials, and private truth are not persisted"
-            ),
+            "private_artifact_policy": MODEL_RACING_OBSERVABILITY_POLICY,
         },
     }
     if profile_id in {"baseline", "custom"}:
@@ -345,10 +348,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
                     "mode": "retain_latest_full_frame",
                     "retained_full_frame_limit": 1,
                     "candidate_ids": ["AA"],
-                    "private_artifact_policy": (
-                        "model-facing raw-FPV image memory only; MCP traces, reports, and "
-                        "image artifacts remain complete"
-                    ),
+                    "private_artifact_policy": RAW_FPV_IMAGE_MEMORY_POLICY,
                 },
             },
         }
@@ -433,10 +433,11 @@ def _model_racing_observability_profile(
         MODEL_RACING_ARM_COUNT_ENV,
         default=default_arm_count,
     )
-    arm_count = max(1, int(arm_count or 1))
     if not enabled:
         arm_count = 1
     else:
+        if arm_count is None or int(arm_count) < 1:
+            _raise_enabled_count_error("model_racing_arm_count", "model_racing")
         arm_count = max(2, arm_count)
     candidate_ids = (
         ["D", "C"] if enabled else [str(item) for item in config.get("candidate_ids", ["D"])]
@@ -468,11 +469,7 @@ def _model_racing_observability_profile(
         if enabled
         else bool(config.get("unknown_loser_billing", False)),
         "hook": str(config.get("hook") or "OpenAI Agents SDK model request boundary"),
-        "private_artifact_policy": (
-            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
-            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
-            "credentials, and private truth are not persisted"
-        ),
+        "private_artifact_policy": MODEL_RACING_OBSERVABILITY_POLICY,
     }
 
 
@@ -498,17 +495,18 @@ def _raw_fpv_image_memory_profile(
         RAW_FPV_IMAGE_MEMORY_RETAIN_ENV,
         default=int(default_policy.get("retained_full_frame_limit") or (1 if enabled else 0)),
     )
-    retain = max(1, int(retain or 1)) if enabled else 0
+    if enabled:
+        if retain is None or int(retain) < 1:
+            _raise_enabled_count_error("raw_fpv_image_memory_retain", "raw_fpv_image_memory")
+    else:
+        retain = 0
     return {
         "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
         "enabled": enabled,
         "mode": "retain_latest_full_frame" if enabled else "off",
         "retained_full_frame_limit": retain,
         "candidate_ids": ["AA"] if enabled else [],
-        "private_artifact_policy": (
-            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
-            "remain complete"
-        ),
+        "private_artifact_policy": RAW_FPV_IMAGE_MEMORY_POLICY,
     }
 
 
@@ -534,17 +532,20 @@ def _camera_grounded_history_profile(
         CAMERA_GROUNDED_HISTORY_RETAIN_ENV,
         default=int(default_policy.get("retained_recent_outputs") or (4 if enabled else 0)),
     )
-    retain = max(1, int(retain or 1)) if enabled else 0
+    if enabled:
+        if retain is None or int(retain) < 1:
+            _raise_enabled_count_error(
+                "camera_grounded_history_retain", "camera_grounded_history_compaction"
+            )
+    else:
+        retain = 0
     return {
         "schema": "agent_sdk_camera_grounded_history_policy_v1",
         "enabled": enabled,
         "mode": "retain_latest_actionable_outputs" if enabled else "off",
         "retained_recent_outputs": retain,
         "candidate_ids": ["AC"] if enabled else [],
-        "private_artifact_policy": (
-            "model-facing camera-grounded history compaction only; MCP traces, reports, "
-            "and run artifacts remain complete"
-        ),
+        "private_artifact_policy": CAMERA_GROUNDED_HISTORY_POLICY,
     }
 
 
@@ -651,10 +652,6 @@ def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
 
 def _normal_provider_profile(provider_profile: str) -> str:
     return normalize_provider_route(provider_profile, default="codex-router-responses")
-
-
-def _wire_api_for_provider_profile(provider_profile: str) -> str:
-    return provider_route_spec(provider_profile).wire_api
 
 
 def _string_setting(
@@ -786,6 +783,12 @@ def _raise_setting_conflict(attr: str, env_name: str, arg_value: object, env_val
     raise ValueError(
         f"conflicting OpenAI Agents SDK setting {attr}: "
         f"{cli_name}={arg_value!r} and {env_name}={env_value!r}"
+    )
+
+
+def _raise_enabled_count_error(attr: str, enabled_attr: str) -> None:
+    raise ValueError(
+        f"OpenAI Agents SDK setting {attr} must be positive when {enabled_attr} is enabled"
     )
 
 
