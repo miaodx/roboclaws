@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-two-map-alignment-blocker
-status: Partially implemented
+status: Approved execution source; blocked on reviewed anchors and local Isaac proof
 created: 2026-06-17
 last_reviewed: 2026-06-18
 implementation_allowed: true
@@ -108,6 +108,27 @@ On-demand Map12 navigation point contract:
   It does not imply planner-backed navigation, collision-free path planning,
   physical robot navigation, a new MCP tool, or a public `household-world`
   surface change.
+
+Planning-loop scope clarification:
+
+- This document is the current execution source for making the B1 / Map 12
+  asset usable like a simulator scene for preview-grade robot pose application:
+  `Map12 waypoint id or map_xy/yaw -> residual-backed coverage check -> B1 scene
+  robot pose -> Isaac pose application -> same-pose FPV, Chase, and topdown
+  evidence`.
+- `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md` remains the
+  prerequisite evidence contract. It owns reviewed correspondences, real
+  `navigation_area_id` / `asset_partition_id` semantics, residual thresholds,
+  and readiness status. This plan consumes only a passing residual artifact from
+  that contract.
+- "Arbitrary Map12 point" means an operator-supplied waypoint id or `map_xy/yaw`
+  inside verified global coverage or an explicitly verified local area. It does
+  not mean every coordinate in the map, a planner-backed path, obstacle
+  avoidance, manipulation readiness, physical robot support, or a public MCP
+  navigation tool.
+- Unsupported or unverified points must emit blocked artifacts with explicit
+  reasons. They must not fall back to bbox seeds, nearest known points, synthetic
+  manual-draft ids, scene-probe cameras, or stale cached previews.
 
 ## Minimal Path
 
@@ -351,7 +372,8 @@ python scripts/operator_console/render_scene_previews.py \
 
 ## Preflight Contract
 
-Preflight status: APPROVED on 2026-06-18 by user `LGTM`
+Preflight status: APPROVED on 2026-06-18 by user `LGTM`; refreshed after
+agent-planning-loop scout review.
 
 Task source: user prompt, this active plan, the 2026-06-17 reduce-entropy
 packet, and the 2026-06-18 agent planning loop.
@@ -360,12 +382,12 @@ Canonical source: `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 
 Route: durable `$intuitive-flow`
 
-Goal: Make B1 / Map 12 usable enough for digital-twin preview and on-demand
-Map12 navigation point application by producing an honest two-map alignment
-diagnostic/review path, fitting residual-backed Map12-to-B1 transforms,
-converting verified Map12 waypoint ids or `map_xy/yaw` requests into B1 scene
-robot poses, and promoting B1 robot-view previews only from residual-backed
-Isaac runtime pose evidence.
+Goal: Make B1 / Map 12 usable enough for MolmoSpaces-like digital-twin preview
+and on-demand Map12 navigation point application by producing an honest two-map
+alignment diagnostic/review path, fitting residual-backed Map12-to-B1
+transforms, converting verified Map12 waypoint ids or `map_xy/yaw` requests into
+B1 scene robot poses, applying those poses in Isaac, and promoting B1 robot-view
+previews only from residual-backed Isaac runtime pose evidence.
 
 Scope:
 
@@ -375,6 +397,10 @@ Scope:
   Map12 navigation point to B1 pose request artifact; transform-aware B1
   waypoint/point robot-view capture; operator-console camera preview promotion
   with residual-backed provenance checks.
+- P1 acceptance uses multiple point rows: at least two distinct verified Map12
+  points should convert/apply as B1 pose evidence before claiming navigation
+  support, while one same-pose FPV/Chase pair is the minimum preview-promotion
+  proof.
 - P2 only after P0/P1 pass: `B1_floor2_slow` visual registration for later
   photorealistic/open-task work.
 
@@ -406,21 +432,23 @@ Context:
   `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
   `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
   `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/`.
-- Useful: `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`
-  as the prerequisite residual/alignment evidence source. This plan's Z-up
-  `x,y` projection policy overrides any stale `x,z` / Y-up examples in that
-  older document.
+- Required prerequisite:
+  `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md` owns
+  human/operator accepted anchors, real semantic ids, residual thresholds, and
+  readiness status. This plan may not create runtime pose/camera proof from
+  draft anchors, bbox seeds, or proposed-only review packets.
 - Avoid unless needed: broad `output/**`, historical retrospectives, and old
   B1 merged-bundle artifacts.
 
 Acceptance:
 
 - SUCCESS: residual-backed global or local B1 / Map 12 alignment exists, or the
-  scene diagnostic honestly blocks alignment; if alignment passes, a reusable
+  scene diagnostic honestly blocks alignment. If alignment passes, a reusable
   on-demand Map12 waypoint or `map_xy/yaw` to B1 scene pose conversion/apply
-  contract exists, unsupported points block loudly, and at least one
-  same-pose FPV/Chase preview pair is promoted from residual-backed Isaac
-  runtime robot pose evidence.
+  contract exists, verified and unsupported point rows are both auditable, at
+  least two distinct verified point rows are exercised before navigation support
+  is claimed, and at least one same-pose FPV/Chase preview pair is promoted from
+  residual-backed Isaac runtime robot pose evidence.
 - BLOCKED_NEEDS_DECISION: none expected; implementation may try different
   diagnostic and review-tool approaches as long as the invariants above hold.
 - BLOCKED_NEEDS_LOCAL_VALIDATION: Isaac runtime waypoint capture and camera
@@ -437,8 +465,10 @@ Verification:
 - Deterministic: run the focused pytest command in this plan plus any new
   tests for Z-up projection, review/export, residual gating, and preview
   provenance rejection.
-- Deterministic artifact tests must include both a verified point conversion
-  and an unsupported/unverified point blocked artifact.
+- Deterministic artifact tests must include verified point conversion rows,
+  unsupported/unverified point blocked artifacts, and no fallback from failed
+  point conversion to bbox, nearest-point, scene-probe, or stale camera preview
+  evidence.
 - Integration: run the Map12 consistency, correspondence review, fitter, and
   readiness commands listed above.
 - Product-run: run `scripts/operator_console/render_scene_previews.py --world

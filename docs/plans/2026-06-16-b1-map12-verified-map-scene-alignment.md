@@ -496,92 +496,61 @@ with real semantic ids, then rerun the fitter on
 `assets/maps/b1-map12-scene-correspondences.json`. Until that passes, keep the
 verification-only synthetic manifest as test evidence only, not production proof.
 
-## Preflight Contract
+## Prerequisite Contract For 2026-06-17 Execution
 
-Preflight status: DRAFT
+Status: accepted prerequisite contract; consumed by
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
-Task source: mixed user prompt + plan review
+Planning-loop decision on 2026-06-18: keep this document focused on alignment
+evidence. The 2026-06-17 plan is the current execution source for on-demand
+Map12 waypoint or `map_xy/yaw` requests, B1 scene pose application, and
+same-pose Isaac preview proof.
 
-Canonical source: `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`
+Goal: Provide the only valid residual-backed alignment evidence that downstream
+runtime pose application may consume. Verified claims require human/operator
+accepted correspondences, real semantic ids, and residual artifacts; poor bbox
+overlay remains only a known-poor visual-search seed.
 
-Route: durable `$intuitive-flow`
+This contract owns:
 
-Goal: Implement the B1 / Map 12 map-scene alignment evidence slice so verified
-claims require reviewed correspondences and residuals, while poor bbox overlay
-remains only a known-poor visual-search seed.
-
-Scope:
-
-- Add the B1 / Map 12 correspondence manifest schema and reviewed-asset
-  lifecycle.
-- Add a report/script anchor review workflow with separate map and scene picks.
-- Add a deterministic transform fitter and residual report.
-- Integrate residual evidence into B1 readiness artifacts without promoting
-  static semantics prematurely.
-- Add report/test coverage for bbox-seed rejection, verified/global vs
-  area-verified claims, and blocked object/manipulation claims.
-
-Non-goals:
-
-- No pick/place, support-surface, object segmentation, receptacle binding, or
-  manipulation support.
-- No planner-backed navigation or physical robot parity claim.
-- No new public product surface or command grammar.
-- No annotation UI unless the report/script workflow is proven insufficient and
-  re-approved.
-- No `semantics.json` promotion until the separate alignment manifest and
-  residual artifact are reviewed.
-
-Entity budget:
-
-- reuse: B1 readiness script, B1 navigation report, static map bundle,
-  `scene_map_correspondence_v1`, cross-environment map parity tests, and
-  `scene-gaussian-map-alignment` evidence vocabulary.
-- remove/merge: none.
-- new: correspondence manifest schema,
-  `assets/maps/b1-map12-scene-correspondences.json` after review, transform
-  fitter script, residual artifact, focused contract test;
-  these are necessary because bbox fit has poor observed quality and cannot be
-  reused as a verified baseline.
-- expansion triggers: custom annotation UI, object-level USD binding,
-  planner-backed navigation, physical robot proof, altered residual thresholds,
-  or public surface changes require re-approval.
-
-Context:
-
-- must-read: this plan, `docs/human/domain.md`,
-  `docs/plans/refactor-reduce-entropy-b1-map12-digital-twin.md`,
-  `docs/plans/2026-06-15-cross-environment-semantic-map-parity.md`,
-  `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`,
-  `skills/scene-gaussian-map-alignment/SKILL.md`,
-  `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`,
-  `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`,
-  `assets/maps/agibot-robot-map-12/semantics.json`,
-  `assets/maps/b1-map12-alignment-review.json`,
+- B1 / Map 12 correspondence manifest schema and reviewed-asset lifecycle.
+- Separate map-coordinate and scene-coordinate picks for accepted anchors.
+- Strict promotion from a human-edited semantic review packet to
   `assets/maps/b1-map12-scene-correspondences.json`.
-- useful: existing operator-console B1 preview artifacts and any current
-  `output/b1-map12/**` readiness/navigation reports.
-- avoid-unless-needed: historical MolmoSpaces Isaac parity plans, raw provider
-  logs, old Genesis renderer work, and broad `output/` scans.
+- Deterministic transform fitting, residual reports, global and per-area
+  threshold policy, and readiness status.
+- Bbox-seed rejection, proposed-only review rejection, synthetic-id rejection,
+  and blocked object/manipulation/planner claims.
 
-Acceptance:
+This contract does not own:
 
-- SUCCESS: reviewed correspondences exist; bbox seed is rejected as verification
-  evidence; fitter emits residuals and visual overlays; readiness can claim
-  global `verified` only when thresholds pass or else records
-  `area_verified_only`; object/receptacle/manipulation/planner claims remain
-  blocked; reports make residuals and outliers auditable.
-- BLOCKED_NEEDS_DECISION: thresholds need relaxation, custom annotation UI is
-  required, accepted anchors cannot be chosen from available evidence, or scope
-  expands into object/manipulation/planner/public-surface work.
-- BLOCKED_NEEDS_LOCAL_VALIDATION: required Isaac scene rendering, local B1
-  assets, or human/operator anchor review are unavailable when claiming
-  reviewed visual evidence or verified alignment.
-- INTERMEDIATE_ONLY: schema, fitter, and tests exist but no reviewed anchor set
-  or local/manual evidence is available; this cannot claim verified alignment.
-- No regressions: existing B1 navigation readiness, cross-environment map
-  parity, Map 12 bundle conversion, and public household-world routes continue
-  to pass.
+- On-demand runtime point conversion into B1 scene robot pose rows.
+- Isaac robot pose application, FPV/Chase/topdown capture, or operator-console
+  preview promotion.
+- Public product-surface grammar, MCP tools, planner-backed navigation,
+  physical robot parity, or manipulation readiness.
+
+Acceptance for downstream consumption:
+
+- At least six anchors have `review_status=accepted`.
+- Accepted anchors have real human-reviewed `navigation_area_id` and
+  `asset_partition_id` values, not synthetic `manual_draft_*` ids or
+  model-generated suggestions.
+- Bbox/seed coordinates do not populate accepted evidence and cannot count
+  toward residual verification.
+- The fitter emits residuals and visual overlays.
+- Readiness can claim global `verified` only when thresholds pass, or records
+  `area_verified_only` for explicit passing local areas.
+- Reports make residuals and outliers auditable.
+- Object/receptacle/manipulation/planner claims remain blocked or out of scope.
+
+Blocked states:
+
+- No human/operator reviewed anchors: downstream pose requests must block.
+- Residuals fail thresholds: downstream pose requests must block unless a
+  specific local area transform independently passes and is explicitly selected.
+- Threshold relaxation, custom annotation UI, object/manipulation/planner
+  expansion, or public surface changes require a plan update before use.
 
 Verification:
 
@@ -627,16 +596,10 @@ Verification:
 - optional: render or update the B1 navigation/alignment HTML report for easier
   review after deterministic gates pass.
 
-Execution:
+Execution ownership:
 
-- main: root session supervises scope, protects bbox/semantic boundaries, and
-  makes final complete/blocked judgment.
-- worker: none by default.
-- worker-goal: none.
-
-To execute: `/goal execute docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md with intuitive-flow`
-
-Optional tracking: none
-
-Approval: `LGTM`, `approve`, or `go ahead` approves this preflight; edits
-request revision.
+- Main execution continues from
+  `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
+- This document remains the prerequisite alignment contract and should be
+  updated only when anchor lifecycle, residual thresholds, or readiness semantics
+  change.
