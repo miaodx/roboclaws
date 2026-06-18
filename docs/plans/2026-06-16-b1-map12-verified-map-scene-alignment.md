@@ -74,6 +74,9 @@ The suggestion command also writes
 `output/b1-map12/manual-draft-anchor-semantic-review.html`, a static read-only
 HTML table for operator review of the proposed anchors and candidate semantic
 ids.
+`scripts/maps/check_b1_map12_semantic_review_packet_fit.py` validates the same
+human-edited packet and runs the residual fitter on a preview manifest under
+`output/` without writing the committed correspondence asset.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real
@@ -398,6 +401,7 @@ them before claiming `verified` requires an explicit plan update.
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/maps/auto_align_b1_map12_scene_topdown.py`
+- `scripts/maps/check_b1_map12_semantic_review_packet_fit.py`
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
@@ -413,6 +417,11 @@ python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json \
   --check
+
+python scripts/maps/check_b1_map12_semantic_review_packet_fit.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --output-dir output/b1-map12/review-packet-fit-check
 
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \

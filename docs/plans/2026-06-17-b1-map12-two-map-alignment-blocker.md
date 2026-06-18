@@ -351,7 +351,7 @@ python scripts/operator_console/render_scene_previews.py \
 
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: APPROVED on 2026-06-18 by user `LGTM`
 
 Task source: user prompt, this active plan, the 2026-06-17 reduce-entropy
 packet, and the 2026-06-18 agent planning loop.
@@ -514,6 +514,9 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - The semantic suggestion command now also emits
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
   for the human/operator to review candidate ids before editing the JSON packet.
+- `scripts/maps/check_b1_map12_semantic_review_packet_fit.py` can validate a
+  human-edited packet and run the residual fitter against a promoted preview
+  manifest under `output/` without writing the committed correspondence asset.
 
 2026-06-17 update:
 
@@ -561,8 +564,9 @@ Next implementation slice:
 
 - Have a human/operator edit the semantic review packet, mark at least six
   anchors accepted, and supply real semantic ids. Use the static HTML review
-  report as a read-only aid, run the strict promotion gate with `--check`, then
-  write `assets/maps/b1-map12-scene-correspondences.json`.
+  report as a read-only aid, run the strict promotion gate with `--check`, run
+  the non-mutating fit check, then write
+  `assets/maps/b1-map12-scene-correspondences.json`.
 - Rerun fitter, readiness, waypoint pose requests, navigation report, and then
   local Isaac same-pose camera proof on that committed manifest. Do not use the
   verification-only synthetic manifest or bbox seed as production evidence.

@@ -107,6 +107,9 @@ Last proven evidence:
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only
   operator table showing each proposed anchor, candidate semantic ids, and
   nearest candidate distances.
+- `scripts/maps/check_b1_map12_semantic_review_packet_fit.py` can validate a
+  human-edited packet and run the residual fitter against a promoted preview
+  manifest under `output/` without writing `assets/maps/b1-map12-scene-correspondences.json`.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q`
   passes.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
@@ -127,8 +130,8 @@ Next implementation step: have a human/operator edit
 six anchors `review_status=accepted`, and supply real `navigation_area_id` /
 `asset_partition_id` values. Use
 `output/b1-map12/manual-draft-anchor-semantic-review.html` as the read-only
-review aid, run the strict promoter with `--check`, then write the committed
-manifest and run the residual fitter.
+review aid, run the strict promoter with `--check`, run the non-mutating fit
+check, then write the committed manifest and run the residual fitter.
 
 Next command/artifact:
 
@@ -162,6 +165,11 @@ python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
   --output assets/maps/b1-map12-scene-correspondences.json \
   --check
+
+python scripts/maps/check_b1_map12_semantic_review_packet_fit.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
+  --output-dir output/b1-map12/review-packet-fit-check
 
 python scripts/maps/promote_b1_map12_semantic_review_packet.py \
   --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \

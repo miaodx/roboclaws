@@ -55,6 +55,9 @@ REVIEW_SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_correspondence
 PROMOTE_REVIEW_PACKET_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_semantic_review_packet.py"
 )
+CHECK_REVIEW_PACKET_FIT_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "check_b1_map12_semantic_review_packet_fit.py"
+)
 RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 VENDOR_MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
@@ -1027,6 +1030,67 @@ def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
             "--output",
             str(tmp_path / "out.json"),
             "--check",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "no human-accepted anchors" in completed.stderr
+
+
+def test_semantic_review_packet_fit_check_writes_preview_not_committed_manifest(
+    tmp_path: Path,
+) -> None:
+    packet = correspondence_manifest(anchors=passing_anchors())
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet_path = tmp_path / "review_packet.json"
+    output_dir = tmp_path / "fit-check"
+    committed_path = tmp_path / "b1-map12-scene-correspondences.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_REVIEW_PACKET_FIT_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--map-bundle",
+            str(RAW_MAP12_BUNDLE),
+            "--output-dir",
+            str(output_dir),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads(completed.stdout)
+    assert summary["committed_manifest_written"] is False
+    assert summary["accepted_anchor_count"] == 6
+    assert summary["global_alignment_status"] == "verified"
+    assert (output_dir / "promoted_correspondences.preview.json").is_file()
+    assert (output_dir / "alignment_residuals.json").is_file()
+    assert not committed_path.exists()
+
+
+def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path) -> None:
+    packet = correspondence_manifest(anchors=[])
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    packet["anchors"] = [{**passing_anchors()[0], "review_status": "proposed"}]
+    packet_path = tmp_path / "review_packet.json"
+    packet_path.write_text(json.dumps(packet), encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_REVIEW_PACKET_FIT_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--map-bundle",
+            str(RAW_MAP12_BUNDLE),
+            "--output-dir",
+            str(tmp_path / "fit-check"),
         ],
         capture_output=True,
         text=True,
