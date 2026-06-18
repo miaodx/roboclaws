@@ -35,8 +35,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--points",
         type=Path,
         help=(
-            "JSON array of {waypoint_id,x,y,yaw|yaw_deg,label}. Use this for multiple "
-            "on-demand navigation points."
+            "JSON array of {waypoint_id,x,y,yaw|yaw_deg,label,navigation_area_id}. "
+            "Use this for multiple on-demand navigation points."
         ),
     )
     parser.add_argument("--waypoint-id", default="map12_on_demand_001")
@@ -83,8 +83,6 @@ def build_pose_request_artifact(
     points: list[dict[str, Any]],
 ) -> dict[str, Any]:
     alignment, artifact_errors = load_alignment_for_requests(alignment_artifact)
-    transform = alignment.get("selected_transform") if isinstance(alignment, dict) else {}
-    coverage = coverage_decision(alignment)
     if not points:
         artifact_errors = [*artifact_errors, "at least one Map12 point is required"]
     waypoints = []
@@ -112,6 +110,7 @@ def build_pose_request_artifact(
                 )
             )
             continue
+        transform, coverage = transform_and_coverage_for_point(alignment, point)
         if coverage["status"] == "blocked":
             blocked_requests.append(
                 blocked_request_row(
@@ -151,9 +150,11 @@ def build_pose_request_artifact(
         "semantic_source": SEMANTIC_SOURCE,
         "alignment_artifact": str(alignment_artifact),
         "alignment_transform_source": "reviewed_correspondence_fit" if not artifact_errors else "",
-        "selected_transform_type": str(transform.get("type") or ""),
-        "source_map_frame": str(transform.get("source_frame") or "robot_map_12_map"),
-        "target_scene_frame": str(transform.get("target_frame") or "b1_rebuilt_scene_usd_world"),
+        "selected_transform_type": selected_transform_type(waypoints),
+        "source_map_frame": str(alignment.get("source_map_frame") or "robot_map_12_map"),
+        "target_scene_frame": str(
+            alignment.get("target_scene_frame") or "b1_rebuilt_scene_usd_world"
+        ),
         "waypoint_count": len(waypoints),
         "waypoints": waypoints,
         "blocked_request_count": len(blocked_requests),
@@ -178,13 +179,18 @@ def load_alignment_for_requests(path: Path) -> tuple[dict[str, Any], list[str]]:
     errors = validate_alignment_residual_artifact(payload)
     if errors:
         return payload, ["invalid alignment artifact: " + "; ".join(errors)]
-    if payload.get("global_alignment_status") != "verified":
-        return payload, ["alignment artifact must be globally verified"]
-    transform = payload.get("selected_transform")
-    if not isinstance(transform, dict) or not transform:
-        return payload, ["alignment artifact missing selected_transform"]
-    if str(transform.get("source") or "") != "reviewed_correspondence_fit":
-        return payload, ["alignment transform must come from reviewed_correspondence_fit"]
+    if payload.get("global_alignment_status") == "verified":
+        transform = payload.get("selected_transform")
+        if not isinstance(transform, dict) or not transform:
+            return payload, ["alignment artifact missing selected_transform"]
+        if str(transform.get("source") or "") != "reviewed_correspondence_fit":
+            return payload, ["alignment transform must come from reviewed_correspondence_fit"]
+        return payload, []
+    if not verified_area_transforms(payload):
+        return payload, [
+            "alignment artifact must be globally verified or contain a verified "
+            "local area transform"
+        ]
     return payload, []
 
 
@@ -223,6 +229,68 @@ def coverage_decision(alignment: dict[str, Any]) -> dict[str, Any]:
         "fit_scope": "global_transform",
         "reason": "alignment artifact is not globally verified",
     }
+
+
+def verified_area_transforms(alignment: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    verified = {}
+    for item in alignment.get("area_alignment") or []:
+        area = item if isinstance(item, dict) else {}
+        transform = area.get("transform")
+        area_id = str(area.get("navigation_area_id") or "")
+        if (
+            area_id
+            and area.get("alignment_status") == "verified"
+            and area.get("fit_scope") == "independent_area_transform"
+            and isinstance(transform, dict)
+            and str(transform.get("source") or "") == "reviewed_correspondence_fit"
+        ):
+            verified[area_id] = area
+    return verified
+
+
+def transform_and_coverage_for_point(
+    alignment: dict[str, Any],
+    point: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if alignment.get("global_alignment_status") == "verified":
+        return dict(alignment.get("selected_transform") or {}), coverage_decision(alignment)
+    area_id = str(point.get("navigation_area_id") or "")
+    if not area_id:
+        return {}, {
+            "status": "blocked",
+            "fit_scope": "local_area_transform",
+            "reason": "local-area alignment requires point.navigation_area_id",
+        }
+    area = verified_area_transforms(alignment).get(area_id)
+    if not area:
+        return {}, {
+            "status": "blocked",
+            "fit_scope": "local_area_transform",
+            "navigation_area_id": area_id,
+            "reason": f"navigation_area_id {area_id!r} is not verified",
+        }
+    transform = dict(area["transform"])
+    return transform, {
+        "status": "verified_local_area",
+        "fit_scope": "independent_area_transform",
+        "navigation_area_id": area_id,
+        "matched_anchor_count": int(area.get("matched_anchor_count") or 0),
+        "max_residual_m": area.get("max_residual_m"),
+        "mean_residual_m": area.get("mean_residual_m"),
+    }
+
+
+def selected_transform_type(waypoints: list[dict[str, Any]]) -> str:
+    types = {
+        str(item.get("selected_transform_type") or "")
+        for item in waypoints
+        if item.get("selected_transform_type")
+    }
+    if len(types) == 1:
+        return next(iter(types))
+    if len(types) > 1:
+        return "mixed"
+    return ""
 
 
 def blocked_request_row(

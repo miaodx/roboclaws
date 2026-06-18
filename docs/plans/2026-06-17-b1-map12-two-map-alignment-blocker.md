@@ -492,6 +492,10 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   waypoint ids or `map_xy/yaw` points. Globally verified residual-backed
   alignment produces B1 pose rows with coverage decisions; unverified
   alignment, malformed points, or missing coverage produce blocked rows.
+- Explicit local-area coverage is supported only when the point names a
+  `navigation_area_id` that has a verified independent area transform in the
+  residual artifact. Missing or unknown local area ids block loudly; no global
+  fallback is inferred for area-only alignment.
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` can consume the
   pose request artifact through `--waypoint-pose-requests`. A blocked request
   artifact blocks smoke capture, and missing/seed-derived readiness waypoints

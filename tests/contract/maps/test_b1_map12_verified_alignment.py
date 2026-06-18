@@ -313,6 +313,134 @@ def test_waypoint_pose_requests_block_unverified_alignment_and_bad_point(
     assert payload["blocked_requests"][1]["request_status"] == "blocked"
 
 
+def test_waypoint_pose_requests_convert_verified_local_area_points(tmp_path: Path) -> None:
+    anchors = [
+        accepted_anchor(
+            "central_a",
+            (0.0, 0.0),
+            (10.0, -4.0),
+            navigation_area_id="central_floor",
+            asset_partition_id="meeting_room_b",
+        ),
+        accepted_anchor(
+            "central_b",
+            (1.0, 0.0),
+            (11.0, -4.0),
+            navigation_area_id="central_floor",
+            asset_partition_id="meeting_room_b",
+        ),
+        accepted_anchor(
+            "central_c",
+            (0.0, 1.0),
+            (10.0, -3.0),
+            navigation_area_id="central_floor",
+            asset_partition_id="meeting_room_b",
+        ),
+        accepted_anchor(
+            "west_a",
+            (10.0, 0.0),
+            (-20.0, 30.0),
+            navigation_area_id="west_corridor",
+            asset_partition_id="meeting_room_a",
+        ),
+        accepted_anchor(
+            "north_a",
+            (0.0, 10.0),
+            (35.0, 22.0),
+            navigation_area_id="north_fixture_area",
+            asset_partition_id="meeting_room_c",
+        ),
+        accepted_anchor(
+            "south_a",
+            (-10.0, -7.0),
+            (-32.0, -24.0),
+            navigation_area_id="south_fixture_area",
+            asset_partition_id="reception_area_a",
+        ),
+    ]
+    alignment = build_alignment_residuals(
+        correspondence_manifest(anchors=anchors),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {
+                "waypoint_id": "central_local_point",
+                "navigation_area_id": "central_floor",
+                "x": 0.5,
+                "y": 0.5,
+            }
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "ready"
+    point = payload["waypoints"][0]
+    assert point["coverage_decision"]["status"] == "verified_local_area"
+    assert point["coverage_decision"]["navigation_area_id"] == "central_floor"
+    assert point["b1_pose"]["x"] == pytest.approx(10.5)
+    assert point["b1_pose"]["y"] == pytest.approx(-3.5)
+
+
+def test_waypoint_pose_requests_block_missing_or_unknown_local_area(tmp_path: Path) -> None:
+    alignment = build_alignment_residuals(
+        correspondence_manifest(
+            anchors=[
+                accepted_anchor(
+                    "central_a",
+                    (0.0, 0.0),
+                    (10.0, -4.0),
+                    navigation_area_id="central_floor",
+                    asset_partition_id="meeting_room_b",
+                ),
+                accepted_anchor(
+                    "central_b",
+                    (1.0, 0.0),
+                    (11.0, -4.0),
+                    navigation_area_id="central_floor",
+                    asset_partition_id="meeting_room_b",
+                ),
+                accepted_anchor(
+                    "central_c",
+                    (0.0, 1.0),
+                    (10.0, -3.0),
+                    navigation_area_id="central_floor",
+                    asset_partition_id="meeting_room_b",
+                ),
+            ]
+        ),
+        map_bundle=RAW_MAP12_BUNDLE,
+        output_dir=tmp_path,
+    )
+    alignment_path = tmp_path / "alignment_residuals.json"
+    alignment_path.write_text(json.dumps(alignment), encoding="utf-8")
+
+    payload = build_pose_request_artifact(
+        alignment_artifact=alignment_path,
+        points=[
+            {"waypoint_id": "missing_area", "x": 0.5, "y": 0.5},
+            {
+                "waypoint_id": "unknown_area",
+                "navigation_area_id": "not_verified_area",
+                "x": 0.5,
+                "y": 0.5,
+            },
+        ],
+    )
+
+    assert validate_waypoint_pose_requests_artifact(payload) == []
+    assert payload["status"] == "blocked"
+    assert payload["waypoint_count"] == 0
+    assert payload["blocked_request_count"] == 2
+    assert "point.navigation_area_id" in payload["blocked_requests"][0]["reason"]
+    assert "not verified" in payload["blocked_requests"][1]["reason"]
+
+
 def test_navigation_smoke_consumes_ready_pose_requests_and_blocks_bad_request_artifact(
     tmp_path: Path,
 ) -> None:
