@@ -859,6 +859,12 @@ def _b1_camera_preview_provenance_errors(
     candidate: dict[str, Any],
 ) -> list[str]:
     errors: list[str] = []
+    source_kind = str(candidate.get("source_kind") or "")
+    if source_kind not in {
+        "run_result_robot_view_step",
+        "navigation_smoke_waypoint_evidence",
+    }:
+        errors.append("unsupported_camera_artifact_source")
     if candidate.get("robot_pose_applied") is not True:
         errors.append("robot_pose_not_applied")
     alignment_artifact = candidate.get("alignment_artifact") or payload.get("alignment_artifact")
@@ -869,6 +875,30 @@ def _b1_camera_preview_provenance_errors(
     )
     if str(transform_source or "") != "reviewed_correspondence_fit":
         errors.append("missing_reviewed_correspondence_transform_source")
+    if source_kind == "run_result_robot_view_step":
+        camera_control_contract = candidate.get("camera_control_contract")
+        if not isinstance(camera_control_contract, dict):
+            errors.append("missing_camera_control_contract")
+        else:
+            agent_facing_fpv = camera_control_contract.get("agent_facing_fpv")
+            if not isinstance(agent_facing_fpv, dict):
+                errors.append("missing_agent_facing_fpv_contract")
+            else:
+                if not (
+                    agent_facing_fpv.get("robot_mounted") is True
+                    or agent_facing_fpv.get("head_camera_equivalent") is True
+                ):
+                    errors.append("fpv_not_robot_mounted_or_head_camera_equivalent")
+                fpv_source = str(agent_facing_fpv.get("source") or "")
+                if "scene_probe" in fpv_source or "bbox" in fpv_source:
+                    errors.append("fpv_source_not_robot_runtime")
+            report_chase = camera_control_contract.get("report_chase_view")
+            if not isinstance(report_chase, dict):
+                errors.append("missing_report_chase_contract")
+            else:
+                chase_source = str(report_chase.get("source") or "")
+                if "scene_probe" in chase_source or "bbox" in chase_source:
+                    errors.append("chase_source_not_robot_runtime")
     return errors
 
 

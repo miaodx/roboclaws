@@ -110,6 +110,11 @@ Last proven evidence:
 - `scripts/maps/check_b1_map12_semantic_review_packet_fit.py` can validate a
   human-edited packet and run the residual fitter against a promoted preview
   manifest under `output/` without writing `assets/maps/b1-map12-scene-correspondences.json`.
+- Operator-console B1 FPV/Chase promotion rejects generic `robot_view_steps`
+  unless they include a camera-control contract proving the FPV source is a
+  robot-mounted or head-camera-equivalent runtime view and not scene-probe/bbox
+  evidence. B1 navigation-smoke waypoint evidence remains valid as the
+  pose-driven camera artifact path.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q`
   passes.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
@@ -119,6 +124,11 @@ Last proven evidence:
   and `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py -q`
   pass for the strict promotion gate, `--check` mode, and read-only semantic
   review report.
+- `ruff check scripts/operator_console/render_scene_previews.py tests/unit/operator_console/test_render_scene_previews.py`,
+  `ruff format --check scripts/operator_console/render_scene_previews.py tests/unit/operator_console/test_render_scene_previews.py`,
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_render_scene_previews.py -q`, and
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
+  pass for the hardened B1 camera-preview provenance gate.
 
 Next hypothesis: once the seven manual anchors receive reviewed real
 `navigation_area_id` and `asset_partition_id` values, they can replace the

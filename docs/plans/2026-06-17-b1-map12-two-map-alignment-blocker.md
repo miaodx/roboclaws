@@ -547,6 +547,12 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - B1 static preview generation still publishes only `map` and `topdown` before
   residual-backed Isaac runtime camera evidence; FPV/Chase promotion remains
   guarded by same-waypoint, residual-backed, `robot_pose_applied` provenance.
+- Operator-console B1 camera preview promotion now rejects generic
+  `robot_view_steps` unless they include an explicit camera-control contract
+  proving the FPV source is robot-mounted or a head-camera equivalent and not a
+  scene-probe or bbox source. Dedicated B1 navigation-smoke waypoint evidence
+  remains accepted because the smoke artifact already represents pose-driven
+  runtime waypoint capture.
 
 Current gate:
 
@@ -586,6 +592,10 @@ ruff format --check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py script
 ruff check scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py tests/contract/maps/test_b1_map12_navigation_report.py
 ruff format --check scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py tests/contract/maps/test_b1_map12_navigation_report.py
 ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_navigation_report.py -q
+ruff check scripts/operator_console/render_scene_previews.py tests/unit/operator_console/test_render_scene_previews.py
+ruff format --check scripts/operator_console/render_scene_previews.py tests/unit/operator_console/test_render_scene_previews.py
+./scripts/dev/run_pytest_standalone.sh tests/unit/operator_console/test_render_scene_previews.py -q
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q
 .venv-isaaclab/bin/python scripts/maps/render_b1_scene_topdown_diagnostic.py --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --output-dir output/b1-map12/scene-topdown-label-overlay
 python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
