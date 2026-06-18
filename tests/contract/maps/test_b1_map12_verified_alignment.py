@@ -925,12 +925,20 @@ def test_strict_semantic_review_promotion_rejects_partial_accepted_packet() -> N
 def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> None:
     packet = correspondence_manifest(anchors=passing_anchors())
     packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+    for anchor in packet["anchors"]:
+        anchor["semantic_review"] = {
+            "status": "needs_human_review",
+            "map_candidates": [{"map_area_id": "candidate_only"}],
+        }
 
     payload = build_reviewed_correspondence_manifest(packet)
 
     assert payload["schema"] == "b1_map12_scene_correspondences_v1"
     assert payload["promotion_policy"]["auto_accept"] is False
     assert len(payload["anchors"]) == 6
+    assert "semantic_review" not in payload["anchors"][0]
+    assert payload["anchors"][0]["navigation_area_id"]
+    assert payload["anchors"][0]["asset_partition_id"]
     assert validate_correspondence_manifest(payload) == []
 
 

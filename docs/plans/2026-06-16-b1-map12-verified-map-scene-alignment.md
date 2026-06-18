@@ -67,7 +67,9 @@ correspondence manifest. It rejects proposed-only packets, missing real semantic
 ids, fewer than six human-accepted anchors, synthetic `manual_draft_*` ids,
 bbox/seed coordinate sources, and auto-accepted suggestions before validating
 the final manifest. Use `--check` first to validate a human-edited packet
-without writing the committed asset.
+without writing the committed asset. Promotion strips review-only suggestion
+metadata such as `semantic_review` before writing the production correspondence
+manifest.
 The suggestion command also writes
 `output/b1-map12/manual-draft-anchor-semantic-review.html`, a static read-only
 HTML table for operator review of the proposed anchors and candidate semantic

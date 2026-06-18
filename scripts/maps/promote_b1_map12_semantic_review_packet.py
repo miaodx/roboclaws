@@ -26,6 +26,20 @@ from scripts.maps.suggest_b1_map12_manual_anchor_semantics import (  # noqa: E40
 
 DEFAULT_PACKET = Path("output/b1-map12/manual-draft-anchor-semantic-review-packet.json")
 DEFAULT_OUTPUT = Path("assets/maps/b1-map12-scene-correspondences.json")
+PROMOTED_ANCHOR_FIELDS = (
+    "anchor_id",
+    "anchor_type",
+    "navigation_area_id",
+    "asset_partition_id",
+    "map_xy",
+    "scene_xyz",
+    "evidence",
+    "confidence",
+    "review_status",
+    "map_coordinate_source",
+    "scene_coordinate_source",
+    "coordinate_source",
+)
 
 
 class PromotionError(ValueError):
@@ -96,7 +110,7 @@ def build_reviewed_correspondence_manifest(
         anchor = dict(raw_anchor)
         anchor_id = str(anchor.get("anchor_id") or f"anchor {index}")
         validate_accepted_anchor(anchor_id, anchor)
-        accepted.append(anchor)
+        accepted.append(promoted_anchor(anchor))
     if not accepted:
         raise PromotionError("review packet has no human-accepted anchors")
     if len(accepted) < MIN_GLOBAL_ACCEPTED_ANCHORS:
@@ -138,6 +152,10 @@ def validate_accepted_anchor(anchor_id: str, anchor: dict[str, Any]) -> None:
             raise PromotionError(f"accepted anchor {anchor_id} uses synthetic {field}: {value}")
     if anchor_uses_known_poor_seed(anchor):
         raise PromotionError(f"accepted anchor {anchor_id} must not use bbox seed coordinates")
+
+
+def promoted_anchor(anchor: dict[str, Any]) -> dict[str, Any]:
+    return {field: anchor[field] for field in PROMOTED_ANCHOR_FIELDS if field in anchor}
 
 
 if __name__ == "__main__":

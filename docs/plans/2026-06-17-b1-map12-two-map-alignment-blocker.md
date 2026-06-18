@@ -509,7 +509,8 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   anchors with real semantic ids and rejects proposed-only rows, fewer than six
   accepted anchors, synthetic `manual_draft_*` ids, bbox/seed coordinate
   sources, and auto-accepted suggestions. Its `--check` mode validates the same
-  gate without writing the committed asset.
+  gate without writing the committed asset, and write mode strips review-only
+  suggestion metadata from promoted anchors.
 - The semantic suggestion command now also emits
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
   for the human/operator to review candidate ids before editing the JSON packet.
