@@ -503,6 +503,12 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
   `waypoint_pose_requests.json`, showing ready and blocked conversion rows so
   coverage decisions are auditable even before Isaac robot-view capture passes.
+- `scripts/maps/promote_b1_map12_semantic_review_packet.py` implements the
+  strict reviewed-anchor promotion gate owned by the 2026-06-16 alignment plan.
+  It writes the committed correspondence manifest only from human-accepted
+  anchors with real semantic ids and rejects proposed-only rows, synthetic
+  `manual_draft_*` ids, bbox/seed coordinate sources, and auto-accepted
+  suggestions.
 
 2026-06-17 update:
 
@@ -548,10 +554,9 @@ Current gate:
 
 Next implementation slice:
 
-- Promote a human-edited semantic review packet into
-  `assets/maps/b1-map12-scene-correspondences.json` only through the strict
-  review gate owned by
-  `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`.
+- Have a human/operator edit the semantic review packet, mark at least six
+  anchors accepted, and supply real semantic ids. Then run the strict promotion
+  gate into `assets/maps/b1-map12-scene-correspondences.json`.
 - Rerun fitter, readiness, waypoint pose requests, navigation report, and then
   local Isaac same-pose camera proof on that committed manifest. Do not use the
   verification-only synthetic manifest or bbox seed as production evidence.

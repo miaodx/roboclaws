@@ -61,6 +61,11 @@ not strong enough to auto-fill final `navigation_area_id` /
 `output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, a
 non-mutating human-review packet that combines each manual pick with semantic
 candidates while keeping all anchors proposed and accepted anchor count at zero.
+`scripts/maps/promote_b1_map12_semantic_review_packet.py` now provides the
+strict promotion path from a human-edited packet into the committed
+correspondence manifest. It rejects proposed-only packets, missing real semantic
+ids, synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and
+auto-accepted suggestions before validating the final manifest.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real
@@ -385,6 +390,7 @@ them before claiming `verified` requires an explicit plan update.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/maps/auto_align_b1_map12_scene_topdown.py`
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
+- `scripts/maps/promote_b1_map12_semantic_review_packet.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `tests/contract/maps/test_b1_map12_verified_alignment.py`
 - `tests/contract/maps/test_b1_map12_digital_twin_readiness.py`
@@ -393,16 +399,21 @@ them before claiming `verified` requires an explicit plan update.
 ## Suggested Proof
 
 ```bash
+# after a human/operator edits the review packet and accepts real semantic ids:
+python scripts/maps/promote_b1_map12_semantic_review_packet.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --output assets/maps/b1-map12-scene-correspondences.json
+
 python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json \
+  --correspondences assets/maps/b1-map12-scene-correspondences.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/manual-draft-alignment
+  --output-dir output/b1-map12/alignment
 
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
   --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 \
-  --alignment-artifact output/b1-map12/manual-draft-alignment/alignment_residuals.json \
-  --output output/b1-map12/manual-draft-alignment/readiness_with_alignment.json
+  --alignment-artifact output/b1-map12/alignment/alignment_residuals.json \
+  --output output/b1-map12/alignment/readiness_with_alignment.json
 
 ./scripts/dev/run_pytest_standalone.sh \
   tests/contract/maps/test_b1_map12_verified_alignment.py \
@@ -411,10 +422,9 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   -q
 ```
 
-The manual draft proof above is verification-only. The final production proof
-must use `assets/maps/b1-map12-scene-correspondences.json` after the same
-anchors receive reviewed real `navigation_area_id` and `asset_partition_id`
-values.
+The old manual draft proof remains verification-only. The final production proof
+must use `assets/maps/b1-map12-scene-correspondences.json` after the anchors
+receive reviewed real `navigation_area_id` and `asset_partition_id` values.
 
 ## Definition Of Done
 

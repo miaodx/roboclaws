@@ -95,21 +95,30 @@ Last proven evidence:
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report before local Isaac camera proof exists.
+- `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
+  strict promotion gate from a human-edited semantic review packet to the
+  committed correspondence manifest. Proposed-only rows, missing real semantic
+  ids, synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and
+  auto-accepted suggestions are rejected before writing output.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q`
   passes.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
   passes for the pose-request and report-audit contract.
+- `ruff check scripts/maps/promote_b1_map12_semantic_review_packet.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
+  `ruff format --check scripts/maps/promote_b1_map12_semantic_review_packet.py tests/contract/maps/test_b1_map12_verified_alignment.py`,
+  and `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py -q`
+  pass for the strict promotion gate.
 
 Next hypothesis: once the seven manual anchors receive reviewed real
 `navigation_area_id` and `asset_partition_id` values, they can replace the
 verification-only synthetic ids in `assets/maps/b1-map12-scene-correspondences.json`
 and preserve the same passing residuals without weakening the threshold policy.
 
-Next implementation step: promote the human-edited semantic review packet only
-through a strict gate. Proposed-only rows, missing semantic ids, synthetic
-`manual_draft_*` ids, bbox/seed coordinate sources, and auto-accepted
-suggestions must be rejected before the committed correspondence manifest is
-written.
+Next implementation step: have a human/operator edit
+`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, mark at least
+six anchors `review_status=accepted`, and supply real `navigation_area_id` /
+`asset_partition_id` values. Then run the strict promoter and residual fitter
+on the committed manifest.
 
 Next command/artifact:
 
@@ -137,10 +146,15 @@ python scripts/maps/suggest_b1_map12_manual_anchor_semantics.py \
   --output output/b1-map12/manual-draft-anchor-semantic-suggestions.json \
   --review-packet-output output/b1-map12/manual-draft-anchor-semantic-review-packet.json
 
+# after a human/operator edits the review packet and accepts real semantic ids:
+python scripts/maps/promote_b1_map12_semantic_review_packet.py \
+  --review-packet output/b1-map12/manual-draft-anchor-semantic-review-packet.json \
+  --output assets/maps/b1-map12-scene-correspondences.json
+
 python scripts/maps/fit_b1_map12_scene_alignment.py \
-  --correspondences output/b1-map12/manual-draft-alignment/b1-map12-scene-correspondences.verification-only.json \
+  --correspondences assets/maps/b1-map12-scene-correspondences.json \
   --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot \
-  --output-dir output/b1-map12/manual-draft-alignment
+  --output-dir output/b1-map12/alignment
 ```
 
 Stop condition: do not mark B1 / Map 12 alignment verified until the committed

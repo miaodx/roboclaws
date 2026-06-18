@@ -30,6 +30,10 @@ from scripts.maps.fit_b1_map12_scene_alignment import (
 from scripts.maps.promote_b1_map12_manual_draft_for_verification import (
     build_verification_manifest,
 )
+from scripts.maps.promote_b1_map12_semantic_review_packet import (
+    PromotionError,
+    build_reviewed_correspondence_manifest,
+)
 from scripts.maps.render_b1_map12_correspondence_review import (
     build_review_packet,
     render_review_report,
@@ -840,6 +844,79 @@ def test_manual_anchor_semantic_review_packet_keeps_anchors_proposed() -> None:
     assert anchor["asset_partition_id"] == "partition_a"
     assert anchor["semantic_review"]["status"] == "needs_human_review"
     assert anchor["semantic_review"]["acceptance_instructions"].startswith("Human reviewer")
+
+
+def test_strict_semantic_review_promotion_rejects_proposed_packet() -> None:
+    packet = {
+        "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
+        "source_map_frame": "robot_map_12_map",
+        "target_scene_frame": "b1_rebuilt_scene_usd_world",
+        "bbox_seed_policy": "known_poor_seed_only",
+        "scene_projection_policy": {
+            "horizontal_axes": ["x", "y"],
+            "up_axis": "z",
+            "source": "2rd_floor_seperated_scene_topdown_policy",
+        },
+        "anchors": [
+            {
+                "anchor_id": "manual_draft_anchor",
+                "anchor_type": "operator_correspondence",
+                "navigation_area_id": "area_a",
+                "asset_partition_id": "partition_a",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "review_status": "proposed",
+            }
+        ],
+    }
+
+    with pytest.raises(PromotionError, match="no human-accepted anchors"):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> None:
+    packet = correspondence_manifest(anchors=passing_anchors())
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+
+    payload = build_reviewed_correspondence_manifest(packet)
+
+    assert payload["schema"] == "b1_map12_scene_correspondences_v1"
+    assert payload["promotion_policy"]["auto_accept"] is False
+    assert len(payload["anchors"]) == 6
+    assert validate_correspondence_manifest(payload) == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("navigation_area_id", "", "needs navigation_area_id"),
+        ("asset_partition_id", "", "needs asset_partition_id"),
+        ("navigation_area_id", "manual_draft_area_1", "uses synthetic navigation_area_id"),
+        ("asset_partition_id", "manual_draft_region_1", "uses synthetic asset_partition_id"),
+    ],
+)
+def test_strict_semantic_review_promotion_rejects_missing_or_synthetic_ids(
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    anchor = passing_anchors()[0]
+    anchor[field] = value
+    packet = correspondence_manifest(anchors=[anchor])
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+
+    with pytest.raises(PromotionError, match=message):
+        build_reviewed_correspondence_manifest(packet)
+
+
+def test_strict_semantic_review_promotion_rejects_bbox_seed_coordinates() -> None:
+    anchor = passing_anchors()[0]
+    anchor["scene_coordinate_source"] = "known_poor_bbox_seed"
+    packet = correspondence_manifest(anchors=[anchor])
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+
+    with pytest.raises(PromotionError, match="must not use bbox seed coordinates"):
+        build_reviewed_correspondence_manifest(packet)
 
 
 def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:
