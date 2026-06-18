@@ -1,20 +1,26 @@
 # B1 / Map 12 Verified Map-Scene Alignment
 
-Current status: B1 / Map 12 geometry alignment is now globally verified from
-the seven manually picked `anchor_role=alignment` anchors in the committed
-manifest. The official residual artifact reports `selected_transform_type=rigid_2d`,
+Current status: B1 / Map 12 geometry alignment is globally verified from the
+seven manually picked `anchor_role=alignment` anchors in the committed
+manifest, and the first residual-backed robot-consumption proof now passes.
+The official residual artifact reports `selected_transform_type=rigid_2d`,
 mean residual `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
-Room/object label projection is still separate and needs additional
-`anchor_role=semantic` room-interior anchors with reviewed `navigation_area_id`
-/ `asset_partition_id` values.
+`output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`
+applies two Map12 navigation-memory points as B1 scene robot poses and captures
+same-pose FPV/Chase evidence. Room/object label projection is still separate
+and needs additional `anchor_role=semantic` room-interior anchors with reviewed
+`navigation_area_id` / `asset_partition_id` values.
 
 Blocker fingerprint:
 
 - blocker_kind: `b1_map12_isaac_same_pose_camera_proof`
-- root_cause_classification: local Isaac runtime evidence pending
-- last_decision_delta: geometry alignment no longer blocks on room ids. The
-  committed manifest now contains seven accepted `anchor_role=alignment`
-  anchors and the official residual fitter verifies global alignment.
+- root_cause_classification: passed for preview-grade kinematic pose-driven
+  Isaac robot-view proof
+- last_decision_delta: geometry alignment no longer blocks on room ids, and
+  local Isaac no longer blocks the first robot-consumption proof. The committed
+  manifest contains seven accepted `anchor_role=alignment` anchors, the
+  official residual fitter verifies global alignment, and two residual-backed
+  Map12 points now produce same-pose FPV/Chase evidence.
 
 Last proven evidence:
 
@@ -106,6 +112,46 @@ Last proven evidence:
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` requires at
   least two distinct applied B1 scene poses before setting
   `robot_navigation_supported=true`; duplicate-pose camera rows stay blocked.
+- `.venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --output output/b1-map12/alignment/readiness_with_alignment.json`
+  passes validation with `map12_overlay_status=verified`,
+  `map12_to_b1_usd_transform_status=verified`, and
+  `robot_navigation_supported=false` before runtime smoke evidence is attached.
+- `python scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --points output/b1-map12/navigation-smoke/map12_points.json --output output/b1-map12/navigation-smoke/waypoint_pose_requests.json`
+  successfully converts two accepted alignment-corner anchors into
+  residual-backed B1 scene poses, but the subsequent smoke run under
+  `output/b1-map12/navigation-smoke/navigation_smoke.json` remains blocked
+  because both FPV images have too little visual detail. This confirms corner
+  alignment anchors are valid geometry evidence but poor camera-smoke points.
+- `python scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --points output/b1-map12/navigation-smoke/residual-overlay/map12_points.json --output output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json`
+  converts the `plastic_bottle_table_1` and `long_table` Map12 navigation-memory
+  candidate points into ready residual-backed B1 scene pose requests with no
+  blocked rows.
+- `.venv-isaaclab/bin/python scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py --readiness-artifact output/b1-map12/alignment/readiness_with_alignment.json --waypoint-pose-requests output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json --output-dir output/b1-map12/navigation-smoke/residual-overlay --accept-nvidia-eula`
+  passes. The resulting
+  `output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`
+  reports `robot_navigation_supported=true`,
+  `robot_navigation_provenance=isaac_b1_map12_navigation_smoke`,
+  `navigation_provenance=kinematic_pose_driven`, two applied waypoints, and
+  same-pose FPV/Chase/Map/Verify images for each waypoint.
+- `.venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 --alignment-artifact output/b1-map12/alignment/alignment_residuals.json --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --require-navigation-success --output output/b1-map12/navigation-smoke/residual-overlay/readiness_with_navigation.json`
+  passes and promotes the readiness artifact to
+  `robot_navigation_supported=true` from the real navigation-smoke artifact.
+- `python scripts/operator_console/render_scene_previews.py --world b1-map12 --b1-camera-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --output-dir output/b1-map12/operator-preview-residual-overlay`
+  succeeds and writes `b1-map12-preview.json`, `b1-map12-fpv.png`,
+  `b1-map12-chase.png`, `b1-map12-map.png`, and `b1-map12-topdown.png`. The FPV
+  and Chase metadata share `waypoint_id=b1_aligned_long_table`, reference
+  `output/b1-map12/alignment/alignment_residuals.json`, use
+  `alignment_transform_source=reviewed_correspondence_fit`, and record
+  `isaac_runtime_*` provenance.
+- `python scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py --run-dir output/b1-map12/navigation-smoke/residual-overlay --readiness-artifact output/b1-map12/alignment/readiness_with_alignment.json --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --waypoint-pose-requests output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json --output output/b1-map12/navigation-smoke/residual-overlay/report.html`
+  passes and writes the reviewable navigation report.
+- `just harness::b1-map12-navigation-smoke stamp=residual-overlay-harness-3 waypoint_pose_requests=output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json output_dir=output/b1-map12/navigation-smoke-harness`
+  passes as the single-command maintainer replay. It writes non-empty
+  `navigation_smoke.json`, `readiness_with_navigation.json`, and `report.html`
+  under `output/b1-map12/navigation-smoke-harness/residual-overlay-harness-3/`.
+  The earlier interrupted
+  `output/b1-map12/navigation-smoke-harness/residual-overlay-harness/` directory
+  is a partial run with zero-byte JSON files and is not evidence.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
   in the HTML report before local Isaac camera proof exists.
@@ -158,17 +204,16 @@ Last proven evidence:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py -q`
   pass for the distinct-applied-pose navigation smoke gate.
 
-Next hypothesis: the verified global alignment can now feed
-`build_b1_map12_waypoint_pose_requests.py` for arbitrary Map12 waypoint ids or
-`map_xy/yaw` points, then local Isaac can apply at least two distinct B1 scene
-poses and capture same-pose FPV/Chase/topdown evidence.
+Next hypothesis: the same residual-backed point path is sufficient for
+operator-selected Map12 `map_xy/yaw` points inside verified global coverage, as
+long as the points are useful interior navigation/viewpoints rather than
+alignment-corner anchors.
 
-Next implementation step: run readiness against
-`output/b1-map12/alignment/alignment_residuals.json`, build two or more
-waypoint pose requests from Map12 points, run the B1 navigation smoke on local
-Isaac, then promote same-pose FPV/Chase preview metadata only from that
-residual-backed runtime camera artifact. Add semantic anchors later before
-projecting room/object labels.
+Next implementation step: keep the navigation-smoke and operator-preview
+artifact path as the accepted first proof. Add semantic anchors later before
+projecting room/object labels. If broader robot consumption is required next,
+wire this residual-backed pose-request path into the operator workflow instead
+of adding a new compatibility route.
 
 Next command/artifact:
 
@@ -217,11 +262,10 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   --output-dir output/b1-map12/alignment
 ```
 
-Stop condition: geometry alignment is verified. Do not mark runtime navigation
-preview complete until at least two residual-backed Map12 point requests become
-distinct applied B1 poses and at least one same-pose FPV/Chase pair is promoted
-from Isaac runtime camera evidence. Do not mark room/area labels verified until
-separate accepted semantic anchors exist.
+Stop condition: geometry alignment and preview-grade runtime navigation proof
+are verified. Do not claim room/area labels, object labels, manipulation,
+planner-backed navigation, physical robot support, or public MCP navigation
+until separate accepted semantic anchors and dedicated proof artifacts exist.
 
 No-touch scope: no public surface changes, no MCP contract changes, no object
 or receptacle USD binding, no manipulation or planner-backed navigation claim,

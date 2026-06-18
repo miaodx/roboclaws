@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-two-map-alignment-blocker
-status: Approved execution source; blocked on reviewed anchors and local Isaac proof
+status: First residual-backed robot-consumption proof passed; room/object semantic anchors remain later work
 created: 2026-06-17
 last_reviewed: 2026-06-18
 implementation_allowed: true
@@ -38,6 +38,16 @@ scene, because digital-twin waypoint previews must start from Map12 waypoints
 and place the robot in Isaac at the corresponding B1 scene pose. The inverse
 direction is still needed before scene labels or object labels can become Map12
 navigation labels or object locations.
+
+Current execution status: the reviewed global transform exists and the first
+Map12 -> B1 robot-consumption proof passes. The residual artifact at
+`output/b1-map12/alignment/alignment_residuals.json` is `global_verified`.
+`output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`
+applies two residual-backed Map12 navigation-memory points as B1 scene robot
+poses and captures same-pose Isaac FPV/Chase evidence. Operator preview
+promotion from that artifact succeeds under
+`output/b1-map12/operator-preview-residual-overlay/`. Room/object projection
+still needs separate semantic anchors and is not part of this proof.
 
 ## Decision
 
@@ -206,6 +216,13 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
      application, missing camera evidence, or any attempt to use bbox/seed
      transforms.
 
+   Current evidence: this step passes for the navigation-memory points
+   `plastic_bottle_table_1` and `long_table` under
+   `output/b1-map12/navigation-smoke/residual-overlay/`. A separate attempt
+   using two accepted alignment-corner anchors generated valid B1 pose requests
+   but remained blocked because both FPV captures had too little visual detail;
+   those anchors are geometry evidence, not good smoke viewpoints.
+
 8. Promote the runtime camera artifact into operator-console preview assets.
    - Reuse `scripts/operator_console/render_scene_previews.py
      --b1-camera-artifact ...`.
@@ -213,6 +230,14 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
      come from the same accepted waypoint evidence row.
    - Preserve the current no-camera static preview behavior when no accepted
      runtime camera artifact exists.
+
+   Current evidence: promotion succeeds from
+   `output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`.
+   The generated preview metadata uses `waypoint_id=b1_aligned_long_table` for
+   both FPV and Chase, references
+   `output/b1-map12/alignment/alignment_residuals.json`, records
+   `alignment_transform_source=reviewed_correspondence_fit`, and keeps
+   `isaac_runtime_*` provenance.
 
 ## Acceptance Criteria
 
@@ -239,9 +264,8 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
   decision, transform source/artifact, and output B1 scene pose.
 - Unsupported or unverified points block loudly with an artifact instead of
   falling back to another transform, point, or camera source.
-- Multiple arbitrary verified Map12 points can be converted and applied as B1
-  scene poses; at least one same-pose FPV/Chase pair is required before preview
-  promotion.
+- Multiple verified Map12 points can be converted and applied as B1 scene poses;
+  at least one same-pose FPV/Chase pair is required before preview promotion.
 - The on-demand pose path does not lower navigation proof thresholds or imply
   planner-backed, collision-free, physical, MCP, or public-surface support.
 - B1 FPV is a robot-mounted/head-camera-equivalent Isaac runtime view, not a
