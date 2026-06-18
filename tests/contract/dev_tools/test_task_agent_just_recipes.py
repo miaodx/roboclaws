@@ -1456,6 +1456,7 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
     assert "generated_mess_count=0" in target_trace
     assert "b1_alignment_artifact=" not in target_trace
     assert "b1_navigation_artifact=" not in target_trace
+    assert "b1_semantic_projection_artifact=" not in target_trace
 
 
 def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() -> None:
@@ -1468,16 +1469,22 @@ def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() ->
         "evidence_lane=world-public-labels",
         "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
         "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json",
+        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
     )
 
     assert route[28] == "output/b1-map12/alignment/alignment_residuals.json"
     assert route[29] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
+    assert route[30] == "output/b1-map12/semantic-projection/semantic_projection.json"
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
         target_trace
     )
     assert (
         "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json"
+        in target_trace
+    )
+    assert (
+        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json"
         in target_trace
     )
 

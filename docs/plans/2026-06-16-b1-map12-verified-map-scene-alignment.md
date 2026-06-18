@@ -103,6 +103,12 @@ alignment and navigation artifacts and write a
 artifacts; callers must pass `b1_alignment_artifact=...` and
 `b1_navigation_artifact=...` explicitly when they want product/open-task runs to
 consume the verified robot-navigation proof.
+It can also consume a verified semantic projection artifact explicitly via
+`b1_semantic_projection_artifact=...` / `--semantic-projection-artifact` and
+write `digital_twin_capabilities.room_semantic_projection_proof`. This remains
+blocked until accepted semantic anchors are promoted and the strict projection
+script produces a verified artifact; proposed packets and alignment-only
+manifests are not accepted as room semantics.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real

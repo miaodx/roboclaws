@@ -656,6 +656,13 @@ Current gate:
   bundle validates and reports `robot_navigation_supported=true`. The compiler
   does not auto-discover `output/` artifacts; callers must pass explicit paths,
   and missing, invalid, or mismatched artifacts fail loudly.
+- The same compiler can now consume an explicit verified semantic projection
+  artifact and write
+  `digital_twin_capabilities.room_semantic_projection_proof` into
+  `semantics.json`. This only promotes room semantics when the projection
+  artifact itself was produced from accepted semantic anchors. The default route
+  does not auto-discover semantic projection output, and object projection stays
+  `blocked_until_object_semantic_anchors`.
 - `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
   currently exits non-zero with `accepted semantic anchors are required before
   projecting room labels`. This is expected until human-accepted
@@ -673,6 +680,10 @@ Next implementation slice:
   map bundle, pass explicit `b1_alignment_artifact=...` and
   `b1_navigation_artifact=...` overrides rather than relying on generated
   `output/` discovery.
+- After the strict semantic projection artifact exists, product/open-task runs
+  may also pass explicit `b1_semantic_projection_artifact=...` to carry verified
+  room semantics in the runtime bundle. Do not pass proposed-only packets or
+  current alignment-only manifests as room semantics.
 - Add separate object-level semantic anchors later before projecting object
   labels.
 

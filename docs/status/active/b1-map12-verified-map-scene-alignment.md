@@ -190,6 +190,14 @@ Last proven evidence:
   auto-discover `output/` artifacts: callers must pass explicit verified
   alignment/navigation artifact paths, and missing or mismatched artifacts fail
   loudly.
+- `scripts/maps/compile_b1_map12_runtime_bundle.py` also accepts explicit
+  `--semantic-projection-artifact` /
+  `b1_semantic_projection_artifact=...` inputs. When a strict projection
+  artifact exists, the generated `semantics.json` carries
+  `digital_twin_capabilities.room_semantic_projection_proof` and promotes room
+  semantic labeling to verified. With the current proposed-only semantic review
+  packet, this remains blocked; the compiler does not auto-discover projection
+  output and does not infer object labels from room anchors.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer

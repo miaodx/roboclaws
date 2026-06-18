@@ -82,8 +82,12 @@ def test_runtime_compiler_uses_vendor_map12_and_review_labels(tmp_path: Path) ->
     assert (output_dir / "b1_runtime_provenance.json").is_file()
     assert (output_dir / "review_labels_topdown.png").is_file()
     proof = runtime_semantics["digital_twin_capabilities"]["robot_consumption_proof"]
+    room_proof = runtime_semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]
     assert proof["status"] == "blocked_missing_verified_alignment"
     assert proof["robot_navigation_supported"] is False
+    assert room_proof["status"] == "blocked_missing_accepted_semantic_anchors"
+    assert room_proof["room_semantics_supported"] is False
+    assert room_proof["object_projection_status"] == "blocked_until_object_semantic_anchors"
     assert runtime_semantics["spatial_contract"]["alignment_status"] == "candidate"
 
 
@@ -128,6 +132,78 @@ def test_runtime_compiler_materializes_verified_robot_consumption_proof(
     assert runtime_semantics["provenance"]["contains_runtime_observations"] is False
     assert runtime_semantics["provenance"]["contains_verified_robot_consumption_proof"] is True
     assert provenance["robot_consumption_proof"]["robot_navigation_supported"] is True
+
+
+def test_runtime_compiler_materializes_verified_room_semantic_projection(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection_path.write_text(
+        json.dumps(_semantic_projection_artifact(review_manifest_path=REVIEW_MANIFEST)),
+        encoding="utf-8",
+    )
+
+    result = compile_runtime_bundle(
+        map_bundle=MAP12_BUNDLE,
+        scene_root=SCENE_ROOT,
+        review_manifest_path=REVIEW_MANIFEST,
+        semantic_projection_artifact_path=projection_path,
+        output_dir=tmp_path / "runtime",
+    )
+    output_dir = Path(result["output_dir"])
+    runtime_semantics = json.loads((output_dir / "semantics.json").read_text(encoding="utf-8"))
+    provenance = json.loads((output_dir / "b1_runtime_provenance.json").read_text(encoding="utf-8"))
+    room_proof = runtime_semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]
+
+    assert result["room_semantics_supported"] is True
+    assert validate_nav2_map_bundle(output_dir).ok
+    assert runtime_semantics["spatial_contract"]["alignment_status"] == "candidate"
+    assert room_proof["status"] == "verified_room_semantics"
+    assert room_proof["semantic_projection_artifact"] == str(projection_path)
+    assert room_proof["room_semantics_supported"] is True
+    assert room_proof["room_projection_count"] == 1
+    assert room_proof["semantic_anchor_count"] == 1
+    assert room_proof["object_projection_status"] == "blocked_until_object_semantic_anchors"
+    assert runtime_semantics["provenance"]["contains_verified_room_semantics"] is True
+    assert provenance["room_semantic_projection_proof"]["room_semantics_supported"] is True
+    assert str(projection_path) in provenance["source_file_hashes"]
+    assert [room["room_id"] for room in runtime_semantics["rooms"]] == ["meeting_room_a"]
+    room = runtime_semantics["rooms"][0]
+    assert room["alignment_status"] == "verified"
+    assert room["polygon_usage"]["semantic_labeling"] == "verified"
+    assert room["semantic_anchor_count"] == 1
+    assert room["source_anchor_ids"] == ["semantic_meeting_room_a"]
+    assert runtime_semantics["inspection_waypoints"][0]["room_id"] == "meeting_room_a"
+
+
+def test_runtime_compiler_rejects_missing_semantic_projection_artifact(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="semantic projection artifact missing"):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=tmp_path / "missing.json",
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_semantic_projection_review_mismatch(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection = _semantic_projection_artifact(review_manifest_path=tmp_path / "other_review.json")
+    projection_path.write_text(json.dumps(projection), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source_review_manifest must match"):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
 
 
 def test_runtime_compiler_rejects_navigation_without_alignment(
@@ -292,6 +368,55 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
                 "views": {"fpv": str(second)},
             },
         ],
+    }
+
+
+def _semantic_projection_artifact(*, review_manifest_path: Path) -> dict:
+    review = _review_manifest()
+    label = next(item for item in review["labels"] if item["label_id"] == "meeting_room_a")
+    map_polygon = [
+        {"x": float(point["x"]), "y": float(point["y"])} for point in label["geometry"]["points"]
+    ]
+    return {
+        "schema": "b1_map12_semantic_projection_v1",
+        "status": "verified_room_semantics",
+        "source_correspondences": "assets/maps/b1-map12-scene-correspondences.json",
+        "source_review_manifest": str(review_manifest_path),
+        "source_map_frame": "robot_map_12",
+        "target_scene_frame": "b1_rebuilt_scene_usd_world_candidate",
+        "semantic_anchor_count": 1,
+        "room_projection_count": 1,
+        "rooms": [
+            {
+                "room_id": "meeting_room_a",
+                "room_label": "Meeting room A",
+                "category": "meeting_room",
+                "navigation_area_id": "west_corridor",
+                "asset_partition_id": "meeting_room_a",
+                "semantic_anchor_count": 1,
+                "semantic_anchors": [
+                    {
+                        "source_anchor_id": "semantic_meeting_room_a",
+                        "map_xy": [-5.0, -6.0],
+                        "scene_xyz": [1.0, 2.0, 0.0],
+                    }
+                ],
+                "map_polygon": map_polygon,
+                "alignment_status": "accepted_semantic_anchor",
+                "semantic_source": "reviewed_b1_map12_semantic_anchor",
+                "review_status": "accepted",
+                "source_label_id": "meeting_room_a",
+                "source_anchor_ids": ["semantic_meeting_room_a"],
+            }
+        ],
+        "object_projection_status": "blocked_until_object_semantic_anchors",
+        "objects": [],
+        "policy": {
+            "requires_promoted_correspondence_manifest": True,
+            "requires_accepted_semantic_anchors": True,
+            "proposed_anchors_are_rejected": True,
+            "object_labels_are_not_inferred_from_room_anchors": True,
+        },
     }
 
 
