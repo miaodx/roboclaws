@@ -386,16 +386,26 @@ def collect_observation_frames(
     max_frames_per_source: int,
 ) -> list[ObservationFrame]:
     frames: list[ObservationFrame] = []
-    for source_kind, run_dirs in (
-        ("raw_failure", raw_run_dirs),
-        ("contrast", contrast_run_dirs),
-    ):
-        for run_dir in run_dirs:
-            run_dir = run_dir.expanduser()
-            if not run_dir.exists():
-                continue
-            collected = _collect_frames_from_run_dir(run_dir, source_kind=source_kind)
-            frames.extend(collected[:max_frames_per_source])
+    raw_source_frames = []
+    for run_dir in raw_run_dirs:
+        run_dir = run_dir.expanduser()
+        if not run_dir.exists():
+            raise FileNotFoundError(f"RAW-FPV source run directory does not exist: {run_dir}")
+        raw_source_frames.extend(
+            _collect_frames_from_run_dir(run_dir, source_kind="raw_failure")[:max_frames_per_source]
+        )
+    if not raw_source_frames:
+        source_dirs = ", ".join(str(path.expanduser()) for path in raw_run_dirs)
+        raise ValueError(
+            f"RAW-FPV source run directories did not yield any usable FPV frames: {source_dirs}"
+        )
+    frames.extend(raw_source_frames)
+    for run_dir in contrast_run_dirs:
+        run_dir = run_dir.expanduser()
+        if not run_dir.exists():
+            continue
+        collected = _collect_frames_from_run_dir(run_dir, source_kind="contrast")
+        frames.extend(collected[:max_frames_per_source])
     return frames
 
 

@@ -432,6 +432,62 @@ def test_raw_fpv_probe_rejects_missing_prediction_manifest(tmp_path: Path) -> No
         raise AssertionError("expected missing prediction manifest to fail aloud")
 
 
+def test_raw_fpv_probe_rejects_missing_raw_source_run_dir(tmp_path: Path) -> None:
+    probe = _load_module()
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(tmp_path / "missing-raw-run"),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "missing-raw-run",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except FileNotFoundError as exc:
+        assert "RAW-FPV source run directory does not exist" in str(exc)
+        assert "missing-raw-run" in str(exc)
+    else:  # pragma: no cover - missing source evidence should fail before scoring
+        raise AssertionError("expected missing RAW-FPV source run directory to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_raw_source_without_usable_frames(tmp_path: Path) -> None:
+    probe = _load_module()
+    empty_run_dir = tmp_path / "empty-raw-run"
+    empty_run_dir.mkdir()
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(empty_run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "empty-raw-run",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except ValueError as exc:
+        assert "RAW-FPV source run directories did not yield any usable FPV frames" in str(exc)
+        assert "empty-raw-run" in str(exc)
+    else:  # pragma: no cover - empty source evidence should fail before scoring
+        raise AssertionError("expected empty RAW-FPV source run directory to fail aloud")
+
+
 def test_raw_fpv_probe_aliases_unique_sweep_frame_labels_by_observation_id(
     tmp_path: Path,
 ) -> None:

@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: RAW-FPV perception probe source evidence now fails aloud.
+  The probe fails before report generation when an explicit `--raw-run-dir` is
+  missing or when all selected RAW-FPV source directories contain no usable FPV
+  frames, instead of producing plausible zero-frame prompt/score artifacts.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud probe input evidence; optional contrast-run opt-out, valid raw
+  source loading, frame grouping, scorer truth loading, provider execution,
+  prompt privacy, scoring, and report artifacts are unchanged. Metric: ratchet
+  remains at 0 complexity rows and 79 oversized modules;
+  `run_raw_fpv_perception_probe.py` is 1917 lines and
+  `test_raw_fpv_perception_probe.py` is 1549 lines. The test file remains
+  oversized; leave pruning/splitting for an `$intuitive-tests` pass. Proof:
+  focused missing/empty RAW-FPV source regression tests, full RAW-FPV
+  perception probe test file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
+
 - 2026-06-18: RAW-FPV perception probe provider model input now fails aloud.
   The probe validates `codex-router-responses` model input through the provider
   registry before request execution, rejects unknown explicit model ids as
