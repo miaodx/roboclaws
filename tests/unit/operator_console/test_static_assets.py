@@ -274,6 +274,7 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert not any(name.startswith("molmospaces-val_8-") for name in molmospaces_preview_files)
     b1_preview_assets = dict(WORLD_SPECS["b1-map12"].preview_assets)
     assert "topdown" not in b1_preview_assets
+    assert "map" not in b1_preview_assets
 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         preview_by_view = dict(WORLD_SPECS[world_id].preview_assets)
@@ -311,8 +312,14 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert b1_metadata["views"]["chase"]["view"] == "chase_camera"
     assert "source_artifact_sha256" in b1_metadata["camera_preview_artifact"]
     assert "path" not in b1_metadata["camera_preview_artifact"]
-    assert b1_metadata["views"]["topdown"]["view"] == "review_label_topdown"
-    assert b1_metadata["views"]["map"]["path"] != b1_metadata["views"]["topdown"]["path"]
+    assert "map" not in b1_metadata["views"]
+    assert "topdown" not in b1_metadata["views"]
+    assert b1_metadata["diagnostic_views"]["map"]["display_policy"] == (
+        "operator_map_diagnostic_not_b1_visual_route_preview"
+    )
+    assert b1_metadata["diagnostic_views"]["topdown"]["display_policy"] == (
+        "v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown"
+    )
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 

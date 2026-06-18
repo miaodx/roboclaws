@@ -14,7 +14,87 @@
     "source_artifact_status": "external_local_verification_artifact",
     "source_kind": "navigation_smoke_waypoint_evidence"
   },
-  "generated_at": "2026-06-18T14:05:35Z",
+  "diagnostic_views": {
+    "map": {
+      "alignment_status": "candidate",
+      "display_frame": null,
+      "display_policy": "operator_map_diagnostic_not_b1_visual_route_preview",
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ]
+        ],
+        "edge_fraction_over_16": 0.139625,
+        "edge_fraction_over_8": 0.167,
+        "height": 560,
+        "max_channel_range": 255.0,
+        "max_stddev": 25.474,
+        "mean_rgb": [
+          213.123,
+          214.498,
+          215.911
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 767,
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "path": "b1-map12-map.png",
+      "provenance": "compiled_vendor_map12_runtime_preview_png",
+      "view": "source_map_preview"
+    },
+    "topdown": {
+      "alignment_status": "candidate",
+      "display_policy": "v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown",
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ],
+          [
+            0,
+            255
+          ]
+        ],
+        "edge_fraction_over_16": 0.174625,
+        "edge_fraction_over_8": 0.208937,
+        "height": 560,
+        "max_channel_range": 255.0,
+        "max_stddev": 43.637,
+        "mean_rgb": [
+          197.074,
+          198.454,
+          191.584
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "thumbnail_color_count": 1444,
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "inspection_waypoint_count": 11,
+      "path": "b1-map12-topdown.png",
+      "provenance": "compiled_b1_map12_review_labels_topdown_png",
+      "review_label_count": 3,
+      "room_count": 3,
+      "view": "review_label_topdown"
+    }
+  },
+  "generated_at": "2026-06-18T14:57:09Z",
   "map_bundle": "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
   "render_resolution": {
     "height": 560,
@@ -25,7 +105,7 @@
   "runtime_map_bundle": "output/operator-console-scene-previews/b1-map12-runtime-map-bundle",
   "runtime_provenance": {
     "compiler": "scripts/maps/compile_b1_map12_runtime_bundle.py",
-    "generated_at": "2026-06-18T14:05:34.679711Z",
+    "generated_at": "2026-06-18T14:57:09.267508Z",
     "generated_from_review_manifest": true,
     "include_draft_labels": false,
     "output_dir": "output/operator-console-scene-previews/b1-map12-runtime-map-bundle",
@@ -163,82 +243,6 @@
       "source_artifact_view": "waypoint_02_views/b1_aligned_long_table.fpv.png",
       "view": "raw_fpv",
       "waypoint_id": "b1_aligned_long_table"
-    },
-    "map": {
-      "alignment_status": "candidate",
-      "display_frame": null,
-      "image_diagnostics": {
-        "channel_extrema_rgb": [
-          [
-            0,
-            255
-          ],
-          [
-            0,
-            255
-          ],
-          [
-            0,
-            255
-          ]
-        ],
-        "edge_fraction_over_16": 0.139625,
-        "edge_fraction_over_8": 0.167,
-        "height": 560,
-        "max_channel_range": 255.0,
-        "max_stddev": 25.474,
-        "mean_rgb": [
-          213.123,
-          214.498,
-          215.911
-        ],
-        "schema": "operator_console_preview_image_diagnostics_v1",
-        "thumbnail_color_count": 767,
-        "visual_status": "reviewable",
-        "width": 900
-      },
-      "path": "b1-map12-map.png",
-      "provenance": "compiled_vendor_map12_runtime_preview_png",
-      "view": "source_map_preview"
-    },
-    "topdown": {
-      "alignment_status": "candidate",
-      "image_diagnostics": {
-        "channel_extrema_rgb": [
-          [
-            0,
-            255
-          ],
-          [
-            0,
-            255
-          ],
-          [
-            0,
-            255
-          ]
-        ],
-        "edge_fraction_over_16": 0.174625,
-        "edge_fraction_over_8": 0.208937,
-        "height": 560,
-        "max_channel_range": 255.0,
-        "max_stddev": 43.637,
-        "mean_rgb": [
-          197.074,
-          198.454,
-          191.584
-        ],
-        "schema": "operator_console_preview_image_diagnostics_v1",
-        "thumbnail_color_count": 1444,
-        "visual_status": "reviewable",
-        "width": 900
-      },
-      "inspection_waypoint_count": 11,
-      "path": "b1-map12-topdown.png",
-      "provenance": "compiled_b1_map12_review_labels_topdown_png",
-      "review_label_count": 3,
-      "room_count": 3,
-      "view": "review_label_topdown"
     }
   },
   "world_id": "b1-map12"

@@ -83,10 +83,6 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "path": "/previews/b1-map12-fpv.png",
             "href": "/previews/b1-map12-fpv.png",
         },
-        "map": {
-            "path": "/previews/b1-map12-map.png",
-            "href": "/previews/b1-map12-map.png",
-        },
         "chase": {
             "path": "/previews/b1-map12-chase.png",
             "href": "/previews/b1-map12-chase.png",
@@ -188,15 +184,25 @@ def test_b1_map12_scene_preview_has_v1_runtime_camera_provenance() -> None:
     assert metadata["views"]["chase"]["provenance"] == "isaac_runtime_report_chase_camera"
     assert not str(metadata["views"]["chase"].get("source_artifact_view", "")).startswith("/")
     assert "source_path" not in metadata["views"]["chase"]
-    assert metadata["views"]["map"]["view"] == "source_map_preview"
-    assert metadata["views"]["map"]["provenance"] == "compiled_vendor_map12_runtime_preview_png"
-    assert metadata["views"]["topdown"]["view"] == "review_label_topdown"
-    assert metadata["views"]["topdown"]["provenance"] == (
+    assert "map" not in metadata["views"]
+    assert "topdown" not in metadata["views"]
+    assert metadata["diagnostic_views"]["map"]["view"] == "source_map_preview"
+    assert metadata["diagnostic_views"]["map"]["provenance"] == (
+        "compiled_vendor_map12_runtime_preview_png"
+    )
+    assert metadata["diagnostic_views"]["map"]["display_policy"] == (
+        "operator_map_diagnostic_not_b1_visual_route_preview"
+    )
+    assert metadata["diagnostic_views"]["topdown"]["view"] == "review_label_topdown"
+    assert metadata["diagnostic_views"]["topdown"]["provenance"] == (
         "compiled_b1_map12_review_labels_topdown_png"
     )
-    assert metadata["views"]["topdown"]["review_label_count"] >= 1
-    assert metadata["views"]["topdown"]["room_count"] >= 1
-    assert metadata["views"]["topdown"]["inspection_waypoint_count"] >= 1
+    assert metadata["diagnostic_views"]["topdown"]["display_policy"] == (
+        "v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown"
+    )
+    assert metadata["diagnostic_views"]["topdown"]["review_label_count"] >= 1
+    assert metadata["diagnostic_views"]["topdown"]["room_count"] >= 1
+    assert metadata["diagnostic_views"]["topdown"]["inspection_waypoint_count"] >= 1
 
 
 def test_console_combinations_are_catalog_backed_axes() -> None:

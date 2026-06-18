@@ -449,7 +449,6 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     assert worlds[world_id]["preview_assets"]["chase"]["href"] == (
         "/previews/molmospaces-procthor-objaverse-val-10-chase.png"
     )
-    assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == "/previews/b1-map12-map.png"
     assert worlds["b1-map12"]["preview_assets"]["fpv"]["href"] == "/previews/b1-map12-fpv.png"
     assert worlds["b1-map12"]["preview_assets"]["chase"]["href"] == ("/previews/b1-map12-chase.png")
     assert (
@@ -564,7 +563,6 @@ def _assert_scene_preview_png_assets(base_url: str) -> None:
         "b1-map12-map.png",
         "molmospaces-procthor-objaverse-val-10-topdown.png",
         "molmospaces-procthor-objaverse-val-10-chase.png",
-        "b1-map12-map.png",
         "b1-map12-fpv.png",
         "b1-map12-chase.png",
     ):

@@ -120,7 +120,6 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         ),
         preview_assets=(
             ("fpv", "/previews/b1-map12-fpv.png"),
-            ("map", "/previews/b1-map12-map.png"),
             ("chase", "/previews/b1-map12-chase.png"),
         ),
     ),

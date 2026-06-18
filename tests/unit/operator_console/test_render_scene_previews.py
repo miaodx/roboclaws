@@ -220,10 +220,18 @@ def test_b1_map12_preview_uses_static_map_bundle_assets(tmp_path: Path, monkeypa
     assert metadata["renderer"] == "static_b1_map12_digital_twin_overview"
     assert "fpv" not in metadata["views"]
     assert "chase" not in metadata["views"]
+    assert "map" not in metadata["views"]
+    assert "topdown" not in metadata["views"]
     assert metadata["review_manifest"] == str(review)
     assert metadata["runtime_map_bundle"] == str(tmp_path / "runtime-map-bundle")
-    assert metadata["views"]["topdown"]["review_label_count"] == 1
-    assert metadata["views"]["topdown"]["inspection_waypoint_count"] == 2
+    assert metadata["diagnostic_views"]["map"]["display_policy"] == (
+        "operator_map_diagnostic_not_b1_visual_route_preview"
+    )
+    assert metadata["diagnostic_views"]["topdown"]["display_policy"] == (
+        "v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown"
+    )
+    assert metadata["diagnostic_views"]["topdown"]["review_label_count"] == 1
+    assert metadata["diagnostic_views"]["topdown"]["inspection_waypoint_count"] == 2
 
 
 def test_b1_map12_preview_promotes_real_isaac_camera_artifact(

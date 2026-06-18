@@ -1223,11 +1223,12 @@ def _b1_map12_preview_metadata(
         "review_manifest": str(B1_ALIGNMENT_REVIEW_MANIFEST),
         "render_resolution": {"width": width, "height": height},
         "runtime_provenance": provenance,
-        "views": {
+        "diagnostic_views": {
             "map": {
                 "path": map_path.name,
                 "view": "source_map_preview",
                 "provenance": "compiled_vendor_map12_runtime_preview_png",
+                "display_policy": "operator_map_diagnostic_not_b1_visual_route_preview",
                 "alignment_status": str(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),
@@ -1238,6 +1239,7 @@ def _b1_map12_preview_metadata(
                 "path": topdown_path.name,
                 "view": "review_label_topdown",
                 "provenance": "compiled_b1_map12_review_labels_topdown_png",
+                "display_policy": ("v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown"),
                 "alignment_status": str(
                     (semantics.get("spatial_contract") or {}).get("alignment_status") or "candidate"
                 ),
@@ -1247,6 +1249,7 @@ def _b1_map12_preview_metadata(
                 "image_diagnostics": _image_diagnostics(topdown_path),
             },
         },
+        "views": {},
     }
 
 
