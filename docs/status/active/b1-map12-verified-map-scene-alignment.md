@@ -215,6 +215,11 @@ Last proven evidence:
   B1 robot-consumption manifest to the run root. These are visible run
   artifacts only; they do not auto-feed generated `output/` artifacts back into
   the default route.
+- `runtime_map_prior_targets.json` now carries the same
+  `digital_twin_capabilities` plus a compact `capability_summary`, so consumers
+  of the materialized-target summary can see verified B1 navigation status and
+  blocked room/object/manipulation capability status without parsing the full
+  snapshot.
 - The operator console artifact list now exposes these wrapper-level files, so
   a B1 console run can show both the canonical prior and the robot-consumption
   manifest even when the live attempt evidence lives in a nested timestamp/seed

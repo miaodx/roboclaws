@@ -257,6 +257,18 @@ def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
     assert snapshot["public_semantic_anchors"]
     assert materialized["actionable_waypoint_ids"]
     assert materialized["fixture_candidates"] == []
+    assert (
+        materialized["capability_summary"]["robot_consumption_status"]
+        == "robot_navigation_verified"
+    )
+    assert materialized["capability_summary"]["robot_navigation_supported"] is True
+    assert materialized["capability_summary"]["room_semantics_supported"] is False
+    assert materialized["capability_summary"]["object_projection_status"] == (
+        "blocked_until_object_semantic_anchors"
+    )
+    assert materialized["digital_twin_capabilities"]["robot_consumption_proof"][
+        "navigation_artifact"
+    ] == str(navigation_path)
 
 
 def test_runtime_compiler_rejects_missing_semantic_projection_artifact(

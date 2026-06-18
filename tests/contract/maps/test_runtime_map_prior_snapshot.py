@@ -310,6 +310,14 @@ def test_nav2_cleanup_bundle_converts_to_runtime_prior_snapshot_shape(tmp_path: 
     assert snapshot["contract"]["private_truth_included"] is False
     assert targets["actionable_waypoint_ids"] == ["room_a_center"]
     assert targets["fixture_candidates"] == []
+    assert (
+        targets["digital_twin_capabilities"]["robot_consumption_proof"][
+            "robot_navigation_supported"
+        ]
+        is True
+    )
+    assert targets["capability_summary"]["robot_navigation_supported"] is True
+    assert targets["capability_summary"]["room_semantics_supported"] is False
     assert runtime_metric_map_from_prior_artifact(snapshot) == snapshot["runtime_metric_map"]
     _assert_no_forbidden_keys(snapshot)
 
@@ -431,8 +439,16 @@ def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:
         "driveable_ways": [{"from_room_id": "room_a", "to_room_id": "room_a"}],
         "digital_twin_capabilities": {
             "robot_consumption_proof": {
+                "status": "robot_navigation_verified",
                 "robot_navigation_supported": True,
-            }
+                "manipulation_supported": False,
+            },
+            "room_semantic_projection_proof": {
+                "status": "blocked_missing_accepted_semantic_anchors",
+                "room_semantics_supported": False,
+                "object_semantics_supported": False,
+                "object_projection_status": "blocked_until_object_semantic_anchors",
+            },
         },
         "provenance": {
             "source": "test_nav2_cleanup_bundle",
