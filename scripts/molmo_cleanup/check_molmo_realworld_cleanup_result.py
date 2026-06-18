@@ -1826,6 +1826,40 @@ def _assert_b1_robot_consumption_proof(data: dict[str, Any], base: Path) -> None
     assert proof.get("navigation_artifact"), proof
     assert proof.get("physical_robot") is False, proof
     assert proof.get("manipulation_supported") is False, proof
+    _assert_b1_robot_consumption_manifest(base, proof)
+
+
+def _assert_b1_robot_consumption_manifest(base: Path, proof: dict[str, Any]) -> None:
+    manifest_path = base / "b1_robot_consumption_manifest.json"
+    assert manifest_path.is_file(), manifest_path
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest.get("schema") == "b1_map12_robot_consumption_manifest_v1", manifest
+    assert manifest.get("status") == "robot_navigation_ready", manifest
+    navigation = manifest.get("navigation") if isinstance(manifest.get("navigation"), dict) else {}
+    assert navigation.get("ready") is True, navigation
+    assert navigation.get("status") == proof.get("status"), navigation
+    assert navigation.get("alignment_status") == proof.get("alignment_status"), navigation
+    assert navigation.get("navigation_status") == proof.get("navigation_status"), navigation
+    assert navigation.get("alignment_artifact") == proof.get("alignment_artifact"), navigation
+    assert navigation.get("navigation_artifact") == proof.get("navigation_artifact"), navigation
+    assert navigation.get("robot_navigation_provenance") == proof.get(
+        "robot_navigation_provenance"
+    ), navigation
+    assert int(navigation.get("navigation_waypoint_count") or 0) == int(
+        proof.get("navigation_waypoint_count") or 0
+    ), navigation
+    capabilities = (
+        manifest.get("capabilities") if isinstance(manifest.get("capabilities"), dict) else {}
+    )
+    assert capabilities.get("robot_navigation") is True, capabilities
+    assert capabilities.get("manipulation") is False, capabilities
+    semantics = manifest.get("semantics") if isinstance(manifest.get("semantics"), dict) else {}
+    assert semantics.get("object_projection_status") == "blocked_until_object_semantic_anchors", (
+        semantics
+    )
+    policy = manifest.get("policy") if isinstance(manifest.get("policy"), dict) else {}
+    assert policy.get("no_output_directory_autodiscovery") is True, policy
+    assert policy.get("object_labels_are_not_inferred_from_room_anchors") is True, policy
 
 
 def _has_planner_proof_requests(data: dict[str, Any]) -> bool:

@@ -223,6 +223,8 @@ Last proven evidence:
   `--require-b1-robot-consumption-proof` gate. That gate reads the run-local
   copied `map_bundle/semantics.json` and requires
   `digital_twin_capabilities.robot_consumption_proof.status=robot_navigation_verified`;
+  it also requires run-root `b1_robot_consumption_manifest.json` to agree with
+  the proof's navigation/artifact fields and no-autodiscovery policy;
   it does not reuse the older RBY1M real-robot readiness gate.
 - The B1 route fails before launch when that gate is active but
   `b1_alignment_artifact` or `b1_navigation_artifact` is missing. This keeps

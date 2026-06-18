@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -1869,6 +1870,31 @@ def test_checker_rejects_b1_robot_consumption_without_verified_navigation(
 ) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     run_result = _b1_robot_consumption_run_result(tmp_path, verified=False)
+
+    with pytest.raises(AssertionError):
+        checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
+
+
+def test_checker_rejects_b1_robot_consumption_without_manifest(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_result = _b1_robot_consumption_run_result(tmp_path, verified=True)
+    (tmp_path / "b1_robot_consumption_manifest.json").unlink()
+
+    with pytest.raises(AssertionError):
+        checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
+
+
+def test_checker_rejects_b1_robot_consumption_manifest_drift(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_result = _b1_robot_consumption_run_result(tmp_path, verified=True)
+    manifest_path = tmp_path / "b1_robot_consumption_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["navigation"]["navigation_artifact"] = "wrong.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(AssertionError):
         checker._assert_b1_robot_consumption_proof(run_result, tmp_path)
@@ -4821,6 +4847,9 @@ def _b1_robot_consumption_run_result(tmp_path: Path, *, verified: bool) -> dict[
         run_dir=tmp_path,
         source_bundle_dir=source_bundle,
     )
+    manifest_path = source_bundle / "b1_robot_consumption_manifest.json"
+    if manifest_path.is_file():
+        shutil.copy2(manifest_path, tmp_path / "b1_robot_consumption_manifest.json")
     return run_result
 
 

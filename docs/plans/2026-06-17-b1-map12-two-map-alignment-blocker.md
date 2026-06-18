@@ -687,7 +687,9 @@ Current gate:
 - The B1 / Isaac checker path now uses
   `--require-b1-robot-consumption-proof`, which validates the run-local copied
   `map_bundle/semantics.json` for a verified
-  `digital_twin_capabilities.robot_consumption_proof`. It intentionally does
+  `digital_twin_capabilities.robot_consumption_proof` and requires the run-root
+  `b1_robot_consumption_manifest.json` to match the verified navigation proof.
+  It intentionally does
   not reuse the older RBY1M `--require-real-robot-alignment` gate.
 - When that gate is active, B1 product/open-task routes fail before launch
   unless both `b1_alignment_artifact` and `b1_navigation_artifact` are passed
