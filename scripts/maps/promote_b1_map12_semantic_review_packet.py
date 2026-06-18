@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
 
 from scripts.maps.fit_b1_map12_scene_alignment import (  # noqa: E402
     B1_MAP12_CORRESPONDENCES_SCHEMA,
+    MIN_GLOBAL_ACCEPTED_ANCHORS,
     anchor_uses_known_poor_seed,
     valid_xy,
     valid_xyz,
@@ -89,6 +90,10 @@ def build_reviewed_correspondence_manifest(
         accepted.append(anchor)
     if not accepted:
         raise PromotionError("review packet has no human-accepted anchors")
+    if len(accepted) < MIN_GLOBAL_ACCEPTED_ANCHORS:
+        raise PromotionError(
+            f"review packet needs at least {MIN_GLOBAL_ACCEPTED_ANCHORS} human-accepted anchors"
+        )
     manifest = {
         "schema": B1_MAP12_CORRESPONDENCES_SCHEMA,
         "source_map_frame": packet.get("source_map_frame"),

@@ -64,8 +64,9 @@ candidates while keeping all anchors proposed and accepted anchor count at zero.
 `scripts/maps/promote_b1_map12_semantic_review_packet.py` now provides the
 strict promotion path from a human-edited packet into the committed
 correspondence manifest. It rejects proposed-only packets, missing real semantic
-ids, synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and
-auto-accepted suggestions before validating the final manifest.
+ids, fewer than six human-accepted anchors, synthetic `manual_draft_*` ids,
+bbox/seed coordinate sources, and auto-accepted suggestions before validating
+the final manifest.
 The suggestion command also writes
 `output/b1-map12/manual-draft-anchor-semantic-review.html`, a static read-only
 HTML table for operator review of the proposed anchors and candidate semantic
@@ -226,10 +227,11 @@ Model-generated or script-generated anchor candidates must remain
 Strict promotion from the semantic review packet to the committed manifest is
 allowed only after a human/operator changes selected anchors to
 `review_status=accepted` and supplies real `navigation_area_id` and
-`asset_partition_id` values. The promotion path must reject proposed-only
-packets, missing semantic ids, synthetic `manual_draft_*` ids, bbox/seed
-coordinate sources, and any attempt to auto-accept suggestions. It must validate
-the final manifest before writing `assets/maps/b1-map12-scene-correspondences.json`.
+`asset_partition_id` values for at least six anchors. The promotion path must
+reject proposed-only packets, partial accepted packets, missing semantic ids,
+synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and any attempt to
+auto-accept suggestions. It must validate the final manifest before writing
+`assets/maps/b1-map12-scene-correspondences.json`.
 
 The checked-in correspondence manifest may remain empty as a fail-loud
 placeholder. Empty anchors mean no transform is verified and the fitter/review

@@ -98,8 +98,9 @@ Last proven evidence:
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited semantic review packet to the
   committed correspondence manifest. Proposed-only rows, missing real semantic
-  ids, synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and
-  auto-accepted suggestions are rejected before writing output.
+  ids, fewer than six human-accepted anchors, synthetic `manual_draft_*` ids,
+  bbox/seed coordinate sources, and auto-accepted suggestions are rejected
+  before writing output.
 - The same semantic suggestion command now writes
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only
   operator table showing each proposed anchor, candidate semantic ids, and

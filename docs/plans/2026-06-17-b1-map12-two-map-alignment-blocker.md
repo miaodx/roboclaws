@@ -506,9 +506,9 @@ Do not broaden into semantic-map authoring until this blocker is closed.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` implements the
   strict reviewed-anchor promotion gate owned by the 2026-06-16 alignment plan.
   It writes the committed correspondence manifest only from human-accepted
-  anchors with real semantic ids and rejects proposed-only rows, synthetic
-  `manual_draft_*` ids, bbox/seed coordinate sources, and auto-accepted
-  suggestions.
+  anchors with real semantic ids and rejects proposed-only rows, fewer than six
+  accepted anchors, synthetic `manual_draft_*` ids, bbox/seed coordinate
+  sources, and auto-accepted suggestions.
 - The semantic suggestion command now also emits
   `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
   for the human/operator to review candidate ids before editing the JSON packet.

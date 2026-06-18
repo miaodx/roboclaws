@@ -911,6 +911,14 @@ def test_strict_semantic_review_promotion_rejects_proposed_packet() -> None:
         build_reviewed_correspondence_manifest(packet)
 
 
+def test_strict_semantic_review_promotion_rejects_partial_accepted_packet() -> None:
+    packet = correspondence_manifest(anchors=passing_anchors()[:5])
+    packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
+
+    with pytest.raises(PromotionError, match="at least 6 human-accepted anchors"):
+        build_reviewed_correspondence_manifest(packet)
+
+
 def test_strict_semantic_review_promotion_promotes_human_accepted_real_ids() -> None:
     packet = correspondence_manifest(anchors=passing_anchors())
     packet["schema"] = "b1_map12_manual_anchor_semantic_review_packet_v1"
