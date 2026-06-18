@@ -66,6 +66,10 @@ strict promotion path from a human-edited packet into the committed
 correspondence manifest. It rejects proposed-only packets, missing real semantic
 ids, synthetic `manual_draft_*` ids, bbox/seed coordinate sources, and
 auto-accepted suggestions before validating the final manifest.
+The suggestion command also writes
+`output/b1-map12/manual-draft-anchor-semantic-review.html`, a static read-only
+HTML table for operator review of the proposed anchors and candidate semantic
+ids.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real

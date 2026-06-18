@@ -45,6 +45,7 @@ from scripts.maps.render_b1_scene_gaussian_topdown import (
 from scripts.maps.suggest_b1_map12_manual_anchor_semantics import (
     build_semantic_review_packet,
     build_semantic_suggestions,
+    render_semantic_review_report,
 )
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_readiness_payload
 
@@ -844,6 +845,42 @@ def test_manual_anchor_semantic_review_packet_keeps_anchors_proposed() -> None:
     assert anchor["asset_partition_id"] == "partition_a"
     assert anchor["semantic_review"]["status"] == "needs_human_review"
     assert anchor["semantic_review"]["acceptance_instructions"].startswith("Human reviewer")
+
+
+def test_manual_anchor_semantic_review_report_is_read_only() -> None:
+    packet = {
+        "schema": "b1_map12_manual_anchor_semantic_review_packet_v1",
+        "status": "needs_human_review",
+        "accepted_manifest_mutated": False,
+        "accepted_anchor_count": 0,
+        "proposed_anchor_count": 1,
+        "strong_candidate_count": 1,
+        "anchors": [
+            {
+                "anchor_id": "manual_draft_anchor",
+                "review_status": "proposed",
+                "navigation_area_id": "area_a",
+                "asset_partition_id": "partition_a",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "semantic_review": {
+                    "suggestion_status": "strong_candidate_needs_review",
+                    "map_candidates": [{"map_area_id": "area_a", "distance_m": 0.0}],
+                    "scene_candidates": [{"partition_id": "partition_a", "distance_m": 0.0}],
+                },
+            }
+        ],
+    }
+
+    html = render_semantic_review_report(packet)
+
+    assert 'id="semantic-review-report"' in html
+    assert "Review aid only" in html
+    assert "manual_draft_anchor" in html
+    assert "area_a" in html
+    assert "partition_a" in html
+    assert "Accepted: <strong>0</strong>" in html
+    assert "mark accepted" not in html
 
 
 def test_strict_semantic_review_promotion_rejects_proposed_packet() -> None:

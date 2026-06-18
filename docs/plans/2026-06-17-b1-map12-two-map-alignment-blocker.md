@@ -509,6 +509,9 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   anchors with real semantic ids and rejects proposed-only rows, synthetic
   `manual_draft_*` ids, bbox/seed coordinate sources, and auto-accepted
   suggestions.
+- The semantic suggestion command now also emits
+  `output/b1-map12/manual-draft-anchor-semantic-review.html`, a read-only table
+  for the human/operator to review candidate ids before editing the JSON packet.
 
 2026-06-17 update:
 
@@ -555,8 +558,9 @@ Current gate:
 Next implementation slice:
 
 - Have a human/operator edit the semantic review packet, mark at least six
-  anchors accepted, and supply real semantic ids. Then run the strict promotion
-  gate into `assets/maps/b1-map12-scene-correspondences.json`.
+  anchors accepted, and supply real semantic ids. Use the static HTML review
+  report as a read-only aid, then run the strict promotion gate into
+  `assets/maps/b1-map12-scene-correspondences.json`.
 - Rerun fitter, readiness, waypoint pose requests, navigation report, and then
   local Isaac same-pose camera proof on that committed manifest. Do not use the
   verification-only synthetic manifest or bbox seed as production evidence.
