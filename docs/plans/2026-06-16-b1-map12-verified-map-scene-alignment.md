@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-verified-map-scene-alignment
-status: Alignment geometry verified; semantic anchors and downstream consumer exposure paused for fresh context
+status: Completed prerequisite evidence contract; active unfinished work moved to 2026-06-17 plan
 created: 2026-06-16
 last_reviewed: 2026-06-18
 implementation_allowed: true
@@ -27,10 +27,33 @@ related_context:
 
 ## Status
 
+Completed prerequisite evidence contract. This document now records the accepted
+geometry-alignment lifecycle, residual thresholds, and evidence that downstream
+B1 runtime work may consume. It is not the active implementation plan for the
+remaining robot-consumption work. Active unfinished work lives in
+`docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
+
+Completed scope:
+
+- Seven human-accepted `anchor_role=alignment` geometry anchors are committed in
+  `assets/maps/b1-map12-scene-correspondences.json`.
+- The official residual artifact at
+  `output/b1-map12/alignment/alignment_residuals.json` is globally verified.
+- Geometry alignment is sufficient for residual-backed Map12-to-B1 pose
+  application.
+- Room/object semantics are explicitly not completed by this contract.
+
+Remaining scope owned elsewhere:
+
+- Agent-visible MCP/runtime-prior capability exposure.
+- Human-accepted `anchor_role=semantic` room-interior anchors.
+- Strict room semantic projection and later object semantic projection.
+- Any future product runtime proof that consumes those semantics.
+
 Reviewed with grill-batch on 2026-06-16. The correspondence schema direction,
 verification thresholds, and first annotation workflow are accepted. The
-implementation slice now has fitter/readiness/probe evidence, but final
-room/area semantic acceptance is still pending.
+implementation slice now has fitter/readiness/probe evidence, while final
+room/area semantic acceptance remains pending in the active 2026-06-17 plan.
 
 2026-06-17 update: there is not yet an operator-authored room semantic
 manifest. Treat `assets/maps/b1-map12-alignment-review.json` as a seed/review
@@ -567,11 +590,9 @@ Success only if:
 
 ## Recommended Next Step
 
-Geometry alignment promotion is complete. Next, consume
-`output/b1-map12/alignment/alignment_residuals.json` from the 2026-06-17 runtime
-plan for readiness, waypoint pose requests, and local Isaac same-pose camera
-proof. Collect separate `anchor_role=semantic` room-interior points only before
-projecting room/object labels into Map12.
+No further implementation should start from this file unless the anchor schema,
+residual thresholds, or readiness semantics need to change. Continue active work
+from `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
 ## Prerequisite Contract For 2026-06-17 Execution
 
@@ -579,9 +600,10 @@ Status: accepted prerequisite contract; consumed by
 `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`.
 
 Planning-loop decision on 2026-06-18: keep this document focused on alignment
-evidence. The 2026-06-17 plan is the current execution source for on-demand
+evidence. The 2026-06-17 plan consumed this residual artifact for on-demand
 Map12 waypoint or `map_xy/yaw` requests, B1 scene pose application, and
-same-pose Isaac preview proof.
+same-pose Isaac preview proof; it remains the active source for remaining
+robot-facing consumer and semantic-projection work.
 
 Goal: Provide the only valid residual-backed alignment evidence that downstream
 runtime pose application may consume. Verified geometry claims require
