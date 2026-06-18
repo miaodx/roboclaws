@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         json.dumps(
             {
+                "comparison": packet["comparison_image"],
                 "output": packet["overlay_image"],
                 "metadata": packet["metadata"],
                 "status": packet["status"],
@@ -77,8 +78,8 @@ def render_overlay(
     if not scene_image_path.is_file():
         raise FileNotFoundError(f"scene topdown image missing: {scene_image_path}")
     scene_image = Image.open(scene_image_path).convert("RGBA")
-    overlay = Image.new("RGBA", scene_image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay, "RGBA")
+    map_layer = Image.new("RGBA", scene_image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(map_layer, "RGBA")
     projector = scene_projector_from_topdown_packet(scene_packet)
 
     free_points = projected_map_points(map_context, transform, projector, mode="free")
@@ -86,19 +87,43 @@ def render_overlay(
     draw_points(draw, free_points, color=(28, 120, 255, 62), radius=1)
     draw_points(draw, occupied_points, color=(255, 64, 42, 185), radius=2)
     draw_alignment_anchors(draw, residuals, transform, projector)
-    draw_header(draw, alignment)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     overlay_path = output_dir / "map12_on_gaussian_topdown.png"
+    map_layer_path = output_dir / "map12_projected_layer.png"
+    comparison_path = output_dir / "map12_gaussian_topdown_comparison.png"
     metadata_path = output_dir / "map12_on_gaussian_topdown.json"
-    blended = Image.alpha_composite(scene_image, overlay).convert("RGB")
+    annotated_map_layer = map_layer.copy()
+    draw_header(
+        ImageDraw.Draw(annotated_map_layer, "RGBA"),
+        alignment,
+        title="Projected Map12 layer only",
+        subtitle="blue=free, red=occupied, green=manual scene picks",
+    )
+    layer_background = Image.new("RGBA", scene_image.size, (18, 22, 26, 255))
+    layer_only = Image.alpha_composite(layer_background, annotated_map_layer).convert("RGB")
+    layer_only.save(map_layer_path)
+
+    annotated_overlay = map_layer.copy()
+    draw_header(
+        ImageDraw.Draw(annotated_overlay, "RGBA"),
+        alignment,
+        title="Map12 projected onto Gaussian topdown",
+        subtitle="photo-like base=Gaussian, colored layer=Map12",
+    )
+    blended = Image.alpha_composite(scene_image, annotated_overlay).convert("RGB")
     blended.save(overlay_path)
+    comparison = comparison_image(scene_image.convert("RGB"), layer_only, blended)
+    comparison.save(comparison_path)
     packet = {
         "schema": "b1_map12_manual_alignment_overlay_v1",
         "status": "rendered",
         "overlay_image": str(overlay_path),
+        "map12_projected_layer": str(map_layer_path),
+        "comparison_image": str(comparison_path),
         "metadata": str(metadata_path),
         "scene_topdown_render": str(scene_topdown_render),
+        "gaussian_topdown_image": str(scene_image_path),
         "map_bundle": str(map_bundle),
         "alignment_artifact": str(alignment_artifact),
         "transform": transform,
@@ -106,7 +131,8 @@ def render_overlay(
         "drawn_occupied_point_count": len(occupied_points),
         "note": (
             "Map12 occupancy is transformed with the manual draft rigid alignment and "
-            "projected into the cropped Gaussian top-down camera. Blue=free, red=occupied."
+            "projected into the cropped Gaussian top-down camera. The photo-like source "
+            "image is the Gaussian top-down. Blue=Map12 free, red=Map12 occupied."
         ),
     }
     metadata_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -256,11 +282,17 @@ def draw_alignment_anchors(
         draw.rectangle((px - 4, py - 4, px + 4, py + 4), outline=(255, 255, 255, 240), width=2)
 
 
-def draw_header(draw: ImageDraw.ImageDraw, alignment: dict[str, Any]) -> None:
+def draw_header(
+    draw: ImageDraw.ImageDraw,
+    alignment: dict[str, Any],
+    *,
+    title: str,
+    subtitle: str,
+) -> None:
     residual = alignment.get("residual_evidence") if isinstance(alignment, dict) else {}
     lines = [
-        "Manual Map12 -> B1 Gaussian topdown overlay",
-        "blue=Map12 free, red=Map12 occupied, green=manual scene picks",
+        title,
+        subtitle,
         f"mean={residual.get('mean_residual_m')}m max={residual.get('max_residual_m')}m",
     ]
     y = 14
@@ -272,6 +304,51 @@ def draw_header(draw: ImageDraw.ImageDraw, alignment: dict[str, Any]) -> None:
         )
         draw.text((14, y), line, fill=(20, 24, 28, 255))
         y += 20
+
+
+def comparison_image(
+    gaussian: Image.Image,
+    map_layer: Image.Image,
+    overlay: Image.Image,
+) -> Image.Image:
+    panels = [
+        panel_with_label(
+            gaussian,
+            "Gaussian topdown source",
+            "photo-like floor, walls, furniture, and rendered asset texture",
+        ),
+        panel_with_label(
+            map_layer,
+            "Map12 projected layer",
+            "manual transform applied to occupancy/free cells",
+        ),
+        panel_with_label(
+            overlay,
+            "Overlay",
+            "Gaussian source plus projected Map12 layer",
+        ),
+    ]
+    gutter = 16
+    width = sum(panel.width for panel in panels) + gutter * (len(panels) - 1)
+    height = max(panel.height for panel in panels)
+    canvas = Image.new("RGB", (width, height), (245, 247, 250))
+    x = 0
+    for panel in panels:
+        canvas.paste(panel, (x, 0))
+        x += panel.width + gutter
+    return canvas
+
+
+def panel_with_label(image: Image.Image, title: str, subtitle: str) -> Image.Image:
+    image = image.convert("RGB")
+    header_height = 58
+    panel = Image.new("RGB", (image.width, image.height + header_height), (255, 255, 255))
+    draw = ImageDraw.Draw(panel)
+    draw.rectangle((0, 0, image.width, header_height), fill=(18, 24, 32))
+    draw.text((14, 10), title, fill=(255, 255, 255))
+    draw.text((14, 32), subtitle, fill=(215, 224, 235))
+    panel.paste(image, (0, header_height))
+    return panel
 
 
 if __name__ == "__main__":
