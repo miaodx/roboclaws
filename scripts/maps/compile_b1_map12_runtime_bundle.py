@@ -11,8 +11,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw
-
 if __package__ in {None, ""}:
     REPO_ROOT = Path(__file__).resolve().parents[2]
     if str(REPO_ROOT) not in sys.path:
@@ -189,7 +187,6 @@ def compile_runtime_bundle(
         encoding="utf-8",
     )
     write_source_frame_bundle_preview(output_dir)
-    write_review_topdown(output_dir, runtime_labels=runtime_labels)
     provenance = runtime_provenance(
         map_bundle=map_bundle,
         scene_root=scene_root,
@@ -997,54 +994,6 @@ def runtime_provenance(
             "or rebuild driveable ways."
         ),
     }
-
-
-def write_review_topdown(output_dir: Path, *, runtime_labels: list[dict[str, Any]]) -> Path:
-    preview_path = output_dir / "preview.png"
-    output_path = output_dir / "review_labels_topdown.png"
-    source = Image.open(preview_path).convert("RGB")
-    image = source.copy()
-    draw = ImageDraw.Draw(image, "RGBA")
-    if runtime_labels:
-        width, height = image.size
-        all_points = [point for label in runtime_labels for point in label.get("polygon") or []]
-        min_x = min(float(point["x"]) for point in all_points)
-        max_x = max(float(point["x"]) for point in all_points)
-        min_y = min(float(point["y"]) for point in all_points)
-        max_y = max(float(point["y"]) for point in all_points)
-        span_x = max(max_x - min_x, 1.0)
-        span_y = max(max_y - min_y, 1.0)
-        scale = min((width * 0.78) / span_x, (height * 0.78) / span_y)
-        offset_x = (width - span_x * scale) / 2.0
-        offset_y = (height - span_y * scale) / 2.0
-
-        def project(point: dict[str, float]) -> tuple[float, float]:
-            return (
-                offset_x + (float(point["x"]) - min_x) * scale,
-                height - (offset_y + (float(point["y"]) - min_y) * scale),
-            )
-
-        palette = [
-            (51, 102, 204, 90),
-            (220, 57, 18, 90),
-            (16, 150, 24, 90),
-            (153, 0, 153, 90),
-            (255, 153, 0, 90),
-        ]
-        for index, label in enumerate(runtime_labels):
-            polygon = [project(point) for point in label.get("polygon") or []]
-            if len(polygon) < 3:
-                continue
-            color = palette[index % len(palette)]
-            draw.polygon(polygon, fill=color, outline=color[:3] + (210,))
-            center = project(label["map_center"])
-            draw.text(
-                center,
-                str(label.get("room_label") or label.get("label_id") or ""),
-                fill=(20, 24, 28, 255),
-            )
-    image.save(output_path)
-    return output_path
 
 
 def _copy_vendor_map12_source(source: Path, output_dir: Path) -> None:

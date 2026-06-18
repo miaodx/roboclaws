@@ -68,16 +68,7 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "href": "/previews/molmospaces-procthor-objaverse-val-10-topdown.png",
         },
     }
-    assert worlds["agibot-g2/map-12"]["preview_assets"] == {
-        "map": {
-            "path": "/previews/b1-map12-map.png",
-            "href": "/previews/b1-map12-map.png",
-        },
-        "topdown": {
-            "path": "/previews/b1-map12-topdown.png",
-            "href": "/previews/b1-map12-topdown.png",
-        },
-    }
+    assert worlds["agibot-g2/map-12"]["preview_assets"] == {}
     assert worlds["b1-map12"]["preview_assets"] == {
         "fpv": {
             "path": "/previews/b1-map12-fpv.png",
@@ -167,13 +158,10 @@ def test_b1_map12_scene_preview_has_v1_runtime_camera_provenance() -> None:
     assert metadata["schema"] == "operator_console_scene_preview_v1"
     assert metadata["world_id"] == "b1-map12"
     assert metadata["backend"] == "isaaclab"
-    assert metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert metadata["renderer"] == "b1_map12_isaac_runtime_camera_previews"
     assert metadata["scene_usd_path"] == (
         "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     )
-    assert metadata["map_bundle"] == "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
-    assert metadata["review_manifest"] == "assets/maps/b1-map12-alignment-review.json"
-    assert metadata["runtime_provenance"]["generated_from_review_manifest"] is True
     assert metadata["camera_preview_artifact"]["schema"] == "b1_map12_navigation_smoke_v1"
     assert metadata["camera_preview_artifact"]["source_artifact_name"] == "navigation_smoke.json"
     assert "path" not in metadata["camera_preview_artifact"]
@@ -186,23 +174,9 @@ def test_b1_map12_scene_preview_has_v1_runtime_camera_provenance() -> None:
     assert "source_path" not in metadata["views"]["chase"]
     assert "map" not in metadata["views"]
     assert "topdown" not in metadata["views"]
-    assert metadata["diagnostic_views"]["map"]["view"] == "source_map_preview"
-    assert metadata["diagnostic_views"]["map"]["provenance"] == (
-        "compiled_vendor_map12_runtime_preview_png"
-    )
-    assert metadata["diagnostic_views"]["map"]["display_policy"] == (
-        "operator_map_diagnostic_not_b1_visual_route_preview"
-    )
-    assert metadata["diagnostic_views"]["topdown"]["view"] == "review_label_topdown"
-    assert metadata["diagnostic_views"]["topdown"]["provenance"] == (
-        "compiled_b1_map12_review_labels_topdown_png"
-    )
-    assert metadata["diagnostic_views"]["topdown"]["display_policy"] == (
-        "v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown"
-    )
-    assert metadata["diagnostic_views"]["topdown"]["review_label_count"] >= 1
-    assert metadata["diagnostic_views"]["topdown"]["room_count"] >= 1
-    assert metadata["diagnostic_views"]["topdown"]["inspection_waypoint_count"] >= 1
+    assert "diagnostic_views" not in metadata
+    assert "map_bundle" not in metadata
+    assert "runtime_map_bundle" not in metadata
 
 
 def test_console_combinations_are_catalog_backed_axes() -> None:

@@ -90,7 +90,7 @@ def test_runtime_compiler_uses_vendor_map12_and_review_labels(tmp_path: Path) ->
     }
     assert (output_dir / "b1_runtime_provenance.json").is_file()
     assert (output_dir / "b1_robot_consumption_manifest.json").is_file()
-    assert (output_dir / "review_labels_topdown.png").is_file()
+    assert not (output_dir / "review_labels_topdown.png").exists()
     proof = runtime_semantics["digital_twin_capabilities"]["robot_consumption_proof"]
     render_proof = runtime_semantics["digital_twin_capabilities"]["render_observation_proof"]
     room_proof = runtime_semantics["digital_twin_capabilities"]["room_semantic_projection_proof"]

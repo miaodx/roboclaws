@@ -297,14 +297,16 @@ def test_static_app_renders_scene_preview_assets() -> None:
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
         assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
-    for view_name in ("fpv", "map", "chase"):
+    for view_name in ("fpv", "chase"):
         path = preview_dir / f"b1-map12-{view_name}.png"
         assert path.is_file()
         assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert not (preview_dir / "b1-map12-map.png").exists()
+    assert not (preview_dir / "b1-map12-topdown.png").exists()
     b1_metadata = json.loads((preview_dir / "b1-map12-preview.json").read_text(encoding="utf-8"))
     assert b1_metadata["world_id"] == "b1-map12"
     assert b1_metadata["backend"] == "isaaclab"
-    assert b1_metadata["renderer"] == "static_b1_map12_with_isaac_runtime_camera_previews"
+    assert b1_metadata["renderer"] == "b1_map12_isaac_runtime_camera_previews"
     assert b1_metadata["scene_usd_path"] == (
         "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     )
@@ -314,12 +316,7 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "path" not in b1_metadata["camera_preview_artifact"]
     assert "map" not in b1_metadata["views"]
     assert "topdown" not in b1_metadata["views"]
-    assert b1_metadata["diagnostic_views"]["map"]["display_policy"] == (
-        "operator_map_diagnostic_not_b1_visual_route_preview"
-    )
-    assert b1_metadata["diagnostic_views"]["topdown"]["display_policy"] == (
-        "v2_registration_diagnostic_not_b1_floor2_slow_aligned_topdown"
-    )
+    assert "diagnostic_views" not in b1_metadata
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 
