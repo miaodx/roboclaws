@@ -2,7 +2,7 @@
 plan_scope: b1-map12-two-map-alignment-blocker
 status: Partially implemented
 created: 2026-06-17
-last_reviewed: 2026-06-17
+last_reviewed: 2026-06-18
 implementation_allowed: true
 source:
   - user request to make two-map alignment the blocking issue for usable digital twin
@@ -92,6 +92,23 @@ Preview parity contract:
 - Static B1 preview generation must continue to publish only `map` and `topdown`
   until such a runtime camera artifact exists.
 
+On-demand Map12 navigation point contract:
+
+- Accepted input is either an existing public Map12 inspection waypoint id or an
+  explicit `map_xy` plus optional yaw in the Map12/source-map frame.
+- The request first runs a residual-backed coverage check. Coverage may be a
+  verified global transform or an explicitly verified local area transform.
+- A supported request emits a B1 scene robot pose packet with frame id, `x/y/z`,
+  yaw, transform source, alignment artifact, input id or point, and coverage
+  decision.
+- An unsupported, uncovered, malformed, or unverified request emits a blocked
+  artifact with the reason. It must not substitute another point, use the bbox
+  seed, or publish fake camera proof.
+- This contract is an internal runtime/artifact path for digital-twin preview.
+  It does not imply planner-backed navigation, collision-free path planning,
+  physical robot navigation, a new MCP tool, or a public `household-world`
+  surface change.
+
 ## Minimal Path
 
 1. Render a `2rd_floor_seperated` topdown diagnostic.
@@ -149,16 +166,19 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
    - Fail: keep all scene labels as evidence only.
 
 7. Generate B1 waypoint robot-view evidence only after residuals pass.
-   - Select at least one Map12 public inspection waypoint in a verified global
-     area or an explicitly verified local area.
-   - Convert the waypoint into a B1 scene robot pose using the residual-backed
-     transform, never the bbox seed.
-   - Apply that robot pose in Isaac and capture FPV, Chase, map, and verify
-     images from the same pose.
-   - Record the alignment artifact, selected transform type, waypoint id,
-     map-frame pose, B1 scene pose, and `robot_pose_applied` status.
-   - If the first capture path cannot apply the pose in Isaac, stop with a
-     blocked artifact instead of publishing FPV/Chase previews.
+   - Build a transform-aware B1 waypoint/pose request path that accepts either
+     an existing Map12 public inspection waypoint or an on-demand Map12
+     `map_xy/yaw` point.
+   - Convert the request into a B1 scene robot pose only when it is inside
+     verified global coverage or an explicitly verified local area.
+   - Apply that robot pose in Isaac and capture same-pose FPV, Chase, topdown,
+     map, and report/verify evidence.
+   - Record the alignment artifact, selected transform type, input waypoint id
+     or point, map-frame pose, B1 scene pose, coverage decision, and
+     `robot_pose_applied` status.
+   - Stop with a blocked artifact on unsupported point, failed pose
+     application, missing camera evidence, or any attempt to use bbox/seed
+     transforms.
 
 8. Promote the runtime camera artifact into operator-console preview assets.
    - Reuse `scripts/operator_console/render_scene_previews.py
@@ -189,6 +209,15 @@ python scripts/maps/fit_b1_map12_scene_alignment.py \
 - After residual-backed waypoint capture, B1 FPV and Chase preview metadata share
   the same `waypoint_id`, reference the same alignment artifact or transform
   source, and use `isaac_runtime_*` provenance.
+- On-demand point requests record input waypoint id or `map_xy/yaw`, coverage
+  decision, transform source/artifact, and output B1 scene pose.
+- Unsupported or unverified points block loudly with an artifact instead of
+  falling back to another transform, point, or camera source.
+- Multiple arbitrary verified Map12 points can be converted and applied as B1
+  scene poses; at least one same-pose FPV/Chase pair is required before preview
+  promotion.
+- The on-demand pose path does not lower navigation proof thresholds or imply
+  planner-backed, collision-free, physical, MCP, or public-surface support.
 - B1 FPV is a robot-mounted/head-camera-equivalent Isaac runtime view, not a
   scene-probe camera. Chase is report evidence from the same applied robot pose,
   not agent-facing policy input.
@@ -227,11 +256,14 @@ P1:
 - Run the fitter and wire its residual output into readiness/report previews.
 - Project accepted room/object labels as candidate Map12 semantics only after
   residuals pass.
-- Add or update a transform-aware B1 waypoint robot-view capture path:
-  `Map12 waypoint -> residual-backed B1 pose -> Isaac robot views`.
+- Add an internal on-demand Map12 navigation point to B1 pose request artifact:
+  `Map12 waypoint id or map_xy/yaw -> residual-backed coverage check -> B1 pose`.
 - Make `run_b1_map12_navigation_smoke.py` or a narrow sibling script consume the
-  reviewed alignment artifact instead of the known-poor bbox candidate when
+  residual-backed pose request artifact instead of bbox candidates when
   producing preview-grade waypoint evidence.
+- Preserve at least two distinct waypoint or point evidence rows before claiming
+  `robot_navigation_supported=true`; a single pose/camera proof is preview
+  evidence only.
 - Promote the accepted runtime camera artifact into operator-console static
   previews with `--b1-camera-artifact`, preserving no-camera static previews as
   the default before runtime evidence exists.
@@ -315,25 +347,28 @@ python scripts/operator_console/render_scene_previews.py \
 
 Preflight status: DRAFT
 
-Task source: user prompt plus this active plan and the 2026-06-17 reduce-entropy
-packet.
+Task source: user prompt, this active plan, the 2026-06-17 reduce-entropy
+packet, and the 2026-06-18 agent planning loop.
 
 Canonical source: `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 
 Route: durable `$intuitive-flow`
 
-Goal: Make B1 / Map 12 usable enough for digital-twin preview by producing an
-honest two-map alignment diagnostic/review path, fitting residual-backed
-Map12-to-B1 transforms, and promoting B1 robot-view previews only from
-residual-backed Isaac runtime pose evidence.
+Goal: Make B1 / Map 12 usable enough for digital-twin preview and on-demand
+Map12 navigation point application by producing an honest two-map alignment
+diagnostic/review path, fitting residual-backed Map12-to-B1 transforms,
+converting verified Map12 waypoint ids or `map_xy/yaw` requests into B1 scene
+robot poses, and promoting B1 robot-view previews only from residual-backed
+Isaac runtime pose evidence.
 
 Scope:
 
 - P0: topdown diagnostic for `2rd_floor_seperated`; two-map anchor review/export;
   Z-up `x,y` correspondence/fitter/test contract; vendor Map12 loading.
-- P1: residual integration into readiness/report paths; transform-aware B1
-  waypoint robot-view capture; operator-console camera preview promotion with
-  residual-backed provenance checks.
+- P1: residual integration into readiness/report paths; an internal on-demand
+  Map12 navigation point to B1 pose request artifact; transform-aware B1
+  waypoint/point robot-view capture; operator-console camera preview promotion
+  with residual-backed provenance checks.
 - P2 only after P0/P1 pass: `B1_floor2_slow` visual registration for later
   photorealistic/open-task work.
 
@@ -366,16 +401,19 @@ Context:
   `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
   `data/robot-data-lab/scene-engine/data/2rd_floor_seperated/`.
 - Useful: `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md`
-  for historical context only; it contains older `x,z` / Y-up examples that
-  must not override this plan.
+  as the prerequisite residual/alignment evidence source. This plan's Z-up
+  `x,y` projection policy overrides any stale `x,z` / Y-up examples in that
+  older document.
 - Avoid unless needed: broad `output/**`, historical retrospectives, and old
   B1 merged-bundle artifacts.
 
 Acceptance:
 
 - SUCCESS: residual-backed global or local B1 / Map 12 alignment exists, or the
-  scene diagnostic honestly blocks alignment; if alignment passes, at least one
-  same-waypoint FPV/Chase preview pair is promoted from residual-backed Isaac
+  scene diagnostic honestly blocks alignment; if alignment passes, a reusable
+  on-demand Map12 waypoint or `map_xy/yaw` to B1 scene pose conversion/apply
+  contract exists, unsupported points block loudly, and at least one
+  same-pose FPV/Chase preview pair is promoted from residual-backed Isaac
   runtime robot pose evidence.
 - BLOCKED_NEEDS_DECISION: none expected; implementation may try different
   diagnostic and review-tool approaches as long as the invariants above hold.
@@ -393,6 +431,8 @@ Verification:
 - Deterministic: run the focused pytest command in this plan plus any new
   tests for Z-up projection, review/export, residual gating, and preview
   provenance rejection.
+- Deterministic artifact tests must include both a verified point conversion
+  and an unsupported/unverified point blocked artifact.
 - Integration: run the Map12 consistency, correspondence review, fitter, and
   readiness commands listed above.
 - Product-run: run `scripts/operator_console/render_scene_previews.py --world
@@ -418,14 +458,28 @@ edits revise this section before execution.
 
 Stop after either:
 
-- the first residual-backed transform is available and at least one
-  same-waypoint B1 FPV/Chase preview pair has been generated and promoted into
-  the operator-console preview metadata; or
+- a reusable on-demand Map12 waypoint or `map_xy/yaw` conversion/apply contract
+  exists, at least two distinct verified points are handled as pose/evidence
+  rows where possible, and at least one same-pose B1 FPV/Chase preview pair has
+  been generated and promoted into the operator-console preview metadata; or
 - the diagnostic proves the scene labels are not self-consistent enough to align.
 
 Do not broaden into semantic-map authoring until this blocker is closed.
 
 ## Implementation Status
+
+2026-06-18 planning-loop update:
+
+- The agent planning loop concluded this 2026-06-17 plan owns the runtime
+  application contract: residual-backed Map12 waypoint ids or on-demand
+  `map_xy/yaw` points become B1 scene robot poses, Isaac pose applications, and
+  same-pose visual evidence only inside verified coverage.
+- `docs/plans/2026-06-16-b1-map12-verified-map-scene-alignment.md` remains the
+  prerequisite alignment/residual evidence source; this plan owns the newer
+  Z-up `x,y` policy and runtime proof contract.
+- Implementation is still blocked until accepted anchors/residuals exist and
+  local Isaac evidence proves the pose/camera path. Unsupported points must
+  produce blocked artifacts, not fallback output.
 
 2026-06-17 update:
 
