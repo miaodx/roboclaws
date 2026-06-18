@@ -13,7 +13,10 @@ Blocker fingerprint:
 - last_decision_delta: rendered Gaussian scene top-down is now required for
   correspondence review; label-inventory diagnostics are rejected, Z-up `x,y`
   correspondence policy remains locked, and residual-backed waypoint
-  provenance checks/no-camera static preview gates remain in place.
+  provenance checks/no-camera static preview gates remain in place. Internal
+  waypoint pose request artifacts now cover verified global or explicitly
+  verified local-area transforms, and the navigation report can display ready
+  and blocked pose-request rows for audit.
 
 Last proven evidence:
 
@@ -77,8 +80,19 @@ Last proven evidence:
   passes validation with `map12_overlay_status=verified`,
   `map12_to_b1_usd_transform_status=verified`, and
   `robot_navigation_supported=false`.
+- `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py` writes
+  `b1_map12_waypoint_pose_requests_v1` artifacts for on-demand Map12 waypoint
+  ids or `map_xy/yaw` points. Globally verified residual alignment and
+  explicitly verified local-area transforms produce ready B1 pose rows;
+  unverified, malformed, missing-area, or unknown-area requests produce
+  blocked rows instead of fallback output.
+- `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
+  `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
+  in the HTML report before local Isaac camera proof exists.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q`
   passes.
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`
+  passes for the pose-request and report-audit contract.
 
 Next hypothesis: once the seven manual anchors receive reviewed real
 `navigation_area_id` and `asset_partition_id` values, they can replace the

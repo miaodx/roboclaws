@@ -500,6 +500,9 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   pose request artifact through `--waypoint-pose-requests`. A blocked request
   artifact blocks smoke capture, and missing/seed-derived readiness waypoints
   no longer act as a silent fallback.
+- `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
+  `waypoint_pose_requests.json`, showing ready and blocked conversion rows so
+  coverage decisions are auditable even before Isaac robot-view capture passes.
 
 2026-06-17 update:
 
@@ -552,6 +555,9 @@ ruff format --check scripts/maps/render_b1_scene_topdown_diagnostic.py tests/con
 ruff check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
 ruff format --check scripts/isaac_lab_cleanup/check_b1_map12_readiness.py scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py tests/contract/maps/test_b1_map12_verified_alignment.py
 ./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q
+ruff check scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py tests/contract/maps/test_b1_map12_navigation_report.py
+ruff format --check scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py tests/contract/maps/test_b1_map12_navigation_report.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_navigation_report.py -q
 .venv-isaaclab/bin/python scripts/maps/render_b1_scene_topdown_diagnostic.py --scene-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated --scene-topdown-render output/b1-map12/scene-gaussian-topdown-crop-z1p8/scene_gaussian_topdown.json --output-dir output/b1-map12/scene-topdown-label-overlay
 python scripts/maps/render_b1_map12_correspondence_review.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --scene-topdown-render output/b1-map12/scene-gaussian-topdown/scene_gaussian_topdown.json --output-dir output/b1-map12/correspondence-review
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
