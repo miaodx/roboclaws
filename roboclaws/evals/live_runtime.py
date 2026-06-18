@@ -121,6 +121,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
     sample_run_dir = live_surface_run_dir(kwargs, output_dir=sample_run_root)
     command = live_surface_command(kwargs, output_dir=sample_run_root)
     env = live_surface_env(kwargs, base_env=os.environ)
+    timeout_s = explicit_live_surface_timeout_s(kwargs)
     started = time.monotonic()
     record: dict[str, Any] = {
         "command": command,
@@ -137,7 +138,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             check=False,
             capture_output=True,
             text=True,
-            timeout=kwargs.get("live_timeout_s"),
+            timeout=timeout_s,
         )
     except subprocess.TimeoutExpired as exc:
         sample_run_dir = discover_live_surface_run_dir(
@@ -156,7 +157,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
                 "returncode": "timeout",
                 "stdout": exc.stdout or "",
                 "stderr": exc.stderr or "",
-                "timeout_s": kwargs.get("live_timeout_s"),
+                "timeout_s": timeout_s,
                 "timeout_completion_grace_s": live_timeout_completion_grace_s(),
                 "effective_run_dir": str(sample_run_dir),
                 "live_status": _load_json(sample_run_dir / "live_status.json"),
@@ -170,9 +171,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             run_result["eval_effective_run_dir"] = str(sample_run_dir)
             return run_result
         _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
-        raise TimeoutError(
-            f"live eval trial timed out after {kwargs.get('live_timeout_s')}s"
-        ) from exc
+        raise TimeoutError(f"live eval trial timed out after {timeout_s:g}s") from exc
 
     sample_run_dir = discover_live_surface_run_dir(
         kwargs,
@@ -373,7 +372,14 @@ def live_surface_timeout_s(kwargs: dict[str, Any]) -> float:
     timeout_s = kwargs.get("live_timeout_s")
     if timeout_s is None:
         return DEFAULT_DETACHED_LIVE_TIMEOUT_S
-    return float(timeout_s)
+    return _positive_timeout_value(timeout_s, "live_timeout_s")
+
+
+def explicit_live_surface_timeout_s(kwargs: dict[str, Any]) -> float | None:
+    timeout_s = kwargs.get("live_timeout_s")
+    if timeout_s is None:
+        return None
+    return _positive_timeout_value(timeout_s, "live_timeout_s")
 
 
 def _live_surface_wait_deadline(*, timeout_s: float, elapsed_s: float) -> float:
@@ -466,6 +472,20 @@ def _non_negative_timeout_value(value: object, setting_name: str) -> float:
     if not math.isfinite(parsed) or parsed < 0:
         raise ValueError(
             f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
+        )
+    return parsed
+
+
+def _positive_timeout_value(value: object, setting_name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
+        ) from exc
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise ValueError(
+            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
         )
     return parsed
 

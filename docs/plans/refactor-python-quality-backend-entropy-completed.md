@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-18: Live eval product-route timeout configuration now fails aloud.
+  Explicit `live_timeout_s` values must be positive finite seconds before the
+  live product route is launched or detached completion polling computes a
+  deadline, instead of allowing zero, negative, non-finite, or malformed values
+  to become immediate/ambiguous wait behavior or late subprocess errors. Owner
+  layer: Eval suites and live-run polling. Behavior-change class: fail-aloud
+  eval live-run configuration; omitted `live_timeout_s` still leaves the
+  blocking subprocess unbounded while using the existing detached-poll default,
+  and valid positive timeouts, timeout recovery, completion grace, provider/env
+  routing, product commands, grading, and artifact discovery are unchanged.
+  Metric: ratchet remains at 0 complexity rows and 79 oversized modules;
+  `test_eval_runner.py` is 1406 lines and remains oversized. Leave test
+  pruning/splitting for an `$intuitive-tests` pass. Proof: focused
+  invalid-timeout and omitted-timeout regression tests, full eval runner unit
+  file, touched-file ruff and format check, py_compile, `git diff --check`, and
+  ratchet.
+
 - 2026-06-18: OpenAI Agents SDK performance-profile enabled feature counts now
   fail aloud. Enabled private profile features reject explicit non-positive
   `model_racing_arm_count`, `raw_fpv_image_memory_retain`, and

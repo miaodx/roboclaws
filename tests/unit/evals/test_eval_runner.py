@@ -285,6 +285,32 @@ def test_live_surface_product_waits_for_detached_codex_status(
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0310/seed-7")
 
 
+def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    seen_timeout = object()
+
+    def fake_run(command: list[str], **kwargs: Any) -> Any:
+        nonlocal seen_timeout
+        seen_timeout = kwargs.get("timeout")
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        run_dir = Path(output_arg.removeprefix("output_dir=")) / "0615_0310" / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+        )
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    live_runtime.run_live_surface_product(**_live_surface_kwargs(tmp_path / "trial-0000"))
+
+    assert seen_timeout is None
+
+
 def test_live_surface_product_recovers_completed_artifact_after_timeout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -366,6 +392,19 @@ def test_live_timeout_completion_grace_rejects_invalid_env(
         match=r"ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S must be a non-negative finite",
     ):
         live_runtime.live_timeout_completion_grace_s()
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "soon"])
+def test_live_surface_timeout_rejects_invalid_config(value: str) -> None:
+    from roboclaws.evals import live_runtime
+
+    kwargs = _live_surface_kwargs(Path("trial-0000"), live_timeout_s=value)  # type: ignore[arg-type]
+
+    with pytest.raises(
+        ValueError,
+        match=r"live_timeout_s must be a positive finite number of seconds",
+    ):
+        live_runtime.live_surface_timeout_s(kwargs)
 
 
 def test_live_surface_product_recovers_after_detached_wait_deadline(

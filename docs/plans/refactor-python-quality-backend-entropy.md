@@ -60,6 +60,22 @@ scripts/dev/check_python_quality_ratchet.py --summary --top 80` on 2026-06-18.
 Treat this as the planning snapshot for the next slice; refresh before executing
 again.
 
+- Follow-up implementation refresh on 2026-06-18 closed one live eval timeout
+  configuration false-green. Explicit `live_timeout_s` values now must be
+  positive finite seconds before the live product route is launched or detached
+  completion polling computes a deadline, instead of allowing zero, negative,
+  non-finite, or malformed values to become immediate/ambiguous wait behavior
+  or late subprocess errors. Owner layer: Eval suites and live-run polling.
+  Behavior-change class: fail-aloud eval live-run configuration; omitted
+  `live_timeout_s` still leaves the blocking subprocess unbounded while using
+  the existing detached-poll default, valid positive timeouts, timeout recovery,
+  completion grace, provider/env routing, product commands, grading, and
+  artifact discovery are unchanged. The ratchet remains 0 complexity rows and
+  79 oversized modules; `test_eval_runner.py` is 1406 lines and remains
+  oversized. Leave test pruning/splitting for an `$intuitive-tests` pass.
+  Proof: focused invalid-timeout and omitted-timeout regression tests, full eval
+  runner unit file, touched-file ruff and format check, py_compile,
+  `git diff --check`, and ratchet.
 - Follow-up implementation refresh on 2026-06-18 closed one OpenAI Agents SDK
   performance-profile numeric-config false-green. Enabled private profile
   features now reject explicit non-positive
