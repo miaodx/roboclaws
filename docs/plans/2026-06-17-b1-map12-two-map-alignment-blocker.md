@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-two-map-alignment-blocker
-status: First residual-backed robot-consumption proof passed; room/object semantic anchors remain later work
+status: Paused after first residual-backed robot-consumption proof; room/object semantic anchors and MCP consumer exposure remain later work
 created: 2026-06-17
 last_reviewed: 2026-06-18
 implementation_allowed: true
@@ -750,3 +750,61 @@ python scripts/maps/render_b1_map12_correspondence_review.py --correspondences a
 python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment
 python scripts/operator_console/render_scene_previews.py --world b1-map12 --output-dir output/b1-map12/static-preview-proof
 ```
+
+## Fresh Context Handoff
+
+Paused on 2026-06-18 at the user's request so the remaining work can resume in
+a fresh context.
+
+Current proven state:
+
+- Geometry alignment is accepted through seven committed
+  `anchor_role=alignment` anchors in
+  `assets/maps/b1-map12-scene-correspondences.json`.
+- The official residual artifact is
+  `output/b1-map12/alignment/alignment_residuals.json`; it is
+  `global_verified` with `selected_transform_type=rigid_2d`, mean residual
+  `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
+- The first preview-grade robot-consumption proof passes through
+  `output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json`.
+  It applies two residual-backed Map12 navigation-memory points as B1 scene
+  robot poses and records same-pose Isaac FPV/Chase evidence.
+- Product and operator-console routes require explicit
+  `b1_alignment_artifact=...` and `b1_navigation_artifact=...` paths before
+  B1 proof consumption. They must not auto-discover generated `output/`
+  artifacts.
+- Compiled B1 runtime bundles write `b1_robot_consumption_manifest.json`,
+  `runtime_map_prior_snapshot.json`, and `runtime_map_prior_targets.json`.
+  `runtime_map_prior_targets.json` includes `digital_twin_capabilities` and
+  `capability_summary`.
+
+Known incomplete state:
+
+- Room semantic projection is still blocked. The current committed
+  correspondence manifest contains geometry anchors only.
+- `docs/status/active/b1-map12-semantic-anchor-review-packet.json` is review
+  input only. It is not accepted semantic truth.
+- Object semantic projection and object/receptacle binding remain blocked.
+- Manipulation, planner-backed navigation, physical robot navigation, and new
+  public MCP navigation tools remain out of scope for this plan.
+- A narrow consumer-chain gap was found just before pausing: the compiled B1
+  prior carries `digital_twin_capabilities`, but
+  `RealWorldCleanupContract` currently extracts prior observed objects,
+  anchors, and rooms without preserving that capability status in the
+  agent-visible MCP/runtime map payload. The next context should verify and fix
+  that strict consumer path without promoting unreviewed semantics.
+
+Recommended first slice for the new context:
+
+1. Inspect `roboclaws/household/realworld_contract_init.py`,
+   `roboclaws/household/realworld_contract_payloads.py`,
+   `roboclaws/household/realworld_runtime_map_contract.py`, and
+   `roboclaws/household/realworld_mcp_server.py`.
+2. Expose existing B1 `digital_twin_capabilities` / `capability_summary` from
+   an explicitly supplied `runtime_map_prior` into the agent-visible
+   `runtime_metric_map` or adjacent map-context payload.
+3. Add focused contract/MCP tests proving the agent can see
+   `robot_navigation_supported=true` while room/object/manipulation capability
+   status remains blocked.
+4. Do not touch generated `output/**`, do not add fallback/autodiscovery, and do
+   not infer room or object labels from the seven alignment anchors.

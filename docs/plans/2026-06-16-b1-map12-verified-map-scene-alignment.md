@@ -1,6 +1,6 @@
 ---
 plan_scope: b1-map12-verified-map-scene-alignment
-status: In progress
+status: Alignment geometry verified; semantic anchors and downstream consumer exposure paused for fresh context
 created: 2026-06-16
 last_reviewed: 2026-06-18
 implementation_allowed: true
@@ -128,6 +128,18 @@ alignment evidence contract. It owns reviewed correspondences, real
 readiness status. `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 consumes a passing residual artifact for on-demand Map12 waypoint or `map_xy/yaw`
 requests, B1 scene pose application, and same-pose Isaac preview proof.
+
+2026-06-18 pause handoff: implementation was paused before changing the
+MCP/runtime consumer path. The alignment contract is in the following state:
+seven accepted `anchor_role=alignment` geometry anchors are committed and the
+official residual artifact is globally verified; room/object semantic anchors
+are still not accepted; the semantic projection script is expected to fail with
+`accepted semantic anchors are required before projecting room labels`.
+Compiled B1 runtime bundles now produce explicit robot-consumption and runtime
+prior artifacts, but the next context should still expose the B1 capability
+status from an explicitly supplied `runtime_map_prior` into the agent-visible
+MCP/runtime map context. That consumer-chain work must not change anchor
+acceptance, infer room labels, or add fallback discovery.
 
 ## Goal
 
@@ -685,3 +697,7 @@ Execution ownership:
 - This document remains the prerequisite alignment contract and should be
   updated only when anchor lifecycle, residual thresholds, or readiness semantics
   change.
+- Fresh-context resume should treat this document as evidence only. The next
+  implementation slice belongs in the 2026-06-17 plan unless it changes the
+  correspondence schema, residual thresholds, or semantic-anchor acceptance
+  contract.

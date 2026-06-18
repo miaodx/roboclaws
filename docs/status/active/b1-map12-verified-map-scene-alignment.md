@@ -370,3 +370,32 @@ Parked work:
   axis-aligned candidate room boxes are too crude. Exported label drafts still
   need an explicit review/merge step before replacing committed map semantics
   or correspondence assets.
+
+Pause handoff for fresh context on 2026-06-18:
+
+- Stop current implementation thread here. The worktree was clean before this
+  documentation update, and no product/runtime code was changed in the paused
+  turn.
+- Current goal remains: make the B1 / Map12 Gaussian asset consumable through
+  the same robot-facing map-prior shape as simulator assets.
+- Already proven: reviewed geometry alignment, residual-backed B1 scene pose
+  application, same-pose Isaac FPV/Chase proof, explicit B1 proof artifacts in
+  product/operator-console routes, B1 robot-consumption manifest, canonical
+  runtime prior snapshot, compact prior targets with capability summary, and
+  B1-specific checker proof.
+- Still not proven: accepted room semantic anchors, strict room semantic
+  projection, object semantic projection, object/receptacle binding,
+  manipulation, planner-backed navigation, physical robot support, or a public
+  MCP navigation tool.
+- Fresh-context first implementation slice: inspect the runtime-prior consumer
+  chain and expose B1 `digital_twin_capabilities` / `capability_summary` from
+  an explicitly supplied `runtime_map_prior` into agent-visible MCP/runtime map
+  context. Expected files to inspect first are
+  `roboclaws/household/realworld_contract_init.py`,
+  `roboclaws/household/realworld_contract_payloads.py`,
+  `roboclaws/household/realworld_runtime_map_contract.py`, and
+  `roboclaws/household/realworld_mcp_server.py`.
+- Strict no-touch constraints for resume: do not commit generated `output/**`;
+  do not add fallback or output autodiscovery; do not treat
+  `docs/status/active/b1-map12-semantic-anchor-review-packet.json` as accepted
+  truth; do not infer room/object labels from the seven alignment anchors.
