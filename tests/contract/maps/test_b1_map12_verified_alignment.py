@@ -39,6 +39,7 @@ from scripts.maps.render_b1_scene_gaussian_topdown import (
     build_topdown_camera_request,
 )
 from scripts.maps.suggest_b1_map12_manual_anchor_semantics import (
+    build_semantic_review_packet,
     build_semantic_suggestions,
 )
 from tests.contract.maps.test_b1_map12_digital_twin_readiness import static_readiness_payload
@@ -795,6 +796,50 @@ def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:
     assert suggestion["suggestion_status"] == "strong_candidate_needs_review"
     assert suggestion["recommended_navigation_area_id"] == "area_a"
     assert suggestion["recommended_asset_partition_id"] == "partition_a"
+
+
+def test_manual_anchor_semantic_review_packet_keeps_anchors_proposed() -> None:
+    draft = correspondence_manifest(
+        anchors=[
+            {
+                "anchor_id": "manual_draft_anchor",
+                "anchor_type": "operator_correspondence",
+                "navigation_area_id": "",
+                "asset_partition_id": "",
+                "map_xy": [1.0, 1.0],
+                "scene_xyz": [1.0, 1.0, 0.0],
+                "review_status": "proposed",
+            }
+        ]
+    )
+    suggestions = {
+        "schema": "b1_map12_manual_anchor_semantic_suggestions_v1",
+        "strong_candidate_count": 1,
+        "suggestions": [
+            {
+                "anchor_id": "manual_draft_anchor",
+                "suggestion_status": "strong_candidate_needs_review",
+                "recommended_navigation_area_id": "area_a",
+                "recommended_asset_partition_id": "partition_a",
+                "map_candidates": [{"map_area_id": "area_a", "distance_m": 0.0}],
+                "scene_candidates": [{"partition_id": "partition_a", "distance_m": 0.0}],
+            }
+        ],
+    }
+
+    packet = build_semantic_review_packet(draft=draft, suggestions=suggestions)
+
+    assert packet["schema"] == "b1_map12_manual_anchor_semantic_review_packet_v1"
+    assert packet["status"] == "needs_human_review"
+    assert packet["accepted_manifest_mutated"] is False
+    assert packet["accepted_anchor_count"] == 0
+    assert packet["proposed_anchor_count"] == 1
+    anchor = packet["anchors"][0]
+    assert anchor["review_status"] == "proposed"
+    assert anchor["navigation_area_id"] == "area_a"
+    assert anchor["asset_partition_id"] == "partition_a"
+    assert anchor["semantic_review"]["status"] == "needs_human_review"
+    assert anchor["semantic_review"]["acceptance_instructions"].startswith("Human reviewer")
 
 
 def test_auto_semantic_label_partition_candidate_stays_candidate_seed_only() -> None:

@@ -57,7 +57,10 @@ Semantic suggestion pass:
 anchors against the current Map12 review polygons and B1 scene partition bounds.
 It found only 1 strong candidate out of 7 anchors, so the current evidence is
 not strong enough to auto-fill final `navigation_area_id` /
-`asset_partition_id` values.
+`asset_partition_id` values. The command now also writes
+`output/b1-map12/manual-draft-anchor-semantic-review-packet.json`, a
+non-mutating human-review packet that combines each manual pick with semantic
+candidates while keeping all anchors proposed and accepted anchor count at zero.
 
 ## Goal
 
