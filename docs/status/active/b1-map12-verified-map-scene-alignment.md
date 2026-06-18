@@ -118,6 +118,9 @@ Last proven evidence:
   robot-mounted or head-camera-equivalent runtime view and not scene-probe/bbox
   evidence. B1 navigation-smoke waypoint evidence remains valid as the
   pose-driven camera artifact path.
+- B1 FPV/Chase promotion also rejects artifacts without waypoint ids or with
+  mixed FPV/Chase view labels, so accepted preview metadata stays tied to one
+  same-waypoint evidence row.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_scene_gaussian_topdown.py tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_label_tool.py tests/contract/maps/test_robot_map12_consistency.py tests/unit/operator_console/test_render_scene_previews.py tests/unit/operator_console/test_static_assets.py -q`
   passes.
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_b1_map12_verified_alignment.py tests/contract/maps/test_b1_map12_digital_twin_readiness.py tests/contract/maps/test_b1_map12_navigation_report.py tests/unit/operator_console/test_render_scene_previews.py -q`

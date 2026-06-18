@@ -859,6 +859,13 @@ def _b1_camera_preview_provenance_errors(
     candidate: dict[str, Any],
 ) -> list[str]:
     errors: list[str] = []
+    waypoint_id = str(candidate.get("waypoint_id") or "").strip()
+    if not waypoint_id:
+        errors.append("missing_waypoint_id")
+    fpv_label = _b1_camera_label_from_view_path(candidate.get("fpv"))
+    chase_label = _b1_camera_label_from_view_path(candidate.get("chase"))
+    if fpv_label and chase_label and fpv_label != chase_label:
+        errors.append("mixed_fpv_chase_view_pair")
     source_kind = str(candidate.get("source_kind") or "")
     if source_kind not in {
         "run_result_robot_view_step",
@@ -906,7 +913,7 @@ def _b1_camera_label_from_view_path(raw_path: Any) -> str:
     if not raw_path:
         return ""
     name = Path(str(raw_path)).name
-    for suffix in (".fpv.png", ".fpv.jpg", ".png", ".jpg"):
+    for suffix in (".fpv.png", ".chase.png", ".fpv.jpg", ".chase.jpg", ".png", ".jpg"):
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return name

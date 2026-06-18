@@ -556,6 +556,9 @@ Do not broaden into semantic-map authoring until this blocker is closed.
   scene-probe or bbox source. Dedicated B1 navigation-smoke waypoint evidence
   remains accepted because the smoke artifact already represents pose-driven
   runtime waypoint capture.
+- The same preview promotion gate also rejects camera artifacts that omit the
+  waypoint id or mix FPV/Chase files from different view labels, so promoted
+  FPV and Chase metadata always describe one same-waypoint evidence row.
 
 Current gate:
 

@@ -461,6 +461,99 @@ def test_b1_camera_promotion_rejects_scene_probe_camera_sources(tmp_path: Path) 
     assert "chase_source_not_robot_runtime" in errors
 
 
+def test_b1_camera_promotion_rejects_missing_waypoint_id(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    views_dir = run_dir / "robot_views"
+    views_dir.mkdir(parents=True)
+    _write_pattern_image(views_dir / "probe.fpv.png", accent=(220, 220, 220))
+    _write_pattern_image(views_dir / "probe.chase.png", accent=(120, 90, 60))
+    artifact = run_dir / "run_result.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "robot_view_steps": [
+                    {
+                        "label": "probe",
+                        "robot_pose_applied": True,
+                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                        "alignment_transform_source": "reviewed_correspondence_fit",
+                        "camera_control_contract": _robot_camera_control_contract(),
+                        "views": {
+                            "fpv": "robot_views/probe.fpv.png",
+                            "chase": "robot_views/probe.chase.png",
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = _promote_b1_camera_previews(
+        camera_artifact=artifact,
+        fpv_path=tmp_path / "b1-map12-fpv.png",
+        chase_path=tmp_path / "b1-map12-chase.png",
+        width=320,
+        height=200,
+    )
+
+    assert result["status"] == "no_usable_camera_pair"
+    assert result["evaluated_candidates"][0]["status"] == "provenance_rejected"
+    assert "missing_waypoint_id" in result["evaluated_candidates"][0]["provenance_errors"]
+
+
+def test_b1_camera_promotion_rejects_mixed_fpv_chase_view_pair(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    views_dir = run_dir / "robot_views"
+    views_dir.mkdir(parents=True)
+    _write_pattern_image(views_dir / "point_a.fpv.png", accent=(220, 220, 220))
+    _write_pattern_image(views_dir / "point_b.chase.png", accent=(120, 90, 60))
+    artifact = run_dir / "run_result.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "robot_view_steps": [
+                    {
+                        "label": "mixed",
+                        "waypoint_id": "generated_exploration_002",
+                        "robot_pose_applied": True,
+                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                        "alignment_transform_source": "reviewed_correspondence_fit",
+                        "camera_control_contract": _robot_camera_control_contract(),
+                        "views": {
+                            "fpv": "robot_views/point_a.fpv.png",
+                            "chase": "robot_views/point_b.chase.png",
+                        },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = _promote_b1_camera_previews(
+        camera_artifact=artifact,
+        fpv_path=tmp_path / "b1-map12-fpv.png",
+        chase_path=tmp_path / "b1-map12-chase.png",
+        width=320,
+        height=200,
+    )
+
+    assert result["status"] == "no_usable_camera_pair"
+    assert result["evaluated_candidates"][0]["status"] == "provenance_rejected"
+    assert "mixed_fpv_chase_view_pair" in result["evaluated_candidates"][0]["provenance_errors"]
+
+
 def test_b1_camera_promotion_accepts_navigation_smoke_waypoint_evidence(
     tmp_path: Path,
 ) -> None:
