@@ -145,14 +145,20 @@ Last proven evidence:
   `isaac_runtime_*` provenance.
 - `python scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py --run-dir output/b1-map12/navigation-smoke/residual-overlay --readiness-artifact output/b1-map12/alignment/readiness_with_alignment.json --navigation-artifact output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json --waypoint-pose-requests output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json --output output/b1-map12/navigation-smoke/residual-overlay/report.html`
   passes and writes the reviewable navigation report.
-- `just harness::b1-map12-navigation-smoke stamp=residual-overlay-harness-4 waypoint_pose_requests=output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json output_dir=output/b1-map12/navigation-smoke-harness`
-  passes as the single-command maintainer replay. It writes non-empty
-  `navigation_smoke.json`, `readiness_with_navigation.json`, `report.html`,
-  and `operator-preview/b1-map12-preview.json` under
-  `output/b1-map12/navigation-smoke-harness/residual-overlay-harness-4/`.
-  The preview metadata uses the same waypoint for FPV/Chase, references
-  `output/b1-map12/alignment/alignment_residuals.json`, and records
-  `alignment_transform_source=reviewed_correspondence_fit`.
+- `just harness::b1-map12-navigation-smoke stamp=residual-overlay-default-harness output_dir=output/b1-map12/navigation-smoke-harness`
+  passes as the canonical single-command maintainer replay. It consumes the
+  default residual-backed readiness candidate waypoints without an explicit
+  `waypoint_pose_requests` override and writes non-empty `navigation_smoke.json`,
+  `readiness_with_navigation.json`, `report.html`, and
+  `operator-preview/b1-map12-preview.json` under
+  `output/b1-map12/navigation-smoke-harness/residual-overlay-default-harness/`.
+  The smoke artifact applies `b1_aligned_plastic_bottle_table_1` and
+  `b1_aligned_long_table`; the preview metadata uses the same waypoint for
+  FPV/Chase, references `output/b1-map12/alignment/alignment_residuals.json`,
+  and records `alignment_transform_source=reviewed_correspondence_fit`.
+  An explicit
+  `waypoint_pose_requests=output/b1-map12/navigation-smoke/residual-overlay/waypoint_pose_requests.json`
+  replay also passes under `residual-overlay-harness-4`.
   The earlier interrupted
   `output/b1-map12/navigation-smoke-harness/residual-overlay-harness/` directory
   is a partial run with zero-byte JSON files and is not evidence.
