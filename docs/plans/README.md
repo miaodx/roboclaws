@@ -49,92 +49,17 @@ plan, add or refresh its header metadata instead:
 
 ## Current Index
 
-Use root `STATUS.md` for the current project focus. This index is a navigation
-aid, not a source of truth for current priority.
+Use root `STATUS.md` for the current project focus and human review links.
+This directory is intentionally searchable instead of hand-indexed; long
+curated lists drift faster than the plans do.
 
-### Active Or Recently Touched
+Useful searches:
 
-- [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
-- [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
-- [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
-- [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
-- [Eval Harness Skill Entrypoint](2026-06-15-eval-harness-skill-entrypoint.md)
-- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md) (historical)
-- [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
-- [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
-- [Report Performance Analysis Skill](2026-06-11-report-performance-analysis-skill.md)
-- [Auto Semantic Map Build](auto-semantic-map-build.md)
-- [Operator Console Orthogonal Launch Refactor](operator-console-orthogonal-launch-refactor.md)
-- [RAW-FPV Subagent Visual Labeling Probe](raw-fpv-subagent-visual-labeling-probe.md)
-- [Live Agent Runtime SDK Perf Follow-ups](live-agent-runtime-sdk-perf-followups.md)
-- [Live Agent Runtime SDK Spike](live-agent-runtime-sdk-spike.md)
+```bash
+rg -n "^\\*\\*Status:\\*\\*" docs/plans
+rg -n "surface=household-world|agent::eval|runtime_map_prior" docs/plans
+```
 
-### Household World, Map Build, And Cleanup
-
-- [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
-- [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
-- [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
-- [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
-- [Mujoco Isaac Minimal Map Task Parity](mujoco-isaac-minimal-map-task-parity.md) (superseded / historical)
-- [Actionable Semantic Map Snapshot](refactor-actionable-semantic-map-snapshot.md)
-- [Minimal-First Semantic Map Pipeline](refactor-reduce-entropy-minimal-semantic-map.md)
-- [Done Readiness Held State](refactor-reduce-entropy-done-readiness-held-state.md)
-- [RAW_FPV Visual Candidate Actionability](refactor-raw-fpv-visual-candidate-actionability.md)
-- [FPV Visual Scan/Confirm Gate](refactor-fpv-visual-evidence-gate.md)
-- [Sanitized Agent Steering](refactor-reduce-entropy-sanitized-agent-steering.md)
-- [Molmo Cleanup Memory And Routine Entropy](refactor-reduce-entropy-molmo-cleanup-memory.md)
-- [MolmoSpaces Bounded Concurrent Cleanup Runs](molmospaces-bounded-concurrent-cleanup.md)
-- [MolmoSpaces Sanitized World Labels Lane](molmospaces-sanitized-world-labels-lane.md)
-- [MolmoSpaces Waypoint-Honest Cleanup Flow](molmospaces-waypoint-honest-cleanup-flow.md)
-- [MolmoSpaces Real-Robot Contract Alignment](molmospaces-real-robot-contract-alignment.md)
-- [Environment Setup Relocation Contract](environment-setup-relocation-contract.md)
-
-### Real Robot And Backend Work
-
-- [Agibot G2 Cleanup Support Pilot](agibot-g2-cleanup-support-pilot.md)
-- [Agibot Robot Map 9 Dry-Run Rehearsal](agibot-robot-map-9-dry-run-rehearsal.md)
-- [Agibot Robot Map 9 Semantic Actions Rehearsal](agibot-robot-map-9-semantic-actions-rehearsal.md)
-- [MolmoSpaces Agibot Contract Rehearsal](molmospaces-agibot-contract-rehearsal.md)
-- [Agibot RAW_FPV Preflight](refactor-agibot-raw-fpv-preflight.md)
-- [B1 Map 12 Digital Twin Navigation Readiness](refactor-reduce-entropy-b1-map12-digital-twin.md)
-
-### Rendering, Cameras, And Visual Grounding
-
-- [Digital-Twin Isaac / MolmoSpaces Mainline Separation](2026-06-15-separate-digital-twin-isaac-from-molmospaces-mainline.md)
-- [Isaac Lab MolmoSpaces Backend Support](isaac-lab-molmospaces-backend-support.md) (superseded / historical)
-- [MuJoCo Isaac Object And Render Parity Audit](mujoco-isaac-object-render-parity-audit.md) (superseded / historical)
-- [MuJoCo Isaac Render Difference Probe Directions](mujoco-isaac-render-difference-probe-directions.md) (superseded / historical)
-- [MuJoCo Isaac Visual Parity Convergence](mujoco-isaac-visual-parity-convergence.md) (superseded / historical)
-- [Runtime Render State Parity](refactor-runtime-render-state-parity.md)
-- [Scene Camera Material Vs Light Diagnostic](scene-camera-material-vs-light-diagnostic.md)
-- [Genesis Scene-Camera Backend Lane](genesis-scene-camera-backend-lane.md) (retired / historical)
-- [MolmoSpaces HTTP Visual Grounding Service](molmospaces-http-visual-grounding-service.md)
-- [Visual Grounding GPU Sidecar Benchmark](visual-grounding-gpu-sidecar-benchmark.md)
-- [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
-
-### Launch, Console, And Agent Runtime
-
-- [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
-- [Operator Relative Navigation Control](2026-06-16-operator-relative-navigation-control.md)
-- [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
-- [Eval Harness Skill Entrypoint](2026-06-15-eval-harness-skill-entrypoint.md)
-- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md) (historical)
-- [Task Surface, Intent, And Goal Contract Refactor](task-surface-intent-goal-contract-refactor.md)
-- [Domain-First Launch Architecture](refactor-reduce-entropy-domain-first-launch-architecture.md)
-- [Operator Console Agent Interaction](operator-console-agent-interaction.md)
-- [Operator Console Layered Launch Gates](operator-console-layered-launch-gates.md)
-- [Operator Console Background Tasks](2026-06-15-operator-console-background-tasks.md)
-- [Operator Console UI](refactor-operator-console-ui.md)
-- [Standalone Codex Operator Console](standalone-codex-operator-console.md)
-- [Standalone Operator Console UI Design Contract](standalone-codex-operator-console-UI-SPEC.md)
-- [Operator Console UI Review](standalone-codex-operator-console-UI-REVIEW.md)
-- [Live Agent Runner Boundary](refactor-live-agent-runner-boundary.md)
-- [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
-- [Codex Harness Sidecar Lifecycle](refactor-codex-harness-sidecar-lifecycle.md)
-- [Molmo Cleanup Codex Harness Speedup](molmo-cleanup-codex-harness-speedup.md)
-- [MiMo v2.5 Migration](refactor-mimo-v25-migration.md)
-
-### Naming And Evidence Lanes
-
-- [Drop World Oracle Labels](2026-06-16-drop-world-oracle-labels.md)
-- [Evidence Lane Naming Refactor](refactor-evidence-lane-naming.md)
+Retirement records and superseded proposals stay here as history. They are not
+current implementation guidance unless `STATUS.md`, `ARCHITECTURE.md`, or a
+new active plan explicitly promotes them.

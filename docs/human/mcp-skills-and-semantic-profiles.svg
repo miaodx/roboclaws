@@ -87,7 +87,7 @@
   <text x="390" y="560" class="card-text">or blocked capability</text>
   <rect x="670" y="488" width="242" height="86" class="card"/>
   <text x="694" y="516" class="card-title">other modules</text>
-  <text x="694" y="540" class="card-text">search, photo capture,</text>
+  <text x="694" y="540" class="card-text">search, inspection,</text>
   <text x="694" y="560" class="card-text">inspection, memory</text>
   <rect x="958" y="488" width="226" height="86" class="warn-chip"/>
   <text x="982" y="520" class="chip-text">No copied profile:</text>

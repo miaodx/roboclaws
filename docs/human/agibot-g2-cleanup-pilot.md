@@ -47,7 +47,7 @@ set -a && source .env && set +a
 just dev::network-status
 ```
 
-如果 `network: work`，OpenClaw 禁止。Codex 可以用 repo-local `.env` 里的
+如果 `network: work`，guarded maintainer routes 禁止。Codex 可以用 repo-local `.env` 里的
 `XM_LLM_API_KEY`，或显式 `CODEX_BASE_URL` + `CODEX_API_KEY`。不要把 key 写进日志、
 报告或文档。
 

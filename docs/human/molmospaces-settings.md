@@ -7,6 +7,12 @@ to choose the right run shape before making project-status claims.
 
 For the current project-status artifact, prefer:
 
+```bash
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=world-public-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5
+```
+
+That public command resolves to the current MolmoSpaces/RBY1M cleanup shape:
+
 ```text
 contract=realworld_cleanup_v1
 public_backend=mujoco
@@ -19,7 +25,7 @@ static_fixture_projection_mode=room_only
 primitive_provenance=api_semantic
 ```
 
-This produces a real MolmoSpaces/RBY1M cleanup report with Agent View, Private
+It produces a real MolmoSpaces/RBY1M cleanup report with Agent View, Private
 Evaluation, Score, Semantic Substeps, and Robot View Timeline. The timeline
 contains FPV, chase, map, and verification images when the backend can capture
 robot views.
@@ -48,8 +54,8 @@ for fast contract checks, but it has no robot camera timeline.
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
 | Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup lanes. |
 | Map bundle | `map_bundle=<path-or-assets-id>` | Operator override for a prepared environment bundle. | Fails before cleanup startup if missing or invalid. |
-| Static fixture projection | `room_only` | Public room-level static fixture projection. | Preferred ADR-0003 setting. |
-| Static fixture projection | `exact_fixtures` | Easier exact static fixture projection. | Fallback/debug only. |
+| Static fixture projection artifact | `room_only` | Public room-level static fixture projection in map/report artifacts. | Current default artifact shape; not an active MCP tool. |
+| Static fixture projection artifact | `exact_fixtures` | Easier exact static fixture projection. | Historical/debug artifact only. |
 | Provenance | `api_semantic` | Cleanup tools mutate simulator semantic state. | Current normal cleanup loop. |
 | Provenance | `planner_backed` | Cleanup subphase has matching RBY1M/CuRobo proof. | Future strict manipulation target. |
 
@@ -151,17 +157,13 @@ as report provenance.
 | `yolo-world` | YOLO-World open-vocabulary proposer over RAW_FPV images. | YOLO-family comparison target. |
 | `omdet-turbo` | Transformers OmDet-Turbo open-vocabulary proposer over RAW_FPV images. | First-wave non-YOLO comparison target; current supported checkpoint is `omlab/omdet-turbo-swin-tiny-hf`. |
 
-Hosted VLM refiner and direct-producer labelers such as
-`grounding-dino+mimo-v2.5`, `yoloe+mimo-v2.5`,
-`grounding-dino+qwen3-vl`, `mimo-v2.5-direct`, and `qwen3-vl-direct` are retired
-from the active camera-labeler axis. ADR-0138 keeps the HTTP sidecar boundary
-detector-only; old Gemini/MiMo/Qwen results are historical/parked evidence only.
+Hosted multimodal refiner and direct-producer labelers are retired from the
+active camera-labeler axis. ADR-0138 keeps the HTTP sidecar boundary
+detector-only; old hosted-model results are historical/parked evidence only.
 
 Recommended command shape for current pipeline comparison:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yoloe
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yolo-world
@@ -208,11 +210,10 @@ install model dependencies and weights deliberately in the sidecar environment
 before using it. Live Codex is a useful best-effort confidence check for that
 slice, but direct and MCP-smoke fake HTTP runs are the hard gates.
 
-Qwen3-VL, MiMo, Gemini, and similar hosted VLM routes are not active visual
-grounding sidecar dependencies. Reintroduce any VLM refiner or direct-producer
-route only through a fresh plan with a bounded offline/on-demand labeling use
-case; do not make those providers part of normal cleanup, benchmark, or CI
-recipes.
+Hosted multimodal routes are not active visual-grounding sidecar dependencies.
+Reintroduce any hosted refiner or direct-producer route only through a fresh
+plan with a bounded offline/on-demand labeling use case; do not make those
+providers part of normal cleanup, benchmark, or CI recipes.
 
 Before promoting a real pipeline to the end-to-end cleanup matrix, run a
 perception-isolated visual-grounding benchmark over fixed RAW_FPV observations.
@@ -362,11 +363,10 @@ built-in `OmDetTurboProcessor` and `OmDetTurboForObjectDetection`; the
 previously listed base checkpoint is not a valid public model id, so the
 first-wave matrix sweeps the tiny checkpoint with threshold variants instead.
 
-The active sidecar contract is detector-only. Hosted VLM refiner and
-direct-producer probes that previously used OpenAI-compatible chat-completions
-endpoints are parked historical routes, not current setup steps. Generic model
-provider keys may still be used by Codex, Claude Code, OpenAI Agents SDK, and
-OpenClaw text routes; they are not visual-grounding camera labelers.
+The active sidecar contract is detector-only. Hosted refiner and direct-producer
+probes that previously used chat-completions endpoints are parked historical
+routes, not current setup steps. Generic model provider keys may still be used
+by supported coding-agent routes; they are not visual-grounding camera labelers.
 
 List the sidecar adapter slots without starting the server:
 
@@ -382,10 +382,10 @@ until a real adapter run loads them.
 Real proposer pipeline ids such as `grounding-dino` and `yoloe` report visible
 `adapter_unavailable`, `missing_dependency`, or adapter-error failures unless
 the service is started with `--adapter-mode real` with installed sidecar
-dependencies and model weights. Retired hosted VLM ids such as
-`grounding-dino+mimo-v2.5`, `mimo-v2.5-direct`, and `qwen3-vl-direct` are not
-active adapter slots. The adapter catalog names the optional sidecar extra and
-current redacted runtime readiness for each target adapter.
+dependencies and model weights. Legacy hosted refiner/direct-producer ids are
+not active adapter slots. The
+adapter catalog names the optional sidecar extra and current redacted runtime
+readiness for each target adapter.
 
 For real-robot deployment, extend the same benchmark with a fixed head-camera
 seed set and edge latency measurements before selecting a proposer. Route
@@ -417,7 +417,7 @@ the current source of truth before claiming a run supports a setting.
 |------------|--------------------|--------------|---------------------|-------|
 | `python -m roboclaws.household.realworld_cleanup` | yes | yes | yes | Deterministic cleanup demo and checker path. The example path is only a thin wrapper. |
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | yes | Dogfood/smoke wrapper used by several just recipes; uses model-declared simulated producers where camera-label declarations are exercised. |
-| `python -m roboclaws.cli.agent_server household-world.cleanup` | yes | yes | yes | Direct Codex/Claude/OpenClaw server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
+| `python -m roboclaws.cli.agent_server household-world.cleanup` | yes | yes | yes | Direct coding-agent server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
 | `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Internals use `declare_visual_candidates` and `navigate_to_visual_candidate` for camera evidence to handle registration. |
 
 ## Command Taxonomy
@@ -444,14 +444,12 @@ just agent::run household-world.cleanup <agent-engine-or-private-driver> <eviden
 | Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
 | Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
 | Preset | `smoke` | Synthetic contract sanity; world labels; semantic report. |
-| Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives privileged structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
-| Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation authorization. |
+| Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation permission. |
 | Evidence lane | `camera-raw-fpv` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
 | Evidence lane | `camera-grounded-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates produced by `camera_labeler`. |
 
-OpenClaw smoke/live drivers are validation-required maintainer routes. Keep
-them out of normal operator runbooks until the off-work-network Gateway proof is
-green; see `docs/human/openclaw/demo.md` and `docs/human/openclaw/local.md`.
+Guarded smoke/live drivers are validation-required maintainer routes. Keep
+them out of normal operator runbooks until their separate proof is green.
 
 `verify::*` remains the confidence-gate namespace: it runs focused tests and then
 delegates scenario execution to `harness::*`. `harness::*` remains the
@@ -507,8 +505,8 @@ just code::codex-provider-smoke
 
 Local public live-agent recipes support Codex and Claude Code only through the
 pinned coding-agent Docker toolchain and repo-local `.env`. Hosted CI does not
-support Codex. OpenClaw stays outside normal hosted/current run guidance until
-the validation-required Gateway proof is green. Use the same key set when
+support Codex. Guarded maintainer routes stay outside normal hosted/current run
+guidance until their validation proof is green. Use the same key set when
 comparing Kimi/MiMo results across machines:
 
 ```bash
@@ -549,14 +547,6 @@ Live Codex Molmo cleanup remains single-session by launcher policy; if one row
 is active, later live Codex rows are blocked rather than moved to a hidden port
 or silently replaced by a cheaper substitute.
 
-For quick maintainer debugging, the smoke convenience recipe still accepts
-private positional values or `driver=` / `profile=` prefixes:
-
-```bash
-just molmo::quick-check openclaw-smoke smoke
-just molmo::quick-check driver=openclaw-smoke profile=smoke
-```
-
 ## Report Shapes
 
 All Molmo cleanup demos should route through the shared cleanup report underlay
@@ -568,7 +558,7 @@ sections.
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
 | Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, top-down scene view, and verification. Base Navigation Map preview and Runtime Metric Map evidence are rendered separately from scene imagery. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
-| Sanitized detector evidence | `evidence_lane=world-public-labels` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation authorization remain policy-required until source-FPV confirmation. |
+| Sanitized detector evidence | `evidence_lane=world-public-labels` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation permission remain policy-required until source-FPV confirmation. |
 | Model-declared camera cleanup | `camera-raw-fpv` or `camera-grounded-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
 | Camera-label producer evidence | `evidence_lane=camera-grounded-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with camera-labeler and internal visual-grounding pipeline provenance. |
 | Planner proof attached | `--planner-proof-run-result ...` | Attached Planner Proof, Cleanup Primitive Gate, Planner Cleanup Bridge. |
@@ -643,8 +633,8 @@ just molmo::codex-report
 just molmo::claude-report
 ```
 
-OpenClaw report recipes are maintainer-only validation routes documented under
-`docs/human/openclaw/`; they are not part of the normal current entrypoint set.
+Guarded report recipes are maintainer-only validation routes; they are not part
+of the normal current entrypoint set.
 `claude-report` is blocked on the work network unless the repo-local `.env`
 contains a supported MiMo, Kimi, or MiMo mify Anthropic key route. `codex-report`
 may run on the work network with the repo-local `codex-router-responses` route configured in
@@ -683,11 +673,11 @@ just harness::molmo-planner-proof-bundle-execute-rerun
   RAW-FPV visual labeler is tracked separately as perception-only evidence.
 - `camera_model_policy` remains internal metadata for deterministic simulated
   camera-label producer evidence under the shared Model-Declared Observation
-  schema; it is not real VLM pixel inference unless the producer is explicitly a
-  VLM/detector route.
+  schema; it is not real pixel inference unless the producer is explicitly a
+  detector route.
 - The global planner cleanup bridge remains blocked until cleanup subphases are
   planner-backed for the required object/target bindings.
-- OpenClaw minimum viability and clean cleanup success are separate gates.
+- Guarded maintainer viability and clean cleanup success are separate gates.
 
 ## Source Docs
 

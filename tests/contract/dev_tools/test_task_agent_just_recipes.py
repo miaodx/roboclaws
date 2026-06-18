@@ -1061,7 +1061,7 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
     assert "direct-runner|openclaw-gateway" not in exc.value.hint
 
 
-def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
+def test_public_engine_docs_keep_guarded_maintainer_routes_out_of_public_list() -> None:
     readme = (JUST_DIR / "README.md").read_text(encoding="utf-8")
     engine_section = readme.split("Agent engines:", 1)[1].split("Provider profiles", 1)[0]
     taxonomy = (REPO_ROOT / "docs" / "human" / "agent-task-command-taxonomy.md").read_text(
@@ -1076,16 +1076,17 @@ def test_public_engine_docs_quarantine_openclaw_gateway() -> None:
     ]
 
     assert "openclaw-gateway" not in engine_section
-    assert "openclaw-gateway" in readme
+    assert "openclaw-gateway" not in readme
     assert "Validation-required maintainer engines" in readme
     assert "- `openclaw-gateway`" not in taxonomy_engine_bullets
     assert "Validation-required maintainer engines" in taxonomy
 
 
-def test_openclaw_demo_doc_stays_validation_required() -> None:
+def test_retired_maintainer_demo_doc_does_not_publish_current_command() -> None:
     demo_doc = (REPO_ROOT / "docs" / "human" / "openclaw" / "demo.md").read_text(encoding="utf-8")
 
-    assert "validation-required maintainer route" in demo_doc
+    assert "historical" in demo_doc
+    assert "agent_engine=openclaw-gateway" not in demo_doc
     assert "same public launch catalog" not in demo_doc
 
 
@@ -1103,7 +1104,7 @@ def test_human_docs_do_not_surface_legacy_cleanup_commands_as_current() -> None:
     assert "profile=camera-labels" not in legacy_arch
     assert "openclaw-smoke-report" not in settings
     assert "just molmo::openclaw-report" not in settings
-    assert "OpenClaw report recipes are maintainer-only validation routes" in settings
+    assert "Guarded report recipes are maintainer-only validation routes" in settings
 
 
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:

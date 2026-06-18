@@ -8,26 +8,25 @@ AI agents should also read these docs when they need human-facing context.
 ## Read First
 
 - [Domain vocabulary](domain.md)
-- [Contributing](contributing.md)
-- [UT and CI design](ut_ci_design.md)
 - [Agent/task command taxonomy](agent-task-command-taxonomy.md)
 - [Evaluation suites](evaluation.md)
-- [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)
-- [Architecture hygiene review](architecture-hygiene-review.md)
 - [Technical design](technical-design.md)
+
+## Reference
+
 - [MolmoSpaces settings](molmospaces-settings.md)
-- [MolmoSpaces visual grounding results](molmospaces-visual-grounding-results.md)
-- [Model matrix](model-matrix.md)
-- [Model route verdicts](model-route-verdicts.yaml)
-
-## Runbooks
-
 - [Local runtime reference](local-runtime.md)
 - [Direct coding-agent household MCP driver](coding-agent-nav-server.md)
+- [Model matrix](model-matrix.md)
+- [Model route verdicts](model-route-verdicts.yaml)
+- [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)
+- [UT and CI design](ut_ci_design.md)
+- [Contributing](contributing.md)
+
+## Specialized Runbooks
+
 - [Agibot G2 Cleanup Pilot](agibot-g2-cleanup-pilot.md)
-- [OpenClaw demo status](openclaw/demo.md)
-- [OpenClaw local development](openclaw/local.md)
-- [OpenClaw Gateway internals](openclaw/gateway-internals.md)
+- [Architecture hygiene review](architecture-hygiene-review.md)
 
 ## AI-Agent Docs
 
@@ -39,10 +38,3 @@ human review surface:
 - `docs/retrospectives/` - shipped history
 - `docs/status/active/` - parallel work notes
 - `docs/ai/` - implementation evidence, experiments, and agent-only runbooks
-
-## Historical / Superseded
-
-These records are useful when auditing why older command shapes changed, but
-they are not first-read guidance for current runs:
-
-- [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)

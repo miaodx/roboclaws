@@ -45,11 +45,10 @@ preview from Runtime Metric Map evidence, keep Runtime Map Prior Snapshot
 as a prior wrapper, and no longer publish generated `semantic_map.png` /
 `map_overlay.json` previews as current map proof.
 
-The active visual-grounding sidecar contract is now detector-only: hosted VLM
-refiner/direct-producer camera labelers are retired from active code, command
-examples, tests, and benchmark promotion. OpenClaw remains available only as a
-guarded validation-required maintainer route until an off-work-network Gateway
-proof runs.
+The active camera-labeling sidecar contract is detector-only. Hosted refiner or
+direct-producer camera labelers are retired from active code, command examples,
+tests, and benchmark promotion. Validation-required maintainer routes stay
+guarded until their separate off-work-network proof runs.
 
 The first-slice cross-environment semantic map parity contract is implemented.
 Real-robot, B1 digital-twin, and simulator static map bundles now declare
@@ -84,10 +83,8 @@ implemented sim map surface simplification is
 `docs/plans/2026-06-17-sim-map-surface-simplification.md`. The
 implemented household launch contract is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
-ADR-0136. The implemented visual-grounding cleanup is
-`docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`,
-backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
-`docs/plans/refactor-retire-ai2thor-vlm-direct.md`. The implemented B1 / Map 12
+ADR-0136. The implemented visual-grounding cleanup is backed by ADR-0138.
+Retirement records remain searchable under `docs/plans/`. The implemented B1 / Map 12
 thin review/runtime contract is
 `docs/plans/2026-06-16-b1-map12-thin-review-runtime-contract.md`.
 
@@ -116,8 +113,9 @@ Default non-direct eval requests remain blocked identity/preflight packets
 unless live execution is explicitly requested. Remaining validation blockers are
 external or product-route-specific: broader live-agent `pass^k` proof needs
 healthy provider/runtime capacity and agent behavior that reaches `done`,
-RAW-FPV live cleanup needs live-session capacity, and OpenClaw Gateway proof
-must run separately off the work network before OpenClaw can be called healthy.
+RAW-FPV live cleanup needs live-session capacity, and validation-required
+maintainer routes need separate off-work-network proof before they can be
+called healthy.
 
 ## Human Review Surface
 
@@ -148,10 +146,6 @@ must run separately off the work network before OpenClaw can be called healthy.
   `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`
 - B1 / Map 12 semantic and public-navigation follow-ups:
   `docs/plans/2026-06-18-b1-map12-semantic-and-public-nav-followups.md`
-- Implemented VLM-sidecar/OpenClaw status cleanup:
-  `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
-- Implemented AI2-THOR/direct-VLM retirement record:
-  `docs/plans/refactor-retire-ai2thor-vlm-direct.md`
 - Open-ended proof-status contract:
   `docs/plans/2026-06-11-open-ended-proof-status.md`
 - Current status: `STATUS.md`

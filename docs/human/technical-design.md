@@ -79,10 +79,10 @@ Agent engines are product runtimes, not tasks:
 - Docker-backed Claude Code;
 - OpenAI Agents SDK.
 
-OpenClaw Gateway is a validation-required maintainer route until the
-off-work-network Gateway proof is green. Script-style proof and dry-run paths
-belong under direct runners, harness recipes, or backend adapters; they are not
-public agent engines.
+Validation-required maintainer routes stay outside the normal public engine
+list until their separate proof gates are green. Script-style proof and dry-run
+paths belong under direct runners, harness recipes, or backend adapters; they
+are not public agent engines.
 
 Reusable behavior belongs in skills. The maintained cleanup skill drives
 `preset=cleanup`; the `household-open-task` skill drives no-preset household
@@ -105,7 +105,7 @@ parallel task taxonomy.
 
 ## Current Non-Goals
 
-- Do not reintroduce retired navigation/game surfaces as compatibility shims.
+- Do not reintroduce retired surfaces as compatibility shims.
 - Do not expose private generated mess truth or hidden acceptable destinations
   to agents.
 - Do not claim physical manipulation readiness without planner-backed or

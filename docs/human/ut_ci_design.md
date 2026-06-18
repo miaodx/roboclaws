@@ -14,9 +14,9 @@ for real services and real simulator/backend evidence.
    fast enough to run on every PR.
 3. Every public task or backend needs a minimum deterministic contract, but not
    every task/backend combination belongs in required CI.
-4. Real model, Gateway, GPU, simulator, and robot-backed runs are evidence
-   gates. They should be `main`-only, advisory, opt-in, nightly, or local-only
-   unless they are stable and cheap enough to block ordinary PRs.
+4. Real model, external-service, GPU, simulator, and robot-backed runs are
+   evidence gates. They should be `main`-only, advisory, opt-in, nightly, or
+   local-only unless they are stable and cheap enough to block ordinary PRs.
 5. GitHub-specific behavior such as artifact download, Pages assembly, and
    deploy permissions should have a local rehearsal path or a focused test that
    models the important constraint.
@@ -40,8 +40,8 @@ CI. Removing them saves little and makes `main` depend on local discipline.
 | Local feedback | before commit or push | no | focused tests, `just agent::verify mock`, targeted reproduction |
 | Required PR gate | every PR and push | yes | lint, format, deterministic pytest, mock reports, command routing contracts |
 | Required main gate | push to `main` | yes, if stable | public report assembly, Pages artifact shape, stable real-model smoke if accepted |
-| Advisory smoke | push to `main` or scheduled | no | OpenClaw/Gateway/provider runs that can timeout or depend on external services |
-| Opt-in expensive gate | manual dispatch or commit tag | no by default | live model matrices, open-ended photo tasks, broad backend comparisons |
+| Advisory smoke | push to `main` or scheduled | no | provider or external-service runs that can timeout or depend on external services |
+| Opt-in expensive gate | manual dispatch or commit tag | no by default | live model matrices, open-ended household tasks, broad backend comparisons |
 | Local-only proof | developer workstation | no hosted CI | GPU, real robot, Isaac, Agibot GDK, full MolmoSpaces visual proof |
 | Eval suite | scheduled, manual, or release gate | no by default until accepted | versioned samples, repeated trials, graders, aggregate metrics, and regression replay |
 
@@ -81,8 +81,8 @@ This required contract should use fake, fixture, direct, mock, or synthetic
 backends when possible.
 
 Real provider behavior is separate evidence. Do not block ordinary PRs on real
-Kimi/MiMo/OpenClaw/GPU/robot behavior unless the run is stable, cheap, and
-explicitly accepted as a required gate.
+provider, GPU, or robot behavior unless the run is stable, cheap, and explicitly
+accepted as a required gate.
 
 ## Required Coverage For New Backends
 
@@ -99,7 +99,7 @@ The real backend run belongs in an advisory, manual, scheduled, or local-only
 gate when it requires any of the following:
 
 - paid model calls
-- Docker Gateway availability
+- external service availability
 - GPU or display
 - downloaded simulator assets beyond normal mock reports
 - private vendor resources

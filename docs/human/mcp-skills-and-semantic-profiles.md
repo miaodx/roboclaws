@@ -11,8 +11,8 @@ backends without making teammates read the GSD phase logs.
 
 Roboclaws uses a **skill-first, MCP-bounded** architecture:
 
-1. A user gives an **open-ended goal**, such as "clean the room" or "take
-   useful photos."
+1. A user gives an **open-ended goal**, such as "clean the room" or "inspect
+   this room."
 2. The goal resolves to a **surface open-task contract** plus either a
    natural-language `prompt=...` or an optional preset such as
    `surface=household-world preset=map-build` or
@@ -98,7 +98,7 @@ Open-ended goal
 
 The skill layer can hold long-running behavior, prompt strategy, scripts,
 examples, checks, and maintenance notes. It is the right home for reusable
-strategy such as photo capture, generated-mess cleanup, grocery placement, or
+strategy such as generated-mess cleanup, grocery placement, target search, or
 room inspection. Public command names, parameters, reports, and acceptance gates
 belong to runnable surfaces and intents.
 
@@ -318,9 +318,8 @@ Reusable capability profiles should remain small enough to be shared:
   strategy.
 
 This keeps future household tasks cheap to add. Object search, inspection,
-photo capture, navigation rehearsal, and cleanup can share the same world
-profile without each creating a copied profile with the same map, observation,
-and waypoint tools.
+navigation rehearsal, and cleanup can share the same world profile without each
+creating a copied profile with the same map, observation, and waypoint tools.
 
 ### Keep Planning in the Agent and Skills
 

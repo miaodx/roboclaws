@@ -7,27 +7,9 @@ related tests close enough to scan.
 ```text
 tests/
   unit/
-    core/
-    examples/
-    games/
-    molmo_cleanup/
-    openclaw/
-    providers/
-    scripts/
   contract/
-    appliance/
-    checkers/
-    dev_tools/
-    mcp/
-    molmo_cleanup/
-    openclaw/
-    regression/
-    reports/
   regression/
-    refactor/
-    views/
   integration/
-    coding_agent/
   fixtures/
   support/
 ```
@@ -40,7 +22,7 @@ tests/
 - `integration`: process, Docker, external CLI, provider, simulator, or other
   environment-bound tests.
 - `regression`: known-bug or artifact-regression coverage.
-- `local`: requires local GPU, paid API key, real simulator, or real Gateway.
+- `local`: requires local GPU, paid API key, real simulator, or backend service.
 - `slow`: CI-safe but expensive enough to keep out of tight loops.
 
 ## Common Commands
