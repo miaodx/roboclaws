@@ -170,9 +170,18 @@ Last proven evidence:
   `accepted_anchor_count=0`. The strict promoter rejects the packet with
   `review packet has no human-accepted anchors`, so it is a review input, not
   accepted room/object semantics.
+- `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
+  currently exits non-zero with `accepted semantic anchors are required before
+  projecting room labels`. This is the correct gate for the current committed
+  manifest: seven accepted `anchor_role=alignment` anchors prove geometry, but
+  room label projection is blocked until accepted `anchor_role=semantic`
+  anchors are promoted into the correspondence manifest. The projection script
+  also keeps object projection blocked; it does not infer object labels from
+  room anchors.
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` can include
   `waypoint_pose_requests.json` and renders ready/blocked conversion decisions
-  in the HTML report before local Isaac camera proof exists.
+  in the HTML report. The current accepted navigation-smoke proof includes
+  local Isaac same-pose camera evidence.
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py` now implements the
   strict promotion gate from a human-edited review packet to the committed
   correspondence manifest. Proposed-only rows, missing `anchor_role`, fewer
@@ -230,9 +239,11 @@ alignment-corner anchors.
 Next implementation step: human-review
 `docs/status/active/b1-map12-semantic-anchor-review-packet.json`. If those room
 interior points are valid, change selected anchors to `review_status=accepted`
-and promote them through the strict review-packet promoter before projecting
-room/object labels. Keep the navigation-smoke and operator-preview artifact path
-as the accepted first robot-consumption proof.
+and promote them through the strict review-packet promoter before running
+`scripts/maps/build_b1_map12_semantic_projection.py`. Room projection should
+remain blocked until that promotion exists; object projection remains a later
+semantic-anchor proof. Keep the navigation-smoke and operator-preview artifact
+path as the accepted first robot-consumption proof.
 
 Next command/artifact:
 

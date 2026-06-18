@@ -24,6 +24,7 @@ from scripts.maps.auto_align_b1_map12_scene_topdown import semantic_label_partit
 from scripts.maps.build_b1_map12_semantic_anchor_review_packet import (
     build_semantic_anchor_review_packet,
 )
+from scripts.maps.build_b1_map12_semantic_projection import build_semantic_projection
 from scripts.maps.fit_b1_map12_scene_alignment import (
     ALIGNMENT_ANCHOR_ROLE,
     B1_MAP12_ALIGNMENT_RESIDUALS_SCHEMA,
@@ -63,6 +64,9 @@ PROMOTE_REVIEW_PACKET_SCRIPT = (
 )
 CHECK_REVIEW_PACKET_FIT_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "check_b1_map12_semantic_review_packet_fit.py"
+)
+SEMANTIC_PROJECTION_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "build_b1_map12_semantic_projection.py"
 )
 RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 VENDOR_MAP12_BUNDLE = (
@@ -214,6 +218,41 @@ def semantic_review_packet(*, anchors: list[dict[str, object]]) -> dict[str, obj
         }
     )
     return packet
+
+
+def accepted_room_review_manifest(*, labels: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "schema": "b1_map12_alignment_review_v1",
+        "labels": labels,
+    }
+
+
+def accepted_room_label(
+    *,
+    label_id: str,
+    map_area_id: str,
+    scene_partition_id: str,
+    room_label: str,
+    category: str = "room",
+) -> dict[str, object]:
+    return {
+        "label_id": label_id,
+        "map_area_id": map_area_id,
+        "scene_partition_id": scene_partition_id,
+        "review_status": "accepted",
+        "room_label": room_label,
+        "category": category,
+        "geometry": {
+            "type": "map_polygon",
+            "frame_id": "map",
+            "points": [
+                {"x": 0.0, "y": 0.0},
+                {"x": 2.0, "y": 0.0},
+                {"x": 2.0, "y": 2.0},
+                {"x": 0.0, "y": 2.0},
+            ],
+        },
+    }
 
 
 def test_manifest_rejects_accepted_anchor_from_known_poor_bbox_seed() -> None:
@@ -1116,6 +1155,190 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
 
     with pytest.raises(PromotionError, match="no human-accepted anchors"):
         build_reviewed_correspondence_manifest(packet)
+
+
+def test_semantic_projection_rejects_current_alignment_only_manifest() -> None:
+    correspondences = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    review_manifest = json.loads(
+        (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    with pytest.raises(ValueError, match="accepted semantic anchors are required"):
+        build_semantic_projection(
+            correspondences=correspondences,
+            review_manifest=review_manifest,
+        )
+
+
+def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
+    tmp_path: Path,
+) -> None:
+    output_path = tmp_path / "semantic_projection.json"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SEMANTIC_PROJECTION_SCRIPT),
+            "--correspondences",
+            str(REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json"),
+            "--review-manifest",
+            str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+            "--output",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert "accepted semantic anchors are required" in completed.stderr
+    assert not output_path.exists()
+
+
+def test_semantic_projection_rejects_proposed_review_packet_input() -> None:
+    proposed_packet = semantic_review_packet(
+        anchors=[{**passing_anchors()[0], "review_status": "proposed"}]
+    )
+    review_manifest = accepted_room_review_manifest(
+        labels=[
+            accepted_room_label(
+                label_id="meeting_room_a",
+                map_area_id="west_corridor",
+                scene_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="unexpected correspondence schema"):
+        build_semantic_projection(
+            correspondences=proposed_packet,
+            review_manifest=review_manifest,
+        )
+
+
+def test_semantic_projection_projects_only_accepted_room_semantics() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    review_manifest = accepted_room_review_manifest(
+        labels=[
+            accepted_room_label(
+                label_id="meeting_room_a",
+                map_area_id="west_corridor",
+                scene_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+                category="meeting_room",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_b",
+                map_area_id="central_floor",
+                scene_partition_id="meeting_room_b",
+                room_label="Open kitchen",
+                category="kitchen",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_c",
+                map_area_id="north_fixture_area",
+                scene_partition_id="meeting_room_c",
+                room_label="Meeting room B",
+                category="meeting_room",
+            ),
+            accepted_room_label(
+                label_id="reception_area_a",
+                map_area_id="south_fixture_area",
+                scene_partition_id="reception_area_a",
+                room_label="Main hall",
+                category="living_room",
+            ),
+            accepted_room_label(
+                label_id="storage_room_a",
+                map_area_id="storage_room_a",
+                scene_partition_id="storage_room_a",
+                room_label="Storage room",
+                category="storage_room",
+            ),
+        ]
+    )
+
+    payload = build_semantic_projection(
+        correspondences=promoted,
+        review_manifest=review_manifest,
+        correspondences_path=Path("assets/maps/b1-map12-scene-correspondences.json"),
+        review_manifest_path=Path("assets/maps/b1-map12-alignment-review.json"),
+    )
+
+    assert payload["schema"] == "b1_map12_semantic_projection_v1"
+    assert payload["status"] == "verified_room_semantics"
+    assert payload["semantic_anchor_count"] == 6
+    assert payload["room_projection_count"] == 5
+    assert payload["object_projection_status"] == "blocked_until_object_semantic_anchors"
+    assert payload["objects"] == []
+    rooms = {room["room_id"]: room for room in payload["rooms"]}
+    assert rooms["meeting_room_a"]["semantic_anchor_count"] == 2
+    assert rooms["meeting_room_a"]["navigation_area_id"] == "west_corridor"
+    assert rooms["meeting_room_a"]["source_anchor_ids"] == ["anchor_1", "anchor_2"]
+    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert rooms["meeting_room_b"]["category"] == "kitchen"
+    assert rooms["meeting_room_b"]["map_polygon"] == [
+        {"x": 0.0, "y": 0.0},
+        {"x": 2.0, "y": 0.0},
+        {"x": 2.0, "y": 2.0},
+        {"x": 0.0, "y": 2.0},
+    ]
+
+
+def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    promoted["anchors"][1]["navigation_area_id"] = "wrong_area"
+    review_manifest = accepted_room_review_manifest(
+        labels=[
+            accepted_room_label(
+                label_id="meeting_room_a",
+                map_area_id="west_corridor",
+                scene_partition_id="meeting_room_a",
+                room_label="Meeting room A",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_b",
+                map_area_id="central_floor",
+                scene_partition_id="meeting_room_b",
+                room_label="Open kitchen",
+            ),
+            accepted_room_label(
+                label_id="meeting_room_c",
+                map_area_id="north_fixture_area",
+                scene_partition_id="meeting_room_c",
+                room_label="Meeting room B",
+            ),
+            accepted_room_label(
+                label_id="reception_area_a",
+                map_area_id="south_fixture_area",
+                scene_partition_id="reception_area_a",
+                room_label="Main hall",
+            ),
+            accepted_room_label(
+                label_id="storage_room_a",
+                map_area_id="storage_room_a",
+                scene_partition_id="storage_room_a",
+                room_label="Storage room",
+            ),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="must share one navigation_area_id"):
+        build_semantic_projection(
+            correspondences=promoted,
+            review_manifest=review_manifest,
+        )
 
 
 def test_strict_review_promotion_promotes_alignment_anchors_without_semantic_ids() -> None:

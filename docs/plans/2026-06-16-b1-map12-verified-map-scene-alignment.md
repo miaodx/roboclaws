@@ -90,6 +90,12 @@ ids.
 `scripts/maps/check_b1_map12_semantic_review_packet_fit.py` validates the same
 human-edited packet and runs the residual fitter on a preview manifest under
 `output/` without writing the committed correspondence asset.
+`scripts/maps/build_b1_map12_semantic_projection.py` is now the strict
+room-label projection gate. With the current committed alignment-only manifest,
+it exits non-zero with `accepted semantic anchors are required before projecting
+room labels`; this is expected until human-accepted `anchor_role=semantic`
+room-interior anchors are promoted. The projection artifact keeps object
+projection blocked and does not infer object labels from room anchors.
 
 2026-06-18 planning-loop clarification: this plan remains the prerequisite
 alignment evidence contract. It owns reviewed correspondences, real
@@ -473,7 +479,9 @@ The old manual draft proof remains verification-only. The final production
 geometry proof must use `assets/maps/b1-map12-scene-correspondences.json` with
 accepted `anchor_role=alignment` anchors. Room/area label projection remains a
 second proof that needs separate accepted `anchor_role=semantic` anchors with
-real `navigation_area_id` and `asset_partition_id` values.
+real `navigation_area_id` and `asset_partition_id` values. The strict semantic
+projection script must fail on proposed-only packets and the current
+alignment-only manifest.
 
 ## Definition Of Done
 
@@ -496,6 +504,8 @@ Success only if:
   non-collinear `anchor_role=semantic` anchors for that area;
 - room/area semantic correspondence can become verified only with residual
   evidence;
+- room-label projection cannot be emitted until accepted `anchor_role=semantic`
+  anchors exist in the promoted correspondence manifest;
 - object/receptacle USD binding, manipulation, and planner-backed navigation
   remain blocked or out of scope;
 - reports show residuals and outliers clearly enough for a human to audit the
@@ -506,6 +516,9 @@ Success only if:
 - Need first accepted alignment anchor set. Without human/operator-reviewed
   geometry correspondences, verified global alignment remains blocked. Without
   separate accepted semantic anchors, room/area label projection remains blocked.
+- The current first accepted alignment anchor set exists and verifies global
+  geometry, but the semantic projection gate correctly remains blocked until
+  room-interior semantic anchors are reviewed and promoted.
 - If residuals are high, prefer area-level verified claims over weakening
   global thresholds.
 - Accepted annotation lifecycle: draft under `output/`; committed map-bundle
@@ -602,6 +615,12 @@ Verification:
     --correspondences assets/maps/b1-map12-scene-correspondences.json \
     --map-bundle assets/maps/agibot-robot-map-12 \
     --output-dir output/b1-map12/alignment
+
+  # Expected to fail until accepted semantic anchors are promoted.
+  python scripts/maps/build_b1_map12_semantic_projection.py \
+    --correspondences assets/maps/b1-map12-scene-correspondences.json \
+    --review-manifest assets/maps/b1-map12-alignment-review.json \
+    --output output/b1-map12/semantic-projection/semantic_projection.json
 
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
     --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \

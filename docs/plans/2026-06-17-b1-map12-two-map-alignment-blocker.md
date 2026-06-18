@@ -48,6 +48,11 @@ poses and captures same-pose Isaac FPV/Chase evidence. Operator preview
 promotion from that artifact succeeds under
 `output/b1-map12/operator-preview-residual-overlay/`. Room/object projection
 still needs separate semantic anchors and is not part of this proof.
+`scripts/maps/build_b1_map12_semantic_projection.py` is the strict room-label
+projection gate: with the current alignment-only manifest it must fail with
+`accepted semantic anchors are required before projecting room labels`, and it
+keeps object projection blocked instead of inferring object labels from room
+anchors.
 
 ## Decision
 
@@ -304,8 +309,10 @@ P0:
 P1:
 
 - Run the fitter and wire its residual output into readiness/report previews.
-- Project accepted room/object labels as candidate Map12 semantics only after
-  residuals pass.
+- Project accepted room labels only after residuals pass and the promoted
+  correspondence manifest contains accepted `anchor_role=semantic` anchors with
+  real semantic ids. Keep object labels blocked until their own reviewed
+  semantic anchors exist.
 - Add an internal on-demand Map12 navigation point to B1 pose request artifact:
   `Map12 waypoint id or map_xy/yaw -> residual-backed coverage check -> B1 pose`.
 - Make `run_b1_map12_navigation_smoke.py` or a narrow sibling script consume the
@@ -638,19 +645,25 @@ Current gate:
 - `python scripts/maps/fit_b1_map12_scene_alignment.py --correspondences assets/maps/b1-map12-scene-correspondences.json --map-bundle vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot --output-dir output/b1-map12/alignment`
   writes `global_alignment_status=verified`, `selected_transform_type=rigid_2d`,
   mean residual `0.352908 m`, p90 `0.491765 m`, and max `0.502064 m`.
-- The internal pose-request artifact and report-audit path can now consume that
-  residual artifact. Isaac waypoint camera proof and FPV/Chase preview
-  promotion remain unverified until local Isaac runtime evidence exists.
+- The internal pose-request artifact and report-audit path consume that
+  residual artifact. The default navigation-smoke harness now passes with two
+  residual-backed Map12 navigation-memory points and same-pose Isaac FPV/Chase
+  evidence.
+- `python scripts/maps/build_b1_map12_semantic_projection.py --correspondences assets/maps/b1-map12-scene-correspondences.json --review-manifest assets/maps/b1-map12-alignment-review.json --output output/b1-map12/semantic-projection/semantic_projection.json`
+  currently exits non-zero with `accepted semantic anchors are required before
+  projecting room labels`. This is expected until human-accepted
+  `anchor_role=semantic` room-interior anchors are promoted.
 
 Next implementation slice:
 
-- Run readiness against `output/b1-map12/alignment/alignment_residuals.json`,
-  build residual-backed waypoint pose requests for at least two Map12 points,
-  run local Isaac same-pose camera proof, and promote FPV/Chase preview metadata
-  only from that runtime evidence. Do not use the verification-only manifest or
-  bbox seed as production evidence.
-- Add separate `anchor_role=semantic` room-interior points later for room/object
-  label projection.
+- Human-review `docs/status/active/b1-map12-semantic-anchor-review-packet.json`.
+  If selected room-interior points are valid, promote them through
+  `scripts/maps/promote_b1_map12_semantic_review_packet.py`, then run the
+  strict semantic projection script. Do not use the verification-only manifest,
+  bbox seed, proposed-only packet, or current alignment-only manifest as room
+  semantics.
+- Add separate object-level semantic anchors later before projecting object
+  labels.
 
 Latest deterministic evidence:
 
