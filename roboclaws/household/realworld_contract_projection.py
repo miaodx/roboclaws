@@ -381,7 +381,7 @@ def _static_fixture_projection(
             minimal_map_mode=minimal_map_mode,
             assert_no_forbidden_agent_view_keys=assert_no_forbidden_agent_view_keys,
         )
-    if contract._bundle_static_fixture_projection_template is not None:
+    if contract._bundle_static_landmarks_template is not None:
         return _bundle_static_fixture_projection(
             contract,
             realworld_contract=realworld_contract,
@@ -399,7 +399,10 @@ def _bundle_static_fixture_projection(
     realworld_contract: str,
     assert_no_forbidden_agent_view_keys: Any,
 ) -> dict[str, Any]:
-    static_fixture_projection = copy.deepcopy(contract._bundle_static_fixture_projection_template)
+    static_fixture_projection = _scenario_static_fixture_projection(
+        contract,
+        realworld_contract=realworld_contract,
+    )
     if contract._scene_index_fixture_overlay:
         static_fixture_projection["rooms"] = _static_fixture_projection_with_scene_index_overlay(
             static_fixture_projection.get("rooms") or [],
@@ -581,30 +584,26 @@ def _public_waypoints_with_visits(waypoints: Any, contract: Any) -> list[dict[st
     ]
 
 
-def _fixtures_from_bundle_static_fixture_projection(
-    static_fixture_projection: dict[str, Any],
+def _fixtures_from_bundle_static_landmarks(
+    static_landmarks: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     fixtures: dict[str, dict[str, Any]] = {}
-    for room in static_fixture_projection.get("rooms") or []:
-        if not isinstance(room, dict):
+    for raw_landmark in static_landmarks:
+        if not isinstance(raw_landmark, dict):
             continue
-        room_id = str(room.get("room_id") or "")
-        room_label = str(room.get("room_label") or room_id)
-        for raw_fixture in room.get("fixtures") or []:
-            if not isinstance(raw_fixture, dict):
-                continue
-            fixture = dict(raw_fixture)
-            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-            if not fixture_id:
-                continue
-            fixture.setdefault("fixture_id", fixture_id)
-            fixture.setdefault("receptacle_id", fixture_id)
-            fixture.setdefault("room_id", room_id)
-            fixture.setdefault("room_area", room_label or room_id)
-            fixture.setdefault("kind", "receptacle")
-            fixture.setdefault("name", fixture_id)
-            fixture.setdefault("category", fixture.get("name", fixture_id))
-            fixtures[fixture_id] = fixture
+        fixture = dict(raw_landmark)
+        fixture_id = str(fixture.get("fixture_id") or fixture.get("landmark_id") or "")
+        if not fixture_id:
+            continue
+        room_id = str(fixture.get("room_id") or "")
+        fixture.setdefault("fixture_id", fixture_id)
+        fixture.setdefault("receptacle_id", fixture_id)
+        fixture.setdefault("room_id", room_id)
+        fixture.setdefault("room_area", room_id.replace("_", " ") or room_id)
+        fixture.setdefault("kind", "receptacle")
+        fixture.setdefault("name", fixture_id)
+        fixture.setdefault("category", fixture.get("name", fixture_id))
+        fixtures[fixture_id] = fixture
     return fixtures
 
 
@@ -904,19 +903,16 @@ def _first_waypoint_id(waypoints: list[dict[str, Any]]) -> str:
 
 def _rooms_from_bundle_projection(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     fixture_ids_by_room: dict[str, list[str]] = defaultdict(list)
-    for room in static_fixture_projection.get("rooms") or []:
-        if not isinstance(room, dict):
+    for fixture in static_landmarks:
+        if not isinstance(fixture, dict):
             continue
-        room_id = str(room.get("room_id") or "")
-        for fixture in room.get("fixtures") or []:
-            if not isinstance(fixture, dict):
-                continue
-            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-            if fixture_id:
-                fixture_ids_by_room[room_id].append(fixture_id)
+        room_id = str(fixture.get("room_id") or "")
+        fixture_id = str(fixture.get("fixture_id") or fixture.get("landmark_id") or "")
+        if fixture_id:
+            fixture_ids_by_room[room_id].append(fixture_id)
 
     rooms = []
     for raw_room in metric_map.get("rooms") or []:
@@ -933,11 +929,9 @@ def _rooms_from_bundle_projection(
 
 def _inspection_waypoints_from_bundle_projection(
     metric_map: dict[str, Any],
-    static_fixture_projection: dict[str, Any],
+    static_landmarks: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    fixture_waypoint_ids, room_fixture_ids = _bundle_fixture_projection_indexes(
-        static_fixture_projection
-    )
+    fixture_waypoint_ids, room_fixture_ids = _bundle_landmark_indexes(static_landmarks)
     waypoints = []
     frame_id = str(metric_map.get("frame_id") or "map")
     for raw_waypoint in metric_map.get("inspection_waypoints") or []:
@@ -954,40 +948,37 @@ def _inspection_waypoints_from_bundle_projection(
     return waypoints
 
 
-def _bundle_fixture_projection_indexes(
-    static_fixture_projection: dict[str, Any],
+def _bundle_landmark_indexes(
+    static_landmarks: list[dict[str, Any]],
 ) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     fixture_waypoint_ids: dict[str, list[str]] = defaultdict(list)
     room_fixture_ids: dict[str, list[str]] = defaultdict(list)
-    for room in static_fixture_projection.get("rooms") or []:
-        if not isinstance(room, dict):
+    for landmark in static_landmarks:
+        if not isinstance(landmark, dict):
             continue
-        _add_bundle_room_fixture_indexes(
-            room=room,
+        _add_bundle_static_landmark_indexes(
+            landmark=landmark,
             fixture_waypoint_ids=fixture_waypoint_ids,
             room_fixture_ids=room_fixture_ids,
         )
     return fixture_waypoint_ids, room_fixture_ids
 
 
-def _add_bundle_room_fixture_indexes(
+def _add_bundle_static_landmark_indexes(
     *,
-    room: dict[str, Any],
+    landmark: dict[str, Any],
     fixture_waypoint_ids: dict[str, list[str]],
     room_fixture_ids: dict[str, list[str]],
 ) -> None:
-    room_id = str(room.get("room_id") or "")
-    for fixture in room.get("fixtures") or []:
-        if not isinstance(fixture, dict):
-            continue
-        fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
-        if not fixture_id:
-            continue
-        room_fixture_ids[room_id].append(fixture_id)
-        for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
-            waypoint_id = str(fixture.get(key) or "")
-            if waypoint_id and fixture_id not in fixture_waypoint_ids[waypoint_id]:
-                fixture_waypoint_ids[waypoint_id].append(fixture_id)
+    room_id = str(landmark.get("room_id") or "")
+    fixture_id = str(landmark.get("fixture_id") or landmark.get("landmark_id") or "")
+    if not fixture_id:
+        return
+    room_fixture_ids[room_id].append(fixture_id)
+    for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
+        waypoint_id = str(landmark.get(key) or "")
+        if waypoint_id and fixture_id not in fixture_waypoint_ids[waypoint_id]:
+            fixture_waypoint_ids[waypoint_id].append(fixture_id)
 
 
 def _bundle_inspection_waypoint(

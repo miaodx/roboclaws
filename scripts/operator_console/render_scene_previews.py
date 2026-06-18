@@ -30,7 +30,10 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 from roboclaws.launch.scene_sampler import parse_molmospaces_world_id  # noqa: E402
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS  # noqa: E402
-from roboclaws.maps.bundle import write_nav2_map_bundle_snapshot  # noqa: E402
+from roboclaws.maps.bundle import (  # noqa: E402
+    static_landmarks_from_fixture_projection,
+    write_nav2_map_bundle_snapshot,
+)
 
 PREVIEW_METADATA_SCHEMA = "operator_console_scene_preview_v1"
 DEFAULT_OUTPUT_DIR = Path("roboclaws/operator_console/static/previews")
@@ -896,7 +899,9 @@ def _static_navigation_preview(
     bundle = write_nav2_map_bundle_snapshot(
         run_dir=run_dir,
         metric_map=contract.metric_map(),
-        static_fixture_projection=contract.static_fixture_projection(),
+        static_landmarks=static_landmarks_from_fixture_projection(
+            contract.static_fixture_projection()
+        ),
     )
     preview_path = run_dir / str(
         (bundle.get("artifact_paths") or {}).get("preview_png") or "map_bundle/preview.png"

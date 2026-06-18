@@ -9,7 +9,7 @@ from roboclaws.household import (
     realworld_runtime_map_targets,
 )
 from roboclaws.maps.bundle import validate_nav2_map_bundle
-from roboclaws.maps.project import metric_map_from_bundle, static_fixture_projection_from_bundle
+from roboclaws.maps.project import metric_map_from_bundle, static_landmarks_from_bundle
 
 
 def validate_contract_options(
@@ -78,7 +78,7 @@ def init_map_projection(target: Any, map_bundle_dir: str | Path | None) -> None:
     target.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
     target.map_bundle_validation = None
     target._bundle_metric_map_template = None
-    target._bundle_static_fixture_projection_template = None
+    target._bundle_static_landmarks_template = None
     if target.map_bundle_dir is not None:
         _init_bundle_map_projection(target)
     else:
@@ -161,22 +161,17 @@ def _init_bundle_map_projection(target: Any) -> None:
     validation.raise_for_errors()
     target.map_bundle_validation = validation.as_dict()
     target._bundle_metric_map_template = metric_map_from_bundle(target.map_bundle_dir)
-    target._bundle_static_fixture_projection_template = static_fixture_projection_from_bundle(
-        target.map_bundle_dir,
-        static_fixture_projection_mode=target.static_fixture_projection_mode,
-    )
-    target._fixtures = (
-        realworld_contract_projection._fixtures_from_bundle_static_fixture_projection(
-            target._bundle_static_fixture_projection_template
-        )
+    target._bundle_static_landmarks_template = static_landmarks_from_bundle(target.map_bundle_dir)
+    target._fixtures = realworld_contract_projection._fixtures_from_bundle_static_landmarks(
+        target._bundle_static_landmarks_template
     )
     target._rooms = realworld_contract_projection._rooms_from_bundle_projection(
         target._bundle_metric_map_template,
-        target._bundle_static_fixture_projection_template,
+        target._bundle_static_landmarks_template,
     )
     target._waypoints = realworld_contract_projection._inspection_waypoints_from_bundle_projection(
         target._bundle_metric_map_template,
-        target._bundle_static_fixture_projection_template,
+        target._bundle_static_landmarks_template,
     )
     target._scene_index_fixture_overlay = (
         realworld_contract_projection._scene_index_public_fixture_overlay(

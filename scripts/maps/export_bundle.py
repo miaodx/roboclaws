@@ -12,7 +12,11 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.maps.bundle import validate_nav2_map_bundle, write_nav2_map_bundle  # noqa: E402
+from roboclaws.maps.bundle import (  # noqa: E402
+    static_landmarks_from_fixture_projection,
+    validate_nav2_map_bundle,
+    write_nav2_map_bundle,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -24,7 +28,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--run-result", type=Path, help="run_result.json with agent_view.")
     parser.add_argument(
-        "--agent-view", type=Path, help="agent_view.json with metric_map/static_fixture_projection."
+        "--agent-view",
+        type=Path,
+        help="agent_view.json with metric_map and static fixture artifact payload.",
     )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--no-validate", action="store_true")
@@ -49,7 +55,7 @@ def main(argv: list[str] | None = None) -> None:
     snapshot = write_nav2_map_bundle(
         args.output_dir,
         metric_map=metric_map,
-        static_fixture_projection=static_fixture_projection,
+        static_landmarks=static_landmarks_from_fixture_projection(static_fixture_projection),
     )
     if not args.no_validate:
         validate_nav2_map_bundle(args.output_dir).raise_for_errors()

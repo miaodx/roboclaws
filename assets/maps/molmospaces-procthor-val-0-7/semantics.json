@@ -33,7 +33,7 @@
     }
   ],
   "environment_id": "molmospaces-procthor-val-0-7",
-  "fixtures": [
+  "static_landmarks": [
     {
       "affordances": [
         "place"

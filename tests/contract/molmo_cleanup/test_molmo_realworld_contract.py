@@ -36,6 +36,7 @@ from roboclaws.household.types import (
     TargetRule,
 )
 from roboclaws.household.visual_grounding import VISUAL_GROUNDING_RESPONSE_SCHEMA
+from roboclaws.maps.bundle import static_landmarks_from_fixture_projection
 from roboclaws.maps.route import validate_metric_map_route
 
 
@@ -727,11 +728,12 @@ def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals
     contract = _contract(session)
     metric_map = contract.metric_map()
     static_fixture_projection = contract.static_fixture_projection()
+    static_landmarks = static_landmarks_from_fixture_projection(static_fixture_projection)
     waypoints = metric_map["inspection_waypoints"]
     routes = [
         validate_metric_map_route(
             metric_map,
-            static_fixture_projection,
+            static_landmarks,
             start_waypoint_id=str(waypoints[0]["waypoint_id"]),
             goal_waypoint_id=str(waypoint["waypoint_id"]),
         )

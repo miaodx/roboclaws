@@ -13,6 +13,7 @@ from roboclaws.maps.bundle import (
     RUNTIME_COSTMAP_GAPS,
     copy_nav2_map_bundle_snapshot,
     metric_map_bundle_metadata,
+    static_landmarks_from_fixture_projection,
     validate_nav2_map_bundle,
     write_nav2_map_bundle_snapshot,
 )
@@ -74,7 +75,7 @@ def attach_nav2_map_bundle_snapshot(
         snapshot = write_nav2_map_bundle_snapshot(
             run_dir=run_dir,
             metric_map=metric_map,
-            static_fixture_projection=static_fixture_projection,
+            static_landmarks=static_landmarks_from_fixture_projection(static_fixture_projection),
         )
     run_result["nav2_map_bundle"] = snapshot
     artifacts = run_result.setdefault("artifacts", {})

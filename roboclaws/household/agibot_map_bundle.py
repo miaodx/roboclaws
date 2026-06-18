@@ -126,7 +126,9 @@ def _semantics_from_context(
         ),
         "display_frame": None,
         "rooms": [_room_payload(room, frame_id=frame_id) for room in _list(context.get("rooms"))],
-        "fixtures": [_fixture_payload(fixture) for fixture in _list(context.get("fixtures"))],
+        "static_landmarks": [
+            _fixture_payload(fixture) for fixture in _list(context.get("fixtures"))
+        ],
         "inspection_waypoints": [
             _waypoint_payload(waypoint) for waypoint in _list(context.get("inspection_waypoints"))
         ],
@@ -265,7 +267,7 @@ def _write_agibot_preview(
             cx = sum(point[0] for point in points) / len(points)
             cy = sum(point[1] for point in points) / len(points)
             draw.text((cx - 28, cy - 7), str(room.get("room_label") or ""), fill=(20, 35, 70, 255))
-    for fixture in semantics.get("fixtures") or []:
+    for fixture in semantics.get("static_landmarks") or []:
         pose = fixture.get("pose") or {}
         x, y = project(float(pose.get("x", 0.0)), float(pose.get("y", 0.0)))
         draw.rectangle((x - 8, y - 6, x + 8, y + 6), fill=(128, 82, 32, 220))

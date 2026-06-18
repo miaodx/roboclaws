@@ -49,6 +49,7 @@ from roboclaws.household.visual_scan_guidance import (
     noop_camera_adjustment_hint,
     visual_scan_payload,
 )
+from roboclaws.maps.bundle import static_landmarks_from_fixture_projection
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
@@ -346,7 +347,7 @@ class RealWorldCleanupContract:
         start_waypoint_id = self._current_waypoint_id
         route = validate_metric_map_route(
             self.metric_map(),
-            self.static_fixture_projection(),
+            static_landmarks_from_fixture_projection(self.static_fixture_projection()),
             start_waypoint_id=start_waypoint_id,
             goal_waypoint_id=waypoint_id,
         )
