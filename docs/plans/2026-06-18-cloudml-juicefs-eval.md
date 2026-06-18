@@ -1,6 +1,6 @@
 ---
 plan_scope: cloudml-juicefs-eval
-status: Reviewed; phase split required before implementation
+status: Phase 0 implemented and locally verified; Phase 1/2 require explicit platform inputs and approval
 created: 2026-06-18
 last_reviewed: 2026-06-19
 implementation_allowed: false
@@ -415,6 +415,49 @@ and suite matrix.
 ## Docker Image Strategy
 See **Now-Verifiable Track**. This is the first thing to prove before relying on
 CloudML.
+
+## Phase 0 Implementation Evidence
+
+Status: implemented and locally verified on 2026-06-19.
+
+Implemented artifacts:
+
+- `Dockerfile.eval`: dedicated eval image definition for the baked Roboclaws
+  `dev` dependency environment. This image is separate from
+  `Dockerfile.coding-agents` because it owns the Python eval runtime, not Codex
+  or Claude Code CLIs.
+- `scripts/dev/run_eval_image_offline_smoke.sh`: repeatable local proof command
+  that bind-mounts the current checkout read-only, runs Docker with
+  `--network none`, editable-installs the mounted checkout into
+  `/opt/roboclaws/.venv` with `--no-build-isolation --no-deps`, then calls the
+  existing `just agent::eval` facade.
+
+Verification evidence:
+
+```bash
+docker build -f Dockerfile.eval -t roboclaws-eval:local .
+ROBOCLAWS_EVAL_OUTPUT_DIR=/tmp/roboclaws-eval-output \
+  scripts/dev/run_eval_image_offline_smoke.sh
+```
+
+Observed result:
+
+- Docker image id:
+  `sha256:66fd32d8943a231830e2ca29fe9467f0f6ff808e6baad45cf9640d728023d81d`.
+- `smoke_regression` passed under Docker `--network none`.
+- Current-checkout eval artifacts were written to
+  `/tmp/roboclaws-eval-output-current/household_world_smoke_regression/offline-smoke-current/`.
+- `eval_results.json` aggregate: `passed=1`, `failed=0`, `blocked=0`,
+  `pass_at_1=1.0`.
+- `eval_report.html` exists in the same output directory.
+
+Runtime install note: the no-network editable install needs the build backend
+and editable helper available in the baked venv. The image therefore installs
+`hatchling` and `editables` during image build, declares `editables` in
+`pyproject.toml` build-system requirements, then uses
+`uv pip install --no-build-isolation --no-deps --editable "$REPO_DIR"` at
+runtime. This keeps package resolution in the network-allowed image build
+phase and keeps the CloudML/container entrypoint network-free.
 
 ## CloudML Submit Template
 See **Now-Verifiable Track** for the current dry-run command shape. After
