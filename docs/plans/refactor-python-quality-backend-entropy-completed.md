@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval map-build runtime-map artifact parsing now fails aloud.
+  Map-build outcome grading no longer collapses malformed or non-object
+  `runtime_metric_map.json` into an empty map that looks like ordinary
+  actionability drift. Corrupt required runtime-map evidence now keeps the
+  canonical `artifact_missing` failure class while exposing
+  `runtime_metric_map_error` in the outcome grader, and missing maps keep the
+  existing map-actionability/dependency behavior. Owner layer: Eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; live eval routing,
+  dependency resolution, open-ended predicates, report rendering, and public
+  eval result failure-class schema are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  map-build/map-consumer tests, full eval-runner unit file, touched-file ruff
+  and format check, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console runtime inventory JSON source errors now surface
   explicitly. Malformed or non-object top-level `operator_state.json` and
   `eval_harness.json` files produce non-blocking `source_error` task rows in

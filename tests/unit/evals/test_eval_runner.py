@@ -932,6 +932,47 @@ def test_map_build_eval_catches_unusable_runtime_metric_map(tmp_path: Path) -> N
     assert result["grader_outputs"]["outcome"]["schema_ok"] is False
 
 
+@pytest.mark.parametrize(
+    ("runtime_map_text", "expected_error"),
+    [
+        ("{", "invalid_json:Expecting property name enclosed in double quotes"),
+        ("[]", "invalid_json_object"),
+    ],
+)
+def test_map_build_eval_classifies_malformed_runtime_metric_map_as_invalid_artifact(
+    tmp_path: Path,
+    runtime_map_text: str,
+    expected_error: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        (run_dir / "runtime_metric_map.json").write_text(runtime_map_text, encoding="utf-8")
+        return _run_result(
+            run_dir,
+            completion_status="map_build_complete",
+            include_runtime_map=False,
+        )
+
+    run = run_eval_suite(
+        "evals/household_world/suites/map_build_consumer.json",
+        output_root=tmp_path,
+        stamp="malformed-map",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    outcome = result["grader_outputs"]["outcome"]
+    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert outcome["failure_class"] == "artifact_missing"
+    assert outcome["runtime_metric_map_exists"] is True
+    assert outcome["runtime_metric_map_error"].startswith(expected_error)
+    assert outcome["runtime_metric_map_schema"] == "unavailable"
+
+
 def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])

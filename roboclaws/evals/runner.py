@@ -424,7 +424,7 @@ def _outcome_grader(
 ) -> dict[str, Any]:
     if sample.intent == "map-build":
         runtime_map_path = run_dir / "runtime_metric_map.json"
-        runtime_map = _load_json(runtime_map_path) if runtime_map_path.exists() else {}
+        runtime_map, runtime_map_error = _load_required_json_mapping(runtime_map_path)
         config = sample.grader_config or {}
         schema_ok = runtime_map.get("schema") == str(
             config.get("require_runtime_metric_map_schema") or "runtime_metric_map_v1"
@@ -446,11 +446,19 @@ def _outcome_grader(
                 else True
             )
         )
+        failure_class = MISSING_NOT_APPLICABLE
+        if not passed:
+            failure_class = (
+                "artifact_missing"
+                if runtime_map_error not in {"", "missing"}
+                else "map_actionability_failure"
+            )
         return {
             "status": "passed" if passed else "failed",
-            "failure_class": "map_actionability_failure" if not passed else MISSING_NOT_APPLICABLE,
+            "failure_class": failure_class,
             "runtime_metric_map_exists": runtime_map_path.exists(),
             "runtime_metric_map_schema": runtime_map.get("schema", MISSING_UNAVAILABLE),
+            "runtime_metric_map_error": runtime_map_error or MISSING_NOT_APPLICABLE,
             "schema_ok": schema_ok,
             "public_semantic_anchor_count": len(anchors),
             "generated_exploration_candidate_count": len(exploration),
@@ -1159,6 +1167,18 @@ def _load_json(path: Path) -> dict[str, Any]:
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _load_required_json_mapping(path: Path) -> tuple[dict[str, Any], str]:
+    if not path.exists():
+        return {}, "missing"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {}, f"invalid_json:{exc.msg}"
+    if not isinstance(payload, dict):
+        return {}, "invalid_json_object"
+    return payload, ""
 
 
 def _skill_name(sample: EvalSample) -> str:
