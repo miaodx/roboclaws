@@ -85,6 +85,68 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
     assert any(item["label"] == "Report" for item in state["artifact_paths"])
 
 
+def test_state_surfaces_malformed_operator_state_source_error(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "broken-wrapper"
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text("{not-json", encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["run_id"] == "broken-wrapper"
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Operator State"
+    assert state["checker_status"]["message"] == (
+        "Launch failed: operator state source error: Operator State"
+    )
+    assert state["source_errors"] == [
+        {
+            "label": "Operator State",
+            "path": str((run_dir / "operator_state.json").resolve()),
+            "href": (
+                f"/artifacts/{(run_dir / 'operator_state.json').relative_to(tmp_path)}"
+                f"?v={(run_dir / 'operator_state.json').stat().st_mtime_ns}"
+            ),
+            "reason": "invalid JSON at line 1 column 2",
+        }
+    ]
+
+
+def test_state_surfaces_malformed_nested_live_status_and_run_result(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0619_1200" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text("{bad-live-status", encoding="utf-8")
+    (attempt_dir / "run_result.json").write_text('["not", "object"]', encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["display_run_id"] == "0619_1200/seed-7"
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Live Status, Run Result"
+    assert [(error["label"], error["reason"]) for error in state["source_errors"]] == [
+        ("Live Status", "invalid JSON at line 1 column 2"),
+        ("Run Result", "expected JSON object"),
+    ]
+    assert state["checker_status"]["message"] == (
+        "Launch failed: operator state source error: Live Status, Run Result"
+    )
+
+
 def test_state_follows_nested_live_attempt_under_console_wrapper(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0608_1807" / "seed-7"

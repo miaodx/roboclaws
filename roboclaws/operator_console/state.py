@@ -58,6 +58,23 @@ class ArtifactLink:
         }
 
 
+@dataclass(frozen=True)
+class JsonSourceError:
+    """Operator-visible source error for a present JSON artifact."""
+
+    path: Path
+    label: str
+    reason: str
+
+    def to_payload(self, root: Path) -> dict[str, str]:
+        return {
+            "label": self.label,
+            "path": str(self.path),
+            "href": _artifact_href(root, self.path) if self.path.exists() else "",
+            "reason": self.reason,
+        }
+
+
 def derive_operator_state(
     root: Path, run_dir: Path, route: ConsoleLaunchSelection | None = None
 ) -> dict[str, Any]:
@@ -65,9 +82,21 @@ def derive_operator_state(
 
     run_dir = run_dir.resolve()
     display_run_dir = resolve_display_run_dir(run_dir)
-    status = _read_json(run_dir / "operator_state.json")
-    live_status = _read_json(_latest_existing(display_run_dir, ("live_status.json",)))
-    run_result = _read_json(_latest_existing(display_run_dir, ("run_result.json",)))
+    json_sources = (
+        _read_json_source(run_dir / "operator_state.json", label="Operator State"),
+        _read_json_source(
+            _latest_existing(display_run_dir, ("live_status.json",)),
+            label="Live Status",
+        ),
+        _read_json_source(
+            _latest_existing(display_run_dir, ("run_result.json",)),
+            label="Run Result",
+        ),
+    )
+    source_errors = tuple(source for source in json_sources if isinstance(source, JsonSourceError))
+    status = _json_source_payload(json_sources[0])
+    live_status = _json_source_payload(json_sources[1])
+    run_result = _json_source_payload(json_sources[2])
     launch_failure = _wrapper_launch_failure(
         status, live_status, run_result, run_dir, display_run_dir
     )
@@ -85,18 +114,25 @@ def derive_operator_state(
     stale_live_failure = _stale_live_status_failure(live_status, run_result)
     if stale_live_failure:
         phase = "failed"
+    source_failure = _json_source_failure(source_errors)
+    if source_failure:
+        phase = "failed"
     checker = checker_status(
         checker_log=_latest_existing(display_run_dir, ("checker.log",)),
         report=_latest_existing(display_run_dir, ("report.html",)),
         run_result=run_result,
         phase=phase,
         launch_failure_reason=str(
-            stale_live_failure.get("terminal_reason") or launch_failure.get("terminal_reason") or ""
+            source_failure.get("terminal_reason")
+            or stale_live_failure.get("terminal_reason")
+            or launch_failure.get("terminal_reason")
+            or ""
         ),
     )
     terminal_status = dict(status)
     terminal_status.update(launch_failure)
     terminal_status.update(stale_live_failure)
+    terminal_status.update(source_failure)
     terminal_reason = _terminal_reason(terminal_status, live_status, run_result)
     artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
     artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
@@ -147,6 +183,7 @@ def derive_operator_state(
         "latest_view_assets": latest_view_assets,
         "checker_status": checker,
         "terminal_reason": terminal_reason,
+        "source_errors": [error.to_payload(root) for error in source_errors],
         "public_run_result": public_result,
         "prompt_preview": prompt_preview,
         "operator_prompt": prompt_preview.get("operator_prompt") or "",
@@ -284,13 +321,40 @@ def _live_status_owner_pid(live_status: dict[str, Any]) -> int | None:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
+    source = _read_json_source(path, label=path.name)
+    return _json_source_payload(source)
+
+
+def _read_json_source(path: Path, *, label: str) -> dict[str, Any] | JsonSourceError:
     if not path or not path.exists():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except json.JSONDecodeError as exc:
+        return JsonSourceError(
+            path=path.resolve(),
+            label=label,
+            reason=f"invalid JSON at line {exc.lineno} column {exc.colno}",
+        )
+    except OSError as exc:
+        return JsonSourceError(path=path.resolve(), label=label, reason=str(exc))
+    if not isinstance(payload, dict):
+        return JsonSourceError(path=path.resolve(), label=label, reason="expected JSON object")
+    return payload
+
+
+def _json_source_payload(source: dict[str, Any] | JsonSourceError) -> dict[str, Any]:
+    return source if isinstance(source, dict) else {}
+
+
+def _json_source_failure(errors: tuple[JsonSourceError, ...]) -> dict[str, str]:
+    if not errors:
         return {}
-    return payload if isinstance(payload, dict) else {}
+    labels = ", ".join(error.label for error in errors)
+    return {
+        "phase": "failed",
+        "terminal_reason": f"operator state source error: {labels}",
+    }
 
 
 def _prompt_preview(

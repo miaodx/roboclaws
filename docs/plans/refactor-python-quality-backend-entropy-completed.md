@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console live-state JSON source errors now fail aloud.
+  Present malformed or non-object core `operator_state.json`,
+  `live_status.json`, and `run_result.json` sources no longer collapse to empty
+  payloads that can make the console show idle, missing, or generic pending
+  state. `derive_operator_state` now records compact `source_errors`, marks the
+  run failed, and routes the existing status/checker/terminal-reason fields
+  through an actionable `operator state source error: ...` message, while
+  genuinely missing optional files remain absent. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud runtime artifact/source
+  truth; display-run discovery, valid live status/result handling, artifact
+  links, checker diagnostics, controls, JSONL trace parsing, and missing-file
+  tolerance are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused operator-console state tests, full
+  operator-console unit folder, touched-file ruff and format check,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Operator-console prompt previews now fail aloud for malformed
   OpenAI Agents numeric prompt-env values. Non-empty
   `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET`,

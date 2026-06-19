@@ -34,7 +34,10 @@ Latest quality snapshot from 2026-06-19:
   them instead of producing an empty recommendation set. Operator-console prompt
   previews now reject malformed or negative OpenAI Agents numeric prompt-env
   values instead of rendering default-looking kickoff prompts for bad live-route
-  input. Continue fail-aloud/runtime-source audits from fresh evidence rather
+  input, and the operator-state payload now reports malformed core
+  `operator_state.json` / `live_status.json` / `run_result.json` sources as
+  explicit failed source errors instead of erasing them into idle or missing
+  state. Continue fail-aloud/runtime-source audits from fresh evidence rather
   than reopening closed helper splits; route any future test-shape cleanup
   through `$intuitive-tests`.
 
