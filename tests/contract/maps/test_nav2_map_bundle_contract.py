@@ -112,6 +112,24 @@ def test_nav2_projection_rejects_semantics_without_waypoints(tmp_path: Path) -> 
         static_landmarks_from_bundle(bundle_dir)
 
 
+def test_nav2_projection_rejects_non_object_semantics(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
+    agent_view = _agent_view()
+    write_nav2_map_bundle(
+        bundle_dir,
+        metric_map=agent_view["metric_map"],
+        static_landmarks=_static_landmarks(agent_view),
+    )
+    (bundle_dir / "semantics.json").write_text("[]\n", encoding="utf-8")
+
+    validation = validate_nav2_map_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert "semantics.json must contain a JSON object" in validation.errors
+    with pytest.raises(AssertionError, match="semantics.json must contain a JSON object"):
+        metric_map_from_bundle(bundle_dir)
+
+
 def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
     exporter = _load_module(EXPORTER_PATH, "export_bundle")
     checker = _load_module(CHECKER_PATH, "check_bundle")

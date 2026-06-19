@@ -56,6 +56,9 @@ Latest quality snapshot from 2026-06-20:
   malformed or non-object Agibot `navigation_memory.json`, Agibot
   `source.json`, and Nav2 `semantics.json` sources as explicit source-path
   errors instead of raw parser/type failures or wrong-shaped source packets. The
+  Nav2 map-bundle validator now reports parseable non-object `semantics.json`
+  sources as bundle validation errors instead of raising raw attribute errors
+  during validation or projection. The
   operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as

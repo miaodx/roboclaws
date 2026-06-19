@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Nav2 map-bundle validation now fails aloud when
+  `semantics.json` parses to a non-object JSON value. Wrong-shaped semantics
+  files now produce an explicit bundle validation error and projection callers
+  receive the existing assertion path instead of raw attribute failures during
+  validation or projection; valid bundle export, checking, route validation,
+  and projection behavior are unchanged. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud map-bundle source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused Nav2 map-bundle
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion now fails aloud on
   malformed or parseable non-object source JSON for Agibot navigation memory
   and Nav2 cleanup bundles. Corrupt `navigation_memory.json`, `agibot/source.json`,

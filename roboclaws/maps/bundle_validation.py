@@ -102,10 +102,14 @@ def _load_bundle_semantics(
     errors: list[str],
 ) -> dict[str, Any]:
     try:
-        return json.loads((bundle_dir / paths["semantics_json"]).read_text(encoding="utf-8"))
+        payload = json.loads((bundle_dir / paths["semantics_json"]).read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         errors.append(f"invalid semantics.json: {exc}")
         return {}
+    if not isinstance(payload, dict):
+        errors.append("semantics.json must contain a JSON object")
+        return {}
+    return payload
 
 
 def _validate_semantics_private_truth(
