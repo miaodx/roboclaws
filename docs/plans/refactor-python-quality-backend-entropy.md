@@ -166,7 +166,10 @@ Latest quality snapshot from 2026-06-20:
   while preserving helper-level, suite-level, and live-before-launch failure
   surfaces. Operator-console public recipe tests now replace a direct
   `just/console.just` text-shape assertion with the public `just --dry-run
-  console::run` surface while keeping CLI default coverage separate. Eval
+  console::run` surface while keeping CLI default coverage separate. OpenAI
+  Agents SDK live-runtime config failure tests now merge duplicate invalid
+  retry-attempt, retry-sleep, and MCP-timeout env/direct bodies into existing
+  validation tables. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
@@ -373,6 +376,11 @@ Good families:
 
 - Provider/env tests that duplicate constants or route tables without
   exercising canonical resolution, readiness failure, or visible diagnostics.
+- OpenAI Agents SDK live-runtime config failure pruning is done for the current
+  duplicate invalid retry-attempt, retry-sleep, and MCP-timeout env/direct
+  bodies; reopen only with fresh duplicated provider/env scaffolding that does
+  not protect a distinct provider route, readiness failure, or visible
+  diagnostic surface.
 - Operator-console tests that assert static DOM/route wiring without launch
   readiness, redaction, locks, status transitions, or artifact links.
 - Operator-console `console::run` public recipe/default-bind pruning is done

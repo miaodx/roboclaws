@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: OpenAI Agents SDK live-runtime config failure tests now fold
+  duplicate one-off invalid retry-attempt, retry-sleep, and MCP-timeout
+  env/direct tests into the existing parameterized validation tables. The
+  slice preserves exact provider-config failure detail checks through the shared
+  runtime failure helper while removing repeated request/run/status assertion
+  bodies. Owner layer: Agent Engines And Provider Profiles. Behavior-change
+  class: unit-test pruning / no production behavior change. Metric:
+  `tests/unit/agents/test_live_runtime.py` keeps 137 collected cases while test
+  functions drop 112 -> 108 and file size drops 5825 -> 5765 lines; ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  `$intuitive-tests` audit/propose, focused config-validation cases, full
+  `test_live_runtime.py`, touched-file ruff/format checks, `git diff --check`,
+  and ratchet. Reopen only with fresh provider/env tests that duplicate runtime
+  config failure scaffolding without protecting a distinct provider route,
+  readiness failure, or visible diagnostic surface.
+
 - 2026-06-20: Operator-console public recipe tests now merge the standalone
   `just/console.just` text-shape assertion into the public `just --summary` /
   `just --dry-run console::run` behavior check. The slice keeps the separate

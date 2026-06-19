@@ -1557,31 +1557,16 @@ def _assert_openai_agents_config_failure(
     assert detail in payload["detail"]
 
 
-def test_openai_agents_runtime_rejects_invalid_retry_attempts_env(
-    tmp_path: Path, monkeypatch
-) -> None:
-    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS", "many")
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS" in payload["detail"]
-    assert "must be a non-negative integer, got 'many'" in payload["detail"]
-
-
 @pytest.mark.parametrize(
     ("metadata", "env", "expected_detail"),
     [
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS": "many"},
+            "model_service_retry_attempts "
+            "(ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS) must be a "
+            "non-negative integer, got 'many'",
+        ),
         (
             {"model_service_retry_attempts": True},
             {},
@@ -1616,29 +1601,15 @@ def test_openai_agents_runtime_rejects_invalid_retry_attempt_numeric_values(
     _assert_openai_agents_config_failure(tmp_path, metadata=metadata, detail=expected_detail)
 
 
-def test_openai_agents_runtime_rejects_invalid_direct_retry_sleep_s(tmp_path: Path) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"model_service_retry_sleep_s": "later"},
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting model_service_retry_sleep_s" in payload["detail"]
-    assert "must be a finite non-negative number, got 'later'" in payload["detail"]
-
-
 @pytest.mark.parametrize(
     ("metadata", "env", "expected_detail"),
     [
+        (
+            {"model_service_retry_sleep_s": "later"},
+            {},
+            "model_service_retry_sleep_s (model_service_retry_sleep_s) must be a "
+            "finite non-negative number, got 'later'",
+        ),
         (
             {"model_service_retry_sleep_s": True},
             {},
@@ -1673,53 +1644,22 @@ def test_openai_agents_runtime_rejects_invalid_retry_sleep_numeric_values(
     _assert_openai_agents_config_failure(tmp_path, metadata=metadata, detail=expected_detail)
 
 
-def test_openai_agents_runtime_rejects_invalid_mcp_client_timeout_env(
-    tmp_path: Path, monkeypatch
-) -> None:
-    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "eventually")
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S" in payload["detail"]
-    assert "must be a finite non-negative number, got 'eventually'" in payload["detail"]
-
-
-def test_openai_agents_runtime_rejects_invalid_direct_mcp_client_timeout(
-    tmp_path: Path,
-) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"mcp_client_session_timeout_s": -1},
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting mcp_client_session_timeout_s" in payload["detail"]
-    assert "must be a finite non-negative number, got -1" in payload["detail"]
-
-
 @pytest.mark.parametrize(
     ("metadata", "env", "expected_detail"),
     [
+        (
+            {},
+            {"ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S": "eventually"},
+            "mcp_client_session_timeout_s "
+            "(ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S) must be a "
+            "finite non-negative number, got 'eventually'",
+        ),
+        (
+            {"mcp_client_session_timeout_s": -1},
+            {},
+            "mcp_client_session_timeout_s (mcp_client_session_timeout_s) must be a "
+            "finite non-negative number, got -1",
+        ),
         (
             {"mcp_client_session_timeout_s": True},
             {},
