@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion and B1 runtime bundle
+  compilation now reuse the shared `roboclaws.maps.navigation_memory` parser
+  for Agibot navigation-memory object loading, item-list selection, item type
+  guards, and point/pose numeric validation. This removes the duplicate local
+  readers and parsing helpers from both oversized callers while preserving the
+  existing Runtime Map Prior and B1 compiler diagnostics for malformed,
+  non-object, empty, wrong-shaped, and bad-coordinate sources. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: parser ownership
+  consolidation / no intended valid-output change. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules; the B1 runtime bundle compiler
+  dropped below the previous 1639-line snapshot to 1576 lines, and Runtime Map
+  Prior Snapshot moved from 1213 lines before the earlier parser work to 1174
+  lines after this consolidation. Proof: focused Runtime Map Prior Snapshot and
+  B1 runtime bundle contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, duplicate-parser search, and
+  ratchet. Reopen only with fresh evidence that these callers have grown
+  another local Agibot navigation-memory parser or that shared parser
+  diagnostics drift from the covered contract expectations.
+
 - 2026-06-20: B1 Map 12 consistency and label-tool review layers now load
   `navigation_memory.json` through a shared strict parser, require a non-empty
   `items` or `catalog.navigation_memory` list, reject non-object rows, reject

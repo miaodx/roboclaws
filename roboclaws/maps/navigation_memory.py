@@ -9,7 +9,10 @@ from typing import Any
 
 
 def read_navigation_memory(
-    path: Path, *, source_name: str = "navigation_memory.json"
+    path: Path,
+    *,
+    source_name: str = "navigation_memory.json",
+    json_object_label: str | None = None,
 ) -> dict[str, Any]:
     path = Path(path)
     if not path.is_file():
@@ -19,6 +22,8 @@ def read_navigation_memory(
     except json.JSONDecodeError as exc:
         raise ValueError(f"{source_name} must contain valid JSON object: {path}") from exc
     if not isinstance(payload, dict):
+        if json_object_label:
+            raise ValueError(f"{json_object_label} must contain a JSON object at {path}")
         raise ValueError(f"{source_name} must contain a JSON object: {path}")
     return payload
 
@@ -53,6 +58,14 @@ def navigation_memory_item(
     if not isinstance(raw_item, dict):
         raise ValueError(f"{source_name} item {index} must be a JSON object")
     return raw_item
+
+
+def required_xy_yaw_pose_source(payload: Any, *, label: str) -> dict[str, float]:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object with x, y, and yaw")
+    return {
+        key: _required_float(payload.get(key), label=f"{label} {key}") for key in ("x", "y", "yaw")
+    }
 
 
 def navigation_memory_point_source(

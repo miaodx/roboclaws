@@ -73,7 +73,10 @@ Latest quality snapshot from 2026-06-20:
   non-object, empty, wrong-shaped, or bad-point `navigation_memory.json`
   sources, and bind review packets to the selected map bundle's sibling memory
   source instead of emitting empty layers or partial consistency packets from
-  corrupt evidence. The Nav2 map-bundle
+  corrupt evidence. Runtime Map Prior Snapshot conversion and B1 runtime bundle
+  compilation now reuse that shared parser too, removing their duplicate
+  local readers, item-list parsers, item guards, and point/pose numeric
+  validators while preserving existing source-error diagnostics. The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
   during validation or projection. B1 runtime bundle compilation now reports

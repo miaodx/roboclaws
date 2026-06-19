@@ -5,7 +5,6 @@ import argparse
 import datetime as dt
 import hashlib
 import json
-import math
 import shutil
 import sys
 from collections import Counter, defaultdict
@@ -26,6 +25,12 @@ from roboclaws.maps.bundle import (
     write_source_frame_bundle_preview,
 )
 from roboclaws.maps.bundle_validation import parse_map_yaml
+from roboclaws.maps.navigation_memory import (
+    navigation_memory_item,
+    navigation_memory_items,
+    navigation_memory_point_source,
+    read_navigation_memory,
+)
 from roboclaws.maps.rasterize import OccupancyGrid, load_pgm
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
@@ -168,7 +173,10 @@ def compile_runtime_bundle(
         include_draft_labels=include_draft_labels,
     )
     review_summary = review_validation_summary(review, include_draft_labels=include_draft_labels)
-    navigation_memory = _read_navigation_memory(navigation_memory_path)
+    navigation_memory = read_navigation_memory(
+        navigation_memory_path,
+        source_name="navigation memory",
+    )
     waypoints = _inspection_waypoints_from_navigation_memory(
         navigation_memory,
         frame_id=frame_id,
@@ -1246,15 +1254,15 @@ def _inspection_waypoints_from_navigation_memory(
     grid: OccupancyGrid,
 ) -> list[dict[str, Any]]:
     waypoints = []
-    for index, item in enumerate(_navigation_memory_items(payload), start=1):
-        item = _navigation_memory_item(item, index=index)
+    for index, item in enumerate(navigation_memory_items(payload), start=1):
+        item = navigation_memory_item(item, index=index)
         item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
-        nav_goal = _navigation_memory_point_source(
+        nav_goal = navigation_memory_point_source(
             item.get("nav_goal"),
             label=f"navigation_memory.json item {item_id} nav_goal",
             required=False,
         )
-        pose = _navigation_memory_point_source(
+        pose = navigation_memory_point_source(
             item.get("pose"),
             label=f"navigation_memory.json item {item_id} pose",
             required=False,
@@ -1306,8 +1314,8 @@ def _first_free_navigation_memory_point(
 
 def _navigation_memory_anchors(payload: dict[str, Any], *, frame_id: str) -> list[dict[str, Any]]:
     anchors = []
-    for index, item in enumerate(_navigation_memory_items(payload), start=1):
-        item = _navigation_memory_item(item, index=index)
+    for index, item in enumerate(navigation_memory_items(payload), start=1):
+        item = navigation_memory_item(item, index=index)
         item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
         anchors.append(
             {
@@ -1339,7 +1347,7 @@ def _navigation_memory_point(
     frame_id: str,
     label: str,
 ) -> dict[str, Any] | None:
-    source = _navigation_memory_point_source(
+    source = navigation_memory_point_source(
         payload,
         label=label,
         required=False,
@@ -1360,51 +1368,6 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _read_navigation_memory(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"navigation memory must contain valid JSON object: {path}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"navigation memory must contain a JSON object: {path}")
-    return payload
-
-
-def _navigation_memory_point_source(
-    payload: Any,
-    *,
-    label: str,
-    required: bool,
-) -> dict[str, float]:
-    if payload is None and not required:
-        return {}
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must be an object with x, y, and optional yaw/z")
-    if "x" not in payload or "y" not in payload:
-        raise ValueError(f"{label} must include x and y")
-    point = {
-        "x": _required_float(payload.get("x"), label=f"{label} x"),
-        "y": _required_float(payload.get("y"), label=f"{label} y"),
-    }
-    if "yaw" in payload:
-        point["yaw"] = _required_float(payload.get("yaw"), label=f"{label} yaw")
-    if "z" in payload:
-        point["z"] = _required_float(payload.get("z"), label=f"{label} z")
-    return point
-
-
-def _required_float(value: Any, *, label: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{label} must be a finite number")
-    try:
-        result = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{label} must be a finite number") from exc
-    if not math.isfinite(result):
-        raise ValueError(f"{label} must be a finite number")
-    return result
 
 
 def _room_waypoints_from_review_labels(
@@ -1465,32 +1428,6 @@ def _room_waypoints_from_rooms(
             }
         )
     return waypoints
-
-
-def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if "items" in payload:
-        items = payload["items"]
-        if not isinstance(items, list) or not items:
-            raise ValueError("navigation_memory.json items must be a non-empty list")
-        return list(items)
-    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
-    memory = catalog.get("navigation_memory")
-    if "navigation_memory" in catalog:
-        if not isinstance(memory, list) or not memory:
-            raise ValueError(
-                "navigation_memory.json catalog.navigation_memory must be a non-empty list"
-            )
-        return list(memory)
-    raise ValueError(
-        "navigation_memory.json must contain a non-empty items list "
-        "or catalog.navigation_memory list"
-    )
-
-
-def _navigation_memory_item(raw_item: Any, *, index: int) -> dict[str, Any]:
-    if not isinstance(raw_item, dict):
-        raise ValueError(f"navigation_memory.json item {index} must be a JSON object")
-    return raw_item
 
 
 def _driveable_ways_from_rooms(rooms: list[dict[str, Any]]) -> list[dict[str, str]]:

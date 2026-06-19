@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.maps.bundle import parse_map_yaml
+from roboclaws.maps.navigation_memory import (
+    navigation_memory_item,
+    navigation_memory_items,
+    read_navigation_memory,
+    required_xy_yaw_pose_source,
+)
 from roboclaws.maps.rasterize import OccupancyGrid, load_pgm, world_to_grid
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
@@ -96,9 +102,10 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     _require_file(occupancy_path)
     _require_file(source_path)
 
-    navigation_memory = _read_json_object(
+    navigation_memory = read_navigation_memory(
         navigation_memory_path,
-        label="Agibot navigation memory",
+        source_name="Agibot navigation memory",
+        json_object_label="Agibot navigation memory",
     )
     map_yaml = parse_map_yaml(nav2_yaml_path.read_text(encoding="utf-8"))
     resolution, origin = _source_map_geometry(map_yaml, label="Agibot nav2.yaml")
@@ -114,8 +121,15 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     waypoints: list[dict[str, Any]] = []
     fixture_candidates: list[dict[str, Any]] = []
     observed_objects: list[dict[str, Any]] = []
-    for index, raw_item in enumerate(_navigation_memory_items(navigation_memory), start=1):
-        item = _navigation_memory_item(raw_item, index=index)
+    for index, raw_item in enumerate(
+        navigation_memory_items(navigation_memory, source_name="Agibot navigation memory"),
+        start=1,
+    ):
+        item = navigation_memory_item(
+            raw_item,
+            index=index,
+            source_name="Agibot navigation memory",
+        )
         anchor = _anchor_from_navigation_memory_item(item, index=index, grid=grid)
         anchors.append(anchor)
         waypoint = _waypoint_from_anchor(anchor)
@@ -480,20 +494,12 @@ def _anchor_from_navigation_memory_item(
     anchor_type = _anchor_type(item)
     nav_goal_raw = item["nav_goal"] if "nav_goal" in item else item.get("pose")
     object_pose_raw = item["pose"] if "pose" in item else item.get("nav_goal")
-    nav_goal_source = _required_pose_source(
+    nav_goal = required_xy_yaw_pose_source(
         nav_goal_raw,
         label=f"Agibot navigation memory item {item_id} nav_goal",
     )
-    object_pose_source = _required_pose_source(
+    object_pose = required_xy_yaw_pose_source(
         object_pose_raw,
-        label=f"Agibot navigation memory item {item_id} pose",
-    )
-    nav_goal = _required_pose_dict(
-        nav_goal_source,
-        label=f"Agibot navigation memory item {item_id} nav_goal",
-    )
-    object_pose = _required_pose_dict(
-        object_pose_source,
         label=f"Agibot navigation memory item {item_id} pose",
     )
     reachability = _reachability_status(nav_goal, grid=grid)
@@ -565,7 +571,10 @@ def _anchor_from_navigation_memory_item(
 
 def _bundle_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
     waypoint_id = str(waypoint.get("waypoint_id") or waypoint.get("id") or "")
-    pose = _required_pose_dict(waypoint, label=f"Nav2 cleanup waypoint {waypoint_id}")
+    pose = required_xy_yaw_pose_source(
+        waypoint,
+        label=f"Nav2 cleanup waypoint {waypoint_id}",
+    )
     return {
         "waypoint_id": waypoint_id,
         "frame_id": str(waypoint.get("frame_id") or "map"),
@@ -788,32 +797,6 @@ def _snapshot_summary(snapshot: dict[str, Any]) -> dict[str, Any]:
         ),
         "movable_prior_count": len(movable_priors),
     }
-
-
-def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if "items" in payload:
-        items = payload["items"]
-        if not isinstance(items, list) or not items:
-            raise ValueError("Agibot navigation memory items must be a non-empty list")
-        return list(items)
-    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
-    memory = catalog.get("navigation_memory")
-    if "navigation_memory" in catalog:
-        if not isinstance(memory, list) or not memory:
-            raise ValueError(
-                "Agibot navigation memory catalog.navigation_memory must be a non-empty list"
-            )
-        return list(memory)
-    raise ValueError(
-        "Agibot navigation memory must contain a non-empty items list "
-        "or catalog.navigation_memory list"
-    )
-
-
-def _navigation_memory_item(raw_item: Any, *, index: int) -> dict[str, Any]:
-    if not isinstance(raw_item, dict):
-        raise ValueError(f"Agibot navigation memory item {index} must be a JSON object")
-    return raw_item
 
 
 def _nav2_cleanup_waypoint_sources(semantics: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1065,28 +1048,6 @@ def _pose_dict(raw: dict[str, Any]) -> dict[str, float]:
     for key in ("x", "y", "yaw"):
         pose[key] = _float(raw.get(key))
     return pose
-
-
-def _required_pose_source(value: Any, *, label: str) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ValueError(f"{label} must be an object with x, y, and yaw")
-    return value
-
-
-def _required_pose_dict(raw: dict[str, Any], *, label: str) -> dict[str, float]:
-    return {key: _required_float(raw.get(key), label=f"{label} {key}") for key in ("x", "y", "yaw")}
-
-
-def _required_float(value: Any, *, label: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{label} must be a finite number")
-    try:
-        result = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{label} must be a finite number") from exc
-    if not math.isfinite(result):
-        raise ValueError(f"{label} must be a finite number")
-    return round(result, 6)
 
 
 def _float(value: Any) -> float:
