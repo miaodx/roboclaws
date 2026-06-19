@@ -92,9 +92,12 @@ Latest quality snapshot from 2026-06-19:
   apple-to-apple summary now applies the same run-dir source-truth rule to
   declared summary artifacts and robot-view samples, rejecting missing declared
   visual evidence instead of linking CWD substitutes or silently omitting links.
-  Continue fail-aloud/runtime-source audits from fresh evidence rather than
-  reopening closed helper splits; route any future test-shape cleanup through
-  `$intuitive-tests`.
+  Operator-console B1 camera preview promotion now resolves declared relative
+  view paths only under the source artifact directory and rejects `../` escapes,
+  so stale CWD files or sibling run files cannot be promoted as current robot
+  camera evidence. Continue fail-aloud/runtime-source audits from fresh
+  evidence rather than reopening closed helper splits; route any future
+  test-shape cleanup through `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.

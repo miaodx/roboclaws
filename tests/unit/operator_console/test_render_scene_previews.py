@@ -550,31 +550,10 @@ def test_b1_camera_promotion_accepts_navigation_smoke_waypoint_evidence(
     views_dir.mkdir(parents=True)
     _write_pattern_image(views_dir / "point_a.fpv.png", accent=(220, 220, 220))
     _write_pattern_image(views_dir / "point_a.chase.png", accent=(120, 90, 60))
-    artifact = run_dir / "navigation_smoke.json"
-    artifact.write_text(
-        json.dumps(
-            {
-                "schema": "b1_map12_navigation_smoke_v1",
-                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
-                "alignment_transform_source": "reviewed_correspondence_fit",
-                "waypoint_evidence": [
-                    {
-                        "waypoint_id": "point_a",
-                        "robot_pose_applied": True,
-                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
-                        "alignment_transform_source": "reviewed_correspondence_fit",
-                        "views": {
-                            "fpv": "waypoint_01_views/point_a.fpv.png",
-                            "chase": "waypoint_01_views/point_a.chase.png",
-                        },
-                    }
-                ],
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
+    artifact = _write_b1_navigation_smoke_artifact(
+        run_dir,
+        fpv_path="waypoint_01_views/point_a.fpv.png",
+        chase_path="waypoint_01_views/point_a.chase.png",
     )
 
     result = _promote_b1_camera_previews(
@@ -588,6 +567,77 @@ def test_b1_camera_promotion_accepts_navigation_smoke_waypoint_evidence(
     assert result["status"] == "promoted"
     assert result["artifact"]["source_kind"] == "navigation_smoke_waypoint_evidence"
     assert result["views"]["fpv"]["waypoint_id"] == "point_a"
+
+
+@pytest.mark.parametrize(
+    (
+        "fpv_path",
+        "chase_path",
+        "external_dir",
+        "chdir_to_tmp",
+        "expected_status",
+        "expect_empty_source",
+    ),
+    [
+        (
+            "stale_views/point_a.fpv.png",
+            "stale_views/point_a.chase.png",
+            "stale_views",
+            True,
+            "missing_view_file",
+            False,
+        ),
+        (
+            "../outside_views/point_a.fpv.png",
+            "../outside_views/point_a.chase.png",
+            "outside_views",
+            False,
+            "missing_view_path",
+            True,
+        ),
+    ],
+)
+def test_b1_camera_promotion_keeps_relative_views_bound_to_artifact_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fpv_path: str,
+    chase_path: str,
+    external_dir: str,
+    chdir_to_tmp: bool,
+    expected_status: str,
+    expect_empty_source: bool,
+) -> None:
+    artifact = _write_b1_navigation_smoke_artifact(
+        tmp_path / "run",
+        fpv_path=fpv_path,
+        chase_path=chase_path,
+    )
+    stale_dir = tmp_path / external_dir
+    stale_dir.mkdir()
+    _write_pattern_image(stale_dir / "point_a.fpv.png", accent=(220, 220, 220))
+    _write_pattern_image(stale_dir / "point_a.chase.png", accent=(120, 90, 60))
+    if chdir_to_tmp:
+        monkeypatch.chdir(tmp_path)
+
+    result = _promote_b1_camera_previews(
+        camera_artifact=artifact,
+        fpv_path=tmp_path / "b1-map12-fpv.png",
+        chase_path=tmp_path / "b1-map12-chase.png",
+        width=320,
+        height=200,
+    )
+
+    assert result["status"] == "no_usable_camera_pair"
+    candidate = result["evaluated_candidates"][0]
+    assert candidate["status"] == expected_status
+    if expect_empty_source:
+        assert candidate["fpv_source"] == ""
+        assert candidate["chase_source"] == ""
+    else:
+        assert candidate["fpv_source"].startswith(str(tmp_path / "run"))
+        assert candidate["chase_source"].startswith(str(tmp_path / "run"))
+    assert not (tmp_path / "b1-map12-fpv.png").exists()
+    assert not (tmp_path / "b1-map12-chase.png").exists()
 
 
 def test_b1_camera_promotion_rejects_missing_residual_alignment_provenance(
@@ -941,6 +991,39 @@ def _write_b1_camera_artifact(run_dir: Path, *, label: str) -> Path:
                             "fpv": f"robot_views/{label}.fpv.png",
                             "chase": f"robot_views/{label}.chase.png",
                         },
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return artifact
+
+
+def _write_b1_navigation_smoke_artifact(
+    run_dir: Path,
+    *,
+    fpv_path: str,
+    chase_path: str,
+) -> Path:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    artifact = run_dir / "navigation_smoke.json"
+    artifact.write_text(
+        json.dumps(
+            {
+                "schema": "b1_map12_navigation_smoke_v1",
+                "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                "alignment_transform_source": "reviewed_correspondence_fit",
+                "waypoint_evidence": [
+                    {
+                        "waypoint_id": "point_a",
+                        "robot_pose_applied": True,
+                        "alignment_artifact": str(run_dir / "alignment_residuals.json"),
+                        "alignment_transform_source": "reviewed_correspondence_fit",
+                        "views": {"fpv": fpv_path, "chase": chase_path},
                     }
                 ],
             },

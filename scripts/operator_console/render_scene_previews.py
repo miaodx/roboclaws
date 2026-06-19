@@ -953,10 +953,13 @@ def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path |
     path = Path(str(raw_path))
     if path.is_absolute():
         return path
-    candidate = artifact_path.parent / path
-    if candidate.exists():
-        return candidate
-    return path
+    base_dir = artifact_path.parent.resolve()
+    resolved = (base_dir / path).resolve()
+    try:
+        resolved.relative_to(base_dir)
+    except ValueError:
+        return None
+    return resolved
 
 
 def _file_sha256(path: Path) -> str:

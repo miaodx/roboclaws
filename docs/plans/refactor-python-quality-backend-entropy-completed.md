@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console B1 camera preview promotion now resolves
+  declared relative FPV/chase view paths only under the source artifact
+  directory and rejects relative path escapes before file lookup. The console no
+  longer promotes stale same-named CWD files or sibling-run view files as
+  current B1 robot camera preview evidence; explicit absolute view paths remain
+  accepted. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud artifact/source truth; preview quality scoring, provenance
+  checks, skip-existing metadata checks, static B1 preview behavior, and
+  MolmoSpaces rendering are unchanged. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 78 oversized modules. Proof: focused operator-console
+  preview tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-19: Codex cleanup apple-to-apple summaries now fail aloud on declared
   top-level artifact links or robot-view sample paths that are empty, missing,
   or not the expected file/directory kind, and resolve declared relative paths
