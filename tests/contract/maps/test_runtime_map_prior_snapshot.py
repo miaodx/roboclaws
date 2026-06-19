@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -269,6 +270,39 @@ def test_runtime_map_prior_loader_rejects_snapshot_with_invalid_runtime_map() ->
         )
 
 
+def test_agibot_navigation_memory_rejects_non_object_navigation_memory(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    (map_dir / "navigation_memory.json").write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Agibot navigation memory must contain a JSON object at .*navigation_memory\.json",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+def test_agibot_navigation_memory_rejects_malformed_source_json(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    (map_dir / "agibot" / "source.json").write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Agibot map source must contain valid JSON object at .*source\.json",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+def test_nav2_cleanup_bundle_rejects_non_object_semantics(tmp_path: Path) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    (bundle_dir / "semantics.json").write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"Nav2 cleanup semantics must contain a JSON object at .*semantics\.json",
+    ):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
 def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     tmp_path: Path,
 ) -> None:
@@ -392,6 +426,12 @@ def _online_minimal_snapshot() -> dict:
         contract.agent_view_payload()["runtime_metric_map"],
         source_navigation_map=contract.metric_map(),
     )
+
+
+def _copy_agibot_runtime_prior_fixture(tmp_path: Path) -> Path:
+    map_dir = tmp_path / "robot_map_12"
+    shutil.copytree(ROBOT_MAP_12_FIXTURE, map_dir)
+    return map_dir
 
 
 def _write_minimal_nav2_cleanup_bundle(bundle_dir: Path) -> Path:

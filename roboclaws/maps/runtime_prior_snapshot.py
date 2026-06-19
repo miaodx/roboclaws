@@ -95,7 +95,10 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     _require_file(occupancy_path)
     _require_file(source_path)
 
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory = _read_json_object(
+        navigation_memory_path,
+        label="Agibot navigation memory",
+    )
     map_yaml = parse_map_yaml(nav2_yaml_path.read_text(encoding="utf-8"))
     grid = load_pgm(
         occupancy_path,
@@ -103,7 +106,7 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
         origin_x=float((map_yaml.get("origin") or [0.0, 0.0, 0.0])[0]),
         origin_y=float((map_yaml.get("origin") or [0.0, 0.0, 0.0])[1]),
     )
-    source = json.loads(source_path.read_text(encoding="utf-8"))
+    source = _read_json_object(source_path, label="Agibot map source")
 
     anchors: list[dict[str, Any]] = []
     waypoints: list[dict[str, Any]] = []
@@ -240,7 +243,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
         origin_x=float(origin[0]),
         origin_y=float(origin[1]),
     )
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = _read_json_object(semantics_path, label="Nav2 cleanup semantics")
     if semantics.get("schema") != "nav2_cleanup_semantics_v1":
         raise ValueError(
             "compiled cleanup bundle semantics must use schema nav2_cleanup_semantics_v1"
@@ -1102,6 +1105,16 @@ def _stable_id(prefix: str, value: str) -> str:
 def _require_file(path: Path) -> None:
     if not path.is_file():
         raise FileNotFoundError(path)
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object at {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object at {path}")
+    return payload
 
 
 def _assert_no_private_truth(value: Any) -> None:

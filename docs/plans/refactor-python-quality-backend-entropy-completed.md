@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion now fails aloud on
+  malformed or parseable non-object source JSON for Agibot navigation memory
+  and Nav2 cleanup bundles. Corrupt `navigation_memory.json`, `agibot/source.json`,
+  or `semantics.json` files now produce concise source-path errors instead of
+  raw parser/type failures or deriving fields from wrong-shaped packets, while
+  valid Agibot and Nav2 conversion behavior is unchanged. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  map/source artifact truth. Metric: ratchet stayed at 0 Ruff complexity rows
+  and reports 79 oversized modules in the current dirty worktree. Proof:
+  focused Runtime Map Prior Snapshot contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-20: The Nav2 map-bundle exporter now fails aloud on malformed
   agent-view JSON and parseable non-object run-result JSON. CLI users get
   concise source-path errors instead of tracebacks or raw type failures, while

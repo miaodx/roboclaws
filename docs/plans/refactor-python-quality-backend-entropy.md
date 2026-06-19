@@ -52,7 +52,10 @@ Latest quality snapshot from 2026-06-20:
   crashing or deriving proof-summary fields from wrong-shaped JSON. The Nav2
   map-bundle exporter now reports malformed agent-view JSON and non-object
   run-result JSON as concise CLI source errors instead of surfacing tracebacks
-  or raw type failures. The
+  or raw type failures. Runtime Map Prior Snapshot conversion now reports
+  malformed or non-object Agibot `navigation_memory.json`, Agibot
+  `source.json`, and Nav2 `semantics.json` sources as explicit source-path
+  errors instead of raw parser/type failures or wrong-shaped source packets. The
   operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
