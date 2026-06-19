@@ -145,7 +145,11 @@ Latest quality snapshot from 2026-06-19:
   requests also reject malformed or non-object child `live_status.json`
   sources before child-stop, wrapper termination, lock release, or status
   rewrite, so corrupt live child evidence cannot be replaced by a clean
-  operator-stop payload.
+  operator-stop payload. Operator-console launch starts now reserve a unique
+  run directory before writing launch logs or `operator_state.json`, so
+  same-second run-id collisions or stale directories cannot overwrite existing
+  run evidence; empty pre-state reservations are cleaned up on launch-build or
+  lock-acquire failure.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

@@ -250,37 +250,35 @@ def start_console_run(
     if not readiness["can_start"]:
         raise ConsoleLaunchError(str(readiness["blocker"]))
 
-    run_id = _new_run_id(route)
-    run_dir = console_output_root(root) / "runs" / run_id
-    if route.supports_operator_steer:
-        overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
-    selected_intent = request.intent_id or route.intent_id
-    launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
-    preview = build_prompt_preview(
-        route,
-        PromptPreviewRequest(
-            intent_id=selected_intent,
-            prompt=launch_prompt,
-            overrides=overrides,
-            env_overrides=prompt_preview_env(run_env, env_overrides),
-        ),
-    )
-    argv = build_launch_argv(
-        route,
-        root=root,
-        run_id=run_id,
-        intent=selected_intent,
-        prompt=launch_prompt,
-        overrides=overrides,
-    )
-    mcp_host, mcp_port = requested_mcp_endpoint(overrides)
-    mcp_url = f"http://{mcp_host}:{mcp_port}/mcp"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    log_path = run_dir / "console-launch.log"
+    run_id, run_dir = _reserve_new_run_dir(root, route)
     lock = ResourceLock(root, route.lock_name)
-    lock_state = lock.acquire(run_id=run_id)
     process: subprocess.Popen[bytes] | None = None
     try:
+        if route.supports_operator_steer:
+            overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
+        selected_intent = request.intent_id or route.intent_id
+        launch_prompt = _launch_prompt_for_intent(route, selected_intent, request.prompt)
+        preview = build_prompt_preview(
+            route,
+            PromptPreviewRequest(
+                intent_id=selected_intent,
+                prompt=launch_prompt,
+                overrides=overrides,
+                env_overrides=prompt_preview_env(run_env, env_overrides),
+            ),
+        )
+        argv = build_launch_argv(
+            route,
+            root=root,
+            run_id=run_id,
+            intent=selected_intent,
+            prompt=launch_prompt,
+            overrides=overrides,
+        )
+        mcp_host, mcp_port = requested_mcp_endpoint(overrides)
+        mcp_url = f"http://{mcp_host}:{mcp_port}/mcp"
+        log_path = run_dir / "console-launch.log"
+        lock_state = lock.acquire(run_id=run_id)
         with log_path.open("ab") as log_stream:
             process = subprocess.Popen(
                 argv,
@@ -295,6 +293,7 @@ def start_console_run(
         if process is not None:
             process.terminate()
         lock.release(run_id=run_id, force=True)
+        _remove_empty_reserved_run_dir(run_dir)
         raise
     started_at_epoch = time.time()
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -1051,6 +1050,28 @@ def _parse_nonnegative_int(raw: str, key: str) -> int:
 def _new_run_id(route: ConsoleLaunchSelection) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     return f"{timestamp}-{_safe_run_id_suffix(route.id)}"
+
+
+def _reserve_new_run_dir(root: Path, route: ConsoleLaunchSelection) -> tuple[str, Path]:
+    runs_dir = console_output_root(root) / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    base_run_id = _new_run_id(route)
+    for suffix in ("", *(f"-{index}" for index in range(2, 100))):
+        run_id = f"{base_run_id}{suffix}"
+        run_dir = runs_dir / run_id
+        try:
+            run_dir.mkdir()
+        except FileExistsError:
+            continue
+        return run_id, run_dir
+    raise ConsoleLaunchError(f"could not allocate unique operator-console run id: {base_run_id}")
+
+
+def _remove_empty_reserved_run_dir(run_dir: Path) -> None:
+    try:
+        run_dir.rmdir()
+    except OSError:
+        pass
 
 
 def _safe_run_id_suffix(raw: str) -> str:

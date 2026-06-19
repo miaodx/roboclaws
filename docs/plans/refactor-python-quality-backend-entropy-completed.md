@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console launch starts now reserve a unique run
+  directory before launch log or `operator_state.json` writes. Same-second
+  route launches or stale run directories can no longer overwrite existing run
+  evidence; exhausted reservation attempts fail before process spawn or lock
+  ownership, and empty pre-state reservations are removed when launch-build or
+  lock-acquire steps fail. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud operator-visible source truth and artifact
+  identity preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  reports 79 oversized modules in the current dirty worktree. Proof: focused
+  operator-console launcher/API tests, touched-file ruff/format checks, `git
+  diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console stop requests now reject malformed or
   non-object child `live_status.json` sources before stopping child live runs,
   terminating wrapper processes, releasing backend locks, or rewriting status

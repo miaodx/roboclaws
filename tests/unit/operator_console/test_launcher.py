@@ -12,6 +12,7 @@ from roboclaws.operator_console.launcher import (
     ConsoleLaunchError,
     LaunchRequest,
     _new_run_id,
+    _safe_run_id_suffix,
     _terminate_process_group,
     build_launch_argv,
     load_repo_dotenv,
@@ -287,6 +288,134 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     state_path = console_output_root(tmp_path) / "runs" / state["run_id"] / "operator_state.json"
     persisted = json.loads(state_path.read_text(encoding="utf-8"))
     assert persisted["lock"]["owner_run_id"] == state["run_id"]
+
+
+def test_launcher_uses_new_run_id_when_existing_run_dir_would_be_reused(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    base_run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    existing_run_dir = console_output_root(tmp_path) / "runs" / base_run_id
+    existing_run_dir.mkdir(parents=True)
+    existing_state_path = existing_run_dir / "operator_state.json"
+    existing_state_path.write_text("{corrupt-existing-state", encoding="utf-8")
+
+    class FakeProcess:
+        pid = 12345
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime") as strftime_mock,
+        patch("roboclaws.operator_console.launcher.subprocess.Popen", return_value=FakeProcess()),
+    ):
+        strftime_mock.side_effect = lambda fmt, *args: (
+            "20260620-101112" if fmt == "%Y%m%d-%H%M%S" else "2026-06-20T10:11:12Z"
+        )
+        state = start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    assert state["run_id"] == f"{base_run_id}-2"
+    assert existing_state_path.read_text(encoding="utf-8") == "{corrupt-existing-state"
+    state_path = console_output_root(tmp_path) / "runs" / state["run_id"] / "operator_state.json"
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted["run_id"] == state["run_id"]
+    assert ResourceLock(tmp_path, route.lock_name).read().owner_run_id == state["run_id"]
+
+
+def test_launcher_fails_when_run_id_reservation_is_exhausted(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    base_run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    runs_dir = console_output_root(tmp_path) / "runs"
+    runs_dir.mkdir(parents=True)
+    for suffix in ("", *(f"-{index}" for index in range(2, 100))):
+        (runs_dir / f"{base_run_id}{suffix}").mkdir()
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime", return_value="20260620-101112"),
+        patch("roboclaws.operator_console.launcher.subprocess.Popen") as popen,
+        pytest.raises(
+            ConsoleLaunchError, match="could not allocate unique operator-console run id"
+        ),
+    ):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    popen.assert_not_called()
+    assert ResourceLock(tmp_path, route.lock_name).read().held is False
+
+
+def test_launcher_removes_empty_reserved_run_dir_when_lock_acquire_fails(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+
+    def fail_acquire(self, *, run_id, pid=None):  # noqa: ANN001, ANN202
+        del self, run_id, pid
+        raise RuntimeError("lock unavailable")
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime", return_value="20260620-101112"),
+        patch("roboclaws.operator_console.launcher.ResourceLock.acquire", fail_acquire),
+        patch("roboclaws.operator_console.launcher.subprocess.Popen") as popen,
+        pytest.raises(RuntimeError, match="lock unavailable"),
+    ):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    popen.assert_not_called()
+    assert not run_dir.exists()
+
+
+def test_launcher_removes_empty_reserved_run_dir_when_argv_build_fails(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = f"20260620-101112-{_safe_run_id_suffix(route.id)}"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+
+    with (
+        patch("roboclaws.operator_console.launcher.time.strftime", return_value="20260620-101112"),
+        patch(
+            "roboclaws.operator_console.launcher.build_launch_argv",
+            side_effect=ConsoleLaunchError("bad argv"),
+        ),
+        patch("roboclaws.operator_console.launcher.subprocess.Popen") as popen,
+        pytest.raises(ConsoleLaunchError, match="bad argv"),
+    ):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(
+                selection_id_override=route.id,
+                intent_id="open-ended",
+                overrides={"port": _free_port()},
+            ),
+            env=CODEX_ENV,
+        )
+
+    popen.assert_not_called()
+    assert not run_dir.exists()
 
 
 def test_launcher_rejects_missing_canonical_selection_identity(tmp_path: Path) -> None:
