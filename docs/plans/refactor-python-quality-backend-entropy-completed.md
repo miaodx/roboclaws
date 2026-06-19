@@ -3162,6 +3162,15 @@ logs before choosing the next slice.
   contract tests, ruff, format check, diff check, and ratchet. Reopen only if
   active verification commands or tests regain canonical free-camera wording as
   a current robot-FPV acceptance gate.
+- Active agent planning guidance now names the staged
+  `docs/plans -> review/autoplan/preflight -> GSD` workflow directly instead
+  of pointing agents at the unavailable `hybrid-phase-pipeline` skill. Owner
+  layer: workflow / agent guidance. Behavior-change class: stale active
+  guidance removal. Metric: exact active-guidance search no longer finds the
+  old skill name outside this completed ledger. Proof: targeted search and
+  docs-only diff check. Reopen only if active repo guidance reintroduces the
+  hybrid-router skill as a dependency instead of spelling out the current
+  staged workflow.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

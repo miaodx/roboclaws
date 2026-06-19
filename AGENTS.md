@@ -378,8 +378,9 @@ Required for any task tagged `local-dev` on the issue tracker. Good for:
 
 ## 8) Planning workflow
 
-Use the `hybrid-phase-pipeline` skill when available. It is the router for
-combining Matt-style skills, gstack review, and GSD without duplicating process.
+Use the current staged workflow directly: shape plans in `docs/plans/`, run the
+relevant review/autoplan/preflight step when needed, then move committed phases
+through GSD. Do not depend on a separate hybrid-router skill being installed.
 
 Invariant: one source of truth per stage, with `STATUS.md` as the short
 human-facing dashboard.
