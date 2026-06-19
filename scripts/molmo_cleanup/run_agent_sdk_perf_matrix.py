@@ -10,10 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.reports.live_performance import (
+    ReportPerformanceSourceError,
     compare_report_performance_metrics,
     extract_report_performance_metrics,
     privacy_findings_for_packet,
     privacy_findings_for_run_dir,
+    read_jsonl,
     read_model_latency_calibration,
 )
 
@@ -285,9 +287,15 @@ def _load_row_runs(row: dict[str, Any]) -> None:
     calibration = _row_calibration(row)
     if row["calibration_path"] and calibration is None:
         return
+    try:
+        baseline_summary = _run_summary(baseline_dir, calibration=calibration)
+        candidate_summary = _run_summary(candidate_dir, calibration=calibration)
+    except ReportPerformanceSourceError as exc:
+        _block(row, f"run source error: {exc}")
+        return
     row["_calibration"] = calibration
-    row["_baseline_summary"] = _run_summary(baseline_dir, calibration=calibration)
-    row["_candidate_summary"] = _run_summary(candidate_dir, calibration=calibration)
+    row["_baseline_summary"] = baseline_summary
+    row["_candidate_summary"] = candidate_summary
     row["artifact_links"] = {
         "baseline_run_dir": str(baseline_dir),
         "candidate_run_dir": str(candidate_dir),
@@ -314,7 +322,7 @@ def _run_summary(run_dir: Path, *, calibration: dict[str, Any] | None = None) ->
     quality = _dict(metrics.get("quality"))
     timing = _dict(metrics.get("timing"))
     call_counts = _dict(metrics.get("call_counts"))
-    trace_events = _read_jsonl(run_dir / "trace.jsonl")
+    trace_events = read_jsonl(run_dir / "trace.jsonl")
     return {
         "run_dir": str(run_dir),
         "elapsed_s": _float_or_none(timing.get("observed_wall_s")),
@@ -929,32 +937,6 @@ def _delta(candidate: Any, baseline: Any) -> float | None:
     if candidate_value is None or baseline_value is None:
         return None
     return round(candidate_value - baseline_value, 3)
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
 
 
 def _dict(value: Any) -> dict[str, Any]:

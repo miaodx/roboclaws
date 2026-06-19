@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Agent SDK speedup matrix row loading now blocks on present
+  malformed or non-object baseline/candidate source artifacts instead of
+  deriving quality, speed, or reducible-bucket recommendations from empty or
+  partial evidence. The matrix reuses the strict report-performance
+  `trace.jsonl` reader for its camera-grounded tool breakdown and turns
+  report-performance source errors into explicit row reasons; missing optional
+  files still preserve the existing unavailable behavior. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  artifact/source truth; matrix manifest schema, privacy scanning,
+  comparison math, candidate coverage, and live-run producers are unchanged.
+  Metric: `run_agent_sdk_perf_matrix.py` shrank from 989 to 971 lines, and the
+  ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused Agent SDK perf-matrix tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Detached live-run summary source parsing now fails aloud for
   present malformed or non-object `live_status.json`, `live_timing.json`,
   `run_result.json`, and `trace.jsonl` artifacts. Corrupt summary inputs no

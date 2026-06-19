@@ -68,7 +68,10 @@ Latest quality snapshot from 2026-06-19:
   history. Detached live-run summaries now fail aloud on present malformed or
   non-object `live_status.json`, `live_timing.json`, `run_result.json`, and
   `trace.jsonl` sources instead of rendering pending/unknown summaries from
-  corrupt evidence.
+  corrupt evidence. Agent SDK speedup matrix rows now block on present
+  malformed or non-object baseline/candidate run source artifacts instead of
+  accepting, rejecting, or recommending speedup work from empty or partial
+  performance evidence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
