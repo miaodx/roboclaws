@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Live eval surface JSON artifact loading now fails aloud.
+  Existing malformed or non-object `run_result.json` / `live_status.json`
+  files in live eval product-route directories no longer collapse to empty
+  payloads that look missing, unfinished, or terminally ambiguous. The live
+  adapter preserves missing optional files as absent, but present corrupt JSON
+  now raises an explicit source error that the eval packet classifies under the
+  existing `artifact_missing` failure class. Owner layer: Eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; live command
+  construction, detached polling, open-ended checker recovery, provider
+  readiness, report rendering, and public eval result failure-class schema are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized
+  modules. Proof: focused malformed live-run-result and live-recovery tests,
+  full eval-runner unit file, touched-file ruff and format check,
+  `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval trace JSONL parsing now fails aloud for trajectory grading.
   Malformed or non-object `trace.jsonl` rows no longer disappear while valid
   rows still drive required-tool and completion predicates; trajectory grading

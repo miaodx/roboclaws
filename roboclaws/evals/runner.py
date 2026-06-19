@@ -1088,6 +1088,12 @@ def _failure_class_from_exception(exc: Exception) -> str:
         return "environment_blocked"
     if any(token in message for token in environment_tokens):
         return "environment_blocked"
+    artifact_tokens = (
+        "invalid live eval json artifact",
+        "live eval json artifact",
+    )
+    if any(token in message for token in artifact_tokens):
+        return "artifact_missing"
     provider_tokens = (
         "provider_transient_failure",
         "provider_config_failure",

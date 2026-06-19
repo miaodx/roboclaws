@@ -311,6 +311,43 @@ def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
     assert seen_timeout is None
 
 
+def test_live_surface_product_fails_aloud_on_malformed_run_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        run_dir = Path(output_arg.removeprefix("output_dir=")) / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text("{", encoding="utf-8")
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-malformed-run-result",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_timeout_s=12.5,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 3}
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    runner = result["grader_outputs"]["runner"]
+    assert runner["status"] == "failed"
+    assert runner["error_type"] == "ValueError"
+    assert "invalid live eval JSON artifact" in runner["message"]
+
+
 def test_live_surface_product_recovers_completed_artifact_after_timeout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

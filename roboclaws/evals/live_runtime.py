@@ -664,9 +664,11 @@ def _load_json(path: Path) -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid live eval JSON artifact {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"live eval JSON artifact {path} must contain an object")
+    return payload
 
 
 def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None:
