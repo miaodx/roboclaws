@@ -137,6 +137,7 @@ def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> Non
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
+        allow_synthetic_map_projection=True,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     online_snapshot = runtime_prior_snapshot_from_runtime_metric_map(
@@ -178,6 +179,7 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
         runtime_map_prior=snapshot["runtime_metric_map"],
+        allow_synthetic_map_projection=True,
     )
     public_receptacles = contract.public_receptacles_by_id()
 
@@ -361,6 +363,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
         output_dir=tmp_path / "cleanup",
         seed=7,
         runtime_map_prior_path=prior_path,
+        allow_synthetic_map_projection=True,
     )
 
     prior_rows = [
@@ -382,6 +385,7 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
 def _online_minimal_snapshot() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        allow_synthetic_map_projection=True,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     return runtime_prior_snapshot_from_runtime_metric_map(

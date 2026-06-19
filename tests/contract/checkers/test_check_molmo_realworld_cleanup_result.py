@@ -49,6 +49,22 @@ def _load_module(path: Path, name: str):
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
+    if path == DEMO_PATH:
+        run_realworld_cleanup = module.run_realworld_cleanup
+
+        def run_synthetic_realworld_cleanup(**kwargs):
+            kwargs.setdefault("allow_synthetic_map_projection", True)
+            return run_realworld_cleanup(**kwargs)
+
+        module.run_realworld_cleanup = run_synthetic_realworld_cleanup
+    elif path == SMOKE_PATH:
+        run_smoke = module.run_smoke
+
+        def run_synthetic_smoke(**kwargs):
+            kwargs.setdefault("allow_synthetic_map_projection", True)
+            return run_smoke(**kwargs)
+
+        module.run_smoke = run_synthetic_smoke
     return module
 
 

@@ -12,6 +12,7 @@ from roboclaws.household.scenario import build_cleanup_scenario
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        allow_synthetic_map_projection=True,
     )
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = contract.target_fixture_for_detection(
@@ -45,7 +46,10 @@ def test_realworld_observed_handle_planner_binding_stays_private() -> None:
 
 
 def test_observed_handle_planner_binding_requires_registered_handle() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        allow_synthetic_map_projection=True,
+    )
 
     binding = contract.planner_observed_handle_binding("observed_999", "sink_01")
 

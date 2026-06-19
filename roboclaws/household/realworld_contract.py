@@ -200,6 +200,7 @@ class RealWorldCleanupContract:
         runtime_map_prior: dict[str, Any] | None = None,
         evidence_lane: str | None = None,
         public_acceptance_config: dict[str, Any] | None = None,
+        allow_synthetic_map_projection: bool = False,
     ) -> None:
         realworld_contract_init.validate_contract_options(
             static_fixture_projection_mode=static_fixture_projection_mode,
@@ -223,7 +224,11 @@ class RealWorldCleanupContract:
             visual_grounding_artifact_base_dir=visual_grounding_artifact_base_dir,
             visual_grounding_run_id=visual_grounding_run_id,
         )
-        realworld_contract_init.init_map_projection(self, map_bundle_dir)
+        realworld_contract_init.init_map_projection(
+            self,
+            map_bundle_dir,
+            allow_synthetic_map_projection=allow_synthetic_map_projection,
+        )
         realworld_contract_init.init_public_map_projection(self)
         self._current_waypoint_id = realworld_contract_init.initial_waypoint_id(self)
         realworld_contract_init.init_runtime_state(self, runtime_map_prior)

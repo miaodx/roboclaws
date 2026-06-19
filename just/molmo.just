@@ -528,6 +528,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       else
         map_bundle_args+=(--require-map-bundle)
       fi
+    else
+      map_bundle_args+=(--allow-synthetic-map-projection)
     fi
 
     stamp="$({{timestamp_cmd}})"

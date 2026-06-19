@@ -22,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+CANONICAL_SCENE_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmospaces" / "procthor-10k-val" / "0"
 
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
@@ -262,21 +263,30 @@ def test_nav2_bundle_writer_rejects_missing_metric_map_height(tmp_path: Path) ->
 def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_bundle_dir=PREBUILT_BUNDLE,
+        map_bundle_dir=CANONICAL_SCENE_BUNDLE,
     )
 
     metric_map = contract.metric_map()
     static_fixture_projection = contract.static_fixture_projection()
     waypoints = metric_map["inspection_waypoints"]
+    semantics = json.loads((CANONICAL_SCENE_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
+    source_waypoints = semantics["inspection_waypoints"]
     navigation = contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
 
-    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
-    assert metric_map["map_id"] == "molmo-cleanup-default-7_base_navigation_map"
+    assert metric_map["map_bundle"]["environment_id"] == "molmospaces-procthor-10k-val-0"
+    assert metric_map["map_id"] == semantics["map_id"]
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert all(item["visited"] is False for item in waypoints)
     assert static_fixture_projection["rooms"] == []
-    assert waypoints[0]["waypoint_source"] == "generated_exploration_candidate"
+    assert [item["waypoint_id"] for item in waypoints] == [
+        item["waypoint_id"] for item in source_waypoints
+    ]
+    assert waypoints[0]["waypoint_source"] == source_waypoints[0]["waypoint_source"]
+    assert waypoints[0]["x"] == source_waypoints[0]["x"]
+    assert waypoints[0]["y"] == source_waypoints[0]["y"]
+    assert "fixture_ids" not in waypoints[0]
+    assert metric_map["base_navigation_map"]["source"] == "map_artifact_inspection_waypoints"
     assert navigation["navigation_backend"] == SIM_COSTMAP_PLANNER
     assert navigation["route_validation"]["ok"] is True
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
@@ -285,6 +295,7 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        allow_synthetic_map_projection=True,
     )
     return {
         "metric_map": contract.metric_map(),

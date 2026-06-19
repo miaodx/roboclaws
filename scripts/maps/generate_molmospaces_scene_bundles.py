@@ -246,6 +246,7 @@ def _generate_scene_bundle(
             session,
             static_fixture_projection_mode="room_only",
             map_bundle_dir=None,
+            allow_synthetic_map_projection=True,
         )
         agent_view = contract.agent_view_payload()
         (scene_run_dir / "agent_view.json").write_text(

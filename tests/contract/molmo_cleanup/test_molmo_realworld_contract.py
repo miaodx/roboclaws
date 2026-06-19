@@ -43,6 +43,8 @@ def _contract(
     session: CleanupBackendSession,
     **kwargs: object,
 ) -> RealWorldCleanupContract:
+    if "map_bundle_dir" not in kwargs and "allow_synthetic_map_projection" not in kwargs:
+        kwargs["allow_synthetic_map_projection"] = True
     return RealWorldCleanupContract(session, **kwargs)
 
 
@@ -146,7 +148,7 @@ class _RelativePoseBackend(_PoseRecordingBackend):
 
 
 def test_realworld_contract_defaults_to_base_navigation_map() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
     static_fixture_projection = contract.static_fixture_projection()
@@ -155,6 +157,17 @@ def test_realworld_contract_defaults_to_base_navigation_map() -> None:
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert static_fixture_projection["rooms"] == []
+
+
+def test_realworld_contract_requires_map_bundle_without_synthetic_opt_in() -> None:
+    try:
+        RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    except ValueError as exc:
+        assert "map_bundle_dir is required for product runtime base inspection_waypoints" in str(
+            exc
+        )
+    else:
+        raise AssertionError("expected product runtime to reject missing map bundle")
 
 
 def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
@@ -505,7 +518,7 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
     session.backend.scenario_source = "isaac_scene_index"
     contract = _contract(
         session,
-        map_bundle_dir=Path("assets/maps/molmospaces/procthor-10k-val/0"),
+        allow_synthetic_map_projection=True,
     )
 
     detection = None
@@ -1982,6 +1995,7 @@ def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
     contract = RealWorldCleanupContract(
         CleanupBackendSession(scenario, backend=backend),
         perception_mode=RAW_FPV_ONLY_MODE,
+        allow_synthetic_map_projection=True,
     )
     waypoints = contract.metric_map()["inspection_waypoints"]
     first_waypoint = waypoints[0]
@@ -2640,8 +2654,9 @@ def test_minimal_raw_fpv_navigate_validation_returns_schema_recovery() -> None:
     assert invented_target["ok"] is False
     assert invented_target["error_reason"] == "invalid_visual_candidate"
     assert invented_target["candidate_error"]["field"] == "target_fixture_id"
-    assert "must be omitted in Base Navigation Map RAW_FPV" in (
-        invented_target["candidate_error"]["reason"]
+    assert (
+        "must be omitted in Base Navigation Map RAW_FPV"
+        in (invented_target["candidate_error"]["reason"])
     )
     assert (
         invented_target["raw_fpv_candidate_recovery"]["base_navigation_map_target_fixture_rule"]

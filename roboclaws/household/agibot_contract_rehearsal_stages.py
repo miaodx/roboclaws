@@ -210,6 +210,7 @@ def _build_contract_rehearsal_session(
         task_prompt=scenario.task,
         static_fixture_projection_mode="exact_fixtures",
         perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+        allow_synthetic_map_projection=True,
     )
     return _ContractRehearsalSession(
         scenario=scenario,

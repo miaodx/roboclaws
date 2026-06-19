@@ -177,7 +177,7 @@ def _metric_map(
             **contract._current_pose(),
             "room_id": contract._current_room_id(),
             "waypoint_id": contract._current_waypoint_id,
-            "pose_source": "generated_exploration_candidate",
+            "pose_source": _current_pose_source(contract),
         },
         "inspection_waypoints": _public_navigation_waypoints_with_visits(contract),
         "generated_exploration_candidates": _public_waypoints_with_visits(
@@ -190,23 +190,23 @@ def _metric_map(
         ),
         "base_navigation_map": {
             "enabled": True,
-            "source": "public_occupancy_free_space",
+            "source": _base_navigation_map_source(contract),
             "generated_candidate_count": len(contract._public_waypoints),
             "source_rooms_hidden": False,
             "source_room_labels_visible": bool(contract._public_rooms),
             "source_fixtures_hidden": True,
-            "source_inspection_waypoints_hidden": True,
+            "source_inspection_waypoints_hidden": False,
             "public_contract_note": (
-                "Base Navigation Map exposes occupancy geometry and generated "
-                "exploration candidates plus public room labels, not authored "
-                "fixture or movable-object semantics."
+                "Base Navigation Map exposes occupancy geometry, artifact-authored "
+                "inspection waypoints, and public room labels, not authored fixture "
+                "tables or movable-object semantics."
             ),
         },
         "public_contract_note": (
-            "Base Navigation Map projection: public room labels and generated "
-            "exploration candidates are visible. Static fixture tables, source "
-            "inspection waypoint ids, movable-object inventory, and private scoring "
-            "truth are hidden; Runtime Metric Map observations enrich the run."
+            "Base Navigation Map projection: public room labels and artifact-authored "
+            "inspection waypoints are visible. Static fixture tables, movable-object "
+            "inventory, and private scoring truth are hidden; Runtime Metric Map "
+            "observations enrich the run."
         ),
     }
     metric_map["runtime_metric_map"] = contract.runtime_metric_map_payload(
@@ -304,6 +304,17 @@ def _public_waypoints_with_visits(waypoints: Any, contract: Any) -> list[dict[st
         }
         for item in waypoints
     ]
+
+
+def _current_pose_source(contract: Any) -> str:
+    waypoint = contract._waypoint_by_id(contract._current_waypoint_id) or {}
+    return str(waypoint.get("waypoint_source") or "inspection_waypoint")
+
+
+def _base_navigation_map_source(contract: Any) -> str:
+    if getattr(contract, "_bundle_metric_map_template", None) is not None:
+        return "map_artifact_inspection_waypoints"
+    return "synthetic_map_projection"
 
 
 def _fixtures_from_bundle_static_landmarks(
@@ -722,7 +733,57 @@ def _bundle_inspection_waypoint(
     return waypoint
 
 
-def _generated_exploration_waypoints(
+def _public_base_waypoints_from_artifact(
+    metric_map: dict[str, Any],
+    *,
+    public_rooms: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    source_waypoints = [
+        item for item in metric_map.get("inspection_waypoints") or [] if isinstance(item, dict)
+    ]
+    if not source_waypoints:
+        raise AssertionError("metric map artifact must contain inspection_waypoints")
+    frame_id = str(metric_map.get("frame_id") or "map")
+    room_labels = _room_label_by_id(public_rooms)
+    public_waypoints = []
+    for index, source in enumerate(source_waypoints, start=1):
+        waypoint = dict(source)
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if not waypoint_id:
+            raise AssertionError("inspection waypoint missing waypoint_id")
+        room_id = str(source.get("room_id") or "generated_area")
+        room_label = str(room_labels.get(room_id) or source.get("room_label") or "")
+        waypoint["waypoint_id"] = waypoint_id
+        waypoint.setdefault("frame_id", frame_id)
+        waypoint["x"] = float(source.get("x", 0.0))
+        waypoint["y"] = float(source.get("y", 0.0))
+        waypoint["yaw"] = float(source.get("yaw", 0.0))
+        waypoint["room_id"] = room_id
+        waypoint["room_label"] = room_label
+        waypoint.setdefault("label", f"Inspection waypoint {index}")
+        waypoint.setdefault("purpose", "base_navigation_map_exploration")
+        waypoint.setdefault("waypoint_source", "map_artifact_inspection_waypoint")
+        waypoint.setdefault("coverage_estimate", round(1.0 / max(len(source_waypoints), 1), 6))
+        waypoint.pop("fixture_ids", None)
+        public_waypoints.append(waypoint)
+    return public_waypoints
+
+
+def _private_waypoint_map_for_public_base_waypoints(
+    public_waypoints: list[dict[str, Any]],
+    private_waypoints: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    private_by_id = {str(item.get("waypoint_id") or ""): item for item in private_waypoints}
+    return {
+        str(public.get("waypoint_id") or ""): private_by_id.get(
+            str(public.get("waypoint_id") or ""),
+            public,
+        )
+        for public in public_waypoints
+    }
+
+
+def _synthetic_exploration_waypoints(
     metric_map: dict[str, Any],
     *,
     fallback_waypoints: list[dict[str, Any]],
@@ -765,7 +826,7 @@ def _generated_exploration_waypoints(
     return generated
 
 
-def _private_waypoint_map_for_generated_candidates(
+def _private_waypoint_map_for_synthetic_exploration(
     generated_waypoints: list[dict[str, Any]],
     private_waypoints: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:

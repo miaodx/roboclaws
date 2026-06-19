@@ -125,6 +125,7 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
     contract = RealWorldCleanupContract(
         base_contract,
         perception_mode=RAW_FPV_ONLY_MODE,
+        allow_synthetic_map_projection=True,
     )
 
     yaw_offsets = tuple(args.camera_yaw_deg or DEFAULT_CAMERA_YAWS)
