@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: OpenAI Agents SDK performance-profile float settings now reject
+  non-finite values before runtime profile metadata is produced. `nan` can no
+  longer be clamped to `0.0`, and `inf` can no longer survive as a plausible
+  MCP timeout or model-service retry sleep value. Owner layer: Agent Engines
+  And Provider Profiles. Behavior-change class: fail-aloud provider/runtime
+  env input; finite defaults and finite overrides, provider route semantics,
+  model selection, live provider execution, and public defaults are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused OpenAI Agents
+  perf-profile tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-20: Runtime inventory artifact rows now advertise same-origin
   `/artifacts/...` and `/api/raw/...` links only for files under
   `output/operator-console`, matching the operator-console artifact server

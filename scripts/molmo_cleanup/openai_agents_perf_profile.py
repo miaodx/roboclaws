@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 from typing import Any
 
@@ -741,8 +742,8 @@ def _float_setting(
     if raw is None:
         raw = env_raw if env_raw not in {None, ""} else default
     value = _number_setting_value(attr, raw, float, "a non-negative number")
-    if value < 0:
-        raise ValueError(f"{attr} must be non-negative")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{attr} must be a finite non-negative number")
     return round(max(0.0, value), 3)
 
 

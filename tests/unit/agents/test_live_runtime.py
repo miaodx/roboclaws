@@ -4440,9 +4440,39 @@ def test_openai_agents_perf_profile_uses_cache_tools_env(monkeypatch) -> None:
 def test_openai_agents_perf_profile_rejects_negative_mcp_timeout(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
 
-    with pytest.raises(ValueError, match="mcp_client_session_timeout_s must be non-negative"):
+    with pytest.raises(
+        ValueError,
+        match="mcp_client_session_timeout_s must be a finite non-negative number",
+    ):
         _resolve_agent_sdk_perf_profile(
             _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=-1.0)
+        )
+
+
+@pytest.mark.parametrize(
+    ("env_value", "direct_value", "expected_error"),
+    [
+        ("nan", None, "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("inf", None, "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", float("nan"), "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", float("inf"), "mcp_client_session_timeout_s must be a finite non-negative number"),
+        ("", float("-inf"), "mcp_client_session_timeout_s must be a finite non-negative number"),
+    ],
+)
+def test_openai_agents_perf_profile_rejects_non_finite_float_settings(
+    monkeypatch,
+    env_value: str,
+    direct_value: float | None,
+    expected_error: str,
+) -> None:
+    if env_value:
+        monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", env_value)
+    else:
+        monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", raising=False)
+
+    with pytest.raises(ValueError, match=expected_error):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(mcp_client_session_timeout_s=direct_value)
         )
 
 

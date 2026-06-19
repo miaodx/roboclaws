@@ -36,7 +36,10 @@ Latest quality snapshot from 2026-06-20:
   them instead of producing an empty recommendation set. Operator-console prompt
   previews now reject malformed or negative OpenAI Agents numeric prompt-env
   values instead of rendering default-looking kickoff prompts for bad live-route
-  input, and the operator-state payload now reports malformed core
+  input. OpenAI Agents SDK performance-profile float settings now reject
+  non-finite timeout/retry values instead of clamping `nan` to zero or writing
+  `inf` into runtime profile metadata, and the operator-state payload now
+  reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
   explicit failed source errors instead of erasing them into idle or missing
   state. OpenAI Agents SDK model selection now rejects unknown model overrides,
