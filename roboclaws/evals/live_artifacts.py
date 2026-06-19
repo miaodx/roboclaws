@@ -23,7 +23,49 @@ def discover_live_surface_run_dir(
     priority_candidates = _unique_live_surface_candidates(
         [fallback_run_dir, _live_surface_run_dir_from_stdout(stdout)]
     )
+    priority_match = _priority_live_surface_run_dir(
+        priority_candidates,
+        started_wall_time_s=started_wall_time_s,
+    )
+    if priority_match is not None:
+        return priority_match
+    discovered = _discovered_live_surface_run_dirs(
+        output_dir,
+        seed_leaf=seed_leaf,
+        exclude=priority_candidates,
+    )
+    current_match = _current_discovered_live_surface_run_dir(
+        discovered,
+        output_dir=output_dir,
+        seed_leaf=seed_leaf,
+        started_wall_time_s=started_wall_time_s,
+    )
+    if current_match is not None:
+        return current_match
     for candidate in priority_candidates:
+        if candidate.exists():
+            return candidate
+    current_existing = _current_existing_live_surface_run_dirs(
+        discovered,
+        started_wall_time_s=started_wall_time_s,
+    )
+    if len(current_existing) == 1:
+        return current_existing[0]
+    if len(current_existing) > 1:
+        _raise_ambiguous_live_surface_run_dirs(
+            current_existing,
+            output_dir=output_dir,
+            seed_leaf=seed_leaf,
+        )
+    return fallback_run_dir
+
+
+def _priority_live_surface_run_dir(
+    candidates: list[Path],
+    *,
+    started_wall_time_s: float | None,
+) -> Path | None:
+    for candidate in candidates:
         if _live_surface_run_dir_has_stale_evidence(
             candidate,
             started_wall_time_s=started_wall_time_s,
@@ -34,58 +76,59 @@ def discover_live_surface_run_dir(
             started_wall_time_s=started_wall_time_s,
         ):
             return candidate
-    discovered = _discovered_live_surface_run_dirs(
-        output_dir,
-        seed_leaf=seed_leaf,
-        exclude=priority_candidates,
-    )
-    current_discovered = [
+    return None
+
+
+def _current_discovered_live_surface_run_dir(
+    candidates: list[Path],
+    *,
+    output_dir: Path,
+    seed_leaf: str,
+    started_wall_time_s: float | None,
+) -> Path | None:
+    current_candidates = [
         candidate
-        for candidate in discovered
+        for candidate in candidates
         if _live_surface_run_dir_has_current_evidence(
             candidate,
             started_wall_time_s=started_wall_time_s,
         )
     ]
-    if len(current_discovered) == 1:
-        return current_discovered[0]
-    if len(current_discovered) > 1:
+    if len(current_candidates) == 1:
+        return current_candidates[0]
+    if len(current_candidates) > 1:
         _raise_ambiguous_live_surface_run_dirs(
-            current_discovered,
+            current_candidates,
             output_dir=output_dir,
             seed_leaf=seed_leaf,
         )
-    stale_discovered = [
+    stale_candidates = [
         candidate
-        for candidate in discovered
+        for candidate in candidates
         if _live_surface_run_dir_has_stale_evidence(
             candidate,
             started_wall_time_s=started_wall_time_s,
         )
     ]
-    if stale_discovered:
-        _raise_stale_live_surface_run_dirs(stale_discovered, started_wall_time_s)
-    for candidate in priority_candidates:
-        if candidate.exists():
-            return candidate
-    current_existing = [
+    if stale_candidates:
+        _raise_stale_live_surface_run_dirs(stale_candidates, started_wall_time_s)
+    return None
+
+
+def _current_existing_live_surface_run_dirs(
+    candidates: list[Path],
+    *,
+    started_wall_time_s: float | None,
+) -> list[Path]:
+    return [
         candidate
-        for candidate in discovered
+        for candidate in candidates
         if candidate.exists()
         and _live_surface_run_dir_is_current(
             candidate,
             started_wall_time_s=started_wall_time_s,
         )
     ]
-    if len(current_existing) == 1:
-        return current_existing[0]
-    if len(current_existing) > 1:
-        _raise_ambiguous_live_surface_run_dirs(
-            current_existing,
-            output_dir=output_dir,
-            seed_leaf=seed_leaf,
-        )
-    return fallback_run_dir
 
 
 def load_live_eval_json(path: Path) -> dict[str, Any]:

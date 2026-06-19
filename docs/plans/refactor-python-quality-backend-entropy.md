@@ -23,7 +23,9 @@ Latest quality snapshot from 2026-06-19:
 - Ruff complexity rows: 0.
 - Oversized modules: 78.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
-  fail-aloud slices surfaced malformed operator-console runtime inventory
+  fail-aloud slices kept Ruff complexity rows clear again after splitting the
+  live eval artifact selector below the C901 threshold, and surfaced malformed
+  operator-console runtime inventory
   JSON, eval runtime-map artifacts, eval trace JSONL artifacts, and live eval
   surface JSON artifacts as explicit source-error evidence. Eval-harness
   provider readiness now rejects unknown provider profiles through the provider

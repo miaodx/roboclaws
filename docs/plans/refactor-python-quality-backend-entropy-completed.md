@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Split the live eval artifact selector's priority,
+  current-discovered, and current-existing candidate decisions into named
+  helpers after the previous fail-aloud slice introduced one Ruff C901 row.
+  The stale/ambiguous artifact behavior is unchanged, but
+  `discover_live_surface_run_dir` is back under the complexity gate. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  deterministic helper refactor; public launch command construction,
+  artifact freshness rules, detached polling, and grader schemas are
+  unchanged. Metric: ratchet returned to 0 Ruff complexity rows and stayed at
+  78 oversized modules. Proof: focused eval-runner tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval-runner live surface artifact discovery now fails aloud for
   stale or ambiguous sibling `seed-*` run directories. Live eval rows no longer
   silently grade substitute artifacts from an older run or an unclear current
