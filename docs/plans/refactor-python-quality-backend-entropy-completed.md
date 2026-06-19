@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Detached live eval completion now requires terminal
+  `live_status.json` evidence before treating `run_result.json` as completed
+  Codex live-route proof. Timeout recovery, deadline recovery, and grace-window
+  polling now share the same terminal-status predicate, preserving the explicit
+  open-ended checker-failure allowance while rejecting still-running or
+  non-checker-failed detached runs. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud detached live eval source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  `roboclaws/evals/live_runtime.py` remains below the module-size warning.
+  Focused regression coverage keeps `tests/unit/evals/test_eval_runner.py`
+  above the 2000-line warning and remains parked for `$intuitive-tests`. Proof:
+  focused live surface product tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-20: Live eval surface artifact discovery now validates
   stdout-declared `Artifacts:` directories before treating them as priority live
   route evidence. Declared paths must stay under the live surface output root

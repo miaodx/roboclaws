@@ -150,7 +150,10 @@ Latest quality snapshot from 2026-06-20:
   eval surface artifact discovery now rejects stdout-declared artifact
   directories outside the live surface output root or not ending at the
   expected `seed-*` leaf, so trial-dir or malformed paths cannot become
-  priority live-run evidence. Eval
+  priority live-run evidence. Detached live eval completion now requires
+  terminal live-status evidence for detached Codex routes, so timeout recovery
+  cannot treat a still-running or failed route's `run_result.json` as completed
+  eval proof. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.

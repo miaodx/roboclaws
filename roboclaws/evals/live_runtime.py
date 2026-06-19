@@ -161,6 +161,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             output_dir=sample_run_root,
             effective_run_dir=sample_run_dir,
             started_wall_time_s=started_wall_time_s,
+            allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
         )
         record.update(
             {
@@ -175,7 +176,11 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         )
         run_result_path = sample_run_dir / "run_result.json"
         run_result = _load_json(run_result_path)
-        if run_result:
+        if run_result and _live_surface_already_complete(
+            sample_run_dir,
+            allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
+            require_terminal_status=_live_surface_route_can_detach(kwargs),
+        ):
             record["returncode"] = "timeout_after_completion"
             _write_live_eval_command_record(run_dir / "live_eval_command.json", record)
             run_result["eval_effective_run_dir"] = str(sample_run_dir)
@@ -301,12 +306,14 @@ def wait_for_live_surface_completion(
 ) -> Path:
     """Wait for a detached live product route to finish when the route returns early."""
 
+    require_terminal_status = _live_surface_route_can_detach(kwargs)
     if _live_surface_already_complete(
         effective_run_dir,
         allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        require_terminal_status=require_terminal_status,
     ):
         return effective_run_dir
-    if not _live_surface_route_can_detach(kwargs):
+    if not require_terminal_status:
         return effective_run_dir
 
     timeout_s = live_surface_timeout_s(kwargs)
@@ -318,19 +325,29 @@ def wait_for_live_surface_completion(
             fallback_run_dir=effective_run_dir,
             started_wall_time_s=started_wall_time_s,
         )
-        if _live_surface_poll_completed(
+        if _live_surface_already_complete(
             effective_run_dir,
             allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+            require_terminal_status=True,
         ):
             return effective_run_dir
         time.sleep(max(poll_s, 0.05))
-    return _recover_live_surface_after_wait_timeout(
+    effective_run_dir = wait_for_timed_out_live_surface_artifact(
         kwargs,
         output_dir=output_dir,
         effective_run_dir=effective_run_dir,
         poll_s=poll_s,
-        timeout_s=timeout_s,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
         started_wall_time_s=started_wall_time_s,
+    )
+    if _live_surface_already_complete(
+        effective_run_dir,
+        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+        require_terminal_status=True,
+    ):
+        return effective_run_dir
+    raise TimeoutError(
+        f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
     )
 
 
@@ -338,10 +355,11 @@ def _live_surface_already_complete(
     effective_run_dir: Path,
     *,
     allow_open_ended_checker_failure: bool,
+    require_terminal_status: bool,
 ) -> bool:
-    return (
-        (effective_run_dir / "run_result.json").is_file() and not allow_open_ended_checker_failure
-    ) or _live_surface_run_is_terminal(
+    if (effective_run_dir / "run_result.json").is_file() and not require_terminal_status:
+        return True
+    return _live_surface_run_is_terminal(
         effective_run_dir,
         allow_open_ended_checker_failure=allow_open_ended_checker_failure,
     )
@@ -366,54 +384,13 @@ def _live_surface_wait_deadline(*, timeout_s: float, elapsed_s: float) -> float:
     return time.monotonic() + remaining_s
 
 
-def _live_surface_poll_completed(
-    effective_run_dir: Path,
-    *,
-    allow_open_ended_checker_failure: bool,
-) -> bool:
-    if not (effective_run_dir / "run_result.json").is_file():
-        return _live_surface_run_is_terminal(
-            effective_run_dir,
-            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-        )
-    status = _load_json(effective_run_dir / "live_status.json")
-    if status and status.get("exit_status") in {0}:
-        return True
-    return _live_surface_run_is_terminal(
-        effective_run_dir,
-        allow_open_ended_checker_failure=allow_open_ended_checker_failure,
-    )
-
-
-def _recover_live_surface_after_wait_timeout(
-    kwargs: dict[str, Any],
-    *,
-    output_dir: Path,
-    effective_run_dir: Path,
-    poll_s: float,
-    timeout_s: float,
-    started_wall_time_s: float | None,
-) -> Path:
-    effective_run_dir = wait_for_timed_out_live_surface_artifact(
-        kwargs,
-        output_dir=output_dir,
-        effective_run_dir=effective_run_dir,
-        poll_s=poll_s,
-        started_wall_time_s=started_wall_time_s,
-    )
-    if (effective_run_dir / "run_result.json").is_file():
-        return effective_run_dir
-    raise TimeoutError(
-        f"detached live eval trial did not finish within {timeout_s:g}s: {effective_run_dir}"
-    )
-
-
 def wait_for_timed_out_live_surface_artifact(
     kwargs: dict[str, Any],
     *,
     output_dir: Path,
     effective_run_dir: Path,
     poll_s: float = 1.0,
+    allow_open_ended_checker_failure: bool = False,
     started_wall_time_s: float | None = None,
 ) -> Path:
     """Give detached routes a short grace window after subprocess timeout."""
@@ -428,7 +405,11 @@ def wait_for_timed_out_live_surface_artifact(
             fallback_run_dir=effective_run_dir,
             started_wall_time_s=started_wall_time_s,
         )
-        if (effective_run_dir / "run_result.json").is_file():
+        if _live_surface_already_complete(
+            effective_run_dir,
+            allow_open_ended_checker_failure=allow_open_ended_checker_failure,
+            require_terminal_status=True,
+        ):
             return effective_run_dir
         time.sleep(max(poll_s, 0.05))
     return discover_live_surface_run_dir(

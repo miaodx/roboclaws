@@ -364,6 +364,9 @@ def test_live_surface_product_discovers_timestamped_run_dir(
         (timestamped_run_dir / "run_result.json").write_text(
             json.dumps(_run_result(timestamped_run_dir, completion_status="success")) + "\n"
         )
+        (timestamped_run_dir / "live_status.json").write_text(
+            '{"phase": "finished", "exit_status": 0}\n'
+        )
         return _completed_process(returncode=0)
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
@@ -577,6 +580,7 @@ def test_live_surface_product_preserves_unbounded_subprocess_timeout_by_default(
         (run_dir / "run_result.json").write_text(
             json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
         )
+        (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
         return _completed_process(returncode=0)
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
@@ -750,6 +754,9 @@ def test_live_surface_product_recovers_after_detached_wait_deadline(
             (detached_run_dir / "run_result.json").write_text(
                 json.dumps(_run_result(detached_run_dir, completion_status="success")) + "\n"
             )
+            (detached_run_dir / "live_status.json").write_text(
+                '{"phase": "finished", "exit_status": 0}\n'
+            )
 
     monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
     monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
@@ -760,6 +767,78 @@ def test_live_surface_product_recovers_after_detached_wait_deadline(
     )
 
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0312/seed-7")
+
+
+def test_live_surface_product_rejects_detached_run_result_without_terminal_status(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    clock = {"now": 0.0}
+    detached_run_dir: Path | None = None
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0313" / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+        )
+        (run_dir / "live_status.json").write_text('{"phase": "running-codex"}\n')
+        nonlocal detached_run_dir
+        detached_run_dir = run_dir
+        return _completed_process(returncode=0)
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    def fake_sleep(seconds: float) -> None:
+        clock["now"] += seconds
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    monkeypatch.setattr(live_runtime.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(live_runtime.time, "sleep", fake_sleep)
+    monkeypatch.setenv("ROBOCLAWS_LIVE_EVAL_TIMEOUT_COMPLETION_GRACE_S", "0")
+
+    with pytest.raises(
+        TimeoutError,
+        match=r"detached live eval trial did not finish within 1s",
+    ):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+        )
+
+    assert detached_run_dir is not None
+    assert (detached_run_dir / "run_result.json").is_file()
+
+
+def test_live_surface_product_rejects_detached_run_result_with_failed_status(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    def fake_run(command: list[str], **_kwargs: Any) -> Any:
+        output_arg = next(item for item in command if item.startswith("output_dir="))
+        output_dir = Path(output_arg.removeprefix("output_dir="))
+        run_dir = output_dir / "0615_0314" / "seed-7"
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / "run_result.json").write_text(
+            json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+        )
+        (run_dir / "live_status.json").write_text(
+            '{"phase": "failed", "exit_status": 1, "reason": "provider failure"}\n'
+        )
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="detached live surface run failed with exit 1"):
+        live_runtime.run_live_surface_product(
+            **_live_surface_kwargs(tmp_path / "trial-0000", live_timeout_s=1.0)
+        )
 
 
 def test_live_open_ended_eval_grades_artifacts_after_checker_nonzero_exit(
