@@ -444,31 +444,46 @@ def live_timeout_completion_grace_s() -> float:
 
 
 def _non_negative_timeout_value(value: object, setting_name: str) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
-        ) from exc
-    if not math.isfinite(parsed) or parsed < 0:
-        raise ValueError(
-            f"{setting_name} must be a non-negative finite number of seconds, got {value!r}"
-        )
-    return parsed
+    return _finite_timeout_value(
+        value,
+        setting_name,
+        allow_zero=True,
+    )
 
 
 def _positive_timeout_value(value: object, setting_name: str) -> float:
+    return _finite_timeout_value(
+        value,
+        setting_name,
+        allow_zero=False,
+    )
+
+
+def _finite_timeout_value(
+    value: object,
+    setting_name: str,
+    *,
+    allow_zero: bool,
+) -> float:
+    lower_bound = "non-negative" if allow_zero else "positive"
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
-        ) from exc
-    if not math.isfinite(parsed) or parsed <= 0:
-        raise ValueError(
-            f"{setting_name} must be a positive finite number of seconds, got {value!r}"
-        )
+        raise ValueError(_timeout_value_error(setting_name, lower_bound, value)) from exc
+    if not math.isfinite(parsed) or parsed < 0 or (parsed == 0 and not allow_zero):
+        raise ValueError(_timeout_value_error(setting_name, lower_bound, value))
     return parsed
+
+
+def _timeout_value_error(
+    setting_name: str,
+    lower_bound_description: str,
+    value: object,
+) -> str:
+    return (
+        f"{setting_name} must be a {lower_bound_description} finite number of seconds, "
+        f"got {value!r}"
+    )
 
 
 def live_product_run_kwargs(

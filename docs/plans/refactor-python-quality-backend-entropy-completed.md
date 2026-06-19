@@ -3179,6 +3179,15 @@ logs before choosing the next slice.
   stale checklist residue removal. Proof: targeted active-surface search and
   docs-only diff check. Reopen only with a concrete active symbol or command
   surface, not the historical checklist names alone.
+- Live eval timeout validation is consolidated behind one finite-timeout parser
+  with positive and non-negative wrappers, preserving the existing detached
+  live route timeout and completion-grace error messages. Owner layer: Eval
+  suites / live runtime adapter. Behavior-change class: internal helper
+  consolidation. Metric: `live_runtime.py` remains under the current ratchet
+  ceiling with no complexity rows. Proof: focused eval runner timeout/live
+  runtime tests, ruff, format check, diff check, and ratchet. Reopen only if
+  `roboclaws/evals/live_runtime.py` regains duplicated numeric timeout parsing
+  policy.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
