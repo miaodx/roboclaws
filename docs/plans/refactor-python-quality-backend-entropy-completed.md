@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 scene topdown diagnostic overlay loading now treats explicit
+  `--scene-topdown-render` input as JSON-object source truth. Malformed or
+  parseable non-object render packets return concise source-path errors before
+  schema validation or overlay report writes, instead of surfacing raw
+  parser/type failures from wrong-shaped Gaussian topdown evidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 scene topdown render source truth. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules; coverage landed in the small
+  topdown diagnostic contract test file instead of the B1 alignment hard
+  ceiling test. Proof: focused B1 scene topdown diagnostic contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh scene-topdown diagnostic evidence that
+  explicit Gaussian topdown render packets are again loaded through raw
+  parser/type paths, accepted as plausible non-object packets, or allowed to
+  write overlay artifacts after source-load failure.
+
 - 2026-06-20: B1 Map 12 manual-draft verification promotion CLI loading now
   treats explicit `--draft` input as JSON-object source truth. Missing,
   malformed, or parseable non-object draft packets return concise CLI

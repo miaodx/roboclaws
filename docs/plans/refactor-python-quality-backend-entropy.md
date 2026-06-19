@@ -101,7 +101,9 @@ Latest quality snapshot from 2026-06-20:
   apply the same source-truth rule to explicit `--review-packet` inputs before
   promotion, preview, residual, or committed-manifest writes. B1 manual-draft
   verification promotion now applies the same source-truth rule to explicit
-  `--draft` inputs before verification-only manifest writes.
+  `--draft` inputs before verification-only manifest writes. B1 scene topdown
+  diagnostics now apply the same source-truth rule to explicit
+  `--scene-topdown-render` packets before overlay report writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
