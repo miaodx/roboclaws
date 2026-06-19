@@ -150,22 +150,8 @@ def accepted_review_labels_by_partition(
         row = label if isinstance(label, dict) else {}
         if row.get("review_status") != "accepted":
             continue
-        partition_id = str(row.get("scene_partition_id") or "")
-        if not partition_id:
-            raise ValueError("accepted review labels need scene_partition_id")
-        if not row.get("label_id") or not row.get("map_area_id"):
-            raise ValueError("accepted review labels need label_id and map_area_id")
-        geometry = row.get("geometry") if isinstance(row.get("geometry"), dict) else {}
-        points = geometry.get("points")
-        if geometry.get("type") != "map_polygon" or not isinstance(points, list) or len(points) < 3:
-            raise ValueError(
-                f"accepted review label {row.get('label_id')!r} needs map_polygon geometry"
-            )
-        for point in points:
-            if not isinstance(point, dict) or "x" not in point or "y" not in point:
-                raise ValueError(
-                    f"accepted review label {row.get('label_id')!r} has malformed polygon point"
-                )
+        partition_id = accepted_review_label_partition_id(row)
+        validate_accepted_review_label(row)
         if partition_id in rows:
             raise ValueError(
                 f"duplicate accepted review label for scene partition {partition_id!r}"
@@ -174,6 +160,32 @@ def accepted_review_labels_by_partition(
     if not rows:
         raise ValueError("review manifest has no accepted room labels")
     return rows
+
+
+def accepted_review_label_partition_id(row: dict[str, Any]) -> str:
+    partition_id = str(row.get("scene_partition_id") or "")
+    if not partition_id:
+        raise ValueError("accepted review labels need scene_partition_id")
+    return partition_id
+
+
+def validate_accepted_review_label(row: dict[str, Any]) -> None:
+    if not row.get("label_id") or not row.get("map_area_id"):
+        raise ValueError("accepted review labels need label_id and map_area_id")
+    validate_accepted_review_label_geometry(row)
+
+
+def validate_accepted_review_label_geometry(row: dict[str, Any]) -> None:
+    geometry = row.get("geometry") if isinstance(row.get("geometry"), dict) else {}
+    points = geometry.get("points")
+    if geometry.get("type") != "map_polygon" or not isinstance(points, list) or len(points) < 3:
+        raise ValueError(
+            f"accepted review label {row.get('label_id')!r} needs map_polygon geometry"
+        )
+    if any(not isinstance(point, dict) or "x" not in point or "y" not in point for point in points):
+        raise ValueError(
+            f"accepted review label {row.get('label_id')!r} has malformed polygon point"
+        )
 
 
 def projected_room(anchors: list[dict[str, Any]], label: dict[str, Any]) -> dict[str, Any]:

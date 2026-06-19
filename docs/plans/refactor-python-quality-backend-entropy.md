@@ -20,7 +20,7 @@ their full execution notes back here.
 
 Latest quality snapshot from 2026-06-19:
 
-- Ruff complexity rows: 4.
+- Ruff complexity rows: 3.
 - Oversized modules: 78.
 - Current emphasis: finish fresh complexity regressions only when they align
   with validation/fail-aloud ownership, especially B1 artifact visual

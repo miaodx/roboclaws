@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: B1 semantic-projection accepted review-label validation was
+  split into partition-id, label-required-field, and map-polygon geometry
+  helpers inside the existing semantic projection builder. Owner layer:
+  Backend Runtime / Environment Primitive, with artifact-validation impact on
+  B1 room semantic projection inputs. Behavior-change class: helper extraction
+  plus focused fail-aloud proof; accepted label projection, duplicate
+  partition detection, missing field errors, existing projection payload schema,
+  and object-semantic blocked status are unchanged. Metric: ratchet improved
+  from 4 to 3 Ruff complexity rows and stayed at 78 oversized modules; the
+  selected `build_b1_map12_semantic_projection.py` complexity row was cleared.
+  Proof: focused B1 verified-alignment/semantic-projection contract tests,
+  touched-file ruff and format check, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-19: B1 operator-console camera-preview provenance validation was
   split into candidate-shape, alignment-provenance, FPV/chase contract, and
   forbidden-source helpers inside the existing preview renderer owner. Owner

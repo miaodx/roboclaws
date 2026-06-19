@@ -1343,6 +1343,26 @@ def test_semantic_projection_rejects_mixed_area_ids_for_one_partition() -> None:
         )
 
 
+def test_semantic_projection_rejects_malformed_accepted_review_label_polygon() -> None:
+    promoted = build_reviewed_correspondence_manifest(
+        semantic_review_packet(anchors=passing_anchors())
+    )
+    label = accepted_room_label(
+        label_id="meeting_room_a",
+        map_area_id="west_corridor",
+        scene_partition_id="meeting_room_a",
+        room_label="Meeting room A",
+    )
+    label["geometry"]["points"][0].pop("y")
+    review_manifest = accepted_room_review_manifest(labels=[label])
+
+    with pytest.raises(ValueError, match="has malformed polygon point"):
+        build_semantic_projection(
+            correspondences=promoted,
+            review_manifest=review_manifest,
+        )
+
+
 def test_strict_review_promotion_promotes_alignment_anchors_without_semantic_ids() -> None:
     anchors = []
     for anchor in passing_anchors():
