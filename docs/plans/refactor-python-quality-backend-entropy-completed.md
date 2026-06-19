@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Provider/profile route selection now fails aloud for
+  route-incompatible catalog models. Provider routes declare compatible model
+  ids, readiness and route payloads expose them, OpenAI Agents SDK runtime and
+  performance-profile resolution reject known-but-wrong-route models such as
+  `gpt-5.5` on `minimax-responses`, RAW-FPV evidence-lane checks validate the
+  selected provider/model pair, and coding-agent shell helpers preserve the
+  existing unknown-model diagnostic while surfacing route incompatibility
+  details. Owner layer: Agent Engines And Provider Profiles, with
+  evidence-lane impact at the Runnable Surfaces And Presets boundary.
+  Behavior-change class: fail-aloud provider/model route compatibility;
+  documented defaults, known model aliases, unknown-model failures, supported
+  MiniMax variant selection, provider key/base-url validation, Codex/Claude
+  unsupported-provider checks, and live SDK execution behavior are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: full impacted provider catalog, OpenAI Agents live-runtime, MiniMax
+  provider, model-provider checker, evidence-lane, coding-agent helper, and
+  task-agent recipe contract tests, plus touched-file ruff/format checks,
+  `bash -n`, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: OpenAI Agents SDK runtime model selection now fails aloud for
   unknown model overrides. Explicit `model`,
   `LiveAgentRequest.model`, `ROBOCLAWS_OPENAI_AGENTS_MODEL`, or

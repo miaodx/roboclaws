@@ -149,7 +149,25 @@ roboclaws_code_agent_profile_wire_api() {
 
 roboclaws_code_agent_model_id() {
   local model="$1"
+  local provider="${2:-}"
   local resolved
+  if [[ -n "$provider" && "$provider" != "system" ]]; then
+    if ! resolved="$(roboclaws_provider_registry model-id "$model" 2>/dev/null)"; then
+      echo "error: unknown coding-agent model '${model}'; add it to roboclaws.agents.provider_registry or use a catalog model" >&2
+      return 2
+    fi
+    local detail
+    if resolved="$(roboclaws_provider_registry provider-model-id "$provider" "$resolved" 2>&1)"; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+    detail="$resolved"
+    echo "error: coding-agent model '${model}' is incompatible with provider '${provider}'; use the provider default or a route-compatible catalog model" >&2
+    if [[ -n "${detail:-}" ]]; then
+      echo "$detail" >&2
+    fi
+    return 2
+  fi
   if resolved="$(roboclaws_provider_registry model-id "$model" 2>/dev/null)"; then
     printf '%s\n' "$resolved"
     return 0
@@ -178,7 +196,7 @@ roboclaws_code_agent_model() {
     if [[ -z "$model" ]]; then
       model="$(roboclaws_code_agent_profile_default_model "$provider")" || return
     elif [[ "$provider" != "system" && "$explicit_model" == "1" ]]; then
-      model="$(roboclaws_code_agent_model_id "$model")" || return
+      model="$(roboclaws_code_agent_model_id "$model" "$provider")" || return
     fi
   fi
   printf '%s\n' "$model"

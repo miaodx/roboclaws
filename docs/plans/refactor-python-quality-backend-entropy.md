@@ -37,11 +37,12 @@ Latest quality snapshot from 2026-06-19:
   input, and the operator-state payload now reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
   explicit failed source errors instead of erasing them into idle or missing
-  state. OpenAI Agents SDK model selection now rejects unknown model overrides
-  before SDK launch instead of passing catalog-missing strings into a live
-  provider route. Continue fail-aloud/runtime-source audits from fresh evidence
-  rather than reopening closed helper splits; route any future test-shape
-  cleanup through `$intuitive-tests`.
+  state. OpenAI Agents SDK model selection now rejects unknown model overrides,
+  and provider/profile route selection rejects catalog-known models that belong
+  to the wrong route instead of treating family-compatible names as launchable.
+  Continue fail-aloud/runtime-source audits from fresh evidence rather than
+  reopening closed helper splits; route any future test-shape cleanup through
+  `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.

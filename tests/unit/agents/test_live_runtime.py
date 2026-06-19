@@ -1720,6 +1720,33 @@ def test_openai_agents_runtime_rejects_unknown_model_env(tmp_path: Path, monkeyp
     assert "not-in-provider-catalog" in payload["detail"]
 
 
+def test_openai_agents_runtime_rejects_route_incompatible_model_env(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MM_API_KEY", "fake-mm-key")
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_PROFILE", "minimax-responses")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL", "gpt-5.5")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting model is incompatible" in payload["detail"]
+    assert (
+        "model 'gpt-5.5' is incompatible with provider_profile 'minimax-responses'"
+        in (payload["detail"])
+    )
+
+
 def test_openai_agents_runtime_allows_matching_provider_model_env_aliases(
     tmp_path: Path,
     monkeypatch,
@@ -3607,7 +3634,7 @@ def test_openai_agents_cleanup_runner_compact_continuation_preserves_composite_c
         port=18788,
         lock_path=tmp_path / "live.lock",
         provider_profile="mimo-mify-responses",
-        model="mimo-v2.5",
+        model="xiaomi/mimo-v2.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
         mcp_client_session_timeout_s=30.0,
@@ -4496,6 +4523,36 @@ def test_openai_agents_perf_profile_resolves_mimo_and_chat_defaults(monkeypatch)
     assert kimi["provider_profile"] == "kimi-openai-chat"
     assert kimi["wire_api"] == "chat-completions"
     assert kimi["sdk_model_settings"]["extra_headers"] == {"User-Agent": "claude-code/1.0.0"}
+
+
+def test_openai_agents_perf_profile_rejects_route_incompatible_model(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=("model 'gpt-5.5' is incompatible with provider_profile 'minimax-responses'"),
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(
+                provider_profile="minimax-responses",
+                model="gpt-5.5",
+            )
+        )
+
+
+def test_openai_agents_perf_profile_rejects_unknown_model(monkeypatch) -> None:
+    monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE", raising=False)
+
+    with pytest.raises(
+        ValueError,
+        match=("unknown model 'not-in-provider-catalog' for provider_profile minimax-responses"),
+    ):
+        _resolve_agent_sdk_perf_profile(
+            _openai_agents_perf_profile_base_args(
+                provider_profile="minimax-responses",
+                model="not-in-provider-catalog",
+            )
+        )
 
 
 def test_openai_agents_perf_profile_accepts_thinking_mode_override(monkeypatch) -> None:
