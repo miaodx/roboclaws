@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion now requires Agibot
+  `navigation_memory.json` to provide a non-empty `items` list or non-empty
+  `catalog.navigation_memory` list, and rejects non-object memory rows before
+  anchor materialization. Missing, empty, or wrong-shaped item sources can no
+  longer produce a valid-looking zero-anchor prior snapshot. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  offline prior source-list truth; the existing catalog-shaped alternate source
+  remains accepted. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Runtime Map Prior Snapshot contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen only
+  with fresh Agibot offline prior evidence that missing, empty, or wrong-shaped
+  memory entries again become empty or partially fabricated snapshots.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion now rejects malformed,
   missing, non-object, non-finite, or boolean Agibot `nav_goal`/`pose`
   coordinates and Nav2 cleanup-bundle waypoint `x`/`y`/`yaw` coordinates before

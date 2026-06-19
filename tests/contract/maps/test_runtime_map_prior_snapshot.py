@@ -281,6 +281,79 @@ def test_agibot_navigation_memory_rejects_non_object_navigation_memory(tmp_path:
         runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
 
 
+def test_agibot_navigation_memory_accepts_catalog_navigation_memory_items(
+    tmp_path: Path,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    items = navigation_memory.pop("items")
+    navigation_memory["catalog"] = {"navigation_memory": items}
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+    assert snapshot["summary"]["anchor_count"] == 9
+
+
+@pytest.mark.parametrize(
+    ("payload_update", "expected_error"),
+    [
+        (
+            lambda payload: payload.pop("items"),
+            "Agibot navigation memory must contain a non-empty items list "
+            "or catalog.navigation_memory list",
+        ),
+        (
+            lambda payload: payload.__setitem__("items", {}),
+            "Agibot navigation memory items must be a non-empty list",
+        ),
+        (
+            lambda payload: payload.__setitem__("items", []),
+            "Agibot navigation memory items must be a non-empty list",
+        ),
+        (
+            lambda payload: (
+                payload.pop("items"),
+                payload.__setitem__("catalog", {"navigation_memory": {}}),
+            ),
+            "Agibot navigation memory catalog.navigation_memory must be a non-empty list",
+        ),
+        (
+            lambda payload: (
+                payload.pop("items"),
+                payload.__setitem__("catalog", {"navigation_memory": []}),
+            ),
+            "Agibot navigation memory catalog.navigation_memory must be a non-empty list",
+        ),
+    ],
+)
+def test_agibot_navigation_memory_rejects_missing_or_empty_item_sources(
+    tmp_path: Path,
+    payload_update,
+    expected_error: str,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    payload_update(navigation_memory)
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+def test_agibot_navigation_memory_rejects_non_object_items(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory["items"][0] = []
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Agibot navigation memory item 1 must be a JSON object"):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
 def test_agibot_navigation_memory_rejects_malformed_source_json(tmp_path: Path) -> None:
     map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
     (map_dir / "agibot" / "source.json").write_text("{not-json\n", encoding="utf-8")

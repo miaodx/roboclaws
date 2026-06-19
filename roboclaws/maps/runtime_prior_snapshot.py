@@ -115,7 +115,7 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
     fixture_candidates: list[dict[str, Any]] = []
     observed_objects: list[dict[str, Any]] = []
     for index, raw_item in enumerate(_navigation_memory_items(navigation_memory), start=1):
-        item = raw_item if isinstance(raw_item, dict) else {}
+        item = _navigation_memory_item(raw_item, index=index)
         anchor = _anchor_from_navigation_memory_item(item, index=index, grid=grid)
         anchors.append(anchor)
         waypoint = _waypoint_from_anchor(anchor)
@@ -793,11 +793,29 @@ def _snapshot_summary(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if isinstance(payload.get("items"), list):
-        return list(payload["items"])
+    if "items" in payload:
+        items = payload["items"]
+        if not isinstance(items, list) or not items:
+            raise ValueError("Agibot navigation memory items must be a non-empty list")
+        return list(items)
     catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
     memory = catalog.get("navigation_memory")
-    return list(memory) if isinstance(memory, list) else []
+    if "navigation_memory" in catalog:
+        if not isinstance(memory, list) or not memory:
+            raise ValueError(
+                "Agibot navigation memory catalog.navigation_memory must be a non-empty list"
+            )
+        return list(memory)
+    raise ValueError(
+        "Agibot navigation memory must contain a non-empty items list "
+        "or catalog.navigation_memory list"
+    )
+
+
+def _navigation_memory_item(raw_item: Any, *, index: int) -> dict[str, Any]:
+    if not isinstance(raw_item, dict):
+        raise ValueError(f"Agibot navigation memory item {index} must be a JSON object")
+    return raw_item
 
 
 def _anchor_type(item: dict[str, Any]) -> str:
