@@ -88,7 +88,10 @@ Latest quality snapshot from 2026-06-20:
   or corrupt. B1 runtime bundle compilation now also treats explicit
   `--review-manifest` input as JSON-object source truth, sharing the same
   source guard as semantic projection artifacts so malformed or non-object
-  review manifests fail before validation or artifact writes.
+  review manifests fail before validation or artifact writes. Explicit B1
+  runtime alignment/navigation proof artifacts now use that same guard, so
+  malformed or non-object robot-consumption proof evidence fails before proof
+  validation or runtime bundle writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

@@ -648,9 +648,7 @@ def _blocked_robot_consumption_proof() -> dict[str, Any]:
 
 def _verified_alignment_artifact(alignment_artifact_path: Path) -> tuple[Path, dict[str, Any]]:
     alignment_artifact_path = Path(alignment_artifact_path)
-    if not alignment_artifact_path.is_file():
-        raise ValueError(f"alignment artifact missing: {alignment_artifact_path}")
-    alignment = json.loads(alignment_artifact_path.read_text(encoding="utf-8"))
+    alignment = _read_json_object(alignment_artifact_path, label="alignment artifact")
     alignment_errors = validate_alignment_residual_artifact(alignment)
     if alignment_errors:
         raise ValueError("invalid alignment artifact: " + "; ".join(alignment_errors))
@@ -683,9 +681,7 @@ def _verified_navigation_artifact(
     alignment_artifact_path: Path,
 ) -> tuple[Path, dict[str, Any]]:
     navigation_artifact_path = Path(navigation_artifact_path)
-    if not navigation_artifact_path.is_file():
-        raise ValueError(f"navigation artifact missing: {navigation_artifact_path}")
-    navigation = json.loads(navigation_artifact_path.read_text(encoding="utf-8"))
+    navigation = _read_json_object(navigation_artifact_path, label="navigation artifact")
     navigation_errors = validate_navigation_smoke_artifact(navigation, require_files=True)
     if navigation_errors:
         raise ValueError("invalid navigation artifact: " + "; ".join(navigation_errors))

@@ -224,13 +224,30 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     )
 
 
-def test_runtime_compiler_rejects_malformed_review_manifest_json(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{not-json\n",
+            r"review manifest must contain valid JSON object: .*review\.json",
+        ),
+        (
+            "[]\n",
+            r"review manifest must contain a JSON object: .*review\.json",
+        ),
+    ],
+)
+def test_runtime_compiler_rejects_bad_review_manifest_source(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
     review_path = tmp_path / "review.json"
-    review_path.write_text("{not-json\n", encoding="utf-8")
+    review_path.write_text(source_text, encoding="utf-8")
 
     with pytest.raises(
         ValueError,
-        match=r"review manifest must contain valid JSON object: .*review\.json",
+        match=expected_error,
     ):
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
@@ -240,18 +257,57 @@ def test_runtime_compiler_rejects_malformed_review_manifest_json(tmp_path: Path)
         )
 
 
-def test_runtime_compiler_rejects_non_object_review_manifest(tmp_path: Path) -> None:
-    review_path = tmp_path / "review.json"
-    review_path.write_text("[]\n", encoding="utf-8")
+@pytest.mark.parametrize(
+    ("artifact_kind", "source_text", "expected_error"),
+    [
+        (
+            "alignment",
+            "{not-json\n",
+            r"alignment artifact must contain valid JSON object: .*alignment_residuals\.json",
+        ),
+        (
+            "alignment",
+            "[]\n",
+            r"alignment artifact must contain a JSON object: .*alignment_residuals\.json",
+        ),
+        (
+            "navigation",
+            "{not-json\n",
+            r"navigation artifact must contain valid JSON object: .*navigation_smoke\.json",
+        ),
+        (
+            "navigation",
+            "[]\n",
+            r"navigation artifact must contain a JSON object: .*navigation_smoke\.json",
+        ),
+    ],
+)
+def test_runtime_compiler_rejects_bad_robot_consumption_proof_artifact_sources(
+    tmp_path: Path,
+    artifact_kind: str,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    alignment_path = tmp_path / "alignment_residuals.json"
+    navigation_path = tmp_path / "navigation_smoke.json"
+    if artifact_kind == "alignment":
+        alignment_path.write_text(source_text, encoding="utf-8")
+        navigation_artifact_path = None
+    else:
+        alignment_path.write_text(json.dumps(_verified_alignment_artifact()), encoding="utf-8")
+        navigation_path.write_text(source_text, encoding="utf-8")
+        navigation_artifact_path = navigation_path
 
     with pytest.raises(
         ValueError,
-        match=r"review manifest must contain a JSON object: .*review\.json",
+        match=expected_error,
     ):
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=review_path,
+            review_manifest_path=REVIEW_MANIFEST,
+            alignment_artifact_path=alignment_path,
+            navigation_artifact_path=navigation_artifact_path,
             output_dir=tmp_path / "runtime",
         )
 

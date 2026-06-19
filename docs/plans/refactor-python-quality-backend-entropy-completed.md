@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 runtime bundle robot-consumption proof loading now reads
+  explicit alignment and navigation artifacts through the shared JSON-object
+  source guard. Missing, malformed, or parseable non-object
+  `--alignment-artifact` / `--navigation-artifact` inputs now raise concise
+  source-path errors before proof validation or runtime bundle writes, instead
+  of surfacing raw parser/type failures from wrong-shaped proof evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 runtime proof source truth / source-reader consolidation.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  table-driven tests kept the B1 runtime bundle contract test below warning
+  band while the runtime compiler remains in warning-band debt at 1574 lines.
+  Proof: focused B1 runtime bundle contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Reopen only
+  with fresh runtime bundle evidence that explicit alignment/navigation proof
+  artifacts are again loaded through raw parser/type paths or accepted as
+  plausible non-object source packets.
+
 - 2026-06-20: B1 runtime bundle compilation now reads explicit
   `--review-manifest` input through the same JSON-object source guard used for
   explicit semantic projection artifacts. Missing, malformed, or parseable
