@@ -376,7 +376,7 @@ def _trajectory_grader(
     run_dir: Path,
     run_result: dict[str, Any],
 ) -> dict[str, Any]:
-    trace_events = _read_trace_events(run_dir / "trace.jsonl")
+    trace_events, trace_errors = _read_trace_events_with_errors(run_dir / "trace.jsonl")
     response_tools = {
         str(event.get("tool"))
         for event in trace_events
@@ -402,11 +402,15 @@ def _trajectory_grader(
     )
     if failed_or_noop_count > 0:
         violations.append("failed_or_noop_tool")
+    if trace_errors:
+        violations.append("trace_json_invalid")
     return {
         "status": "failed" if violations else "passed",
+        "failure_class": ("trajectory_policy_violation" if violations else MISSING_NOT_APPLICABLE),
         "missing_required_tools": missing_tools,
         "violation_count": len(violations),
         "violations": violations,
+        "trace_parse_errors": trace_errors,
         "static_fixture_projection_trace_count": static_fixture_projection_count,
         "static_fixture_projection_policy": (
             "direct_runner_internal_compatibility"
@@ -638,7 +642,7 @@ def _open_ended_success_predicate(
     predicate_id = str(config.get("predicate_id") or "completion_claim")
     authoritative = bool(config.get("authoritative") is True)
     runtime_map = _load_json(run_dir / "runtime_metric_map.json")
-    trace_events = _read_trace_events(run_dir / "trace.jsonl")
+    trace_events, _trace_errors = _read_trace_events_with_errors(run_dir / "trace.jsonl")
     if predicate_id == "completion_claim":
         return {
             "predicate_id": predicate_id,
@@ -1145,20 +1149,24 @@ def _artifact_paths(run_dir: Path) -> dict[str, Any]:
     return {key: str(path) for key, path in paths.items()}
 
 
-def _read_trace_events(path: Path) -> list[dict[str, Any]]:
+def _read_trace_events_with_errors(path: Path) -> tuple[list[dict[str, Any]], list[str]]:
     if not path.exists():
-        return []
-    events = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+        return [], []
+    events: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            errors.append(f"line {line_number}: invalid_json:{exc.msg}")
             continue
         if isinstance(payload, dict):
             events.append(payload)
-    return events
+            continue
+        errors.append(f"line {line_number}: invalid_json_object")
+    return events, errors
 
 
 def _load_json(path: Path) -> dict[str, Any]:

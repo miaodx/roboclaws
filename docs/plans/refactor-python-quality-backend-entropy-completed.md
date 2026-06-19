@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval trace JSONL parsing now fails aloud for trajectory grading.
+  Malformed or non-object `trace.jsonl` rows no longer disappear while valid
+  rows still drive required-tool and completion predicates; trajectory grading
+  records `trace_json_invalid` and `trace_parse_errors` under the canonical
+  `trajectory_policy_violation` failure class. Owner layer: Eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; missing traces,
+  valid traces, open-ended success predicates, live eval routing, report
+  rendering, and public eval result failure-class schema are unchanged. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused malformed-trace/open-ended predicate tests, full eval-runner unit
+  file, touched-file ruff and format check, `git diff --check`, and ratchet.
+
 - 2026-06-19: Eval map-build runtime-map artifact parsing now fails aloud.
   Map-build outcome grading no longer collapses malformed or non-object
   `runtime_metric_map.json` into an empty map that looks like ordinary

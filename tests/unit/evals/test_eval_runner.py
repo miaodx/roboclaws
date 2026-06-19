@@ -761,6 +761,54 @@ def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_ancho
     )
 
 
+def test_eval_runner_fails_trajectory_when_trace_contains_malformed_json(
+    tmp_path: Path,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        (run_dir / "trace.jsonl").write_text(
+            "\n".join(
+                [
+                    '{"event": "response", "tool": "metric_map"}',
+                    "{",
+                    '{"event": "response", "tool": "done"}',
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+        )
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp="malformed-trace",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    results = {result["identity"]["sample_id"]: result for result in payload["results"]}
+    result = results["open_ended.drink_seed7"]
+    trajectory = result["grader_outputs"]["trajectory"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "trajectory_policy_violation"
+    assert trajectory["missing_required_tools"] == []
+    assert trajectory["violations"] == ["trace_json_invalid"]
+    assert trajectory["trace_parse_errors"][0].startswith(
+        "line 2: invalid_json:Expecting property name enclosed in double quotes"
+    )
+
+
 def test_live_surface_command_uses_current_public_launch_axes(tmp_path: Path) -> None:
     seen_kwargs: list[dict[str, Any]] = []
 
