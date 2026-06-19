@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: OpenAI Agents SDK performance-profile numeric settings now
+  reject direct Python boolean values before runtime profile metadata is
+  produced. Direct `max_turns`, `raw_fpv_candidate_budget`,
+  `mcp_client_session_timeout_s`, and `model_service_retry_sleep_s` values can
+  no longer accept `True` as `1` / `1.0`; string env parsing, finite numeric
+  defaults, provider route/model selection, and boolean settings remain
+  unchanged. Owner layer: Agent Engines And Provider Profiles. Behavior-change
+  class: fail-aloud provider/env numeric config source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules; the profile
+  helper remains at the 800-line threshold after local compaction. Proof:
+  focused performance-profile validation cases, full `test_live_runtime.py`,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen only
+  with fresh numeric config bool/string coercion false-confidence evidence.
+
 - 2026-06-20: Provider retry helper tests now merge one-assertion status-code,
   transient-error classification, and retry-delay checks into three
   behavior-named parameter tables while keeping the negative-attempt error test

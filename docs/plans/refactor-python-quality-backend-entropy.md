@@ -41,10 +41,12 @@ Latest quality snapshot from 2026-06-20:
   values instead of rendering default-looking kickoff prompts for bad live-route
   input. OpenAI Agents SDK performance-profile float settings now reject
   non-finite timeout/retry values instead of clamping `nan` to zero or writing
-  `inf` into runtime profile metadata, and the live OpenAI Agents runtime now
-  rejects boolean/non-finite max-turn, retry, and MCP-timeout metadata/env
-  values before writing status/timing evidence. OpenAI Agents SDK live timing
-  now fails final timing packets aloud when present MCP timing sources
+  `inf` into runtime profile metadata, direct OpenAI Agents SDK
+  performance-profile numeric values now reject booleans instead of accepting
+  `True` as `1`, and the live OpenAI Agents runtime now rejects
+  boolean/non-finite max-turn, retry, and MCP-timeout metadata/env values before
+  writing status/timing evidence. OpenAI Agents SDK live timing now fails final
+  timing packets aloud when present MCP timing sources
   (`run_result.json` or `trace.jsonl`) are malformed or non-object instead of
   deriving plausible timing from substitute/partial evidence. Planner proof
   bundle result summaries now surface parseable non-object proof

@@ -4605,6 +4605,43 @@ def test_openai_agents_perf_profile_rejects_invalid_direct_integer(monkeypatch) 
         )
 
 
+@pytest.mark.parametrize(
+    ("env_name", "overrides", "expected_error"),
+    [
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS",
+            {"max_turns": True},
+            "OpenAI Agents SDK setting max_turns must be an integer",
+        ),
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET",
+            {"raw_fpv_candidate_budget": True},
+            "OpenAI Agents SDK setting raw_fpv_candidate_budget must be an integer",
+        ),
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S",
+            {"mcp_client_session_timeout_s": True},
+            "OpenAI Agents SDK setting mcp_client_session_timeout_s must be a non-negative number",
+        ),
+        (
+            "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S",
+            {"model_service_retry_sleep_s": True},
+            "OpenAI Agents SDK setting model_service_retry_sleep_s must be a non-negative number",
+        ),
+    ],
+)
+def test_openai_agents_perf_profile_rejects_boolean_numeric_values(
+    monkeypatch,
+    env_name: str,
+    overrides: dict[str, object],
+    expected_error: str,
+) -> None:
+    monkeypatch.delenv(env_name, raising=False)
+
+    with pytest.raises(ValueError, match=expected_error):
+        _resolve_agent_sdk_perf_profile(_openai_agents_perf_profile_base_args(**overrides))
+
+
 def test_openai_agents_perf_profile_rejects_non_positive_max_turns(monkeypatch) -> None:
     monkeypatch.delenv("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", raising=False)
 

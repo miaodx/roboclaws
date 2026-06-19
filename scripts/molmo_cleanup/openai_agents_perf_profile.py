@@ -748,6 +748,8 @@ def _float_setting(
 
 
 def _number_setting_value(attr: str, raw: object, parser: Any, expected: str) -> Any:
+    if isinstance(raw, bool):
+        raise ValueError(f"OpenAI Agents SDK setting {attr} must be {expected}, got {raw!r}")
     try:
         return parser(raw)
     except (TypeError, ValueError) as exc:
@@ -771,9 +773,7 @@ def _bool_arg_setting(
         if value != env_value:
             _raise_setting_conflict(attr, env_name, value, env_value)
         raw = value
-    if raw is None:
-        if env_raw not in {None, ""}:
-            raw = env_raw
+    raw = env_raw if raw is None and env_raw not in {None, ""} else raw
     if raw is None:
         return default
     return _bool_setting_value(raw)
