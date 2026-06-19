@@ -1615,6 +1615,45 @@ def test_strict_semantic_review_promotion_cli_rejects_current_proposed_packet(
     assert "no human-accepted anchors" in completed.stderr
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (None, "review packet missing"),
+        ("{not-json\n", "review packet must contain valid JSON object"),
+        ("[]\n", "review packet must contain a JSON object"),
+    ],
+)
+def test_strict_semantic_review_promotion_cli_rejects_bad_packet_source_json(
+    tmp_path: Path,
+    source_text: str | None,
+    expected_error: str,
+) -> None:
+    packet_path = tmp_path / "bad_review_packet.json"
+    output_path = tmp_path / "b1-map12-scene-correspondences.json"
+    if source_text is not None:
+        packet_path.write_text(source_text, encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_REVIEW_PACKET_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--output",
+            str(output_path),
+            "--check",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert not output_path.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(packet_path) in completed.stderr
+
+
 def test_semantic_review_packet_fit_check_writes_preview_not_committed_manifest(
     tmp_path: Path,
 ) -> None:
@@ -1671,6 +1710,46 @@ def test_semantic_review_packet_fit_check_rejects_proposed_packet(tmp_path: Path
 
     assert completed.returncode == 2
     assert "no human-accepted anchors" in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (None, "review packet missing"),
+        ("{not-json\n", "review packet must contain valid JSON object"),
+        ("[]\n", "review packet must contain a JSON object"),
+    ],
+)
+def test_semantic_review_packet_fit_check_rejects_bad_packet_source_json(
+    tmp_path: Path,
+    source_text: str | None,
+    expected_error: str,
+) -> None:
+    packet_path = tmp_path / "bad_review_packet.json"
+    output_dir = tmp_path / "fit-check"
+    if source_text is not None:
+        packet_path.write_text(source_text, encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(CHECK_REVIEW_PACKET_FIT_SCRIPT),
+            "--review-packet",
+            str(packet_path),
+            "--map-bundle",
+            str(RAW_MAP12_BUNDLE),
+            "--output-dir",
+            str(output_dir),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 2
+    assert not output_dir.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(packet_path) in completed.stderr
 
 
 def test_review_packet_loads_vendor_map_and_scene_diagnostic_export_template(

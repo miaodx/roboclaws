@@ -97,7 +97,9 @@ Latest quality snapshot from 2026-06-20:
   projection validation or output writes. B1 semantic-anchor review packet CLI
   loading now applies the same source-truth rule to explicit
   `--review-manifest` and `--alignment-artifact` inputs before proposed-anchor
-  packet writes.
+  packet writes. B1 semantic review packet promotion and fit-check CLIs now
+  apply the same source-truth rule to explicit `--review-packet` inputs before
+  promotion, preview, residual, or committed-manifest writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
