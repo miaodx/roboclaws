@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Report-performance source parsing now fails aloud for present
+  malformed or non-object JSON and JSONL artifacts. Corrupt
+  `live_timing.json`, `live_status.json`, `run_result.json`, `trace.jsonl`,
+  OpenAI/Codex/Claude event or span streams, and provider request metrics no
+  longer collapse to empty or partial inputs that can make performance packets,
+  model-call telemetry, provider transport evidence, or comparisons look
+  cleaner than the artifact source. Missing optional artifacts still preserve
+  the existing unavailable/missing behavior. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud artifact/source truth;
+  packet schemas, telemetry math, privacy scanning, calibration handling, and
+  live-agent artifact producers are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  report-performance tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console route-lock readiness now fails aloud for
   malformed lock-owner `operator_state.json` and nested `live_status.json`
   sources. A backend lock held by a corrupt owner run no longer looks absent,

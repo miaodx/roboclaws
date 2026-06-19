@@ -4,9 +4,12 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from roboclaws.reports.live_performance import (
     MODEL_CALL_METRIC_SCHEMA,
     REPORT_PERFORMANCE_SCHEMA,
+    ReportPerformanceSourceError,
     compare_run_dirs,
     extract_model_call_metrics,
     extract_provider_request_metrics,
@@ -510,6 +513,55 @@ def test_provider_request_metrics_are_privacy_scanned(tmp_path: Path) -> None:
     assert any(finding["reason"] == "forbidden key raw_prompt" for finding in findings)
 
 
+def test_report_performance_metrics_fail_aloud_on_malformed_json_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path / "run", restored=5, elapsed_s=70, gap_s=30)
+    (run_dir / "run_result.json").write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(ReportPerformanceSourceError, match=r"run_result\.json.*line 1"):
+        extract_report_performance_metrics(run_dir)
+
+
+def test_report_performance_metrics_fail_aloud_on_non_object_json_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path / "run", restored=5, elapsed_s=70, gap_s=30)
+    (run_dir / "live_timing.json").write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ReportPerformanceSourceError, match=r"live_timing\.json.*expected object"):
+        extract_report_performance_metrics(run_dir)
+
+
+def test_report_performance_metrics_fail_aloud_on_malformed_jsonl_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path / "run", restored=5, elapsed_s=70, gap_s=30)
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"response","tool":"observe"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReportPerformanceSourceError, match=r"trace\.jsonl.*line 2"):
+        extract_report_performance_metrics(run_dir)
+
+
+def test_report_performance_metrics_fail_aloud_on_non_object_jsonl_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path / "run", restored=5, elapsed_s=70, gap_s=30)
+    (run_dir / "openai-agents-spans.jsonl").write_text(
+        json.dumps(["not", "an", "object"]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ReportPerformanceSourceError,
+        match=r"openai-agents-spans\.jsonl.*line 1.*expected object",
+    ):
+        extract_model_call_metrics(run_dir)
+
+
 def test_extract_provider_request_metrics_ignores_other_schemas(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -523,6 +575,24 @@ def test_extract_provider_request_metrics_ignores_other_schemas(tmp_path: Path) 
 
     assert len(rows) == 1
     assert rows[0]["duration_s"] == 2.5
+
+
+def test_provider_request_metrics_fail_aloud_on_malformed_jsonl_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "provider_request_metrics.jsonl").write_text(
+        '{"schema":"roboclaws_provider_request_metric_v1","duration_s":2.5}\n'
+        '{"schema":"roboclaws_provider_request_metric_v1"',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ReportPerformanceSourceError,
+        match=r"provider_request_metrics\.jsonl.*line 2",
+    ):
+        extract_provider_request_metrics(run_dir)
 
 
 def _write_run(
