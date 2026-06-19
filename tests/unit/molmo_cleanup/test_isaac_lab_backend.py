@@ -908,6 +908,7 @@ def test_isaac_rby1m_chase_camera_matches_mujoco_follower_pitch() -> None:
     assert target == pytest.approx(isaac_lab_backend_worker.RBY1M_CHASE_CAMERA_TARGET_OFFSET_M)
     assert horizontal_distance == pytest.approx(vertical_drop)
     assert math.degrees(math.atan2(vertical_drop, horizontal_distance)) == pytest.approx(45.0)
+    assert horizontal_distance == pytest.approx(1.0)
 
 
 class _FakeSceneCameraSim:
@@ -4725,8 +4726,8 @@ def test_isaac_chase_pose_uses_robot_relative_camera_follower() -> None:
 
     eye, target = isaac_lab_backend_worker._robot_relative_chase_eye_target(pose)
 
-    assert eye == pytest.approx((3.345426, 3.573012, 2.705), abs=1e-6)
-    assert target == pytest.approx((3.008962, 4.828715, 1.405), abs=1e-6)
+    assert eye == pytest.approx((3.267781, 3.862789, 2.556), abs=1e-6)
+    assert target == pytest.approx((3.008962, 4.828715, 1.556), abs=1e-6)
 
 
 def test_isaac_camera_view_poses_prefers_robot_relative_chase() -> None:
@@ -4757,8 +4758,8 @@ def test_isaac_camera_view_poses_prefers_robot_relative_chase() -> None:
     )
 
     chase_eye, chase_target = poses["chase"]
-    assert chase_eye[0] == pytest.approx([3.345426, 3.573012, 2.705], abs=1e-6)
-    assert chase_target[0] == pytest.approx([3.008962, 4.828715, 1.405], abs=1e-6)
+    assert chase_eye[0] == pytest.approx([3.267781, 3.862789, 2.556], abs=1e-6)
+    assert chase_target[0] == pytest.approx([3.008962, 4.828715, 1.556], abs=1e-6)
 
 
 def test_isaac_lab_real_worker_views_fallback_when_semantic_pose_rerender_fails(
