@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.evals.models import (
-    EVAL_SAMPLE_SCHEMA,
-    MISSING_NOT_APPLICABLE,
     MISSING_UNAVAILABLE,
+    EvalResult,
     EvalSample,
     EvalSuite,
     load_eval_sample,
@@ -56,7 +55,8 @@ def promote_regression_sample_from_eval_result(
         source_sample_id=source_sample_id,
         source_trial_id=source_trial_id,
     )
-    identity = _mapping(result.get("identity"))
+    EvalResult.from_mapping(result)
+    identity = _promotion_identity(result)
     failure_class = str(result.get("failure_class") or MISSING_UNAVAILABLE)
     sample_id = regression_sample_id or _default_regression_sample_id(identity, failure_class)
     sample_output_path = sample_output_path or _default_sample_output_path(sample_id)
@@ -160,6 +160,20 @@ def _select_result(
     raise ValueError(f"no {selector}failed, blocked, or inconclusive eval result found")
 
 
+def _promotion_identity(result: dict[str, Any]) -> dict[str, Any]:
+    identity = _mapping(result.get("identity"))
+    for key in ("sample_id", "trial_id", "provider_profile"):
+        _required_identity_string(identity, key)
+    return identity
+
+
+def _required_identity_string(identity: dict[str, Any], key: str) -> str:
+    value = identity.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"eval result identity {key} must be a non-empty string")
+    return value
+
+
 def _regression_sample_payload(
     *,
     source_sample: EvalSample | None,
@@ -171,10 +185,13 @@ def _regression_sample_payload(
     review_label: str,
     version: str,
 ) -> dict[str, Any]:
-    if source_sample is not None:
-        payload = source_sample.to_dict()
-    else:
-        payload = _sample_payload_from_identity(identity, bundle)
+    if source_sample is None:
+        source_sample_id = str(identity.get("sample_id") or MISSING_UNAVAILABLE)
+        raise ValueError(
+            f"eval suite sample_refs must include source sample {source_sample_id!r} "
+            "before promoting a regression sample"
+        )
+    payload = source_sample.to_dict()
     payload["sample_id"] = sample_id
     payload["version"] = version
     payload["trial_count"] = 1
@@ -190,44 +207,6 @@ def _regression_sample_payload(
         review_label=review_label,
     )
     return payload
-
-
-def _sample_payload_from_identity(
-    identity: dict[str, Any],
-    bundle: dict[str, Any],
-) -> dict[str, Any]:
-    suite = _mapping(bundle.get("suite"))
-    provider_profile = str(identity.get("provider_profile") or MISSING_UNAVAILABLE)
-    return {
-        "schema": EVAL_SAMPLE_SCHEMA,
-        "sample_id": str(identity.get("sample_id") or MISSING_UNAVAILABLE),
-        "version": str(identity.get("sample_version") or MISSING_UNAVAILABLE),
-        "surface": str(identity.get("surface") or MISSING_UNAVAILABLE),
-        "intent": str(identity.get("intent") or MISSING_UNAVAILABLE),
-        "preset": str(identity.get("preset") or MISSING_NOT_APPLICABLE),
-        "world": str(identity.get("world") or MISSING_UNAVAILABLE),
-        "backend": str(identity.get("backend") or MISSING_UNAVAILABLE),
-        "evidence_lane": str(identity.get("evidence_lane") or MISSING_UNAVAILABLE),
-        "camera_labeler": str(identity.get("camera_labeler") or MISSING_NOT_APPLICABLE),
-        "scenario_setup": str(identity.get("scenario_setup") or MISSING_UNAVAILABLE),
-        "seed": int(identity.get("seed") or 0),
-        "prompt": str(identity.get("prompt") or MISSING_NOT_APPLICABLE),
-        "goal_contract_hash": str(identity.get("goal_contract_hash") or MISSING_UNAVAILABLE),
-        "allowed_agent_engines": [str(identity.get("agent_engine") or MISSING_UNAVAILABLE)],
-        "provider_profiles": [provider_profile],
-        "trial_count": 1,
-        "required_graders": list(suite.get("required_graders") or ("artifacts", "privacy")),
-        "private_goal_reference": {
-            "schema": "household_eval_private_goal_reference_v1",
-            "private_truth_scope": "grader_only",
-        },
-        "launch_overrides": {
-            "agent_engine": str(identity.get("agent_engine") or MISSING_UNAVAILABLE),
-            "evidence_lane": str(identity.get("evidence_lane") or MISSING_UNAVAILABLE),
-            "seed": int(identity.get("seed") or 0),
-            "scenario_setup": str(identity.get("scenario_setup") or MISSING_UNAVAILABLE),
-        },
-    }
 
 
 def _private_goal_reference(

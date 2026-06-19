@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval regression promotion now requires a declared source sample
+  ref and validates promotion source identity before deriving promoted
+  sample/suite artifacts. Promotion can no longer fabricate a plausible
+  regression sample from eval-result identity fields when `sample_refs` are
+  absent, nor write durable source metadata from malformed `sample_id`,
+  `trial_id`, or `provider_profile` values. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud regression-promotion
+  source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused regression-promotion tests, full
+  eval-runner unit file, touched-file ruff/format checks, `git diff --check`,
+  and ratchet.
+
 - 2026-06-20: Eval result bundle and HTML report rendering now validate
   scene-sampler projection source truth before publishing compact aggregate
   evidence. Malformed or missing scene-source counts, support/status fields,

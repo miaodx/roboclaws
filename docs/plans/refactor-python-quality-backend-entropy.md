@@ -149,7 +149,11 @@ Latest quality snapshot from 2026-06-20:
   source sample is missing, invalid, or resolves to a different sample id.
   Regression promotion now also validates both the promoted sample payload and
   updated suite payload before writing either artifact, so invalid suite output
-  can no longer leave an orphan promoted sample behind. Live-agent result
+  can no longer leave an orphan promoted sample behind. Regression promotion
+  now requires declared suite `sample_refs` and validates promotion source
+  identity before writing sample/suite artifacts, so missing refs or malformed
+  source identity can no longer fabricate a plausible regression sample from
+  eval-result fields. Live-agent result
   artifact loading now fails aloud on present malformed or non-object
   `live_status.json` / `run_result.json` sources instead of erasing corrupt
   status or completion evidence into unknown or absent state. Eval live-product

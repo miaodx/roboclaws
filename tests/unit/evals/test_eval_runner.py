@@ -1642,6 +1642,60 @@ def test_regression_promotion_rejects_passed_results(tmp_path: Path) -> None:
         promote_regression_sample_from_eval_result(run.results_path)
 
 
+def test_regression_promotion_requires_declared_source_sample_ref(tmp_path: Path) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    results_path = tmp_path / "eval_results_without_sample_refs.json"
+    bundle = json.loads(run.results_path.read_text())
+    bundle["suite"].pop("sample_refs")
+    results_path.write_text(json.dumps(bundle), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="sample_refs must include source sample"):
+        promote_regression_sample_from_eval_result(
+            results_path,
+            sample_output_path=sample_output,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
+def test_regression_promotion_rejects_invalid_result_identity_before_writing(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    results_path = tmp_path / "eval_results_with_invalid_identity.json"
+    bundle = json.loads(run.results_path.read_text())
+    bundle["results"][0]["identity"]["trial_id"] = 7
+    results_path.write_text(json.dumps(bundle), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError, match="eval result identity trial_id must be a non-empty string"
+    ):
+        promote_regression_sample_from_eval_result(
+            results_path,
+            sample_output_path=sample_output,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
 def test_regression_promotion_fails_aloud_on_missing_declared_source_sample(
     tmp_path: Path,
 ) -> None:
