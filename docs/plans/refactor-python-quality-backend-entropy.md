@@ -51,7 +51,10 @@ Latest quality snapshot from 2026-06-19:
   explicitly instead of letting latest-action/tool summaries derive from a
   partially skipped trace. Operator-console agent event JSONL errors now fail
   the normalized state explicitly instead of letting latest-decision evidence
-  derive from a partially skipped agent log.
+  derive from a partially skipped agent log. Operator-console route-lock
+  readiness now blocks on malformed lock-owner `operator_state.json` /
+  `live_status.json` sources instead of treating corrupt owner evidence as
+  absent or startable.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

@@ -417,6 +417,55 @@ def test_readiness_releases_terminal_failed_lock_instead_of_attaching_dead_run(
     assert ResourceLock(tmp_path, route.lock_name).read().held is False
 
 
+def test_readiness_blocks_on_malformed_lock_owner_state_source(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-wrapper-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text("{bad-state", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "source_error"
+    assert "Backend lock owner source error" in readiness["blocker"]
+    assert "operator_state.json contains invalid JSON" in readiness["blocker"]
+    assert readiness["attachable_run"] is None
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
+def test_readiness_blocks_on_malformed_lock_owner_live_status_source(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-live-status-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0619_1900" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 99999999,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text("[1]", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "source_error"
+    assert "live_status.json must contain a JSON object" in readiness["blocker"]
+    assert readiness["attachable_run"] is None
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
 def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "wrapper-run"

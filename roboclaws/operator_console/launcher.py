@@ -60,6 +60,15 @@ class ConsoleLaunchError(ValueError):
     """User-facing launch validation error."""
 
 
+class _JsonSourceError(ValueError):
+    """Internal source error for present launcher JSON artifacts."""
+
+    def __init__(self, path: Path, reason: str) -> None:
+        self.path = path
+        self.reason = reason
+        super().__init__(f"{path}: {reason}")
+
+
 @dataclass(frozen=True)
 class LaunchRequest:
     world_id: str = ""
@@ -456,9 +465,21 @@ def _route_lock_readiness(
 ) -> tuple[Any, dict[str, Any] | None, str, str]:
     lock = ResourceLock(root, route.lock_name)
     lock_state = lock.read()
-    if _release_terminal_owner_lock(root, lock_state):
+    lock_source_error = ""
+    try:
+        released_terminal_lock = _release_terminal_owner_lock(root, lock_state)
+    except _JsonSourceError as exc:
+        released_terminal_lock = False
+        lock_source_error = _lock_source_error_message(exc)
+    if released_terminal_lock:
         lock_state = lock.read()
-    attachable_run = _attachable_run_payload(root, lock_state)
+    try:
+        attachable_run = _attachable_run_payload(root, lock_state)
+    except _JsonSourceError as exc:
+        attachable_run = None
+        lock_source_error = _lock_source_error_message(exc)
+    if lock_source_error:
+        return lock_state, attachable_run, lock_source_error, "source_error"
     lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
     if not lock_active:
         return lock_state, attachable_run, "", ""
@@ -470,6 +491,10 @@ def _route_lock_readiness(
     else:
         blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
     return lock_state, attachable_run, blocker, "locked"
+
+
+def _lock_source_error_message(error: _JsonSourceError) -> str:
+    return f"Backend lock owner source error: {error.path.name} {error.reason}"
 
 
 def _validate_override_keys(route: ConsoleLaunchSelection, overrides: dict[str, str]) -> None:
@@ -658,13 +683,10 @@ def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | Non
     state_path = run_dir / "operator_state.json"
     if not state_path.exists():
         return None
-    try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    state = _read_json_source(state_path)
     route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
     display_run_dir = resolve_display_run_dir(run_dir)
-    live_status = _read_json(display_run_dir / "live_status.json")
+    live_status = _read_optional_json_source(display_run_dir / "live_status.json")
     if _existing_terminal_phase(display_run_dir, state):
         return None
     active_pid = _live_run_pid(display_run_dir) or lock_state.pid
@@ -723,9 +745,10 @@ def _release_terminal_owner_lock(root: Path, lock_state: Any) -> bool:
     if not lock_state.held or not lock_state.owner_run_id:
         return False
     run_dir = console_output_root(root) / "runs" / lock_state.owner_run_id
-    state = _read_json(run_dir / "operator_state.json")
-    if not state:
+    state_path = run_dir / "operator_state.json"
+    if not state_path.exists():
         return False
+    state = _read_json_source(state_path)
     display_run_dir = resolve_display_run_dir(run_dir)
     if not _existing_terminal_phase(display_run_dir, state):
         return False
@@ -734,7 +757,7 @@ def _release_terminal_owner_lock(root: Path, lock_state: Any) -> bool:
 
 
 def _existing_terminal_phase(display_run_dir: Path, state: dict[str, Any]) -> str:
-    live_status = _read_json(display_run_dir / "live_status.json")
+    live_status = _read_optional_json_source(display_run_dir / "live_status.json")
     for payload in (live_status, state):
         phase = str(payload.get("phase") or "").strip().lower()
         if phase in TERMINAL_RUN_PHASES:
@@ -743,7 +766,7 @@ def _existing_terminal_phase(display_run_dir: Path, state: dict[str, Any]) -> st
 
 
 def _existing_terminal_reason(display_run_dir: Path, state: dict[str, Any]) -> str:
-    live_status = _read_json(display_run_dir / "live_status.json")
+    live_status = _read_optional_json_source(display_run_dir / "live_status.json")
     for payload in (live_status, state):
         for key in ("terminal_reason", "reason", "error_reason", "terminate_reason"):
             value = payload.get(key)
@@ -915,6 +938,24 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _read_optional_json_source(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return _read_json_source(path)
+
+
+def _read_json_source(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise _JsonSourceError(path, f"contains invalid JSON at line {exc.lineno}") from exc
+    except OSError as exc:
+        raise _JsonSourceError(path, f"cannot be read: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise _JsonSourceError(path, "must contain a JSON object")
+    return payload
 
 
 def _pid_exists(pid: int) -> bool:

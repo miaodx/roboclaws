@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console route-lock readiness now fails aloud for
+  malformed lock-owner `operator_state.json` and nested `live_status.json`
+  sources. A backend lock held by a corrupt owner run no longer looks absent,
+  silently startable, or attachable; readiness blocks with `blocker_kind:
+  source_error` and keeps the lock held for operator inspection. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: fail-aloud runtime
+  artifact/source truth; valid attachable-run payloads, stale terminal-lock
+  release, stop-run process cleanup, provider readiness, route gates, and
+  runtime-inventory blockers are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  operator-console launcher tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Operator-console agent event JSONL parsing now fails aloud in
   normalized live-state payloads. Malformed or non-object `codex-events*.jsonl`,
   `claude-events*.jsonl`, and `openai-agents-events*.jsonl` rows no longer
