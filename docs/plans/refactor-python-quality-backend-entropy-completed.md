@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console request-field readiness now rejects present JSON
+  sources that do not contain a JSON object before marking required Agibot/B1
+  launch artifacts ready. Parseable-but-wrong-shaped attached context/proof
+  files such as arrays no longer satisfy `context_json`,
+  `b1_alignment_artifact`, or `b1_navigation_artifact` gates; missing files,
+  malformed JSON, relative path resolution, and valid object artifacts keep the
+  existing behavior. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud launch-input source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused Agibot readiness and neighboring
+  operator-console launcher/API readiness tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console session reads now reject malformed,
   non-object, or mismatched `sessions/<id>.json` records as explicit source
   errors. Corrupt session files no longer look like unknown sessions or get

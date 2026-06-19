@@ -134,7 +134,10 @@ Latest quality snapshot from 2026-06-19:
   instead of treating corrupt run state as unsupported route/session absence.
   Operator-console session reads now reject malformed session records as source
   errors before command writes instead of treating present corrupt files as
-  unknown sessions or dropping session-link evidence.
+  unknown sessions or dropping session-link evidence. Operator-console
+  request-field readiness now rejects present JSON sources that are not objects
+  before marking Agibot/B1 launch artifacts ready, so arrays or scalar JSON can
+  no longer satisfy required context/proof gates.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

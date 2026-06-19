@@ -164,11 +164,19 @@ def _request_field_gate(
             blocks_start=gate.required,
         )
     try:
-        json.loads(context_path.read_text(encoding="utf-8"))
+        payload = json.loads(context_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return GateEvaluation(
             ok=False,
             message=f"{label} is not readable JSON: {raw_path} ({exc})",
+            kind=kind,
+            severity=gate.severity,
+            blocks_start=gate.required,
+        )
+    if not isinstance(payload, dict):
+        return GateEvaluation(
+            ok=False,
+            message=f"{label} must contain a JSON object: {raw_path}",
             kind=kind,
             severity=gate.severity,
             blocks_start=gate.required,
