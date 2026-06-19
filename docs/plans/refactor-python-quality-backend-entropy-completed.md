@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Planner proof bundle result summaries now fail aloud when a
+  present proof `run_result.json` source parses to non-object JSON. Wrong-shaped
+  proof result files now become explicit unreadable result evidence with
+  `proof_run_result_unreadable` instead of crashing or letting proof-summary
+  fields derive from an invalid source packet; malformed JSON keeps the same
+  unreadable packet path. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused planner proof request tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-20: OpenAI Agents SDK live timing now fails aloud when present MCP
   timing source artifacts are malformed or non-object. Corrupt
   `run_result.json` no longer gets erased before falling back to trace-derived

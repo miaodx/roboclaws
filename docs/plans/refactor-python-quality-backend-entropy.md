@@ -46,7 +46,10 @@ Latest quality snapshot from 2026-06-20:
   values before writing status/timing evidence. OpenAI Agents SDK live timing
   now fails final timing packets aloud when present MCP timing sources
   (`run_result.json` or `trace.jsonl`) are malformed or non-object instead of
-  deriving plausible timing from substitute/partial evidence. The
+  deriving plausible timing from substitute/partial evidence. Planner proof
+  bundle result summaries now surface parseable non-object proof
+  `run_result.json` sources as explicit unreadable result evidence instead of
+  crashing or deriving proof-summary fields from wrong-shaped JSON. The
   operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as

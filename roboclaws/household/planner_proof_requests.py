@@ -1530,23 +1530,14 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     try:
         data = json.loads(run_result_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
-        result.update(
-            {
-                "status": "unreadable",
-                "task_feasibility_status": "unknown",
-                "visual_status": "unknown",
-                "blockers": [
-                    {
-                        "code": "proof_run_result_unreadable",
-                        "message": f"{type(exc).__name__}: {exc}",
-                    }
-                ],
-            }
-        )
+        result.update(_unreadable_proof_result_payload(f"{type(exc).__name__}: {exc}"))
         return result
-    evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        result.update(_unreadable_proof_result_payload(f"non-object JSON: {type(data).__name__}"))
+        return result
+    evidence = data.get("manipulation_evidence")
     evidence = evidence if isinstance(evidence, dict) else {}
-    artifacts = data.get("artifacts") if isinstance(data, dict) else {}
+    artifacts = data.get("artifacts")
     artifacts = artifacts if isinstance(artifacts, dict) else {}
     blockers = _blockers(evidence.get("blockers") or [])
     cleanup_binding_blockers = _blockers(evidence.get("cleanup_primitive_binding_blockers") or [])
@@ -1610,6 +1601,20 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return result
+
+
+def _unreadable_proof_result_payload(message: str) -> dict[str, Any]:
+    return {
+        "status": "unreadable",
+        "task_feasibility_status": "unknown",
+        "visual_status": "unknown",
+        "blockers": [
+            {
+                "code": "proof_run_result_unreadable",
+                "message": message,
+            }
+        ],
+    }
 
 
 def _has_blocker_code(result: dict[str, Any], code: str) -> bool:
