@@ -16,17 +16,9 @@
     {
       "from_room_id": "room_5",
       "to_room_id": "room_6"
-    },
-    {
-      "from_room_id": "room_6",
-      "to_room_id": "room_7"
-    },
-    {
-      "from_room_id": "room_7",
-      "to_room_id": "room_8"
     }
   ],
-  "environment_id": "molmospaces-procthor-10k-val-0",
+  "environment_id": "molmospaces-procthor-objaverse-val-10",
   "frame_ids": {
     "base": "base_link",
     "camera": "head_camera_rgb_optical_frame",
@@ -43,7 +35,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 1",
       "purpose": "base_navigation_map_exploration",
@@ -66,7 +58,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 2",
       "purpose": "base_navigation_map_exploration",
@@ -89,7 +81,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 3",
       "purpose": "base_navigation_map_exploration",
@@ -112,7 +104,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 4",
       "purpose": "base_navigation_map_exploration",
@@ -135,7 +127,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 5",
       "purpose": "base_navigation_map_exploration",
@@ -158,7 +150,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 6",
       "purpose": "base_navigation_map_exploration",
@@ -181,7 +173,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 7",
       "purpose": "base_navigation_map_exploration",
@@ -204,7 +196,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 8",
       "purpose": "base_navigation_map_exploration",
@@ -227,7 +219,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 9",
       "purpose": "base_navigation_map_exploration",
@@ -250,7 +242,7 @@
         "source_room_label_available": true,
         "source_waypoint_hidden": true
       },
-      "coverage_estimate": 0.071429,
+      "coverage_estimate": 0.1,
       "frame_id": "map",
       "label": "Generated exploration candidate 10",
       "purpose": "base_navigation_map_exploration",
@@ -262,101 +254,9 @@
       "x": 13.0,
       "y": 1.7,
       "yaw": 0.0
-    },
-    {
-      "candidate_provenance": {
-        "candidate_index": 11,
-        "source": "public_occupancy_free_space",
-        "source_fixtures_hidden": true,
-        "source_pose": "free_space_sample",
-        "source_room_hidden": false,
-        "source_room_label_available": true,
-        "source_waypoint_hidden": true
-      },
-      "coverage_estimate": 0.071429,
-      "frame_id": "map",
-      "label": "Generated exploration candidate 11",
-      "purpose": "base_navigation_map_exploration",
-      "room_id": "room_7",
-      "room_label": "room 7",
-      "visited": false,
-      "waypoint_id": "generated_exploration_011",
-      "waypoint_source": "generated_exploration_candidate",
-      "x": 16.0,
-      "y": 0.3,
-      "yaw": 0.0
-    },
-    {
-      "candidate_provenance": {
-        "candidate_index": 12,
-        "source": "public_occupancy_free_space",
-        "source_fixtures_hidden": true,
-        "source_pose": "free_space_sample",
-        "source_room_hidden": false,
-        "source_room_label_available": true,
-        "source_waypoint_hidden": true
-      },
-      "coverage_estimate": 0.071429,
-      "frame_id": "map",
-      "label": "Generated exploration candidate 12",
-      "purpose": "base_navigation_map_exploration",
-      "room_id": "room_7",
-      "room_label": "room 7",
-      "visited": false,
-      "waypoint_id": "generated_exploration_012",
-      "waypoint_source": "generated_exploration_candidate",
-      "x": 16.0,
-      "y": 1.7,
-      "yaw": 0.0
-    },
-    {
-      "candidate_provenance": {
-        "candidate_index": 13,
-        "source": "public_occupancy_free_space",
-        "source_fixtures_hidden": true,
-        "source_pose": "free_space_sample",
-        "source_room_hidden": false,
-        "source_room_label_available": true,
-        "source_waypoint_hidden": true
-      },
-      "coverage_estimate": 0.071429,
-      "frame_id": "map",
-      "label": "Generated exploration candidate 13",
-      "purpose": "base_navigation_map_exploration",
-      "room_id": "room_8",
-      "room_label": "room 8",
-      "visited": false,
-      "waypoint_id": "generated_exploration_013",
-      "waypoint_source": "generated_exploration_candidate",
-      "x": 19.0,
-      "y": 0.3,
-      "yaw": 0.0
-    },
-    {
-      "candidate_provenance": {
-        "candidate_index": 14,
-        "source": "public_occupancy_free_space",
-        "source_fixtures_hidden": true,
-        "source_pose": "free_space_sample",
-        "source_room_hidden": false,
-        "source_room_label_available": true,
-        "source_waypoint_hidden": true
-      },
-      "coverage_estimate": 0.071429,
-      "frame_id": "map",
-      "label": "Generated exploration candidate 14",
-      "purpose": "base_navigation_map_exploration",
-      "room_id": "room_8",
-      "room_label": "room 8",
-      "visited": false,
-      "waypoint_id": "generated_exploration_014",
-      "waypoint_source": "generated_exploration_candidate",
-      "x": 19.0,
-      "y": 1.7,
-      "yaw": 0.0
     }
   ],
-  "map_id": "molmospaces-procthor-10k-val-0_base_navigation_map",
+  "map_id": "molmospaces-procthor-objaverse-val-10_base_navigation_map",
   "map_version": "base-navigation-map-v1",
   "provenance": {
     "contains_private_scoring_truth": false,
@@ -547,80 +447,6 @@
       "public_room_source": "base_navigation_map",
       "room_id": "room_6",
       "room_label": "room 6",
-      "source_map_frame_id": "map"
-    },
-    {
-      "alignment_status": "native",
-      "category": "room_area",
-      "geometry_source": "operator_authored_navigation_zone",
-      "map_center": {
-        "x": 16.0,
-        "y": 1.0
-      },
-      "polygon": [
-        {
-          "x": 15.0,
-          "y": 0.0
-        },
-        {
-          "x": 17.0,
-          "y": 0.0
-        },
-        {
-          "x": 17.0,
-          "y": 2.0
-        },
-        {
-          "x": 15.0,
-          "y": 2.0
-        }
-      ],
-      "polygon_role": "navigation_area",
-      "polygon_usage": {
-        "navigation": true,
-        "review": true,
-        "semantic_labeling": "native"
-      },
-      "public_room_source": "base_navigation_map",
-      "room_id": "room_7",
-      "room_label": "room 7",
-      "source_map_frame_id": "map"
-    },
-    {
-      "alignment_status": "native",
-      "category": "room_area",
-      "geometry_source": "operator_authored_navigation_zone",
-      "map_center": {
-        "x": 19.0,
-        "y": 1.0
-      },
-      "polygon": [
-        {
-          "x": 18.0,
-          "y": 0.0
-        },
-        {
-          "x": 20.0,
-          "y": 0.0
-        },
-        {
-          "x": 20.0,
-          "y": 2.0
-        },
-        {
-          "x": 18.0,
-          "y": 2.0
-        }
-      ],
-      "polygon_role": "navigation_area",
-      "polygon_usage": {
-        "navigation": true,
-        "review": true,
-        "semantic_labeling": "native"
-      },
-      "public_room_source": "base_navigation_map",
-      "room_id": "room_8",
-      "room_label": "room 8",
       "source_map_frame_id": "map"
     }
   ],

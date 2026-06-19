@@ -26,7 +26,7 @@
       "to_room_id": "room_8"
     }
   ],
-  "environment_id": "molmospaces-procthor-10k-val-0",
+  "environment_id": "molmospaces-procthor-objaverse-val-5",
   "frame_ids": {
     "base": "base_link",
     "camera": "head_camera_rgb_optical_frame",
@@ -356,7 +356,7 @@
       "yaw": 0.0
     }
   ],
-  "map_id": "molmospaces-procthor-10k-val-0_base_navigation_map",
+  "map_id": "molmospaces-procthor-objaverse-val-5_base_navigation_map",
   "map_version": "base-navigation-map-v1",
   "provenance": {
     "contains_private_scoring_truth": false,
