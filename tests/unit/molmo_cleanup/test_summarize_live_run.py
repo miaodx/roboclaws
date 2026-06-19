@@ -209,6 +209,72 @@ def test_single_run_summary_does_not_print_hard_coded_speedup_baseline(
     assert "normalized model time: unavailable" in output
 
 
+def test_single_run_summary_fails_aloud_on_malformed_live_timing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "live_timing.json").write_text("{bad-json}\n", encoding="utf-8")
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "live_timing.json" in captured.err
+    assert "invalid JSON" in captured.err
+
+
+def test_single_run_summary_fails_aloud_on_non_object_run_result(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "run_result.json").write_text('["not", "a", "result"]\n', encoding="utf-8")
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "run_result.json" in captured.err
+    assert "non-object JSON" in captured.err
+
+
+def test_single_run_summary_fails_aloud_on_malformed_trace_source(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"response","tool":"done"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    status = summarize.main([str(run_dir)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "trace.jsonl:2" in captured.err
+    assert "invalid JSON" in captured.err
+
+
 def test_agent_sdk_comparison_manifest_prints_terminal_classification(
     tmp_path: Path,
     capsys,

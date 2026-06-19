@@ -65,7 +65,10 @@ Latest quality snapshot from 2026-06-19:
   or span metrics from partially skipped source evidence. RAW-FPV OpenAI
   Agents budget guards now fail aloud on present malformed or non-object
   `trace.jsonl` rows instead of deciding budget exhaustion from partial trace
-  history.
+  history. Detached live-run summaries now fail aloud on present malformed or
+  non-object `live_status.json`, `live_timing.json`, `run_result.json`, and
+  `trace.jsonl` sources instead of rendering pending/unknown summaries from
+  corrupt evidence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

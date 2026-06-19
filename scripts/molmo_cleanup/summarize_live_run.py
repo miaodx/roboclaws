@@ -56,7 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: run path does not exist: {run_dir}", file=sys.stderr)
         return 1
 
-    summary = _summarize(run_dir)
+    try:
+        summary = _summarize(run_dir)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     _print_summary(summary)
     return 0
 
@@ -615,15 +619,21 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
+    ):
         if not line.strip():
             continue
+        source = f"{path}:{line_number}"
         try:
             item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, dict):
-            events.append(item)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"live-run summary {source}: invalid JSON: {exc.msg}") from exc
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"live-run summary source {source}: non-object JSON: {type(item).__name__}"
+            )
+        events.append(item)
     return events
 
 
@@ -632,9 +642,14 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"live-run summary source {path}: invalid JSON at line {exc.lineno} "
+            f"column {exc.colno}: {exc.msg}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"live-run summary source {path}: non-object JSON: {type(data).__name__}")
+    return data
 
 
 def _read_text(path: Path) -> str:

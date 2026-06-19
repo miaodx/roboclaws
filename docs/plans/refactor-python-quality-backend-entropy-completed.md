@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Detached live-run summary source parsing now fails aloud for
+  present malformed or non-object `live_status.json`, `live_timing.json`,
+  `run_result.json`, and `trace.jsonl` artifacts. Corrupt summary inputs no
+  longer collapse to pending/unknown runner, timing, result, or trace sections
+  that can make a damaged live run look merely incomplete; the CLI exits
+  nonzero with the source path and row/location. Missing optional files still
+  preserve the existing pending/unknown behavior. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud artifact/source
+  truth; report layout, comparison-manifest handling, performance extraction
+  math, and live artifact producers are unchanged. Metric: touched production
+  module remains under the default 800-line target, and the ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  summarize-live-run tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet.
+
 - 2026-06-19: RAW-FPV OpenAI Agents budget guard trace parsing now fails
   aloud for present malformed or non-object `trace.jsonl` rows. Corrupt trace
   evidence no longer disappears before the RAW-FPV candidate, repeated-failure,
