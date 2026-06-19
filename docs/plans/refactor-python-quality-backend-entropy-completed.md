@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Cleanup report regeneration now fails aloud on declared
+  scenario/trace/snapshot artifact paths that are empty, missing, or not files,
+  and resolves declared relative artifact paths only under the run directory.
+  Regenerated reports no longer substitute CWD files or same-basename colocated
+  files when `run_result.json` declares a different artifact source; historical
+  absent `scenario` artifacts still use the run-result shell fallback. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; report rendering, run-result path
+  discovery, historical absent-artifact defaults, and cleanup visual sections
+  are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused cleanup artifact-report contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-19: Split the live eval artifact selector's priority,
   current-discovered, and current-existing candidate decisions into named
   helpers after the previous fail-aloud slice introduced one Ruff C901 row.

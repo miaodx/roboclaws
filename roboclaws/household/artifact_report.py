@@ -28,23 +28,35 @@ def rerender_cleanup_report_from_run_result(run_result_path: Path) -> Path:
         run_dir,
         artifacts.get("scenario"),
         default_name="scenario.json",
+        artifact_label="scenario",
+        declared="scenario" in artifacts,
     )
     if scenario_path.is_file():
         scenario = load_cleanup_scenario_artifact(scenario_path)
     else:
         scenario = cleanup_scenario_shell_from_run_result(run_result)
     trace_events = load_trace_events(
-        _resolve_artifact(run_dir, artifacts.get("trace"), default_name="trace.jsonl")
+        _resolve_artifact(
+            run_dir,
+            artifacts.get("trace"),
+            default_name="trace.jsonl",
+            artifact_label="trace",
+            declared="trace" in artifacts,
+        )
     )
     before_snapshot = _resolve_artifact(
         run_dir,
         artifacts.get("before_snapshot"),
         default_name="before.png",
+        artifact_label="before_snapshot",
+        declared="before_snapshot" in artifacts,
     )
     after_snapshot = _resolve_artifact(
         run_dir,
         artifacts.get("after_snapshot"),
         default_name="after.png",
+        artifact_label="after_snapshot",
+        declared="after_snapshot" in artifacts,
     )
     return render_cleanup_report(
         run_dir=run_dir,
@@ -190,17 +202,26 @@ def _resolve_artifact(
     value: Any,
     *,
     default_name: str,
+    artifact_label: str,
+    declared: bool,
 ) -> Path:
-    text = str(value or default_name)
+    if not declared:
+        return run_dir / default_name
+
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"declared {artifact_label} artifact is empty")
     candidate = Path(text)
     if candidate.is_absolute():
-        return candidate
-    if candidate.exists():
-        return candidate
-    colocated = run_dir / candidate.name
-    if colocated.exists():
-        return colocated
-    return run_dir / candidate
+        resolved = candidate
+    else:
+        resolved = run_dir / candidate
+    if not resolved.is_file():
+        raise FileNotFoundError(
+            f"declared {artifact_label} artifact is missing or not a file: "
+            f"{resolved} (from {text!r})"
+        )
+    return resolved
 
 
 def _read_json(path: Path) -> dict[str, Any]:
