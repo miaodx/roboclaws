@@ -396,7 +396,13 @@ def _classify_eval_result_row(row: dict[str, Any]) -> None:
     ]
     if not result_paths:
         return
-    payload = _load_json(result_paths[-1])
+    try:
+        payload = _load_required_json_object(result_paths[-1], label="eval_results.json")
+    except ValueError as exc:
+        row["outcome"] = "failed"
+        row["failure_class"] = "harness_bug_unclassified"
+        row["eval_results_error"] = str(exc)
+        return
     aggregate = payload.get("aggregate") if isinstance(payload.get("aggregate"), dict) else {}
     failed = int(aggregate.get("failed") or 0)
     blocked = int(aggregate.get("blocked") or 0)
@@ -422,6 +428,21 @@ def _load_json(path: Path) -> dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _load_required_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"{label} source error at {_display_path(path)}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} JSON parse error at {_display_path(path)}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"{label} source error at {_display_path(path)}: expected object, got "
+            f"{type(payload).__name__}"
+        )
+    return payload
 
 
 def _first_failure_class(aggregate: dict[str, Any]) -> str:

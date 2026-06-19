@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval-harness attached result packets now fail aloud when
+  malformed. Required `eval_results.json` artifacts linked from selected eval
+  rows no longer collapse to an empty aggregate that can leave a zero-exit row
+  looking passed; present corrupt JSON or non-object payloads now mark the row
+  `outcome=failed` with `failure_class=harness_bug_unclassified` and an
+  explicit `eval_results_error`. Owner layer: Eval suites. Behavior-change
+  class: fail-aloud harness artifact/source truth; missing result artifacts,
+  valid failed/blocked aggregates, detached live-status polling, report
+  rendering, and exit-status semantics are unchanged. Metric: ratchet stayed
+  at 0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  eval-harness manifest tests, full eval unit folder, touched-file ruff and
+  format check, `git diff --check`, and ratchet.
+
 - 2026-06-19: Eval-harness provider readiness now fails aloud through the
   provider registry. Live eval rows with unknown provider profiles no longer
   pass preflight merely because Codex router environment variables are present;
