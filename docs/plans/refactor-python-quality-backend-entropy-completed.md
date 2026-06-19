@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Live eval trial grading now requires live product runners to
+  declare an explicit `eval_effective_run_dir` under the trial run directory
+  before artifacts are graded. Missing, malformed, nonexistent, or escaped
+  effective run directories now fail as artifact-source errors instead of
+  letting stale trial-directory artifacts stand in for live route evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud live eval artifact source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; focused regression coverage
+  keeps `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused live eval tests, full eval-runner unit file, touched-file ruff/format
+  checks, `git diff --check`, and ratchet.
+
 - 2026-06-20: Eval regression promotion now requires a declared source sample
   ref and validates promotion source identity before deriving promoted
   sample/suite artifacts. Promotion can no longer fabricate a plausible

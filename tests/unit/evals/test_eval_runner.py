@@ -211,6 +211,66 @@ def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> 
     )
 
 
+def test_eval_runner_rejects_live_result_without_effective_run_dir(tmp_path: Path) -> None:
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        stale_trial_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(stale_trial_dir, completion_status="success")
+        surface_run_dir = stale_trial_dir / "surface-run" / f"seed-{kwargs['seed']}"
+        _write_product_artifacts(surface_run_dir, completion_status="success")
+        return _run_result(surface_run_dir, completion_status="success")
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-missing-effective-run-dir",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 3}
+    result = payload["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    runner = result["grader_outputs"]["runner"]
+    assert runner["status"] == "failed"
+    assert runner["error_type"] == "ValueError"
+    assert "missing eval_effective_run_dir" in runner["message"]
+    assert result["artifacts"] == {}
+
+
+def test_eval_runner_rejects_live_effective_run_dir_outside_trial(tmp_path: Path) -> None:
+    external_run_dir = tmp_path / "external-live-route" / "seed-7"
+
+    def live_product_runner(**kwargs: Any) -> dict[str, Any]:
+        surface_run_dir = Path(kwargs["output_dir"]) / "surface-run" / f"seed-{kwargs['seed']}"
+        _write_product_artifacts(surface_run_dir, completion_status="success")
+        _write_product_artifacts(external_run_dir, completion_status="success")
+        result = _run_result(surface_run_dir, completion_status="success")
+        result["eval_effective_run_dir"] = str(external_run_dir)
+        return result
+
+    run = run_eval_suite(
+        "cleanup_capability",
+        output_root=tmp_path,
+        stamp="live-escaped-effective-run-dir",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+        live_product_runner=live_product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    assert payload["aggregate"]["failed"] == 3
+    assert payload["aggregate"]["failure_classes"] == {"artifact_missing": 3}
+    runner = payload["results"][0]["grader_outputs"]["runner"]
+    assert runner["error_type"] == "ValueError"
+    assert "eval_effective_run_dir must stay under trial run_dir" in runner["message"]
+
+
 def test_eval_runner_classifies_live_provider_failures_as_blocked(tmp_path: Path) -> None:
     def live_product_runner(**_kwargs: Any) -> dict[str, Any]:
         raise RuntimeError(

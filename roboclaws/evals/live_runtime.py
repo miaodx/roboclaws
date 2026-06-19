@@ -87,10 +87,13 @@ def run_live_eval_trial(
                 live_timeout_s=live_timeout_s,
             )
         )
+        effective_run_dir = _live_eval_effective_run_dir(
+            run_result,
+            trial_run_dir=run_dir,
+        )
     except Exception as exc:  # noqa: BLE001 - eval packets must classify runner failures.
         return hooks.blocked_result_from_exception(trial, exc)
 
-    effective_run_dir = Path(str(run_result.get("eval_effective_run_dir") or run_dir))
     grader_outputs = hooks.grade_trial(
         sample=sample,
         run_dir=effective_run_dir,
@@ -709,6 +712,27 @@ def _public_backend_from_implementation(backend: str) -> str:
 
 def _load_json(path: Path) -> dict[str, Any]:
     return load_live_eval_json(path)
+
+
+def _live_eval_effective_run_dir(run_result: object, *, trial_run_dir: Path) -> Path:
+    if not isinstance(run_result, dict):
+        raise ValueError("live eval run_result must be an object")
+    if "eval_effective_run_dir" not in run_result:
+        raise ValueError("live eval run_result is missing eval_effective_run_dir")
+    raw_path = run_result.get("eval_effective_run_dir")
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        raise ValueError(f"eval_effective_run_dir must be a non-empty string, got {raw_path!r}")
+    effective_run_dir = Path(raw_path)
+    trial_root = trial_run_dir.resolve()
+    effective_root = effective_run_dir.resolve()
+    if not effective_root.is_relative_to(trial_root):
+        raise ValueError(
+            f"eval_effective_run_dir must stay under trial run_dir {trial_run_dir}, "
+            f"got {effective_run_dir}"
+        )
+    if not effective_run_dir.is_dir():
+        raise ValueError(f"eval_effective_run_dir does not exist: {effective_run_dir}")
+    return effective_run_dir
 
 
 def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None:
