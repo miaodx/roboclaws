@@ -448,8 +448,15 @@ def _outcome_grader(
         schema_ok = runtime_map.get("schema") == str(
             config.get("require_runtime_metric_map_schema") or "runtime_metric_map_v1"
         )
-        anchors = runtime_map.get("public_semantic_anchors") or []
-        exploration = runtime_map.get("generated_exploration_candidates") or []
+        anchors, anchors_error = _optional_list_value(
+            runtime_map,
+            "public_semantic_anchors",
+        )
+        exploration, exploration_error = _optional_list_value(
+            runtime_map,
+            "generated_exploration_candidates",
+        )
+        runtime_map_error = runtime_map_error or anchors_error or exploration_error
         private_truth_absent = runtime_map.get("private_truth_included") is False
         source_map_not_mutated = runtime_map.get("source_map_mutated") is False
         passed = (
@@ -897,6 +904,15 @@ def _list_of_mappings(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _optional_list_value(payload: dict[str, Any], key: str) -> tuple[list[Any], str]:
+    if key not in payload or payload.get(key) is None:
+        return [], ""
+    value = payload.get(key)
+    if not isinstance(value, list):
+        return [], f"{key}:invalid_json_array"
+    return value, ""
 
 
 def _model_attempt_summary(run_result: dict[str, Any]) -> dict[str, Any]:

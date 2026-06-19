@@ -1420,6 +1420,54 @@ def test_map_build_eval_classifies_malformed_runtime_metric_map_as_invalid_artif
     assert outcome["runtime_metric_map_schema"] == "unavailable"
 
 
+@pytest.mark.parametrize(
+    ("field_name", "expected_error"),
+    [
+        ("public_semantic_anchors", "public_semantic_anchors:invalid_json_array"),
+        (
+            "generated_exploration_candidates",
+            "generated_exploration_candidates:invalid_json_array",
+        ),
+    ],
+)
+def test_map_build_eval_rejects_wrong_shaped_runtime_map_lists(
+    tmp_path: Path,
+    field_name: str,
+    expected_error: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="map_build_complete")
+        runtime_map = json.loads((run_dir / "runtime_metric_map.json").read_text())
+        runtime_map[field_name] = "looks-like-many-items"
+        (run_dir / "runtime_metric_map.json").write_text(
+            json.dumps(runtime_map) + "\n",
+            encoding="utf-8",
+        )
+        return _run_result(
+            run_dir,
+            completion_status="map_build_complete",
+            include_runtime_map=False,
+        )
+
+    run = run_eval_suite(
+        "evals/household_world/suites/map_build_consumer.json",
+        output_root=tmp_path,
+        stamp=f"wrong-shaped-{field_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    outcome = result["grader_outputs"]["outcome"]
+    assert result["identity"]["sample_id"] == "map_build.baseline_seed7"
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert outcome["failure_class"] == "artifact_missing"
+    assert outcome["runtime_metric_map_error"] == expected_error
+    assert outcome["runtime_metric_map_schema"] == "runtime_metric_map_v1"
+
+
 def test_scene_sampler_stress_records_sampler_admission(tmp_path: Path) -> None:
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])

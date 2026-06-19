@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Map-build outcome grading now rejects wrong-shaped
+  `runtime_metric_map.json` list fields before applying minimum-count checks.
+  Present `public_semantic_anchors` or `generated_exploration_candidates`
+  values that are strings, objects, or other non-list JSON can no longer pass
+  actionability thresholds via Python `len()` on the wrong type. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  runtime-map source shape truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules; focused regression coverage keeps
+  `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused map-build runtime-map tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-20: Eval artifact grading now validates present required JSON
   artifacts (`run_result.json`, `agent_view.json`, `runtime_metric_map.json`,
   and `private_evaluation.json`) as object JSON before marking the artifacts
