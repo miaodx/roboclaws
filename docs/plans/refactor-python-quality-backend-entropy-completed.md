@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: OpenAI Agents SDK metric JSONL parsing now fails aloud for
+  present malformed or non-object event/span/trace rows. Corrupt
+  `openai-agents-events.jsonl`, `openai-agents-spans.jsonl`, or `trace.jsonl`
+  sources no longer disappear before context/cache/growth, retry/fallback,
+  racing, input-filter, event-count, or span metrics are written into
+  `live_timing.json`; diagnostics include the source path and row number.
+  Missing optional files still preserve the existing unavailable behavior.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; metric schemas, aggregation math, live
+  runtime retry behavior, and event/span producers are unchanged. Metric:
+  `openai_agents_metrics.py` is 799 lines, and the ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused OpenAI
+  Agents live-runtime metrics tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Model-latency calibration source parsing now fails aloud for
   present malformed or non-object `model_call_metrics.jsonl` rows. Calibration
   fitting and holdout validation no longer skip corrupt source rows before

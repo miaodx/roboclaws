@@ -4748,6 +4748,20 @@ def test_openai_agents_event_metrics_parse_tool_errors(tmp_path: Path) -> None:
     assert "Waited 5.0 seconds" in metrics["tool_error_messages_sample"][0]
 
 
+def test_openai_agents_event_metrics_fail_aloud_on_malformed_event_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-events.jsonl").write_text(
+        '{"event":"result"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"openai-agents-events\.jsonl:2.*invalid JSON"):
+        _openai_agents_event_metrics(run_dir)
+
+
 def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
     tmp_path: Path,
 ) -> None:
@@ -4936,6 +4950,20 @@ def test_openai_agents_span_metrics_parse_span_artifacts(tmp_path: Path) -> None
     assert "Raw prompts" in metrics["sanitization_note"]
 
 
+def test_openai_agents_span_metrics_fail_aloud_on_non_object_span_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-spans.jsonl").write_text(
+        json.dumps(["not", "an", "event"]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"openai-agents-spans\.jsonl:1.*non-object JSON"):
+        _openai_agents_span_metrics(run_dir)
+
+
 def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -5041,6 +5069,20 @@ def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path)
     assert growth["raw_fpv_observation_count"] == 1
     assert growth["continuation_attempt_count"] == 1
     assert growth["tool_response_bytes_total"] > 0
+
+
+def test_openai_agents_context_growth_metrics_fail_aloud_on_malformed_trace_source(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "trace.jsonl").write_text(
+        '{"event":"request","tool":"observe"}\n{bad-json}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
+        _context_growth_metrics(run_dir, {})
 
 
 def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Path) -> None:

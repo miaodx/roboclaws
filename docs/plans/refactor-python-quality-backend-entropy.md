@@ -59,7 +59,10 @@ Latest quality snapshot from 2026-06-19:
   performance packets from empty or partial telemetry. Model-latency
   calibration now fails aloud on present malformed or non-object
   `model_call_metrics.jsonl` rows instead of fitting calibration packets from
-  silently skipped source evidence.
+  silently skipped source evidence. OpenAI Agents SDK event/span/trace metrics
+  now fail aloud on present malformed or non-object JSONL rows instead of
+  deriving context/cache/growth, retry/fallback, racing, input-filter, event,
+  or span metrics from partially skipped source evidence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
