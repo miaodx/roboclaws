@@ -15,7 +15,6 @@ from roboclaws.agents.provider_registry import (
     default_enabled_models,
     default_enabled_provider_routes,
     model_aliases,
-    model_supports_images,
     normalize_provider_route,
     openai_agents_runtime_settings,
     openclaw_model_id,
@@ -75,9 +74,9 @@ def test_provider_factory_routes_through_catalog(monkeypatch) -> None:
 
 def test_catalog_reports_all_real_models_image_capable() -> None:
     # mimo-v2.5 has native vision; every non-mock catalog model is image-capable.
-    assert model_supports_images("mimo_openai/mimo-v2.5") is True
-    assert model_supports_images("mimo_anthropic/mimo-v2.5") is True
-    assert model_supports_images("anthropic_kimi/k2p5") is True
+    assert resolve_model("mimo_openai/mimo-v2.5").supports_image_input is True
+    assert resolve_model("mimo_anthropic/mimo-v2.5").supports_image_input is True
+    assert resolve_model("anthropic_kimi/k2p5").supports_image_input is True
 
 
 def test_catalog_returns_openclaw_model_identifier() -> None:

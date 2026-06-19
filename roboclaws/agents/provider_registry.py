@@ -552,11 +552,6 @@ def maybe_resolve_model(model_name: str | None) -> ModelSpec | None:
         return None
 
 
-def model_supports_images(model_name: str | None) -> bool:
-    spec = maybe_resolve_model(model_name)
-    return True if spec is None else spec.supports_image_input
-
-
 def required_env_keys(model_name: str) -> tuple[str, ...]:
     return resolve_model(model_name).direct_required_env_keys
 

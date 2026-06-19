@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Removed the stale `model_supports_images` helper from the
+  provider registry. The helper had no production callers and treated unknown
+  model ids as image-capable, which conflicted with the current fail-aloud
+  provider/model registry direction. Remaining tests now use the canonical
+  `resolve_model(...).supports_image_input` path. Owner layer: Agent Engines
+  And Provider Profiles. Behavior-change class: stale helper deletion;
+  provider readiness, route-model compatibility, aliases, direct-provider
+  factory routing, and public route payloads are unchanged. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  stale-reference search, full provider catalog unit tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-19: Provider/profile route selection now fails aloud for
   route-incompatible catalog models. Provider routes declare compatible model
   ids, readiness and route payloads expose them, OpenAI Agents SDK runtime and
