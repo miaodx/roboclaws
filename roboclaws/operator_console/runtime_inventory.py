@@ -38,6 +38,10 @@ LIVE_MARKERS = (
 )
 
 
+class JsonSourceError(dict[str, Any]):
+    """Malformed JSON source details that remain mapping-compatible for callers."""
+
+
 def runtime_inventory_payload(
     root: Path,
     *,
@@ -81,7 +85,11 @@ def runtime_blockers_from_inventory(inventory: dict[str, Any]) -> dict[str, Any]
     tasks = [
         task
         for task in inventory.get("tasks") or []
-        if isinstance(task, dict) and _task_can_block(task) and _has_ui_e2e_blocking_resource(task)
+        if isinstance(task, dict)
+        and (
+            (_task_can_block(task) and _has_ui_e2e_blocking_resource(task))
+            or _task_has_source_error(task)
+        )
     ]
     return {
         "schema": "roboclaws_operator_console_runtime_blockers_v1",
@@ -174,6 +182,9 @@ def _operator_console_tasks(root: Path, *, include_recent_terminal: bool) -> lis
     tasks: list[dict[str, Any]] = []
     if runs_root.is_dir():
         for state_path in _latest_paths(runs_root.glob("*/operator_state.json"), limit=100):
+            if error_task := _json_source_error_task(root, state_path, owner="operator-console"):
+                tasks.append(error_task)
+                continue
             task = _operator_run_task(root, state_path.parent)
             if task and _include_task(task, include_recent_terminal=include_recent_terminal):
                 tasks.append(task)
@@ -184,8 +195,7 @@ def _operator_console_tasks(root: Path, *, include_recent_terminal: bool) -> lis
             if not lock.held:
                 continue
             if any(
-                item.get("owner") == "operator-console"
-                and item.get("run_id") == lock.owner_run_id
+                item.get("owner") == "operator-console" and item.get("run_id") == lock.owner_run_id
                 for item in tasks
             ):
                 continue
@@ -270,6 +280,9 @@ def _eval_harness_tasks(root: Path, *, include_recent_terminal: bool) -> list[di
         return []
     tasks: list[dict[str, Any]] = []
     for manifest_path in _latest_paths(harness_root.glob("*/eval_harness.json"), limit=50):
+        if error_task := _json_source_error_task(root, manifest_path, owner="eval-harness"):
+            tasks.append(error_task)
+            continue
         manifest = _read_json(manifest_path)
         for row in manifest.get("rows") or []:
             if not isinstance(row, dict) or not row.get("row_dir"):
@@ -516,7 +529,9 @@ def _run_dir_resources(display_run_dir: Path | None) -> list[dict[str, Any]]:
             )
         )
     slot = _read_json(display_run_dir / "visual_backend_slot.json")
-    if slot:
+    if isinstance(slot, JsonSourceError):
+        resources.append(_json_source_error_resource(slot))
+    elif slot:
         slot_id = slot.get("slot_id")
         resources.append(
             _resource(
@@ -529,7 +544,11 @@ def _run_dir_resources(display_run_dir: Path | None) -> list[dict[str, Any]]:
             )
         )
     live_status = _read_json(display_run_dir / "live_status.json")
-    status_slot = live_status.get("visual_backend_slot")
+    if isinstance(live_status, JsonSourceError):
+        resources.append(_json_source_error_resource(live_status))
+        status_slot = None
+    else:
+        status_slot = live_status.get("visual_backend_slot")
     if isinstance(status_slot, dict) and status_slot.get("slot_id"):
         resources.append(
             _resource(
@@ -725,6 +744,8 @@ def _visual_slot_payload_active(payload: dict[str, Any]) -> bool:
         return False
     path = Path(str(payload.get("path") or ""))
     current_payload = _read_json(path) if path.is_file() else payload
+    if isinstance(current_payload, JsonSourceError):
+        return False
     current_run_id = str(current_payload.get("run_id") or "")
     payload_run_id = str(payload.get("run_id") or "")
     if current_run_id and payload_run_id and current_run_id != payload_run_id:
@@ -767,6 +788,12 @@ def _has_ui_e2e_blocking_resource(task: dict[str, Any]) -> bool:
         if resource.get("kind") in blocking_kinds:
             return True
     return False
+
+
+def _task_has_source_error(task: dict[str, Any]) -> bool:
+    if task.get("status") == "source_error":
+        return True
+    return any(resource.get("kind") == "source_error" for resource in task.get("resources") or [])
 
 
 def _task_blocks_route(
@@ -905,14 +932,69 @@ def _mtime_for_task(task: dict[str, Any]) -> float:
     return 0.0
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _json_source_error_task(root: Path, path: Path, *, owner: str) -> dict[str, Any]:
+    error = _read_json(path)
+    if not isinstance(error, JsonSourceError):
+        return {}
+    rel = _relative_to_root(root, path)
+    source_label = rel or path.name
+    return _task(
+        task_id=f"source-error:{owner}:{source_label}",
+        status="source_error",
+        owner=owner,
+        label=f"Invalid runtime inventory JSON: {source_label}",
+        resource=f"invalid JSON source {source_label}",
+        resources=[_json_source_error_resource(error)],
+        run_dir=path.parent,
+        artifacts=[_artifact(root, path, "Invalid JSON source", kind="status")],
+        extra={
+            "error_reason": error["error_reason"],
+            "source_path": str(path),
+            "message": error["message"],
+        },
+    )
+
+
+def _json_source_error_resource(error: JsonSourceError) -> dict[str, Any]:
+    return _resource(
+        "source_error",
+        error["message"],
+        path=Path(str(error["source_path"])),
+        active=False,
+        error_reason=error["error_reason"],
+    )
+
+
+def _read_json(path: Path) -> dict[str, Any] | JsonSourceError:
     if not path or not path.exists():
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except json.JSONDecodeError as exc:
+        return JsonSourceError(
+            {
+                "error_reason": "invalid_json",
+                "source_path": str(path),
+                "message": f"{path.name} is not readable JSON: {exc.msg}",
+            }
+        )
+    except OSError as exc:
+        return JsonSourceError(
+            {
+                "error_reason": "unreadable_json",
+                "source_path": str(path),
+                "message": f"{path.name} could not be read: {exc.strerror or exc}",
+            }
+        )
+    if isinstance(payload, dict):
+        return payload
+    return JsonSourceError(
+        {
+            "error_reason": "invalid_json_object",
+            "source_path": str(path),
+            "message": f"{path.name} must contain a JSON object",
+        }
+    )
 
 
 def _latest_paths(paths: Any, *, limit: int) -> list[Path]:

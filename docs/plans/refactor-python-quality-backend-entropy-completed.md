@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console runtime inventory JSON source errors now surface
+  explicitly. Malformed or non-object top-level `operator_state.json` and
+  `eval_harness.json` files produce non-blocking `source_error` task rows in
+  the runtime task payload, and malformed nested `live_status.json` /
+  `visual_backend_slot.json` files appear as inactive source-error resources
+  on the affected task instead of disappearing as empty metadata. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: fail-aloud runtime
+  artifact/status source truth; missing optional files, valid active-resource
+  blockers, route readiness blocking, artifact links, and tmux/docker/port
+  probing are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules; `runtime_inventory.py` remains oversized and should
+  be split only around a future ownership boundary. Proof: focused
+  runtime-inventory unit tests, touched-file ruff and format check,
+  `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console static scene-preview asset coverage was
   consolidated through `$intuitive-tests`: the one long
   `test_static_app_renders_scene_preview_assets` body was split into

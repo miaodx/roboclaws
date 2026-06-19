@@ -22,10 +22,11 @@ Latest quality snapshot from 2026-06-19:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 78.
-- Current emphasis: fresh Ruff complexity rows are clear again. Continue
-  fail-aloud/runtime-source audits from fresh evidence rather than reopening
-  closed helper splits; route any future test-shape cleanup through
-  `$intuitive-tests`.
+- Current emphasis: fresh Ruff complexity rows are clear again. The latest
+  fail-aloud slice surfaced malformed operator-console runtime inventory
+  JSON as explicit source-error evidence. Continue fail-aloud/runtime-source
+  audits from fresh evidence rather than reopening closed helper splits; route
+  any future test-shape cleanup through `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.
