@@ -634,28 +634,27 @@ def _cache_tools_list(request: LiveAgentRequest) -> bool:
 
 def _mcp_client_session_timeout_seconds(request: LiveAgentRequest) -> tuple[bool, float | None]:
     configured = None
-    source = "mcp_client_session_timeout_s"
     if isinstance(request.metadata, dict):
         configured = request.metadata.get("mcp_client_session_timeout_s")
     if configured is None:
         raw_env = os.environ.get(MCP_CLIENT_SESSION_TIMEOUT_ENV)
-        if raw_env is not None:
-            configured = raw_env
-            source = MCP_CLIENT_SESSION_TIMEOUT_ENV
+        if raw_env is None or str(raw_env).strip() == "":
+            return False, None
+        value = _non_negative_float(
+            None,
+            setting_name="mcp_client_session_timeout_s",
+            env_name=MCP_CLIENT_SESSION_TIMEOUT_ENV,
+            default=0.0,
+        )
+        return (True, None) if value == 0 else (True, round(value, 3))
     if configured is None or str(configured).strip() == "":
         return False, None
-    try:
-        value = float(configured)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "OpenAI Agents SDK setting mcp_client_session_timeout_s "
-            f"({source}) must be a non-negative number, got {configured!r}"
-        ) from exc
-    if value < 0:
-        raise ValueError(
-            "OpenAI Agents SDK setting mcp_client_session_timeout_s "
-            f"({source}) must be a non-negative number, got {configured!r}"
-        )
+    value = _non_negative_float(
+        configured,
+        setting_name="mcp_client_session_timeout_s",
+        env_name=MCP_CLIENT_SESSION_TIMEOUT_ENV,
+        default=0.0,
+    )
     if value == 0:
         return True, None
     return True, round(value, 3)
@@ -1746,9 +1745,14 @@ def _non_negative_int(value: Any, *, setting_name: str, env_name: str, default: 
             source = env_name
         else:
             value = default
+    if isinstance(value, bool):
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"non-negative integer, got {value!r}"
+        )
     try:
         parsed = int(value)
-    except (TypeError, ValueError) as exc:
+    except (OverflowError, TypeError, ValueError) as exc:
         raise ValueError(
             f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
             f"non-negative integer, got {value!r}"
@@ -1770,17 +1774,22 @@ def _non_negative_float(value: Any, *, setting_name: str, env_name: str, default
             source = env_name
         else:
             value = default
+    if isinstance(value, bool):
+        raise ValueError(
+            f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
+            f"finite non-negative number, got {value!r}"
+        )
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(
             f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
-            f"non-negative number, got {value!r}"
+            f"finite non-negative number, got {value!r}"
         ) from exc
-    if parsed < 0:
+    if not math.isfinite(parsed) or parsed < 0:
         raise ValueError(
             f"OpenAI Agents SDK setting {setting_name} ({source}) must be a "
-            f"non-negative number, got {value!r}"
+            f"finite non-negative number, got {value!r}"
         )
     return parsed
 

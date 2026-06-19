@@ -38,8 +38,10 @@ Latest quality snapshot from 2026-06-20:
   values instead of rendering default-looking kickoff prompts for bad live-route
   input. OpenAI Agents SDK performance-profile float settings now reject
   non-finite timeout/retry values instead of clamping `nan` to zero or writing
-  `inf` into runtime profile metadata, and the operator-state payload now
-  reports malformed core
+  `inf` into runtime profile metadata, and the live OpenAI Agents runtime now
+  rejects boolean/non-finite retry and MCP-timeout metadata/env values before
+  writing status/timing evidence. The operator-state payload now reports
+  malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
   explicit failed source errors instead of erasing them into idle or missing
   state. OpenAI Agents SDK model selection now rejects unknown model overrides,

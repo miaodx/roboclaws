@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: The live OpenAI Agents runtime now rejects boolean and non-finite
+  numeric settings before status/timing evidence is written. Direct metadata
+  and env inputs for model-service retry attempts, model-service retry sleep,
+  and MCP client session timeout now fail with `provider_config_failure`
+  instead of accepting booleans as numbers, leaking `nan` / `inf`, or surfacing
+  raw conversion failures; zero MCP timeout still explicitly disables the
+  client timeout. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: fail-aloud live runtime env/metadata input; SDK
+  perf-profile defaults, provider route/model selection, live provider calls,
+  and zero-timeout disable semantics are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused OpenAI Agents live-runtime numeric tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-20: OpenAI Agents SDK performance-profile float settings now reject
   non-finite values before runtime profile metadata is produced. `nan` can no
   longer be clamped to `0.0`, and `inf` can no longer survive as a plausible
