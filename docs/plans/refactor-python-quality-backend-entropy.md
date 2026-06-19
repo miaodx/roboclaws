@@ -60,7 +60,10 @@ Latest quality snapshot from 2026-06-20:
   sources as bundle validation errors instead of raising raw attribute errors
   during validation or projection. B1 runtime bundle compilation now reports
   malformed or non-object explicit semantic projection artifacts as source-path
-  errors instead of raw JSON/type failures. The
+  errors instead of raw JSON/type failures. MolmoSpaces worker initialization
+  now treats adjacent scene JSON as room-label source truth, so malformed,
+  wrong-shaped, or label-less source packets fail aloud instead of falling
+  through to raw parser/type errors or iTHOR-derived labels. The
   operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as

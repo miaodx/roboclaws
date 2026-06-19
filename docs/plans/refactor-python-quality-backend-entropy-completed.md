@@ -34,6 +34,17 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces worker initialization now fails aloud on malformed,
+  wrong-shaped, or label-less adjacent scene JSON before deriving source room
+  labels. A present source scene JSON packet can no longer surface as a raw
+  parser/type failure or silently fall through to iTHOR-derived labels; missing
+  source JSON keeps the explicit iTHOR floorplan fallback. Owner layer:
+  Backend Runtime / Environment Primitive. Behavior-change class: fail-aloud
+  worker initialization metadata source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused MolmoSpaces worker-state tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-20: B1 runtime bundle compilation now fails aloud when an explicit
   semantic projection artifact is malformed or parses to non-object JSON.
   Corrupt `semantic_projection.json` inputs now produce source-path validation
