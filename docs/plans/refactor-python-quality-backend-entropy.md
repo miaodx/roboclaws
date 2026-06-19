@@ -132,6 +132,9 @@ Latest quality snapshot from 2026-06-19:
   interaction commands now reject malformed run `operator_state.json` sources
   before appending steer messages, next-goal queues, or session-link updates
   instead of treating corrupt run state as unsupported route/session absence.
+  Operator-console session reads now reject malformed session records as source
+  errors before command writes instead of treating present corrupt files as
+  unknown sessions or dropping session-link evidence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

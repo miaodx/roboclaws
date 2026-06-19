@@ -46,6 +46,10 @@ class InteractionError(ValueError):
     """User-facing interaction validation error."""
 
 
+class UnknownOperatorSessionError(InteractionError):
+    """Raised when an operator session record is missing."""
+
+
 def create_operator_session(root: Path) -> dict[str, Any]:
     """Create a durable operator session record."""
 
@@ -71,9 +75,9 @@ def create_operator_session(root: Path) -> dict[str, Any]:
 
 
 def get_operator_session(root: Path, session_id: str) -> dict[str, Any]:
-    payload = _read_json(_session_path(root, session_id))
+    payload = _read_session_json(_session_path(root, session_id), session_id=session_id)
     if not payload:
-        raise InteractionError(f"unknown operator session: {session_id}")
+        raise UnknownOperatorSessionError(f"unknown operator session: {session_id}")
     return payload
 
 
@@ -109,6 +113,7 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
         "transport": "mcp_check_operator_messages",
         "operator_message_pending": True,
     }
+    _preflight_session_source(root, run_state)
     _append_message(run_dir, message)
     _record_session_message(root, run_dir, message, run_state=run_state)
     return message
@@ -460,7 +465,7 @@ def _session_for_run(
     if session_id:
         try:
             return get_operator_session(root, session_id)
-        except InteractionError:
+        except UnknownOperatorSessionError:
             pass
     return attach_run_to_session(root, run_id)
 
@@ -479,7 +484,7 @@ def _record_session_message(
         session_id = session["operator_session_id"]
     try:
         session = get_operator_session(root, session_id)
-    except InteractionError:
+    except UnknownOperatorSessionError:
         return
     message_ids = list(session.get("message_ids") or [])
     message_id = str(message.get("message_id") or "")
@@ -501,6 +506,16 @@ def _session_id_from_run_state(run_dir: Path) -> str:
 
 def _session_id_from_state(state: dict[str, Any]) -> str:
     return str(state.get("operator_session_id") or "")
+
+
+def _preflight_session_source(root: Path, run_state: dict[str, Any]) -> None:
+    session_id = _session_id_from_state(run_state)
+    if not session_id:
+        return
+    try:
+        get_operator_session(root, session_id)
+    except UnknownOperatorSessionError:
+        return
 
 
 def _write_session(root: Path, session: dict[str, Any]) -> None:
@@ -600,6 +615,27 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _read_session_json(path: Path, *, session_id: str) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise InteractionError(
+            (
+                f"operator session source contains invalid JSON at {path}: "
+                f"line {exc.lineno} column {exc.colno}: {exc.msg}"
+            )
+        ) from exc
+    except OSError as exc:
+        raise InteractionError(f"operator session source cannot be read at {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise InteractionError(f"operator session source must be a JSON object at {path}")
+    if str(payload.get("operator_session_id") or session_id) != session_id:
+        raise InteractionError(f"operator session source id mismatch at {path}")
+    return payload
 
 
 def _read_run_state(path: Path) -> dict[str, Any]:

@@ -34,6 +34,17 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console session reads now reject malformed,
+  non-object, or mismatched `sessions/<id>.json` records as explicit source
+  errors. Corrupt session files no longer look like unknown sessions or get
+  bypassed while steer messages mutate run artifacts; missing sessions keep the
+  existing absent-session behavior. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud operator-visible source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree. Proof: focused operator-console
+  interaction, launcher, and HTTP-console tests; touched-file ruff/format
+  checks; `git diff --check`; changed-code review; and ratchet.
+
 - 2026-06-19: Operator-console interaction commands now reject malformed or
   non-object run `operator_state.json` sources before appending steer messages,
   next-goal queue rows, or session-link updates. Corrupt run state no longer
