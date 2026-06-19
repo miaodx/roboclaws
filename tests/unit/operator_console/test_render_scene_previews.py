@@ -595,6 +595,14 @@ def test_b1_camera_promotion_accepts_navigation_smoke_waypoint_evidence(
             "missing_view_path",
             True,
         ),
+        (
+            None,
+            None,
+            "absolute_views",
+            False,
+            "missing_view_path",
+            True,
+        ),
     ],
 )
 def test_b1_camera_promotion_keeps_relative_views_bound_to_artifact_dir(
@@ -607,12 +615,14 @@ def test_b1_camera_promotion_keeps_relative_views_bound_to_artifact_dir(
     expected_status: str,
     expect_empty_source: bool,
 ) -> None:
+    stale_dir = tmp_path / external_dir
+    fpv_path = fpv_path or str(stale_dir / "point_a.fpv.png")
+    chase_path = chase_path or str(stale_dir / "point_a.chase.png")
     artifact = _write_b1_navigation_smoke_artifact(
         tmp_path / "run",
         fpv_path=fpv_path,
         chase_path=chase_path,
     )
-    stale_dir = tmp_path / external_dir
     stale_dir.mkdir()
     _write_pattern_image(stale_dir / "point_a.fpv.png", accent=(220, 220, 220))
     _write_pattern_image(stale_dir / "point_a.chase.png", accent=(120, 90, 60))

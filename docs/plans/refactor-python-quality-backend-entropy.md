@@ -155,7 +155,10 @@ Latest quality snapshot from 2026-06-20:
   cannot treat a still-running or failed route's `run_result.json` as completed
   eval proof. Eval-harness detached live-product rows now apply the same
   terminal live-status rule before marking a row passed, so a running route's
-  early `run_result.json` cannot become harness pass evidence. Eval
+  early `run_result.json` cannot become harness pass evidence. Operator-console
+  B1 camera preview promotion now rejects absolute artifact view paths, keeping
+  promoted FPV/chase images bound to files declared under the source artifact
+  directory instead of arbitrary stale local files. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.

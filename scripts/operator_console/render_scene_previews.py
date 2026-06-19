@@ -952,7 +952,7 @@ def _resolve_b1_artifact_view_path(artifact_path: Path, raw_path: Any) -> Path |
         return None
     path = Path(str(raw_path))
     if path.is_absolute():
-        return path
+        return None
     base_dir = artifact_path.parent.resolve()
     resolved = (base_dir / path).resolve()
     try:

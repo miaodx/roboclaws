@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console B1 camera preview promotion now rejects absolute
+  FPV/chase artifact view paths, so external local files cannot be promoted as
+  current Isaac runtime camera evidence. Relative view paths remain bound under
+  the source artifact directory, matching the existing `../` escape rejection.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud preview artifact source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; the preview script remains under
+  the current module-size warning while the focused operator-console preview
+  test file remains oversized. Proof: focused operator-console preview tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-20: Eval-harness detached live-product rows now require terminal
   `live_status.json` evidence before marking a Codex live product row passed
   from `run_result.json`. A row with result artifacts but a still-running live
