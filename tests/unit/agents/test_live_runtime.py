@@ -2853,6 +2853,75 @@ def _assert_openai_agents_timeline_and_checker(
     assert "--require-clean-agent-run" in checker_command
 
 
+@pytest.mark.parametrize(
+    ("source_name", "source_text", "expected_detail"),
+    [
+        ("run_result.json", "{not-json}\n", "run_result.json: invalid JSON"),
+        (
+            "trace.jsonl",
+            json.dumps({"event": "request", "tool": "done"}) + "\n[]\n",
+            "trace.jsonl:2: non-object JSON: list",
+        ),
+    ],
+)
+def test_openai_agents_live_timing_fails_aloud_on_malformed_mcp_timing_source(
+    tmp_path: Path,
+    source_name: str,
+    source_text: str,
+    expected_detail: str,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = _parse_live_openai_agents_args(
+        [
+            "--run-dir",
+            str(run_dir),
+            "--repo-root",
+            str(_isolated_repo_root(tmp_path)),
+            "--status-path",
+            str(run_dir / "live_status.json"),
+            "--provider-profile",
+            "codex-router-responses",
+            "--model",
+            "gpt-5.5",
+            "--client-url",
+            "http://127.0.0.1:18788/mcp",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "18788",
+            "--lock-path",
+            str(tmp_path / "live.lock"),
+            "--server-startup-timeout-s",
+            "1",
+            "--kickoff-prompt",
+            "clean the room",
+            "--backend",
+            "molmospaces_subprocess",
+            "--task",
+            "clean",
+            "--min-generated-mess-count",
+            "5",
+            "--profile",
+            "smoke",
+        ]
+    )
+    runner = LiveOpenAIAgentsCleanupRunner(args)
+    (run_dir / source_name).write_text(source_text, encoding="utf-8")
+
+    source_error = runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert source_error.startswith("live_timing_source_error: OpenAI Agents live source")
+    assert expected_detail in source_error
+    assert timing["phase"] == "failed"
+    assert timing["exit_status"] == 1
+    assert timing["reason"] == source_error
+    assert timing["live_timing_source_error"] == source_error
+    assert timing["mcp_trace_timing"]["available"] is False
+    assert expected_detail in timing["mcp_trace_timing"]["source_error"]
+
+
 def test_openai_agents_camera_grounded_composite_profile_adds_private_server_flag(
     tmp_path: Path,
     monkeypatch,

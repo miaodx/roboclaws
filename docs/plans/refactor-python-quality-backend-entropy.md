@@ -43,7 +43,11 @@ Latest quality snapshot from 2026-06-20:
   non-finite timeout/retry values instead of clamping `nan` to zero or writing
   `inf` into runtime profile metadata, and the live OpenAI Agents runtime now
   rejects boolean/non-finite max-turn, retry, and MCP-timeout metadata/env
-  values before writing status/timing evidence. The operator-state payload now
+  values before writing status/timing evidence. OpenAI Agents SDK live timing
+  now fails final timing packets aloud when present MCP timing sources
+  (`run_result.json` or `trace.jsonl`) are malformed or non-object instead of
+  deriving plausible timing from substitute/partial evidence. The
+  operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
   explicit failed source errors instead of erasing them into idle or missing

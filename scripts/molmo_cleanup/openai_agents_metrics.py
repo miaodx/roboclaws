@@ -35,7 +35,7 @@ def openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
     tool_error_messages: list[str] = []
     result_count = 0
     for path in event_paths:
-        for event in _read_jsonl_path(path):
+        for event in read_openai_agents_jsonl_source(path):
             event_type = str(event.get("event") or "")
             if event_type:
                 event_counts[event_type] = event_counts.get(event_type, 0) + 1
@@ -75,7 +75,7 @@ def openai_agents_span_metrics(run_dir: Path) -> dict[str, Any]:
     limitations: list[dict[str, Any]] = []
     span_end_count = 0
     for path in span_paths:
-        for event in _read_jsonl_path(path):
+        for event in read_openai_agents_jsonl_source(path):
             event_type = str(event.get("event") or "")
             if event_type:
                 event_counts[event_type] = event_counts.get(event_type, 0) + 1
@@ -242,7 +242,7 @@ def openai_agents_cache_metrics(
 
 
 def openai_agents_context_growth_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
-    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
+    trace_events = read_openai_agents_jsonl_source(run_dir / "trace.jsonl")
     if not trace_events:
         return {
             "available": False,
@@ -648,7 +648,7 @@ def _events_by_schema(run_dir: Path, schema: str) -> list[dict[str, Any]]:
     return [
         event
         for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
-        for event in _read_jsonl_path(path)
+        for event in read_openai_agents_jsonl_source(path)
         if event.get("schema") == schema
     ]
 
@@ -656,7 +656,7 @@ def _events_by_schema(run_dir: Path, schema: str) -> list[dict[str, Any]]:
 def _response_span_end_events(run_dir: Path) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     for path in sorted(run_dir.glob("openai-agents-spans*.jsonl")):
-        for event in _read_jsonl_path(path):
+        for event in read_openai_agents_jsonl_source(path):
             if event.get("event") == "span_end" and event.get("span_type") == "response":
                 events.append(event)
     return events
@@ -727,7 +727,9 @@ def _continuation_attempt_count(timing: dict[str, Any]) -> int:
     )
 
 
-def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
+def read_openai_agents_jsonl_source(
+    path: Path, *, source_label: str = "OpenAI Agents metrics source"
+) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     events: list[dict[str, Any]] = []
@@ -740,11 +742,10 @@ def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
         try:
             item = json.loads(line)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"OpenAI Agents metrics {source}: invalid JSON: {exc.msg}") from exc
+            raise ValueError(f"{source_label} {source}: invalid JSON: {exc.msg}") from exc
         if not isinstance(item, dict):
-            raise ValueError(
-                f"OpenAI Agents metrics source {source}: non-object JSON: {type(item).__name__}"
-            )
+            kind = type(item).__name__
+            raise ValueError(f"{source_label} {source}: non-object JSON: {kind}")
         events.append(item)
     return events
 

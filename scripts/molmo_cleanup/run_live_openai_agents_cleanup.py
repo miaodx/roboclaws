@@ -73,6 +73,7 @@ from scripts.molmo_cleanup.openai_agents_metrics import (
 from scripts.molmo_cleanup.openai_agents_metrics import (
     openai_agents_span_metrics as _openai_agents_span_metrics,
 )
+from scripts.molmo_cleanup.openai_agents_metrics import read_openai_agents_jsonl_source
 from scripts.molmo_cleanup.openai_agents_perf_profile import (
     MODEL_THINKING_MODE_ENV,
     camera_grounded_composite_tools_enabled_for_run,
@@ -763,7 +764,7 @@ class LiveOpenAIAgentsCleanupRunner:
         retryable: bool | None = None,
         resume_available: bool | None = None,
         detail: str = "",
-    ) -> None:
+    ) -> str:
         finished_at = time.time()
         payload = dict(self.live_timing)
         payload.update(
@@ -784,25 +785,38 @@ class LiveOpenAIAgentsCleanupRunner:
         if detail:
             payload["detail"] = detail
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
-        payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
-        payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
-        payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
-        payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
-        payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(self.run_dir)
-        payload["model_racing_observability_metrics"] = _model_racing_observability_metrics(
-            self.run_dir
-        )
-        payload["model_input_filter_metrics"] = _model_input_filter_metrics(self.run_dir)
-        payload["context_metrics"] = _context_metrics(self.run_dir, payload)
-        payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
-        payload["context_growth_metrics"] = _context_growth_metrics(self.run_dir, payload)
-        payload["model_or_sdk_unattributed_s"] = _model_or_sdk_unattributed_seconds(payload)
-        payload["timeline"] = _live_timing_timeline(payload)
+        source_error = ""
+        try:
+            payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+            payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
+            payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
+            payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
+            payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(
+                self.run_dir
+            )
+            payload["model_racing_observability_metrics"] = _model_racing_observability_metrics(
+                self.run_dir
+            )
+            payload["model_input_filter_metrics"] = _model_input_filter_metrics(self.run_dir)
+            payload["context_metrics"] = _context_metrics(self.run_dir, payload)
+            payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
+            payload["context_growth_metrics"] = _context_growth_metrics(self.run_dir, payload)
+            payload["model_or_sdk_unattributed_s"] = _model_or_sdk_unattributed_seconds(payload)
+            payload["timeline"] = _live_timing_timeline(payload)
+        except ValueError as exc:
+            source_error = f"live_timing_source_error: {exc}"
+            payload["live_timing_source_error"] = source_error
+            if phase == "finished" and exit_status == 0:
+                payload["phase"] = "failed"
+                payload["exit_status"] = 1
+                payload["reason"] = source_error
+            payload["mcp_trace_timing"] = {"available": False, "source_error": str(exc)}
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         write_model_call_metrics_jsonl(
             self.run_dir / "model_call_metrics.jsonl",
             extract_model_call_metrics(self.run_dir, live_timing=payload),
         )
+        return source_error
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
@@ -1690,8 +1704,19 @@ def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
     if run_result_path.is_file():
         try:
             run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            run_result = {}
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"OpenAI Agents live source {run_result_path}: invalid JSON: {exc.msg}"
+            ) from exc
+        except OSError as exc:
+            raise ValueError(
+                f"OpenAI Agents live source {run_result_path}: read error: {exc}"
+            ) from exc
+        if not isinstance(run_result, dict):
+            raise ValueError(
+                "OpenAI Agents live source "
+                f"{run_result_path}: non-object JSON: {type(run_result).__name__}"
+            )
         timing = run_result.get("runtime_timing")
         if isinstance(timing, dict):
             return timing
@@ -1915,19 +1940,7 @@ def _estimated_tokens_from_chars(char_count: int) -> int:
 
 
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip():
-            continue
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(item, dict):
-            events.append(item)
-    return events
+    return read_openai_agents_jsonl_source(path, source_label="OpenAI Agents live source")
 
 
 def _float_or_none(value: Any) -> float | None:

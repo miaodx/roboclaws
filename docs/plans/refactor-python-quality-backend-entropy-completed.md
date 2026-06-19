@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: OpenAI Agents SDK live timing now fails aloud when present MCP
+  timing source artifacts are malformed or non-object. Corrupt
+  `run_result.json` no longer gets erased before falling back to trace-derived
+  timing, and corrupt `trace.jsonl` no longer escapes during downstream metrics
+  extraction before `live_timing.json` is written; final successful writes are
+  downgraded to failed timing evidence with `live_timing_source_error`. Owner
+  layer: Agent Engines And Provider Profiles. Behavior-change class:
+  fail-aloud live runtime artifact/source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree; the runner reuses the OpenAI Agents metrics JSONL source parser
+  rather than carrying a duplicate partial parser. Proof: focused OpenAI
+  Agents live timing tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
 - 2026-06-20: Operator-console prompt previews now reject malformed or negative
   cleanup `relocation_count` overrides before rendering kickoff prompts.
   Preview-only target cleanup counts can no longer silently coerce invalid
