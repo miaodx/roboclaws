@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion now rejects malformed
+  source-map geometry in Agibot `nav2.yaml` and Nav2 cleanup-bundle `map.yaml`
+  before building offline prior packets. Missing, non-positive, non-finite, or
+  wrong-shaped resolution/origin values can no longer default to `0.05` or
+  `[0, 0, 0]`, and yaw now comes from the same validated origin tuple. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source-map geometry truth; valid Agibot and Nav2 conversion shape
+  is unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Runtime Map Prior Snapshot contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only with fresh offline prior conversion evidence that source map geometry is
+  again defaulted, silently coerced, or read through a separate parser.
+
 - 2026-06-20: OpenAI Agents SDK performance-profile numeric settings now
   reject direct Python boolean values before runtime profile metadata is
   produced. Direct `max_turns`, `raw_fpv_candidate_budget`,

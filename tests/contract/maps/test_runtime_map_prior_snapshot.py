@@ -303,6 +303,49 @@ def test_nav2_cleanup_bundle_rejects_non_object_semantics(tmp_path: Path) -> Non
         runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
 
 
+@pytest.mark.parametrize(
+    ("map_yaml", "expected_error"),
+    [
+        (
+            ["image: map.pgm", "origin: [0, 0, 0]"],
+            "Nav2 cleanup map.yaml resolution must be a positive finite number",
+        ),
+        (
+            ["image: map.pgm", "resolution: 0.05"],
+            "Nav2 cleanup map.yaml origin must be a 3-item numeric list",
+        ),
+        (
+            ["image: map.pgm", "resolution: 0.05", "origin: [0, 0]"],
+            "Nav2 cleanup map.yaml origin must be a 3-item numeric list",
+        ),
+    ],
+)
+def test_nav2_cleanup_bundle_rejects_malformed_map_yaml_geometry(
+    tmp_path: Path,
+    map_yaml: list[str],
+    expected_error: str,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    (bundle_dir / "map.yaml").write_text("\n".join([*map_yaml, ""]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
+def test_agibot_navigation_memory_rejects_malformed_nav2_yaml_geometry(tmp_path: Path) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    (map_dir / "agibot" / "nav2.yaml").write_text(
+        "\n".join(["image: occupancy.pgm", "resolution: 0.05", "origin: [0, 0]", ""]),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Agibot nav2.yaml origin must be a 3-item numeric list",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
 def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     tmp_path: Path,
 ) -> None:

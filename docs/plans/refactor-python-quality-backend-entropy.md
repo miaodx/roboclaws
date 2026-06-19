@@ -56,9 +56,10 @@ Latest quality snapshot from 2026-06-20:
   run-result JSON as concise CLI source errors instead of surfacing tracebacks
   or raw type failures. Runtime Map Prior Snapshot conversion now reports
   malformed or non-object Agibot `navigation_memory.json`, Agibot
-  `source.json`, and Nav2 `semantics.json` sources as explicit source-path
-  errors instead of raw parser/type failures or wrong-shaped source packets. The
-  Nav2 map-bundle validator now reports parseable non-object `semantics.json`
+  `source.json`, Nav2 `semantics.json`, and malformed Nav2/Agibot source-map
+  geometry as explicit source-path errors instead of raw parser/type failures,
+  wrong-shaped source packets, or defaulted map geometry. The Nav2 map-bundle
+  validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
   during validation or projection. B1 runtime bundle compilation now reports
   malformed or non-object explicit semantic projection artifacts as source-path

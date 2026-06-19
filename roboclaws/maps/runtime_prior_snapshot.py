@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -100,11 +101,12 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
         label="Agibot navigation memory",
     )
     map_yaml = parse_map_yaml(nav2_yaml_path.read_text(encoding="utf-8"))
+    resolution, origin = _source_map_geometry(map_yaml, label="Agibot nav2.yaml")
     grid = load_pgm(
         occupancy_path,
-        resolution_m=float(map_yaml.get("resolution") or 0.05),
-        origin_x=float((map_yaml.get("origin") or [0.0, 0.0, 0.0])[0]),
-        origin_y=float((map_yaml.get("origin") or [0.0, 0.0, 0.0])[1]),
+        resolution_m=resolution,
+        origin_x=origin[0],
+        origin_y=origin[1],
     )
     source = _read_json_object(source_path, label="Agibot map source")
 
@@ -140,7 +142,7 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
             "artifact_paths": _artifact_paths(map_dir),
             "costmap": {
                 "resolution_m": grid.resolution_m,
-                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": _yaw(map_yaml)},
+                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": round(origin[2], 6)},
                 "width": grid.width,
                 "height": grid.height,
                 "occupancy_grid_artifact": "agibot/occupancy.pgm",
@@ -235,11 +237,10 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
     _require_file(semantics_path)
 
     map_yaml = parse_map_yaml(map_yaml_path.read_text(encoding="utf-8"))
-    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
-    origin = (origin + [0.0, 0.0, 0.0])[:3]
+    resolution, origin = _source_map_geometry(map_yaml, label="Nav2 cleanup map.yaml")
     grid = load_pgm(
         occupancy_path,
-        resolution_m=float(map_yaml.get("resolution") or 0.05),
+        resolution_m=resolution,
         origin_x=float(origin[0]),
         origin_y=float(origin[1]),
     )
@@ -281,7 +282,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
             },
             "costmap": {
                 "resolution_m": grid.resolution_m,
-                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": _yaw(map_yaml)},
+                "origin": {"x": grid.origin_x, "y": grid.origin_y, "yaw": round(origin[2], 6)},
                 "width": grid.width,
                 "height": grid.height,
                 "occupancy_grid_artifact": "map.pgm",
@@ -1083,12 +1084,23 @@ def _map_id(map_dir: Path, source: dict[str, Any]) -> str:
     return str(source.get("alias") or source.get("requested_map_id") or map_dir.name)
 
 
-def _yaw(map_yaml: dict[str, Any]) -> float:
-    origin = map_yaml.get("origin") if isinstance(map_yaml.get("origin"), list) else []
+def _source_map_geometry(map_yaml: dict[str, Any], *, label: str) -> tuple[float, list[float]]:
     try:
-        return round(float(origin[2]), 6)
-    except (IndexError, TypeError, ValueError):
-        return 0.0
+        resolution = float(map_yaml.get("resolution"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} resolution must be a positive finite number") from exc
+    if not math.isfinite(resolution) or resolution <= 0.0:
+        raise ValueError(f"{label} resolution must be a positive finite number")
+    origin = map_yaml.get("origin")
+    if not isinstance(origin, list) or len(origin) != 3:
+        raise ValueError(f"{label} origin must be a 3-item numeric list")
+    try:
+        parsed_origin = [float(item) for item in origin]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} origin must be a 3-item numeric list") from exc
+    if any(not math.isfinite(item) for item in parsed_origin):
+        raise ValueError(f"{label} origin must be a 3-item numeric list")
+    return resolution, parsed_origin
 
 
 def _safe_id(value: str) -> str:
