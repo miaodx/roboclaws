@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval-harness detached live-product polling now fails aloud for
+  malformed `live_status.json` source evidence. A corrupt live-status sidecar
+  no longer looks absent while the harness waits for `run_result.json` or marks
+  the detached live-product row as passed; the row blocks with an explicit
+  source-error detail and keeps the live-status/driver artifacts attached.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; row selection, provider readiness, live
+  command construction, detached timeout duration, result-artifact attachment,
+  and eval aggregate parsing are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  eval-harness selector tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval-runner grader sidecar parsing now fails aloud for present
   malformed or non-object optional JSON artifacts. Corrupt
   `live_status.json`, `live_timing.json`, `advisory_evaluation.json`, and

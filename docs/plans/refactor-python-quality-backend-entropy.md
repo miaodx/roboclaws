@@ -78,7 +78,10 @@ Latest quality snapshot from 2026-06-19:
   malformed or non-object optional sidecars (`live_status.json`,
   `live_timing.json`, `advisory_evaluation.json`, and open-ended
   `runtime_metric_map.json`) instead of collapsing corrupt source evidence into
-  unavailable/advisory-neutral grading state.
+  unavailable/advisory-neutral grading state. Eval-harness detached live-product
+  polling now blocks rows on malformed `live_status.json` source evidence instead
+  of treating corrupt status as absent while waiting for or accepting terminal
+  artifacts.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

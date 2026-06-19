@@ -289,17 +289,27 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
     deadline = time.monotonic() + DETACHED_LIVE_PRODUCT_TIMEOUT_S
     while time.monotonic() <= deadline:
         run_result = run_dir / "run_result.json"
+        live_status = run_dir / "live_status.json"
+        status, source_error = _load_live_status_source(live_status)
+        if source_error:
+            row["status"] = "blocked"
+            row["outcome"] = "blocked"
+            row["blocker_category"] = "environment_blocked"
+            row["blockers"] = [
+                _environment_blocker(f"detached live product row source error: {source_error}")
+            ]
+            _append_output_artifacts(row, live_status, run_dir / "driver.log")
+            return
         if run_result.is_file():
             row["status"] = "ran"
             row["outcome"] = "passed"
             _append_output_artifacts(
                 row,
                 run_result,
-                run_dir / "live_status.json",
+                live_status,
                 run_dir / "report.html",
             )
             return
-        status = _load_json(run_dir / "live_status.json")
         exit_status = status.get("exit_status")
         phase = str(status.get("phase") or "").lower()
         if exit_status not in {None, 0} or phase in {"failed", "stopped_by_operator"}:
@@ -312,7 +322,7 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
                     f"{phase or exit_status}"
                 )
             ]
-            _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+            _append_output_artifacts(row, live_status, run_dir / "driver.log")
             return
         time.sleep(1.0)
         run_dir = _discover_live_product_run_dir(run_root) or run_dir
@@ -325,6 +335,15 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
         )
     ]
     _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+
+
+def _load_live_status_source(path: Path) -> tuple[dict[str, Any], str]:
+    if not path.exists():
+        return {}, ""
+    try:
+        return _load_required_json_object(path, label="live_status"), ""
+    except ValueError as exc:
+        return {}, str(exc)
 
 
 def _is_detached_live_product_row(row: dict[str, Any]) -> bool:

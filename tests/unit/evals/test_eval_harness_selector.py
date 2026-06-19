@@ -497,6 +497,44 @@ def test_detached_live_product_row_waits_for_terminal_artifact(
     assert any(path.endswith("run_result.json") for path in row["output_artifacts"])
 
 
+def test_detached_live_product_row_blocks_on_malformed_live_status_source(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
+
+    def fake_run(command, **_kwargs):
+        output_arg = next(item for item in command if str(item).startswith("output_dir="))
+        output_dir = Path(str(output_arg).split("=", 1)[1])
+        run_dir = output_dir / "0615_1225" / "seed-7"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "live_status.json").write_text("{", encoding="utf-8")
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    manifest = selector.build_eval_harness(
+        mode="execute",
+        budget="focused",
+        changed_files=["roboclaws/household/raw_fpv_guidance.py"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_harness(manifest)
+
+    row = _selected_rows(manifest)["codex-cleanup-camera-raw-fpv-live-product"]
+    assert row["status"] == "blocked"
+    assert row["outcome"] == "blocked"
+    assert row["blocker_category"] == "environment_blocked"
+    assert "live_status JSON parse error" in row["blockers"][0]["detail"]
+    assert any(path.endswith("live_status.json") for path in row["output_artifacts"])
+
+
 def test_failed_live_row_with_busy_mcp_port_is_classified_as_blocked() -> None:
     for stderr in (
         (
