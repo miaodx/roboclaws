@@ -433,6 +433,62 @@ def test_live_surface_product_rejects_mixed_fresh_and_stale_artifacts(
         live_runtime.run_live_surface_product(**kwargs)
 
 
+def test_live_surface_product_rejects_stdout_artifacts_path_outside_surface_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    stale_trial_dir = trial_dir
+    _write_product_artifacts(stale_trial_dir, completion_status="success")
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        return _completed_process(
+            returncode=0,
+            stdout=f"Artifacts: {stale_trial_dir}\n",
+        )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(RuntimeError, match="stdout live surface artifacts path must stay under"):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_product_rejects_stdout_artifacts_path_without_seed_leaf(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    wrong_leaf_dir = trial_dir / "surface-run" / "0615_0305"
+    _write_product_artifacts(wrong_leaf_dir, completion_status="success")
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        return _completed_process(
+            returncode=0,
+            stdout=f"Artifacts: {wrong_leaf_dir}\n",
+        )
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(
+        RuntimeError, match="stdout live surface artifacts path must end with seed-7"
+    ):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
 def test_live_surface_discovery_fails_on_ambiguous_current_sibling_artifacts(
     tmp_path: Path,
 ) -> None:

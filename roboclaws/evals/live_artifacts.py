@@ -20,9 +20,12 @@ def discover_live_surface_run_dir(
     """Return the actual artifact directory created by the public live route."""
 
     seed_leaf = f"seed-{int(kwargs['seed'])}"
-    priority_candidates = _unique_live_surface_candidates(
-        [fallback_run_dir, _live_surface_run_dir_from_stdout(stdout)]
+    stdout_run_dir = _live_surface_run_dir_from_stdout(
+        stdout,
+        output_dir=output_dir,
+        seed_leaf=seed_leaf,
     )
+    priority_candidates = _unique_live_surface_candidates([fallback_run_dir, stdout_run_dir])
     priority_match = _priority_live_surface_run_dir(
         priority_candidates,
         started_wall_time_s=started_wall_time_s,
@@ -265,7 +268,12 @@ def _live_surface_run_dir_is_current(
         return False
 
 
-def _live_surface_run_dir_from_stdout(stdout: str) -> Path | None:
+def _live_surface_run_dir_from_stdout(
+    stdout: str,
+    *,
+    output_dir: Path,
+    seed_leaf: str,
+) -> Path | None:
     for raw_line in stdout.splitlines():
         line = raw_line.strip()
         if not line.startswith("Artifacts"):
@@ -273,5 +281,27 @@ def _live_surface_run_dir_from_stdout(stdout: str) -> Path | None:
         _, _, value = line.partition(":")
         path = value.strip()
         if path:
-            return Path(path)
+            candidate = Path(path)
+            _validate_stdout_live_surface_run_dir(
+                candidate,
+                output_dir=output_dir,
+                seed_leaf=seed_leaf,
+            )
+            return candidate
     return None
+
+
+def _validate_stdout_live_surface_run_dir(
+    path: Path,
+    *,
+    output_dir: Path,
+    seed_leaf: str,
+) -> None:
+    try:
+        path.resolve().relative_to(output_dir.resolve())
+    except ValueError as exc:
+        raise RuntimeError(
+            f"stdout live surface artifacts path must stay under {output_dir}: {path}"
+        ) from exc
+    if path.name != seed_leaf:
+        raise RuntimeError(f"stdout live surface artifacts path must end with {seed_leaf}: {path}")

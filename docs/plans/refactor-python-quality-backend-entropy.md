@@ -146,7 +146,11 @@ Latest quality snapshot from 2026-06-20:
   or wrong-shaped values, and also rejects wrong-shaped
   `runtime_map_prior_from_sample` source-sample ids before direct or live eval
   product launch instead of passing declared stale priors through to the runner,
-  skipping explicit null values, or stringifying malformed source values. Eval
+  skipping explicit null values, or stringifying malformed source values. Live
+  eval surface artifact discovery now rejects stdout-declared artifact
+  directories outside the live surface output root or not ending at the
+  expected `seed-*` leaf, so trial-dir or malformed paths cannot become
+  priority live-run evidence. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.

@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Live eval surface artifact discovery now validates
+  stdout-declared `Artifacts:` directories before treating them as priority live
+  route evidence. Declared paths must stay under the live surface output root
+  and end at the expected `seed-*` leaf, preventing trial-directory artifacts,
+  malformed parent paths, or escaped paths from substituting for the actual live
+  product run. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud live eval artifact source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; focused
+  regression coverage keeps `tests/unit/evals/test_eval_runner.py` above the
+  2000-line warning and should be handled only through the planned
+  `$intuitive-tests` route. Proof: focused live surface artifact discovery
+  tests, full eval-runner unit file, touched-file ruff/format checks, `git diff
+  --check`, and ratchet.
+
 - 2026-06-20: Eval dependency resolution now treats present
   `runtime_map_prior` fields as source truth even when the value is null or
   empty. Explicit null values now fail as invalid dependency metadata, and
