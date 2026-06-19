@@ -3171,6 +3171,14 @@ logs before choosing the next slice.
   docs-only diff check. Reopen only if active repo guidance reintroduces the
   hybrid-router skill as a dependency instead of spelling out the current
   staged workflow.
+- The active small-cut checklist no longer carries stale exact-name entries for
+  empty camera-labeler maps or `_task_prefix_legacy`. Search found no active
+  code, recipe, or human-doc surface with those exact stale artifacts; current
+  `_task_prefix` remains a live prompt helper and is not a legacy surface by
+  itself. Owner layer: workflow / cleanup plan hygiene. Behavior-change class:
+  stale checklist residue removal. Proof: targeted active-surface search and
+  docs-only diff check. Reopen only with a concrete active symbol or command
+  surface, not the historical checklist names alone.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

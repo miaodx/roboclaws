@@ -459,8 +459,7 @@ confidence without postponing a stronger P1 frontier.
 - B1 preview row:
   `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 - Behavior-test fixture-builder work in selected operator-console tests.
-- Stale small cuts: empty camera-labeler maps, `_task_prefix_legacy`, and
-  duplicated lane prose.
+- Stale small cuts: duplicated lane prose.
 
 Keep public `camera_labeler` / `visual_grounding_pipeline_id` semantics unless
 a selected slice explicitly migrates them.
