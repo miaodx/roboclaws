@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 consistency and label-tool review layers now load
+  `navigation_memory.json` through a shared strict parser, require a non-empty
+  `items` or `catalog.navigation_memory` list, reject non-object rows, reject
+  present malformed `nav_goal` / `pose` point fields, and fail on missing
+  selected-bundle sibling memory sources instead of rendering empty navigation
+  memory layers or partial consistency packets. The label tool also resolves
+  the memory source next to the selected map bundle instead of a stale global
+  default. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 review-layer source truth; valid
+  item-list and catalog-shaped memory sources remain accepted. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof: focused B1
+  Map 12 consistency and label-tool contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Parked:
+  migrating the already-strict Runtime Map Prior Snapshot and B1 runtime bundle
+  compiler local parsers onto the shared helper should be a separate
+  caller-proof slice, not folded into this review-layer change. Reopen only
+  with fresh B1 review-tool evidence that malformed navigation memory sources
+  are again skipped, defaulted, or written as valid-looking empty/partial
+  packets.
+
 - 2026-06-20: B1 runtime bundle compilation now loads
   `navigation_memory.json` through a strict object parser, requires a non-empty
   `items` or `catalog.navigation_memory` list, rejects non-object rows, and

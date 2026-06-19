@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +17,7 @@ from scripts.maps.render_b1_map12_label_tool import (
     label_tool_template,
     label_tool_template_path,
     materialize_scene_evidence_artifacts,
+    navigation_memory_layer_from_path,
     pixel_to_world,
     render_label_tool_html,
     validate_label_draft_manifest,
@@ -133,6 +135,89 @@ def test_label_tool_packet_exposes_navigation_memory_layer() -> None:
     assert items["kitchen_center"]["nav_goal"]["frame_id"] == "map"
     assert items["fridge_main"]["pose"]["x"] == pytest.approx(1.6879071220842632)
     assert items["fridge_main"]["nav_goal"]["x"] == pytest.approx(1.125)
+
+
+@pytest.mark.parametrize(
+    ("navigation_memory", "expected_error"),
+    [
+        (
+            [],
+            "navigation_memory.json must contain a JSON object",
+        ),
+        (
+            {},
+            "navigation_memory.json must contain a non-empty items list "
+            "or catalog.navigation_memory list",
+        ),
+        (
+            {"items": []},
+            "navigation_memory.json items must be a non-empty list",
+        ),
+        (
+            {"items": [[]]},
+            "navigation_memory.json item 1 must be a JSON object",
+        ),
+        (
+            {"items": [{"id": "bad_anchor", "nav_goal": {"x": "bad", "y": 1.0}}]},
+            "navigation_memory.json item bad_anchor nav_goal x must be a finite number",
+        ),
+        (
+            {"items": [{"id": "bad_anchor"}]},
+            "navigation_memory.json item bad_anchor must include pose or nav_goal",
+        ),
+    ],
+)
+def test_label_tool_rejects_malformed_navigation_memory_sources(
+    tmp_path: Path,
+    navigation_memory: object,
+    expected_error: str,
+) -> None:
+    map_bundle = _copy_map12_bundle(tmp_path)
+    navigation_memory_path = map_bundle.parent / "navigation_memory.json"
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_label_tool_packet(map_bundle=map_bundle)
+
+
+def test_label_tool_rejects_malformed_navigation_memory_json(tmp_path: Path) -> None:
+    map_bundle = _copy_map12_bundle(tmp_path)
+    navigation_memory_path = map_bundle.parent / "navigation_memory.json"
+    navigation_memory_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"navigation_memory.json must contain valid JSON object: .*navigation_memory\.json",
+    ):
+        build_label_tool_packet(map_bundle=map_bundle)
+
+
+def test_label_tool_accepts_catalog_navigation_memory_items(tmp_path: Path) -> None:
+    map_bundle = _copy_map12_bundle(tmp_path)
+    navigation_memory_path = map_bundle.parent / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    items = navigation_memory.pop("items")
+    navigation_memory["catalog"] = {"navigation_memory": items}
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    packet = build_label_tool_packet(map_bundle=map_bundle)
+
+    assert len(packet["navigation_memory_layer"]["items"]) == 9
+
+
+def test_navigation_memory_layer_rejects_missing_source(tmp_path: Path) -> None:
+    transform = SourceMapTransform(
+        width_px=913,
+        height_px=716,
+        resolution_m=0.0500000007451,
+        origin_x=-35.1000022888,
+        origin_y=-22.3000011444,
+    )
+
+    with pytest.raises(ValueError, match=r"navigation_memory\.json missing: .*missing\.json"):
+        navigation_memory_layer_from_path(
+            tmp_path / "missing.json", transform=transform, frame_id="map"
+        )
 
 
 def test_label_tool_packet_excludes_scene_evidence_by_default() -> None:
@@ -412,3 +497,9 @@ def test_label_tool_cli_does_not_own_a_server() -> None:
     assert "--serve" not in result.stdout
     assert "--host" not in result.stdout
     assert "--port" not in result.stdout
+
+
+def _copy_map12_bundle(tmp_path: Path) -> Path:
+    map_dir = tmp_path / "robot_map_12"
+    shutil.copytree(MAP_BUNDLE.parent, map_dir)
+    return map_dir / "agibot"

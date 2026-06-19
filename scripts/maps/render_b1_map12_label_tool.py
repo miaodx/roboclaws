@@ -21,6 +21,12 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.maps.bundle_validation import parse_map_yaml
+from roboclaws.maps.navigation_memory import (
+    navigation_memory_item,
+    navigation_memory_items,
+    navigation_memory_point_source,
+    read_navigation_memory,
+)
 from roboclaws.maps.room_semantics import build_scene_room_semantic_overlay
 from roboclaws.maps.spatial_contract import (
     ALIGNMENT_STATUS_CANDIDATE,
@@ -34,7 +40,6 @@ LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
-DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/label-tool")
 TEMPLATE_PATH = Path(__file__).with_name("b1_map12_label_tool_template.html")
@@ -69,14 +74,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    artifacts = write_label_tool_artifacts(
-        map_bundle=args.map_bundle,
-        semantics_path=args.semantics,
-        scene_root=args.scene_root,
-        include_gaussian_scene=args.include_gaussian_scene,
-        review_manifest_path=args.output_review_manifest,
-        output_dir=args.output_dir,
-    )
+    try:
+        artifacts = write_label_tool_artifacts(
+            map_bundle=args.map_bundle,
+            semantics_path=args.semantics,
+            scene_root=args.scene_root,
+            include_gaussian_scene=args.include_gaussian_scene,
+            review_manifest_path=args.output_review_manifest,
+            output_dir=args.output_dir,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     payload = {
         "schema": LABEL_TOOL_PACKET_SCHEMA,
         "shape_count": artifacts["shape_count"],
@@ -164,7 +173,7 @@ def build_label_tool_packet(
         frame_id=frame_id,
     )
     navigation_memory_layer = navigation_memory_layer_from_path(
-        DEFAULT_NAVIGATION_MEMORY,
+        map_bundle.parent / "navigation_memory.json",
         transform=transform,
         frame_id=frame_id,
     )
@@ -653,23 +662,22 @@ def navigation_memory_layer_from_path(
     frame_id: str,
 ) -> dict[str, Any]:
     path = Path(navigation_memory_path)
-    if not path.is_file():
-        return {
-            "schema": "robot_map12_navigation_memory_layer_v1",
-            "source": str(path),
-            "coordinate_policy": "navigation_memory_pose_and_nav_goal_are_map_frame_priors",
-            "items": [],
-        }
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_navigation_memory(path)
     items = [
         item
         for item in (
-            navigation_memory_layer_item(raw_item, transform=transform, frame_id=frame_id)
-            for raw_item in navigation_memory_items(payload)
-            if isinstance(raw_item, dict)
+            navigation_memory_layer_item(
+                navigation_memory_item(raw_item, index=index),
+                index=index,
+                transform=transform,
+                frame_id=frame_id,
+            )
+            for index, raw_item in enumerate(navigation_memory_items(payload), start=1)
         )
         if item is not None
     ]
+    if not items:
+        raise ValueError(f"navigation_memory.json did not yield any label-layer items: {path}")
     return {
         "schema": "robot_map12_navigation_memory_layer_v1",
         "source": str(path),
@@ -681,18 +689,25 @@ def navigation_memory_layer_from_path(
 def navigation_memory_layer_item(
     item: dict[str, Any],
     *,
+    index: int,
     transform: SourceMapTransform,
     frame_id: str,
 ) -> dict[str, Any] | None:
-    item_id = str(item.get("id") or "")
-    pose = _navigation_memory_point(item.get("pose"), transform=transform, frame_id=frame_id)
+    item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
+    pose = _navigation_memory_point(
+        item.get("pose"),
+        transform=transform,
+        frame_id=frame_id,
+        label=f"navigation_memory.json item {item_id} pose",
+    )
     nav_goal = _navigation_memory_point(
         item.get("nav_goal"),
         transform=transform,
         frame_id=frame_id,
+        label=f"navigation_memory.json item {item_id} nav_goal",
     )
-    if not item_id or (pose is None and nav_goal is None):
-        return None
+    if pose is None and nav_goal is None:
+        raise ValueError(f"navigation_memory.json item {item_id} must include pose or nav_goal")
     return {
         "id": item_id,
         "label": str(item.get("label") or item_id),
@@ -706,32 +721,23 @@ def navigation_memory_layer_item(
     }
 
 
-def navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if isinstance(payload.get("items"), list):
-        return list(payload["items"])
-    catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
-    memory = catalog.get("navigation_memory")
-    return list(memory) if isinstance(memory, list) else []
-
-
 def _navigation_memory_point(
     payload: Any,
     *,
     transform: SourceMapTransform,
     frame_id: str,
+    label: str,
 ) -> dict[str, Any] | None:
-    if not isinstance(payload, dict) or "x" not in payload or "y" not in payload:
+    source = navigation_memory_point_source(payload, label=label, required=False)
+    if not source:
         return None
-    try:
-        x = float(payload["x"])
-        y = float(payload["y"])
-    except (TypeError, ValueError):
-        return None
+    x = source["x"]
+    y = source["y"]
     return {
         "frame_id": frame_id,
         "x": x,
         "y": y,
-        "yaw": _optional_float(payload.get("yaw")),
+        "yaw": source.get("yaw"),
         "pixel_center": world_to_pixel(x, y, transform),
     }
 

@@ -68,7 +68,12 @@ Latest quality snapshot from 2026-06-20:
   wrong-shaped `navigation_memory.json` sources and present malformed
   `nav_goal`/`pose` point fields before writing runtime semantics, instead of
   skipping source evidence into a generic no-waypoints failure or partial
-  bundle. The Nav2 map-bundle
+  bundle. B1 Map 12 consistency and label-tool review layers now use the same
+  strict navigation-memory source parser, reject missing, malformed,
+  non-object, empty, wrong-shaped, or bad-point `navigation_memory.json`
+  sources, and bind review packets to the selected map bundle's sibling memory
+  source instead of emitting empty layers or partial consistency packets from
+  corrupt evidence. The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
   during validation or projection. B1 runtime bundle compilation now reports
