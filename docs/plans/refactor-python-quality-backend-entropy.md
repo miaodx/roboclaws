@@ -81,7 +81,9 @@ Latest quality snapshot from 2026-06-19:
   unavailable/advisory-neutral grading state. Eval-harness detached live-product
   polling now blocks rows on malformed `live_status.json` source evidence instead
   of treating corrupt status as absent while waiting for or accepting terminal
-  artifacts.
+  artifacts. Eval-runner live surface artifact discovery now rejects stale or
+  ambiguous sibling `seed-*` run directories instead of grading substitute
+  artifacts from a previous or unclear live route.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

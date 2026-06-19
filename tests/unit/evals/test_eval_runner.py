@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -264,6 +265,85 @@ def test_live_surface_product_discovers_timestamped_run_dir(
     assert command_log
     assert result["eval_effective_run_dir"].endswith("surface-run/0615_0305/seed-7")
     assert (tmp_path / "trial-0000" / "live_eval_command.json").exists()
+
+
+def test_live_surface_product_rejects_stale_sibling_run_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    stale_run_dir = trial_dir / "surface-run" / "old-run" / "seed-7"
+    _write_product_artifacts(stale_run_dir, completion_status="success")
+    (stale_run_dir / "run_result.json").write_text(
+        json.dumps(_run_result(stale_run_dir, completion_status="success")) + "\n"
+    )
+    for artifact in (stale_run_dir, *stale_run_dir.iterdir()):
+        os.utime(artifact, (1.0, 1.0))
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(RuntimeError, match="stale live surface run artifacts"):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_product_rejects_mixed_fresh_and_stale_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    trial_dir = tmp_path / "trial-0000"
+    run_dir = trial_dir / "surface-run" / "seed-7"
+    _write_product_artifacts(run_dir, completion_status="success")
+    (run_dir / "run_result.json").write_text(
+        json.dumps(_run_result(run_dir, completion_status="success")) + "\n"
+    )
+    os.utime(run_dir / "run_result.json", (1.0, 1.0))
+
+    def fake_run(
+        _command: list[str],
+        **_kwargs: Any,
+    ) -> Any:
+        (run_dir / "live_status.json").write_text('{"phase": "finished", "exit_status": 0}\n')
+        return _completed_process(returncode=0)
+
+    monkeypatch.setattr(live_runtime.subprocess, "run", fake_run)
+    kwargs = _live_surface_kwargs(trial_dir, live_timeout_s=1.0)
+    kwargs["agent_engine"] = "openai-agents-sdk"
+
+    with pytest.raises(RuntimeError, match="stale live surface run artifacts"):
+        live_runtime.run_live_surface_product(**kwargs)
+
+
+def test_live_surface_discovery_fails_on_ambiguous_current_sibling_artifacts(
+    tmp_path: Path,
+) -> None:
+    from roboclaws.evals import live_runtime
+
+    output_dir = tmp_path / "surface-run"
+    for stamp in ("0615_0305", "0615_0306"):
+        _write_product_artifacts(
+            output_dir / stamp / "seed-7",
+            completion_status="success",
+        )
+
+    with pytest.raises(RuntimeError, match="ambiguous live surface run artifacts"):
+        live_runtime.discover_live_surface_run_dir(
+            {"seed": 7},
+            output_dir=output_dir,
+            fallback_run_dir=output_dir / "seed-7",
+            started_wall_time_s=0.0,
+        )
 
 
 def test_live_surface_product_waits_for_detached_codex_status(

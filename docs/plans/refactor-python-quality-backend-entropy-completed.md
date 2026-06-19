@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval-runner live surface artifact discovery now fails aloud for
+  stale or ambiguous sibling `seed-*` run directories. Live eval rows no longer
+  silently grade substitute artifacts from an older run or an unclear current
+  route when the commanded run directory lacks evidence; the adapter still
+  accepts explicit/stdout artifact directories and one unique current
+  timestamped directory. The JSON sidecar loader and artifact-dir selector now
+  live in `roboclaws/evals/live_artifacts.py`, keeping
+  `roboclaws/evals/live_runtime.py` under the default module-size target.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; public launch command construction,
+  detached polling timeouts, checker recovery, and grader schemas are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused eval-runner tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval-harness detached live-product polling now fails aloud for
   malformed `live_status.json` source evidence. A corrupt live-status sidecar
   no longer looks absent while the harness waits for `run_result.json` or marks

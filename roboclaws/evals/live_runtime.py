@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from roboclaws.evals.dependencies import dependency_failure, resolve_artifact_dependencies
+from roboclaws.evals.live_artifacts import (
+    discover_live_surface_run_dir,
+    load_live_eval_json,
+)
 from roboclaws.evals.models import (
     MISSING_NOT_APPLICABLE,
     MISSING_SENTINELS,
@@ -122,6 +126,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
     command = live_surface_command(kwargs, output_dir=sample_run_root)
     env = live_surface_env(kwargs, base_env=os.environ)
     timeout_s = explicit_live_surface_timeout_s(kwargs)
+    started_wall_time_s = time.time()
     started = time.monotonic()
     record: dict[str, Any] = {
         "command": command,
@@ -146,11 +151,13 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
             output_dir=sample_run_root,
             fallback_run_dir=sample_run_dir,
             stdout=exc.stdout or "",
+            started_wall_time_s=started_wall_time_s,
         )
         sample_run_dir = wait_for_timed_out_live_surface_artifact(
             kwargs,
             output_dir=sample_run_root,
             effective_run_dir=sample_run_dir,
+            started_wall_time_s=started_wall_time_s,
         )
         record.update(
             {
@@ -178,6 +185,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         output_dir=sample_run_root,
         fallback_run_dir=sample_run_dir,
         stdout=completed.stdout,
+        started_wall_time_s=started_wall_time_s,
     )
     record.update(
         {
@@ -201,6 +209,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
                 effective_run_dir=sample_run_dir,
                 elapsed_s=time.monotonic() - started,
                 allow_open_ended_checker_failure=True,
+                started_wall_time_s=started_wall_time_s,
             )
             run_result["eval_effective_run_dir"] = str(sample_run_dir)
             return run_result
@@ -212,6 +221,7 @@ def run_live_surface_product(**kwargs: Any) -> dict[str, Any]:
         effective_run_dir=sample_run_dir,
         elapsed_s=time.monotonic() - started,
         allow_open_ended_checker_failure=_is_open_ended_eval_sample(kwargs),
+        started_wall_time_s=started_wall_time_s,
     )
     record["effective_run_dir"] = str(sample_run_dir)
     record["live_status"] = _load_json(sample_run_dir / "live_status.json")
@@ -276,43 +286,6 @@ def live_surface_run_dir(kwargs: dict[str, Any], *, output_dir: Path) -> Path:
     return output_dir / f"seed-{int(kwargs['seed'])}"
 
 
-def discover_live_surface_run_dir(
-    kwargs: dict[str, Any],
-    *,
-    output_dir: Path,
-    fallback_run_dir: Path,
-    stdout: str = "",
-) -> Path:
-    """Return the actual artifact directory created by the public live route."""
-
-    seed_leaf = f"seed-{int(kwargs['seed'])}"
-    candidates = [fallback_run_dir]
-    stdout_dir = _live_surface_run_dir_from_stdout(stdout)
-    if stdout_dir is not None:
-        candidates.append(stdout_dir)
-    candidates.extend(
-        sorted(
-            (candidate for candidate in output_dir.glob(f"*/{seed_leaf}") if candidate.is_dir()),
-            key=lambda item: item.stat().st_mtime,
-            reverse=True,
-        )
-    )
-    candidates.extend(
-        sorted(
-            (candidate for candidate in output_dir.glob(seed_leaf) if candidate.is_dir()),
-            key=lambda item: item.stat().st_mtime,
-            reverse=True,
-        )
-    )
-    for candidate in candidates:
-        if _live_surface_run_dir_has_evidence(candidate):
-            return candidate
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return fallback_run_dir
-
-
 def wait_for_live_surface_completion(
     kwargs: dict[str, Any],
     *,
@@ -321,6 +294,7 @@ def wait_for_live_surface_completion(
     elapsed_s: float = 0.0,
     poll_s: float = 1.0,
     allow_open_ended_checker_failure: bool = False,
+    started_wall_time_s: float | None = None,
 ) -> Path:
     """Wait for a detached live product route to finish when the route returns early."""
 
@@ -339,6 +313,7 @@ def wait_for_live_surface_completion(
             kwargs,
             output_dir=output_dir,
             fallback_run_dir=effective_run_dir,
+            started_wall_time_s=started_wall_time_s,
         )
         if _live_surface_poll_completed(
             effective_run_dir,
@@ -352,6 +327,7 @@ def wait_for_live_surface_completion(
         effective_run_dir=effective_run_dir,
         poll_s=poll_s,
         timeout_s=timeout_s,
+        started_wall_time_s=started_wall_time_s,
     )
 
 
@@ -413,12 +389,14 @@ def _recover_live_surface_after_wait_timeout(
     effective_run_dir: Path,
     poll_s: float,
     timeout_s: float,
+    started_wall_time_s: float | None,
 ) -> Path:
     effective_run_dir = wait_for_timed_out_live_surface_artifact(
         kwargs,
         output_dir=output_dir,
         effective_run_dir=effective_run_dir,
         poll_s=poll_s,
+        started_wall_time_s=started_wall_time_s,
     )
     if (effective_run_dir / "run_result.json").is_file():
         return effective_run_dir
@@ -433,6 +411,7 @@ def wait_for_timed_out_live_surface_artifact(
     output_dir: Path,
     effective_run_dir: Path,
     poll_s: float = 1.0,
+    started_wall_time_s: float | None = None,
 ) -> Path:
     """Give detached routes a short grace window after subprocess timeout."""
 
@@ -444,6 +423,7 @@ def wait_for_timed_out_live_surface_artifact(
             kwargs,
             output_dir=output_dir,
             fallback_run_dir=effective_run_dir,
+            started_wall_time_s=started_wall_time_s,
         )
         if (effective_run_dir / "run_result.json").is_file():
             return effective_run_dir
@@ -452,6 +432,7 @@ def wait_for_timed_out_live_surface_artifact(
         kwargs,
         output_dir=output_dir,
         fallback_run_dir=effective_run_dir,
+        started_wall_time_s=started_wall_time_s,
     )
 
 
@@ -660,15 +641,7 @@ def _public_backend_from_implementation(backend: str) -> str:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"invalid live eval JSON artifact {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"live eval JSON artifact {path} must contain an object")
-    return payload
+    return load_live_eval_json(path)
 
 
 def _write_live_eval_command_record(path: Path, payload: dict[str, Any]) -> None:
@@ -711,26 +684,6 @@ def _live_surface_run_is_terminal(
 def _is_open_ended_checker_failure(status: dict[str, Any]) -> bool:
     reason = str(status.get("reason") or "").lower()
     return "cleanup checker exited with status" in reason
-
-
-def _live_surface_run_dir_has_evidence(path: Path) -> bool:
-    return (
-        (path / "run_result.json").is_file()
-        or (path / "live_status.json").is_file()
-        or (path / "trace.jsonl").is_file()
-    )
-
-
-def _live_surface_run_dir_from_stdout(stdout: str) -> Path | None:
-    for raw_line in stdout.splitlines():
-        line = raw_line.strip()
-        if not line.startswith("Artifacts"):
-            continue
-        _, _, value = line.partition(":")
-        path = value.strip()
-        if path:
-            return Path(path)
-    return None
 
 
 def _live_surface_route_can_detach(kwargs: dict[str, Any]) -> bool:
