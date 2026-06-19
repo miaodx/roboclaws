@@ -78,7 +78,10 @@ Latest quality snapshot from 2026-06-20:
   local readers, item-list parsers, item guards, and point/pose numeric
   validators while preserving existing source-error diagnostics. B1 Map 12
   label-tool draft export now rejects missing or invalid `polygon_role` source
-  values instead of defaulting malformed draft labels to `navigation_area`.
+  values instead of defaulting malformed draft labels to `navigation_area`,
+  and explicitly supplied label-tool review manifests must now exist, parse to
+  a JSON object, and use the accepted review schema instead of disappearing
+  into the no-review-manifest path.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

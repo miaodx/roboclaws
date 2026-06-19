@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 label-tool review-manifest loading now treats an
+  explicitly supplied manifest path as source truth: missing files, malformed
+  JSON, parseable non-object JSON, and wrong-schema manifests raise clear
+  label-tool source errors instead of silently falling through to the
+  no-review-manifest semantics path. The default no-manifest vendor Map 12 path
+  remains supported. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud label-tool review source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  label-tool script remains in the tracked warning band at 1151 lines. Proof:
+  focused B1 label-tool contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  label-tool evidence that explicit review-manifest paths are again ignored,
+  schema-skipped, or treated like optional absent inputs.
+
 - 2026-06-20: B1 Map 12 label-tool draft export now preserves
   `polygon_role` as source-truth metadata and rejects missing or invalid draft
   label roles during manifest generation/validation instead of defaulting bad

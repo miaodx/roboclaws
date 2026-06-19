@@ -109,6 +109,43 @@ def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> Non
     assert packet["initial_draft_manifest"]["labels"] == []
 
 
+@pytest.mark.parametrize(
+    ("review_manifest_text", "expected_error"),
+    [
+        (
+            None,
+            r"review manifest missing: .*missing-review\.json",
+        ),
+        (
+            "{not-json\n",
+            r"review manifest must contain valid JSON object: .*missing-review\.json",
+        ),
+        (
+            json.dumps([]),
+            r"review manifest must contain a JSON object: .*missing-review\.json",
+        ),
+        (
+            json.dumps({"schema": "wrong_review_schema", "labels": []}),
+            r"review manifest schema must be b1_map12_alignment_review_v1: .*missing-review\.json",
+        ),
+    ],
+)
+def test_label_tool_rejects_malformed_explicit_review_manifest(
+    tmp_path: Path,
+    review_manifest_text: str | None,
+    expected_error: str,
+) -> None:
+    review_manifest_path = tmp_path / "missing-review.json"
+    if review_manifest_text is not None:
+        review_manifest_path.write_text(review_manifest_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_label_tool_packet(
+            map_bundle=MAP_BUNDLE,
+            review_manifest_path=review_manifest_path,
+        )
+
+
 def test_authored_map12_bundle_stays_removed() -> None:
     assert not REMOVED_AUTHORED_BUNDLE.exists()
 

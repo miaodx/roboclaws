@@ -38,6 +38,7 @@ from roboclaws.maps.spatial_contract import (
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
+B1_MAP12_ALIGNMENT_REVIEW_SCHEMA = "b1_map12_alignment_review_v1"
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
@@ -244,8 +245,18 @@ def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | 
         return None
     path = Path(review_manifest_path)
     if not path.is_file():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
+        raise ValueError(f"review manifest missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"review manifest must contain valid JSON object: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"review manifest must contain a JSON object: {path}")
+    if payload.get("schema") != B1_MAP12_ALIGNMENT_REVIEW_SCHEMA:
+        raise ValueError(
+            f"review manifest schema must be {B1_MAP12_ALIGNMENT_REVIEW_SCHEMA}: {path}"
+        )
+    return payload
 
 
 def load_semantics_or_empty(semantics_path: Path, *, source_json_path: Path) -> dict[str, Any]:
@@ -279,7 +290,7 @@ def seed_shapes_from_review_or_semantics(
     transform: SourceMapTransform,
     frame_id: str,
 ) -> list[dict[str, Any]]:
-    if review_manifest and review_manifest.get("schema") == "b1_map12_alignment_review_v1":
+    if review_manifest is not None:
         return seed_shapes_from_review_manifest(
             review_manifest,
             transform=transform,
