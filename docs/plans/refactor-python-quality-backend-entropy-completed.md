@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: B1 operator-console camera-preview provenance validation was
+  split into candidate-shape, alignment-provenance, FPV/chase contract, and
+  forbidden-source helpers inside the existing preview renderer owner. Owner
+  layer: Thin Runtime / Server Adapters, with artifact credibility impact on
+  operator-console B1 preview status. Behavior-change class: helper extraction
+  only; accepted Isaac runtime camera previews, navigation-smoke preview
+  promotion, rejection error tokens for missing camera contracts, scene-probe
+  sources, missing waypoint ids, mixed FPV/chase pairs, and missing residual
+  alignment provenance are unchanged. Metric: ratchet improved from 6 to 4
+  Ruff complexity rows and stayed at 78 oversized modules; the selected
+  `render_scene_previews.py` complexity rows were cleared while the file
+  remains oversized at 1400 lines. Proof: focused operator-console scene
+  preview unit tests, touched-file ruff and format check, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-19: B1 runtime-bundle semantic projection and robot-consumption
   validation complexity was split into focused helpers inside the existing
   compiler owner. Malformed semantic projection room rows now fail through the
