@@ -1402,98 +1402,81 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
     assert plan.preset is None
 
 
-@pytest.mark.parametrize("value", ["bad", "-1", "5.5", 5.0, True])
-def test_live_surface_command_rejects_invalid_generated_mess_count(
+@pytest.mark.parametrize(
+    ("field_name", "value", "expected_error"),
+    [
+        ("generated_mess_count", "bad", "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", "-1", "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", "5.5", "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", 5.0, "generated_mess_count must be a non-negative integer"),
+        ("generated_mess_count", True, "generated_mess_count must be a non-negative integer"),
+        ("scene_index", "bad", "scene_index must be a non-negative integer"),
+        ("scene_index", "-1", "scene_index must be a non-negative integer"),
+        ("scene_index", "5.5", "scene_index must be a non-negative integer"),
+        ("scene_index", 5.0, "scene_index must be a non-negative integer"),
+        ("scene_index", True, "scene_index must be a non-negative integer"),
+        ("scene_source", "", "scene_source must be a non-empty string"),
+        ("scene_source", "  ", "scene_source must be a non-empty string"),
+        ("scene_source", 7, "scene_source must be a non-empty string"),
+        ("scene_source", True, "scene_source must be a non-empty string"),
+    ],
+)
+def test_live_surface_command_rejects_invalid_launch_metadata(
     tmp_path: Path,
+    field_name: str,
     value: object,
+    expected_error: str,
 ) -> None:
     kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
-    kwargs["evidence_lane"] = "world-public-labels"
-    kwargs["generated_mess_count"] = value
+    if field_name == "generated_mess_count":
+        kwargs["evidence_lane"] = "world-public-labels"
+    kwargs[field_name] = value
 
-    with pytest.raises(ValueError, match="generated_mess_count must be a non-negative integer"):
+    with pytest.raises(ValueError, match=expected_error):
         live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
 
 
-@pytest.mark.parametrize("value", ["bad", "-1", "5.5", 5.0, True])
-def test_live_surface_command_rejects_invalid_scene_index(
-    tmp_path: Path,
-    value: object,
-) -> None:
-    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
-    kwargs["scene_index"] = value
-
-    with pytest.raises(ValueError, match="scene_index must be a non-negative integer"):
-        live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
-
-
-@pytest.mark.parametrize("value", ["", "  ", 7, True])
-def test_live_surface_command_rejects_invalid_scene_source(
-    tmp_path: Path,
-    value: object,
-) -> None:
-    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
-    kwargs["scene_source"] = value
-
-    with pytest.raises(ValueError, match="scene_source must be a non-empty string"):
-        live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
-
-
-def test_live_eval_rejects_invalid_sample_generated_mess_count(tmp_path: Path) -> None:
-    result = _run_invalid_cleanup_sample(
-        tmp_path,
-        sample_id="cleanup.invalid_generated_mess_count",
-        stamp="invalid-generated-mess-count",
-        mutate=lambda sample: sample["private_goal_reference"].__setitem__(
-            "generated_mess_count",
-            "five",
+@pytest.mark.parametrize(
+    ("case_name", "mutate", "expected_error"),
+    [
+        (
+            "generated-mess-count",
+            lambda sample: sample["private_goal_reference"].__setitem__(
+                "generated_mess_count",
+                "five",
+            ),
+            "private_goal_reference.generated_mess_count must be a non-negative integer",
         ),
-        assertion_message="product runner should not launch with invalid mess count",
-    )
-
-    assert result["status"] == "failed"
-    assert result["failure_class"] == "artifact_missing"
-    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
-    assert (
-        "private_goal_reference.generated_mess_count must be a non-negative integer"
-        in result["grader_outputs"]["runner"]["message"]
-    )
-
-
-def test_live_eval_rejects_invalid_sample_scene_index(tmp_path: Path) -> None:
+        (
+            "scene-index",
+            lambda sample: sample["launch_overrides"].__setitem__("scene_index", True),
+            "launch_overrides.scene_index must be a non-negative integer",
+        ),
+        (
+            "scene-source",
+            lambda sample: sample["launch_overrides"].__setitem__("scene_source", ""),
+            "launch_overrides.scene_source must be a non-empty string",
+        ),
+    ],
+)
+def test_eval_runner_rejects_invalid_sample_launch_metadata(
+    tmp_path: Path,
+    case_name: str,
+    mutate: Callable[[dict[str, Any]], None],
+    expected_error: str,
+) -> None:
     result = _run_invalid_cleanup_sample(
         tmp_path,
-        sample_id="cleanup.invalid_scene_index",
-        stamp="invalid-scene-index",
-        mutate=lambda sample: sample["launch_overrides"].__setitem__("scene_index", True),
-        assertion_message="product runner should not launch with invalid scene index",
+        sample_id=f"cleanup.invalid_{case_name.replace('-', '_')}",
+        stamp=f"invalid-{case_name}",
+        mutate=mutate,
+        assertion_message=f"product runner should not launch with invalid {case_name}",
     )
 
     assert result["status"] == "failed"
     assert result["failure_class"] == "artifact_missing"
     assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
-    assert (
-        "launch_overrides.scene_index must be a non-negative integer"
-        in result["grader_outputs"]["runner"]["message"]
-    )
-
-
-def test_live_eval_rejects_invalid_sample_scene_source(tmp_path: Path) -> None:
-    result = _run_invalid_cleanup_sample(
-        tmp_path,
-        sample_id="cleanup.invalid_scene_source",
-        stamp="invalid-scene-source",
-        mutate=lambda sample: sample["launch_overrides"].__setitem__("scene_source", ""),
-        assertion_message="product runner should not launch with invalid scene source",
-    )
-
-    assert result["status"] == "failed"
-    assert result["failure_class"] == "artifact_missing"
-    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
-    assert (
-        "launch_overrides.scene_source must be a non-empty string"
-        in result["grader_outputs"]["runner"]["message"]
-    )
+    assert expected_error in result["grader_outputs"]["runner"]["message"]
 
 
 def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
@@ -1974,35 +1957,6 @@ def test_eval_runner_rejects_empty_explicit_runtime_map_prior_launch_override(
     )
 
 
-def test_live_eval_rejects_invalid_explicit_runtime_map_prior_before_launch(
-    tmp_path: Path,
-) -> None:
-    result = _run_invalid_cleanup_sample(
-        tmp_path,
-        sample_id="cleanup.live_invalid_runtime_map_prior",
-        stamp="live-invalid-runtime-map-prior",
-        mutate=lambda sample: sample.update(
-            {
-                "allowed_agent_engines": ["openai-agents-sdk"],
-                "provider_profiles": ["codex-router-responses"],
-                "artifact_dependencies": {"runtime_map_prior": ["prior.json"]},
-            }
-        ),
-        assertion_message="live product runner should not launch with invalid runtime_map_prior",
-        agent_engine="openai-agents-sdk",
-        provider_profile="codex-router-responses",
-        live_execution="run",
-    )
-
-    assert result["status"] == "failed"
-    assert result["failure_class"] == "artifact_missing"
-    assert result["identity"]["agent_engine"] == "openai-agents-sdk"
-    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
-    assert (
-        "runtime_map_prior must be a string path" in result["grader_outputs"]["runner"]["message"]
-    )
-
-
 @pytest.mark.parametrize(
     ("container_key", "value"),
     [
@@ -2040,23 +1994,39 @@ def test_eval_runner_rejects_invalid_runtime_map_prior_source_sample(
     )
 
 
-def test_live_eval_rejects_invalid_runtime_map_prior_source_sample_before_launch(
+@pytest.mark.parametrize(
+    ("case_name", "artifact_dependencies", "expected_error"),
+    [
+        (
+            "runtime-map-prior",
+            {"runtime_map_prior": ["prior.json"]},
+            "runtime_map_prior must be a string path",
+        ),
+        (
+            "runtime-map-prior-source",
+            {"runtime_map_prior_from_sample": {"id": "map-build"}},
+            "runtime_map_prior_from_sample must be a non-empty string",
+        ),
+    ],
+)
+def test_live_eval_rejects_invalid_runtime_map_dependency_before_launch(
     tmp_path: Path,
+    case_name: str,
+    artifact_dependencies: dict[str, object],
+    expected_error: str,
 ) -> None:
     result = _run_invalid_cleanup_sample(
         tmp_path,
-        sample_id="cleanup.live_invalid_runtime_map_prior_source",
-        stamp="live-invalid-runtime-map-prior-source",
+        sample_id=f"cleanup.live_invalid_{case_name.replace('-', '_')}",
+        stamp=f"live-invalid-{case_name}",
         mutate=lambda sample: sample.update(
             {
                 "allowed_agent_engines": ["openai-agents-sdk"],
                 "provider_profiles": ["codex-router-responses"],
-                "artifact_dependencies": {"runtime_map_prior_from_sample": {"id": "map-build"}},
+                "artifact_dependencies": artifact_dependencies,
             }
         ),
-        assertion_message=(
-            "live product runner should not launch with invalid runtime_map_prior_from_sample"
-        ),
+        assertion_message=f"live product runner should not launch with invalid {case_name}",
         agent_engine="openai-agents-sdk",
         provider_profile="codex-router-responses",
         live_execution="run",
@@ -2066,10 +2036,7 @@ def test_live_eval_rejects_invalid_runtime_map_prior_source_sample_before_launch
     assert result["failure_class"] == "artifact_missing"
     assert result["identity"]["agent_engine"] == "openai-agents-sdk"
     assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
-    assert (
-        "runtime_map_prior_from_sample must be a non-empty string"
-        in result["grader_outputs"]["runner"]["message"]
-    )
+    assert expected_error in result["grader_outputs"]["runner"]["message"]
 
 
 def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path) -> None:

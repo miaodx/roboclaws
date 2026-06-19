@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval-runner unit tests now consolidate duplicate launch-metadata
+  validation bodies for direct live-surface command kwargs, sample-derived live
+  launch metadata, and live runtime-map dependency metadata into behavior tables.
+  The slice preserves the same collected parameter cases and keeps direct helper
+  validation, suite-level sample validation, direct dependency resolver checks,
+  and live-before-launch checks distinct. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: unit-test pruning / no production
+  behavior change. Metric: eval-runner collection stayed at 104 cases while
+  `tests/unit/evals/test_eval_runner.py` 2613 -> 2580 lines; ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: `$intuitive-tests`
+  audit/propose, focused eval-runner collection, eval-runner plus adjacent
+  eval-harness tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh duplicated
+  validation bodies; do not collapse helper-level and suite-level checks when
+  they prove different failure surfaces.
+
 - 2026-06-20: Eval-harness selector tests now merge low-signal route-selection
   shape checks into two behavior tables for changed-file signals and explicit
   intent axes. The slice preserves provider readiness, runtime-prior,

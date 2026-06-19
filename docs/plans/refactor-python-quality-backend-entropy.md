@@ -161,7 +161,10 @@ Latest quality snapshot from 2026-06-20:
   directory instead of arbitrary stale local files. Eval-harness selector tests
   now merge repeated changed-file and explicit-intent route-selection checks
   into two behavior tables, preserving live/blocker/source-error regressions
-  while dropping copied one-field row metadata assertions. Eval
+  while dropping copied one-field row metadata assertions. Eval-runner tests now
+  consolidate duplicate launch-metadata validation bodies into behavior tables
+  while preserving helper-level, suite-level, and live-before-launch failure
+  surfaces. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
@@ -375,6 +378,9 @@ Good families:
   or row-metadata duplication. Other eval-harness tests remain valid candidates
   only when they duplicate manifest keys one field at a time instead of proving
   selected rows, blockers, promotion packets, or result contracts.
+- Eval-runner launch-metadata validation pruning is done for the current
+  duplicate direct/sample/live dependency bodies; reopen only with fresh
+  duplicated validation bodies that do not protect a distinct failure surface.
 - Molmo cleanup worker/report tests that assert helper shape, static file
   names, or copied fixture metadata already covered by stronger tests.
 
