@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console static scene-preview asset coverage was
+  consolidated through `$intuitive-tests`: the one long
+  `test_static_app_renders_scene_preview_assets` body was split into
+  behavior-named assertion helpers for app wiring, MolmoSpaces preview files,
+  MolmoSpaces metadata, B1 preview policy, and B1 camera-preview metadata.
+  Owner layer: tests for Thin Runtime / Server Adapters static
+  operator-console assets. Behavior-change class: test-only consolidation;
+  no static app, preview artifact, world catalog, route, or production code was
+  changed, and no assertions were intentionally removed. Metric: ratchet
+  improved from 1 to 0 Ruff complexity rows and stayed at 78 oversized
+  modules. Proof: focused static-assets unit tests, touched-file ruff and
+  format check, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: B1 custom-asset visual comparison validation was split into
   input compatibility checks, waypoint-evidence checks, per-waypoint
   pose/image row assembly, and contact-sheet status helpers inside the
