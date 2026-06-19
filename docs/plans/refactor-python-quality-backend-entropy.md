@@ -81,7 +81,11 @@ Latest quality snapshot from 2026-06-20:
   values instead of defaulting malformed draft labels to `navigation_area`,
   and explicitly supplied label-tool review manifests must now exist, parse to
   a JSON object, and use the accepted review schema instead of disappearing
-  into the no-review-manifest path.
+  into the no-review-manifest path. Explicit label-tool `--semantics` paths
+  now fail on missing, malformed, or non-object JSON sources, and the
+  intentional no-authored-semantics default requires valid map source metadata
+  instead of fabricating a `robot_map_12` identity when `source.json` is absent
+  or corrupt.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

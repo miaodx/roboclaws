@@ -110,6 +110,74 @@ def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> Non
 
 
 @pytest.mark.parametrize(
+    ("semantics_text", "expected_error"),
+    [
+        (
+            None,
+            r"semantics missing: .*explicit-semantics\.json",
+        ),
+        (
+            "{not-json\n",
+            r"semantics must contain valid JSON object: .*explicit-semantics\.json",
+        ),
+        (
+            json.dumps([]),
+            r"semantics must contain a JSON object: .*explicit-semantics\.json",
+        ),
+    ],
+)
+def test_label_tool_rejects_malformed_explicit_semantics_source(
+    tmp_path: Path,
+    semantics_text: str | None,
+    expected_error: str,
+) -> None:
+    semantics_path = tmp_path / "explicit-semantics.json"
+    if semantics_text is not None:
+        semantics_path.write_text(semantics_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_label_tool_packet(
+            map_bundle=MAP_BUNDLE,
+            semantics_path=semantics_path,
+        )
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{not-json\n",
+            r"map source metadata must contain valid JSON object: .*source\.json",
+        ),
+        (
+            json.dumps([]),
+            r"map source metadata must contain a JSON object: .*source\.json",
+        ),
+    ],
+)
+def test_label_tool_rejects_malformed_source_metadata_when_defaulting_semantics(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    map_bundle = _copy_map12_bundle(tmp_path)
+    (map_bundle / "source.json").write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_label_tool_packet(map_bundle=map_bundle)
+
+
+def test_label_tool_rejects_missing_source_metadata_when_defaulting_semantics(
+    tmp_path: Path,
+) -> None:
+    map_bundle = _copy_map12_bundle(tmp_path)
+    (map_bundle / "source.json").unlink()
+
+    with pytest.raises(ValueError, match=r"map source metadata missing: .*source\.json"):
+        build_label_tool_packet(map_bundle=map_bundle)
+
+
+@pytest.mark.parametrize(
     ("review_manifest_text", "expected_error"),
     [
         (

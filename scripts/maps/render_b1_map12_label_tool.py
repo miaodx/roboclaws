@@ -154,10 +154,12 @@ def build_label_tool_packet(
         origin_y=float(_origin(map_yaml)[1]),
         origin_yaw_rad=float(_origin(map_yaml)[2]),
     )
+    explicit_semantics_path = semantics_path is not None
     semantics_path = semantics_path or map_bundle / "semantics.json"
     semantics = load_semantics_or_empty(
         semantics_path,
         source_json_path=map_bundle / "source.json",
+        allow_missing=not explicit_semantics_path,
     )
     frame_id = source_map_frame_id(semantics)
     review_manifest = load_review_manifest(review_manifest_path)
@@ -259,13 +261,33 @@ def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | 
     return payload
 
 
-def load_semantics_or_empty(semantics_path: Path, *, source_json_path: Path) -> dict[str, Any]:
+def load_semantics_or_empty(
+    semantics_path: Path,
+    *,
+    source_json_path: Path,
+    allow_missing: bool = True,
+) -> dict[str, Any]:
     path = Path(semantics_path)
     if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
-    source = {}
-    if source_json_path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"semantics must contain valid JSON object: {path}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"semantics must contain a JSON object: {path}")
+        return payload
+    if not allow_missing:
+        raise ValueError(f"semantics missing: {path}")
+    if not source_json_path.is_file():
+        raise ValueError(f"map source metadata missing: {source_json_path}")
+    try:
         source = json.loads(source_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"map source metadata must contain valid JSON object: {source_json_path}"
+        ) from exc
+    if not isinstance(source, dict):
+        raise ValueError(f"map source metadata must contain a JSON object: {source_json_path}")
     return {
         "schema": "robot_map12_empty_label_tool_semantics_v1",
         "environment_id": str(source.get("alias") or "robot_map_12"),

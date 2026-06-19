@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 label-tool semantic source loading now treats
+  explicitly supplied `--semantics` paths as source truth: missing files,
+  malformed JSON, and parseable non-object JSON raise clear source errors
+  instead of falling back to the empty vendor semantics packet. The intentional
+  no-authored-semantics default still exists for the raw vendor Map 12 bundle,
+  but now requires valid `source.json` metadata and fails when that source
+  identity packet is missing, malformed, or non-object instead of fabricating
+  `robot_map_12`. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud label-tool semantics source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  label-tool script remains in the tracked warning band at 1173 lines. Proof:
+  focused B1 label-tool contract tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with fresh
+  label-tool evidence that explicit semantics paths or required vendor source
+  metadata are again skipped, defaulted, or turned into plausible empty packet
+  identity.
+
 - 2026-06-20: B1 Map 12 label-tool review-manifest loading now treats an
   explicitly supplied manifest path as source truth: missing files, malformed
   JSON, parseable non-object JSON, and wrong-schema manifests raise clear
