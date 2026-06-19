@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pytest
 
@@ -1106,49 +1106,30 @@ def test_live_surface_command_rejects_invalid_scene_index(
         live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
 
 
+@pytest.mark.parametrize("value", ["", "  ", 7, True])
+def test_live_surface_command_rejects_invalid_scene_source(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
+    kwargs["scene_source"] = value
+
+    with pytest.raises(ValueError, match="scene_source must be a non-empty string"):
+        live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
+
+
 def test_live_eval_rejects_invalid_sample_generated_mess_count(tmp_path: Path) -> None:
-    sample = json.loads(
-        (
-            Path(__file__).resolve().parents[3]
-            / "evals"
-            / "household_world"
-            / "samples"
-            / "cleanup"
-            / "smoke_seed7.json"
-        ).read_text(encoding="utf-8")
-    )
-    sample["sample_id"] = "cleanup.invalid_generated_mess_count"
-    sample["private_goal_reference"]["generated_mess_count"] = "five"
-    sample_path = tmp_path / "invalid_generated_mess_count_sample.json"
-    sample_path.write_text(json.dumps(sample), encoding="utf-8")
-    suite_path = tmp_path / "invalid_generated_mess_count_suite.json"
-    suite_path.write_text(
-        json.dumps(
-            {
-                "schema": "roboclaws_eval_suite_v1",
-                "suite_id": "household_world.invalid_generated_mess_count",
-                "version": "2026-06-20",
-                "capability": "household_world_cleanup",
-                "sample_ids": [sample["sample_id"]],
-                "sample_refs": [str(sample_path)],
-                "required_graders": ["artifacts"],
-                "thresholds": {"pass_at_1": 1.0},
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    def product_runner(**_kwargs: Any) -> dict[str, Any]:
-        raise AssertionError("product runner should not launch with invalid mess count")
-
-    run = run_eval_suite(
-        str(suite_path),
-        output_root=tmp_path,
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_generated_mess_count",
         stamp="invalid-generated-mess-count",
-        product_runner=product_runner,
+        mutate=lambda sample: sample["private_goal_reference"].__setitem__(
+            "generated_mess_count",
+            "five",
+        ),
+        assertion_message="product runner should not launch with invalid mess count",
     )
 
-    result = json.loads(run.results_path.read_text())["results"][0]
     assert result["status"] == "failed"
     assert result["failure_class"] == "artifact_missing"
     assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
@@ -1159,53 +1140,37 @@ def test_live_eval_rejects_invalid_sample_generated_mess_count(tmp_path: Path) -
 
 
 def test_live_eval_rejects_invalid_sample_scene_index(tmp_path: Path) -> None:
-    sample = json.loads(
-        (
-            Path(__file__).resolve().parents[3]
-            / "evals"
-            / "household_world"
-            / "samples"
-            / "cleanup"
-            / "smoke_seed7.json"
-        ).read_text(encoding="utf-8")
-    )
-    sample["sample_id"] = "cleanup.invalid_scene_index"
-    sample["launch_overrides"]["scene_index"] = True
-    sample_path = tmp_path / "invalid_scene_index_sample.json"
-    sample_path.write_text(json.dumps(sample), encoding="utf-8")
-    suite_path = tmp_path / "invalid_scene_index_suite.json"
-    suite_path.write_text(
-        json.dumps(
-            {
-                "schema": "roboclaws_eval_suite_v1",
-                "suite_id": "household_world.invalid_scene_index",
-                "version": "2026-06-20",
-                "capability": "household_world_cleanup",
-                "sample_ids": [sample["sample_id"]],
-                "sample_refs": [str(sample_path)],
-                "required_graders": ["artifacts"],
-                "thresholds": {"pass_at_1": 1.0},
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    def product_runner(**_kwargs: Any) -> dict[str, Any]:
-        raise AssertionError("product runner should not launch with invalid scene index")
-
-    run = run_eval_suite(
-        str(suite_path),
-        output_root=tmp_path,
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_scene_index",
         stamp="invalid-scene-index",
-        product_runner=product_runner,
+        mutate=lambda sample: sample["launch_overrides"].__setitem__("scene_index", True),
+        assertion_message="product runner should not launch with invalid scene index",
     )
 
-    result = json.loads(run.results_path.read_text())["results"][0]
     assert result["status"] == "failed"
     assert result["failure_class"] == "artifact_missing"
     assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
     assert (
         "launch_overrides.scene_index must be a non-negative integer"
+        in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+def test_live_eval_rejects_invalid_sample_scene_source(tmp_path: Path) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_scene_source",
+        stamp="invalid-scene-source",
+        mutate=lambda sample: sample["launch_overrides"].__setitem__("scene_source", ""),
+        assertion_message="product runner should not launch with invalid scene source",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "launch_overrides.scene_source must be a non-empty string"
         in result["grader_outputs"]["runner"]["message"]
     )
 
@@ -1853,6 +1818,58 @@ def _live_surface_kwargs(run_dir: Path, *, live_timeout_s: float | None = None) 
         "model": None,
         "live_timeout_s": live_timeout_s,
     }
+
+
+def _run_invalid_cleanup_sample(
+    tmp_path: Path,
+    *,
+    sample_id: str,
+    stamp: str,
+    mutate: Callable[[dict[str, Any]], None],
+    assertion_message: str,
+) -> dict[str, Any]:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals"
+            / "household_world"
+            / "samples"
+            / "cleanup"
+            / "smoke_seed7.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = sample_id
+    mutate(sample)
+    path_token = sample_id.replace(".", "_")
+    sample_path = tmp_path / f"{path_token}_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / f"{path_token}_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": f"household_world.{path_token}",
+                "version": "2026-06-20",
+                "capability": "household_world_cleanup",
+                "sample_ids": [sample_id],
+                "sample_refs": [str(sample_path)],
+                "required_graders": ["artifacts"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError(assertion_message)
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp=stamp,
+        product_runner=product_runner,
+    )
+    return json.loads(run.results_path.read_text())["results"][0]
 
 
 def _completed_process(*, returncode: int, stdout: str = "", stderr: str = "") -> Any:

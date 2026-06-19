@@ -35,6 +35,20 @@ logs before choosing the next slice.
 ## Completed Bundles
 
 - 2026-06-20: Eval live-product launch setup now rejects invalid
+  `scene_source` metadata before building direct product kwargs or live surface
+  commands. Explicit empty or wrong-shaped eval sample launch overrides and
+  live command kwargs can no longer fall back to `procthor-10k-val` or render a
+  non-string scene source into the command; missing sample overrides still use
+  the documented default. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud eval launch metadata source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  `tests/unit/evals/test_eval_runner.py` remains above the 2000-line warning
+  from focused regression coverage and should be handled only through the
+  planned `$intuitive-tests` route. Proof: focused live-surface command and
+  eval-runner regression tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
+- 2026-06-20: Eval live-product launch setup now rejects invalid
   `scene_index` metadata before building direct product kwargs or live surface
   commands. Bad eval sample launch overrides or live command kwargs can no
   longer coerce booleans, floats, negative values, or malformed strings into a

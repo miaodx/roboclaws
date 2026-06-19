@@ -156,7 +156,9 @@ Latest quality snapshot from 2026-06-20:
   launch setup now rejects invalid cleanup `generated_mess_count` /
   `relocation_count` metadata instead of silently dropping scenario setup from
   the live surface command, and invalid eval sample `scene_index` overrides now
-  fail before selecting a substitute scene. Apple-to-apple
+  fail before selecting a substitute scene. Explicit invalid eval
+  `scene_source` metadata now fails instead of falling back to
+  `procthor-10k-val`. Apple-to-apple
   grid execution now rejects malformed existing grid manifests and stable
   malformed live-status sources instead of silently discarding previous row
   evidence or timing out from a fabricated unknown phase. Operator-console

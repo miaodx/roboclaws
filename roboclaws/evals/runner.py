@@ -1136,6 +1136,7 @@ def _failure_class_from_exception(exc: Exception) -> str:
         "generated_mess_count must be a non-negative integer",
         "launch_overrides.relocation_count must be a non-negative integer",
         "launch_overrides.scene_index must be a non-negative integer",
+        "launch_overrides.scene_source must be a non-empty string",
         "invalid live eval json artifact",
         "live eval json artifact",
     )

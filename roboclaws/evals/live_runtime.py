@@ -254,7 +254,7 @@ def live_surface_command(kwargs: dict[str, Any], *, output_dir: Path) -> list[st
         f"seed={kwargs['seed']}",
         f"output_dir={output_dir}",
         f"run_dir={live_surface_run_dir(kwargs, output_dir=output_dir)}",
-        f"scene_source={kwargs['scene_source']}",
+        f"scene_source={_live_surface_scene_source(kwargs)}",
         f"scene_index={_live_surface_scene_index(kwargs)}",
     ]
     if sample is not None and sample.preset not in {"", MISSING_NOT_APPLICABLE}:
@@ -526,7 +526,6 @@ def product_run_kwargs(
 ) -> dict[str, Any]:
     """Return shared cleanup product-run kwargs for direct and live eval trials."""
 
-    launch_overrides = sample.launch_overrides or {}
     map_build = sample.intent == "map-build" or sample.preset == "map-build"
     kwargs: dict[str, Any] = {
         "output_dir": run_dir,
@@ -536,7 +535,7 @@ def product_run_kwargs(
         "evidence_lane": evidence_lane(sample, budget=budget),
         "map_build": map_build,
         "generated_mess_count": generated_mess_count(sample),
-        "scene_source": str(launch_overrides.get("scene_source") or "procthor-10k-val"),
+        "scene_source": scene_source(sample),
         "scene_index": scene_index(sample),
         "run_metadata_overrides": {
             "eval_sample_id": sample.sample_id,
@@ -591,6 +590,16 @@ def generated_mess_count(sample: EvalSample) -> int:
     if sample.intent == "map-build":
         return 0
     return 10
+
+
+def scene_source(sample: EvalSample) -> str:
+    launch_overrides = sample.launch_overrides or {}
+    if "scene_source" not in launch_overrides:
+        return "procthor-10k-val"
+    return _non_empty_string_value(
+        launch_overrides.get("scene_source"),
+        "launch_overrides.scene_source",
+    )
 
 
 def scene_index(sample: EvalSample) -> int:
@@ -659,6 +668,16 @@ def _generated_mess_count(kwargs: dict[str, Any]) -> int:
 
 def _live_surface_scene_index(kwargs: dict[str, Any]) -> int:
     return _non_negative_int_value(kwargs["scene_index"], "scene_index")
+
+
+def _live_surface_scene_source(kwargs: dict[str, Any]) -> str:
+    return _non_empty_string_value(kwargs["scene_source"], "scene_source")
+
+
+def _non_empty_string_value(value: object, setting_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{setting_name} must be a non-empty string, got {value!r}")
+    return value
 
 
 def _non_negative_int_value(value: object, setting_name: str) -> int:
