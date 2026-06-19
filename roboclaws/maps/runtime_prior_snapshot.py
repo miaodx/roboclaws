@@ -480,8 +480,24 @@ def _anchor_from_navigation_memory_item(
 ) -> dict[str, Any]:
     item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
     anchor_type = _anchor_type(item)
-    nav_goal = _pose_dict(item.get("nav_goal") or item.get("pose") or {})
-    object_pose = _pose_dict(item.get("pose") or item.get("nav_goal") or {})
+    nav_goal_raw = item["nav_goal"] if "nav_goal" in item else item.get("pose")
+    object_pose_raw = item["pose"] if "pose" in item else item.get("nav_goal")
+    nav_goal_source = _required_pose_source(
+        nav_goal_raw,
+        label=f"Agibot navigation memory item {item_id} nav_goal",
+    )
+    object_pose_source = _required_pose_source(
+        object_pose_raw,
+        label=f"Agibot navigation memory item {item_id} pose",
+    )
+    nav_goal = _required_pose_dict(
+        nav_goal_source,
+        label=f"Agibot navigation memory item {item_id} nav_goal",
+    )
+    object_pose = _required_pose_dict(
+        object_pose_source,
+        label=f"Agibot navigation memory item {item_id} pose",
+    )
     reachability = _reachability_status(nav_goal, grid=grid)
     classification_status = _classification_status(item, anchor_type=anchor_type)
     actionability = _actionability(anchor_type, reachability["status"], classification_status)
@@ -551,12 +567,11 @@ def _anchor_from_navigation_memory_item(
 
 def _bundle_waypoint(waypoint: dict[str, Any]) -> dict[str, Any]:
     waypoint_id = str(waypoint.get("waypoint_id") or waypoint.get("id") or "")
+    pose = _required_pose_dict(waypoint, label=f"Nav2 cleanup waypoint {waypoint_id}")
     return {
         "waypoint_id": waypoint_id,
         "frame_id": str(waypoint.get("frame_id") or "map"),
-        "x": _float(waypoint.get("x")),
-        "y": _float(waypoint.get("y")),
-        "yaw": _float(waypoint.get("yaw")),
+        **pose,
         "room_id": str(waypoint.get("room_id") or ""),
         "label": str(waypoint.get("label") or waypoint_id),
         "waypoint_source": str(waypoint.get("waypoint_source") or "nav2_cleanup_bundle"),
@@ -578,9 +593,9 @@ def _anchor_from_bundle_waypoint(waypoint: dict[str, Any], *, index: int) -> dic
         "room_label": str(waypoint.get("label") or waypoint.get("room_id") or ""),
         "waypoint_id": waypoint_id,
         "pose": {
-            "x": _float(waypoint.get("x")),
-            "y": _float(waypoint.get("y")),
-            "yaw": _float(waypoint.get("yaw")),
+            "x": waypoint["x"],
+            "y": waypoint["y"],
+            "yaw": waypoint["yaw"],
         },
         "affordances": ["navigate", "observe"],
         "aliases": [waypoint_id],
@@ -1022,6 +1037,28 @@ def _pose_dict(raw: dict[str, Any]) -> dict[str, float]:
     for key in ("x", "y", "yaw"):
         pose[key] = _float(raw.get(key))
     return pose
+
+
+def _required_pose_source(value: Any, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object with x, y, and yaw")
+    return value
+
+
+def _required_pose_dict(raw: dict[str, Any], *, label: str) -> dict[str, float]:
+    return {key: _required_float(raw.get(key), label=f"{label} {key}") for key in ("x", "y", "yaw")}
+
+
+def _required_float(value: Any, *, label: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a finite number")
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a finite number") from exc
+    if not math.isfinite(result):
+        raise ValueError(f"{label} must be a finite number")
+    return round(result, 6)
 
 
 def _float(value: Any) -> float:

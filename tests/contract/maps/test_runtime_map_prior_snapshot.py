@@ -346,6 +346,101 @@ def test_agibot_navigation_memory_rejects_malformed_nav2_yaml_geometry(tmp_path:
         runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
 
 
+@pytest.mark.parametrize("field", ["x", "y", "yaw"])
+def test_agibot_navigation_memory_rejects_missing_nav_goal_geometry(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory["items"][0]["nav_goal"].pop(field)
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Agibot navigation memory item plastic_bottle_table_1 nav_goal {field} "
+        "must be a finite number",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+@pytest.mark.parametrize("field", ["x", "y", "yaw"])
+def test_agibot_navigation_memory_rejects_malformed_nav_goal_geometry(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory["items"][0]["nav_goal"][field] = "not-a-number"
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Agibot navigation memory item plastic_bottle_table_1 nav_goal {field} "
+        "must be a finite number",
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+@pytest.mark.parametrize("nav_goal", [None, []])
+def test_agibot_navigation_memory_rejects_non_object_nav_goal_geometry(
+    tmp_path: Path,
+    nav_goal: object,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory["items"][0]["nav_goal"] = nav_goal
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal "
+            "must be an object with x, y, and yaw"
+        ),
+    ):
+        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
+
+
+@pytest.mark.parametrize("field", ["x", "y", "yaw"])
+def test_nav2_cleanup_bundle_rejects_missing_waypoint_geometry(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["inspection_waypoints"][0].pop(field)
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Nav2 cleanup waypoint room_a_center {field} must be a finite number",
+    ):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
+@pytest.mark.parametrize("field", ["x", "y", "yaw"])
+def test_nav2_cleanup_bundle_rejects_malformed_waypoint_geometry(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics["inspection_waypoints"][0][field] = "not-a-number"
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Nav2 cleanup waypoint room_a_center {field} must be a finite number",
+    ):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
 def test_agibot_navigation_memory_converter_script_writes_snapshot_and_summary(
     tmp_path: Path,
 ) -> None:

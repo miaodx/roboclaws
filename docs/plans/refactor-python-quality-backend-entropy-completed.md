@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion now rejects malformed,
+  missing, non-object, non-finite, or boolean Agibot `nav_goal`/`pose`
+  coordinates and Nav2 cleanup-bundle waypoint `x`/`y`/`yaw` coordinates before
+  materializing offline prior anchors. Present-but-bad Agibot `nav_goal` values
+  can no longer fall through to `pose`, and malformed Nav2 waypoint geometry can
+  no longer become plausible map-frame zero coordinates. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  offline prior waypoint geometry source truth; online runtime-map wrapping
+  remains unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Runtime Map Prior Snapshot contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen only
+  with fresh offline prior conversion evidence that waypoint or anchor pose
+  geometry is again defaulted, silently coerced, or fallback-substituted.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion now rejects malformed
   source-map geometry in Agibot `nav2.yaml` and Nav2 cleanup-bundle `map.yaml`
   before building offline prior packets. Missing, non-positive, non-finite, or
