@@ -270,12 +270,15 @@ def _run_trial(
             agent_engine=agent_engine,
             run_dir=run_dir,
         )
-    dependency_artifacts = resolve_artifact_dependencies(
-        sample,
-        repetition_index=repetition_index,
-        sample_artifacts=sample_artifacts,
-    )
-    failure = dependency_failure(dependency_artifacts)
+    try:
+        dependency_artifacts = resolve_artifact_dependencies(
+            sample,
+            repetition_index=repetition_index,
+            sample_artifacts=sample_artifacts,
+        )
+        failure = dependency_failure(dependency_artifacts)
+    except Exception as exc:  # noqa: BLE001 - eval packets must classify metadata failures.
+        return _blocked_result_from_exception(trial, exc)
     if failure is not None:
         return _failed_result_from_dependency(trial, run_dir, failure)
     try:
@@ -1235,6 +1238,7 @@ def _failure_class_from_exception(exc: Exception) -> str:
         "launch_overrides.relocation_count must be a non-negative integer",
         "launch_overrides.scene_index must be a non-negative integer",
         "launch_overrides.scene_source must be a non-empty string",
+        "runtime_map_prior must be a string path",
         "eval_effective_run_dir",
         "live eval run_result",
         "invalid live eval json artifact",

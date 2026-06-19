@@ -1793,6 +1793,59 @@ def test_eval_dependency_resolver_preserves_empty_explicit_runtime_map_prior() -
     assert failure["message"] == "explicit runtime_map_prior path was empty"
 
 
+@pytest.mark.parametrize("value", [True, 7, 1.5, ["prior.json"], {"path": "prior.json"}])
+def test_eval_runner_rejects_invalid_explicit_runtime_map_prior_value(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_runtime_map_prior",
+        stamp=f"invalid-runtime-map-prior-{type(value).__name__}",
+        mutate=lambda sample: sample.__setitem__(
+            "artifact_dependencies",
+            {"runtime_map_prior": value},
+        ),
+        assertion_message="product runner should not launch with invalid runtime_map_prior",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "runtime_map_prior must be a string path" in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+def test_live_eval_rejects_invalid_explicit_runtime_map_prior_before_launch(
+    tmp_path: Path,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.live_invalid_runtime_map_prior",
+        stamp="live-invalid-runtime-map-prior",
+        mutate=lambda sample: sample.update(
+            {
+                "allowed_agent_engines": ["openai-agents-sdk"],
+                "provider_profiles": ["codex-router-responses"],
+                "artifact_dependencies": {"runtime_map_prior": ["prior.json"]},
+            }
+        ),
+        assertion_message="live product runner should not launch with invalid runtime_map_prior",
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["identity"]["agent_engine"] == "openai-agents-sdk"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "runtime_map_prior must be a string path" in result["grader_outputs"]["runner"]["message"]
+    )
+
+
 def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path) -> None:
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
@@ -2115,6 +2168,7 @@ def _run_invalid_cleanup_sample(
     stamp: str,
     mutate: Callable[[dict[str, Any]], None],
     assertion_message: str,
+    **run_kwargs: Any,
 ) -> dict[str, Any]:
     sample = json.loads(
         (
@@ -2156,6 +2210,8 @@ def _run_invalid_cleanup_sample(
         output_root=tmp_path,
         stamp=stamp,
         product_runner=product_runner,
+        live_product_runner=product_runner,
+        **run_kwargs,
     )
     return json.loads(run.results_path.read_text())["results"][0]
 

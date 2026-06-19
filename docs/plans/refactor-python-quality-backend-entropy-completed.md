@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval dependency resolution now rejects wrong-shaped explicit
+  `runtime_map_prior` metadata before direct or live product launch. Boolean,
+  numeric, list, or object prior values now become artifact-source eval result
+  failures instead of raw exceptions or stringified path lookups, while the
+  existing explicit empty-string prior failure remains a dependency error.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud eval dependency metadata source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; focused regression coverage
+  keeps `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused direct/live dependency tests, full eval-runner unit file, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-20: Open-ended authoritative predicate grading now rejects
   wrong-shaped Runtime Metric Map predicate source fields before converting
   them to empty evidence. Corrupt `public_semantic_anchors`,

@@ -23,7 +23,7 @@ def resolve_artifact_dependencies(
         explicit_source = launch_overrides.get("runtime_map_prior")
     if explicit_source is not None:
         return {
-            "runtime_map_prior_path": str(explicit_source or "").strip(),
+            "runtime_map_prior_path": _explicit_runtime_map_prior_path(explicit_source),
             "runtime_map_prior_source": "explicit_path",
         }
     source_sample_id = str(
@@ -75,3 +75,9 @@ def dependency_failure(dependency_artifacts: dict[str, Any]) -> dict[str, Any] |
 
 def sample_artifact_key(sample_id: str, repetition_index: int) -> str:
     return f"{sample_id}#{repetition_index}"
+
+
+def _explicit_runtime_map_prior_path(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"runtime_map_prior must be a string path, got {value!r}")
+    return value.strip()

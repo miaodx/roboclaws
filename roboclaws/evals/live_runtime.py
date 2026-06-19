@@ -66,15 +66,15 @@ def run_live_eval_trial(
 ) -> EvalResult:
     """Run and grade one live-agent eval trial through the product surface."""
 
-    dependency_artifacts = resolve_artifact_dependencies(
-        sample,
-        repetition_index=repetition_index,
-        sample_artifacts=sample_artifacts,
-    )
-    failure = dependency_failure(dependency_artifacts)
-    if failure is not None:
-        return hooks.failed_result_from_dependency(trial, run_dir, failure)
     try:
+        dependency_artifacts = resolve_artifact_dependencies(
+            sample,
+            repetition_index=repetition_index,
+            sample_artifacts=sample_artifacts,
+        )
+        failure = dependency_failure(dependency_artifacts)
+        if failure is not None:
+            return hooks.failed_result_from_dependency(trial, run_dir, failure)
         run_result = live_product_runner(
             **live_product_run_kwargs(
                 sample,
