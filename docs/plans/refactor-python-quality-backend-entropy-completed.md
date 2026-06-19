@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval artifact grading now validates present required JSON
+  artifacts (`run_result.json`, `agent_view.json`, `runtime_metric_map.json`,
+  and `private_evaluation.json`) as object JSON before marking the artifacts
+  grader passed. Malformed or wrong-shaped required evidence now appears as
+  artifact source errors instead of letting a valid in-memory product result
+  mask corrupt persisted eval evidence. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud eval artifact source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  focused regression coverage keeps `tests/unit/evals/test_eval_runner.py`
+  above the 2000-line warning and should be handled only through the planned
+  `$intuitive-tests` route. Proof: focused required-artifact regression tests,
+  full eval-runner unit file, touched-file ruff/format checks, `git diff
+  --check`, and ratchet.
+
 - 2026-06-20: Live eval trial grading now requires live product runners to
   declare an explicit `eval_effective_run_dir` under the trial run directory
   before artifacts are graded. Missing, malformed, nonexistent, or escaped

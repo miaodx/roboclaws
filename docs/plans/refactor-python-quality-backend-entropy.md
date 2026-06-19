@@ -157,7 +157,10 @@ Latest quality snapshot from 2026-06-20:
   grading now requires explicit in-trial `eval_effective_run_dir` source
   metadata, so stale trial-directory artifacts cannot stand in for live route
   evidence when a live product runner omits or escapes the effective run
-  directory. Live-agent result
+  directory. Eval artifact grading now validates required persisted JSON
+  artifacts as object JSON, so corrupt `run_result.json`, `agent_view.json`,
+  `runtime_metric_map.json`, or `private_evaluation.json` files cannot pass
+  behind a valid in-memory product result. Live-agent result
   artifact loading now fails aloud on present malformed or non-object
   `live_status.json` / `run_result.json` sources instead of erasing corrupt
   status or completion evidence into unknown or absent state. Eval live-product

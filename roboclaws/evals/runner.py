@@ -343,9 +343,24 @@ def _artifact_grader(
         "private_evaluation": run_dir / "private_evaluation.json",
     }
     missing = [name for name, path in required.items() if not path.exists()]
+    source_errors = _required_json_artifact_source_errors(
+        {
+            name: required[name]
+            for name in (
+                "run_result",
+                "agent_view",
+                "runtime_metric_map",
+                "private_evaluation",
+            )
+        }
+    )
     return {
-        "status": "failed" if missing else "passed",
+        "status": "failed" if missing or source_errors else "passed",
+        "failure_class": (
+            "artifact_missing" if missing or source_errors else MISSING_NOT_APPLICABLE
+        ),
         "missing": missing,
+        "source_errors": source_errors,
         "resolved_dependencies": dict(dependency_artifacts or {}),
         "required": {name: str(path) for name, path in required.items()},
     }
@@ -1245,6 +1260,21 @@ def _json_source_error(path: Path, reason: str) -> dict[str, str]:
     if not reason:
         return {}
     return {"path": str(path), "reason": reason}
+
+
+def _required_json_artifact_source_errors(paths: dict[str, Path]) -> list[dict[str, str]]:
+    errors: list[dict[str, str]] = []
+    for name, path in paths.items():
+        _payload, reason = _load_optional_json_mapping(path)
+        if reason:
+            errors.append(
+                {
+                    "artifact": name,
+                    "path": str(path),
+                    "reason": reason,
+                }
+            )
+    return errors
 
 
 def _load_required_json_mapping(path: Path) -> tuple[dict[str, Any], str]:
