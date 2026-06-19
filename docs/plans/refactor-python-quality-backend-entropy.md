@@ -25,7 +25,10 @@ Latest quality snapshot from 2026-06-19:
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices surfaced malformed operator-console runtime inventory
   JSON, eval runtime-map artifacts, eval trace JSONL artifacts, and live eval
-  surface JSON artifacts as explicit source-error evidence. Continue
+  surface JSON artifacts as explicit source-error evidence. Eval-harness
+  provider readiness now rejects unknown provider profiles through the provider
+  registry instead of treating them like the Codex router when Codex env vars
+  happen to exist. Continue
   fail-aloud/runtime-source audits from fresh evidence rather than reopening
   closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

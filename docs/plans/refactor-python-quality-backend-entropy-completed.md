@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval-harness provider readiness now fails aloud through the
+  provider registry. Live eval rows with unknown provider profiles no longer
+  pass preflight merely because Codex router environment variables are present;
+  provider readiness now reports an explicit unknown-profile diagnostic, and
+  eval-harness blockers consume the canonical readiness packet instead of a
+  duplicate hard-coded env table. Owner layer: Agent Engines And Provider
+  Profiles, surfaced through Eval suites. Behavior-change class: fail-aloud
+  provider/profile input; documented default provider profiles, known profile
+  env checks, optional/required row semantics, timing-proxy defaults, and live
+  row execution are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows
+  and 78 oversized modules. Proof: focused eval-harness and provider catalog
+  tests, touched-file ruff and format check, `git diff --check`, and ratchet.
+
 - 2026-06-19: Live eval surface JSON artifact loading now fails aloud.
   Existing malformed or non-object `run_result.json` / `live_status.json`
   files in live eval product-route directories no longer collapse to empty

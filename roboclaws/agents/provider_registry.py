@@ -644,7 +644,24 @@ def provider_readiness(
     env_map = os.environ if env is None else env
     try:
         route = resolve_provider_route_for_engine(agent_engine, provider_profile)
-    except (KeyError, ValueError) as exc:
+    except KeyError:
+        selected = str(provider_profile or default_provider_profile(agent_engine) or "")
+        message = (
+            f"provider_profile {selected!r} is unknown for agent_engine {agent_engine!r}; "
+            "add it to the provider registry or use a supported provider profile."
+        )
+        return {
+            "driver": _driver_for_agent_engine(agent_engine),
+            "agent_engine": agent_engine,
+            "provider": selected,
+            "provider_profile": selected,
+            "model": model or "",
+            "required_env": [],
+            "missing_env": [],
+            "ok": False,
+            "message": message,
+        }
+    except ValueError as exc:
         selected = str(provider_profile or default_provider_profile(agent_engine) or "")
         return {
             "driver": _driver_for_agent_engine(agent_engine),

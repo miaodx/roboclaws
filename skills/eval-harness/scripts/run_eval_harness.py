@@ -10,6 +10,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.parse
 from pathlib import Path
@@ -17,6 +18,8 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 SELECTOR_PATH = SCRIPT_DIR / "select_eval_harness.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
@@ -139,15 +142,8 @@ def _requirement_blocker(
         return _environment_blocker(".venv/bin/python is missing")
     if requirement == "docker" and shutil.which("docker") is None:
         return _environment_blocker("docker is not on PATH")
-    if requirement == "codex_provider" and not _has_codex_provider(axes):
-        return {
-            "category": "model_or_provider_unavailable",
-            "detail": (
-                "codex-router-responses requires CODEX_BASE_URL and CODEX_API_KEY; "
-                "mimo-mify-responses requires XM_LLM_API_KEY; "
-                "minimax-responses requires MM_API_KEY"
-            ),
-        }
+    if requirement == "codex_provider":
+        return _provider_requirement_blocker(axes)
     if requirement == "openai_agents_package" and not _has_module("agents"):
         return _environment_blocker("openai-agents package is not installed")
     if requirement == "dino_sidecar" and not prior_blockers and not _ensure_dino_sidecar(manifest):
@@ -444,13 +440,35 @@ def _command_value(row: dict[str, Any], key: str) -> str:
     return ""
 
 
-def _has_codex_provider(axes: dict[str, Any]) -> bool:
-    profile = str(axes.get("provider_profile") or "codex-router-responses")
-    if profile == "mimo-mify-responses":
-        return bool(os.environ.get("XM_LLM_API_KEY"))
-    if profile == "minimax-responses":
-        return bool(os.environ.get("MM_API_KEY"))
-    return bool(os.environ.get("CODEX_BASE_URL") and os.environ.get("CODEX_API_KEY"))
+def _provider_requirement_blocker(axes: dict[str, Any]) -> dict[str, str] | None:
+    from roboclaws.agents.provider_registry import provider_readiness
+
+    readiness = provider_readiness(
+        agent_engine=str(axes.get("agent_engine") or ""),
+        provider_profile=str(axes.get("provider_profile") or "") or None,
+    )
+    if readiness.get("ok"):
+        return None
+    return {
+        "category": "model_or_provider_unavailable",
+        "detail": _provider_readiness_message(readiness),
+    }
+
+
+def _provider_readiness_message(readiness: dict[str, Any]) -> str:
+    message = str(readiness.get("message") or "").strip()
+    if message:
+        return message
+    missing = [str(item) for item in readiness.get("missing_env") or []]
+    if missing:
+        return (
+            f"{readiness.get('provider_profile') or readiness.get('provider')} "
+            f"requires {', '.join(missing)}"
+        )
+    return (
+        f"provider_profile {readiness.get('provider_profile') or readiness.get('provider')!r} "
+        f"is not ready for agent_engine {readiness.get('agent_engine')!r}"
+    )
 
 
 def _has_module(module_name: str) -> bool:

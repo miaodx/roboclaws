@@ -305,6 +305,22 @@ def test_execute_marks_live_row_blocked_when_provider_is_missing(
     assert rows["codex-cleanup-live-eval"]["blocker_category"] == "model_or_provider_unavailable"
 
 
+def test_provider_blocker_rejects_unknown_profile_even_when_codex_env_exists(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "key")
+
+    blocker = runner._provider_requirement_blocker(
+        {"agent_engine": "codex-cli", "provider_profile": "not-a-provider-route"}
+    )
+
+    assert blocker is not None
+    assert blocker["category"] == "model_or_provider_unavailable"
+    assert "provider_profile 'not-a-provider-route' is unknown" in blocker["detail"]
+    assert "agent_engine 'codex-cli'" in blocker["detail"]
+
+
 def test_execute_defaults_provider_timing_proxy_for_live_codex_row(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

@@ -239,6 +239,20 @@ def test_provider_readiness_rejects_unknown_model_override() -> None:
     assert "provider_profile codex-router-responses" in readiness["message"]
 
 
+def test_provider_readiness_rejects_unknown_provider_profile() -> None:
+    readiness = provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile="not-a-provider-route",
+        env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+    )
+
+    assert readiness["ok"] is False
+    assert readiness["provider_profile"] == "not-a-provider-route"
+    assert readiness["missing_env"] == []
+    assert "provider_profile 'not-a-provider-route' is unknown" in readiness["message"]
+    assert "agent_engine 'codex-cli'" in readiness["message"]
+
+
 def test_provider_registry_cli_dispatches_route_and_json_commands(
     tmp_path,
     capsys,
