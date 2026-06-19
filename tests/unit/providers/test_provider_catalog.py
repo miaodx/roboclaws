@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from roboclaws.agents.provider_registry import (
     ROUTE_BLOCKED,
     ROUTE_CAP_UNKNOWN,
@@ -15,6 +17,7 @@ from roboclaws.agents.provider_registry import (
     model_aliases,
     model_supports_images,
     normalize_provider_route,
+    openai_agents_runtime_settings,
     openclaw_model_id,
     provider_readiness,
     provider_route_spec,
@@ -251,6 +254,22 @@ def test_provider_readiness_rejects_unknown_provider_profile() -> None:
     assert readiness["missing_env"] == []
     assert "provider_profile 'not-a-provider-route' is unknown" in readiness["message"]
     assert "agent_engine 'codex-cli'" in readiness["message"]
+
+
+def test_openai_agents_runtime_settings_reject_unknown_model_override() -> None:
+    with pytest.raises(
+        ValueError,
+        match="OpenAI Agents SDK setting model is unknown, got 'not-in-provider-catalog'",
+    ):
+        openai_agents_runtime_settings(
+            provider_profile="codex-router-responses",
+            request_provider_profile=None,
+            model="not-in-provider-catalog",
+            request_model=None,
+            base_url=None,
+            api_key=None,
+            env={"CODEX_BASE_URL": "https://codex.example.test/v1", "CODEX_API_KEY": "key"},
+        )
 
 
 def test_provider_registry_cli_dispatches_route_and_json_commands(

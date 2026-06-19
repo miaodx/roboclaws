@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: OpenAI Agents SDK runtime model selection now fails aloud for
+  unknown model overrides. Explicit `model`,
+  `LiveAgentRequest.model`, `ROBOCLAWS_OPENAI_AGENTS_MODEL`, or
+  `ROBOCLAWS_CODEX_MODEL` values must resolve through the provider model
+  catalog before the SDK route is constructed, so a typo like
+  `not-in-provider-catalog` becomes the existing `provider_config_failure`
+  status instead of being passed to the live provider client. Owner layer:
+  Agent Engines And Provider Profiles. Behavior-change class: fail-aloud
+  provider/model route input; default model selection, known model aliases,
+  valid explicit route models such as `MiniMax-M2.7-highspeed`, provider
+  profile conflict detection, base-url/API-key validation, and SDK execution
+  behavior are unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused provider catalog and live-runtime
+  unknown-model tests, full provider catalog and OpenAI Agents live-runtime unit
+  files, Minimax SDK route regression, touched-file ruff and format check,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Operator-console live-state JSON source errors now fail aloud.
   Present malformed or non-object core `operator_state.json`,
   `live_status.json`, and `run_result.json` sources no longer collapse to empty

@@ -1698,6 +1698,28 @@ def test_openai_agents_runtime_rejects_conflicting_provider_model_env_settings(
     assert expected_detail in payload["detail"]
 
 
+def test_openai_agents_runtime_rejects_unknown_model_env(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MODEL", "not-in-provider-catalog")
+    request = LiveAgentRequest(
+        run_id="household-world.cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.phase == "failed"
+    assert result.reason == "provider_config_failure"
+    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
+    assert payload["reason"] == "provider_config_failure"
+    assert "OpenAI Agents SDK setting model is unknown" in payload["detail"]
+    assert "not-in-provider-catalog" in payload["detail"]
+
+
 def test_openai_agents_runtime_allows_matching_provider_model_env_aliases(
     tmp_path: Path,
     monkeypatch,

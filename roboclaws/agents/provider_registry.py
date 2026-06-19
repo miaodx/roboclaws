@@ -872,7 +872,9 @@ def _normal_provider_profile(value: str) -> str:
 
 def _normal_model_id(value: str) -> str:
     model = maybe_resolve_model(value)
-    return model.model_id if model is not None else value
+    if model is None:
+        raise ValueError(f"OpenAI Agents SDK setting model is unknown, got {value!r}")
+    return model.model_id
 
 
 def _explicit_string(value: Any) -> str:
