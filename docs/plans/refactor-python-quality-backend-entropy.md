@@ -49,7 +49,9 @@ Latest quality snapshot from 2026-06-19:
   packets instead of hiding queued steering evidence behind empty inbox state.
   Operator-console `trace.jsonl` source errors now fail the normalized state
   explicitly instead of letting latest-action/tool summaries derive from a
-  partially skipped trace.
+  partially skipped trace. Operator-console agent event JSONL errors now fail
+  the normalized state explicitly instead of letting latest-decision evidence
+  derive from a partially skipped agent log.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

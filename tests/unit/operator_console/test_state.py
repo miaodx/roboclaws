@@ -397,6 +397,57 @@ def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
     )
 
 
+def test_state_surfaces_malformed_agent_event_source_error(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0608_2110" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_selection(MUJOCO_CODEX_CLEANUP).to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "response", "tool": "observe", "ok": True}) + "\n",
+        encoding="utf-8",
+    )
+    (attempt_dir / "codex-events.jsonl").write_text(
+        "{not-json}\n"
+        + json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "agent_message",
+                    "text": "I found a cup and will inspect it.",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_selection(MUJOCO_CODEX_CLEANUP))
+
+    assert state["phase"] == "failed"
+    assert state["status"] == "failed"
+    assert state["terminal_reason"] == "operator state source error: Agent Events"
+    assert state["latest_public_decision_evidence"]["decision"] == (
+        "I found a cup and will inspect it."
+    )
+    assert [(error["label"], error["reason"]) for error in state["source_errors"]] == [
+        ("Agent Events", "invalid JSON at line 1 column 2")
+    ]
+
+
 def test_state_summarizes_claude_events_for_live_decision(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0608_2118" / "seed-7"

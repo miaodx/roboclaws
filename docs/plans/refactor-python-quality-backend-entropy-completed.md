@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console agent event JSONL parsing now fails aloud in
+  normalized live-state payloads. Malformed or non-object `codex-events*.jsonl`,
+  `claude-events*.jsonl`, and `openai-agents-events*.jsonl` rows no longer
+  disappear while latest-decision evidence is selected from remaining valid
+  agent messages; the state marks the run failed with the relevant event-source
+  label and keeps row-level `source_errors`. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud runtime artifact/source truth;
+  valid Codex/Claude/OpenAI Agents message extraction, trace-derived latest
+  action/tool summaries, artifact links, and checker handoff behavior are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused operator-console state tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-19: Operator-console `trace.jsonl` parsing now fails aloud in the
   normalized live-state payload. Present malformed or non-object trace rows no
   longer disappear while latest-action, decision-evidence, and latest-tool

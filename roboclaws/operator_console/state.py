@@ -118,6 +118,8 @@ def derive_operator_state(
     stale_live_failure = _stale_live_status_failure(live_status, run_result)
     if stale_live_failure:
         phase = "failed"
+    agent_message, agent_source_errors = _latest_agent_message(display_run_dir)
+    source_errors = (*source_errors, *agent_source_errors)
     source_failure = _json_source_failure(source_errors)
     if source_failure:
         phase = "failed"
@@ -145,7 +147,6 @@ def derive_operator_state(
         display_run_dir,
     )
     public_result = _public_run_result_summary(run_result)
-    latest_agent_message = _latest_agent_message(display_run_dir)
     prompt_preview = _prompt_preview(status, live_status, run_result, display_run_dir)
     run_id = str(status.get("run_id") or run_dir.name)
     from roboclaws.operator_console.interactions import operator_message_state
@@ -179,7 +180,7 @@ def derive_operator_state(
         "elapsed_seconds": _elapsed_seconds(status),
         "latest_action": _latest_action(latest_trace, run_result),
         "latest_public_decision_evidence": _decision_evidence(
-            latest_trace, run_result, latest_agent_message
+            latest_trace, run_result, agent_message
         ),
         "latest_tool_call": _tool_call_summary(latest_trace),
         "camera_state": camera_state,
@@ -537,34 +538,32 @@ def _float_or_zero(value: Any) -> float:
     return round(number, 3)
 
 
-def _latest_agent_message(run_dir: Path) -> str:
+def _latest_agent_message(run_dir: Path) -> tuple[str, tuple[JsonSourceError, ...]]:
     event_paths: list[Path] = []
     for pattern in AGENT_EVENT_GLOBS:
         event_paths.extend(path for path in run_dir.glob(pattern) if path.is_file())
     event_paths = sorted(set(event_paths), key=_safe_mtime)
+    source_errors: list[JsonSourceError] = []
     for path in reversed(event_paths):
-        message = _last_agent_message(path)
+        rows, row_errors = _read_jsonl_source(path, label=_agent_event_label(path))
+        source_errors.extend(row_errors)
+        message = _last_agent_message(rows)
         if message:
-            return message
-    return ""
+            return message, tuple(source_errors)
+    return "", tuple(source_errors)
 
 
-def _last_agent_message(path: Path) -> str:
-    if not path.exists():
-        return ""
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return ""
-    for line in reversed(lines):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
+def _agent_event_label(path: Path) -> str:
+    name = path.name
+    if name.startswith("claude-events"):
+        return "Claude Events"
+    if name.startswith("openai-agents-events"):
+        return "OpenAI Agents Events"
+    return "Agent Events"
+
+
+def _last_agent_message(rows: list[dict[str, Any]]) -> str:
+    for payload in reversed(rows):
         text = _agent_message_text(payload)
         if text:
             return text
