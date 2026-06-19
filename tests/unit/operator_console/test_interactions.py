@@ -87,6 +87,52 @@ def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Pat
     assert not (run_dir / "continue_queue.jsonl").exists()
 
 
+def test_steer_rejects_malformed_operator_state_source_without_writing_message(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator state source contains invalid JSON"):
+        append_steer_message(tmp_path, "run-a", "Observe the desk again")
+
+    assert state_path.read_text(encoding="utf-8") == "{not-json"
+    assert not (run_dir / "operator_messages.jsonl").exists()
+
+
+def test_next_goal_rejects_non_object_operator_state_source_without_writing_queue(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(InteractionError, match="operator state source must be a JSON object"):
+        append_next_goal_request(tmp_path, "run-a", "Run the next sweep")
+
+    assert state_path.read_text(encoding="utf-8") == "[]\n"
+    assert not (run_dir / "operator_messages.jsonl").exists()
+    assert not (run_dir / "next_goal_queue.jsonl").exists()
+
+
+def test_list_messages_preserves_passive_malformed_operator_state_summary(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(tmp_path, phase="running-codex")
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+
+    messages = list_operator_messages(tmp_path, "run-a")
+    state = operator_message_state(tmp_path, run_dir)
+
+    assert messages["operator_session_id"] == ""
+    assert messages["messages"] == []
+    assert messages["source_error"] is False
+    assert state["operator_session_id"] == ""
+    assert state["source_error"] is False
+
+
 def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path) -> None:
     _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
 

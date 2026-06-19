@@ -98,7 +98,7 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     body = _clean_text(body)
     if not body:
         raise InteractionError("Steer Current Run requires message text.")
-    run_dir, route = _run_context(root, run_id)
+    run_dir, route, run_state = _run_context(root, run_id, strict=True)
     state = derive_operator_state(root, run_dir, route)
     if _is_terminal_state(state):
         raise InteractionError("Robot Run is terminal; use Next Goal instead.")
@@ -110,7 +110,7 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
         "operator_message_pending": True,
     }
     _append_message(run_dir, message)
-    _record_session_message(root, run_dir, message)
+    _record_session_message(root, run_dir, message, run_state=run_state)
     return message
 
 
@@ -126,9 +126,9 @@ def append_next_goal_request(
     prompt = _clean_text(prompt)
     if not prompt:
         raise InteractionError("Next Goal requires a goal prompt.")
-    run_dir, route = _run_context(root, run_id)
+    run_dir, route, run_state = _run_context(root, run_id, strict=True)
     state = derive_operator_state(root, run_dir, route)
-    session = _session_for_run(root, run_dir, run_id)
+    session = _session_for_run(root, run_dir, run_id, run_state=run_state)
     terminal = _is_terminal_state(state)
     if not terminal:
         raise InteractionError(
@@ -171,12 +171,12 @@ def append_next_goal_request(
     )
     _append_jsonl(run_dir / NEXT_GOAL_QUEUE, message)
     _append_message(run_dir, message)
-    _record_session_message(root, run_dir, message)
+    _record_session_message(root, run_dir, message, run_state=run_state)
     return message
 
 
 def list_operator_messages(root: Path, run_id: str) -> dict[str, Any]:
-    run_dir, route = _run_context(root, run_id)
+    run_dir, route, _run_state = _run_context(root, run_id)
     state = derive_operator_state(root, run_dir, route)
     messages, source_errors = _read_message_rows_with_source_errors(run_dir)
     return {
@@ -377,19 +377,28 @@ def _public_artifact_scope(artifacts: list[Any]) -> list[dict[str, str]]:
     return output
 
 
-def _run_context(root: Path, run_id: str) -> tuple[Path, ConsoleLaunchSelection | None]:
+def _run_context(
+    root: Path,
+    run_id: str,
+    *,
+    strict: bool = False,
+) -> tuple[Path, ConsoleLaunchSelection | None, dict[str, Any]]:
     if not run_id:
         raise InteractionError("run_id is required.")
     run_dir = console_output_root(root) / "runs" / run_id
     if not run_dir.is_dir():
         raise InteractionError(f"unknown run: {run_id}")
-    state = _read_json(run_dir / "operator_state.json")
+    state = (
+        _read_run_state(run_dir / "operator_state.json")
+        if strict
+        else _read_json(run_dir / "operator_state.json")
+    )
     selection_id = _state_selection_id(state)
     try:
         route = get_selection(selection_id) if selection_id else None
     except KeyError:
         route = None
-    return run_dir, route
+    return run_dir, route, state
 
 
 def _state_selection_id(state: dict[str, Any]) -> str:
@@ -440,8 +449,14 @@ def _requires_next_goal_confirmation(route: ConsoleLaunchSelection | None) -> bo
     return route.emergency_stop_required or route.resource_kind in {"physical_robot", "real_robot"}
 
 
-def _session_for_run(root: Path, run_dir: Path, run_id: str) -> dict[str, Any]:
-    session_id = _session_id_from_run_state(run_dir)
+def _session_for_run(
+    root: Path,
+    run_dir: Path,
+    run_id: str,
+    *,
+    run_state: dict[str, Any],
+) -> dict[str, Any]:
+    session_id = _session_id_from_state(run_state)
     if session_id:
         try:
             return get_operator_session(root, session_id)
@@ -450,8 +465,14 @@ def _session_for_run(root: Path, run_dir: Path, run_id: str) -> dict[str, Any]:
     return attach_run_to_session(root, run_id)
 
 
-def _record_session_message(root: Path, run_dir: Path, message: dict[str, Any]) -> None:
-    state = _read_json(run_dir / "operator_state.json")
+def _record_session_message(
+    root: Path,
+    run_dir: Path,
+    message: dict[str, Any],
+    *,
+    run_state: dict[str, Any] | None = None,
+) -> None:
+    state = run_state if run_state is not None else _read_run_state(run_dir / "operator_state.json")
     session_id = str(state.get("operator_session_id") or message.get("operator_session_id") or "")
     if not session_id:
         session = attach_run_to_session(root, str(message.get("run_id") or run_dir.name))
@@ -475,6 +496,10 @@ def _record_session_message(root: Path, run_dir: Path, message: dict[str, Any]) 
 
 def _session_id_from_run_state(run_dir: Path) -> str:
     state = _read_json(run_dir / "operator_state.json")
+    return _session_id_from_state(state)
+
+
+def _session_id_from_state(state: dict[str, Any]) -> str:
     return str(state.get("operator_session_id") or "")
 
 
@@ -575,6 +600,25 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _read_run_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise InteractionError(f"unknown run: {path.parent.name}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise InteractionError(
+            (
+                f"operator state source contains invalid JSON at {path}: "
+                f"line {exc.lineno} column {exc.colno}: {exc.msg}"
+            )
+        ) from exc
+    except OSError as exc:
+        raise InteractionError(f"operator state source cannot be read at {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise InteractionError(f"operator state source must be a JSON object at {path}")
+    return payload
 
 
 def _session_path(root: Path, session_id: str) -> Path:

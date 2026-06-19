@@ -128,7 +128,10 @@ Latest quality snapshot from 2026-06-19:
   plausible fallback run or metadata-free row. Operator-console manual control
   now rejects malformed `operator_state.json` sources before route lookup,
   MCP calls, control-row append, or state rewrite instead of collapsing corrupt
-  state into a missing endpoint or overwriting source evidence.
+  state into a missing endpoint or overwriting source evidence. Operator-console
+  interaction commands now reject malformed run `operator_state.json` sources
+  before appending steer messages, next-goal queues, or session-link updates
+  instead of treating corrupt run state as unsupported route/session absence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
