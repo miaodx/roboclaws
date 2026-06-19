@@ -44,7 +44,9 @@ Latest quality snapshot from 2026-06-19:
   aloud instead of being skipped into fewer apparent source observations.
   Operator-console control source JSONL errors now fail aloud before appending
   new manual-control rows, preserving operator-intervention evidence instead
-  of silently renumbering around corrupt history.
+  of silently renumbering around corrupt history. Operator-console message
+  inbox JSONL errors now surface as console-state and MCP-visible source-error
+  packets instead of hiding queued steering evidence behind empty inbox state.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console message inbox parsing now fails aloud for
+  malformed or non-object `operator_messages.jsonl` rows. Corrupt present
+  steering evidence no longer disappears from console message state or MCP
+  `check_operator_messages` results; list/state payloads expose compact
+  `source_errors`, MCP delivery returns an explicit source-error packet, and
+  the pending-message hint tells the agent to surface the source error instead
+  of treating the inbox as empty. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud runtime artifact/source truth; valid queued
+  steering delivery, seen-state rewriting, missing-file tolerance, next-goal
+  requests, session attachment, and private-payload stripping are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused operator-console interaction tests, stale private-reader
+  search, touched-file ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-19: Operator-console manual-control source parsing now fails aloud
   for malformed or non-object `operator_control.jsonl` rows. Corrupt present
   control evidence no longer disappears before event-id assignment or

@@ -178,11 +178,13 @@ def append_next_goal_request(
 def list_operator_messages(root: Path, run_id: str) -> dict[str, Any]:
     run_dir, route = _run_context(root, run_id)
     state = derive_operator_state(root, run_dir, route)
-    messages = _read_message_rows(run_dir)
+    messages, source_errors = _read_message_rows_with_source_errors(run_dir)
     return {
         "run_id": run_id,
         "operator_session_id": _session_id_from_run_state(run_dir),
         "messages": messages,
+        "source_errors": source_errors,
+        "source_error": bool(source_errors),
         "operator_message_pending": any(
             item.get("command_type") == "steer" and item.get("status") == "queued"
             for item in messages
@@ -197,7 +199,7 @@ def operator_message_state(root: Path, run_dir: Path) -> dict[str, Any]:
     """Return summarized interaction state for ``derive_operator_state``."""
 
     del root
-    rows = _read_message_rows(run_dir)
+    rows, source_errors = _read_message_rows_with_source_errors(run_dir)
     pending_steer = [
         item
         for item in rows
@@ -209,6 +211,8 @@ def operator_message_state(root: Path, run_dir: Path) -> dict[str, Any]:
         "pending_steer_count": len(pending_steer),
         "operator_message_pending": bool(pending_steer),
         "latest_message": rows[-1] if rows else {},
+        "source_errors": source_errors,
+        "source_error": bool(source_errors),
     }
 
 
@@ -216,7 +220,22 @@ def check_operator_messages_for_mcp(run_dir: Path, *, max_messages: int = 10) ->
     """Return queued steer messages and mark them seen for MCP delivery."""
 
     wrapper_dir = _wrapper_dir_for_display(run_dir)
-    rows = _read_message_rows(wrapper_dir)
+    rows, source_errors = _read_message_rows_with_source_errors(wrapper_dir)
+    if source_errors:
+        return {
+            "ok": False,
+            "tool": "check_operator_messages",
+            "status": "source_error",
+            "error_reason": "operator_message_source_error",
+            "operator_message_pending": False,
+            "messages": [],
+            "message_count": 0,
+            "source_errors": source_errors,
+            "instruction": (
+                "Operator steering inbox exists but could not be parsed. Treat this as a "
+                "source error and ask the operator to inspect operator_messages.jsonl."
+            ),
+        }
     selected: list[dict[str, Any]] = []
     next_rows: list[dict[str, Any]] = []
     now = _utc_now()
@@ -255,10 +274,18 @@ def check_operator_messages_for_mcp(run_dir: Path, *, max_messages: int = 10) ->
 
 def pending_operator_message_hint(run_dir: Path) -> dict[str, Any]:
     wrapper_dir = _wrapper_dir_for_display(run_dir)
+    rows, source_errors = _read_message_rows_with_source_errors(wrapper_dir)
+    if source_errors:
+        return {
+            "operator_message_source_error": True,
+            "operator_message_source_errors": source_errors,
+            "operator_message_instruction": (
+                "Operator steering inbox exists but could not be parsed. "
+                "Call check_operator_messages to surface the source error."
+            ),
+        }
     pending = [
-        row
-        for row in _read_message_rows(wrapper_dir)
-        if row.get("command_type") == "steer" and row.get("status") == "queued"
+        row for row in rows if row.get("command_type") == "steer" and row.get("status") == "queued"
     ]
     if not pending:
         return {}
@@ -467,21 +494,59 @@ def _append_message(run_dir: Path, message: dict[str, Any]) -> None:
     _append_jsonl(run_dir / MESSAGE_LOG, _strip_private_payload(message))
 
 
-def _read_message_rows(run_dir: Path) -> list[dict[str, Any]]:
+def _read_message_rows_with_source_errors(
+    run_dir: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     path = _message_log_path(run_dir)
     if not path.exists():
-        return rows
-    for line in path.read_text(encoding="utf-8").splitlines():
+        return rows, []
+    source_errors: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        return rows, [_message_source_error(path, f"cannot read operator message source: {exc}")]
+    for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            source_errors.append(
+                _message_source_error(
+                    path,
+                    f"invalid JSON: {exc.msg}",
+                    line_number=line_number,
+                )
+            )
             continue
-        if isinstance(payload, dict):
-            rows.append(payload)
-    return rows
+        if not isinstance(payload, dict):
+            source_errors.append(
+                _message_source_error(
+                    path,
+                    "row must be a JSON object",
+                    line_number=line_number,
+                )
+            )
+            continue
+        rows.append(payload)
+    return rows, source_errors
+
+
+def _message_source_error(
+    path: Path,
+    message: str,
+    *,
+    line_number: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "source": "operator_messages",
+        "path": str(path),
+        "message": message,
+    }
+    if line_number is not None:
+        payload["line"] = line_number
+    return payload
 
 
 def _rewrite_messages(run_dir: Path, rows: list[dict[str, Any]]) -> None:
