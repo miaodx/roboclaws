@@ -89,101 +89,35 @@ def build_asset_visual_comparison(
 ) -> dict[str, Any]:
     baseline = _load_navigation_artifact(baseline_navigation_path)
     candidate = _load_navigation_artifact(candidate_navigation_path)
-    errors: list[str] = []
-    warnings: list[str] = []
-    errors.extend(_navigation_artifact_shape_errors(baseline, label=baseline_name))
-    errors.extend(_navigation_artifact_shape_errors(candidate, label=candidate_name))
     baseline_rows = _waypoints_by_id(baseline)
     candidate_rows = _waypoints_by_id(candidate)
     baseline_ids = list(baseline_rows)
     candidate_ids = list(candidate_rows)
-    if baseline_ids != candidate_ids:
-        errors.append(
-            f"waypoint order mismatch: {baseline_name}={baseline_ids}, "
-            f"{candidate_name}={candidate_ids}"
-        )
     shared_ids = [waypoint_id for waypoint_id in baseline_ids if waypoint_id in candidate_rows]
-    scene_baseline = str(baseline.get("b1_scene_usd") or "")
-    scene_candidate = str(candidate.get("b1_scene_usd") or "")
-    if not scene_baseline:
-        errors.append(f"{baseline_name} missing b1_scene_usd")
-    if not scene_candidate:
-        errors.append(f"{candidate_name} missing b1_scene_usd")
-    if scene_baseline and scene_candidate and scene_baseline == scene_candidate:
-        errors.append("asset visual comparison requires two distinct render scene USDs")
-
-    errors.extend(
-        f"{baseline_name}: {error}"
-        for error in validate_robot_view_waypoint_evidence(
-            list(baseline_rows.values()),
-            require_files=False,
-            required_views=DEFAULT_REQUIRED_VIEWS,
-            reviewable_views=DEFAULT_REQUIRED_VIEWS,
-        )
+    errors = _asset_visual_comparison_input_errors(
+        baseline_name=baseline_name,
+        baseline=baseline,
+        baseline_ids=baseline_ids,
+        baseline_rows=baseline_rows,
+        candidate_name=candidate_name,
+        candidate=candidate,
+        candidate_ids=candidate_ids,
+        candidate_rows=candidate_rows,
     )
-    errors.extend(
-        f"{candidate_name}: {error}"
-        for error in validate_robot_view_waypoint_evidence(
-            list(candidate_rows.values()),
-            require_files=False,
-            required_views=DEFAULT_REQUIRED_VIEWS,
-            reviewable_views=DEFAULT_REQUIRED_VIEWS,
-        )
+    rows, row_errors, warnings = _asset_visual_comparison_rows(
+        baseline_name=baseline_name,
+        baseline_rows=baseline_rows,
+        candidate_name=candidate_name,
+        candidate_rows=candidate_rows,
+        shared_ids=shared_ids,
+        allow_low_detail=allow_low_detail,
     )
-
-    rows = []
-    for waypoint_id in shared_ids:
-        baseline_row = baseline_rows[waypoint_id]
-        candidate_row = candidate_rows[waypoint_id]
-        pose_errors = _pose_match_errors(
-            _dict(baseline_row.get("robot_pose")),
-            _dict(candidate_row.get("robot_pose")),
-            waypoint_id=waypoint_id,
-            baseline_name=baseline_name,
-            candidate_name=candidate_name,
-        )
-        errors.extend(pose_errors)
-        image_errors = []
-        for label, row in (
-            (baseline_name, baseline_row),
-            (candidate_name, candidate_row),
-        ):
-            for view_name in DEFAULT_REQUIRED_VIEWS:
-                image_errors.extend(
-                    f"{label} {waypoint_id} {view_name}: {error}"
-                    for error in _view_image_errors(row, view_name)
-                )
-        if allow_low_detail:
-            hard_errors, soft_warnings = _split_low_detail_errors(image_errors)
-            errors.extend(hard_errors)
-            warnings.extend(soft_warnings)
-        else:
-            errors.extend(image_errors)
-        rows.append(
-            {
-                "waypoint_id": waypoint_id,
-                "map12_nav_goal": baseline_row.get("map12_nav_goal"),
-                "robot_pose": baseline_row.get("robot_pose"),
-                "views": {
-                    baseline_name: _required_view_paths(baseline_row),
-                    candidate_name: _required_view_paths(candidate_row),
-                },
-            }
-        )
-
-    if contact_sheet is not None:
-        if contact_sheet.is_file():
-            contact_sheet_status = "available"
-        else:
-            contact_sheet_status = "missing"
-            errors.append(f"contact sheet missing: {contact_sheet}")
-    else:
-        contact_sheet_status = "not_provided"
-
-    status = "passed" if not errors and len(shared_ids) >= 2 else "failed"
+    errors.extend(row_errors)
+    contact_sheet_status, contact_sheet_errors = _contact_sheet_status(contact_sheet)
+    errors.extend(contact_sheet_errors)
     if len(shared_ids) < 2:
         errors.append("asset visual comparison requires at least two shared waypoints")
-        status = "failed"
+    status = "passed" if not errors else "failed"
     return {
         "schema": ASSET_VISUAL_COMPARISON_SCHEMA,
         "status": status,
@@ -215,6 +149,202 @@ def build_asset_visual_comparison(
             "errors": errors,
         },
     }
+
+
+def _asset_visual_comparison_input_errors(
+    *,
+    baseline_name: str,
+    baseline: dict[str, Any],
+    baseline_ids: list[str],
+    baseline_rows: dict[str, dict[str, Any]],
+    candidate_name: str,
+    candidate: dict[str, Any],
+    candidate_ids: list[str],
+    candidate_rows: dict[str, dict[str, Any]],
+) -> list[str]:
+    return [
+        *_navigation_artifact_shape_errors(baseline, label=baseline_name),
+        *_navigation_artifact_shape_errors(candidate, label=candidate_name),
+        *_waypoint_order_errors(
+            baseline_name=baseline_name,
+            baseline_ids=baseline_ids,
+            candidate_name=candidate_name,
+            candidate_ids=candidate_ids,
+        ),
+        *_scene_comparison_errors(
+            baseline_name=baseline_name,
+            baseline=baseline,
+            candidate_name=candidate_name,
+            candidate=candidate,
+        ),
+        *_navigation_waypoint_evidence_errors(
+            baseline_name=baseline_name,
+            baseline_rows=baseline_rows,
+            candidate_name=candidate_name,
+            candidate_rows=candidate_rows,
+        ),
+    ]
+
+
+def _waypoint_order_errors(
+    *,
+    baseline_name: str,
+    baseline_ids: list[str],
+    candidate_name: str,
+    candidate_ids: list[str],
+) -> list[str]:
+    if baseline_ids == candidate_ids:
+        return []
+    return [
+        f"waypoint order mismatch: {baseline_name}={baseline_ids}, {candidate_name}={candidate_ids}"
+    ]
+
+
+def _scene_comparison_errors(
+    *,
+    baseline_name: str,
+    baseline: dict[str, Any],
+    candidate_name: str,
+    candidate: dict[str, Any],
+) -> list[str]:
+    scene_baseline = str(baseline.get("b1_scene_usd") or "")
+    scene_candidate = str(candidate.get("b1_scene_usd") or "")
+    errors = []
+    if not scene_baseline:
+        errors.append(f"{baseline_name} missing b1_scene_usd")
+    if not scene_candidate:
+        errors.append(f"{candidate_name} missing b1_scene_usd")
+    if scene_baseline and scene_candidate and scene_baseline == scene_candidate:
+        errors.append("asset visual comparison requires two distinct render scene USDs")
+    return errors
+
+
+def _navigation_waypoint_evidence_errors(
+    *,
+    baseline_name: str,
+    baseline_rows: dict[str, dict[str, Any]],
+    candidate_name: str,
+    candidate_rows: dict[str, dict[str, Any]],
+) -> list[str]:
+    return [
+        *(
+            f"{baseline_name}: {error}"
+            for error in _robot_view_waypoint_evidence_errors(baseline_rows)
+        ),
+        *(
+            f"{candidate_name}: {error}"
+            for error in _robot_view_waypoint_evidence_errors(candidate_rows)
+        ),
+    ]
+
+
+def _robot_view_waypoint_evidence_errors(rows: dict[str, dict[str, Any]]) -> list[str]:
+    return validate_robot_view_waypoint_evidence(
+        list(rows.values()),
+        require_files=False,
+        required_views=DEFAULT_REQUIRED_VIEWS,
+        reviewable_views=DEFAULT_REQUIRED_VIEWS,
+    )
+
+
+def _asset_visual_comparison_rows(
+    *,
+    baseline_name: str,
+    baseline_rows: dict[str, dict[str, Any]],
+    candidate_name: str,
+    candidate_rows: dict[str, dict[str, Any]],
+    shared_ids: list[str],
+    allow_low_detail: bool,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    rows = []
+    errors: list[str] = []
+    warnings: list[str] = []
+    for waypoint_id in shared_ids:
+        row, row_errors, row_warnings = _asset_visual_comparison_row(
+            baseline_name=baseline_name,
+            baseline_row=baseline_rows[waypoint_id],
+            candidate_name=candidate_name,
+            candidate_row=candidate_rows[waypoint_id],
+            waypoint_id=waypoint_id,
+            allow_low_detail=allow_low_detail,
+        )
+        rows.append(row)
+        errors.extend(row_errors)
+        warnings.extend(row_warnings)
+    return rows, errors, warnings
+
+
+def _asset_visual_comparison_row(
+    *,
+    baseline_name: str,
+    baseline_row: dict[str, Any],
+    candidate_name: str,
+    candidate_row: dict[str, Any],
+    waypoint_id: str,
+    allow_low_detail: bool,
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    errors = _pose_match_errors(
+        _dict(baseline_row.get("robot_pose")),
+        _dict(candidate_row.get("robot_pose")),
+        waypoint_id=waypoint_id,
+        baseline_name=baseline_name,
+        candidate_name=candidate_name,
+    )
+    image_errors = _asset_visual_comparison_image_errors(
+        baseline_name=baseline_name,
+        baseline_row=baseline_row,
+        candidate_name=candidate_name,
+        candidate_row=candidate_row,
+        waypoint_id=waypoint_id,
+    )
+    warnings: list[str] = []
+    if allow_low_detail:
+        hard_errors, warnings = _split_low_detail_errors(image_errors)
+        errors.extend(hard_errors)
+    else:
+        errors.extend(image_errors)
+    return (
+        {
+            "waypoint_id": waypoint_id,
+            "map12_nav_goal": baseline_row.get("map12_nav_goal"),
+            "robot_pose": baseline_row.get("robot_pose"),
+            "views": {
+                baseline_name: _required_view_paths(baseline_row),
+                candidate_name: _required_view_paths(candidate_row),
+            },
+        },
+        errors,
+        warnings,
+    )
+
+
+def _asset_visual_comparison_image_errors(
+    *,
+    baseline_name: str,
+    baseline_row: dict[str, Any],
+    candidate_name: str,
+    candidate_row: dict[str, Any],
+    waypoint_id: str,
+) -> list[str]:
+    errors = []
+    for label, row in (
+        (baseline_name, baseline_row),
+        (candidate_name, candidate_row),
+    ):
+        for view_name in DEFAULT_REQUIRED_VIEWS:
+            errors.extend(
+                f"{label} {waypoint_id} {view_name}: {error}"
+                for error in _view_image_errors(row, view_name)
+            )
+    return errors
+
+
+def _contact_sheet_status(contact_sheet: Path | None) -> tuple[str, list[str]]:
+    if contact_sheet is None:
+        return "not_provided", []
+    if contact_sheet.is_file():
+        return "available", []
+    return "missing", [f"contact sheet missing: {contact_sheet}"]
 
 
 def _load_navigation_artifact(path: Path) -> dict[str, Any]:

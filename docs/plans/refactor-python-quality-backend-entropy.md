@@ -20,12 +20,12 @@ their full execution notes back here.
 
 Latest quality snapshot from 2026-06-19:
 
-- Ruff complexity rows: 3.
+- Ruff complexity rows: 1.
 - Oversized modules: 78.
-- Current emphasis: finish fresh complexity regressions only when they align
-  with validation/fail-aloud ownership, especially B1 artifact visual
-  validation and semantic review helpers, while continuing to prefer explicit
-  blocked/unavailable states over fabricated runtime/source evidence.
+- Current emphasis: only the long static-asset test complexity row remains
+  after the B1 validation rows were cleared. Route any test-shape cleanup
+  through `$intuitive-tests`; otherwise continue fail-aloud/runtime-source
+  audits from fresh evidence rather than reopening closed helper splits.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.

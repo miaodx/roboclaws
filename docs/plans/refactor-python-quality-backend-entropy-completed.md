@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: B1 custom-asset visual comparison validation was split into
+  input compatibility checks, waypoint-evidence checks, per-waypoint
+  pose/image row assembly, and contact-sheet status helpers inside the
+  existing comparison checker. Owner layer: Backend Runtime / Environment
+  Primitive, with artifact-validation impact on B1 custom render-scene visual
+  review. Behavior-change class: helper extraction only; passed same-pose
+  custom scene comparisons, pose mismatch failures, low-detail warning mode,
+  contact-sheet status, artifact schema, and non-default-route policy flags are
+  unchanged. Metric: ratchet improved from 3 to 1 Ruff complexity row and
+  stayed at 78 oversized modules; the selected
+  `check_b1_map12_asset_visual_comparison.py` complexity rows were cleared.
+  Proof: focused asset-visual-comparison contract tests, touched-file ruff and
+  format check, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: B1 semantic-projection accepted review-label validation was
   split into partition-id, label-required-field, and map-polygon geometry
   helpers inside the existing semantic projection builder. Owner layer:
