@@ -1239,6 +1239,7 @@ def _failure_class_from_exception(exc: Exception) -> str:
         "launch_overrides.scene_index must be a non-negative integer",
         "launch_overrides.scene_source must be a non-empty string",
         "runtime_map_prior must be a string path",
+        "runtime_map_prior_from_sample must be a non-empty string",
         "eval_effective_run_dir",
         "live eval run_result",
         "invalid live eval json artifact",

@@ -26,12 +26,16 @@ def resolve_artifact_dependencies(
             "runtime_map_prior_path": _explicit_runtime_map_prior_path(explicit_source),
             "runtime_map_prior_source": "explicit_path",
         }
-    source_sample_id = str(
-        dependencies.get("runtime_map_prior_from_sample")
-        or launch_overrides.get("runtime_map_prior_from_sample")
-        or ""
-    ).strip()
-    if not source_sample_id:
+    source_sample_id = None
+    if "runtime_map_prior_from_sample" in dependencies:
+        source_sample_id = _runtime_map_prior_source_sample_id(
+            dependencies.get("runtime_map_prior_from_sample")
+        )
+    elif "runtime_map_prior_from_sample" in launch_overrides:
+        source_sample_id = _runtime_map_prior_source_sample_id(
+            launch_overrides.get("runtime_map_prior_from_sample")
+        )
+    if source_sample_id is None:
         return {}
     source_artifacts = (
         sample_artifacts.get(sample_artifact_key(source_sample_id, repetition_index))
@@ -81,3 +85,12 @@ def _explicit_runtime_map_prior_path(value: Any) -> str:
     if not isinstance(value, str):
         raise ValueError(f"runtime_map_prior must be a string path, got {value!r}")
     return value.strip()
+
+
+def _runtime_map_prior_source_sample_id(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"runtime_map_prior_from_sample must be a non-empty string, got {value!r}")
+    source_sample_id = value.strip()
+    if not source_sample_id:
+        raise ValueError("runtime_map_prior_from_sample must be a non-empty string")
+    return source_sample_id

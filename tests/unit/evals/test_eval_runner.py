@@ -1846,6 +1846,75 @@ def test_live_eval_rejects_invalid_explicit_runtime_map_prior_before_launch(
     )
 
 
+@pytest.mark.parametrize(
+    ("container_key", "value"),
+    [
+        ("artifact_dependencies", True),
+        ("artifact_dependencies", 7),
+        ("artifact_dependencies", ["map_build.baseline_seed7"]),
+        ("artifact_dependencies", {"sample_id": "map_build.baseline_seed7"}),
+        ("launch_overrides", ""),
+    ],
+)
+def test_eval_runner_rejects_invalid_runtime_map_prior_source_sample(
+    tmp_path: Path,
+    container_key: str,
+    value: object,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_runtime_map_prior_source",
+        stamp=f"invalid-runtime-map-prior-source-{container_key}-{type(value).__name__}",
+        mutate=lambda sample: sample.setdefault(container_key, {}).__setitem__(
+            "runtime_map_prior_from_sample",
+            value,
+        ),
+        assertion_message=(
+            "product runner should not launch with invalid runtime_map_prior_from_sample"
+        ),
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "runtime_map_prior_from_sample must be a non-empty string"
+        in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+def test_live_eval_rejects_invalid_runtime_map_prior_source_sample_before_launch(
+    tmp_path: Path,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.live_invalid_runtime_map_prior_source",
+        stamp="live-invalid-runtime-map-prior-source",
+        mutate=lambda sample: sample.update(
+            {
+                "allowed_agent_engines": ["openai-agents-sdk"],
+                "provider_profiles": ["codex-router-responses"],
+                "artifact_dependencies": {"runtime_map_prior_from_sample": {"id": "map-build"}},
+            }
+        ),
+        assertion_message=(
+            "live product runner should not launch with invalid runtime_map_prior_from_sample"
+        ),
+        agent_engine="openai-agents-sdk",
+        provider_profile="codex-router-responses",
+        live_execution="run",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["identity"]["agent_engine"] == "openai-agents-sdk"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "runtime_map_prior_from_sample must be a non-empty string"
+        in result["grader_outputs"]["runner"]["message"]
+    )
+
+
 def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path) -> None:
     def product_runner(**kwargs: Any) -> dict[str, Any]:
         run_dir = Path(kwargs["output_dir"])
