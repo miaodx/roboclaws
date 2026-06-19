@@ -817,7 +817,18 @@ def verified_room_semantic_projection(
         raise ValueError(
             f"semantic projection artifact missing: {semantic_projection_artifact_path}"
         )
-    projection = json.loads(semantic_projection_artifact_path.read_text(encoding="utf-8"))
+    try:
+        projection = json.loads(semantic_projection_artifact_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"semantic projection artifact must contain valid JSON object: "
+            f"{semantic_projection_artifact_path}: {exc.msg}"
+        ) from exc
+    if not isinstance(projection, dict):
+        raise ValueError(
+            f"semantic projection artifact must contain a JSON object: "
+            f"{semantic_projection_artifact_path}"
+        )
     errors = semantic_projection_errors(
         projection,
         review_manifest_path=review_manifest_path,

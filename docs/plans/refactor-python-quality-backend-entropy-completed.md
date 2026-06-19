@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 runtime bundle compilation now fails aloud when an explicit
+  semantic projection artifact is malformed or parses to non-object JSON.
+  Corrupt `semantic_projection.json` inputs now produce source-path validation
+  errors instead of raw `JSONDecodeError` or attribute failures, while missing
+  artifact, review-mismatch, malformed-room, and valid verified-room semantics
+  behavior remain unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud runtime-map source artifact truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and reports 79 oversized modules in
+  the current dirty worktree. Proof: focused B1 runtime-bundle contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-20: Nav2 map-bundle validation now fails aloud when
   `semantics.json` parses to a non-object JSON value. Wrong-shaped semantics
   files now produce an explicit bundle validation error and projection callers

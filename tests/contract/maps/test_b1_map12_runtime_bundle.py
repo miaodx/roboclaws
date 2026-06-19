@@ -316,6 +316,50 @@ def test_runtime_compiler_rejects_missing_semantic_projection_artifact(
         )
 
 
+def test_runtime_compiler_rejects_malformed_semantic_projection_artifact(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"semantic projection artifact must contain valid JSON object: "
+            r".*semantic_projection\.json"
+        ),
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_non_object_semantic_projection_artifact(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"semantic projection artifact must contain a JSON object: "
+            r".*semantic_projection\.json"
+        ),
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
 def test_runtime_compiler_rejects_semantic_projection_review_mismatch(
     tmp_path: Path,
 ) -> None:
