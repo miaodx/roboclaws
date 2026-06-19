@@ -64,6 +64,9 @@ REVIEW_SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_correspondence
 PROMOTE_REVIEW_PACKET_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_semantic_review_packet.py"
 )
+PROMOTE_MANUAL_DRAFT_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "promote_b1_map12_manual_draft_for_verification.py"
+)
 CHECK_REVIEW_PACKET_FIT_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "check_b1_map12_semantic_review_packet_fit.py"
 )
@@ -894,6 +897,41 @@ def test_manual_draft_promotion_is_explicit_verification_only() -> None:
     assert payload["anchors"][0]["navigation_area_id"] == ""
     assert payload["anchors"][0]["asset_partition_id"] == ""
     assert "geometry only" in payload["anchors"][0]["evidence"]["verification_note"]
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (None, "manual draft missing"),
+        ("{not-json\n", "manual draft must contain valid JSON object"),
+        ("[]\n", "manual draft must contain a JSON object"),
+    ],
+)
+def test_manual_draft_promotion_cli_rejects_bad_source_json(
+    tmp_path: Path,
+    source_text: str | None,
+    expected_error: str,
+) -> None:
+    draft_path = tmp_path / "manual_draft.json"
+    output = tmp_path / "verification-only.json"
+    if source_text is not None:
+        draft_path.write_text(source_text, encoding="utf-8")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROMOTE_MANUAL_DRAFT_SCRIPT),
+            "--draft",
+            str(draft_path),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert (completed.returncode, output.exists()) == (2, False)
+    assert expected_error in completed.stderr and str(draft_path) in completed.stderr
 
 
 def test_manual_anchor_semantic_suggestions_do_not_accept_anchors() -> None:

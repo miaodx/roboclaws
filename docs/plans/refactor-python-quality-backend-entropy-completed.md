@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 manual-draft verification promotion CLI loading now
+  treats explicit `--draft` input as JSON-object source truth. Missing,
+  malformed, or parseable non-object draft packets return concise CLI
+  source-path errors and do not write verification-only correspondence
+  manifests, instead of surfacing raw file/parser/type failures before draft
+  promotion. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 manual draft source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules; the
+  touched B1 alignment test stayed at the 2000-line hard-ceiling boundary
+  after local table compaction. Proof: focused B1 manual-draft promotion
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh manual-draft
+  promotion CLI evidence that explicit drafts are again loaded through raw
+  parser/type paths, accepted as plausible non-object packets, or allowed to
+  write verification-only artifacts after source-load failure.
+
 - 2026-06-20: B1 Map 12 semantic review packet promotion and fit-check CLI
   loading now treats explicit `--review-packet` inputs as JSON-object source
   truth. Missing, malformed, or parseable non-object review packets return
