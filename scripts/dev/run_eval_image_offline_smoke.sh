@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+default_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+repo_root="${ROBOCLAWS_EVAL_REPO_DIR:-$default_repo_root}"
 image="${ROBOCLAWS_EVAL_IMAGE:-roboclaws-eval:local}"
 suite="${ROBOCLAWS_EVAL_SUITE:-smoke_regression}"
 budget="${ROBOCLAWS_EVAL_BUDGET:-smoke}"
@@ -20,12 +21,18 @@ Environment overrides:
   ROBOCLAWS_EVAL_BUDGET      Eval budget. Default: smoke
   ROBOCLAWS_EVAL_STAMP       Eval stamp. Default: offline-smoke
   ROBOCLAWS_EVAL_OUTPUT_DIR  Host output dir. Default: /tmp/roboclaws-eval-output
+  ROBOCLAWS_EVAL_REPO_DIR    Checkout to mount read-only. Default: current repo
 USAGE
   exit 0
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "error: docker is required for the offline eval image proof" >&2
+  exit 1
+fi
+
+if [[ ! -d "$repo_root/roboclaws" || ! -f "$repo_root/pyproject.toml" ]]; then
+  echo "error: ROBOCLAWS_EVAL_REPO_DIR must point at a Roboclaws checkout: $repo_root" >&2
   exit 1
 fi
 

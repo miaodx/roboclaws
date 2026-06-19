@@ -1,12 +1,11 @@
-# CloudML + JuiceFS Eval Phase 0 Capsule
+# CloudML + JuiceFS Eval Capsule
 
 Source plan: `docs/plans/2026-06-18-cloudml-juicefs-eval.md`
 
-Current blocker: none for local Phase 0 proof. CloudML dry-run/submission still
-requires registry URL, queue/resource, Git URL/commit, JuiceFS mount config, and
-explicit approval for Phase 1/2.
+Current blocker: no blocker for image push or CloudML dry-run. Formal CloudML
+submission still requires explicit approval.
 
-Blocker fingerprint: `cloudml_config_external_inputs`
+Blocker fingerprint: `cloudml_submit_requires_confirmation`
 
 Last proven evidence:
 
@@ -19,6 +18,19 @@ Last proven evidence:
   and
   `/tmp/roboclaws-eval-output-current/household_world_smoke_regression/offline-smoke-current/eval_report.html`.
 - Eval aggregate: `passed=1`, `failed=0`, `blocked=0`, `pass_at_1=1.0`.
+- Pushed eval image:
+  `micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619`.
+- Pushed image digest:
+  `sha256:90a21f7ba1d9336f67c95adedef452d2c75b806da3b853cce374403102a56742`.
+- CloudML code source:
+  `https://git.n.xiaomi.com/ipg/infra/roboclaws.git`, branch `main`, commit
+  `dfb0a395d1cf56121a00ed3f1477e3f7cf8130b3`.
+- Clean `mi/main` checkout smoke passed under Docker `--network none` with
+  artifacts under
+  `/tmp/roboclaws-eval-output-cloudml-phase1-mi-main/household_world_smoke_regression/offline-smoke-mi-main-dfb0a395/`.
+- CloudML dry-run YAML generated at
+  `/tmp/roboclaws-cloudml-dfb0a395-smoke.yaml` with `dry_run=true` and no
+  submitted task id.
 
 Completed slices:
 
@@ -30,27 +42,31 @@ Completed slices:
   without network.
 - Declared `editables` in `pyproject.toml` build-system requirements because
   hatchling editable builds need it.
+- Added `scripts/dev/build_push_eval_image.sh` for build, local offline smoke,
+  and cc-proxy push.
+- Added `scripts/dev/cloudml_eval_dry_run.sh` for executor-backed CloudML
+  dry-run YAML generation.
+- Updated `scripts/dev/run_eval_image_offline_smoke.sh` to support
+  `ROBOCLAWS_EVAL_REPO_DIR`, allowing a clean `mi/main` checkout to be mounted
+  for proof.
 
-Next hypothesis: Phase 1 can validate JuiceFS staging and CloudML dry-run shape
-once the operator supplies CloudML queue/resource, internal registry image
-reference, Git source/commit, JuiceFS mount fields, and credentials.
+Next hypothesis: Phase 2 can submit the deterministic `smoke_regression` job to
+CloudML with the dry-run YAML shape after the operator confirms formal submit.
 
 Next command/artifact:
 
 ```bash
-docker build -f Dockerfile.eval -t roboclaws-eval:local .
-ROBOCLAWS_EVAL_OUTPUT_DIR=/tmp/roboclaws-eval-output-current \
-ROBOCLAWS_EVAL_STAMP=offline-smoke-current \
-  scripts/dev/run_eval_image_offline_smoke.sh
+ROBOCLAWS_CLOUDML_IMAGE_URL=micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619 \
+ROBOCLAWS_CLOUDML_OUTPUT_YAML=/tmp/roboclaws-cloudml-dfb0a395-smoke.yaml \
+  scripts/dev/cloudml_eval_dry_run.sh
 ```
 
-Stop condition: do not expand into CloudML or JuiceFS work until Phase 1/2
-platform fields and approval are supplied.
+Stop condition: do not submit a real CloudML job until the dry-run YAML and
+submitted image reference are accepted.
 
 No-touch scope: no executor target changes, no real CloudML submission, no
 JuiceFS upload/download implementation, no live provider evals, and no
 `just agent::eval` semantics changes.
 
-Parked work: Phase 1 JuiceFS/executor staging, CloudML dry-run with supplied
-platform fields, Phase 2 formal CloudML smoke, live provider evals, report
-publishing from JuiceFS.
+Parked work: Phase 2 formal CloudML smoke, JuiceFS artifact retrieval/download,
+live provider evals, report publishing from JuiceFS.

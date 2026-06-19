@@ -1,6 +1,6 @@
 ---
 plan_scope: cloudml-juicefs-eval
-status: Phase 0 implemented and locally verified; Phase 1/2 require explicit platform inputs and approval
+status: Phase 1 dry-run implemented and locally verified; formal CloudML submit still requires explicit approval
 created: 2026-06-18
 last_reviewed: 2026-06-19
 implementation_allowed: false
@@ -458,6 +458,102 @@ and editable helper available in the baked venv. The image therefore installs
 `uv pip install --no-build-isolation --no-deps --editable "$REPO_DIR"` at
 runtime. This keeps package resolution in the network-allowed image build
 phase and keeps the CloudML/container entrypoint network-free.
+
+## Phase 1 Implementation Evidence
+
+Status: image push and CloudML dry-run verified on 2026-06-19.
+
+Operator-supplied decisions:
+
+- CloudML should consume the internal `mi/main` Roboclaws repository commit.
+- Eval image should be pushed to the internal `cc-proxy` registry.
+- The first CloudML command may be chosen pragmatically by the implementer.
+
+Implemented artifacts:
+
+- `scripts/dev/build_push_eval_image.sh`: builds `Dockerfile.eval`, proves the
+  selected image with Docker `--network none`, then pushes it to the
+  CloudML-accessible registry.
+- `scripts/dev/cloudml_eval_dry_run.sh`: generates a CloudML custom training
+  dry-run YAML through executor using the `profiles/nvs/miaodongxu.yaml`
+  wrapper, the `mi/main` code commit, the cc-proxy image, and the fixed
+  Miaodongxu JuiceFS mounts.
+- `scripts/dev/run_eval_image_offline_smoke.sh` now accepts
+  `ROBOCLAWS_EVAL_REPO_DIR`, so the local image proof can mount a clean
+  checkout matching the CloudML `code_commit` instead of the current possibly
+  dirty working tree.
+
+Verified image:
+
+```text
+image_url: micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619
+image_digest: sha256:90a21f7ba1d9336f67c95adedef452d2c75b806da3b853cce374403102a56742
+image_size: 1877458360
+```
+
+Verified code source:
+
+```text
+code_url: https://git.n.xiaomi.com/ipg/infra/roboclaws.git
+code_branch: main
+code_commit: dfb0a395d1cf56121a00ed3f1477e3f7cf8130b3
+```
+
+Verification evidence:
+
+```bash
+docker build \
+  -f Dockerfile.eval \
+  -t roboclaws-eval:local \
+  -t micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619 \
+  .
+ROBOCLAWS_EVAL_IMAGE=micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619 \
+ROBOCLAWS_EVAL_REPO_DIR=/tmp/roboclaws-mi-main-dfb0a395d1cf \
+ROBOCLAWS_EVAL_OUTPUT_DIR=/tmp/roboclaws-eval-output-cloudml-phase1-mi-main \
+ROBOCLAWS_EVAL_STAMP=offline-smoke-mi-main-dfb0a395 \
+  scripts/dev/run_eval_image_offline_smoke.sh
+docker push micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619
+ROBOCLAWS_CLOUDML_IMAGE_URL=micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging:roboclaws-eval-dfb0a395d1cf-20260619 \
+ROBOCLAWS_CLOUDML_OUTPUT_YAML=/tmp/roboclaws-cloudml-dfb0a395-smoke.yaml \
+  scripts/dev/cloudml_eval_dry_run.sh
+```
+
+Observed result:
+
+- Pushed image digest:
+  `sha256:90a21f7ba1d9336f67c95adedef452d2c75b806da3b853cce374403102a56742`.
+- Clean `mi/main` checkout smoke passed under Docker `--network none`.
+- Local smoke artifacts were written to
+  `/tmp/roboclaws-eval-output-cloudml-phase1-mi-main/household_world_smoke_regression/offline-smoke-mi-main-dfb0a395/`.
+- `eval_results.json` aggregate: `passed=1`, `failed=0`, `blocked=0`,
+  `pass_at_1=1.0`.
+- CloudML dry-run YAML was generated at
+  `/tmp/roboclaws-cloudml-dfb0a395-smoke.yaml` with `dry_run=true`, no
+  `task_id`, and no CloudML submission.
+
+Dry-run YAML shape:
+
+- `queueId`: `11759`.
+- `resourceName`: `cloudml.ng1r49-8-8.13-107`.
+- `resourcePriority`: `GUARANTEED`.
+- `juiceFsMountConfigs`:
+  - read-only input:
+    `robot-intelligent-planning-data` / `wlcb-cloudml` /
+    `/dongxu/gpu_perf/gpu_perf` mounted at `/mnt/cloudml/input`.
+  - read/write output:
+    `robot-intelligent-planning-data` / `wlcb-cloudml` /
+    `/dongxu/gpu_perf/executor_cloudml_runs` mounted at
+    `/mnt/cloudml/output`.
+- `imageCommand`:
+  `bash -lc 'set -Eeuo pipefail; cd /ml-engine/code/roboclaws.git; test -x /opt/roboclaws/.venv/bin/python; uv pip install --python /opt/roboclaws/.venv/bin/python --no-build-isolation --no-deps --editable /ml-engine/code/roboclaws.git; just agent::eval suite=smoke_regression budget=smoke output_dir=/mnt/cloudml/output/roboclaws-evals stamp=cloudml-smoke-dfb0a395d1cf-20260619'`.
+
+Executor note: the personal `nvs miaodongxu cloudml submit` wrapper safely
+handles simple command strings and the fixed JuiceFS mounts. For the Roboclaws
+dry-run script, the CloudML command uses literal paths
+(`/ml-engine/code/roboclaws.git`, `/opt/roboclaws/.venv/bin/python`, and
+`/mnt/cloudml/output/roboclaws-evals`) instead of runtime shell variables
+because executor command-template interpolation runs through a generated bash
+script before calling the CloudML target.
 
 ## CloudML Submit Template
 See **Now-Verifiable Track** for the current dry-run command shape. After
