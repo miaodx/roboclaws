@@ -13,6 +13,7 @@ from scripts.maps.render_b1_map12_label_tool import (
     LABEL_TOOL_PACKET_SCHEMA,
     SourceMapTransform,
     build_label_tool_packet,
+    draft_label_from_shape,
     draft_manifest_from_shapes,
     label_tool_template,
     label_tool_template_path,
@@ -434,6 +435,62 @@ def test_label_draft_manifest_keeps_circle_candidate_and_review_only() -> None:
     assert label["geometry_source"] == "operator_authored_navigation_zone"
     assert label["alignment_status"] == "candidate"
     assert label["review_status"] == "draft"
+
+
+@pytest.mark.parametrize("polygon_role", ["", "definitely_not_a_contract_role"])
+def test_label_draft_manifest_rejects_missing_or_invalid_polygon_role(
+    polygon_role: str,
+) -> None:
+    shape = {
+        "shape_id": "bad_role_001",
+        "label": "bad role",
+        "category": "unknown",
+        "navigation_area_id": "",
+        "asset_partition_id": "",
+        "source_room_id": "",
+        "source_map_frame_id": "map",
+        "geometry": {
+            "kind": "polygon",
+            "polygon": [
+                {"x": 0.0, "y": 0.0},
+                {"x": 1.0, "y": 0.0},
+                {"x": 1.0, "y": 1.0},
+            ],
+        },
+        "map_center": {"x": 0.7, "y": -3.8},
+        "polygon_role": polygon_role,
+        "geometry_source": "scene_engine_partition",
+        "alignment_status": "candidate",
+        "review_status": "draft",
+    }
+
+    with pytest.raises(ValueError, match="label bad_role_001 polygon_role must be one of"):
+        draft_manifest_from_shapes(
+            [shape],
+            source_packet={
+                "source_map_frame_id": "map",
+                "map_bundle": str(MAP_BUNDLE),
+                "source_semantics": str(MAP_BUNDLE / "semantics.json"),
+                "source_image": str(MAP_BUNDLE / "map.pgm"),
+            },
+        )
+
+    manifest = {
+        "schema": LABEL_DRAFT_MANIFEST_SCHEMA,
+        "source_map_frame_id": "map",
+        "map_bundle": str(MAP_BUNDLE),
+        "source_semantics": str(MAP_BUNDLE / "semantics.json"),
+        "source_image": str(MAP_BUNDLE / "map.pgm"),
+        "review_status": "draft",
+        "alignment_status": "candidate",
+        "source_map_mutated": False,
+        "verified_status_allowed": False,
+        "labels": [draft_label_from_shape(shape)],
+    }
+
+    errors = validate_label_draft_manifest(manifest)
+
+    assert any("polygon_role must be one of" in error for error in errors)
 
 
 def test_label_draft_manifest_rejects_verified_export() -> None:

@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 label-tool draft export now preserves
+  `polygon_role` as source-truth metadata and rejects missing or invalid draft
+  label roles during manifest generation/validation instead of defaulting bad
+  source values to `navigation_area`. The slice keeps forced candidate
+  `alignment_status`, draft `review_status`, and operator-authored
+  `geometry_source` export behavior unchanged. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud semantic-map
+  draft source truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the label-tool script remains in the tracked warning band
+  at 1140 lines. Proof: focused B1 label-tool contract tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh label-tool evidence that malformed semantic-map role
+  metadata is again silently converted into valid-looking draft labels.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion and B1 runtime bundle
   compilation now reuse the shared `roboclaws.maps.navigation_memory` parser
   for Agibot navigation-memory object loading, item-list selection, item type

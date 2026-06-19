@@ -76,7 +76,10 @@ Latest quality snapshot from 2026-06-20:
   corrupt evidence. Runtime Map Prior Snapshot conversion and B1 runtime bundle
   compilation now reuse that shared parser too, removing their duplicate
   local readers, item-list parsers, item guards, and point/pose numeric
-  validators while preserving existing source-error diagnostics. The Nav2 map-bundle
+  validators while preserving existing source-error diagnostics. B1 Map 12
+  label-tool draft export now rejects missing or invalid `polygon_role` source
+  values instead of defaulting malformed draft labels to `navigation_area`.
+  The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
   during validation or projection. B1 runtime bundle compilation now reports

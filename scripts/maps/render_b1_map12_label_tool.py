@@ -887,7 +887,7 @@ def draft_manifest_from_shapes(
     source_packet: dict[str, Any],
 ) -> dict[str, Any]:
     labels = [draft_label_from_shape(shape) for shape in shapes]
-    return {
+    manifest = {
         "schema": LABEL_DRAFT_MANIFEST_SCHEMA,
         "source_map_frame_id": str(source_packet.get("source_map_frame_id") or "map"),
         "map_bundle": str(source_packet.get("map_bundle") or ""),
@@ -899,6 +899,10 @@ def draft_manifest_from_shapes(
         "verified_status_allowed": False,
         "labels": labels,
     }
+    errors = validate_label_draft_manifest(manifest)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return manifest
 
 
 def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
@@ -914,11 +918,7 @@ def draft_label_from_shape(shape: dict[str, Any]) -> dict[str, Any]:
         "source_map_frame_id": str(shape.get("source_map_frame_id") or "map"),
         "geometry": geometry,
         "map_center": center,
-        "polygon_role": _valid_or_default(
-            str(shape.get("polygon_role") or ""),
-            POLYGON_ROLES,
-            POLYGON_ROLE_NAVIGATION_AREA,
-        ),
+        "polygon_role": str(shape.get("polygon_role") or ""),
         "geometry_source": GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
         "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
         "review_status": "draft",
@@ -956,6 +956,9 @@ def _draft_manifest_label_errors(raw_label: Any, *, index: int) -> list[str]:
         errors.append(f"label {label_id} alignment_status must remain candidate")
     if label.get("review_status") != "draft":
         errors.append(f"label {label_id} review_status must remain draft")
+    polygon_role = str(label.get("polygon_role") or "")
+    if polygon_role not in POLYGON_ROLES:
+        errors.append(f"label {label_id} polygon_role must be one of {sorted(POLYGON_ROLES)}")
     geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
     errors.extend(_draft_manifest_geometry_errors(label_id, geometry))
     return errors
@@ -1112,10 +1115,6 @@ def _draft_geometry(value: Any) -> dict[str, Any]:
         return {"kind": "point", "center": _geometry_center(geometry)}
     polygon = _polygon_points(geometry.get("polygon"))
     return {"kind": "polygon", "polygon": polygon}
-
-
-def _valid_or_default(value: str, valid_values: frozenset[str], default: str) -> str:
-    return value if value in valid_values else default
 
 
 def _repo_artifact_path(source: str, *, repo_root: Path) -> Path | None:
