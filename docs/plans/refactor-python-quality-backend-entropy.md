@@ -138,6 +138,10 @@ Latest quality snapshot from 2026-06-19:
   request-field readiness now rejects present JSON sources that are not objects
   before marking Agibot/B1 launch artifacts ready, so arrays or scalar JSON can
   no longer satisfy required context/proof gates.
+  Operator-console stop requests now reject malformed or non-object
+  `operator_state.json` sources before child-stop, process termination, lock
+  release, or state rewrite, so corrupt stop-state evidence no longer becomes
+  a raw JSON/type failure or gets overwritten during stop handling.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

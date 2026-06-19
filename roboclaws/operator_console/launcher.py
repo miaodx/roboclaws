@@ -433,7 +433,11 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     state_path = run_dir / "operator_state.json"
     if not state_path.exists():
         raise ConsoleLaunchError(f"unknown run id: {run_id}")
-    state = json.loads(state_path.read_text(encoding="utf-8"))
+    try:
+        state = _read_json_source(state_path)
+    except _JsonSourceError as exc:
+        message = f"operator stop source error: {exc.path.name} {exc.reason}"
+        raise ConsoleLaunchError(message) from exc
     display_run_dir = resolve_display_run_dir(run_dir)
     terminal_phase = "human_takeover_stop" if emergency else "stopped_by_operator"
     existing_terminal_phase = _existing_terminal_phase(display_run_dir, state)

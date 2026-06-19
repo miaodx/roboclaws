@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console stop requests now reject malformed or
+  non-object `operator_state.json` sources before stopping child live runs,
+  terminating wrapper processes, releasing backend locks, or rewriting stop
+  state. Corrupt stop-state evidence no longer surfaces as a raw JSON/type
+  failure or gets overwritten by stop handling; unknown runs and valid
+  stopped/failed terminal handling are unchanged. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud operator-visible source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused
+  operator-console launcher/API stop tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console request-field readiness now rejects present JSON
   sources that do not contain a JSON object before marking required Agibot/B1
   launch artifacts ready. Parseable-but-wrong-shaped attached context/proof

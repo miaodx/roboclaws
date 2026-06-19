@@ -643,6 +643,24 @@ def test_stop_console_run_stops_docker_container_bound_to_attempt_workspace(
     assert docker_stops == [["docker", "stop", "--time", "5", "container-b"]]
 
 
+def test_stop_console_run_rejects_malformed_operator_state_source(tmp_path: Path) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-stop-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{bad-state", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    with pytest.raises(ConsoleLaunchError, match="operator stop source error") as exc_info:
+        stop_console_run(tmp_path, run_id)
+
+    assert "operator_state.json" in str(exc_info.value)
+    assert "contains invalid JSON" in str(exc_info.value)
+    assert state_path.read_text(encoding="utf-8") == "{bad-state"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
 def test_terminate_process_group_falls_back_to_single_pid_when_group_lookup_fails() -> None:
     signals: list[tuple[int, int]] = []
 

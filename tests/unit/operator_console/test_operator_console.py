@@ -1354,6 +1354,44 @@ def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path:
     assert ResourceLock(tmp_path, route.lock_name).read().held is False
 
 
+def test_operator_console_stop_endpoint_rejects_non_object_operator_state_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-stop-state-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/stop",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 400
+    assert "operator stop source error" in payload["error"]
+    assert "operator_state.json must contain a JSON object" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "[]\n"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
 def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:
     handler = partial(ConsoleRequestHandler, root=tmp_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
