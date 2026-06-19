@@ -550,5 +550,259 @@
       "units": "meters"
     }
   },
-  "static_landmarks": []
+  "static_landmarks": [
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "landmark_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4",
+      "manipulation_frame": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_4_manipulation",
+      "name": "Bed (double-pillow|4|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 0.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_001",
+      "preferred_manipulation_waypoint_id": "generated_exploration_001",
+      "room_id": "room_4"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sink",
+      "fixture_id": "sink_13396f8922ea48b094bd7e8ad6c5e141_1_0_5",
+      "footprint": {
+        "depth_m": 0.45,
+        "shape": "rectangle",
+        "width_m": 0.6
+      },
+      "landmark_id": "sink_13396f8922ea48b094bd7e8ad6c5e141_1_0_5",
+      "manipulation_frame": "sink_13396f8922ea48b094bd7e8ad6c5e141_1_0_5_manipulation",
+      "name": "Sink (sink-with-faucet|5|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 3.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_003",
+      "preferred_manipulation_waypoint_id": "generated_exploration_003",
+      "room_id": "room_5"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_2dabc92dc6ce8359222084648aabeefb_1_0_6",
+      "footprint": {
+        "depth_m": 0.35,
+        "shape": "rectangle",
+        "width_m": 0.45
+      },
+      "landmark_id": "bed_2dabc92dc6ce8359222084648aabeefb_1_0_6",
+      "manipulation_frame": "bed_2dabc92dc6ce8359222084648aabeefb_1_0_6_manipulation",
+      "name": "Bed (single-pillow|6|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 6.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_005",
+      "preferred_manipulation_waypoint_id": "generated_exploration_005",
+      "room_id": "room_6"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_3eea3ff3fb0048f2b32ba78c59885908_1_0_6",
+      "footprint": {
+        "depth_m": 0.39,
+        "shape": "rectangle",
+        "width_m": 0.51
+      },
+      "landmark_id": "diningtable_3eea3ff3fb0048f2b32ba78c59885908_1_0_6",
+      "manipulation_frame": "diningtable_3eea3ff3fb0048f2b32ba78c59885908_1_0_6_manipulation",
+      "name": "DiningTable (chair-diningtable|6|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 7.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_005",
+      "preferred_manipulation_waypoint_id": "generated_exploration_005",
+      "room_id": "room_6"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sink",
+      "fixture_id": "sink_81ffa698ad990e0f63279ef75e7e9201_1_0_7",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "sink_81ffa698ad990e0f63279ef75e7e9201_1_0_7",
+      "manipulation_frame": "sink_81ffa698ad990e0f63279ef75e7e9201_1_0_7_manipulation",
+      "name": "Sink (sink-with-faucet|7|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 9.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_007",
+      "preferred_manipulation_waypoint_id": "generated_exploration_007",
+      "room_id": "room_7"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "CounterTop",
+      "fixture_id": "countertop_d98352e4c5cde304a35e8e4fc53a9ccc_1_0_8",
+      "footprint": {
+        "depth_m": 0.45,
+        "shape": "rectangle",
+        "width_m": 0.6
+      },
+      "landmark_id": "countertop_d98352e4c5cde304a35e8e4fc53a9ccc_1_0_8",
+      "manipulation_frame": "countertop_d98352e4c5cde304a35e8e4fc53a9ccc_1_0_8_manipulation",
+      "name": "CounterTop (CounterTop|8|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 12.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_009",
+      "preferred_manipulation_waypoint_id": "generated_exploration_009",
+      "room_id": "room_8"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_089acb80b74f0348b7337b13ac73b412_1_0_8",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "landmark_id": "diningtable_089acb80b74f0348b7337b13ac73b412_1_0_8",
+      "manipulation_frame": "diningtable_089acb80b74f0348b7337b13ac73b412_1_0_8_manipulation",
+      "name": "DiningTable (chair-diningtable|8|3|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 13.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_009",
+      "preferred_manipulation_waypoint_id": "generated_exploration_009",
+      "room_id": "room_8"
+    },
+    {
+      "affordances": [
+        "place",
+        "open",
+        "place_inside",
+        "close"
+      ],
+      "category": "Fridge",
+      "fixture_id": "refrigerator_70e2053608febd954f1738a98646cfd4_1_0_8",
+      "footprint": {
+        "depth_m": 0.45,
+        "shape": "rectangle",
+        "width_m": 0.6
+      },
+      "landmark_id": "refrigerator_70e2053608febd954f1738a98646cfd4_1_0_8",
+      "manipulation_frame": "refrigerator_70e2053608febd954f1738a98646cfd4_1_0_8_manipulation",
+      "name": "Fridge (Fridge|8|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 12.35,
+        "y": 1.65,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_009",
+      "preferred_manipulation_waypoint_id": "generated_exploration_009",
+      "room_id": "room_8"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_b4e1a9042fbd52004d56633326efce4a_1_0_9",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "diningtable_b4e1a9042fbd52004d56633326efce4a_1_0_9",
+      "manipulation_frame": "diningtable_b4e1a9042fbd52004d56633326efce4a_1_0_9_manipulation",
+      "name": "DiningTable (DiningTable|9|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 15.35,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_011",
+      "preferred_manipulation_waypoint_id": "generated_exploration_011",
+      "room_id": "room_9"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_7e7288da2da8f557872ed2ac399a8d35_1_0_9",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "landmark_id": "stand_7e7288da2da8f557872ed2ac399a8d35_1_0_9",
+      "manipulation_frame": "stand_7e7288da2da8f557872ed2ac399a8d35_1_0_9_manipulation",
+      "name": "TVStand (television|9|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 16.65,
+        "y": 0.35,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "generated_exploration_011",
+      "preferred_manipulation_waypoint_id": "generated_exploration_011",
+      "room_id": "room_9"
+    }
+  ]
 }

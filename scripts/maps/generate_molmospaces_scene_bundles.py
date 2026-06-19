@@ -254,9 +254,7 @@ def _generate_scene_bundle(
             encoding="utf-8",
         )
         metric_map = agent_view.get("metric_map") if isinstance(agent_view, dict) else {}
-        static_fixture_projection = (
-            agent_view.get("static_fixture_projection") if isinstance(agent_view, dict) else {}
-        )
+        static_fixture_projection = contract.source_map_static_fixture_projection()
         if not isinstance(metric_map, dict) or not metric_map:
             raise RuntimeError(f"missing metric_map for {target.token}")
         if not isinstance(static_fixture_projection, dict) or not static_fixture_projection:

@@ -292,6 +292,21 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
+def test_realworld_contract_observes_objects_from_selected_prebuilt_bundle() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_bundle_dir=PREBUILT_BUNDLE,
+    )
+
+    observation = _first_non_empty_observation(contract)
+    metric_map = contract.metric_map()
+    semantics = json.loads((PREBUILT_BUNDLE / "semantics.json").read_text(encoding="utf-8"))
+
+    assert semantics["static_landmarks"]
+    assert observation["visible_object_detections"]
+    assert metric_map["runtime_metric_map"]["observed_objects"]
+
+
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -305,6 +320,15 @@ def _agent_view() -> dict:
 
 def _static_landmarks(agent_view: dict) -> list[dict]:
     return static_landmarks_from_fixture_projection(agent_view["static_fixture_projection"])
+
+
+def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        if observation["visible_object_detections"]:
+            return observation
+    raise AssertionError("expected at least one visible object detection")
 
 
 def _load_module(path: Path, name: str):
