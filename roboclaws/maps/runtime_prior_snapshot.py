@@ -251,9 +251,7 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
         )
     rooms = copy.deepcopy(semantics.get("rooms") or [])
     inspection_waypoints = [
-        _bundle_waypoint(waypoint)
-        for waypoint in semantics.get("inspection_waypoints") or []
-        if isinstance(waypoint, dict)
+        _bundle_waypoint(waypoint) for waypoint in _nav2_cleanup_waypoint_sources(semantics)
     ]
     anchors = [
         _anchor_from_bundle_waypoint(waypoint, index=index)
@@ -816,6 +814,18 @@ def _navigation_memory_item(raw_item: Any, *, index: int) -> dict[str, Any]:
     if not isinstance(raw_item, dict):
         raise ValueError(f"Agibot navigation memory item {index} must be a JSON object")
     return raw_item
+
+
+def _nav2_cleanup_waypoint_sources(semantics: dict[str, Any]) -> list[dict[str, Any]]:
+    waypoints = semantics.get("inspection_waypoints")
+    if not isinstance(waypoints, list) or not waypoints:
+        raise ValueError("Nav2 cleanup semantics inspection_waypoints must be a non-empty list")
+    result: list[dict[str, Any]] = []
+    for index, waypoint in enumerate(waypoints, start=1):
+        if not isinstance(waypoint, dict):
+            raise ValueError(f"Nav2 cleanup waypoint {index} must be a JSON object")
+        result.append(waypoint)
+    return result
 
 
 def _anchor_type(item: dict[str, Any]) -> str:

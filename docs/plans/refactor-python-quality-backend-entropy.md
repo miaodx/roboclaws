@@ -57,9 +57,10 @@ Latest quality snapshot from 2026-06-20:
   or raw type failures. Runtime Map Prior Snapshot conversion now reports
   malformed or non-object Agibot `navigation_memory.json`, missing, empty, or
   wrong-shaped Agibot navigation-memory item sources, Agibot `source.json`,
-  Nav2 `semantics.json`, and malformed Nav2/Agibot source-map geometry as
-  explicit source-path errors instead of raw parser/type failures,
-  wrong-shaped source packets, valid-looking empty snapshots, or defaulted map geometry. Runtime Map Prior
+  Nav2 `semantics.json`, missing, empty, or wrong-shaped Nav2 waypoint sources,
+  and malformed Nav2/Agibot source-map geometry as explicit source-path errors
+  instead of raw parser/type failures, wrong-shaped source packets,
+  valid-looking empty snapshots, or defaulted map geometry. Runtime Map Prior
   Snapshot conversion also rejects malformed or missing Agibot
   `nav_goal`/`pose` and Nav2 waypoint `x`/`y`/`yaw` geometry instead of
   defaulting offline prior coordinates to plausible map-frame zeroes. The Nav2 map-bundle

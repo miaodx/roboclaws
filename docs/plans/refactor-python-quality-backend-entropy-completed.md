@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime Map Prior Snapshot conversion now requires Nav2
+  cleanup-bundle `semantics.json` to provide a non-empty
+  `inspection_waypoints` list and rejects non-object waypoint rows before
+  materializing anchors. Missing, empty, or wrong-shaped waypoint sources can no
+  longer produce a valid-looking zero-waypoint prior snapshot. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  offline prior source-list truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules after compacting the focused contract tests
+  back below the 800-line threshold. Proof: focused Runtime Map Prior Snapshot
+  contract tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only with fresh Nav2 cleanup-bundle evidence that missing,
+  empty, or wrong-shaped waypoint entries again become empty or partially
+  fabricated snapshots.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion now requires Agibot
   `navigation_memory.json` to provide a non-empty `items` list or non-empty
   `catalog.navigation_memory` list, and rejects non-object memory rows before

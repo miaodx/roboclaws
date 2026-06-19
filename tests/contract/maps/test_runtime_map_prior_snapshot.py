@@ -297,60 +297,45 @@ def test_agibot_navigation_memory_accepts_catalog_navigation_memory_items(
 
 
 @pytest.mark.parametrize(
-    ("payload_update", "expected_error"),
+    ("navigation_memory", "expected_error"),
     [
         (
-            lambda payload: payload.pop("items"),
+            {},
             "Agibot navigation memory must contain a non-empty items list "
             "or catalog.navigation_memory list",
         ),
         (
-            lambda payload: payload.__setitem__("items", {}),
+            {"items": {}},
             "Agibot navigation memory items must be a non-empty list",
         ),
         (
-            lambda payload: payload.__setitem__("items", []),
+            {"items": []},
             "Agibot navigation memory items must be a non-empty list",
         ),
         (
-            lambda payload: (
-                payload.pop("items"),
-                payload.__setitem__("catalog", {"navigation_memory": {}}),
-            ),
+            {"catalog": {"navigation_memory": {}}},
             "Agibot navigation memory catalog.navigation_memory must be a non-empty list",
         ),
         (
-            lambda payload: (
-                payload.pop("items"),
-                payload.__setitem__("catalog", {"navigation_memory": []}),
-            ),
+            {"catalog": {"navigation_memory": []}},
             "Agibot navigation memory catalog.navigation_memory must be a non-empty list",
+        ),
+        (
+            {"items": [[]]},
+            "Agibot navigation memory item 1 must be a JSON object",
         ),
     ],
 )
 def test_agibot_navigation_memory_rejects_missing_or_empty_item_sources(
     tmp_path: Path,
-    payload_update,
+    navigation_memory: dict,
     expected_error: str,
 ) -> None:
     map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
     navigation_memory_path = map_dir / "navigation_memory.json"
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
-    payload_update(navigation_memory)
     navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
 
     with pytest.raises(ValueError, match=expected_error):
-        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
-
-
-def test_agibot_navigation_memory_rejects_non_object_items(tmp_path: Path) -> None:
-    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
-    navigation_memory_path = map_dir / "navigation_memory.json"
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
-    navigation_memory["items"][0] = []
-    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="Agibot navigation memory item 1 must be a JSON object"):
         runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
 
 
@@ -373,6 +358,45 @@ def test_nav2_cleanup_bundle_rejects_non_object_semantics(tmp_path: Path) -> Non
         ValueError,
         match=r"Nav2 cleanup semantics must contain a JSON object at .*semantics\.json",
     ):
+        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
+
+
+@pytest.mark.parametrize(
+    ("inspection_waypoints", "expected_error"),
+    [
+        (
+            None,
+            "Nav2 cleanup semantics inspection_waypoints must be a non-empty list",
+        ),
+        (
+            {},
+            "Nav2 cleanup semantics inspection_waypoints must be a non-empty list",
+        ),
+        (
+            [],
+            "Nav2 cleanup semantics inspection_waypoints must be a non-empty list",
+        ),
+        (
+            [[]],
+            "Nav2 cleanup waypoint 1 must be a JSON object",
+        ),
+    ],
+)
+def test_nav2_cleanup_bundle_rejects_missing_or_empty_waypoint_sources(
+    tmp_path: Path,
+    inspection_waypoints: object,
+    expected_error: str,
+) -> None:
+    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    if inspection_waypoints is None:
+        semantics.pop("inspection_waypoints")
+    else:
+        semantics["inspection_waypoints"] = inspection_waypoints
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
         runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
 
 
@@ -419,92 +443,70 @@ def test_agibot_navigation_memory_rejects_malformed_nav2_yaml_geometry(tmp_path:
         runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
 
 
-@pytest.mark.parametrize("field", ["x", "y", "yaw"])
-def test_agibot_navigation_memory_rejects_missing_nav_goal_geometry(
-    tmp_path: Path,
-    field: str,
-) -> None:
-    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
-    navigation_memory_path = map_dir / "navigation_memory.json"
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
-    navigation_memory["items"][0]["nav_goal"].pop(field)
-    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError,
-        match=rf"Agibot navigation memory item plastic_bottle_table_1 nav_goal {field} "
-        "must be a finite number",
-    ):
-        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
-
-
-@pytest.mark.parametrize("field", ["x", "y", "yaw"])
-def test_agibot_navigation_memory_rejects_malformed_nav_goal_geometry(
-    tmp_path: Path,
-    field: str,
-) -> None:
-    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
-    navigation_memory_path = map_dir / "navigation_memory.json"
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
-    navigation_memory["items"][0]["nav_goal"][field] = "not-a-number"
-    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError,
-        match=rf"Agibot navigation memory item plastic_bottle_table_1 nav_goal {field} "
-        "must be a finite number",
-    ):
-        runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
-
-
-@pytest.mark.parametrize("nav_goal", [None, []])
-def test_agibot_navigation_memory_rejects_non_object_nav_goal_geometry(
-    tmp_path: Path,
-    nav_goal: object,
-) -> None:
-    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
-    navigation_memory_path = map_dir / "navigation_memory.json"
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
-    navigation_memory["items"][0]["nav_goal"] = nav_goal
-    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError,
-        match=(
-            "Agibot navigation memory item plastic_bottle_table_1 nav_goal "
-            "must be an object with x, y, and yaw"
+@pytest.mark.parametrize(
+    ("case", "expected_error"),
+    [
+        (
+            "missing_x",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal x "
+            "must be a finite number",
         ),
-    ):
+        (
+            "malformed_x",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal x "
+            "must be a finite number",
+        ),
+        (
+            "none",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal "
+            "must be an object with x, y, and yaw",
+        ),
+        (
+            "list",
+            "Agibot navigation memory item plastic_bottle_table_1 nav_goal "
+            "must be an object with x, y, and yaw",
+        ),
+    ],
+)
+def test_agibot_navigation_memory_rejects_invalid_nav_goal_geometry(
+    tmp_path: Path,
+    case: str,
+    expected_error: str,
+) -> None:
+    map_dir = _copy_agibot_runtime_prior_fixture(tmp_path)
+    navigation_memory_path = map_dir / "navigation_memory.json"
+    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory["items"][0]["nav_goal"] = _invalid_nav_goal(
+        navigation_memory["items"][0]["nav_goal"],
+        case,
+    )
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
         runtime_prior_snapshot_from_agibot_navigation_memory(map_dir)
 
 
-@pytest.mark.parametrize("field", ["x", "y", "yaw"])
-def test_nav2_cleanup_bundle_rejects_missing_waypoint_geometry(
+@pytest.mark.parametrize(
+    ("field", "malformed_value"),
+    [
+        ("x", None),
+        ("y", None),
+        ("yaw", None),
+        ("x", "not-a-number"),
+    ],
+)
+def test_nav2_cleanup_bundle_rejects_invalid_waypoint_geometry(
     tmp_path: Path,
     field: str,
+    malformed_value: object,
 ) -> None:
     bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
     semantics_path = bundle_dir / "semantics.json"
     semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
-    semantics["inspection_waypoints"][0].pop(field)
-    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
-
-    with pytest.raises(
-        ValueError,
-        match=rf"Nav2 cleanup waypoint room_a_center {field} must be a finite number",
-    ):
-        runtime_prior_snapshot_from_nav2_cleanup_bundle(bundle_dir)
-
-
-@pytest.mark.parametrize("field", ["x", "y", "yaw"])
-def test_nav2_cleanup_bundle_rejects_malformed_waypoint_geometry(
-    tmp_path: Path,
-    field: str,
-) -> None:
-    bundle_dir = _write_minimal_nav2_cleanup_bundle(tmp_path / "bundle")
-    semantics_path = bundle_dir / "semantics.json"
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
-    semantics["inspection_waypoints"][0][field] = "not-a-number"
+    if malformed_value is None:
+        semantics["inspection_waypoints"][0].pop(field)
+    else:
+        semantics["inspection_waypoints"][0][field] = malformed_value
     semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
 
     with pytest.raises(
@@ -771,6 +773,20 @@ def _collect_forbidden_keys(value: object, hits: set[str]) -> None:
     elif isinstance(value, list):
         for item in value:
             _collect_forbidden_keys(item, hits)
+
+
+def _invalid_nav_goal(nav_goal: dict, case: str) -> object:
+    if case == "none":
+        return None
+    if case == "list":
+        return []
+    result = dict(nav_goal)
+    _, field = case.split("_", 1)
+    if case.startswith("missing_"):
+        result.pop(field)
+    else:
+        result[field] = "not-a-number"
+    return result
 
 
 def _load_module(path: Path, name: str):
