@@ -119,7 +119,10 @@ Latest quality snapshot from 2026-06-19:
   can no longer leave an orphan promoted sample behind. Live-agent result
   artifact loading now fails aloud on present malformed or non-object
   `live_status.json` / `run_result.json` sources instead of erasing corrupt
-  status or completion evidence into unknown or absent state.
+  status or completion evidence into unknown or absent state. Apple-to-apple
+  grid execution now rejects malformed existing grid manifests and stable
+  malformed live-status sources instead of silently discarding previous row
+  evidence or timing out from a fabricated unknown phase.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

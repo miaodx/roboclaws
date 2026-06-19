@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: MolmoSpaces apple-to-apple grid execution now rejects malformed
+  or non-object existing `apple2apple_test_grid.json` manifests during filtered
+  execute, and stable malformed/non-object `live_status.json` sources during
+  detached live-row polling. Corrupt manifests no longer get treated as absent
+  before row-state merge, and corrupt live status no longer becomes
+  `phase=unknown`; the live-status reader keeps a small retry window for
+  transient partial writes while preserving missing-source optional behavior.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused apple-to-apple grid tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Live-agent result artifact loading now fails aloud when present
   `live_status.json` or `run_result.json` sources are malformed or contain
   non-object JSON. Corrupt live status no longer becomes `phase=unknown`, and
