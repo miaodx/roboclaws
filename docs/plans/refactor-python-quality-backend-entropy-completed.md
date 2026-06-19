@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Scene-sampler readiness export now fails aloud when an enabled
+  artifact has no payload instead of writing `{}` as a valid-looking readiness
+  artifact, and invalid `--candidate-range` input returns a concise CLI error
+  before writing artifacts instead of surfacing a traceback. Normal readiness
+  artifact generation, threshold failures, generated eval packets, and disabled
+  artifact flags are unchanged. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud artifact/config input truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and reports 79 oversized
+  modules in the current dirty worktree.
+  Proof: focused scene-sampler readiness export tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Coding-agent provider profile selection now rejects unknown
   provider profiles at the common shell helper boundary instead of echoing the
   raw value as if it were selected, and the provider-registry CLI reports an

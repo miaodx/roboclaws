@@ -21,7 +21,7 @@ their full execution notes back here.
 Latest quality snapshot from 2026-06-19:
 
 - Ruff complexity rows: 0.
-- Oversized modules: 78.
+- Oversized modules: 79.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -102,9 +102,12 @@ Latest quality snapshot from 2026-06-19:
   `seed-*` placeholders no longer hide or replace real failure artifacts.
   Detached live-run summary auto-discovery now requires live-run evidence in
   selected seed directories and explicit empty run directories fail aloud,
-  preventing pending/all-missing summaries from placeholder paths. Continue
-  fail-aloud/runtime-source audits from fresh evidence rather than reopening
-  closed helper splits; route any future test-shape cleanup through
+  preventing pending/all-missing summaries from placeholder paths. Scene-sampler
+  readiness export now rejects enabled artifacts with missing payloads and
+  malformed candidate-range CLI input instead of writing `{}` artifacts or
+  surfacing tracebacks. Continue fail-aloud/runtime-source audits from fresh
+  evidence rather than reopening closed helper splits; route any future
+  test-shape cleanup through
   `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a

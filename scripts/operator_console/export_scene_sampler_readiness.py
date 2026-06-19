@@ -55,10 +55,14 @@ class _ReadinessPayloads:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    candidate_indices = _candidate_indices(
-        candidate_indexes=tuple(args.candidate_indexes),
-        candidate_ranges=tuple(args.candidate_ranges),
-    )
+    try:
+        candidate_indices = _candidate_indices(
+            candidate_indexes=tuple(args.candidate_indexes),
+            candidate_ranges=tuple(args.candidate_ranges),
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     report = export_readiness_artifacts(
         output_dir=args.output_dir,
         candidate_indices=candidate_indices,
@@ -425,8 +429,10 @@ def _write_named_artifacts(
     for key, enabled, filename, payload in entries:
         if not enabled:
             continue
+        if payload is None:
+            raise ValueError(f"enabled artifact {key!r} has no payload")
         path = output_dir / filename
-        _write_json(path, payload or {})
+        _write_json(path, payload)
         artifacts[key] = str(path)
     return artifacts
 
