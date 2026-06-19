@@ -153,7 +153,9 @@ Latest quality snapshot from 2026-06-20:
   priority live-run evidence. Detached live eval completion now requires
   terminal live-status evidence for detached Codex routes, so timeout recovery
   cannot treat a still-running or failed route's `run_result.json` as completed
-  eval proof. Eval
+  eval proof. Eval-harness detached live-product rows now apply the same
+  terminal live-status rule before marking a row passed, so a running route's
+  early `run_result.json` cannot become harness pass evidence. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.

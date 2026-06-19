@@ -301,7 +301,7 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
             ]
             _append_output_artifacts(row, live_status, run_dir / "driver.log")
             return
-        if run_result.is_file():
+        if run_result.is_file() and _detached_live_status_is_complete(status):
             row["status"] = "ran"
             row["outcome"] = "passed"
             _append_output_artifacts(
@@ -336,6 +336,10 @@ def _wait_for_detached_live_product_row(row: dict[str, Any]) -> None:
         )
     ]
     _append_output_artifacts(row, run_dir / "live_status.json", run_dir / "driver.log")
+
+
+def _detached_live_status_is_complete(status: dict[str, Any]) -> bool:
+    return status.get("exit_status") == 0
 
 
 def _load_live_status_source(path: Path) -> tuple[dict[str, Any], str]:

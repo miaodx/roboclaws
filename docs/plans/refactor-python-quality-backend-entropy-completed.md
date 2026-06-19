@@ -34,6 +34,16 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval-harness detached live-product rows now require terminal
+  `live_status.json` evidence before marking a Codex live product row passed
+  from `run_result.json`. A row with result artifacts but a still-running live
+  status now blocks at the harness layer instead of publishing false-green pass
+  evidence. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud detached live eval source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: focused
+  eval-harness selector tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
 - 2026-06-20: Detached live eval completion now requires terminal
   `live_status.json` evidence before treating `run_result.json` as completed
   Codex live-route proof. Timeout recovery, deadline recovery, and grace-window

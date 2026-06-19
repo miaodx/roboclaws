@@ -498,6 +498,10 @@ def test_detached_live_product_row_waits_for_terminal_artifact(
             / "seed-7"
         )
         (run_dir / "run_result.json").write_text('{"cleanup_success":true}\n', encoding="utf-8")
+        (run_dir / "live_status.json").write_text(
+            '{"phase":"finished","exit_status":0}\n',
+            encoding="utf-8",
+        )
         (run_dir / "report.html").write_text("<html></html>\n", encoding="utf-8")
 
     def fake_monotonic() -> float:
@@ -522,6 +526,52 @@ def test_detached_live_product_row_waits_for_terminal_artifact(
     assert row["outcome"] == "passed"
     assert row["detached_live_run_dir"].endswith("0615_1225/seed-7")
     assert any(path.endswith("run_result.json") for path in row["output_artifacts"])
+
+
+def test_detached_live_product_row_does_not_pass_on_running_status_with_result(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner, "_row_blockers", lambda row, manifest: [])
+    monkeypatch.setattr(runner, "DETACHED_LIVE_PRODUCT_TIMEOUT_S", 0.0)
+
+    def fake_run(command, **_kwargs):
+        output_arg = next(item for item in command if str(item).startswith("output_dir="))
+        output_dir = Path(str(output_arg).split("=", 1)[1])
+        run_dir = output_dir / "0615_1226" / "seed-7"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "live_status.json").write_text(
+            '{"phase":"running-codex"}\n',
+            encoding="utf-8",
+        )
+        (run_dir / "run_result.json").write_text(
+            '{"cleanup_success":true}\n',
+            encoding="utf-8",
+        )
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    manifest = selector.build_eval_harness(
+        mode="execute",
+        budget="focused",
+        changed_files=["roboclaws/household/raw_fpv_guidance.py"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_harness(manifest)
+
+    row = _selected_rows(manifest)["codex-cleanup-camera-raw-fpv-live-product"]
+    assert row["status"] == "blocked"
+    assert row["outcome"] == "blocked"
+    assert row["blocker_category"] == "environment_blocked"
+    assert "detached live product row did not finish" in row["blockers"][0]["detail"]
+    assert any(path.endswith("live_status.json") for path in row["output_artifacts"])
 
 
 def test_detached_live_product_row_blocks_on_malformed_live_status_source(
