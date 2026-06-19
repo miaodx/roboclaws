@@ -63,7 +63,11 @@ Latest quality snapshot from 2026-06-20:
   errors instead of raw JSON/type failures. MolmoSpaces worker initialization
   now treats adjacent scene JSON as room-label source truth, so malformed,
   wrong-shaped, or label-less source packets fail aloud instead of falling
-  through to raw parser/type errors or iTHOR-derived labels. The
+  through to raw parser/type errors or iTHOR-derived labels. Scene-camera
+  comparison now owns Isaac source artifact loading in
+  `scene_camera_source_artifacts.py`, validates present `scene_metadata.json`
+  packets, and keeps the main comparison file below the hard ceiling instead
+  of degrading corrupt metadata into missing-target evidence. The
   operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
@@ -399,6 +403,8 @@ Closed or cohesive owners:
   `robot_camera_apple2apple_camera_contract.py`.
 - Native Isaac render diagnostics:
   `robot_camera_apple2apple_native_render.py`.
+- Scene-camera source artifacts:
+  `scene_camera_source_artifacts.py`.
 
 Preserve runner orchestration, top-level manifest/report attachment, capture
 worker boundaries, and artifact schemas unless explicitly selected.

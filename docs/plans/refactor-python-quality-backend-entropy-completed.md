@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-camera comparison now has a focused
+  `scene_camera_source_artifacts.py` owner for prepared-USD source metadata,
+  local Isaac scene-index lookup, scene-index entry extraction, and support-pose
+  normalization. Present `scene_metadata.json` files now fail aloud when
+  malformed, wrong-shaped, or carrying non-object object entries instead of
+  degrading into missing Isaac target evidence; missing metadata remains
+  optional. The main comparison facade dropped below the 2000-line hard ceiling.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud scene-camera source artifact truth plus ownership split. Metric:
+  ratchet stayed at 0 Ruff complexity rows and reports 79 oversized modules;
+  `roboclaws/household/scene_camera_comparison.py` fell from 2011 to 1956
+  lines. Proof: focused scene-camera comparison contract tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-20: MolmoSpaces worker initialization now fails aloud on malformed,
   wrong-shaped, or label-less adjacent scene JSON before deriving source room
   labels. A present source scene JSON packet can no longer surface as a raw
