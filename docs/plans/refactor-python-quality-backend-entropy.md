@@ -141,11 +141,12 @@ Latest quality snapshot from 2026-06-20:
   surfacing tracebacks. Eval HTML reports now render declared missing or
   output-escaping run/report artifact paths as explicit unavailable source
   evidence instead of clickable proof links while preserving verified in-output
-  artifact links. Eval dependency resolution now rejects missing, empty, or
-  wrong-shaped explicit `runtime_map_prior` metadata and wrong-shaped
+  artifact links. Eval dependency resolution now treats explicitly present
+  `runtime_map_prior` metadata as source truth and rejects missing, empty, null,
+  or wrong-shaped values, and also rejects wrong-shaped
   `runtime_map_prior_from_sample` source-sample ids before direct or live eval
-  product launch instead of passing declared stale priors through to the runner
-  or stringifying malformed source values. Eval
+  product launch instead of passing declared stale priors through to the runner,
+  skipping explicit null values, or stringifying malformed source values. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.

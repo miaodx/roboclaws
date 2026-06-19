@@ -16,14 +16,18 @@ def resolve_artifact_dependencies(
 ) -> dict[str, Any]:
     dependencies = sample.artifact_dependencies or {}
     launch_overrides = sample.launch_overrides or {}
-    explicit_source = None
     if "runtime_map_prior" in dependencies:
-        explicit_source = dependencies.get("runtime_map_prior")
-    elif "runtime_map_prior" in launch_overrides:
-        explicit_source = launch_overrides.get("runtime_map_prior")
-    if explicit_source is not None:
         return {
-            "runtime_map_prior_path": _explicit_runtime_map_prior_path(explicit_source),
+            "runtime_map_prior_path": _explicit_runtime_map_prior_path(
+                dependencies.get("runtime_map_prior")
+            ),
+            "runtime_map_prior_source": "explicit_path",
+        }
+    elif "runtime_map_prior" in launch_overrides:
+        return {
+            "runtime_map_prior_path": _explicit_runtime_map_prior_path(
+                launch_overrides.get("runtime_map_prior")
+            ),
             "runtime_map_prior_source": "explicit_path",
         }
     source_sample_id = None

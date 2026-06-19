@@ -1793,7 +1793,7 @@ def test_eval_dependency_resolver_preserves_empty_explicit_runtime_map_prior() -
     assert failure["message"] == "explicit runtime_map_prior path was empty"
 
 
-@pytest.mark.parametrize("value", [True, 7, 1.5, ["prior.json"], {"path": "prior.json"}])
+@pytest.mark.parametrize("value", [None, True, 7, 1.5, ["prior.json"], {"path": "prior.json"}])
 def test_eval_runner_rejects_invalid_explicit_runtime_map_prior_value(
     tmp_path: Path,
     value: object,
@@ -1814,6 +1814,28 @@ def test_eval_runner_rejects_invalid_explicit_runtime_map_prior_value(
     assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
     assert (
         "runtime_map_prior must be a string path" in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+def test_eval_runner_rejects_empty_explicit_runtime_map_prior_launch_override(
+    tmp_path: Path,
+) -> None:
+    result = _run_invalid_cleanup_sample(
+        tmp_path,
+        sample_id="cleanup.invalid_runtime_map_prior_override",
+        stamp="invalid-runtime-map-prior-override-empty",
+        mutate=lambda sample: sample.setdefault("launch_overrides", {}).__setitem__(
+            "runtime_map_prior",
+            "",
+        ),
+        assertion_message="product runner should not launch with empty runtime_map_prior",
+    )
+
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "EvalDependencyError"
+    assert (
+        result["grader_outputs"]["runner"]["message"] == "explicit runtime_map_prior path was empty"
     )
 
 
