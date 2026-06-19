@@ -171,7 +171,8 @@ Latest quality snapshot from 2026-06-20:
   retry-attempt, retry-sleep, and MCP-timeout env/direct bodies into existing
   validation tables, and performance-profile MCP-timeout tests now fold
   duplicate malformed-env and negative-direct cases into the same invalid-value
-  table. Eval
+  table. Provider retry helper tests now merge one-assertion retry/error
+  classification functions into behavior-named parameter tables. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
@@ -378,6 +379,10 @@ Good families:
 
 - Provider/env tests that duplicate constants or route tables without
   exercising canonical resolution, readiness failure, or visible diagnostics.
+- Provider retry helper pruning is done for the current duplicated
+  status-code, transient-error classification, and retry-delay one-assertion
+  tests; reopen only with fresh duplicate helper classifications, not route
+  readiness or provider safety retry behavior.
 - OpenAI Agents SDK live-runtime config failure pruning is done for the current
   duplicate invalid retry-attempt, retry-sleep, and MCP-timeout env/direct
   bodies; reopen only with fresh duplicated provider/env scaffolding that does

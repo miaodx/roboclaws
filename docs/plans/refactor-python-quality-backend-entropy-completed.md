@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Provider retry helper tests now merge one-assertion status-code,
+  transient-error classification, and retry-delay checks into three
+  behavior-named parameter tables while keeping the negative-attempt error test
+  separate. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: unit-test pruning / no production behavior change.
+  Metric: `tests/unit/providers/test_provider_retry.py` keeps 14 collected
+  cases while test functions drop 10 -> 4; the file moves 77 -> 88 lines
+  because explicit case tables are longer than one-assertion functions. Proof:
+  `$intuitive-tests` audit/propose, focused provider-retry tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only with fresh provider retry tests that duplicate the same helper
+  classifications instead of adding a distinct retry/error behavior.
+
 - 2026-06-20: OpenAI Agents SDK performance-profile MCP-timeout validation
   tests now fold the duplicate malformed-env and negative-direct one-off tests
   into the existing invalid MCP-timeout value table. Route/profile/model
