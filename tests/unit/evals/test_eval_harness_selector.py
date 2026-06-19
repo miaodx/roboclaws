@@ -271,6 +271,33 @@ def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path
     assert f"runtime_map_prior={prior}" in command
 
 
+def test_runtime_prior_blocker_uses_current_map_build_row(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(runner.shutil, "which", lambda name: f"/usr/bin/{name}")
+    repo_root = tmp_path / "repo"
+    (repo_root / ".venv" / "bin").mkdir(parents=True)
+    (repo_root / ".venv" / "bin" / "python").touch()
+    monkeypatch.setattr(runner, "REPO_ROOT", repo_root)
+    manifest = selector.build_eval_harness(
+        budget="focused",
+        changed_files=["roboclaws/maps/runtime_prior_snapshot.py"],
+        output_dir=tmp_path,
+    )
+    rows = _selected_rows(manifest)
+    map_row = rows["direct-map-build-world-public"]
+    prior = Path(map_row["row_dir"]) / "run" / "seed-7" / "runtime_metric_map.json"
+    prior.parent.mkdir(parents=True)
+    prior.write_text('{"schema":"runtime_metric_map_v1"}\n', encoding="utf-8")
+    map_row["status"] = "ran"
+    map_row["outcome"] = "passed"
+
+    blockers = runner._row_blockers(rows["direct-cleanup-runtime-prior-consumer"], manifest)
+
+    assert blockers == []
+
+
 def test_smoke_budget_records_relevant_expensive_rows_as_user_budget_skipped(
     tmp_path: Path,
 ) -> None:

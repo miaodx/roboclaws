@@ -3188,6 +3188,15 @@ logs before choosing the next slice.
   runtime tests, ruff, format check, diff check, and ratchet. Reopen only if
   `roboclaws/evals/live_runtime.py` regains duplicated numeric timeout parsing
   policy.
+- Eval-harness runtime-prior blocking now checks the current
+  `direct-map-build-world-public` source row instead of the retired
+  `direct-map-build-world-oracle` id, so the cleanup consumer row can run after
+  the selected map-build row passes and writes `runtime_metric_map.json`. Owner
+  layer: Eval suites / eval-harness. Behavior-change class: stale launch-axis
+  bug fix. Metric: no new owner; harness runner stays under the current
+  ratchet ceiling. Proof: focused eval-harness selector tests, ruff, format
+  check, diff check, and ratchet. Reopen only if runtime-prior prerequisite
+  logic drifts from the row ids declared by `eval_harness_rows.py`.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

@@ -35,6 +35,7 @@ ROW_BLOCKER_REQUIREMENT_PRIORITY = {
     "runtime_map_prior": 5,
     "docker": 6,
 }
+RUNTIME_MAP_PRIOR_SOURCE_ROW_ID = "direct-map-build-world-public"
 
 spec = importlib.util.spec_from_file_location("eval_harness_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
@@ -637,7 +638,7 @@ def _stop_managed_dino_sidecars() -> None:
 
 def _runtime_prior_available(manifest: dict[str, Any]) -> bool:
     for row in manifest.get("rows") or []:
-        if row.get("row_id") != "direct-map-build-world-oracle":
+        if row.get("row_id") != RUNTIME_MAP_PRIOR_SOURCE_ROW_ID:
             continue
         if row.get("status") != "ran" or row.get("outcome") != "passed":
             return False
