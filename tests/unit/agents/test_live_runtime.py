@@ -202,6 +202,39 @@ def test_live_agent_result_reads_existing_cli_artifacts(tmp_path: Path) -> None:
     assert result.artifact_paths["openai_agents_spans"] == run_dir / "openai-agents-spans.jsonl"
 
 
+def test_live_agent_result_keeps_missing_artifacts_optional(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    result = live_agent_result_from_artifacts(run_dir)
+
+    assert result.phase == "unknown"
+    assert result.run_result_present is False
+    assert result.task_completion == {}
+
+
+def test_live_agent_result_fails_on_malformed_live_status_source(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "live_status.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"live_status\.json.*invalid JSON"):
+        live_agent_result_from_artifacts(run_dir)
+
+
+def test_live_agent_result_fails_on_non_object_run_result_source(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (run_dir / "run_result.json").write_text(json.dumps(["ok"]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"run_result\.json.*non-object JSON"):
+        live_agent_result_from_artifacts(run_dir)
+
+
 def test_openai_agents_runtime_missing_sdk_writes_normalized_failure(
     tmp_path: Path, monkeypatch
 ) -> None:

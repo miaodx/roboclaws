@@ -116,7 +116,10 @@ Latest quality snapshot from 2026-06-19:
   source sample is missing, invalid, or resolves to a different sample id.
   Regression promotion now also validates both the promoted sample payload and
   updated suite payload before writing either artifact, so invalid suite output
-  can no longer leave an orphan promoted sample behind.
+  can no longer leave an orphan promoted sample behind. Live-agent result
+  artifact loading now fails aloud on present malformed or non-object
+  `live_status.json` / `run_result.json` sources instead of erasing corrupt
+  status or completion evidence into unknown or absent state.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

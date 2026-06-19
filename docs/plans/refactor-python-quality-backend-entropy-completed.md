@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Live-agent result artifact loading now fails aloud when present
+  `live_status.json` or `run_result.json` sources are malformed or contain
+  non-object JSON. Corrupt live status no longer becomes `phase=unknown`, and
+  corrupt run-result completion evidence no longer disappears as an absent
+  task-completion packet; genuinely missing live artifacts keep the existing
+  optional incomplete-run behavior. Owner layer: Thin Runtime / Server
+  Adapters. Behavior-change class: fail-aloud artifact/source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and reports 79 oversized modules in
+  the current dirty worktree. Proof: focused live-runtime artifact-loader
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-19: Eval regression promotion now validates the promoted sample
   payload and updated suite payload before writing either artifact. Invalid
   suite updates no longer leave orphan promoted sample files behind when

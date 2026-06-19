@@ -238,9 +238,18 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"live-agent artifact source {path}: invalid JSON at line {exc.lineno} "
+            f"column {exc.colno}: {exc.msg}"
+        ) from exc
+    except OSError as exc:
+        raise ValueError(f"live-agent artifact source {path}: cannot be read: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"live-agent artifact source {path}: non-object JSON: {type(payload).__name__}"
+        )
+    return payload
 
 
 def _bool_or_none(value: Any) -> bool | None:
