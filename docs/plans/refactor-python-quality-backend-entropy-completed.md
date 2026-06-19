@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console `trace.jsonl` parsing now fails aloud in the
+  normalized live-state payload. Present malformed or non-object trace rows no
+  longer disappear while latest-action, decision-evidence, and latest-tool
+  summaries are derived from the remaining valid rows; the state marks the run
+  failed with a deduplicated `operator state source error: Trace` terminal
+  reason and preserves row-level `source_errors`. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud runtime artifact/source
+  truth; valid trace pairing, nested live-attempt discovery, camera-state
+  summary, core JSON source errors, agent-message extraction, artifact links,
+  and checker handoff behavior are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  operator-console state tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Operator-console message inbox parsing now fails aloud for
   malformed or non-object `operator_messages.jsonl` rows. Corrupt present
   steering evidence no longer disappears from console message state or MCP

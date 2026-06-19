@@ -93,7 +93,6 @@ def derive_operator_state(
             label="Run Result",
         ),
     )
-    source_errors = tuple(source for source in json_sources if isinstance(source, JsonSourceError))
     status = _json_source_payload(json_sources[0])
     live_status = _json_source_payload(json_sources[1])
     run_result = _json_source_payload(json_sources[2])
@@ -101,7 +100,12 @@ def derive_operator_state(
         status, live_status, run_result, run_dir, display_run_dir
     )
     trace_path = _latest_existing(display_run_dir, ("trace.jsonl",))
-    latest_trace = _last_robot_tool_jsonl(trace_path) or _last_jsonl(trace_path)
+    trace_rows, trace_source_errors = _read_jsonl_source(trace_path, label="Trace")
+    source_errors = (
+        *(source for source in json_sources if isinstance(source, JsonSourceError)),
+        *trace_source_errors,
+    )
+    latest_trace = _last_robot_tool_jsonl(trace_rows) or _last_jsonl(trace_rows)
     camera_state = _camera_angle_summary(trace_path)
     phase = str(
         live_status.get("phase")
@@ -350,7 +354,7 @@ def _json_source_payload(source: dict[str, Any] | JsonSourceError) -> dict[str, 
 def _json_source_failure(errors: tuple[JsonSourceError, ...]) -> dict[str, str]:
     if not errors:
         return {}
-    labels = ", ".join(error.label for error in errors)
+    labels = ", ".join(dict.fromkeys(error.label for error in errors))
     return {
         "phase": "failed",
         "terminal_reason": f"operator state source error: {labels}",
@@ -411,46 +415,58 @@ def _prompt_preview(
     }
 
 
-def _last_jsonl(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-    for line in reversed(lines):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+def _last_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    for payload in reversed(rows):
         if isinstance(payload, dict):
             return payload
     return {}
 
 
-def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
+def _read_jsonl_source(
+    path: Path,
+    *,
+    label: str,
+) -> tuple[list[dict[str, Any]], tuple[JsonSourceError, ...]]:
     if not path.exists():
-        return {}
+        return [], ()
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return {}
-    payloads: list[dict[str, Any]] = []
-    for line in lines:
+    except OSError as exc:
+        return [], (JsonSourceError(path=path.resolve(), label=label, reason=str(exc)),)
+    rows: list[dict[str, Any]] = []
+    source_errors: list[JsonSourceError] = []
+    for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            source_errors.append(
+                JsonSourceError(
+                    path=path.resolve(),
+                    label=label,
+                    reason=f"invalid JSON at line {line_number} column {exc.colno}",
+                )
+            )
             continue
-        if isinstance(payload, dict):
-            payloads.append(payload)
-    for index in range(len(payloads) - 1, -1, -1):
-        payload = payloads[index]
+        if not isinstance(payload, dict):
+            source_errors.append(
+                JsonSourceError(
+                    path=path.resolve(),
+                    label=label,
+                    reason=f"expected JSON object at line {line_number}",
+                )
+            )
+            continue
+        rows.append(payload)
+    return rows, tuple(source_errors)
+
+
+def _last_robot_tool_jsonl(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    for index in range(len(rows) - 1, -1, -1):
+        payload = rows[index]
         if isinstance(payload, dict) and _is_robot_tool_trace(payload):
-            return _paired_tool_trace(payload, payloads[:index])
+            return _paired_tool_trace(payload, rows[:index])
     return {}
 
 

@@ -47,6 +47,9 @@ Latest quality snapshot from 2026-06-19:
   of silently renumbering around corrupt history. Operator-console message
   inbox JSONL errors now surface as console-state and MCP-visible source-error
   packets instead of hiding queued steering evidence behind empty inbox state.
+  Operator-console `trace.jsonl` source errors now fail the normalized state
+  explicitly instead of letting latest-action/tool summaries derive from a
+  partially skipped trace.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
