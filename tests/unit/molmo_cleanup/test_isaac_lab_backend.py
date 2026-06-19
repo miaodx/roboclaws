@@ -2690,7 +2690,7 @@ def test_isaac_stage_light_paths_detects_existing_lights_without_pxr() -> None:
 
 
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
-    map_bundle = Path("assets/maps/molmospaces-procthor-val-0-7")
+    map_bundle = Path("assets/maps/molmospaces/procthor-10k-val/0")
     backend = IsaacLabSubprocessBackend(
         run_dir=tmp_path,
         python_executable=Path(sys.executable),

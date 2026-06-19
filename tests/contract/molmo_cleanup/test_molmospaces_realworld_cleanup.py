@@ -464,7 +464,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         record_robot_views=True,
         generated_mess_count=1,
         evidence_lane="world-public-labels",
-        map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
+        map_bundle_dir=Path("assets/maps/molmospaces/procthor-10k-val/0"),
         require_map_bundle=True,
     )
 

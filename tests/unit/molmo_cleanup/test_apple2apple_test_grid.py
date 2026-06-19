@@ -60,7 +60,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
         "evidence_lane=world-public-labels",
     ]
     assert "scenario_setup=baseline" in setup_command
-    assert "map_bundle=assets/maps/molmospaces-procthor-val-0-7" in setup_command
+    assert "map_bundle=assets/maps/molmospaces/procthor-10k-val/0" in setup_command
 
 
 def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) -> None:

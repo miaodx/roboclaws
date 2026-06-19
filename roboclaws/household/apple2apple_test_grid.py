@@ -12,7 +12,7 @@ from roboclaws.household.realworld_contract import DEFAULT_REALWORLD_TASK
 
 GRID_SCHEMA = "molmo_apple2apple_test_grid_v1"
 ROW_SCHEMA = "molmo_apple2apple_test_grid_row_v1"
-DEFAULT_MAP_BUNDLE = "assets/maps/molmospaces-procthor-val-0-7"
+DEFAULT_MAP_BUNDLE = "assets/maps/molmospaces/procthor-10k-val/0"
 RUNTIME_MAP_PRIOR_PLACEHOLDER = "${ROBOCLAWS_RUNTIME_MAP_PRIOR}"
 
 

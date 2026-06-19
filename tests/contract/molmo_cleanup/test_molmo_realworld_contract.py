@@ -505,7 +505,7 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
     session.backend.scenario_source = "isaac_scene_index"
     contract = _contract(
         session,
-        map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
+        map_bundle_dir=Path("assets/maps/molmospaces/procthor-10k-val/0"),
     )
 
     detection = None

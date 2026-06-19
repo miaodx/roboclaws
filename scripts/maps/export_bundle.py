@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_path  # noqa: E402
 from roboclaws.maps.bundle import (  # noqa: E402
     static_landmarks_from_fixture_projection,
     validate_nav2_map_bundle,
@@ -32,7 +33,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="agent_view.json with metric_map and static fixture artifact payload.",
     )
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--molmospaces-scene-source",
+        help=(
+            "MolmoSpaces scene source; selects the canonical output path when "
+            "--output-dir is omitted."
+        ),
+    )
+    parser.add_argument(
+        "--molmospaces-scene-index",
+        type=int,
+        help=(
+            "MolmoSpaces scene index; selects the canonical output path when "
+            "--output-dir is omitted."
+        ),
+    )
+    parser.add_argument(
+        "--map-asset-root",
+        type=Path,
+        help="Asset root for canonical scene output; defaults to assets/maps.",
+    )
     parser.add_argument("--no-validate", action="store_true")
     return parser.parse_args(argv)
 
@@ -41,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     if bool(args.run_result) == bool(args.agent_view):
         raise SystemExit("provide exactly one of --run-result or --agent-view")
+    output_dir = _output_dir(args)
     agent_view = _load_agent_view(run_result=args.run_result, agent_view=args.agent_view)
     metric_map = (
         agent_view.get("metric_map") if isinstance(agent_view.get("metric_map"), dict) else {}
@@ -53,16 +75,30 @@ def main(argv: list[str] | None = None) -> None:
     if not metric_map or not static_fixture_projection:
         raise SystemExit("agent view must contain metric_map and static_fixture_projection")
     snapshot = write_nav2_map_bundle(
-        args.output_dir,
+        output_dir,
         metric_map=metric_map,
         static_landmarks=static_landmarks_from_fixture_projection(static_fixture_projection),
     )
     if not args.no_validate:
-        validate_nav2_map_bundle(args.output_dir).raise_for_errors()
+        validate_nav2_map_bundle(output_dir).raise_for_errors()
     print(
         "nav2-map-bundle exported: "
-        f"{args.output_dir} map_id={snapshot.get('map_id')} "
+        f"{output_dir} map_id={snapshot.get('map_id')} "
         f"parameter_hash={snapshot.get('parameter_hash')}"
+    )
+
+
+def _output_dir(args: argparse.Namespace) -> Path:
+    if args.output_dir is not None:
+        return args.output_dir
+    if args.molmospaces_scene_source is None or args.molmospaces_scene_index is None:
+        raise SystemExit(
+            "provide --output-dir or both --molmospaces-scene-source and --molmospaces-scene-index"
+        )
+    return molmospaces_nav2_map_bundle_path(
+        scene_source=args.molmospaces_scene_source,
+        scene_index=args.molmospaces_scene_index,
+        asset_root=args.map_asset_root or Path("assets") / "maps",
     )
 
 

@@ -985,6 +985,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
         "output_dir=output/custom",
         "scene_source=procthor-10k-val",
         "scene_index=0",
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
         "backend=molmospaces_subprocess",
         "generated_mess_count=5",
     )
@@ -1142,6 +1143,7 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert (
         "target=just agent::run household-world.cleanup codex-cli camera-grounded-labels "
         "camera_labeler=grounding-dino scene_source=procthor-10k-val scene_index=0 "
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0 "
         "backend=molmospaces_subprocess generated_mess_count=5"
     ) in plan_trace
 
@@ -1171,6 +1173,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         "world-public-labels",
         "scene_source=procthor-10k-val",
         "scene_index=0",
+        "map_bundle=assets/maps/molmospaces/procthor-10k-val/0",
         "backend=molmospaces_subprocess",
         "generated_mess_count=5",
     )
@@ -1776,9 +1779,11 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert 'map_bundle="auto"' in text
-    assert 'map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"' in text
+    assert 'python_bin" -m roboclaws.launch.map_bundles' in text
     assert "--map-bundle-dir" in text
     assert "--require-map-bundle" in text
+    assert "using backend-derived public metric map" not in text
+    assert "map_bundle=${map_bundle_dir} is not allowed" in text
 
 
 def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
@@ -1826,7 +1831,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "5",
         "127.0.0.1",
         "18788",
-        "auto",
+        "assets/maps/molmospaces/procthor-10k-val/0",
         "skill",
     ]
     assert route[12] == "off"

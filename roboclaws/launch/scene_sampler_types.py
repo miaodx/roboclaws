@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from roboclaws.launch.map_bundles import molmospaces_nav2_map_bundle_arg
+
 SAMPLER_GENERATOR_VERSION = "2026-06-15.preview-readiness-v1"
 
 UI_LANE = "ui"
@@ -64,13 +66,14 @@ class SceneSamplerRow:
     def default_overrides(self) -> tuple[str, ...]:
         if self.scene_index is None:
             return ()
-        overrides = (
+        return (
             f"scene_source={self.scene_source}",
             f"scene_index={self.scene_index}",
+            molmospaces_nav2_map_bundle_arg(
+                scene_source=self.scene_source,
+                scene_index=self.scene_index,
+            ),
         )
-        if self.scene_source != "procthor-10k-val" or self.scene_index != 0:
-            overrides = (*overrides, "map_bundle=none")
-        return overrides
 
     def to_dict(self) -> dict[str, Any]:
         return {

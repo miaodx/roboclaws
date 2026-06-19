@@ -449,13 +449,19 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         if [[ "$profile" == "smoke" ]]; then
           map_bundle_dir=""
         else
-          map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"
+          map_bundle_dir="$(
+            "$python_bin" -m roboclaws.launch.map_bundles \
+              --scene-source "$scene_source" \
+              --scene-index "$scene_index"
+          )"
         fi
         ;;
-      none|false|off)
-        map_bundle_dir=""
-        ;;
     esac
+    if [[ "$profile" != "smoke" && "$map_bundle_dir" =~ ^(none|false|off)$ ]]; then
+      echo "error: ${task_surface}/${task_intent} on backend '${backend:-auto}' requires a selected prebuilt Nav2 map bundle; map_bundle=${map_bundle_dir} is not allowed" >&2
+      echo "hint: generate the canonical scene bundle with scripts/maps/export_bundle.py --molmospaces-scene-source ${scene_source} --molmospaces-scene-index ${scene_index}" >&2
+      exit 1
+    fi
     if [[ -n "$map_bundle_dir" && "$map_bundle_dir" != */* && -d "assets/maps/${map_bundle_dir}" ]]; then
       map_bundle_dir="assets/maps/${map_bundle_dir}"
     fi
@@ -516,11 +522,9 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     fi
     if [[ "$profile" != "smoke" ]]; then
       if [[ -z "$map_bundle_dir" ]]; then
-        if [[ "$backend" != "molmospaces_subprocess" && "$backend" != "isaaclab_subprocess" ]]; then
-          echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
-          exit 1
-        fi
-        echo "==> no map bundle selected; using backend-derived public metric map"
+        echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
+        echo "hint: generate the canonical scene bundle with scripts/maps/export_bundle.py --molmospaces-scene-source ${scene_source} --molmospaces-scene-index ${scene_index}" >&2
+        exit 1
       else
         map_bundle_args+=(--require-map-bundle)
       fi

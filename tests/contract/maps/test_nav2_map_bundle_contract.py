@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,50 @@ def test_exporter_and_checker_accept_public_agent_view(tmp_path: Path) -> None:
 
     assert (bundle_dir / "map.yaml").is_file()
     assert (bundle_dir / "semantics.json").is_file()
+
+
+def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> None:
+    exporter = _load_module(EXPORTER_PATH, "export_bundle")
+    checker = _load_module(CHECKER_PATH, "check_bundle")
+    agent_view_path = tmp_path / "agent_view.json"
+    asset_root = tmp_path / "assets" / "maps"
+    bundle_dir = asset_root / "molmospaces" / "procthor-objaverse-val" / "10"
+    agent_view_path.write_text(json.dumps(_agent_view()), encoding="utf-8")
+
+    exporter.main(
+        [
+            "--agent-view",
+            str(agent_view_path),
+            "--molmospaces-scene-source",
+            "procthor-objaverse-val",
+            "--molmospaces-scene-index",
+            "10",
+            "--map-asset-root",
+            str(asset_root),
+        ]
+    )
+    checker.main([str(bundle_dir)])
+
+    assert (bundle_dir / "map.yaml").is_file()
+    assert (bundle_dir / "semantics.json").is_file()
+
+
+def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) -> None:
+    invalid_bundle = tmp_path / "missing-scene-bundle"
+    invalid_bundle.mkdir()
+
+    result = subprocess.run(
+        [str(REPO_ROOT / ".venv" / "bin" / "python"), str(CHECKER_PATH), str(invalid_bundle)],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "nav2-map-bundle invalid" in result.stderr
+    assert "missing required artifact: map.yaml" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_bundle_writer_normalizes_wide_room_only_static_landmarks(tmp_path: Path) -> None:

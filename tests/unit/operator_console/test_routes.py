@@ -317,15 +317,19 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
     for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
         assert f"{world_id}::mujoco::cleanup::codex-cli::world-public-labels" in disabled_ids
 
-    val0 = get_selection(MUJOCO_CODEX_CLEANUP)
+    objaverse0 = get_selection(MUJOCO_CODEX_CLEANUP)
     val10 = get_selection(
         "molmospaces/procthor-objaverse-val/10::mujoco::map-build::codex-cli::world-public-labels"
     )
 
-    assert "scene_index=0" in val0.launch_default_overrides
-    assert "map_bundle=none" in val0.launch_default_overrides
+    assert "scene_index=0" in objaverse0.launch_default_overrides
+    assert "map_bundle=assets/maps/molmospaces/procthor-objaverse-val/0" in (
+        objaverse0.launch_default_overrides
+    )
     assert "scene_index=10" in val10.launch_default_overrides
-    assert "map_bundle=none" in val10.launch_default_overrides
+    assert "map_bundle=assets/maps/molmospaces/procthor-objaverse-val/10" in (
+        val10.launch_default_overrides
+    )
     assert val10.to_payload()["preview_assets"]["fpv"]["href"] == (
         "/previews/molmospaces-procthor-objaverse-val-10-fpv.png"
     )
@@ -334,7 +338,7 @@ def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) 
     assert "world=molmospaces/procthor-objaverse-val/10" in argv
     assert "scene_source=procthor-objaverse-val" in argv
     assert "scene_index=10" in argv
-    assert "map_bundle=none" in argv
+    assert "map_bundle=assets/maps/molmospaces/procthor-objaverse-val/10" in argv
 
 
 def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
