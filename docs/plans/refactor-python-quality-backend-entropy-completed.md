@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval-runner grader sidecar parsing now fails aloud for present
+  malformed or non-object optional JSON artifacts. Corrupt
+  `live_status.json`, `live_timing.json`, `advisory_evaluation.json`, and
+  open-ended `runtime_metric_map.json` sources no longer collapse into
+  unavailable live status/timing, advisory-neutral semantic satisfaction, or
+  predicate evidence; affected rows fail with `artifact_missing` and compact
+  `source_errors` while genuinely missing optional sidecars keep the existing
+  unavailable behavior. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; suite/sample/result
+  schemas, product-runner invocation, required map-build runtime-map grading,
+  trace policy, and live execution are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused eval-runner
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet.
+
 - 2026-06-19: Codex and Claude live-run timing source parsing now fails aloud
   for present malformed or non-object `trace.jsonl` rows, and Codex event
   summary parsing now fails aloud for malformed or non-object

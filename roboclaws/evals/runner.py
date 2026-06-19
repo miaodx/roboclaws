@@ -541,15 +541,26 @@ def _efficiency_grader(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str
         if isinstance(run_result.get("tool_event_counts"), dict)
         else {}
     )
-    live_status = _merged_live_status(run_dir=run_dir, run_result=run_result)
-    live_timing = _load_json(run_dir / "live_timing.json")
+    live_status, live_status_error = _merged_live_status(run_dir=run_dir, run_result=run_result)
+    live_timing_path = run_dir / "live_timing.json"
+    live_timing, live_timing_error = _load_optional_json_mapping(live_timing_path)
     timing_payload = dict(run_result)
     if live_timing:
         timing_payload["live_timing"] = live_timing
         timing_payload["runner_wall_time_s"] = _live_wall_time_s(live_timing)
     model_attempt_summary = _model_attempt_summary(timing_payload)
+    source_errors = [
+        error
+        for error in (
+            _json_source_error(run_dir / "live_status.json", live_status_error),
+            _json_source_error(live_timing_path, live_timing_error),
+        )
+        if error
+    ]
     return {
-        "status": "passed",
+        "status": "failed" if source_errors else "passed",
+        "failure_class": "artifact_missing" if source_errors else MISSING_NOT_APPLICABLE,
+        "source_errors": source_errors,
         "tool_event_count": sum(_int_value(value) for value in tool_counts.values()),
         "tool_call_count": sum(
             _int_value(value) for key, value in tool_counts.items() if str(key).endswith(":request")
@@ -597,8 +608,12 @@ def _open_ended_grader(
     advisory = (
         run_result.get("advisory_evaluation")
         if isinstance(run_result.get("advisory_evaluation"), dict)
-        else _load_json(run_dir / "advisory_evaluation.json")
+        else {}
     )
+    advisory_error = ""
+    if not advisory:
+        advisory_path = run_dir / "advisory_evaluation.json"
+        advisory, advisory_error = _load_optional_json_mapping(advisory_path)
     advisory_available = bool(advisory)
     semantic_status = "advisory_available" if advisory_available else "advisory_unavailable"
     config = sample.grader_config or {}
@@ -607,18 +622,34 @@ def _open_ended_grader(
         predicate_config if isinstance(predicate_config, dict) else {},
         run_dir=run_dir,
     )
+    source_errors = [
+        error
+        for error in (
+            _json_source_error(run_dir / "advisory_evaluation.json", advisory_error),
+            *(predicate.get("source_errors") or []),
+        )
+        if error
+    ]
+    if source_errors:
+        semantic_status = "source_error"
     hard_passed = claim_present and artifact_ready
     if predicate["authoritative"]:
         hard_passed = hard_passed and predicate["passed"]
+    if source_errors:
+        hard_passed = False
     return {
         "status": "passed" if hard_passed else "failed",
         "failure_class": (
             MISSING_NOT_APPLICABLE
             if hard_passed
             else (
-                "private_goal_not_satisfied"
-                if claim_present and artifact_ready and predicate["authoritative"]
-                else "agent_no_completion_claim"
+                "artifact_missing"
+                if source_errors
+                else (
+                    "private_goal_not_satisfied"
+                    if claim_present and artifact_ready and predicate["authoritative"]
+                    else "agent_no_completion_claim"
+                )
             )
         ),
         "open_ended_category": str(config.get("open_ended_category") or MISSING_UNAVAILABLE),
@@ -631,6 +662,7 @@ def _open_ended_grader(
             config.get("semantic_satisfaction_authoritative") is True
         ),
         "success_predicate": predicate,
+        "source_errors": source_errors,
     }
 
 
@@ -641,13 +673,24 @@ def _open_ended_success_predicate(
 ) -> dict[str, Any]:
     predicate_id = str(config.get("predicate_id") or "completion_claim")
     authoritative = bool(config.get("authoritative") is True)
-    runtime_map = _load_json(run_dir / "runtime_metric_map.json")
+    runtime_map_path = run_dir / "runtime_metric_map.json"
+    runtime_map, runtime_map_error = _load_optional_json_mapping(runtime_map_path)
     trace_events, _trace_errors = _read_trace_events_with_errors(run_dir / "trace.jsonl")
+    if runtime_map_error:
+        return {
+            "predicate_id": predicate_id,
+            "authoritative": authoritative,
+            "passed": False,
+            "source_error": True,
+            "source_errors": [_json_source_error(runtime_map_path, runtime_map_error)],
+            "evidence": {},
+        }
     if predicate_id == "completion_claim":
         return {
             "predicate_id": predicate_id,
             "authoritative": authoritative,
             "passed": True,
+            "source_errors": [],
             "evidence": {},
         }
     if predicate_id == "public_anchor_observed":
@@ -929,12 +972,12 @@ def _model_attempt_summary_from_live_timing(value: dict[str, Any]) -> dict[str, 
     return {}
 
 
-def _merged_live_status(*, run_dir: Path, run_result: dict[str, Any]) -> dict[str, Any]:
+def _merged_live_status(*, run_dir: Path, run_result: dict[str, Any]) -> tuple[dict[str, Any], str]:
     live_status = (
         run_result.get("live_status") if isinstance(run_result.get("live_status"), dict) else {}
     )
-    sidecar = _load_json(run_dir / "live_status.json")
-    return {**sidecar, **live_status}
+    sidecar, sidecar_error = _load_optional_json_mapping(run_dir / "live_status.json")
+    return {**sidecar, **live_status}, sidecar_error
 
 
 def _live_wall_time_s(live_timing: dict[str, Any]) -> Any:
@@ -1024,6 +1067,7 @@ def _status_from_graders(grader_outputs: dict[str, Any]) -> tuple[str, str]:
         ("sampler_admission", "map_actionability_failure"),
         ("open_ended", "agent_no_completion_claim"),
         ("outcome", "private_goal_not_satisfied"),
+        ("efficiency", "artifact_missing"),
     )
     for grader_name, failure_class in ordered_failures:
         grader = grader_outputs.get(grader_name, {})
@@ -1175,12 +1219,26 @@ def _read_trace_events_with_errors(path: Path) -> tuple[list[dict[str, Any]], li
     return events, errors
 
 
-def _load_json(path: Path) -> dict[str, Any]:
+def _load_optional_json_mapping(path: Path) -> tuple[dict[str, Any], str]:
+    if not path.exists():
+        return {}, ""
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        return {}, ""
+    except json.JSONDecodeError as exc:
+        return {}, f"invalid_json:{exc.msg}"
+    except OSError as exc:
+        return {}, f"read_error:{exc.strerror or exc}"
+    if not isinstance(payload, dict):
+        return {}, "invalid_json_object"
+    return payload, ""
+
+
+def _json_source_error(path: Path, reason: str) -> dict[str, str]:
+    if not reason:
         return {}
-    return payload if isinstance(payload, dict) else {}
+    return {"path": str(path), "reason": reason}
 
 
 def _load_required_json_mapping(path: Path) -> tuple[dict[str, Any], str]:

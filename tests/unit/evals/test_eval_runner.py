@@ -67,6 +67,37 @@ def test_eval_runner_classifies_missing_product_artifacts(tmp_path: Path) -> Non
     assert "report" in result["grader_outputs"]["artifacts"]["missing"]
 
 
+@pytest.mark.parametrize("sidecar_name", ["live_status.json", "live_timing.json"])
+def test_eval_runner_fails_aloud_on_malformed_efficiency_sidecars(
+    tmp_path: Path,
+    sidecar_name: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        _write_product_artifacts(run_dir, completion_status="success")
+        (run_dir / sidecar_name).write_text("{", encoding="utf-8")
+        return _run_result(run_dir, completion_status="success")
+
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp=f"malformed-{sidecar_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = payload["results"][0]
+    efficiency = result["grader_outputs"]["efficiency"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert efficiency["status"] == "failed"
+    assert efficiency["failure_class"] == "artifact_missing"
+    assert efficiency["source_errors"][0]["path"].endswith(sidecar_name)
+    assert efficiency["source_errors"][0]["reason"].startswith(
+        "invalid_json:Expecting property name enclosed in double quotes"
+    )
+
+
 def test_eval_runner_classifies_environment_blocked_exception(tmp_path: Path) -> None:
     run = run_eval_suite(
         "smoke_regression",
@@ -843,6 +874,55 @@ def test_eval_runner_fails_trajectory_when_trace_contains_malformed_json(
     assert trajectory["violations"] == ["trace_json_invalid"]
     assert trajectory["trace_parse_errors"][0].startswith(
         "line 2: invalid_json:Expecting property name enclosed in double quotes"
+    )
+
+
+@pytest.mark.parametrize("sidecar_name", ["advisory_evaluation.json", "runtime_metric_map.json"])
+def test_open_ended_eval_fails_aloud_on_malformed_source_sidecars(
+    tmp_path: Path,
+    sidecar_name: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        result = _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+            include_runtime_map=sidecar_name != "runtime_metric_map.json",
+        )
+        if sample_id == "open_ended.room4_anchor_seed7":
+            if sidecar_name == "advisory_evaluation.json":
+                result.pop("advisory_evaluation")
+            (run_dir / sidecar_name).write_text("{", encoding="utf-8")
+        return result
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp=f"malformed-{sidecar_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = {item["identity"]["sample_id"]: item for item in payload["results"]}[
+        "open_ended.room4_anchor_seed7"
+    ]
+    open_ended = result["grader_outputs"]["open_ended"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert open_ended["status"] == "failed"
+    assert open_ended["failure_class"] == "artifact_missing"
+    assert open_ended["semantic_satisfaction_status"] == "source_error"
+    assert open_ended["source_errors"][0]["path"].endswith(sidecar_name)
+    assert open_ended["source_errors"][0]["reason"].startswith(
+        "invalid_json:Expecting property name enclosed in double quotes"
     )
 
 

@@ -74,7 +74,11 @@ Latest quality snapshot from 2026-06-19:
   performance evidence. Codex and Claude live-run timing writers now surface
   malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing
-  model/timing summaries.
+  model/timing summaries. Eval-runner graders now fail rows aloud on present
+  malformed or non-object optional sidecars (`live_status.json`,
+  `live_timing.json`, `advisory_evaluation.json`, and open-ended
+  `runtime_metric_map.json`) instead of collapsing corrupt source evidence into
+  unavailable/advisory-neutral grading state.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
