@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: RAW-FPV OpenAI Agents budget guard trace parsing now fails
+  aloud for present malformed or non-object `trace.jsonl` rows. Corrupt trace
+  evidence no longer disappears before the RAW-FPV candidate, repeated-failure,
+  or observe-per-waypoint budget guard decides whether the live SDK run hit a
+  terminal budget condition; diagnostics include the source path and row
+  number. Missing trace files still preserve the existing no-budget-failure
+  behavior. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth; budget thresholds,
+  context-budget logic, live retry behavior, and trace producers are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused OpenAI Agents live-runtime budget tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-19: OpenAI Agents SDK metric JSONL parsing now fails aloud for
   present malformed or non-object event/span/trace rows. Corrupt
   `openai-agents-events.jsonl`, `openai-agents-spans.jsonl`, or `trace.jsonl`

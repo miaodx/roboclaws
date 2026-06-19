@@ -62,7 +62,10 @@ Latest quality snapshot from 2026-06-19:
   silently skipped source evidence. OpenAI Agents SDK event/span/trace metrics
   now fail aloud on present malformed or non-object JSONL rows instead of
   deriving context/cache/growth, retry/fallback, racing, input-filter, event,
-  or span metrics from partially skipped source evidence.
+  or span metrics from partially skipped source evidence. RAW-FPV OpenAI
+  Agents budget guards now fail aloud on present malformed or non-object
+  `trace.jsonl` rows instead of deciding budget exhaustion from partial trace
+  history.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
