@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console prompt previews now fail aloud for malformed
+  OpenAI Agents numeric prompt-env values. Non-empty
+  `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET`,
+  `ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT`, and
+  `ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET` preview inputs must be integers
+  and cannot be negative, so `/api/prompt-preview` no longer renders a
+  default-looking kickoff prompt for malformed live-route input that the typed
+  runner configuration would reject or reinterpret. Omitted values keep the
+  documented prompt defaults, and zero keeps the existing prompt-renderer
+  minimum behavior for candidate/observe budgets while allowing zero done
+  retries. Owner layer: Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud operator-preview configuration; route selection, launch env
+  application, provider-profile validation, kickoff prompt text for valid
+  values, and static console UI request shape are unchanged. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 78 oversized modules. Proof: focused
+  operator-console prompt-preview tests, full operator-console unit folder,
+  touched-file ruff and format check, `git diff --check`, and ratchet.
+
 - 2026-06-19: Eval-harness explicit `since=` diff source selection now fails
   aloud. A bad base ref, missing revision, or other `git diff --name-only`
   failure no longer becomes an empty changed-file set that can make

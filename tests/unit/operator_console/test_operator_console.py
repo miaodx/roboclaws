@@ -22,6 +22,10 @@ from roboclaws.operator_console.launcher import (
     route_readiness,
 )
 from roboclaws.operator_console.locks import ResourceLock, ResourceLockError
+from roboclaws.operator_console.prompt_preview import (
+    PromptPreviewRequest,
+    build_prompt_preview,
+)
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import (
     get_selection,
@@ -233,6 +237,120 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
     assert "只收拾桌面上的杯子" in payload["agent_kickoff_prompt"]
     assert "household-open-task skill instructions" in payload["agent_kickoff_prompt"]
     assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
+
+
+def test_operator_console_prompt_preview_endpoint_rejects_invalid_numeric_env(
+    tmp_path: Path,
+) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/prompt-preview",
+            method="POST",
+            data=json.dumps(
+                {
+                    "world_id": "molmospaces/procthor-objaverse-val/0",
+                    "backend_id": "mujoco",
+                    "intent_id": "cleanup",
+                    "agent_engine_id": "openai-agents-sdk",
+                    "provider_profile": "codex-router-responses",
+                    "evidence_lane": "camera-raw-fpv",
+                    "scenario_setup": "relocate-cleanup-related-objects",
+                    "prompt": "收拾杯子",
+                    "overrides": {},
+                    "env_overrides": {"ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "many"},
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 400
+    assert "raw_fpv_candidate_budget must be an integer" in payload["error"]
+
+
+@pytest.mark.parametrize(
+    ("env_overrides", "expected_error"),
+    [
+        (
+            {"ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "-1"},
+            "max_observe_per_waypoint must be non-negative",
+        ),
+        (
+            {"ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET": "-1"},
+            "done_retry_budget must be non-negative",
+        ),
+    ],
+)
+def test_prompt_preview_rejects_invalid_openai_agents_numeric_env_values(
+    env_overrides: dict[str, str],
+    expected_error: str,
+) -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_prompt_preview(
+            route,
+            PromptPreviewRequest(
+                prompt="收拾杯子",
+                env_overrides=env_overrides,
+            ),
+        )
+
+
+def test_prompt_preview_uses_valid_openai_agents_numeric_env_overrides() -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
+
+    payload = build_prompt_preview(
+        route,
+        PromptPreviewRequest(
+            prompt="收拾杯子",
+            overrides={"relocation_count": "4"},
+            env_overrides={
+                "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "3",
+                "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "2",
+                "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET": "0",
+            },
+        ),
+    )
+
+    assert "run budget of 3 raw-FPV candidate attempts" in payload["agent_kickoff_prompt"]
+    assert "use at most 2 observe response(s)" in payload["agent_kickoff_prompt"]
+    assert "retry done at most 0 time(s)" in payload["agent_kickoff_prompt"]
+
+
+def test_prompt_preview_keeps_existing_prompt_minimums_for_zero_budget_env() -> None:
+    route = get_selection(
+        "molmospaces/procthor-objaverse-val/0::mujoco::cleanup::openai-agents-sdk::camera-raw-fpv"
+    )
+
+    payload = build_prompt_preview(
+        route,
+        PromptPreviewRequest(
+            prompt="收拾杯子",
+            env_overrides={
+                "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "0",
+                "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "0",
+            },
+        ),
+    )
+
+    assert "run budget of 1 raw-FPV candidate attempts" in payload["agent_kickoff_prompt"]
+    assert "use at most 1 observe response(s)" in payload["agent_kickoff_prompt"]
 
 
 def test_console_readiness_omits_isaac_marker_diagnostic_but_keeps_locks_blocking(

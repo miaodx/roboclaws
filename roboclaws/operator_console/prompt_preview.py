@@ -28,6 +28,11 @@ PROMPT_PREVIEW_ENV_KEYS = (
     "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET",
     "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS",
 )
+PROMPT_PREVIEW_INT_ENV_KEYS = {
+    "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "raw_fpv_candidate_budget",
+    "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT": "max_observe_per_waypoint",
+    "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET": "done_retry_budget",
+}
 
 
 @dataclass(frozen=True)
@@ -59,16 +64,19 @@ def build_prompt_preview(
         scenario_setup=overrides.get("scenario_setup") or route.scenario_setup,
         relocation_count=overrides.get("relocation_count"),
     )
-    raw_budget = _positive_int(
+    raw_budget = _nonnegative_int_env(
         env_overrides.get("ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"),
+        "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET",
         default=24,
     )
-    max_observe = _positive_int(
+    max_observe = _nonnegative_int_env(
         env_overrides.get("ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"),
+        "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT",
         default=1,
     )
-    done_retry_budget = _nonnegative_int(
+    done_retry_budget = _nonnegative_int_env(
         env_overrides.get("ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"),
+        "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET",
         default=1,
     )
     composite_tools = _truthy(
@@ -138,7 +146,15 @@ def prompt_preview_env(
     for key, value in (env_overrides or {}).items():
         if key in PROMPT_PREVIEW_ENV_KEYS and str(value) != "":
             preview_env[key] = str(value)
+    validate_prompt_preview_env(preview_env)
     return preview_env
+
+
+def validate_prompt_preview_env(env: dict[str, str]) -> None:
+    """Fail aloud when prompt-affecting env values cannot be rendered faithfully."""
+
+    for key, setting_name in PROMPT_PREVIEW_INT_ENV_KEYS.items():
+        _nonnegative_int_env(env.get(key), key, setting_name=setting_name)
 
 
 def _goal_contract(
@@ -225,20 +241,26 @@ def _target_cleanup_count(
     return max(1, count) if count else 1
 
 
-def _positive_int(value: str | None, *, default: int) -> int:
-    try:
-        parsed = int(str(value or ""))
-    except ValueError:
+def _nonnegative_int_env(
+    value: str | None,
+    key: str,
+    *,
+    default: int = 0,
+    setting_name: str | None = None,
+) -> int:
+    if value is None or str(value).strip() == "":
         return default
-    return max(1, parsed)
-
-
-def _nonnegative_int(value: str | None, *, default: int) -> int:
     try:
-        parsed = int(str(value or ""))
+        parsed = int(str(value).strip())
     except ValueError:
-        return default
-    return max(0, parsed)
+        name = setting_name or PROMPT_PREVIEW_INT_ENV_KEYS.get(key, key)
+        raise ValueError(
+            f"OpenAI Agents prompt preview setting {name} must be an integer"
+        ) from None
+    if parsed < 0:
+        name = setting_name or PROMPT_PREVIEW_INT_ENV_KEYS.get(key, key)
+        raise ValueError(f"OpenAI Agents prompt preview setting {name} must be non-negative")
+    return parsed
 
 
 def _truthy(value: str | None) -> bool:

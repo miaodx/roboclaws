@@ -31,10 +31,12 @@ Latest quality snapshot from 2026-06-19:
   happen to exist, and attached eval-harness `eval_results.json` files now
   fail rows aloud when present but malformed or non-object. Explicit
   eval-harness `since=` source refs now fail aloud when `git diff` cannot read
-  them instead of producing an empty recommendation set. Continue
-  fail-aloud/runtime-source audits from fresh evidence rather than reopening
-  closed helper splits; route any future test-shape cleanup through
-  `$intuitive-tests`.
+  them instead of producing an empty recommendation set. Operator-console prompt
+  previews now reject malformed or negative OpenAI Agents numeric prompt-env
+  values instead of rendering default-looking kickoff prompts for bad live-route
+  input. Continue fail-aloud/runtime-source audits from fresh evidence rather
+  than reopening closed helper splits; route any future test-shape cleanup
+  through `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.
