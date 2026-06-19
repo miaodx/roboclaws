@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Runtime inventory artifact rows now advertise same-origin
+  `/artifacts/...` and `/api/raw/...` links only for files under
+  `output/operator-console`, matching the operator-console artifact server
+  boundary. Eval-harness and other non-console-output runtime files remain
+  visible by path and command-copy actions, but no longer publish links that
+  the server must reject. Owner layer: Thin Runtime / Server Adapters.
+  Behavior-change class: fail-aloud/source-boundary protection for
+  operator-visible artifact metadata. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused runtime-inventory tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-20: Operator-console artifact endpoints now serve only files under
   `output/operator-console`. `/artifacts/...` and `/api/raw/...` reject
   arbitrary repo files, directory escapes, and non-file paths instead of

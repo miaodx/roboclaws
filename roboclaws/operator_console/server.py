@@ -35,7 +35,11 @@ from roboclaws.operator_console.launcher import (
     stop_console_run,
 )
 from roboclaws.operator_console.messup import preview_messup
-from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
+from roboclaws.operator_console.paths import (
+    OUTPUT_ROOT_ENV,
+    console_output_root,
+    operator_output_file,
+)
 from roboclaws.operator_console.prompt_preview import (
     PromptPreviewRequest,
     build_prompt_preview,
@@ -259,7 +263,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     def _handle_file_get(self, parsed: ParseResult) -> bool:
         if not parsed.path.startswith("/artifacts/"):
             return False
-        path = _operator_output_file(
+        path = operator_output_file(
             self.repo_root,
             unquote(parsed.path.removeprefix("/artifacts/")),
         )
@@ -444,7 +448,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             self._json({"error": str(exc)}, status=404)
 
     def _serve_raw_artifact(self, request_path: str) -> None:
-        path = _operator_output_file(
+        path = operator_output_file(
             self.repo_root,
             unquote(request_path.removeprefix("/api/raw/")),
         )
@@ -630,14 +634,6 @@ def _parse_run_action_path(path: str) -> tuple[str, str] | None:
         if remainder.endswith(suffix):
             return unquote(remainder[: -len(suffix)]), action
     return None
-
-
-def _operator_output_file(root: Path, rel: str) -> Path | None:
-    output_root = console_output_root(root).resolve()
-    path = (root / Path(rel)).resolve()
-    if not _is_relative_to(path, output_root) or not path.is_file():
-        return None
-    return path
 
 
 def _route_for_run(root: Path, run_id: str):

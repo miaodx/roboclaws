@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 from roboclaws.household.visual_backend_slots import list_visual_backend_slots
 from roboclaws.operator_console.locks import ResourceLock
-from roboclaws.operator_console.paths import console_output_root
+from roboclaws.operator_console.paths import console_output_root, operator_output_request_path
 from roboclaws.operator_console.process_status import pid_is_active
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import ConsoleLaunchSelection
@@ -618,13 +618,13 @@ def _run_actions(
     driver_log = display_run_dir / "driver.log" if display_run_dir else None
     if driver_log and driver_log.is_file():
         actions.append(_command_action("Tail Log", f"tail -f {driver_log}"))
-        rel = _relative_to_root(root, driver_log)
-        if rel:
+        request_path = operator_output_request_path(root, driver_log)
+        if request_path:
             actions.append(
                 {
                     "type": "link",
                     "label": "Open Log",
-                    "href": f"/api/raw/{quote(rel, safe='/')}",
+                    "href": f"/api/raw/{quote(request_path, safe='/')}",
                 }
             )
     return actions
@@ -691,10 +691,10 @@ def _resource(kind: str, label: str, **extra: Any) -> dict[str, Any]:
 def _artifact(root: Path, path: Path, label: str, *, kind: str) -> dict[str, Any]:
     if not path or not path.is_file():
         return {}
-    rel = _relative_to_root(root, path)
-    href = f"/artifacts/{quote(rel, safe='/?=&')}" if rel else ""
-    if kind == "log" and rel:
-        href = f"/api/raw/{quote(rel, safe='/')}"
+    request_path = operator_output_request_path(root, path)
+    href = f"/artifacts/{quote(request_path, safe='/?=&')}" if request_path else ""
+    if kind == "log" and request_path:
+        href = f"/api/raw/{quote(request_path, safe='/')}"
     return {
         "label": label,
         "kind": kind,

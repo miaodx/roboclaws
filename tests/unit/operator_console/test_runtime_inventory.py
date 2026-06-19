@@ -93,6 +93,11 @@ def test_runtime_inventory_lists_eval_harness_detached_live_row(tmp_path: Path) 
     assert any(resource["kind"] == "visual_slot" for resource in task["resources"])
     assert not any(action["label"] == "Attach" for action in task["actions"])
     assert not any(action["type"] == "api_post" for action in task["actions"])
+    artifacts = {item["label"]: item for item in task["artifacts"]}
+    assert artifacts["Driver log"]["path"] == str(run_dir / "driver.log")
+    assert artifacts["Driver log"]["href"] == ""
+    assert artifacts["Eval harness manifest"]["href"] == ""
+    assert not any(action["label"] == "Open Log" for action in task["actions"])
     assert "SECRET_TOKEN_VALUE" not in json.dumps(task)
     assert "secret-key-value" not in json.dumps(task)
 
@@ -355,6 +360,8 @@ def test_runtime_inventory_exposes_direct_stop_only_for_operator_runs(tmp_path: 
 
     task = next(item for item in payload["tasks"] if item["id"] == f"operator-run:{run_id}")
     assert task["owner"] == "operator-console"
+    artifacts = {item["label"]: item for item in task["artifacts"]}
+    assert artifacts["Operator state"]["href"].startswith("/artifacts/output/operator-console/")
     assert any(
         action["type"] == "api_post" and action["label"] == "Stop" for action in task["actions"]
     )

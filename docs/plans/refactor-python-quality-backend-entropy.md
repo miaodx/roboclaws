@@ -152,7 +152,10 @@ Latest quality snapshot from 2026-06-20:
   lock-acquire failure. Operator-console `/artifacts/...` and `/api/raw/...`
   serving now resolves only files under `output/operator-console`, so raw
   log/artifact links can no longer expose arbitrary repo files or escaped
-  paths while retaining redaction for valid operator output logs.
+  paths while retaining redaction for valid operator output logs. Runtime
+  inventory artifact rows now follow the same operator-output source boundary:
+  non-console-output files such as eval-harness manifests and logs remain
+  visible by path but no longer advertise dead same-origin artifact/raw links.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
