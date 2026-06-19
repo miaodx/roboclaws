@@ -871,14 +871,42 @@ def validate_navigation_smoke_artifact(
         "navigation waypoint count must be at least two",
         errors,
     )
-    pose_keys = {
-        (
-            round(float(_dict(item.get("robot_pose")).get("x") or 0.0), 3),
-            round(float(_dict(item.get("robot_pose")).get("y") or 0.0), 3),
+    errors.extend(
+        validate_robot_view_waypoint_evidence(
+            waypoints,
+            require_files=require_files,
+            expected_scene_usd=DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
+            expected_scene_usd_label="B1_floor2_slow visual route",
+            required_views=("fpv",),
+            reviewable_views=("fpv", "chase"),
+            require_distinct_robot_poses=True,
+            distinct_pose_error="navigation waypoint robot poses must be distinct",
         )
-        for item in waypoints
-    }
-    _require(len(pose_keys) >= 2, "navigation waypoint robot poses must be distinct", errors)
+    )
+    return errors
+
+
+def validate_robot_view_waypoint_evidence(
+    waypoints: list[dict[str, Any]],
+    *,
+    require_files: bool = False,
+    expected_scene_usd: Path | str | None = None,
+    expected_scene_usd_label: str = "",
+    required_views: tuple[str, ...] = ("fpv",),
+    reviewable_views: tuple[str, ...] = ("fpv", "chase"),
+    require_distinct_robot_poses: bool = False,
+    distinct_pose_error: str = "waypoint robot poses must be distinct",
+) -> list[str]:
+    errors: list[str] = []
+    if require_distinct_robot_poses:
+        pose_keys = {
+            (
+                round(float(_dict(item.get("robot_pose")).get("x") or 0.0), 3),
+                round(float(_dict(item.get("robot_pose")).get("y") or 0.0), 3),
+            )
+            for item in waypoints
+        }
+        _require(len(pose_keys) >= 2, distinct_pose_error, errors)
     for index, item in enumerate(waypoints, start=1):
         views = _dict(item.get("views"))
         _require(
@@ -896,23 +924,30 @@ def validate_navigation_smoke_artifact(
             f"waypoint {index} requires reviewed correspondence transform source",
             errors,
         )
-        _require(
-            str(item.get("scene_usd") or "") == str(DEFAULT_B1_VISUAL_ROUTE_SCENE_USD),
-            f"waypoint {index} must render B1_floor2_slow visual route",
-            errors,
-        )
-        _require(bool(views.get("fpv")), f"waypoint {index} missing FPV image", errors)
+        if expected_scene_usd is not None:
+            _require(
+                str(item.get("scene_usd") or "") == str(expected_scene_usd),
+                f"waypoint {index} must render {expected_scene_usd_label or expected_scene_usd}",
+                errors,
+            )
+        for view_name in required_views:
+            _require(
+                bool(views.get(view_name)),
+                f"waypoint {index} missing {view_name.upper()} image",
+                errors,
+            )
         if require_files:
             for view_name, raw_path in views.items():
                 if not raw_path:
                     continue
                 path = Path(str(raw_path))
+                exists = path.is_file()
                 _require(
-                    path.is_file(),
+                    exists,
                     f"waypoint {index} view {view_name} missing: {path}",
                     errors,
                 )
-                if view_name in {"fpv", "chase"}:
+                if exists and view_name in set(reviewable_views):
                     errors.extend(
                         f"waypoint {index} {view_name}: {error}"
                         for error in reviewable_image_errors(path)
