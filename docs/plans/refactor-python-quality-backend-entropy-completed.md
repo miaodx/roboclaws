@@ -35,6 +35,19 @@ logs before choosing the next slice.
 ## Completed Bundles
 
 - 2026-06-19: Operator-console stop requests now reject malformed or
+  non-object child `live_status.json` sources before stopping child live runs,
+  terminating wrapper processes, releasing backend locks, or rewriting status
+  artifacts. Corrupt live child evidence can no longer be replaced by a clean
+  `stopped_by_operator` payload, and the HTTP stop endpoint now reports the
+  same operator-facing source error; missing child live status and valid
+  terminal failed-run preservation are unchanged. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud operator-visible source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused
+  operator-console launcher/API stop tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
+- 2026-06-19: Operator-console stop requests now reject malformed or
   non-object `operator_state.json` sources before stopping child live runs,
   terminating wrapper processes, releasing backend locks, or rewriting stop
   state. Corrupt stop-state evidence no longer surfaces as a raw JSON/type

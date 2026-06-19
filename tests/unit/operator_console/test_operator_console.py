@@ -1392,6 +1392,64 @@ def test_operator_console_stop_endpoint_rejects_non_object_operator_state_source
     assert ResourceLock(tmp_path, route.lock_name).read().held is True
 
 
+def test_operator_console_stop_endpoint_rejects_malformed_live_status_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-live-status-stop-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    attempt_dir = run_dir / "0619_1112" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 99999999,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    status_path = attempt_dir / "live_status.json"
+    status_path.write_text("{bad-live-status", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/stop",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with (
+            patch("roboclaws.operator_console.launcher._stop_live_child_run") as stop_child,
+            patch("roboclaws.operator_console.launcher._terminate_process_group") as stop_wrapper,
+            pytest.raises(urllib.error.HTTPError) as exc_info,
+        ):
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 400
+    assert "operator stop source error" in payload["error"]
+    assert "live_status.json contains invalid JSON" in payload["error"]
+    assert status_path.read_text(encoding="utf-8") == "{bad-live-status"
+    stop_child.assert_not_called()
+    stop_wrapper.assert_not_called()
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
 def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:
     handler = partial(ConsoleRequestHandler, root=tmp_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)

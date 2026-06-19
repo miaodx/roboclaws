@@ -661,6 +661,55 @@ def test_stop_console_run_rejects_malformed_operator_state_source(tmp_path: Path
     assert ResourceLock(tmp_path, route.lock_name).read().held is True
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_reason"),
+    [
+        ("{bad-live-status", "contains invalid JSON"),
+        ("[]\n", "must contain a JSON object"),
+    ],
+)
+def test_stop_console_run_rejects_bad_live_status_source_before_stop(
+    tmp_path: Path,
+    source_text: str,
+    expected_reason: str,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-live-status-stop-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0619_1030" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 123450,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    status_path = attempt_dir / "live_status.json"
+    status_path.write_text(source_text, encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=123450)
+
+    with (
+        patch("roboclaws.operator_console.launcher._stop_live_child_run") as stop_child,
+        patch("roboclaws.operator_console.launcher._terminate_process_group") as stop_wrapper,
+        pytest.raises(ConsoleLaunchError, match="operator stop source error") as exc_info,
+    ):
+        stop_console_run(tmp_path, run_id)
+
+    assert "live_status.json" in str(exc_info.value)
+    assert expected_reason in str(exc_info.value)
+    assert status_path.read_text(encoding="utf-8") == source_text
+    stop_child.assert_not_called()
+    stop_wrapper.assert_not_called()
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
 def test_terminate_process_group_falls_back_to_single_pid_when_group_lookup_fails() -> None:
     signals: list[tuple[int, int]] = []
 

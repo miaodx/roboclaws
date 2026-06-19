@@ -141,7 +141,11 @@ Latest quality snapshot from 2026-06-19:
   Operator-console stop requests now reject malformed or non-object
   `operator_state.json` sources before child-stop, process termination, lock
   release, or state rewrite, so corrupt stop-state evidence no longer becomes
-  a raw JSON/type failure or gets overwritten during stop handling.
+  a raw JSON/type failure or gets overwritten during stop handling. Stop
+  requests also reject malformed or non-object child `live_status.json`
+  sources before child-stop, wrapper termination, lock release, or status
+  rewrite, so corrupt live child evidence cannot be replaced by a clean
+  operator-stop payload.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

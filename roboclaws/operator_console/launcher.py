@@ -436,21 +436,29 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     try:
         state = _read_json_source(state_path)
     except _JsonSourceError as exc:
-        message = f"operator stop source error: {exc.path.name} {exc.reason}"
-        raise ConsoleLaunchError(message) from exc
+        raise _operator_stop_source_error(exc) from exc
     display_run_dir = resolve_display_run_dir(run_dir)
     terminal_phase = "human_takeover_stop" if emergency else "stopped_by_operator"
-    existing_terminal_phase = _existing_terminal_phase(display_run_dir, state)
+    try:
+        existing_terminal_phase = _existing_terminal_phase(display_run_dir, state)
+        existing_terminal_reason = (
+            _existing_terminal_reason(display_run_dir, state) if existing_terminal_phase else ""
+        )
+    except _JsonSourceError as exc:
+        raise _operator_stop_source_error(exc) from exc
     _stop_live_child_run(display_run_dir)
     pid = state.get("pid")
     _terminate_process_group(pid if isinstance(pid, int) else None)
     if existing_terminal_phase:
         state["phase"] = existing_terminal_phase
-        state["terminal_reason"] = _existing_terminal_reason(display_run_dir, state) or (
+        state["terminal_reason"] = existing_terminal_reason or (
             state.get("terminal_reason") or existing_terminal_phase
         )
     else:
-        _mark_live_child_stopped(display_run_dir, terminal_phase)
+        try:
+            _mark_live_child_stopped(display_run_dir, terminal_phase)
+        except _JsonSourceError as exc:
+            raise _operator_stop_source_error(exc) from exc
         state["phase"] = terminal_phase
         state["terminal_reason"] = state["phase"]
     state["stopped_at_epoch"] = time.time()
@@ -461,6 +469,10 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     if lock_name:
         ResourceLock(root, lock_name).release(run_id=run_id, force=True)
     return state
+
+
+def _operator_stop_source_error(error: _JsonSourceError) -> ConsoleLaunchError:
+    return ConsoleLaunchError(f"operator stop source error: {error.path.name} {error.reason}")
 
 
 def _route_lock_readiness(
@@ -802,7 +814,7 @@ def _stop_live_child_run(display_run_dir: Path) -> None:
 def _mark_live_child_stopped(display_run_dir: Path, phase: str) -> None:
     display_run_dir.mkdir(parents=True, exist_ok=True)
     status_path = display_run_dir / "live_status.json"
-    payload = _read_json(status_path)
+    payload = _read_optional_json_source(status_path)
     payload.update(
         {
             "phase": phase,
