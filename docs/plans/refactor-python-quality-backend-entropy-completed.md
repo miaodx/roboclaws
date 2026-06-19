@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval-harness explicit `since=` diff source selection now fails
+  aloud. A bad base ref, missing revision, or other `git diff --name-only`
+  failure no longer becomes an empty changed-file set that can make
+  recommendations look clean; the selector raises an actionable error while
+  preserving best-effort behavior for implicit dirty-worktree discovery. Owner
+  layer: Eval suites. Behavior-change class: fail-aloud harness source input;
+  explicit changed files, plan-based selection, explicit axes, implicit
+  worktree fallback, row selection rules, and execution behavior are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused eval-harness selector tests, full eval unit folder,
+  touched-file ruff and format check, `git diff --check`, and ratchet.
+
 - 2026-06-19: Eval-harness attached result packets now fail aloud when
   malformed. Required `eval_results.json` artifacts linked from selected eval
   rows no longer collapse to an empty aggregate that can leave a zero-exit row

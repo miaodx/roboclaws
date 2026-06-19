@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
+import pytest
 from pytest import MonkeyPatch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -111,6 +113,48 @@ def test_explicit_changed_file_does_not_pull_unrelated_worktree_diff(
     rows = _selected_rows(manifest)
     assert "direct-camera-grounded-grounding-dino" in rows
     assert "route-trace-contract-tests" not in rows
+
+
+def test_explicit_since_diff_failure_fails_aloud(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_run(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args=["git", "diff"],
+            returncode=128,
+            stdout="",
+            stderr="fatal: bad revision 'missing-base'",
+        )
+
+    monkeypatch.setattr(selector.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="git diff --name-only 'missing-base' failed"):
+        selector.build_eval_harness(
+            budget="focused",
+            since="missing-base",
+            output_dir=tmp_path,
+        )
+
+
+def test_implicit_worktree_diff_failure_stays_best_effort(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def fake_run(*_args, **_kwargs):
+        return subprocess.CompletedProcess(
+            args=["git", "diff"],
+            returncode=128,
+            stdout="",
+            stderr="fatal: not a git repository",
+        )
+
+    monkeypatch.setattr(selector.subprocess, "run", fake_run)
+
+    manifest = selector.build_eval_harness(budget="focused", output_dir=tmp_path)
+
+    assert manifest["changed_files"] == []
+    assert manifest["summary"]["selected_row_count"] == 0
 
 
 def test_raw_fpv_change_selects_raw_fpv_rows(tmp_path: Path) -> None:

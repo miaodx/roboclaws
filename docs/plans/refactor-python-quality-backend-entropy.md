@@ -29,7 +29,9 @@ Latest quality snapshot from 2026-06-19:
   provider readiness now rejects unknown provider profiles through the provider
   registry instead of treating them like the Codex router when Codex env vars
   happen to exist, and attached eval-harness `eval_results.json` files now
-  fail rows aloud when present but malformed or non-object. Continue
+  fail rows aloud when present but malformed or non-object. Explicit
+  eval-harness `since=` source refs now fail aloud when `git diff` cannot read
+  them instead of producing an empty recommendation set. Continue
   fail-aloud/runtime-source audits from fresh evidence rather than reopening
   closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
