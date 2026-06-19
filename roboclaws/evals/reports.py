@@ -15,6 +15,19 @@ from roboclaws.evals.models import (
 )
 
 RESULTS_BUNDLE_SCHEMA = "roboclaws_eval_results_bundle_v1"
+SAMPLER_PROJECTION_SUMMARY_COUNT_FIELDS = (
+    "source_count",
+    "target_sample_count",
+    "ready_sample_count",
+    "partial_source_count",
+    "rejected_source_count",
+    "blocked_source_count",
+    "complete_source_count",
+    "blocked_row_count",
+    "rejected_row_count",
+    "blocked_or_rejected_row_count",
+    "remaining_sample_count",
+)
 
 
 def results_bundle(
@@ -131,49 +144,135 @@ def _sampler_projection_aggregate(suite: EvalSuite) -> dict[str, Any]:
         return {}
     scene_sources = projection.get("scene_sources")
     if not isinstance(scene_sources, dict):
-        scene_sources = {}
+        raise ValueError("eval suite sampler_projection.scene_sources must be an object")
     compact_sources = {}
     for source, payload in sorted(scene_sources.items()):
+        source_label = str(source)
         if not isinstance(payload, dict):
-            continue
+            raise ValueError(
+                f"eval suite sampler_projection.scene_sources[{source_label!r}] must be an object"
+            )
+        context = f"eval suite sampler_projection scene source {source_label!r}"
         compact_sources[str(source)] = {
-            "support_status": payload.get("support_status", ""),
-            "status": payload.get("status", ""),
-            "target_count": int(payload.get("target_count") or 0),
-            "ready_count": int(payload.get("ready_count") or 0),
-            "needed_count": int(payload.get("needed_count") or 0),
-            "blocked_count": int(payload.get("blocked_count") or 0),
-            "rejected_count": int(payload.get("rejected_count") or 0),
-            "sample_ids": list(payload.get("sample_ids") or []),
+            "support_status": _required_non_empty_string(
+                payload,
+                "support_status",
+                context=context,
+            ),
+            "status": _required_non_empty_string(
+                payload,
+                "status",
+                context=context,
+            ),
+            "target_count": _required_non_negative_int(
+                payload,
+                "target_count",
+                context=context,
+            ),
+            "ready_count": _required_non_negative_int(
+                payload,
+                "ready_count",
+                context=context,
+            ),
+            "needed_count": _required_non_negative_int(
+                payload,
+                "needed_count",
+                context=context,
+            ),
+            "blocked_count": _required_non_negative_int(
+                payload,
+                "blocked_count",
+                context=context,
+            ),
+            "rejected_count": _required_non_negative_int(
+                payload,
+                "rejected_count",
+                context=context,
+            ),
+            "sample_ids": _required_string_list(
+                payload,
+                "sample_ids",
+                context=context,
+            ),
         }
     return {
-        "schema": projection.get("schema", ""),
-        "projection": projection.get("projection", ""),
-        "generator_version": projection.get("generator_version", ""),
-        "summary": dict(projection.get("summary") or {}),
+        "schema": str(projection.get("schema", "")),
+        "projection": str(projection.get("projection", "")),
+        "generator_version": str(projection.get("generator_version", "")),
+        "summary": _required_summary(projection, context="eval suite sampler_projection"),
         "scene_sources": compact_sources,
     }
+
+
+def _required_summary(projection: dict[str, Any], *, context: str) -> dict[str, Any]:
+    summary = projection.get("summary")
+    if not isinstance(summary, dict):
+        raise ValueError(f"{context}.summary must be an object")
+    for key in SAMPLER_PROJECTION_SUMMARY_COUNT_FIELDS:
+        _required_non_negative_int(
+            summary,
+            key,
+            context=f"{context}.summary",
+        )
+    return dict(summary)
+
+
+def _required_non_empty_string(
+    payload: dict[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{context} {key} must be a non-empty string")
+    return value
+
+
+def _required_non_negative_int(
+    payload: dict[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{context} {key} must be a non-negative integer")
+    if value < 0:
+        raise ValueError(f"{context} {key} must be >= 0")
+    return value
+
+
+def _required_string_list(
+    payload: dict[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> list[str]:
+    value = payload.get(key)
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{context} {key} must be a list of strings")
+    return list(value)
 
 
 def _sampler_projection_section(aggregate: dict[str, Any]) -> str:
     sampler_projection = aggregate.get("sampler_projection")
     if not isinstance(sampler_projection, dict):
         return ""
-    summary = sampler_projection.get("summary")
-    if not isinstance(summary, dict):
-        return ""
+    summary = _required_summary(sampler_projection, context="eval report sampler_projection")
+    scene_sources = sampler_projection.get("scene_sources")
+    if not isinstance(scene_sources, dict):
+        raise ValueError("eval report sampler_projection.scene_sources must be an object")
     rows = "\n".join(
-        _sampler_projection_source_row(source, payload)
-        for source, payload in (sampler_projection.get("scene_sources") or {}).items()
-        if isinstance(payload, dict)
+        _sampler_projection_source_row(source, payload) for source, payload in scene_sources.items()
     )
     return f"""  <section>
     <h2>Scene Sampler Projection</h2>
-    <p>Ready samples: {html.escape(str(summary.get("ready_sample_count", 0)))} /
-    {html.escape(str(summary.get("target_sample_count", 0)))}; remaining:
-    {html.escape(str(summary.get("remaining_sample_count", 0)))}; partial sources:
-    {html.escape(str(summary.get("partial_source_count", 0)))}; blocked sources:
-    {html.escape(str(summary.get("blocked_source_count", 0)))}.</p>
+    <p>Ready samples: {html.escape(str(summary["ready_sample_count"]))} /
+    {html.escape(str(summary["target_sample_count"]))}; remaining:
+    {html.escape(str(summary["remaining_sample_count"]))}; partial sources:
+    {html.escape(str(summary["partial_source_count"]))}; blocked sources:
+    {html.escape(str(summary["blocked_source_count"]))}.</p>
     <table>
       <thead>
         <tr>
@@ -189,16 +288,31 @@ def _sampler_projection_section(aggregate: dict[str, Any]) -> str:
 """
 
 
-def _sampler_projection_source_row(source: str, payload: dict[str, Any]) -> str:
+def _sampler_projection_source_row(source: str, payload: Any) -> str:
+    context = f"eval report sampler_projection scene source {source!r}"
+    if not isinstance(payload, dict):
+        raise ValueError(f"{context} must be an object")
+    support_status = _required_non_empty_string(
+        payload,
+        "support_status",
+        context=context,
+    )
+    _required_non_empty_string(payload, "status", context=context)
+    ready_count = _required_non_negative_int(payload, "ready_count", context=context)
+    target_count = _required_non_negative_int(payload, "target_count", context=context)
+    needed_count = _required_non_negative_int(payload, "needed_count", context=context)
+    blocked_count = _required_non_negative_int(payload, "blocked_count", context=context)
+    rejected_count = _required_non_negative_int(payload, "rejected_count", context=context)
+    _required_string_list(payload, "sample_ids", context=context)
     return (
         "        <tr>"
         f"<td>{html.escape(str(source))}</td>"
-        f"<td>{html.escape(str(payload.get('support_status') or ''))}</td>"
-        f"<td>{html.escape(str(payload.get('ready_count') or 0))}/"
-        f"{html.escape(str(payload.get('target_count') or 0))}</td>"
-        f"<td>{html.escape(str(payload.get('needed_count') or 0))}</td>"
-        f"<td>{html.escape(str(payload.get('blocked_count') or 0))}</td>"
-        f"<td>{html.escape(str(payload.get('rejected_count') or 0))}</td>"
+        f"<td>{html.escape(support_status)}</td>"
+        f"<td>{html.escape(str(ready_count))}/"
+        f"{html.escape(str(target_count))}</td>"
+        f"<td>{html.escape(str(needed_count))}</td>"
+        f"<td>{html.escape(str(blocked_count))}</td>"
+        f"<td>{html.escape(str(rejected_count))}</td>"
         "</tr>"
     )
 

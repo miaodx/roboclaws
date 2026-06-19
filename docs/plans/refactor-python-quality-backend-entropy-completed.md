@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval result bundle and HTML report rendering now validate
+  scene-sampler projection source truth before publishing compact aggregate
+  evidence. Malformed or missing scene-source counts, support/status fields,
+  source `sample_ids`, non-object source rows, and malformed summary counts now
+  fail with explicit sampler-projection source errors instead of becoming
+  default-looking `0` values or silently disappearing from `eval_results.json`
+  / `eval_report.html`. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud report/eval artifact source truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  focused eval report regression tests, full eval-runner unit file,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-20: Eval live-product launch setup now rejects invalid
   `scene_source` metadata before building direct product kwargs or live surface
   commands. Explicit empty or wrong-shaped eval sample launch overrides and
