@@ -941,6 +941,86 @@ def test_open_ended_authoritative_predicate_failure_is_behavior_failure(
     )
 
 
+@pytest.mark.parametrize(
+    ("sample_id", "field_name", "expected_error"),
+    [
+        (
+            "open_ended.room4_anchor_seed7",
+            "public_semantic_anchors",
+            "public_semantic_anchors:invalid_json_array",
+        ),
+        (
+            "open_ended.living_waypoint_seed7",
+            "generated_exploration_candidates",
+            "generated_exploration_candidates:invalid_json_array",
+        ),
+        (
+            "open_ended.living_waypoint_seed7",
+            "target_search_summary",
+            "target_search_summary:invalid_json_object",
+        ),
+    ],
+)
+def test_open_ended_predicates_reject_wrong_shaped_runtime_map_sources(
+    tmp_path: Path,
+    sample_id: str,
+    field_name: str,
+    expected_error: str,
+) -> None:
+    def product_runner(**kwargs: Any) -> dict[str, Any]:
+        run_dir = Path(kwargs["output_dir"])
+        current_sample_id = kwargs["run_metadata_overrides"]["eval_sample_id"]
+        _write_product_artifacts(
+            run_dir,
+            completion_status="success",
+            include_goal_contract=True,
+        )
+        result = _run_result(
+            run_dir,
+            completion_status="success",
+            task_intent="open-ended",
+            include_completion_claim=True,
+            include_runtime_map=current_sample_id != sample_id,
+        )
+        if current_sample_id == sample_id:
+            runtime_map = json.loads((run_dir / "runtime_metric_map.json").read_text())
+            runtime_map[field_name] = "wrong-shape"
+            (run_dir / "runtime_metric_map.json").write_text(
+                json.dumps(runtime_map) + "\n",
+                encoding="utf-8",
+            )
+        return result
+
+    run = run_eval_suite(
+        "open_ended_goals",
+        output_root=tmp_path,
+        stamp=f"wrong-shaped-open-ended-{field_name}",
+        product_runner=product_runner,
+    )
+
+    payload = json.loads(run.results_path.read_text())
+    result = {item["identity"]["sample_id"]: item for item in payload["results"]}[sample_id]
+    open_ended = result["grader_outputs"]["open_ended"]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert open_ended["status"] == "failed"
+    assert open_ended["failure_class"] == "artifact_missing"
+    assert open_ended["semantic_satisfaction_status"] == "source_error"
+    assert open_ended["success_predicate"]["source_error"] is True
+    assert open_ended["source_errors"] == [
+        {
+            "path": str(
+                run.output_dir
+                / "runs"
+                / sample_id.replace(".", "_")
+                / "trial-0000"
+                / "runtime_metric_map.json"
+            ),
+            "reason": expected_error,
+        }
+    ]
+
+
 def test_open_ended_waypoint_predicate_accepts_trace_visit_without_runtime_anchor(
     tmp_path: Path,
 ) -> None:

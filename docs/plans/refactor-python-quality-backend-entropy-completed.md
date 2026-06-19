@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Open-ended authoritative predicate grading now rejects
+  wrong-shaped Runtime Metric Map predicate source fields before converting
+  them to empty evidence. Corrupt `public_semantic_anchors`,
+  `generated_exploration_candidates`, `target_search_summary`,
+  `inspection_observations`, `viewpoint_budget`, `observed_waypoint_ids`, or
+  `observed_objects` values now surface as source errors instead of ordinary
+  goal-not-satisfied behavior failures. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud runtime-map predicate source
+  shape truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; focused regression coverage keeps
+  `tests/unit/evals/test_eval_runner.py` above the 2000-line warning and
+  should be handled only through the planned `$intuitive-tests` route. Proof:
+  focused open-ended predicate source-shape tests, full eval-runner unit file,
+  touched-file ruff/format checks, `git diff --check`, and ratchet.
+
 - 2026-06-20: Map-build outcome grading now rejects wrong-shaped
   `runtime_metric_map.json` list fields before applying minimum-count checks.
   Present `public_semantic_anchors` or `generated_exploration_candidates`

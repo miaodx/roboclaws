@@ -163,7 +163,9 @@ Latest quality snapshot from 2026-06-20:
   behind a valid in-memory product result. Map-build outcome grading now rejects
   wrong-shaped Runtime Metric Map list fields before minimum-count checks, so
   strings or objects cannot satisfy actionability thresholds via `len()` on the
-  wrong type. Live-agent result
+  wrong type. Open-ended authoritative predicate grading now treats wrong-shaped
+  Runtime Metric Map predicate source fields as source errors instead of
+  ordinary goal-not-satisfied behavior failures. Live-agent result
   artifact loading now fails aloud on present malformed or non-object
   `live_status.json` / `run_result.json` sources instead of erasing corrupt
   status or completion evidence into unknown or absent state. Eval live-product

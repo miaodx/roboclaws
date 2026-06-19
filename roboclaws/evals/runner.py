@@ -707,6 +707,20 @@ def _open_ended_success_predicate(
             "source_errors": [_json_source_error(runtime_map_path, runtime_map_error)],
             "evidence": {},
         }
+    source_errors = _runtime_map_predicate_source_errors(
+        predicate_id,
+        runtime_map=runtime_map,
+        runtime_map_path=runtime_map_path,
+    )
+    if source_errors:
+        return {
+            "predicate_id": predicate_id,
+            "authoritative": authoritative,
+            "passed": False,
+            "source_error": True,
+            "source_errors": source_errors,
+            "evidence": {},
+        }
     if predicate_id == "completion_claim":
         return {
             "predicate_id": predicate_id,
@@ -898,6 +912,59 @@ def _observed_room_ids(
         if room_id:
             rooms.add(room_id)
     return rooms
+
+
+def _runtime_map_predicate_source_errors(
+    predicate_id: str,
+    *,
+    runtime_map: dict[str, Any],
+    runtime_map_path: Path,
+) -> list[dict[str, str]]:
+    reasons: list[str] = []
+    if predicate_id in {"public_anchor_observed", "waypoint_or_area_visited"}:
+        reasons.extend(
+            _runtime_map_list_field_errors(
+                runtime_map,
+                ("public_semantic_anchors", "generated_exploration_candidates"),
+            )
+        )
+        reasons.extend(_target_search_summary_source_errors(runtime_map))
+    if predicate_id == "observed_category_present":
+        reasons.extend(_runtime_map_list_field_errors(runtime_map, ("observed_objects",)))
+    return [_json_source_error(runtime_map_path, reason) for reason in reasons]
+
+
+def _runtime_map_list_field_errors(payload: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
+    errors: list[str] = []
+    for key in keys:
+        _value, reason = _optional_list_value(payload, key)
+        if reason:
+            errors.append(reason)
+    return errors
+
+
+def _target_search_summary_source_errors(runtime_map: dict[str, Any]) -> list[str]:
+    if (
+        "target_search_summary" not in runtime_map
+        or runtime_map.get("target_search_summary") is None
+    ):
+        return []
+    summary = runtime_map.get("target_search_summary")
+    if not isinstance(summary, dict):
+        return ["target_search_summary:invalid_json_object"]
+    errors = _runtime_map_list_field_errors(summary, ("inspection_observations",))
+    viewpoint_budget = summary.get("viewpoint_budget")
+    if viewpoint_budget is not None:
+        if not isinstance(viewpoint_budget, dict):
+            errors.append("target_search_summary.viewpoint_budget:invalid_json_object")
+        else:
+            errors.extend(
+                _runtime_map_list_field_errors(
+                    viewpoint_budget,
+                    ("observed_waypoint_ids",),
+                )
+            )
+    return errors
 
 
 def _list_of_mappings(value: Any) -> list[dict[str, Any]]:
