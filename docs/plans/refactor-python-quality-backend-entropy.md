@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-19
+last_verified: 2026-06-20
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -18,7 +18,7 @@ live only in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`; do not copy
 their full execution notes back here.
 
-Latest quality snapshot from 2026-06-19:
+Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 79.
@@ -149,7 +149,10 @@ Latest quality snapshot from 2026-06-19:
   run directory before writing launch logs or `operator_state.json`, so
   same-second run-id collisions or stale directories cannot overwrite existing
   run evidence; empty pre-state reservations are cleaned up on launch-build or
-  lock-acquire failure.
+  lock-acquire failure. Operator-console `/artifacts/...` and `/api/raw/...`
+  serving now resolves only files under `output/operator-console`, so raw
+  log/artifact links can no longer expose arbitrary repo files or escaped
+  paths while retaining redaction for valid operator output logs.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

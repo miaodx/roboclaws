@@ -488,6 +488,64 @@ def test_redaction_removes_secret_values_and_headers(tmp_path: Path) -> None:
     assert "live-token" not in redacted_artifact_text(artifact)
 
 
+def test_operator_console_serves_only_operator_output_artifacts(tmp_path: Path) -> None:
+    output_artifact = (
+        tmp_path / "output" / "operator-console" / "runs" / "run-a" / "console-launch.log"
+    )
+    output_artifact.parent.mkdir(parents=True)
+    output_artifact.write_text("Authorization: Bearer live-token\nvisible tail\n", encoding="utf-8")
+    repo_file = tmp_path / "README.md"
+    repo_file.write_text("repo source should not be an artifact\n", encoding="utf-8")
+
+    output_rel = output_artifact.relative_to(tmp_path).as_posix()
+    repo_rel = repo_file.relative_to(tmp_path).as_posix()
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        artifact_url = f"http://{host}:{port}/artifacts/{urllib.parse.quote(output_rel)}"
+        with urllib.request.urlopen(artifact_url) as response:
+            assert response.read().decode("utf-8") == output_artifact.read_text(encoding="utf-8")
+
+        raw_url = f"http://{host}:{port}/api/raw/{urllib.parse.quote(output_rel)}"
+        with urllib.request.urlopen(raw_url) as response:
+            redacted = response.read().decode("utf-8")
+
+        repo_url = f"http://{host}:{port}/artifacts/{urllib.parse.quote(repo_rel)}"
+        with pytest.raises(urllib.error.HTTPError) as repo_error:
+            urllib.request.urlopen(repo_url)
+        raw_repo_url = f"http://{host}:{port}/api/raw/{urllib.parse.quote(repo_rel)}"
+        with pytest.raises(urllib.error.HTTPError) as raw_repo_error:
+            urllib.request.urlopen(raw_repo_url)
+
+        escape_url = (
+            f"http://{host}:{port}/artifacts/"
+            f"{urllib.parse.quote('output/operator-console/../README.md')}"
+        )
+        with pytest.raises(urllib.error.HTTPError) as escape_error:
+            urllib.request.urlopen(escape_url)
+        raw_escape_url = (
+            f"http://{host}:{port}/api/raw/"
+            f"{urllib.parse.quote('output/operator-console/../README.md')}"
+        )
+        with pytest.raises(urllib.error.HTTPError) as raw_escape_error:
+            urllib.request.urlopen(raw_escape_url)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert "live-token" not in redacted
+    assert "visible tail" in redacted
+    assert repo_error.value.code == 404
+    assert raw_repo_error.value.code == 404
+    assert escape_error.value.code == 404
+    assert raw_escape_error.value.code == 404
+
+
 def test_just_console_run_recipe_is_public() -> None:
     repo_root = Path(__file__).resolve().parents[3]
     result = subprocess.run(

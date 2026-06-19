@@ -34,6 +34,17 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console artifact endpoints now serve only files under
+  `output/operator-console`. `/artifacts/...` and `/api/raw/...` reject
+  arbitrary repo files, directory escapes, and non-file paths instead of
+  treating every repo-relative file as operator-visible output, while valid raw
+  log serving still applies secret redaction. Owner layer: Thin Runtime /
+  Server Adapters. Behavior-change class: fail-aloud/source-boundary protection
+  for operator-visible artifacts. Metric: ratchet stayed at 0 Ruff complexity
+  rows and reports 79 oversized modules in the current dirty worktree. Proof:
+  focused operator-console HTTP tests, touched-file ruff/format checks, `git
+  diff --check`, changed-code review, and ratchet.
+
 - 2026-06-20: Operator-console launch starts now reserve a unique run
   directory before launch log or `operator_state.json` writes. Same-second
   route launches or stale run directories can no longer overwrite existing run

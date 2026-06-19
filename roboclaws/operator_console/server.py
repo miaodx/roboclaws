@@ -259,9 +259,11 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     def _handle_file_get(self, parsed: ParseResult) -> bool:
         if not parsed.path.startswith("/artifacts/"):
             return False
-        rel = Path(unquote(parsed.path.removeprefix("/artifacts/")))
-        path = (self.repo_root / rel).resolve()
-        if not _is_relative_to(path, self.repo_root) or not path.exists():
+        path = _operator_output_file(
+            self.repo_root,
+            unquote(parsed.path.removeprefix("/artifacts/")),
+        )
+        if path is None:
             self.send_error(HTTPStatus.NOT_FOUND)
             return True
         self._file(path)
@@ -442,9 +444,11 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             self._json({"error": str(exc)}, status=404)
 
     def _serve_raw_artifact(self, request_path: str) -> None:
-        rel = Path(unquote(request_path.removeprefix("/api/raw/")))
-        path = (self.repo_root / rel).resolve()
-        if not _is_relative_to(path, self.repo_root) or not path.exists():
+        path = _operator_output_file(
+            self.repo_root,
+            unquote(request_path.removeprefix("/api/raw/")),
+        )
+        if path is None:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         self._text(redacted_artifact_text(path))
@@ -626,6 +630,14 @@ def _parse_run_action_path(path: str) -> tuple[str, str] | None:
         if remainder.endswith(suffix):
             return unquote(remainder[: -len(suffix)]), action
     return None
+
+
+def _operator_output_file(root: Path, rel: str) -> Path | None:
+    output_root = console_output_root(root).resolve()
+    path = (root / Path(rel)).resolve()
+    if not _is_relative_to(path, output_root) or not path.is_file():
+        return None
+    return path
 
 
 def _route_for_run(root: Path, run_id: str):
