@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Codex cleanup apple-to-apple summaries now fail aloud on declared
+  top-level artifact links or robot-view sample paths that are empty, missing,
+  or not the expected file/directory kind, and resolve declared relative paths
+  only under the lane run directory. The summary report no longer links CWD
+  substitute artifacts or silently omits missing declared visual evidence; the
+  absent-key historical defaults still point at run-directory defaults and are
+  omitted when those optional files are absent. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud artifact/source truth;
+  comparison math, report layout, live run execution, and camera-contract
+  summaries are unchanged. Metric: the summary script shrank to 944 lines, and
+  the ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused Codex cleanup apple-to-apple summary tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Cleanup report regeneration now fails aloud on declared
   scenario/trace/snapshot artifact paths that are empty, missing, or not files,
   and resolves declared relative artifact paths only under the run directory.

@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_SUMMARY_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_codex_cleanup_apple2apple_summary.py"
@@ -150,6 +152,96 @@ def test_codex_cleanup_apple2apple_summary_flags_different_target_set(
     assert manifest["comparison"]["strict_scene_identical"] is False
     assert manifest["comparison"]["non_comparable_axes"] == ["cleanup_target_signature"]
     assert manifest["comparison"]["axis_checks"]["cleanup_target_signature"]["matches"] is False
+
+
+def test_codex_cleanup_apple2apple_summary_resolves_declared_artifacts_under_run_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_dir = tmp_path / "mujoco" / "seed-6"
+    _write_run(
+        run_dir,
+        backend="molmospaces_subprocess",
+        scenario_id="molmospaces-procthor-val-0-6",
+        completion_status="success",
+        restored_count=1,
+        total_targets=1,
+        generated_mess_count=1,
+        robot_contract_backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        fpv_camera_prim_path=None,
+    )
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    (cwd / "report.html").write_text("wrong report", encoding="utf-8")
+    monkeypatch.chdir(cwd)
+
+    artifacts = run_summary._artifact_links(
+        json.loads((run_dir / "run_result.json").read_text(encoding="utf-8")),
+        run_dir=run_dir,
+        output_dir=tmp_path / "summary",
+    )
+
+    assert artifacts["report"] == "../mujoco/seed-6/report.html"
+
+
+def test_codex_cleanup_apple2apple_summary_rejects_missing_declared_artifact(
+    tmp_path: Path,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_dir = tmp_path / "mujoco" / "seed-6"
+    _write_run(
+        run_dir,
+        backend="molmospaces_subprocess",
+        scenario_id="molmospaces-procthor-val-0-6",
+        completion_status="success",
+        restored_count=1,
+        total_targets=1,
+        generated_mess_count=1,
+        robot_contract_backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        fpv_camera_prim_path=None,
+    )
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    run_result["artifacts"]["trace"] = "missing/trace.jsonl"
+
+    with pytest.raises(FileNotFoundError, match="trace.*missing/trace.jsonl"):
+        run_summary._artifact_links(
+            run_result,
+            run_dir=run_dir,
+            output_dir=tmp_path / "summary",
+        )
+
+
+def test_codex_cleanup_apple2apple_summary_rejects_missing_robot_view_sample(
+    tmp_path: Path,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_dir = tmp_path / "mujoco" / "seed-6"
+    _write_run(
+        run_dir,
+        backend="molmospaces_subprocess",
+        scenario_id="molmospaces-procthor-val-0-6",
+        completion_status="success",
+        restored_count=1,
+        total_targets=1,
+        generated_mess_count=1,
+        robot_contract_backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        fpv_camera_prim_path=None,
+    )
+    steps = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))[
+        "robot_view_steps"
+    ]
+    steps[0]["views"]["fpv"] = "robot_views/missing.fpv.png"
+
+    with pytest.raises(FileNotFoundError, match="robot_view fpv.*missing.fpv.png"):
+        run_summary._robot_view_samples(
+            steps,
+            run_dir=run_dir,
+            output_dir=tmp_path / "summary",
+        )
 
 
 def _write_run(

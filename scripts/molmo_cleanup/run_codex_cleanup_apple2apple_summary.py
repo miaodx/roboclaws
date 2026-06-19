@@ -20,6 +20,14 @@ SCHEMA = "roboclaws_codex_cleanup_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-codex"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd-codex"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
+DEFAULT_ARTIFACTS = {
+    "report": "report.html",
+    "trace": "trace.jsonl",
+    "agent_view": "agent_view.json",
+    "private_evaluation": "private_evaluation.json",
+    "before_snapshot": "before.png",
+    "after_snapshot": "after.png",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -322,23 +330,22 @@ def _artifact_links(
     resolved = {
         "run_dir": run_dir,
         "run_result": run_dir / "run_result.json",
-        "report": _resolve_artifact(artifacts.get("report") or "report.html", run_dir),
-        "trace": _resolve_artifact(artifacts.get("trace") or "trace.jsonl", run_dir),
-        "agent_view": _resolve_artifact(artifacts.get("agent_view") or "agent_view.json", run_dir),
-        "private_evaluation": _resolve_artifact(
-            artifacts.get("private_evaluation") or "private_evaluation.json",
-            run_dir,
-        ),
         "codex_last_message": run_dir / "codex-last-message.md",
-        "before_snapshot": _resolve_artifact(
-            artifacts.get("before_snapshot") or "before.png",
-            run_dir,
+        "robot_views": _resolve_declared_artifact(
+            artifacts,
+            "robot_views",
+            default_name="robot_views",
+            run_dir=run_dir,
+            artifact_kind="directory",
         ),
-        "after_snapshot": _resolve_artifact(
-            artifacts.get("after_snapshot") or "after.png", run_dir
-        ),
-        "robot_views": _resolve_artifact(artifacts.get("robot_views") or "robot_views", run_dir),
     }
+    for key, default_name in DEFAULT_ARTIFACTS.items():
+        resolved[key] = _resolve_declared_artifact(
+            artifacts,
+            key,
+            default_name=default_name,
+            run_dir=run_dir,
+        )
     return {
         key: _output_relpath(path, output_dir)
         for key, path in resolved.items()
@@ -366,7 +373,15 @@ def _robot_view_samples(
                 "action": step.get("action"),
                 "semantic_phase": step.get("semantic_phase"),
                 "views": {
-                    key: _output_relpath(_resolve_artifact(views[key], run_dir), output_dir)
+                    key: _output_relpath(
+                        _resolve_artifact(
+                            views[key],
+                            run_dir,
+                            artifact_label=f"robot_view {key}",
+                            declared=True,
+                        ),
+                        output_dir,
+                    )
                     for key in ROBOT_VIEW_KEYS
                     if key in views
                 },
@@ -414,14 +429,49 @@ def _first_robot_view_contract(steps: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
-def _resolve_artifact(path_value: Any, run_dir: Path) -> Path:
-    path = Path(str(path_value))
+def _resolve_declared_artifact(
+    artifacts: dict[str, Any],
+    key: str,
+    *,
+    default_name: str,
+    run_dir: Path,
+    artifact_kind: str = "file",
+) -> Path:
+    return _resolve_artifact(
+        artifacts.get(key, default_name),
+        run_dir,
+        artifact_label=key,
+        declared=key in artifacts,
+        artifact_kind=artifact_kind,
+    )
+
+
+def _resolve_artifact(
+    path_value: Any,
+    run_dir: Path,
+    *,
+    artifact_label: str,
+    declared: bool,
+    artifact_kind: str = "file",
+) -> Path:
+    if not declared:
+        return run_dir / str(path_value)
+
+    text = str(path_value or "").strip()
+    if not text:
+        raise ValueError(f"declared {artifact_label} artifact is empty")
+    path = Path(text)
     if path.is_absolute():
-        return path
-    run_relative = run_dir / path
-    if run_relative.exists():
-        return run_relative
-    return Path.cwd() / path
+        resolved = path
+    else:
+        resolved = run_dir / path
+    exists = resolved.is_dir() if artifact_kind == "directory" else resolved.is_file()
+    if not exists:
+        raise FileNotFoundError(
+            f"declared {artifact_label} artifact is missing or not a {artifact_kind}: "
+            f"{resolved} (from {text!r})"
+        )
+    return resolved
 
 
 def _output_relpath(path: Path, output_dir: Path) -> str:

@@ -88,7 +88,10 @@ Latest quality snapshot from 2026-06-19:
   artifacts from a previous or unclear live route. Cleanup report regeneration
   now treats declared scenario/trace/snapshot artifact values as source truth
   under the run directory, rejecting missing, empty, or substitute paths instead
-  of reusing CWD files or same-basename colocated files.
+  of reusing CWD files or same-basename colocated files. The Codex cleanup
+  apple-to-apple summary now applies the same run-dir source-truth rule to
+  declared summary artifacts and robot-view samples, rejecting missing declared
+  visual evidence instead of linking CWD substitutes or silently omitting links.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
