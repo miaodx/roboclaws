@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 runtime bundle compilation now reads explicit
+  `--review-manifest` input through the same JSON-object source guard used for
+  explicit semantic projection artifacts. Missing, malformed, or parseable
+  non-object review manifests now raise concise source-path errors before
+  review validation or artifact writes, instead of surfacing raw parser/type
+  failures from wrong-shaped review source truth. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud B1 runtime
+  review source truth / source-reader consolidation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the runtime bundle compiler
+  remains in warning-band debt at 1578 lines. Proof: focused B1 runtime bundle
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh runtime bundle
+  evidence that explicit review manifests are again loaded through raw
+  parser/type paths or accepted as plausible non-object source packets.
+
 - 2026-06-20: B1 Map 12 label-tool semantic source loading now treats
   explicitly supplied `--semantics` paths as source truth: missing files,
   malformed JSON, and parseable non-object JSON raise clear source errors

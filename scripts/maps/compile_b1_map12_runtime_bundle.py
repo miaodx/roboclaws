@@ -130,9 +130,7 @@ def compile_runtime_bundle(
     review_manifest_path = Path(review_manifest_path)
     navigation_memory_path = Path(navigation_memory_path)
     output_dir = Path(output_dir)
-    if not review_manifest_path.is_file():
-        raise ValueError(f"review manifest missing: {review_manifest_path}")
-    review = json.loads(review_manifest_path.read_text(encoding="utf-8"))
+    review = _read_json_object(review_manifest_path, label="review manifest")
     validate_review_manifest(
         review,
         map_bundle=map_bundle,
@@ -826,18 +824,10 @@ def verified_room_semantic_projection(
         raise ValueError(
             f"semantic projection artifact missing: {semantic_projection_artifact_path}"
         )
-    try:
-        projection = json.loads(semantic_projection_artifact_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"semantic projection artifact must contain valid JSON object: "
-            f"{semantic_projection_artifact_path}: {exc.msg}"
-        ) from exc
-    if not isinstance(projection, dict):
-        raise ValueError(
-            f"semantic projection artifact must contain a JSON object: "
-            f"{semantic_projection_artifact_path}"
-        )
+    projection = _read_json_object(
+        semantic_projection_artifact_path,
+        label="semantic projection artifact",
+    )
     errors = semantic_projection_errors(
         projection,
         review_manifest_path=review_manifest_path,
@@ -1557,6 +1547,18 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def _path_matches(declared: object, actual: Path) -> bool:

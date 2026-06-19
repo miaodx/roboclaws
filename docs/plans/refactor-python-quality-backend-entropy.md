@@ -85,7 +85,10 @@ Latest quality snapshot from 2026-06-20:
   now fail on missing, malformed, or non-object JSON sources, and the
   intentional no-authored-semantics default requires valid map source metadata
   instead of fabricating a `robot_map_12` identity when `source.json` is absent
-  or corrupt.
+  or corrupt. B1 runtime bundle compilation now also treats explicit
+  `--review-manifest` input as JSON-object source truth, sharing the same
+  source guard as semantic projection artifacts so malformed or non-object
+  review manifests fail before validation or artifact writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

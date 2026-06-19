@@ -224,6 +224,38 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     )
 
 
+def test_runtime_compiler_rejects_malformed_review_manifest_json(tmp_path: Path) -> None:
+    review_path = tmp_path / "review.json"
+    review_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"review manifest must contain valid JSON object: .*review\.json",
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=review_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_non_object_review_manifest(tmp_path: Path) -> None:
+    review_path = tmp_path / "review.json"
+    review_path.write_text("[]\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"review manifest must contain a JSON object: .*review\.json",
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=review_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
 def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
     tmp_path: Path,
 ) -> None:
