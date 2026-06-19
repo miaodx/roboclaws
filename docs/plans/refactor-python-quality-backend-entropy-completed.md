@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Coding-agent provider profile selection now rejects unknown
+  provider profiles at the common shell helper boundary instead of echoing the
+  raw value as if it were selected, and the provider-registry CLI reports an
+  argparse-style unknown-profile error instead of a Python traceback. Explicit
+  `system` Claude fallback, catalog route aliases, route-compatible model
+  overrides, and downstream Codex/Claude/OpenAI Agents supported-profile checks
+  are unchanged. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: fail-aloud provider/profile input truth. Metric:
+  ratchet stayed at 0 Ruff complexity rows and 78 oversized modules. Proof:
+  focused coding-agent env helper and provider catalog tests, manual unknown
+  profile probes, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-19: Detached live-run summary auto-discovery now requires recognized
   live-run evidence before selecting default or parent `seed-*` directories,
   and explicit empty run directories fail aloud instead of printing

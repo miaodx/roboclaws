@@ -64,3 +64,36 @@ def test_codex_provider_args_allow_route_compatible_model_override() -> None:
     assert result.returncode == 0
     assert 'model="MiniMax-M2.7-highspeed"' in result.stdout.splitlines()
     assert 'model_provider="minimax-responses"' in result.stdout.splitlines()
+
+
+def test_provider_helper_rejects_unknown_profile_without_raw_fallback() -> None:
+    result = run_helper(
+        """
+        set -euo pipefail
+        source "$ROBOCLAWS_HELPER"
+        ROBOCLAWS_PROVIDER_PROFILE=not-a-provider-route
+        roboclaws_code_agent_provider ROBOCLAWS_PROVIDER_PROFILE
+        """
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "unsupported provider profile 'not-a-provider-route'" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_profile_summary_rejects_unknown_profile_without_traceback() -> None:
+    result = run_helper(
+        """
+        set -euo pipefail
+        source "$ROBOCLAWS_HELPER"
+        ROBOCLAWS_PROVIDER_PROFILE=not-a-provider-route
+        roboclaws_code_agent_profile_summary \
+          ROBOCLAWS_PROVIDER_PROFILE ROBOCLAWS_CODEX_MODEL codex-router-responses
+        """
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "unsupported provider profile 'not-a-provider-route'" in result.stderr
+    assert "Traceback" not in result.stderr

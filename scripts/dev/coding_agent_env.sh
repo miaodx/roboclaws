@@ -81,11 +81,11 @@ roboclaws_code_agent_provider() {
     return 0
   fi
   local normalized
-  if normalized="$(roboclaws_provider_registry public-profile "$provider" 2>/dev/null)"; then
-    printf '%s\n' "$normalized"
-  else
-    printf '%s\n' "$provider"
+  if ! normalized="$(roboclaws_provider_registry public-profile "$provider" 2>/dev/null)"; then
+    echo "error: unsupported provider profile '${provider}'; use a supported provider profile." >&2
+    return 2
   fi
+  printf '%s\n' "$normalized"
 }
 
 roboclaws_code_agent_profile_default_model() {

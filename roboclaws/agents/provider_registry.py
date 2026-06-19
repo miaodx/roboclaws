@@ -1018,6 +1018,14 @@ def _supports_engine_exit_code(
     return 0 if agent_engine in route.supported_engines else 1
 
 
+def _provider_route_for_cli(parser: argparse.ArgumentParser, route_id: str) -> ProviderRouteSpec:
+    try:
+        return provider_route_spec(route_id)
+    except KeyError:
+        parser.error(f"provider_profile {route_id!r} is unknown; use a supported provider profile.")
+    raise AssertionError("argparse parser.error should exit")
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = _build_registry_parser()
     args = parser.parse_args(argv)
@@ -1048,7 +1056,7 @@ def _main(argv: list[str] | None = None) -> int:
             parser.error(str(exc))
         print(model.model_id)
         return 0
-    route = provider_route_spec(args.route_id)
+    route = _provider_route_for_cli(parser, args.route_id)
     if args.command == "supports-engine":
         if not args.agent_engine:
             parser.error("agent_engine is required")

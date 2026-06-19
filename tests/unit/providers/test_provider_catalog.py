@@ -344,5 +344,10 @@ def test_provider_registry_cli_dispatches_route_and_json_commands(
     with pytest.raises(SystemExit):
         _main(["provider-model-id", "minimax-responses", "gpt-5.5"])
     assert "incompatible with provider_profile 'minimax-responses'" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        _main(["public-profile", "not-a-provider-route"])
+    captured = capsys.readouterr()
+    assert "provider_profile 'not-a-provider-route' is unknown" in captured.err
+    assert "Traceback" not in captured.err
     assert _main(["supports-engine", "minimax-responses", "openai-agents-sdk"]) == 0
     assert _main(["supports-engine", "mimo-tp-openai-chat", "codex-cli"]) == 1

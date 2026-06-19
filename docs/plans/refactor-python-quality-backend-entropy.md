@@ -42,6 +42,8 @@ Latest quality snapshot from 2026-06-19:
   state. OpenAI Agents SDK model selection now rejects unknown model overrides,
   and provider/profile route selection rejects catalog-known models that belong
   to the wrong route instead of treating family-compatible names as launchable.
+  Coding-agent provider helper and provider-registry CLI route selection now
+  reject unknown provider profiles without raw fallback or Python tracebacks.
   RAW-FPV Codex event JSONL and observe text-result JSON source errors now fail
   aloud instead of being skipped into fewer apparent source observations.
   Operator-console control source JSONL errors now fail aloud before appending
