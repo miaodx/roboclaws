@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,22 @@ from roboclaws.operator_console.routes import ConsoleLaunchSelection
 from roboclaws.operator_console.state import LIVE_RUN_MARKERS, resolve_display_run_dir
 
 HISTORY_FILENAME = "runs.jsonl"
+
+
+@dataclass(frozen=True)
+class HistorySourceError:
+    """Operator-visible source error for latest-run history attachment."""
+
+    path: Path
+    label: str
+    reason: str
+
+    def to_payload(self) -> dict[str, str]:
+        return {
+            "label": self.label,
+            "path": str(self.path),
+            "reason": self.reason,
+        }
 
 
 def append_run_history(
@@ -50,16 +67,19 @@ def append_run_history(
 def latest_run_payload(root: Path) -> dict[str, Any]:
     """Return the newest artifact-backed run payload for history attach."""
 
-    candidates = _history_candidates(root)
+    candidates, source_errors = _history_candidates(root)
+    if source_errors:
+        return _source_error_payload(source_errors)
     if not candidates:
         return {}
     return max(candidates, key=lambda item: float(item.get("activity_epoch") or 0.0))
 
 
-def _history_candidates(root: Path) -> list[dict[str, Any]]:
+def _history_candidates(root: Path) -> tuple[list[dict[str, Any]], tuple[HistorySourceError, ...]]:
     output_root = console_output_root(root)
     by_run_id: dict[str, dict[str, Any]] = {}
-    for row in _read_history_rows(root):
+    rows, source_errors = _read_history_rows(root)
+    for row in rows:
         run_id = str(row.get("run_id") or "")
         if not run_id:
             continue
@@ -78,24 +98,37 @@ def _history_candidates(root: Path) -> list[dict[str, Any]]:
             )
     candidates: list[dict[str, Any]] = []
     for run_id, row in by_run_id.items():
-        payload = _candidate_payload(root, run_id, row)
+        payload, _payload_errors = _candidate_payload(root, run_id, row)
         if payload:
             candidates.append(payload)
-    return candidates
+    return candidates, source_errors
 
 
-def _candidate_payload(root: Path, run_id: str, row: dict[str, Any]) -> dict[str, Any]:
+def _candidate_payload(
+    root: Path, run_id: str, row: dict[str, Any]
+) -> tuple[dict[str, Any], tuple[HistorySourceError, ...]]:
     output_root = console_output_root(root)
     run_dir = Path(str(row.get("run_dir") or output_root / "runs" / run_id))
     if not run_dir.is_absolute():
         run_dir = root / run_dir
     run_dir = run_dir.resolve()
     if not run_dir.is_dir():
-        return {}
+        return {}, ()
     display_run_dir = resolve_display_run_dir(run_dir)
     if not _has_attachable_artifact(display_run_dir):
-        return {}
-    state = _read_json(run_dir / "operator_state.json")
+        return {}, ()
+    state, state_error = _read_json_source(run_dir / "operator_state.json", label="Operator State")
+    if state_error:
+        return (
+            _candidate_source_error_payload(
+                run_id=run_id,
+                run_dir=run_dir,
+                display_run_dir=display_run_dir,
+                source_errors=(state_error,),
+                row=row,
+            ),
+            (state_error,),
+        )
     route_payload = (
         state.get("launch_selection") if isinstance(state.get("launch_selection"), dict) else {}
     )
@@ -109,6 +142,11 @@ def _candidate_payload(root: Path, run_id: str, row: dict[str, Any]) -> dict[str
     )
     launch_label = str(row.get("launch_label") or route_payload.get("label") or "Agent run")
     activity_epoch = _run_activity_epoch(display_run_dir, run_dir, row)
+    live_status, live_status_error = _read_json_source(
+        display_run_dir / "live_status.json",
+        label="Live Status",
+    )
+    source_errors = (live_status_error,) if live_status_error else ()
     payload = {
         "run_id": run_id,
         "selection_id": selection_id,
@@ -118,30 +156,48 @@ def _candidate_payload(root: Path, run_id: str, row: dict[str, Any]) -> dict[str
         "display_run_id": _display_run_id(run_dir, display_run_dir),
         "activity_epoch": activity_epoch,
         "started_at": str(row.get("started_at") or state.get("started_at") or ""),
-        "phase": _latest_phase(display_run_dir, state),
+        "phase": _latest_phase(live_status, state, source_errors=source_errors),
     }
-    return payload
+    if source_errors:
+        payload.update(_source_error_fields(source_errors))
+    return payload, source_errors
 
 
-def _read_history_rows(root: Path) -> list[dict[str, Any]]:
+def _read_history_rows(root: Path) -> tuple[list[dict[str, Any]], tuple[HistorySourceError, ...]]:
     path = _history_path(root)
     if not path.exists():
-        return []
+        return [], ()
     rows: list[dict[str, Any]] = []
+    source_errors: list[HistorySourceError] = []
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return []
-    for line in lines:
+    except OSError as exc:
+        return [], (HistorySourceError(path=path.resolve(), label="Run History", reason=str(exc)),)
+    for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            source_errors.append(
+                HistorySourceError(
+                    path=path.resolve(),
+                    label="Run History",
+                    reason=f"invalid JSON at line {line_number} column {exc.colno}",
+                )
+            )
             continue
         if isinstance(payload, dict):
             rows.append(payload)
-    return rows
+            continue
+        source_errors.append(
+            HistorySourceError(
+                path=path.resolve(),
+                label="Run History",
+                reason=f"line {line_number} expected JSON object",
+            )
+        )
+    return rows, tuple(source_errors)
 
 
 def _history_path(root: Path) -> Path:
@@ -173,8 +229,14 @@ def _run_activity_epoch(display_run_dir: Path, run_dir: Path, row: dict[str, Any
         return 0.0
 
 
-def _latest_phase(display_run_dir: Path, state: dict[str, Any]) -> str:
-    live_status = _read_json(display_run_dir / "live_status.json")
+def _latest_phase(
+    live_status: dict[str, Any],
+    state: dict[str, Any],
+    *,
+    source_errors: tuple[HistorySourceError, ...] = (),
+) -> str:
+    if source_errors:
+        return "failed"
     return str(live_status.get("phase") or state.get("phase") or "")
 
 
@@ -187,11 +249,64 @@ def _display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
         return display_run_dir.name
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def _read_json_source(
+    path: Path,
+    *,
+    label: str,
+) -> tuple[dict[str, Any], HistorySourceError | None]:
     if not path.exists():
-        return {}
+        return {}, None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except json.JSONDecodeError as exc:
+        return {}, HistorySourceError(
+            path=path.resolve(),
+            label=label,
+            reason=f"invalid JSON at line {exc.lineno} column {exc.colno}",
+        )
+    except OSError as exc:
+        return {}, HistorySourceError(path=path.resolve(), label=label, reason=str(exc))
+    if not isinstance(payload, dict):
+        return {}, HistorySourceError(
+            path=path.resolve(), label=label, reason="expected JSON object"
+        )
+    return payload, None
+
+
+def _candidate_source_error_payload(
+    *,
+    run_id: str,
+    run_dir: Path,
+    display_run_dir: Path,
+    source_errors: tuple[HistorySourceError, ...],
+    row: dict[str, Any],
+) -> dict[str, Any]:
+    payload = {
+        "run_id": run_id,
+        "selection_id": str(row.get("selection_id") or ""),
+        "launch_label": str(row.get("launch_label") or "Agent run"),
+        "run_dir": str(run_dir),
+        "display_run_dir": str(display_run_dir),
+        "display_run_id": _display_run_id(run_dir, display_run_dir),
+        "activity_epoch": _run_activity_epoch(display_run_dir, run_dir, row),
+        "started_at": str(row.get("started_at") or ""),
+        "phase": "failed",
+    }
+    payload.update(_source_error_fields(source_errors))
+    return payload
+
+
+def _source_error_payload(source_errors: tuple[HistorySourceError, ...]) -> dict[str, Any]:
+    payload = {"run_id": "", "phase": "failed"}
+    payload.update(_source_error_fields(source_errors))
+    return payload
+
+
+def _source_error_fields(source_errors: tuple[HistorySourceError, ...]) -> dict[str, Any]:
+    labels = ", ".join(dict.fromkeys(error.label for error in source_errors))
+    return {
+        "status": "source_error",
+        "status_label": "Source error",
+        "error": f"operator history source error: {labels}",
+        "source_errors": [error.to_payload() for error in source_errors],
+    }

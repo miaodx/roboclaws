@@ -122,7 +122,10 @@ Latest quality snapshot from 2026-06-19:
   status or completion evidence into unknown or absent state. Apple-to-apple
   grid execution now rejects malformed existing grid manifests and stable
   malformed live-status sources instead of silently discarding previous row
-  evidence or timing out from a fabricated unknown phase.
+  evidence or timing out from a fabricated unknown phase. Operator-console
+  latest-run history attachment now surfaces malformed run history, operator
+  state, or live-status sources as source-error payloads instead of attaching a
+  plausible fallback run or metadata-free row.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

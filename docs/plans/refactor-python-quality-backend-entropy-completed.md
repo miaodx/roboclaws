@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console latest-run history attachment now surfaces
+  malformed `runs.jsonl`, `operator_state.json`, and `live_status.json` source
+  artifacts as explicit source-error payloads instead of skipping corrupt
+  history rows, attaching a metadata-free fallback run, or erasing bad live
+  status into an empty phase. Missing optional sources remain optional, and
+  normal history-index plus run-directory fallback attachment behavior is
+  unchanged. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: fail-aloud operator-visible source truth. Metric: ratchet stayed at
+  0 Ruff complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused operator-console history tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: MolmoSpaces apple-to-apple grid execution now rejects malformed
   or non-object existing `apple2apple_test_grid.json` manifests during filtered
   execute, and stable malformed/non-object `live_status.json` sources during

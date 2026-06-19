@@ -80,3 +80,45 @@ def test_latest_run_payload_falls_back_to_scanning_runs_directory(tmp_path: Path
 
     assert payload["run_id"] == "manual-run"
     assert payload["run_dir"] == str(run_dir.resolve())
+
+
+def test_latest_run_payload_surfaces_malformed_history_index(tmp_path: Path) -> None:
+    history = console_output_root(tmp_path) / "runs.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    history.write_text("{bad-history", encoding="utf-8")
+    run_dir = console_output_root(tmp_path) / "runs" / "fallback-run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "trace.jsonl").write_text("{}\n", encoding="utf-8")
+
+    payload = latest_run_payload(tmp_path)
+
+    assert payload["status"] == "source_error"
+    assert payload["error"] == "operator history source error: Run History"
+    assert payload["source_errors"] == [
+        {
+            "label": "Run History",
+            "path": str(history.resolve()),
+            "reason": "invalid JSON at line 1 column 2",
+        }
+    ]
+
+
+def test_latest_run_payload_surfaces_malformed_run_sidecar(tmp_path: Path) -> None:
+    run_dir = console_output_root(tmp_path) / "runs" / "bad-sidecar"
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text("{bad-state", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text("{}\n", encoding="utf-8")
+
+    payload = latest_run_payload(tmp_path)
+
+    assert payload["run_id"] == "bad-sidecar"
+    assert payload["phase"] == "failed"
+    assert payload["status"] == "source_error"
+    assert payload["error"] == "operator history source error: Operator State"
+    assert payload["source_errors"] == [
+        {
+            "label": "Operator State",
+            "path": str((run_dir / "operator_state.json").resolve()),
+            "reason": "invalid JSON at line 1 column 2",
+        }
+    ]
