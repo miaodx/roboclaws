@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval artifact dependency resolution now treats explicit
+  `runtime_map_prior` values as declared source truth and fails before direct
+  or live product launch when the path is empty or missing. Missing explicit
+  priors now produce an `EvalDependencyError` packet with resolved dependency
+  provenance instead of letting the runner launch against a stale/nonexistent
+  runtime-map prior; sample-derived prior behavior and valid prior handoff are
+  unchanged. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud artifact/source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused eval-runner dependency tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval HTML reports now validate declared `run_result` and
   `report` artifact links against the eval output directory before rendering
   them as proof links. Missing files, empty paths, absolute paths outside the

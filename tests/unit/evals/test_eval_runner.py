@@ -7,7 +7,9 @@ from typing import Any
 
 import pytest
 
+from roboclaws.evals.dependencies import dependency_failure, resolve_artifact_dependencies
 from roboclaws.evals.live_runtime import live_surface_command, live_surface_env
+from roboclaws.evals.models import load_eval_sample
 from roboclaws.evals.regression import (
     promote_regression_from_cli_overrides,
     promote_regression_sample_from_eval_result,
@@ -1379,6 +1381,88 @@ def test_cleanup_consumer_fails_when_runtime_map_dependency_is_missing(tmp_path:
     assert cleanup_result["grader_outputs"]["artifacts"]["missing_dependencies"] == [
         "runtime_map_prior_path"
     ]
+
+
+def test_eval_runner_fails_before_launch_when_explicit_runtime_map_prior_is_missing(
+    tmp_path: Path,
+) -> None:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals/household_world/samples/cleanup/smoke_seed7.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = "cleanup.explicit_missing_prior"
+    sample["artifact_dependencies"] = {
+        "runtime_map_prior": str(tmp_path / "missing-runtime-map-prior.json")
+    }
+    sample_path = tmp_path / "explicit_missing_prior_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / "explicit_missing_prior_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": "household_world.explicit_missing_prior",
+                "version": "2026-06-19",
+                "capability": "household_world_cleanup",
+                "sample_ids": [sample["sample_id"]],
+                "sample_refs": [str(sample_path)],
+                "required_graders": ["artifacts"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("product runner should not launch with missing runtime_map_prior")
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp="explicit-missing-prior",
+        product_runner=product_runner,
+    )
+
+    result = json.loads(run.results_path.read_text())["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "EvalDependencyError"
+    assert result["grader_outputs"]["runner"]["message"].startswith(
+        "runtime_map_prior_path does not exist:"
+    )
+    assert (
+        result["grader_outputs"]["artifacts"]["resolved_dependencies"]["runtime_map_prior_source"]
+        == "explicit_path"
+    )
+
+
+def test_eval_dependency_resolver_preserves_empty_explicit_runtime_map_prior() -> None:
+    sample = load_eval_sample(
+        Path(__file__).resolve().parents[3]
+        / "evals/household_world/samples/cleanup/smoke_seed7.json"
+    )
+    sample = sample.__class__.from_mapping(
+        {
+            **sample.to_dict(),
+            "artifact_dependencies": {"runtime_map_prior": ""},
+        }
+    )
+
+    dependencies = resolve_artifact_dependencies(
+        sample,
+        repetition_index=0,
+        sample_artifacts={},
+    )
+    failure = dependency_failure(dependencies)
+
+    assert dependencies == {
+        "runtime_map_prior_path": "",
+        "runtime_map_prior_source": "explicit_path",
+    }
+    assert failure is not None
+    assert failure["message"] == "explicit runtime_map_prior path was empty"
 
 
 def test_open_ended_eval_separates_claim_from_artifact_readiness(tmp_path: Path) -> None:
