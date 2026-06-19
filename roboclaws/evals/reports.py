@@ -164,9 +164,7 @@ def _sampler_projection_section(aggregate: dict[str, Any]) -> str:
         return ""
     rows = "\n".join(
         _sampler_projection_source_row(source, payload)
-        for source, payload in (
-            sampler_projection.get("scene_sources") or {}
-        ).items()
+        for source, payload in (sampler_projection.get("scene_sources") or {}).items()
         if isinstance(payload, dict)
     )
     return f"""  <section>
@@ -208,15 +206,10 @@ def _sampler_projection_source_row(source: str, payload: dict[str, Any]) -> str:
 def _report_row(result: dict[str, Any], *, output_dir: Path) -> str:
     identity = result.get("identity") if isinstance(result.get("identity"), dict) else {}
     artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), dict) else {}
-    run_result = str(artifacts.get("run_result") or "")
-    report = str(artifacts.get("report") or "")
     links = []
-    if run_result:
-        href = html.escape(_report_href(run_result, output_dir))
-        links.append(f'<a href="{href}">run_result</a>')
-    if report:
-        href = html.escape(_report_href(report, output_dir))
-        links.append(f'<a href="{href}">report</a>')
+    for key, label in (("run_result", "run_result"), ("report", "report")):
+        if key in artifacts:
+            links.append(_artifact_link_or_status(label, artifacts.get(key), output_dir))
     status = str(result.get("status") or "")
     metrics = result.get("metrics") if isinstance(result.get("metrics"), dict) else {}
     attempts = (
@@ -249,12 +242,29 @@ def _report_row(result: dict[str, Any], *, output_dir: Path) -> str:
     )
 
 
-def _report_href(path: str, output_dir: Path) -> str:
-    artifact_path = Path(path)
+def _artifact_link_or_status(label: str, raw_path: Any, output_dir: Path) -> str:
+    path_text = str(raw_path or "").strip()
+    if not path_text:
+        return _artifact_unavailable(label, "empty artifact path", "")
+    artifact_path = Path(path_text)
+    candidate = artifact_path if artifact_path.is_absolute() else output_dir / artifact_path
     try:
-        return artifact_path.relative_to(output_dir).as_posix()
-    except ValueError:
-        return artifact_path.as_posix()
+        resolved_output_dir = output_dir.resolve()
+        resolved_candidate = candidate.resolve()
+        relative_path = resolved_candidate.relative_to(resolved_output_dir)
+    except (OSError, ValueError):
+        return _artifact_unavailable(label, "outside eval output", path_text)
+    if not resolved_candidate.is_file():
+        return _artifact_unavailable(label, "missing artifact", relative_path.as_posix())
+    href = html.escape(relative_path.as_posix())
+    return f'<a href="{href}">{html.escape(label)}</a>'
+
+
+def _artifact_unavailable(label: str, reason: str, path: str) -> str:
+    detail = f"{reason}: {path}" if path else reason
+    return (
+        f'<span class="unavailable">{html.escape(label)} unavailable ({html.escape(detail)})</span>'
+    )
 
 
 def _sample_summaries(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

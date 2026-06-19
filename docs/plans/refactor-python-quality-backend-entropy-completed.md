@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval HTML reports now validate declared `run_result` and
+  `report` artifact links against the eval output directory before rendering
+  them as proof links. Missing files, empty paths, absolute paths outside the
+  eval output tree, and `../` escapes now render as explicit unavailable source
+  evidence instead of clickable stale/substitute links; existing in-output
+  artifacts keep relative hyperlinks. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud artifact/source truth; eval
+  grading, result schemas, aggregation, and product-run artifact generation are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused eval-report
+  tests, existing eval-runner report smoke, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Scene-sampler readiness export now fails aloud when an enabled
   artifact has no payload instead of writing `{}` as a valid-looking readiness
   artifact, and invalid `--candidate-range` input returns a concise CLI error

@@ -105,9 +105,12 @@ Latest quality snapshot from 2026-06-19:
   preventing pending/all-missing summaries from placeholder paths. Scene-sampler
   readiness export now rejects enabled artifacts with missing payloads and
   malformed candidate-range CLI input instead of writing `{}` artifacts or
-  surfacing tracebacks. Continue fail-aloud/runtime-source audits from fresh
-  evidence rather than reopening closed helper splits; route any future
-  test-shape cleanup through
+  surfacing tracebacks. Eval HTML reports now render declared missing or
+  output-escaping run/report artifact paths as explicit unavailable source
+  evidence instead of clickable proof links while preserving verified in-output
+  artifact links. Continue fail-aloud/runtime-source audits from fresh evidence
+  rather than reopening closed helper splits; route any future test-shape
+  cleanup through
   `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a
