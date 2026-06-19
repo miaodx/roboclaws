@@ -1220,17 +1220,29 @@ def _raw_observations_from_codex_events(run_dir: Path) -> list[dict[str, Any]]:
     observations = []
     for path in sorted(run_dir.glob("codex-events*.jsonl")):
         with path.open(encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
                 try:
                     event = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        "RAW-FPV Codex event source contains invalid JSON "
+                        f"at {path}:{line_number}: {exc.msg}"
+                    ) from exc
+                if not isinstance(event, dict):
+                    raise ValueError(
+                        f"RAW-FPV Codex event source row must be an object at {path}:{line_number}"
+                    )
                 item = event.get("item") or {}
                 if item.get("type") != "mcp_tool_call" or item.get("tool") != "observe":
                     continue
                 if event.get("type") != "item.completed":
                     continue
-                payload = _mcp_text_result_json(item.get("result") or {})
+                payload = _mcp_text_result_json(
+                    item.get("result") or {},
+                    source=f"{path}:{line_number}",
+                )
                 raw = (payload.get("raw_fpv_observation") or {}) if payload else {}
                 if raw.get("observation_id"):
                     observations.append(raw)
@@ -1850,14 +1862,21 @@ def _console_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _mcp_text_result_json(result: dict[str, Any]) -> dict[str, Any]:
+def _mcp_text_result_json(
+    result: dict[str, Any], *, source: str = "MCP tool result"
+) -> dict[str, Any]:
     for content in result.get("content") or []:
         if not isinstance(content, dict) or content.get("type") != "text":
             continue
         try:
-            return json.loads(str(content.get("text") or ""))
-        except json.JSONDecodeError:
-            return {}
+            payload = json.loads(str(content.get("text") or ""))
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"RAW-FPV Codex observe result contains invalid JSON at {source}: {exc.msg}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"RAW-FPV Codex observe result must be an object at {source}")
+        return payload
     return {}
 
 

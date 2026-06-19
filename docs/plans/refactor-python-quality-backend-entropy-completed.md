@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: RAW-FPV Codex event source parsing now fails aloud for malformed
+  JSONL rows and malformed observe text-result JSON. Corrupt present
+  `codex-events*.jsonl` evidence no longer disappears into fewer source
+  observations or a generic "no usable FPV frames" error; the probe raises an
+  actionable source path and line number before scoring. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  artifact/source truth; JSON artifact loading, valid Codex observe event
+  extraction, robot-view fallback discovery, provider execution, private
+  scoring, and report rendering are unchanged. Metric: ratchet stayed at
+  0 Ruff complexity rows and 78 oversized modules. Proof: focused RAW-FPV
+  perception probe unit tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Removed the stale `model_supports_images` helper from the
   provider registry. The helper had no production callers and treated unknown
   model ids as image-capable, which conflicted with the current fail-aloud

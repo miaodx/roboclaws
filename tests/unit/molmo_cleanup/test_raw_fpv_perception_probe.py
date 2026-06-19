@@ -616,6 +616,108 @@ def test_raw_fpv_probe_rejects_raw_source_without_usable_frames(tmp_path: Path) 
         raise AssertionError("expected empty RAW-FPV source run directory to fail aloud")
 
 
+def test_raw_fpv_probe_rejects_malformed_codex_event_source(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    (run_dir / "agent_view.json").unlink()
+    (run_dir / "codex-events.jsonl").write_text("\n{not-json}\n", encoding="utf-8")
+
+    try:
+        probe.collect_observation_frames(
+            raw_run_dirs=(run_dir,),
+            contrast_run_dirs=(),
+            max_frames_per_source=4,
+        )
+    except ValueError as exc:
+        assert "RAW-FPV Codex event source contains invalid JSON" in str(exc)
+        assert "codex-events.jsonl:2" in str(exc)
+    else:  # pragma: no cover - corrupt source evidence should fail before scoring
+        raise AssertionError("expected malformed Codex event source to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_non_object_codex_event_source(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    (run_dir / "agent_view.json").unlink()
+    (run_dir / "codex-events.jsonl").write_text("[]\n", encoding="utf-8")
+
+    try:
+        probe.collect_observation_frames(
+            raw_run_dirs=(run_dir,),
+            contrast_run_dirs=(),
+            max_frames_per_source=4,
+        )
+    except ValueError as exc:
+        assert "RAW-FPV Codex event source row must be an object" in str(exc)
+        assert "codex-events.jsonl:1" in str(exc)
+    else:  # pragma: no cover - corrupt source evidence should fail before scoring
+        raise AssertionError("expected non-object Codex event source to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_malformed_codex_observe_result(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    (run_dir / "agent_view.json").unlink()
+    (run_dir / "codex-events.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "mcp_tool_call",
+                    "tool": "observe",
+                    "result": {"content": [{"type": "text", "text": "{not-json}"}]},
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        probe.collect_observation_frames(
+            raw_run_dirs=(run_dir,),
+            contrast_run_dirs=(),
+            max_frames_per_source=4,
+        )
+    except ValueError as exc:
+        assert "RAW-FPV Codex observe result contains invalid JSON" in str(exc)
+        assert "codex-events.jsonl:1" in str(exc)
+    else:  # pragma: no cover - corrupt source evidence should fail before scoring
+        raise AssertionError("expected malformed Codex observe result to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_non_object_codex_observe_result(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    (run_dir / "agent_view.json").unlink()
+    (run_dir / "codex-events.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "mcp_tool_call",
+                    "tool": "observe",
+                    "result": {"content": [{"type": "text", "text": "[]"}]},
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    try:
+        probe.collect_observation_frames(
+            raw_run_dirs=(run_dir,),
+            contrast_run_dirs=(),
+            max_frames_per_source=4,
+        )
+    except ValueError as exc:
+        assert "RAW-FPV Codex observe result must be an object" in str(exc)
+        assert "codex-events.jsonl:1" in str(exc)
+    else:  # pragma: no cover - corrupt source evidence should fail before scoring
+        raise AssertionError("expected non-object Codex observe result to fail aloud")
+
+
 def test_raw_fpv_probe_aliases_unique_sweep_frame_labels_by_observation_id(
     tmp_path: Path,
 ) -> None:
