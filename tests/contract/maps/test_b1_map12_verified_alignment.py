@@ -67,6 +67,9 @@ PROMOTE_REVIEW_PACKET_SCRIPT = (
 CHECK_REVIEW_PACKET_FIT_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "check_b1_map12_semantic_review_packet_fit.py"
 )
+SEMANTIC_ANCHOR_REVIEW_PACKET_SCRIPT = (
+    REPO_ROOT / "scripts" / "maps" / "build_b1_map12_semantic_anchor_review_packet.py"
+)
 SEMANTIC_PROJECTION_SCRIPT = (
     REPO_ROOT / "scripts" / "maps" / "build_b1_map12_semantic_projection.py"
 )
@@ -1157,6 +1160,61 @@ def test_semantic_anchor_review_packet_generates_proposed_room_interior_anchors(
 
     with pytest.raises(PromotionError, match="no human-accepted anchors"):
         build_reviewed_correspondence_manifest(packet)
+
+
+@pytest.mark.parametrize(
+    ("source_arg", "source_text", "expected_error"),
+    [
+        (
+            "--review-manifest",
+            "{not-json\n",
+            "review manifest must contain valid JSON object",
+        ),
+        (
+            "--review-manifest",
+            "[]\n",
+            "review manifest must contain a JSON object",
+        ),
+        (
+            "--alignment-artifact",
+            "{not-json\n",
+            "alignment artifact must contain valid JSON object",
+        ),
+        (
+            "--alignment-artifact",
+            "[]\n",
+            "alignment artifact must contain a JSON object",
+        ),
+    ],
+)
+def test_semantic_anchor_review_packet_cli_rejects_bad_source_json(
+    tmp_path: Path,
+    source_arg: str,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    bad_path = tmp_path / "bad.json"
+    output_path = tmp_path / "semantic_anchor_review_packet.json"
+    bad_path.write_text(source_text, encoding="utf-8")
+    args = [
+        sys.executable,
+        str(SEMANTIC_ANCHOR_REVIEW_PACKET_SCRIPT),
+        "--review-manifest",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--alignment-artifact",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--output",
+        str(output_path),
+    ]
+    args[args.index(source_arg) + 1] = str(bad_path)
+
+    completed = subprocess.run(args, capture_output=True, text=True)
+
+    assert completed.returncode == 2
+    assert not output_path.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(bad_path) in completed.stderr
 
 
 def test_semantic_projection_rejects_current_alignment_only_manifest() -> None:

@@ -94,7 +94,10 @@ Latest quality snapshot from 2026-06-20:
   validation or runtime bundle writes. B1 semantic projection CLI loading now
   treats explicit `--correspondences` and `--review-manifest` files as
   JSON-object source truth too, returning concise CLI source-path errors before
-  projection validation or output writes.
+  projection validation or output writes. B1 semantic-anchor review packet CLI
+  loading now applies the same source-truth rule to explicit
+  `--review-manifest` and `--alignment-artifact` inputs before proposed-anchor
+  packet writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

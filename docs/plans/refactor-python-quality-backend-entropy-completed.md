@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 semantic-anchor review packet CLI loading now treats
+  explicit `--review-manifest` and `--alignment-artifact` inputs as JSON-object
+  source truth. Missing, malformed, or parseable non-object review/alignment
+  files return concise CLI source-path errors and do not write proposed-anchor
+  packets, instead of surfacing raw file/parser/type failures before semantic
+  review packet construction. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud B1 semantic-anchor review source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; table-driven tests kept the touched B1 alignment test within
+  existing warning-band debt. Proof: focused B1 alignment/semantic-anchor
+  contract tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh semantic-anchor
+  review CLI evidence that explicit review or alignment source files are again
+  loaded through raw parser/type paths or accepted as plausible non-object
+  source packets.
+
 - 2026-06-20: B1 Map 12 semantic projection CLI loading now treats explicit
   `--correspondences` and `--review-manifest` inputs as JSON-object source
   truth. Missing, malformed, or parseable non-object correspondence/review
