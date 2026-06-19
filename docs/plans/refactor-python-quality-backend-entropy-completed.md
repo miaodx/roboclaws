@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval-harness selector tests now merge low-signal route-selection
+  shape checks into two behavior tables for changed-file signals and explicit
+  intent axes. The slice preserves provider readiness, runtime-prior,
+  detached-live polling, DINO sidecar, budget, manifest-output, and source-error
+  regressions as separate behavior tests while dropping one-field row metadata
+  assertions. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: unit-test pruning / no production behavior change.
+  Metric: selector collection 31 -> 23 tests and
+  `tests/unit/evals/test_eval_harness_selector.py` 782 -> 738 lines; ratchet
+  stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  `$intuitive-tests` audit/propose, focused selector collection,
+  selector+manifest tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen selector-test pruning only with
+  fresh duplicate static metadata assertions; keep live/blocker/source-error
+  regressions behavior-shaped.
+
 - 2026-06-20: Operator-console B1 camera preview promotion now rejects absolute
   FPV/chase artifact view paths, so external local files cannot be promoted as
   current Isaac runtime camera evidence. Relative view paths remain bound under

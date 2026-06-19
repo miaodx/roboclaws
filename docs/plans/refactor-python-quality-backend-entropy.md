@@ -158,7 +158,10 @@ Latest quality snapshot from 2026-06-20:
   early `run_result.json` cannot become harness pass evidence. Operator-console
   B1 camera preview promotion now rejects absolute artifact view paths, keeping
   promoted FPV/chase images bound to files declared under the source artifact
-  directory instead of arbitrary stale local files. Eval
+  directory instead of arbitrary stale local files. Eval-harness selector tests
+  now merge repeated changed-file and explicit-intent route-selection checks
+  into two behavior tables, preserving live/blocker/source-error regressions
+  while dropping copied one-field row metadata assertions. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
@@ -367,8 +370,11 @@ Good families:
   exercising canonical resolution, readiness failure, or visible diagnostics.
 - Operator-console tests that assert static DOM/route wiring without launch
   readiness, redaction, locks, status transitions, or artifact links.
-- Eval-harness tests that duplicate manifest keys one field at a time instead
-  of proving selected rows, blockers, promotion packets, or result contracts.
+- Eval-harness selector pruning is done for the current duplicate
+  changed-file/explicit-intent shape; reopen only with fresh static manifest-key
+  or row-metadata duplication. Other eval-harness tests remain valid candidates
+  only when they duplicate manifest keys one field at a time instead of proving
+  selected rows, blockers, promotion packets, or result contracts.
 - Molmo cleanup worker/report tests that assert helper shape, static file
   names, or copied fixture metadata already covered by stronger tests.
 

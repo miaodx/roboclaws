@@ -30,72 +30,89 @@ def _selected_rows(manifest: dict) -> dict[str, dict]:
     return {row["row_id"]: row for row in manifest["rows"] if row["selected"]}
 
 
-def test_eval_harness_change_selects_eval_unit_and_smoke_suite(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["roboclaws/evals/runner.py"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    assert manifest["schema"] == "roboclaws_eval_harness_manifest_v1"
-    assert rows["eval-unit-tests"]["row_kind"] == "deterministic_gate"
-    assert rows["smoke-regression-eval-suite"]["row_kind"] == "eval_suite"
-    assert rows["smoke-regression-eval-suite"]["status"] == "not_run"
-
-
-def test_cleanup_skill_change_selects_cleanup_suite_and_live_codex_eval(
-    tmp_path: Path,
+def _assert_selected_rows_include(
+    rows: dict[str, dict],
+    *,
+    case_name: str,
+    present_rows: tuple[str, ...],
+    absent_rows: tuple[str, ...] = (),
 ) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["skills/molmo-realworld-cleanup/SKILL.md"],
-        output_dir=tmp_path,
+    for row_id in present_rows:
+        assert row_id in rows, f"{case_name}: missing selected row {row_id}"
+    for row_id in absent_rows:
+        assert row_id not in rows, f"{case_name}: unexpectedly selected {row_id}"
+
+
+def test_changed_file_signals_select_expected_eval_harness_rows(tmp_path: Path) -> None:
+    cases = (
+        {
+            "name": "eval_harness",
+            "changed_files": ["roboclaws/evals/runner.py"],
+            "present_rows": ("eval-unit-tests", "smoke-regression-eval-suite"),
+        },
+        {
+            "name": "cleanup_skill",
+            "changed_files": ["skills/molmo-realworld-cleanup/SKILL.md"],
+            "present_rows": ("cleanup-capability-eval-suite", "codex-cleanup-live-eval"),
+        },
+        {
+            "name": "agent_sdk",
+            "changed_files": ["roboclaws/agents/drivers/openai_agents_live.py"],
+            "present_rows": ("openai-agents-sdk-open-task-live-eval",),
+            "absent_rows": ("openai-agents-sdk-codex-router-responses-availability",),
+        },
+        {
+            "name": "visual_grounding",
+            "changed_files": ["roboclaws/household/visual_grounding.py"],
+            "present_rows": ("direct-camera-grounded-grounding-dino",),
+        },
+        {
+            "name": "raw_fpv",
+            "changed_files": ["roboclaws/household/raw_fpv_guidance.py"],
+            "present_rows": ("direct-camera-raw-fpv", "codex-cleanup-camera-raw-fpv-live-product"),
+        },
+        {
+            "name": "map_build",
+            "changed_files": ["roboclaws/maps/runtime_prior_snapshot.py"],
+            "present_rows": (
+                "direct-map-build-world-public",
+                "direct-cleanup-runtime-prior-consumer",
+                "map-build-consumer-eval-suite",
+            ),
+        },
+        {
+            "name": "scene_sampler",
+            "changed_files": ["roboclaws/launch/scene_sampler.py"],
+            "present_rows": ("scene-sampler-stress-eval-suite",),
+        },
+        {
+            "name": "open_ended_file",
+            "changed_files": ["docs/plans/2026-06-11-open-ended-proof-status.md"],
+            "present_rows": (
+                "open-ended-household-contract-tests",
+                "open-ended-goals-eval-suite",
+                "codex-open-task-live-eval",
+            ),
+            "absent_rows": (
+                "map-build-consumer-eval-suite",
+                "cleanup-capability-eval-suite",
+            ),
+        },
     )
 
-    rows = _selected_rows(manifest)
-    codex_row = rows["codex-cleanup-live-eval"]
-    assert rows["cleanup-capability-eval-suite"]["row_kind"] == "eval_suite"
-    assert codex_row["row_kind"] == "live_agent_eval"
-    assert codex_row["axes"]["agent_engine"] == "codex-cli"
-    assert codex_row["axes"]["provider_profile"] == "codex-router-responses"
-    assert codex_row["axes"]["evidence_lane"] == "world-public-labels"
-    assert "live_execution=run" in codex_row["command"]
-    assert codex_row["status"] == "not_run"
-
-
-def test_agent_sdk_change_selects_openai_agents_sdk_live_eval(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["roboclaws/agents/drivers/openai_agents_live.py"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    sdk_row = rows["openai-agents-sdk-open-task-live-eval"]
-    assert sdk_row["axes"]["agent_engine"] == "openai-agents-sdk"
-    assert sdk_row["axes"]["provider_profile"] == "minimax-responses"
-    assert sdk_row["axes"]["intent"] == "open-ended"
-    assert sdk_row["axes"]["preset"] == ""
-    assert "suite=open_ended_goals" in sdk_row["command"]
-    assert "provider_profile=minimax-responses" in sdk_row["command"]
-    assert "live_execution=run" in sdk_row["command"]
-    assert "openai-agents-sdk-codex-router-responses-availability" not in rows
-
-
-def test_visual_grounding_change_selects_real_dino_product_row(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["roboclaws/household/visual_grounding.py"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    dino_row = rows["direct-camera-grounded-grounding-dino"]
-    assert dino_row["row_kind"] == "product_run"
-    assert dino_row["axes"]["evidence_lane"] == "camera-grounded-labels"
-    assert dino_row["axes"]["camera_labeler"] == "grounding-dino"
-    assert dino_row["status"] == "not_run"
+    for case in cases:
+        manifest = selector.build_eval_harness(
+            budget="focused",
+            changed_files=case["changed_files"],
+            output_dir=tmp_path / case["name"],
+        )
+        assert manifest["schema"] == "roboclaws_eval_harness_manifest_v1"
+        _assert_selected_rows_include(
+            _selected_rows(manifest),
+            case_name=case["name"],
+            present_rows=case["present_rows"],
+            absent_rows=case.get("absent_rows", ()),
+        )
 
 
 def test_explicit_changed_file_does_not_pull_unrelated_worktree_diff(
@@ -157,101 +174,40 @@ def test_implicit_worktree_diff_failure_stays_best_effort(
     assert manifest["summary"]["selected_row_count"] == 0
 
 
-def test_raw_fpv_change_selects_raw_fpv_rows(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["roboclaws/household/raw_fpv_guidance.py"],
-        output_dir=tmp_path,
+def test_explicit_intent_axes_select_expected_eval_harness_rows(tmp_path: Path) -> None:
+    cases = (
+        {
+            "name": "open_ended",
+            "kwargs": {"intent": ["open-ended"]},
+            "present_rows": (
+                "open-ended-household-contract-tests",
+                "open-ended-goals-eval-suite",
+                "codex-open-task-live-eval",
+                "openai-agents-sdk-open-task-live-eval",
+            ),
+            "absent_rows": ("openai-agents-sdk-codex-router-responses-availability",),
+        },
+        {
+            "name": "planner_proof",
+            "kwargs": {"intent": ["planner-proof"]},
+            "present_rows": ("planner-proof-dry-run-product",),
+            "absent_rows": ("open-ended-goals-eval-suite",),
+        },
     )
 
-    rows = _selected_rows(manifest)
-    assert rows["direct-camera-raw-fpv"]["axes"]["evidence_lane"] == "camera-raw-fpv"
-    assert rows["codex-cleanup-camera-raw-fpv-live-product"]["axes"]["agent_engine"] == "codex-cli"
+    for case in cases:
+        manifest = selector.build_eval_harness(
+            budget="focused",
+            output_dir=tmp_path / case["name"],
+            **case["kwargs"],
+        )
 
-
-def test_map_build_change_selects_map_build_suite_and_cleanup_consumer_prior(
-    tmp_path: Path,
-) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["roboclaws/maps/runtime_prior_snapshot.py"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    assert rows["direct-map-build-world-public"]["axes"]["intent"] == "map-build"
-    assert rows["direct-cleanup-runtime-prior-consumer"]["axes"]["runtime_map_prior"] == "required"
-    assert rows["map-build-consumer-eval-suite"]["row_kind"] == "eval_suite"
-
-
-def test_scene_sampler_change_selects_sampler_stress_suite(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["roboclaws/launch/scene_sampler.py"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    row = rows["scene-sampler-stress-eval-suite"]
-    assert row["row_kind"] == "eval_suite"
-    assert row["axes"]["suite"] == "scene_sampler_stress"
-    assert "suite=scene_sampler_stress" in row["command"]
-
-
-def test_open_ended_changed_file_selects_open_ended_contract_and_live_eval(
-    tmp_path: Path,
-) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        changed_files=["docs/plans/2026-06-11-open-ended-proof-status.md"],
-        output_dir=tmp_path / "harness",
-    )
-
-    rows = _selected_rows(manifest)
-    row = rows["open-ended-household-contract-tests"]
-    assert row["axes"]["intent"] == "open-ended"
-    assert row["expense"] == "deterministic"
-    assert any("test_surface_prompt_omitted_intent" in item for item in row["command"])
-    assert rows["open-ended-goals-eval-suite"]["row_kind"] == "eval_suite"
-    assert "suite=open_ended_goals" in rows["open-ended-goals-eval-suite"]["command"]
-    assert rows["codex-open-task-live-eval"]["row_kind"] == "live_agent_eval"
-    assert "suite=open_ended_goals" in rows["codex-open-task-live-eval"]["command"]
-    assert "map-build-consumer-eval-suite" not in rows
-    assert "cleanup-capability-eval-suite" not in rows
-
-
-def test_explicit_open_ended_intent_selects_open_ended_row(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        intent=["open-ended"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    assert rows["open-ended-household-contract-tests"]["axes"]["intent"] == "open-ended"
-    assert rows["open-ended-goals-eval-suite"]["axes"]["suite"] == "open_ended_goals"
-    assert rows["codex-open-task-live-eval"]["axes"]["intent"] == "open-ended"
-    assert rows["openai-agents-sdk-open-task-live-eval"]["axes"]["provider_profile"] == (
-        "minimax-responses"
-    )
-    assert "openai-agents-sdk-codex-router-responses-availability" not in rows
-
-
-def test_explicit_planner_proof_intent_selects_planner_proof_row(tmp_path: Path) -> None:
-    manifest = selector.build_eval_harness(
-        budget="focused",
-        intent=["planner-proof"],
-        output_dir=tmp_path,
-    )
-
-    rows = _selected_rows(manifest)
-    row = rows["planner-proof-dry-run-product"]
-    assert row["row_kind"] == "product_run"
-    assert row["axes"]["intent"] == "planner-proof"
-    assert "surface=planner-proof" in row["command"]
-    assert "intent=planner-proof" in row["command"]
-    assert "mode=dry-run" in row["command"]
-    assert "open-ended-goals-eval-suite" not in rows
+        _assert_selected_rows_include(
+            _selected_rows(manifest),
+            case_name=case["name"],
+            present_rows=case["present_rows"],
+            absent_rows=case.get("absent_rows", ()),
+        )
 
 
 def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path) -> None:
