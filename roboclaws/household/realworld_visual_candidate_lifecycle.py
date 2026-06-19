@@ -11,7 +11,6 @@ from roboclaws.household import (
 )
 from roboclaws.household.visual_scan_guidance import visual_evidence_recovery_hint
 
-MINIMAL_MAP_MODE = "minimal"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
 CANDIDATE_STATE_NAVIGATION_AUTHORIZED = (
@@ -204,7 +203,6 @@ def normalized_visual_candidate(
         target_fixture_id = realworld_runtime_map_targets.resolve_runtime_anchor_target_fixture_id(
             contract,
             category,
-            minimal_map_mode=MINIMAL_MAP_MODE,
         )
         if target_fixture_id:
             target_resolution_source = "runtime_metric_map_public_semantic_anchor"
@@ -482,7 +480,6 @@ def target_plausibility_for_candidate(
         contract,
         pseudo_detection,
         contract.static_fixture_projection(),
-        minimal_map_mode=MINIMAL_MAP_MODE,
     )
     expected = str((public_target or {}).get("fixture_id") or "")
     return {
@@ -559,9 +556,6 @@ def objects_visible_from_waypoint(contract: Any, waypoint: dict[str, Any]) -> li
         fixture = contract._fixtures.get(location_id)
         if fixture is None:
             continue
-        room_id = _room_id(str(fixture.get("room_area", "unknown")))
-        if contract.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
-            continue
         if fixture_ids and location_id not in fixture_ids:
             continue
         visible.append((obj, str(location_id)))
@@ -578,9 +572,6 @@ def objects_visible_from_room(contract: Any, waypoint: dict[str, Any]) -> list[t
             continue
         fixture = contract._fixtures.get(location_id)
         if fixture is None:
-            continue
-        room_id = _room_id(str(fixture.get("room_area", "unknown")))
-        if contract.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
             continue
         visible.append((obj, str(location_id)))
     return visible

@@ -19,7 +19,6 @@ else:
 
 from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.household.realworld_contract import (  # noqa: E402
-    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     RealWorldCleanupContract,
 )
@@ -126,7 +125,6 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
     contract = RealWorldCleanupContract(
         base_contract,
         perception_mode=RAW_FPV_ONLY_MODE,
-        map_mode=MINIMAL_MAP_MODE,
     )
 
     yaw_offsets = tuple(args.camera_yaw_deg or DEFAULT_CAMERA_YAWS)

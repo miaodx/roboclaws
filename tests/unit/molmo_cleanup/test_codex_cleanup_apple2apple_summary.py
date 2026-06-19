@@ -230,7 +230,6 @@ def _write_run(
         "completion_status": completion_status,
         "scenario_id": scenario_id,
         "seed": 6,
-        "map_mode": "minimal",
         "static_fixture_projection_mode": "room_only",
         "perception_mode": "visible_object_detections",
         "visual_grounding_pipeline_id": "sim",

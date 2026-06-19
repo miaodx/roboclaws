@@ -126,8 +126,6 @@ def runtime_prior_snapshot_from_agibot_navigation_memory(
         "schema": RUNTIME_METRIC_MAP_SCHEMA,
         "contract": "realworld_cleanup_contract_v1",
         "freshness": "offline_converted_prior",
-        "map_mode": "minimal",
-        "minimal_map_mode": True,
         "source_map_mutated": False,
         "private_truth_included": False,
         "static_map": {
@@ -261,8 +259,6 @@ def runtime_prior_snapshot_from_nav2_cleanup_bundle(
         "schema": RUNTIME_METRIC_MAP_SCHEMA,
         "contract": "realworld_cleanup_contract_v1",
         "freshness": "offline_compiled_prior",
-        "map_mode": "minimal",
-        "minimal_map_mode": True,
         "source_map_mutated": False,
         "private_truth_included": False,
         "static_map": {

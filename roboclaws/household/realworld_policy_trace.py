@@ -82,11 +82,11 @@ class _PolicyTraceAccumulator:
             and self.observed_waypoints_at_first_cleanup < self.waypoints.total
         )
 
-    def loop_style(self, *, minimal_map_mode: bool) -> str:
+    def loop_style(self) -> str:
         first_cleanup_before_full_survey = self.first_cleanup_before_full_survey()
         if self.cleanup_action_count == 0:
             return "scan_only"
-        if minimal_map_mode and not first_cleanup_before_full_survey:
+        if not first_cleanup_before_full_survey:
             return "survey_first_cleanup_loop"
         if first_cleanup_before_full_survey:
             return "interleaved_cleanup_loop"
@@ -103,40 +103,31 @@ def cleanup_policy_trace_from_events(
     agent_view: dict[str, Any],
     *,
     schema: str,
-    minimal_map_mode: str,
 ) -> dict[str, Any]:
     metric_map = agent_view.get("metric_map") or {}
-    is_minimal_map = metric_map.get("mode") == minimal_map_mode
-    accumulator = _PolicyTraceAccumulator(
-        waypoints=_trace_waypoints(metric_map, minimal_map_mode=minimal_map_mode)
-    )
+    accumulator = _PolicyTraceAccumulator(waypoints=_trace_waypoints(metric_map))
     for raw in trace_events:
         if raw.get("event") == "response":
             accumulator.record_response(raw)
     return _policy_trace_payload(
         schema=schema,
         accumulator=accumulator,
-        minimal_map_mode=is_minimal_map,
     )
 
 
-def _trace_waypoints(metric_map: dict[str, Any], *, minimal_map_mode: str) -> _TraceWaypoints:
+def _trace_waypoints(metric_map: dict[str, Any]) -> _TraceWaypoints:
     inspection_waypoints = metric_map.get("inspection_waypoints") or []
     target_inspection_waypoints = [
         item
         for item in inspection_waypoints
         if item.get("waypoint_source") == "generated_target_inspection_candidate"
     ]
-    if metric_map.get("mode") == minimal_map_mode:
-        coverage_waypoints = [
-            item
-            for item in inspection_waypoints
-            if item.get("waypoint_source") == "generated_exploration_candidate"
-        ]
-        waypoint_source = "generated_exploration_candidate"
-    else:
-        coverage_waypoints = list(inspection_waypoints)
-        waypoint_source = "static_map_fixture_coverage"
+    coverage_waypoints = [
+        item
+        for item in inspection_waypoints
+        if item.get("waypoint_source") == "generated_exploration_candidate"
+    ]
+    waypoint_source = "generated_exploration_candidate"
     return _TraceWaypoints(
         source=waypoint_source,
         coverage_ids=_waypoint_ids(coverage_waypoints),
@@ -153,13 +144,12 @@ def _policy_trace_payload(
     *,
     schema: str,
     accumulator: _PolicyTraceAccumulator,
-    minimal_map_mode: bool,
 ) -> dict[str, Any]:
     first_cleanup_before_full_survey = accumulator.first_cleanup_before_full_survey()
     return {
         "schema": schema,
         "waypoint_source": accumulator.waypoints.source,
-        "loop_style": accumulator.loop_style(minimal_map_mode=minimal_map_mode),
+        "loop_style": accumulator.loop_style(),
         "total_waypoints": accumulator.waypoints.total,
         "observed_waypoint_count": len(accumulator.visited_waypoints),
         "target_inspection_waypoint_count": len(accumulator.waypoints.target_inspection_ids),

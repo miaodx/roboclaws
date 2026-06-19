@@ -15,13 +15,11 @@ def cleanup_policy_trace_from_events(
     *,
     builder: Callable[..., dict[str, Any]],
     schema: str,
-    minimal_map_mode: str,
 ) -> dict[str, Any]:
     return builder(
         trace_events,
         agent_view,
         schema=schema,
-        minimal_map_mode=minimal_map_mode,
     )
 
 

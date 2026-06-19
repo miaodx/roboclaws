@@ -40,7 +40,7 @@ default:
 # Private household-world implementation runner. Public callers should
 # enter through `run::surface`; maintainers should enter through `agent::run`.
 [private]
-household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" map_build="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_review="" b1_alignment_artifact="" b1_navigation_artifact="" b1_semantic_projection_artifact="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
+household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" map_build="off" runtime_map_prior="" backend_override="auto" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_surface="household-world" task_intent="cleanup" operator_messages_path="" b1_alignment_review="" b1_alignment_artifact="" b1_navigation_artifact="" b1_semantic_projection_artifact="" skill_name="" goal_contract_json="" goal_contract_path="" run_dir_override="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -61,7 +61,6 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     map_build="{{map_build}}"
     runtime_map_prior="{{runtime_map_prior}}"
     backend_override="{{backend_override}}"
-    map_mode="{{map_mode}}"
     scene_source="{{scene_source}}"
     scene_index="{{scene_index}}"
     isaac_scene_usd_path="{{isaac_scene_usd_path}}"
@@ -102,7 +101,6 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     runtime_map_prior="${runtime_map_prior#runtime_map_prior=}"
     backend_override="${backend_override#backend=}"
     backend_override="${backend_override#backend_override=}"
-    map_mode="${map_mode#map_mode=}"
     scene_source="${scene_source#scene_source=}"
     scene_index="${scene_index#scene_index=}"
     isaac_scene_usd_path="${isaac_scene_usd_path#isaac_scene_usd_path=}"
@@ -146,8 +144,8 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
         "$generated_mess_count" "$host" "$port" "$map_bundle"
         "$cleanup_routine" "$robot_views" "$camera_labeler"
         "$visual_grounding_timeout_s" "$map_build"
-        "$runtime_map_prior" "$backend_override" "$map_mode"
-        "$scene_source" "$scene_index" "$isaac_scene_usd_path"
+        "$runtime_map_prior" "$backend_override" "$scene_source"
+        "$scene_index" "$isaac_scene_usd_path"
         "$min_generated_mess_count_override" "$generated_mess_object_ids"
         "$task_surface" "$task_intent" "$operator_messages_path"
         "$b1_alignment_review" "$b1_alignment_artifact" "$b1_navigation_artifact"
@@ -263,15 +261,6 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       echo "error: map-build mode currently supports direct or codex-live driver only" >&2
       exit 1
     fi
-    case "$map_mode" in
-      minimal)
-        ;;
-      *)
-        echo "error: unsupported map_mode '$map_mode' (expected minimal)" >&2
-        exit 1
-        ;;
-    esac
-
     perception_mode="visible_object_detections"
     visual_args=()
     checker_visual_args=()
@@ -452,10 +441,7 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
-    map_build_args+=(--map-mode "$map_mode")
-    if [[ "$map_mode" == "minimal" ]]; then
-      checker_map_build_args+=(--require-minimal-map)
-    fi
+    checker_map_build_args+=(--require-base-navigation-map)
 
     map_bundle_dir="$map_bundle"
     case "$map_bundle_dir" in
@@ -551,7 +537,6 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
     echo "    map      : ${map_bundle_dir:-not required}"
-    echo "    map mode : ${map_mode}"
     echo "    routine  : ${cleanup_routine}"
     echo "    map build: ${map_build_enabled}"
     echo "    views    : ${robot_views}"
@@ -686,7 +671,6 @@ household-world-impl driver="mcp-smoke" profile="smoke" seeds="7" output_dir="ou
           "${visual_args[@]}"
           "${visual_grounding_args[@]}"
           "${runtime_map_prior_args[@]}"
-          --map-mode "$map_mode"
         )
         server_args+=("${goal_contract_args[@]}")
         if [[ -n "$isaac_scene_usd_path" ]]; then

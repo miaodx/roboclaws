@@ -16,7 +16,6 @@ def validate_contract_options(
     *,
     static_fixture_projection_mode: str,
     perception_mode: str,
-    map_mode: str,
 ) -> None:
     helpers = _contract_helpers()
     if static_fixture_projection_mode not in {"room_only", "exact_fixtures"}:
@@ -24,9 +23,6 @@ def validate_contract_options(
     if perception_mode not in helpers.REALWORLD_PERCEPTION_MODES:
         allowed = ", ".join(sorted(helpers.REALWORLD_PERCEPTION_MODES))
         raise ValueError(f"perception_mode must be one of: {allowed}")
-    if map_mode not in helpers.REALWORLD_MAP_MODES:
-        allowed = ", ".join(sorted(helpers.REALWORLD_MAP_MODES))
-        raise ValueError(f"map_mode must be one of: {allowed}")
 
 
 def init_profile_and_acceptance(
@@ -86,21 +82,13 @@ def init_map_projection(target: Any, map_bundle_dir: str | Path | None) -> None:
 
 
 def init_public_map_projection(target: Any) -> None:
-    helpers = _contract_helpers()
-    if target.map_mode == helpers.MINIMAL_MAP_MODE:
-        _init_minimal_public_map_projection(target)
-        return
-    target._public_rooms = target._rooms
-    target._public_fixtures = target._fixtures
-    target._public_waypoints = target._waypoints
-    target._private_waypoint_by_public_id = {}
+    _init_public_map_projection(target)
 
 
 def initial_waypoint_id(target: Any) -> str:
-    helpers = _contract_helpers()
-    first_waypoint = target._waypoints[0]["waypoint_id"] if target._waypoints else ""
-    if target.map_mode == helpers.MINIMAL_MAP_MODE and target._public_waypoints:
+    if target._public_waypoints:
         return str(target._public_waypoints[0]["waypoint_id"])
+    first_waypoint = target._waypoints[0]["waypoint_id"] if target._waypoints else ""
     return str(first_waypoint)
 
 
@@ -200,7 +188,7 @@ def _init_scenario_map_projection(target: Any) -> None:
     target._scene_index_fixture_overlay = {}
 
 
-def _init_minimal_public_map_projection(target: Any) -> None:
+def _init_public_map_projection(target: Any) -> None:
     source_metric_map = (
         target._bundle_metric_map_template
         if target._bundle_metric_map_template is not None
@@ -212,7 +200,7 @@ def _init_minimal_public_map_projection(target: Any) -> None:
     )
     target._public_fixtures = {}
     target._public_waypoints = (
-        realworld_contract_projection._minimal_generated_exploration_waypoints(
+        realworld_contract_projection._generated_exploration_waypoints(
             source_metric_map,
             fallback_waypoints=target._waypoints,
             public_rooms=target._public_rooms,

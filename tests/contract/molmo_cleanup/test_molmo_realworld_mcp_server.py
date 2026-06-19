@@ -12,7 +12,6 @@ from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.profiles import WORLD_PUBLIC_LABELS_PROFILE
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
-    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
     RealWorldCleanupContract,
@@ -280,7 +279,6 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         map_bundle_dir=PREBUILT_BUNDLE,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -313,7 +311,6 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = prior_server.call_tool("metric_map")
@@ -337,7 +334,6 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         runtime_map_prior=prior_snapshot,
         runtime_map_prior_source="prior/runtime_metric_map.json",
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         runtime_map = server._agent_view_payload()["runtime_metric_map"]
@@ -404,7 +400,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     assert "household-cleanup direct world-public-labels" not in report
 
 
-def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
+def test_realworld_mcp_defaults_to_base_navigation_map(tmp_path: Path) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
@@ -420,25 +416,22 @@ def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
     finally:
         server.close()
 
-    assert metric_map["mode"] == MINIMAL_MAP_MODE
+    assert metric_map["base_navigation_map"]["enabled"] is True
     assert metric_map["rooms"]
     assert all(room["room_label"] for room in metric_map["rooms"])
     assert metric_map["room_category_hints"]
     assert metric_map["driveable_ways"]
-    assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
     assert runtime_map["static_map"]["fixtures"] == []
-    assert agent_view["runtime_metric_map"]["map_mode"] == MINIMAL_MAP_MODE
     assert agent_view["cleanup_worklist"]["objects"]
 
 
-def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
+def test_realworld_mcp_base_navigation_map_exposes_actionable_runtime_anchors(
     tmp_path: Path,
 ) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -475,7 +468,6 @@ def test_realworld_mcp_resolves_stale_target_query_to_public_anchor(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = server.call_tool("metric_map")

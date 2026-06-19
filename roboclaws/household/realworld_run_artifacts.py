@@ -31,7 +31,6 @@ from roboclaws.household.profiles import (
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
-    MINIMAL_MAP_MODE,
     REALWORLD_CONTRACT,
     RealWorldCleanupContract,
     cleanup_policy_trace_from_events,
@@ -73,7 +72,6 @@ class RealWorldRunArtifactInputs:
     goal_contract: GoalContract | None
     agent_scratchpad: dict[str, Any]
     map_build: bool
-    map_mode: str
     runtime_map_prior: dict[str, Any] | None
     runtime_map_prior_path: str | Path | None
     evidence_lane: str | None
@@ -258,7 +256,6 @@ def _base_run_result(
         "planner_proof_cleanup_executor_enabled": (inputs.use_planner_proof_for_cleanup_primitives),
         "static_fixture_projection_mode": inputs.contract.static_fixture_projection_mode,
         "perception_mode": inputs.perception_mode,
-        "map_mode": inputs.map_mode,
         "map_build_mode": inputs.map_build,
         "cleanup_actions_disabled": inputs.map_build,
         "runtime_metric_map_prior": _runtime_map_prior_summary(inputs),
@@ -442,8 +439,6 @@ def _map_build_payload(
 ) -> dict[str, Any]:
     return {
         "enabled": inputs.map_build,
-        "map_mode": inputs.map_mode,
-        "minimal_map_mode": inputs.map_mode == MINIMAL_MAP_MODE,
         "camera_schedule": (
             list(inputs.map_build_camera_schedule) if inputs.map_build else []
         ),

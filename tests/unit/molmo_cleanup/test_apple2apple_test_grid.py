@@ -35,7 +35,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
     grid = build_apple2apple_test_grid(output_dir=tmp_path / "grid", task="clean")
 
     assert grid["schema"] == GRID_SCHEMA
-    assert grid["axes"]["map_modes"] == ["online", "offline"]
+    assert grid["axes"]["prior_modes"] == ["online", "offline"]
     assert [item["route_id"] for item in grid["axes"]["agent_routes"]] == [
         "codex-api-router",
         "claude-kimi",

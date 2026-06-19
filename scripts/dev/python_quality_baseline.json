@@ -360,12 +360,12 @@
       },
       {
         "code": "PLR0915",
-        "key": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py|PLR0915|test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates",
+        "key": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py|PLR0915|test_base_navigation_map_hides_authored_semantics_and_uses_generated_candidates",
         "limit": 50,
         "message": "Too many statements (65 > 50)",
         "path": "tests/contract/molmo_cleanup/test_molmo_realworld_contract.py",
         "row": 908,
-        "symbol": "test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates",
+        "symbol": "test_base_navigation_map_hides_authored_semantics_and_uses_generated_candidates",
         "value": 65
       },
       {

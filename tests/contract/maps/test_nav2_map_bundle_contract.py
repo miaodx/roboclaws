@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE, RealWorldCleanupContract
+from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import (
     static_landmarks_from_fixture_projection,
@@ -218,7 +218,6 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_bundle_dir=PREBUILT_BUNDLE,
-        map_mode=MINIMAL_MAP_MODE,
     )
 
     metric_map = contract.metric_map()
@@ -241,7 +240,6 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
     )
     return {
         "metric_map": contract.metric_map(),

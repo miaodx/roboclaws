@@ -9,7 +9,6 @@ import pytest
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_cleanup import _load_runtime_map_prior, run_realworld_cleanup
 from roboclaws.household.realworld_contract import (
-    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     RealWorldCleanupContract,
 )
@@ -137,7 +136,6 @@ def test_online_and_offline_snapshots_share_consumer_contract_shape() -> None:
 def test_materialized_online_snapshot_targets_are_valid_cleanup_targets() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
         perception_mode=RAW_FPV_ONLY_MODE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
@@ -178,7 +176,6 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     snapshot = runtime_prior_snapshot_from_agibot_navigation_memory(ROBOT_MAP_12_FIXTURE)
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
         perception_mode=RAW_FPV_ONLY_MODE,
         runtime_map_prior=snapshot["runtime_metric_map"],
     )
@@ -385,7 +382,6 @@ def test_synthetic_cleanup_consumes_converted_snapshot_through_runtime_prior(
 def _online_minimal_snapshot() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=MINIMAL_MAP_MODE,
     )
     _observe_until_anchor(contract, anchor_category="fridge", anchor_type="receptacle")
     return runtime_prior_snapshot_from_runtime_metric_map(

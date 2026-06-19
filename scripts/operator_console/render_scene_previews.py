@@ -23,7 +23,6 @@ else:
 from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.household.camera_control import canonical_scene_camera_control_request  # noqa: E402
 from roboclaws.household.realworld_contract import (  # noqa: E402
-    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     RealWorldCleanupContract,
 )
@@ -193,7 +192,6 @@ def render_molmospaces_preview(
         contract = RealWorldCleanupContract(
             CleanupBackendSession(backend.scenario, backend=backend),
             perception_mode=RAW_FPV_ONLY_MODE,
-            map_mode=MINIMAL_MAP_MODE,
         )
         metric_map = contract.metric_map()
         waypoint = _first_public_waypoint(metric_map)

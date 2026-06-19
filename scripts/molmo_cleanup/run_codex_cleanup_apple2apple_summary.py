@@ -96,7 +96,6 @@ def _lane_summary(*, lane_id: str, run_result_path: Path, output_dir: Path) -> d
         "scenario_id": run_result.get("scenario_id"),
         "scene": _scene_signature(run_result),
         "seed": run_result.get("seed"),
-        "map_mode": run_result.get("map_mode"),
         "static_fixture_projection_mode": run_result.get("static_fixture_projection_mode"),
         "perception_mode": run_result.get("perception_mode"),
         "visual_grounding_pipeline_id": run_result.get("visual_grounding_pipeline_id"),
@@ -135,7 +134,6 @@ def _comparison_summary(lanes: dict[str, dict[str, Any]]) -> dict[str, Any]:
     axes = {
         "seed": _same_value(lane_values, "seed"),
         "policy": _same_value(lane_values, "policy"),
-        "map_mode": _same_value(lane_values, "map_mode"),
         "requested_generated_mess_count": _same_value(
             lane_values,
             "requested_generated_mess_count",

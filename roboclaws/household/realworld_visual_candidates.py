@@ -481,7 +481,6 @@ def _visual_candidate_validation_error(
     candidate: Any,
     *,
     require_target_fixture_id: bool = True,
-    map_mode: str = "minimal",
     perception_mode: str = "visible_object_detections",
     producer_type: str = "",
 ) -> dict[str, str] | None:
@@ -501,15 +500,14 @@ def _visual_candidate_validation_error(
     if region_error is not None:
         return region_error
     if (
-        map_mode == "minimal"
-        and perception_mode == "raw_fpv_only"
+        perception_mode == "raw_fpv_only"
         and str(producer_type or "") == MAIN_CLEANUP_AGENT_PRODUCER
         and target_fixture_id
     ):
         return {
             "field": "target_fixture_id",
             "reason": (
-                "target_fixture_id must be omitted in minimal map RAW_FPV; use the "
+                "target_fixture_id must be omitted in Base Navigation Map RAW_FPV; use the "
                 "candidate_fixture_id returned by navigate_to_visual_candidate"
             ),
         }

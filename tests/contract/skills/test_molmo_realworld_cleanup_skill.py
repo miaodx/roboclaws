@@ -7,7 +7,6 @@ from typing import Any
 
 from roboclaws.household.cleanup_routine import routine_plan
 from roboclaws.household.profiles import WORLD_PUBLIC_LABELS_PROFILE
-from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
@@ -89,7 +88,6 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         evidence_lane=WORLD_PUBLIC_LABELS_PROFILE,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         detection = _first_detection_by_category(server, "food")
@@ -146,7 +144,6 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_static_fixt
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         detection = _first_detection_by_category(server, "food")

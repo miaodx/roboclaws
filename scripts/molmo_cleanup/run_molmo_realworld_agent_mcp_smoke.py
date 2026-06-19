@@ -23,10 +23,8 @@ from roboclaws.household.profiles import (  # noqa: E402
 )
 from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
-    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
-    REALWORLD_MAP_MODES,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
 from roboclaws.household.realworld_mcp_server import (  # noqa: E402
@@ -129,8 +127,6 @@ def run_smoke(
         include_robot=include_robot,
         record_robot_views=record_robot_views,
         generated_mess_count=generated_mess_count,
-        map_mode=DEFAULT_MAP_MODE,
-        allowed_map_modes=REALWORLD_MAP_MODES,
     )
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,

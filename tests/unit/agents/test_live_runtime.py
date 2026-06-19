@@ -1816,7 +1816,7 @@ def test_model_input_compaction_summarizes_repeated_metric_map_outputs() -> None
         "tool": "metric_map",
         "map_id": "home",
         "map_version": "v1",
-        "mode": "minimal",
+        "base_navigation_map": {"enabled": True},
         "inspection_waypoints": [
             {
                 "waypoint_id": f"wp_{idx}",
