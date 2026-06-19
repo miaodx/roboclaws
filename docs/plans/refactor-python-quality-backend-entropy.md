@@ -169,7 +169,9 @@ Latest quality snapshot from 2026-06-20:
   console::run` surface while keeping CLI default coverage separate. OpenAI
   Agents SDK live-runtime config failure tests now merge duplicate invalid
   retry-attempt, retry-sleep, and MCP-timeout env/direct bodies into existing
-  validation tables. Eval
+  validation tables, and performance-profile MCP-timeout tests now fold
+  duplicate malformed-env and negative-direct cases into the same invalid-value
+  table. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
@@ -381,6 +383,11 @@ Good families:
   bodies; reopen only with fresh duplicated provider/env scaffolding that does
   not protect a distinct provider route, readiness failure, or visible
   diagnostic surface.
+- OpenAI Agents SDK performance-profile MCP-timeout validation pruning is done
+  for the current duplicate malformed-env and negative-direct one-off tests;
+  reopen only with fresh duplicate invalid-value scaffolding that does not
+  protect env/direct precedence, route compatibility, or a visible diagnostic
+  surface.
 - Operator-console tests that assert static DOM/route wiring without launch
   readiness, redaction, locks, status transitions, or artifact links.
 - Operator-console `console::run` public recipe/default-bind pruning is done

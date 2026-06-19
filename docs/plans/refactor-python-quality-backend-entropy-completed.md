@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: OpenAI Agents SDK performance-profile MCP-timeout validation
+  tests now fold the duplicate malformed-env and negative-direct one-off tests
+  into the existing invalid MCP-timeout value table. Route/profile/model
+  compatibility tests remain separate because they protect different provider
+  diagnostics. Owner layer: Agent Engines And Provider Profiles.
+  Behavior-change class: unit-test pruning / no production behavior change.
+  Metric: `tests/unit/agents/test_live_runtime.py` keeps 137 collected cases
+  while test functions drop 108 -> 106 and file size drops 5765 -> 5745 lines;
+  ratchet stayed at 0 Ruff complexity rows and 79 oversized modules. Proof:
+  `$intuitive-tests` audit/propose, focused performance-profile validation
+  cases, full `test_live_runtime.py`, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh performance-profile
+  tests that duplicate simple invalid-value scaffolding without protecting a
+  distinct env/direct precedence, route compatibility, or visible diagnostic
+  surface.
+
 - 2026-06-20: OpenAI Agents SDK live-runtime config failure tests now fold
   duplicate one-off invalid retry-attempt, retry-sleep, and MCP-timeout
   env/direct tests into the existing parameterized validation tables. The
