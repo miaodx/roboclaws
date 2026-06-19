@@ -10,6 +10,22 @@ from typing import Any
 
 MANIFEST_SCHEMA = "molmo_live_ci_report_manifest_v1"
 STATUS_SCHEMA = "molmo_live_ci_entry_status_v1"
+COMMON_DIAGNOSTIC_FILES = (
+    "live_status.json",
+    "claude-command.txt",
+    "claude-version.txt",
+    "claude-events.jsonl",
+    "claude.stderr.log",
+    "checker.log",
+    "server.pid",
+    "trace.jsonl",
+    "run_result.json",
+    "report.html",
+    "agent_view.json",
+    "private_evaluation.json",
+    "advisory_evaluation.json",
+    "planner_proof_requests.json",
+)
 
 
 @dataclass(frozen=True)
@@ -131,7 +147,11 @@ def latest_seed_run_dir(entry_output_dir: Path, *, seed: int) -> Path | None:
 
 
 def latest_seed_artifact_dir(entry_output_dir: Path, *, seed: int) -> Path | None:
-    candidates = sorted(path for path in entry_output_dir.glob(f"*/seed-{seed}") if path.is_dir())
+    candidates = sorted(
+        path
+        for path in entry_output_dir.glob(f"*/seed-{seed}")
+        if path.is_dir() and _has_diagnostic_artifact(path)
+    )
     return candidates[-1] if candidates else None
 
 
@@ -175,24 +195,8 @@ def diagnostic_path_for_entry(entry_name: str, *, seed: int) -> str:
 
 
 def _write_diagnostic_index(seed_dir: Path) -> Path:
-    common_files = (
-        "live_status.json",
-        "claude-command.txt",
-        "claude-version.txt",
-        "claude-events.jsonl",
-        "claude.stderr.log",
-        "checker.log",
-        "server.pid",
-        "trace.jsonl",
-        "run_result.json",
-        "report.html",
-        "agent_view.json",
-        "private_evaluation.json",
-        "advisory_evaluation.json",
-        "planner_proof_requests.json",
-    )
     links = []
-    for relative in common_files:
+    for relative in COMMON_DIAGNOSTIC_FILES:
         path = seed_dir / relative
         if not path.is_file():
             continue
@@ -222,6 +226,10 @@ def _write_diagnostic_index(seed_dir: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _has_diagnostic_artifact(seed_dir: Path) -> bool:
+    return any((seed_dir / relative).is_file() for relative in COMMON_DIAGNOSTIC_FILES)
 
 
 def collect_entry_statuses(root: Path) -> list[dict[str, Any]]:

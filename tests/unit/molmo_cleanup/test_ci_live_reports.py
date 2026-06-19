@@ -13,6 +13,7 @@ from roboclaws.household.ci_live_reports import (
     base_status,
     diagnostic_path_for_entry,
     entry_by_name,
+    latest_seed_artifact_dir,
     publish_diagnostic_seed_run,
     publish_seed_run,
     report_path_for_entry,
@@ -255,6 +256,8 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
     monkeypatch.setenv("KIMI_API_KEY", "test-key")
 
     def fake_run_checked(_command, **_kwargs):
+        empty_latest_seed = output_dir / entry.name / "0513_2300" / "seed-7"
+        empty_latest_seed.mkdir(parents=True)
         seed_dir = output_dir / entry.name / "0513_2217" / "seed-7"
         seed_dir.mkdir(parents=True)
         (seed_dir / "live_status.json").write_text('{"phase":"failed"}\n', encoding="utf-8")
@@ -271,11 +274,23 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
 
     assert status["status"] == "failed"
     assert status["diagnostic_path"] == diagnostic_path_for_entry(entry.name, seed=7)
+    assert status["run_dir"].endswith("0513_2217/seed-7")
     diagnostic_root = publish_root / entry.name / "diagnostics" / "seed-7"
     assert (diagnostic_root / "diagnostics.html").is_file()
     assert (diagnostic_root / "claude-events.jsonl").read_text(encoding="utf-8")
+    assert not (diagnostic_root / "0513_2300").exists()
     payload = json.loads((publish_root / entry.name / "status.json").read_text(encoding="utf-8"))
     assert payload["diagnostic_path"] == status["diagnostic_path"]
+
+
+def test_latest_seed_artifact_dir_ignores_seed_dirs_without_diagnostic_evidence(
+    tmp_path: Path,
+) -> None:
+    entry_output_dir = tmp_path / "runs" / "kimi-k2.6"
+    (entry_output_dir / "0513_2217" / "seed-7").mkdir(parents=True)
+    (entry_output_dir / "0513_2300" / "seed-7").mkdir(parents=True)
+
+    assert latest_seed_artifact_dir(entry_output_dir, seed=7) is None
 
 
 def test_live_claude_print_command_uses_verbose_for_stream_json(

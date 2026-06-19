@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Molmo CI live failure diagnostics now select the latest
+  evidence-bearing `seed-*` directory instead of the newest directory of any
+  shape. Failed live entries no longer publish an empty latest seed placeholder
+  while hiding an older seed directory with actual failure evidence, and
+  runs with no recognized diagnostic artifacts leave the diagnostic link absent
+  instead of creating a no-evidence diagnostics page from automatic discovery.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; live launch commands, successful report
+  publishing, diagnostic index rendering for explicitly supplied bundles, and
+  live status schemas are unchanged. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 78 oversized modules. Proof: full CI live reports unit
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet.
+
 - 2026-06-19: Operator-console B1 camera preview promotion now resolves
   declared relative FPV/chase view paths only under the source artifact
   directory and rejects relative path escapes before file lookup. The console no
