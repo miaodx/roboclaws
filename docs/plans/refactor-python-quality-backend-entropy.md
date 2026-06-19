@@ -125,7 +125,10 @@ Latest quality snapshot from 2026-06-19:
   evidence or timing out from a fabricated unknown phase. Operator-console
   latest-run history attachment now surfaces malformed run history, operator
   state, or live-status sources as source-error payloads instead of attaching a
-  plausible fallback run or metadata-free row.
+  plausible fallback run or metadata-free row. Operator-console manual control
+  now rejects malformed `operator_state.json` sources before route lookup,
+  MCP calls, control-row append, or state rewrite instead of collapsing corrupt
+  state into a missing endpoint or overwriting source evidence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

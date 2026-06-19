@@ -1084,6 +1084,76 @@ def test_operator_console_control_endpoint_rejects_non_object_control_source(
     assert (run_dir / "operator_control.jsonl").read_text(encoding="utf-8") == "[]\n"
 
 
+def test_operator_console_control_endpoint_rejects_malformed_operator_state_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-control-state-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator state source contains invalid JSON" in payload["error"]
+    assert "operator_state.json" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "{not-json"
+    assert not (run_dir / "operator_control.jsonl").exists()
+
+
+def test_operator_console_control_endpoint_rejects_non_object_operator_state_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-control-state-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator state source must be a JSON object" in payload["error"]
+    assert "operator_state.json" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "[]\n"
+    assert not (run_dir / "operator_control.jsonl").exists()
+
+
+def test_operator_console_control_endpoint_does_not_overwrite_corrupt_state_after_tool_call(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "corrupt-control-state-after-call-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    state_path = run_dir / "operator_state.json"
+
+    async def fake_call_mcp_tool(mcp_url, action, arguments):  # noqa: ANN001, ANN202
+        assert mcp_url == "http://127.0.0.1:19999/mcp"
+        assert action == "observe"
+        assert arguments == {}
+        state_path.write_text("{corrupt-after-call", encoding="utf-8")
+        return {"ok": True, "tool": action, "status": "ok"}
+
+    with _console_server(tmp_path) as (host, port):
+        with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
+            payload = _blocked_operator_control_payload(
+                host,
+                port,
+                run_id,
+                {"action": "observe"},
+            )
+
+    assert "operator state source contains invalid JSON" in payload["error"]
+    assert state_path.read_text(encoding="utf-8") == "{corrupt-after-call"
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "operator_control.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["event"] for row in rows] == ["request", "response"]
+    assert not (run_dir / "operator_interventions.json").exists()
+
+
 def test_operator_console_control_endpoint_allows_paused_operator_handoff(
     tmp_path: Path,
 ) -> None:

@@ -39,15 +39,17 @@ def run_operator_control(
     payload: dict[str, object],
 ) -> dict[str, Any]:
     run_dir = console_output_root(root) / "runs" / run_id
-    if not run_dir.is_dir() or not (run_dir / "operator_state.json").is_file():
+    state_path = run_dir / "operator_state.json"
+    if not run_dir.is_dir() or not state_path.is_file():
         raise OperatorControlError("unknown run", status=404)
+    operator_state = read_operator_state_for_control(state_path)
     state = derive_operator_state(root, run_dir, route)
     _validate_control_state(state, route)
     action = str(payload.get("action") or "").strip()
     if action not in ALLOWED_CONTROL_ACTIONS:
         raise OperatorControlError(f"unsupported control action: {action or '<empty>'}")
     arguments = _control_arguments(action, payload)
-    status = _read_json(run_dir / "operator_state.json")
+    status = operator_state
     mcp_url = str(status.get("mcp_url") or "").strip()
     if not mcp_url:
         host = str(status.get("mcp_host") or "").strip()
@@ -202,7 +204,7 @@ def _append_control_row(run_dir: Path, row: dict[str, Any]) -> dict[str, Any]:
 
 def _update_operator_state_with_control(run_dir: Path, response_row: dict[str, Any]) -> None:
     state_path = run_dir / "operator_state.json"
-    state = _read_json(state_path)
+    state = read_operator_state_for_control(state_path)
     summary = _operator_intervention_summary(run_dir)
     state["latest_operator_control"] = response_row
     state["operator_interventions"] = summary
@@ -259,12 +261,30 @@ def _read_control_rows(run_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _read_json(path: Path) -> dict[str, Any]:
+def read_operator_state_for_control(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except FileNotFoundError as exc:
+        raise OperatorControlError("unknown run", status=404) from exc
+    except json.JSONDecodeError as exc:
+        raise OperatorControlError(
+            (
+                f"operator state source contains invalid JSON at {path}: "
+                f"line {exc.lineno} column {exc.colno}: {exc.msg}"
+            ),
+            status=409,
+        ) from exc
+    except OSError as exc:
+        raise OperatorControlError(
+            f"operator state source cannot be read at {path}: {exc}",
+            status=409,
+        ) from exc
+    if not isinstance(payload, dict):
+        raise OperatorControlError(
+            f"operator state source must be a JSON object at {path}",
+            status=409,
+        )
+    return payload
 
 
 def _float(value: object) -> float:

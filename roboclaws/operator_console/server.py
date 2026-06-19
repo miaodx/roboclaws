@@ -12,7 +12,11 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import ParseResult, parse_qs, unquote, urlparse
 
-from roboclaws.operator_console.control import OperatorControlError, run_operator_control
+from roboclaws.operator_console.control import (
+    OperatorControlError,
+    read_operator_state_for_control,
+    run_operator_control,
+)
 from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.interactions import (
     InteractionError,
@@ -628,8 +632,8 @@ def _route_for_run(root: Path, run_id: str):
     state_path = console_output_root(root) / "runs" / run_id / "operator_state.json"
     if not state_path.is_file():
         raise OperatorControlError("unknown run", status=404)
-    payload = json.loads(state_path.read_text(encoding="utf-8"))
-    route_payload = payload.get("route") if isinstance(payload, dict) else {}
+    payload = read_operator_state_for_control(state_path)
+    route_payload = payload.get("route")
     selection_id = str(route_payload.get("id") or "") if isinstance(route_payload, dict) else ""
     if not selection_id:
         raise ValueError("operator state does not include route id")

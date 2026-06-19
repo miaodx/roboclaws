@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console manual control now rejects malformed or
+  non-object `operator_state.json` sources at the control endpoint route lookup
+  and state-update boundaries. Corrupt operator state no longer collapses into
+  a misleading missing MCP endpoint, and a control response cannot overwrite
+  the corrupt source while recording operator intervention evidence; unknown
+  runs remain 404 and valid state/control rows are unchanged. Owner layer: Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud
+  operator-visible source truth. Metric: ratchet stayed at 0 Ruff complexity
+  rows and reports 79 oversized modules in the current dirty worktree. Proof:
+  focused operator-console control endpoint tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Operator-console latest-run history attachment now surfaces
   malformed `runs.jsonl`, `operator_state.json`, and `live_status.json` source
   artifacts as explicit source-error payloads instead of skipping corrupt
