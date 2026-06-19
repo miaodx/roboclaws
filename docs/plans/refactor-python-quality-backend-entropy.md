@@ -114,6 +114,9 @@ Latest quality snapshot from 2026-06-19:
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
+  Regression promotion now also validates both the promoted sample payload and
+  updated suite payload before writing either artifact, so invalid suite output
+  can no longer leave an orphan promoted sample behind.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

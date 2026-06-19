@@ -74,9 +74,6 @@ def promote_regression_sample_from_eval_result(
     )
     EvalSample.from_mapping(sample_payload)
 
-    sample_output_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_json(sample_output_path, sample_payload)
-
     suite_output_path = Path(suite_output_path or suite_path or _default_suite_path(bundle))
     updated_suite = _updated_suite_payload(
         suite_payload,
@@ -86,6 +83,9 @@ def promote_regression_sample_from_eval_result(
         review_label=review_label,
     )
     EvalSuite.from_mapping(updated_suite)
+
+    sample_output_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(sample_output_path, sample_payload)
     suite_output_path.parent.mkdir(parents=True, exist_ok=True)
     _write_json(suite_output_path, updated_suite)
 

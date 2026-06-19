@@ -34,6 +34,17 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval regression promotion now validates the promoted sample
+  payload and updated suite payload before writing either artifact. Invalid
+  suite updates no longer leave orphan promoted sample files behind when
+  promotion fails after sample validation; successful promotion and existing
+  fail-aloud source-sample guards are unchanged. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud artifact/write
+  atomicity. Metric: ratchet stayed at 0 Ruff complexity rows and reports 79
+  oversized modules in the current dirty worktree. Proof: focused eval
+  regression-promotion tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval regression promotion now treats matched suite
   `sample_refs` as declared source truth. Missing or invalid declared source
   samples, plus refs that resolve to a different sample id, now fail before any

@@ -1641,6 +1641,34 @@ def test_regression_promotion_fails_aloud_on_mismatched_declared_source_sample(
     assert not suite_output.exists()
 
 
+def test_regression_promotion_validates_suite_before_writing_sample(
+    tmp_path: Path,
+) -> None:
+    run = run_eval_suite(
+        "smoke_regression",
+        output_root=tmp_path,
+        stamp="artifact-failure",
+        product_runner=_missing_artifact_product_runner,
+    )
+    sample_output = tmp_path / "samples" / "should_not_exist.json"
+    suite_output = tmp_path / "suites" / "should_not_exist.json"
+    suite_path = tmp_path / "suite_with_missing_thresholds.json"
+    suite = json.loads(run.results_path.read_text())["suite"]
+    suite.pop("thresholds")
+    suite_path.write_text(json.dumps(suite), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="thresholds"):
+        promote_regression_sample_from_eval_result(
+            run.results_path,
+            sample_output_path=sample_output,
+            suite_path=suite_path,
+            suite_output_path=suite_output,
+        )
+
+    assert not sample_output.exists()
+    assert not suite_output.exists()
+
+
 def test_regression_promotion_stop_label_does_not_write_outputs(tmp_path: Path) -> None:
     run = run_eval_suite(
         "smoke_regression",
