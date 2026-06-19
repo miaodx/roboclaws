@@ -1094,6 +1094,18 @@ def test_live_surface_command_rejects_invalid_generated_mess_count(
         live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
 
 
+@pytest.mark.parametrize("value", ["bad", "-1", "5.5", 5.0, True])
+def test_live_surface_command_rejects_invalid_scene_index(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
+    kwargs["scene_index"] = value
+
+    with pytest.raises(ValueError, match="scene_index must be a non-negative integer"):
+        live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
+
+
 def test_live_eval_rejects_invalid_sample_generated_mess_count(tmp_path: Path) -> None:
     sample = json.loads(
         (
@@ -1142,6 +1154,58 @@ def test_live_eval_rejects_invalid_sample_generated_mess_count(tmp_path: Path) -
     assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
     assert (
         "private_goal_reference.generated_mess_count must be a non-negative integer"
+        in result["grader_outputs"]["runner"]["message"]
+    )
+
+
+def test_live_eval_rejects_invalid_sample_scene_index(tmp_path: Path) -> None:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals"
+            / "household_world"
+            / "samples"
+            / "cleanup"
+            / "smoke_seed7.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = "cleanup.invalid_scene_index"
+    sample["launch_overrides"]["scene_index"] = True
+    sample_path = tmp_path / "invalid_scene_index_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / "invalid_scene_index_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": "household_world.invalid_scene_index",
+                "version": "2026-06-20",
+                "capability": "household_world_cleanup",
+                "sample_ids": [sample["sample_id"]],
+                "sample_refs": [str(sample_path)],
+                "required_graders": ["artifacts"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("product runner should not launch with invalid scene index")
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp="invalid-scene-index",
+        product_runner=product_runner,
+    )
+
+    result = json.loads(run.results_path.read_text())["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "launch_overrides.scene_index must be a non-negative integer"
         in result["grader_outputs"]["runner"]["message"]
     )
 

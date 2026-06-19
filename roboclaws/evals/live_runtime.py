@@ -255,7 +255,7 @@ def live_surface_command(kwargs: dict[str, Any], *, output_dir: Path) -> list[st
         f"output_dir={output_dir}",
         f"run_dir={live_surface_run_dir(kwargs, output_dir=output_dir)}",
         f"scene_source={kwargs['scene_source']}",
-        f"scene_index={kwargs['scene_index']}",
+        f"scene_index={_live_surface_scene_index(kwargs)}",
     ]
     if sample is not None and sample.preset not in {"", MISSING_NOT_APPLICABLE}:
         command.append(f"preset={sample.preset}")
@@ -537,7 +537,7 @@ def product_run_kwargs(
         "map_build": map_build,
         "generated_mess_count": generated_mess_count(sample),
         "scene_source": str(launch_overrides.get("scene_source") or "procthor-10k-val"),
-        "scene_index": int(launch_overrides.get("scene_index") or 0),
+        "scene_index": scene_index(sample),
         "run_metadata_overrides": {
             "eval_sample_id": sample.sample_id,
             "eval_sample_version": sample.version,
@@ -593,6 +593,16 @@ def generated_mess_count(sample: EvalSample) -> int:
     return 10
 
 
+def scene_index(sample: EvalSample) -> int:
+    launch_overrides = sample.launch_overrides or {}
+    if "scene_index" not in launch_overrides:
+        return 0
+    return _non_negative_int_value(
+        launch_overrides.get("scene_index"),
+        "launch_overrides.scene_index",
+    )
+
+
 def _goal_contract_json(sample: EvalSample) -> str:
     launch_overrides = sample.launch_overrides or {}
     override = str(launch_overrides.get("goal_contract_json") or "")
@@ -645,6 +655,10 @@ def _generated_mess_count(kwargs: dict[str, Any]) -> int:
     if value is None or value == "":
         return 0
     return _non_negative_int_value(value, "generated_mess_count")
+
+
+def _live_surface_scene_index(kwargs: dict[str, Any]) -> int:
+    return _non_negative_int_value(kwargs["scene_index"], "scene_index")
 
 
 def _non_negative_int_value(value: object, setting_name: str) -> int:
