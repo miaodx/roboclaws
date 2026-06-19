@@ -1081,6 +1081,71 @@ def test_live_surface_command_uses_no_preset_public_open_task_route(tmp_path: Pa
     assert plan.preset is None
 
 
+@pytest.mark.parametrize("value", ["bad", "-1", "5.5", 5.0, True])
+def test_live_surface_command_rejects_invalid_generated_mess_count(
+    tmp_path: Path,
+    value: object,
+) -> None:
+    kwargs = _live_surface_kwargs(tmp_path / "trial-0000")
+    kwargs["evidence_lane"] = "world-public-labels"
+    kwargs["generated_mess_count"] = value
+
+    with pytest.raises(ValueError, match="generated_mess_count must be a non-negative integer"):
+        live_surface_command(kwargs, output_dir=tmp_path / "surface-run")
+
+
+def test_live_eval_rejects_invalid_sample_generated_mess_count(tmp_path: Path) -> None:
+    sample = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "evals"
+            / "household_world"
+            / "samples"
+            / "cleanup"
+            / "smoke_seed7.json"
+        ).read_text(encoding="utf-8")
+    )
+    sample["sample_id"] = "cleanup.invalid_generated_mess_count"
+    sample["private_goal_reference"]["generated_mess_count"] = "five"
+    sample_path = tmp_path / "invalid_generated_mess_count_sample.json"
+    sample_path.write_text(json.dumps(sample), encoding="utf-8")
+    suite_path = tmp_path / "invalid_generated_mess_count_suite.json"
+    suite_path.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_eval_suite_v1",
+                "suite_id": "household_world.invalid_generated_mess_count",
+                "version": "2026-06-20",
+                "capability": "household_world_cleanup",
+                "sample_ids": [sample["sample_id"]],
+                "sample_refs": [str(sample_path)],
+                "required_graders": ["artifacts"],
+                "thresholds": {"pass_at_1": 1.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def product_runner(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("product runner should not launch with invalid mess count")
+
+    run = run_eval_suite(
+        str(suite_path),
+        output_root=tmp_path,
+        stamp="invalid-generated-mess-count",
+        product_runner=product_runner,
+    )
+
+    result = json.loads(run.results_path.read_text())["results"][0]
+    assert result["status"] == "failed"
+    assert result["failure_class"] == "artifact_missing"
+    assert result["grader_outputs"]["runner"]["error_type"] == "ValueError"
+    assert (
+        "private_goal_reference.generated_mess_count must be a non-negative integer"
+        in result["grader_outputs"]["runner"]["message"]
+    )
+
+
 def test_live_surface_env_sets_provider_and_model_keys(tmp_path: Path) -> None:
     kwargs: dict[str, Any] = {
         "agent_engine": "claude-code",

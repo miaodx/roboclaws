@@ -578,13 +578,16 @@ def task_prompt(sample: EvalSample) -> str:
 
 def generated_mess_count(sample: EvalSample) -> int:
     reference = sample.private_goal_reference
-    if isinstance(reference.get("generated_mess_count"), int):
-        return int(reference["generated_mess_count"])
+    if "generated_mess_count" in reference:
+        return _non_negative_int_value(
+            reference.get("generated_mess_count"),
+            "private_goal_reference.generated_mess_count",
+        )
     launch_overrides = sample.launch_overrides or {}
     for key in ("generated_mess_count", "relocation_count"):
         value = launch_overrides.get(key)
         if value is not None:
-            return int(value)
+            return _non_negative_int_value(value, f"launch_overrides.{key}")
     if sample.intent == "map-build":
         return 0
     return 10
@@ -638,10 +641,26 @@ def _is_smoke_budget(kwargs: dict[str, Any]) -> bool:
 
 
 def _generated_mess_count(kwargs: dict[str, Any]) -> int:
-    try:
-        return int(kwargs.get("generated_mess_count") or 0)
-    except (TypeError, ValueError):
+    value = kwargs.get("generated_mess_count")
+    if value is None or value == "":
         return 0
+    return _non_negative_int_value(value, "generated_mess_count")
+
+
+def _non_negative_int_value(value: object, setting_name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
+    if isinstance(value, int):
+        if value < 0:
+            raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("+"):
+            text = text[1:]
+        if text.isdecimal():
+            return int(text)
+    raise ValueError(f"{setting_name} must be a non-negative integer, got {value!r}")
 
 
 def _public_backend_from_implementation(backend: str) -> str:

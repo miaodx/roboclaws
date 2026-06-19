@@ -152,7 +152,10 @@ Latest quality snapshot from 2026-06-20:
   can no longer leave an orphan promoted sample behind. Live-agent result
   artifact loading now fails aloud on present malformed or non-object
   `live_status.json` / `run_result.json` sources instead of erasing corrupt
-  status or completion evidence into unknown or absent state. Apple-to-apple
+  status or completion evidence into unknown or absent state. Eval live-product
+  launch setup now rejects invalid cleanup `generated_mess_count` /
+  `relocation_count` metadata instead of silently dropping scenario setup from
+  the live surface command. Apple-to-apple
   grid execution now rejects malformed existing grid manifests and stable
   malformed live-status sources instead of silently discarding previous row
   evidence or timing out from a fabricated unknown phase. Operator-console

@@ -1133,6 +1133,8 @@ def _failure_class_from_exception(exc: Exception) -> str:
     if any(token in message for token in environment_tokens):
         return "environment_blocked"
     artifact_tokens = (
+        "generated_mess_count must be a non-negative integer",
+        "launch_overrides.relocation_count must be a non-negative integer",
         "invalid live eval json artifact",
         "live eval json artifact",
     )
