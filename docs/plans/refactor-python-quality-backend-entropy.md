@@ -98,8 +98,11 @@ Latest quality snapshot from 2026-06-19:
   camera evidence. Molmo CI live failure diagnostics now publish only the
   latest seed directory with recognized diagnostic evidence, so empty newer
   `seed-*` placeholders no longer hide or replace real failure artifacts.
-  Continue fail-aloud/runtime-source audits from fresh evidence rather than
-  reopening closed helper splits; route any future test-shape cleanup through
+  Detached live-run summary auto-discovery now requires live-run evidence in
+  selected seed directories and explicit empty run directories fail aloud,
+  preventing pending/all-missing summaries from placeholder paths. Continue
+  fail-aloud/runtime-source audits from fresh evidence rather than reopening
+  closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a

@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Detached live-run summary auto-discovery now requires recognized
+  live-run evidence before selecting default or parent `seed-*` directories,
+  and explicit empty run directories fail aloud instead of printing
+  pending/all-missing summaries. The summary CLI no longer reports placeholder
+  seed dirs as the latest run; explicit `run_result.json` inputs,
+  comparison-manifest handling, timing extraction, and summary rendering are
+  unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud artifact/source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and 78 oversized modules. Proof: full
+  detached live-run summary unit tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Molmo CI live failure diagnostics now select the latest
   evidence-bearing `seed-*` directory instead of the newest directory of any
   shape. Failed live entries no longer publish an empty latest seed placeholder

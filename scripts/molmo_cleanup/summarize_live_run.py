@@ -20,6 +20,12 @@ from roboclaws.reports.live_performance import (
 )
 
 DEFAULT_SEARCH_ROOT = Path("output/molmo/codex-report")
+LIVE_RUN_DISCOVERY_FILES = (
+    "run_result.json",
+    "trace.jsonl",
+    "live_status.json",
+    "live_timing.json",
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -55,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     if not run_dir.exists():
         print(f"error: run path does not exist: {run_dir}", file=sys.stderr)
         return 1
+    if not _is_live_run_dir(run_dir):
+        print(f"error: run path has no live-run evidence: {run_dir}", file=sys.stderr)
+        return 1
 
     try:
         summary = _summarize(run_dir)
@@ -68,7 +77,11 @@ def main(argv: list[str] | None = None) -> int:
 def _resolve_run_dir(path: Path | None) -> Path | None:
     if path is None:
         candidates = sorted(
-            (candidate for candidate in DEFAULT_SEARCH_ROOT.glob("*/seed-*") if candidate.is_dir()),
+            (
+                candidate
+                for candidate in DEFAULT_SEARCH_ROOT.glob("*/seed-*")
+                if _is_live_run_dir(candidate)
+            ),
             key=lambda item: item.stat().st_mtime,
             reverse=True,
         )
@@ -77,17 +90,21 @@ def _resolve_run_dir(path: Path | None) -> Path | None:
     path = path.expanduser()
     if path.is_file() and path.name == "run_result.json":
         return path.parent
-    if (path / "run_result.json").is_file() or (path / "trace.jsonl").exists():
+    if path.is_dir() and _is_live_run_dir(path):
         return path
 
     seed_dirs = sorted(
-        (candidate for candidate in path.glob("seed-*") if candidate.is_dir()),
+        (candidate for candidate in path.glob("seed-*") if _is_live_run_dir(candidate)),
         key=lambda item: item.stat().st_mtime,
         reverse=True,
     )
     if seed_dirs:
         return seed_dirs[0]
     return path
+
+
+def _is_live_run_dir(path: Path) -> bool:
+    return path.is_dir() and any((path / name).is_file() for name in LIVE_RUN_DISCOVERY_FILES)
 
 
 def _summarize(run_dir: Path) -> dict[str, Any]:
