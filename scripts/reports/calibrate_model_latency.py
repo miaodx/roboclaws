@@ -181,15 +181,25 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines(),
+        start=1,
+    ):
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"model-call metrics source {path} contains invalid JSON at "
+                f"line {line_number}: {exc.msg}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"model-call metrics source {path} contains non-object JSON at "
+                f"line {line_number}: {type(payload).__name__}"
+            )
+        rows.append(payload)
     return rows
 
 

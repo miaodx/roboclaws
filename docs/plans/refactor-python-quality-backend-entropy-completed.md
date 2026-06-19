@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Model-latency calibration source parsing now fails aloud for
+  present malformed or non-object `model_call_metrics.jsonl` rows. Calibration
+  fitting and holdout validation no longer skip corrupt source rows before
+  computing sample counts, fit statistics, validation statistics, or
+  coefficient sets, so diagnostic normalized-latency packets cannot look
+  cleaner by silently shrinking their source dataset. Missing metric files still
+  preserve the existing insufficient-samples / holdout-not-requested behavior,
+  and well-formed but unusable metric rows still count as rejected rows. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth; calibration packet schema, fit math,
+  holdout limitation policy, and model-call metric row rejection rules are
+  unchanged. Metric: ratchet stayed at 0 Ruff complexity rows and
+  78 oversized modules. Proof: focused report-performance calibration tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-19: Report-performance source parsing now fails aloud for present
   malformed or non-object JSON and JSONL artifacts. Corrupt
   `live_timing.json`, `live_status.json`, `run_result.json`, `trace.jsonl`,

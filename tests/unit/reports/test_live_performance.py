@@ -332,6 +332,43 @@ def test_calibrate_model_latency_fails_closed_on_too_few_rows(tmp_path: Path) ->
     assert "insufficient_calibration_samples" in packet["limitations"]
 
 
+def test_calibrate_model_latency_fails_aloud_on_malformed_metrics_source(
+    tmp_path: Path,
+) -> None:
+    calibrator = _load_calibrator()
+    metrics_path = tmp_path / "model_call_metrics.jsonl"
+    metrics_path.write_text(
+        json.dumps(_model_call_metric_row(uncached_input_tokens=1, duration_s=1.0)) + "\n"
+        '{"schema":"roboclaws_model_call_metric_v1"',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"model_call_metrics\.jsonl.*line 2"):
+        calibrator.build_calibration_packet(
+            [metrics_path],
+            dataset_name="malformed-source",
+            min_samples=1,
+        )
+
+
+def test_calibrate_model_latency_fails_aloud_on_non_object_metrics_source(
+    tmp_path: Path,
+) -> None:
+    calibrator = _load_calibrator()
+    metrics_path = tmp_path / "model_call_metrics.jsonl"
+    metrics_path.write_text(
+        json.dumps(["not", "a", "metric"]) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"model_call_metrics\.jsonl.*non-object.*line 1"):
+        calibrator.build_calibration_packet(
+            [metrics_path],
+            dataset_name="non-object-source",
+            min_samples=1,
+        )
+
+
 def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetry(
     tmp_path: Path,
 ) -> None:

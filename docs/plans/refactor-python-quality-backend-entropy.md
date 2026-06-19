@@ -56,7 +56,10 @@ Latest quality snapshot from 2026-06-19:
   `live_status.json` sources instead of treating corrupt owner evidence as
   absent or startable. Report-performance extraction now fails aloud on present
   malformed or non-object JSON/JSONL sources instead of deriving false-green
-  performance packets from empty or partial telemetry.
+  performance packets from empty or partial telemetry. Model-latency
+  calibration now fails aloud on present malformed or non-object
+  `model_call_metrics.jsonl` rows instead of fitting calibration packets from
+  silently skipped source evidence.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
