@@ -36,11 +36,12 @@ logs before choosing the next slice.
 
 - 2026-06-20: The live OpenAI Agents runtime now rejects boolean and non-finite
   numeric settings before status/timing evidence is written. Direct metadata
-  and env inputs for model-service retry attempts, model-service retry sleep,
-  and MCP client session timeout now fail with `provider_config_failure`
-  instead of accepting booleans as numbers, leaking `nan` / `inf`, or surfacing
-  raw conversion failures; zero MCP timeout still explicitly disables the
-  client timeout. Owner layer: Agent Engines And Provider Profiles.
+  and env inputs for max turns, model-service retry attempts,
+  model-service retry sleep, and MCP client session timeout now fail with
+  `provider_config_failure` instead of accepting booleans as numbers, leaking
+  `nan` / `inf`, or surfacing raw conversion failures; zero MCP timeout still
+  explicitly disables the client timeout. Owner layer: Agent Engines And
+  Provider Profiles.
   Behavior-change class: fail-aloud live runtime env/metadata input; SDK
   perf-profile defaults, provider route/model selection, live provider calls,
   and zero-timeout disable semantics are unchanged. Metric: ratchet stayed at

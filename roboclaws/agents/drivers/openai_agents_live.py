@@ -568,7 +568,7 @@ def _positive_int(value: Any, setting_name: str, *, default: int) -> int:
         )
     try:
         parsed = int(value)
-    except (TypeError, ValueError) as exc:
+    except (OverflowError, TypeError, ValueError) as exc:
         raise ValueError(
             f"OpenAI Agents SDK setting {setting_name} must be a positive integer, got {value!r}"
         ) from exc
@@ -608,19 +608,7 @@ def _max_turns(request: LiveAgentRequest) -> int:
     configured = request.metadata.get("max_turns") if isinstance(request.metadata, dict) else None
     if configured is None:
         return DEFAULT_OPENAI_AGENTS_MAX_TURNS
-    try:
-        value = int(configured)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "OpenAI Agents SDK setting max_turns (max_turns) must be a positive integer, "
-            f"got {configured!r}"
-        ) from exc
-    if value < 1:
-        raise ValueError(
-            "OpenAI Agents SDK setting max_turns (max_turns) must be a positive integer, "
-            f"got {configured!r}"
-        )
-    return value
+    return _positive_int(configured, "max_turns", default=DEFAULT_OPENAI_AGENTS_MAX_TURNS)
 
 
 def _cache_tools_list(request: LiveAgentRequest) -> bool:

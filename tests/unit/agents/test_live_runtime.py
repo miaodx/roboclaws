@@ -1769,44 +1769,25 @@ def test_openai_agents_runtime_preserves_zero_mcp_client_timeout_disable(
     assert _mcp_client_session_timeout_seconds(request) == (True, None)
 
 
-def test_openai_agents_runtime_rejects_invalid_direct_max_turns(tmp_path: Path) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"max_turns": "many"},
+@pytest.mark.parametrize(
+    ("value", "expected_detail"),
+    [
+        ("many", "must be a positive integer, got 'many'"),
+        (0, "must be a positive integer, got 0"),
+        (True, "must be a positive integer, got True"),
+        (float("inf"), "must be a positive integer, got inf"),
+    ],
+)
+def test_openai_agents_runtime_rejects_invalid_direct_max_turns(
+    tmp_path: Path,
+    value: object,
+    expected_detail: str,
+) -> None:
+    _assert_openai_agents_config_failure(
+        tmp_path,
+        metadata={"max_turns": value},
+        detail=f"OpenAI Agents SDK setting max_turns {expected_detail}",
     )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting max_turns" in payload["detail"]
-    assert "must be a positive integer, got 'many'" in payload["detail"]
-
-
-def test_openai_agents_runtime_rejects_non_positive_direct_max_turns(tmp_path: Path) -> None:
-    request = LiveAgentRequest(
-        run_id="household-world.cleanup",
-        skill_name="molmo-realworld-cleanup",
-        kickoff_prompt="clean the room",
-        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
-        run_dir=tmp_path / "run",
-        metadata={"max_turns": 0},
-    )
-
-    result = OpenAIAgentsLiveRuntime().run(request)
-
-    assert result.phase == "failed"
-    assert result.reason == "provider_config_failure"
-    payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
-    assert payload["reason"] == "provider_config_failure"
-    assert "OpenAI Agents SDK setting max_turns" in payload["detail"]
-    assert "must be a positive integer, got 0" in payload["detail"]
 
 
 @pytest.mark.parametrize(
