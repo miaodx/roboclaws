@@ -226,7 +226,12 @@ class LiveCodexCleanupRunner:
             self._release_visual_slot()
             return 1
 
-        self._write_live_timing("finished", 0)
+        source_error = self._write_live_timing("finished", 0)
+        if source_error:
+            self._write_status("failed", 1, reason=source_error)
+            self._cleanup_provider_timing_proxy()
+            self._release_visual_slot()
+            return 1
         self._write_status("finished", 0)
         self._cleanup_provider_timing_proxy()
         self._release_visual_slot()
@@ -487,7 +492,10 @@ class LiveCodexCleanupRunner:
         terminal_phase = _wait_for_terminal_phase_from_status(self.status_path)
         if (self.run_dir / "run_result.json").is_file() and status == 0:
             self._check_result()
-            self._write_live_timing("finished", 0)
+            source_error = self._write_live_timing("finished", 0)
+            if source_error:
+                self._write_status("failed", 1, reason=source_error)
+                return 1
             self._write_status("finished", 0)
             return 0
         if terminal_phase in {
@@ -578,7 +586,7 @@ class LiveCodexCleanupRunner:
         retryable: bool | None = None,
         resume_available: bool | None = None,
         detail: str = "",
-    ) -> None:
+    ) -> str:
         finished_at = time.time()
         payload = dict(self.live_timing)
         payload.update(
@@ -599,17 +607,27 @@ class LiveCodexCleanupRunner:
         if detail:
             payload["detail"] = detail
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
-        payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
-        first_request = _first_mcp_request_epoch(self.run_dir)
-        if first_request is not None:
-            payload["time_to_first_mcp_request_s"] = _round_duration(
-                first_request - self.started_at_epoch
-            )
-            server_ready = _float_or_none(payload.get("server_ready_epoch"))
-            if server_ready is not None:
-                payload["first_mcp_request_after_server_ready_s"] = _round_duration(
-                    first_request - server_ready
+        source_error = ""
+        try:
+            payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+            first_request = _first_mcp_request_epoch(self.run_dir)
+            if first_request is not None:
+                payload["time_to_first_mcp_request_s"] = _round_duration(
+                    first_request - self.started_at_epoch
                 )
+                server_ready = _float_or_none(payload.get("server_ready_epoch"))
+                if server_ready is not None:
+                    payload["first_mcp_request_after_server_ready_s"] = _round_duration(
+                        first_request - server_ready
+                    )
+        except ValueError as exc:
+            source_error = f"live_timing_source_error: {exc}"
+            payload["live_timing_source_error"] = source_error
+            if phase == "finished" and exit_status == 0:
+                payload["phase"] = "failed"
+                payload["exit_status"] = 1
+                payload["reason"] = source_error
+            payload["mcp_trace_timing"] = {"available": False, "source_error": str(exc)}
         payload["model_api_time_s"] = payload.get("codex_events", {}).get("model_api_time_s")
         payload["model_api_time_note"] = payload.get("codex_events", {}).get(
             "model_api_time_note",
@@ -620,6 +638,7 @@ class LiveCodexCleanupRunner:
             self.run_dir / "model_call_metrics.jsonl",
             extract_model_call_metrics(self.run_dir, live_timing=payload),
         )
+        return source_error
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
@@ -1118,15 +1137,20 @@ def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     events: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line_number, line in enumerate(
+        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
+    ):
         if not line.strip():
             continue
+        source = f"{path}:{line_number}"
         try:
             item = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Codex live source {source}: invalid JSON: {exc.msg}") from exc
         if isinstance(item, dict):
             events.append(item)
+        else:
+            raise ValueError(f"Codex live source {source}: non-object JSON: {type(item).__name__}")
     return events
 
 

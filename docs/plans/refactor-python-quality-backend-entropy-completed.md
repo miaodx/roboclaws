@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Codex and Claude live-run timing source parsing now fails aloud
+  for present malformed or non-object `trace.jsonl` rows, and Codex event
+  summary parsing now fails aloud for malformed or non-object
+  `codex-events.jsonl` rows. Corrupt timing/model source evidence no longer
+  disappears before `live_timing.json`, MCP trace timing, time-to-first-MCP,
+  Codex event summaries, or model-call metrics are written. A would-be
+  successful run becomes a failed timing/status packet with
+  `live_timing_source_error`; existing failure packets preserve their original
+  reason while recording the source error. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud artifact/source truth;
+  launch command construction, provider timing proxy behavior, checker gates,
+  cleanup-server lifecycle, and model-call metric schemas are unchanged.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 78 oversized modules.
+  Proof: focused CI live-report runner tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet.
+
 - 2026-06-19: Agent SDK speedup matrix row loading now blocks on present
   malformed or non-object baseline/candidate source artifacts instead of
   deriving quality, speed, or reducible-bucket recommendations from empty or

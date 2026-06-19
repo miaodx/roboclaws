@@ -71,7 +71,10 @@ Latest quality snapshot from 2026-06-19:
   corrupt evidence. Agent SDK speedup matrix rows now block on present
   malformed or non-object baseline/candidate run source artifacts instead of
   accepting, rejecting, or recommending speedup work from empty or partial
-  performance evidence.
+  performance evidence. Codex and Claude live-run timing writers now surface
+  malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
+  failed timing/status evidence instead of skipping corrupt rows while writing
+  model/timing summaries.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
