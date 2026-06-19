@@ -34,6 +34,18 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console prompt previews now reject malformed or negative
+  cleanup `relocation_count` overrides before rendering kickoff prompts.
+  Preview-only target cleanup counts can no longer silently coerce invalid
+  launch input into a plausible target of one; baseline/default cleanup counts,
+  valid relocation counts, and existing prompt-env numeric validation are
+  unchanged. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: fail-aloud operator-visible launch-input preview. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused operator-console prompt-preview tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-20: The live OpenAI Agents runtime now rejects boolean and non-finite
   numeric settings before status/timing evidence is written. Direct metadata
   and env inputs for max turns, model-service retry attempts,

@@ -240,8 +240,32 @@ def test_operator_console_prompt_preview_endpoint_renders_agent_kickoff_prompt(
     assert "Codex CLI receives an additional live-route wrapper" in payload["wrapper_notes"][0]
 
 
-def test_operator_console_prompt_preview_endpoint_rejects_invalid_numeric_env(
+@pytest.mark.parametrize(
+    ("request_fields", "expected_error"),
+    [
+        (
+            {
+                "agent_engine_id": "openai-agents-sdk",
+                "evidence_lane": "camera-raw-fpv",
+                "overrides": {},
+                "env_overrides": {"ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "many"},
+            },
+            "raw_fpv_candidate_budget must be an integer",
+        ),
+        (
+            {
+                "agent_engine_id": "codex-cli",
+                "evidence_lane": "world-public-labels",
+                "overrides": {"relocation_count": "abc"},
+            },
+            "relocation_count must be an integer",
+        ),
+    ],
+)
+def test_operator_console_prompt_preview_endpoint_rejects_invalid_numeric_inputs(
     tmp_path: Path,
+    request_fields: dict[str, object],
+    expected_error: str,
 ) -> None:
     handler = partial(ConsoleRequestHandler, root=tmp_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -257,13 +281,10 @@ def test_operator_console_prompt_preview_endpoint_rejects_invalid_numeric_env(
                     "world_id": "molmospaces/procthor-objaverse-val/0",
                     "backend_id": "mujoco",
                     "intent_id": "cleanup",
-                    "agent_engine_id": "openai-agents-sdk",
                     "provider_profile": "codex-router-responses",
-                    "evidence_lane": "camera-raw-fpv",
                     "scenario_setup": "relocate-cleanup-related-objects",
                     "prompt": "收拾杯子",
-                    "overrides": {},
-                    "env_overrides": {"ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET": "many"},
+                    **request_fields,
                 }
             ).encode("utf-8"),
             headers={"Content-Type": "application/json"},
@@ -277,7 +298,7 @@ def test_operator_console_prompt_preview_endpoint_rejects_invalid_numeric_env(
         thread.join(timeout=2)
 
     assert exc_info.value.code == 400
-    assert "raw_fpv_candidate_budget must be an integer" in payload["error"]
+    assert expected_error in payload["error"]
 
 
 @pytest.mark.parametrize(
@@ -307,6 +328,32 @@ def test_prompt_preview_rejects_invalid_openai_agents_numeric_env_values(
             PromptPreviewRequest(
                 prompt="收拾杯子",
                 env_overrides=env_overrides,
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_error"),
+    [
+        ({"relocation_count": "abc"}, "relocation_count must be an integer"),
+        ({"relocation_count": "-3"}, "relocation_count must be non-negative"),
+    ],
+)
+def test_prompt_preview_rejects_invalid_relocation_count(
+    overrides: dict[str, str],
+    expected_error: str,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_CLEANUP)
+
+    with pytest.raises(ValueError, match=expected_error):
+        build_prompt_preview(
+            route,
+            PromptPreviewRequest(
+                prompt="收拾杯子",
+                overrides={
+                    "scenario_setup": "relocate-cleanup-related-objects",
+                    **overrides,
+                },
             ),
         )
 

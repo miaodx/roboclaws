@@ -224,18 +224,13 @@ def _target_cleanup_count(
 ) -> int:
     if selected_intent != "cleanup":
         return 7
-    try:
-        count = int(
-            str(
-                relocation_count
-                if relocation_count not in {None, ""}
-                else ("0" if scenario_setup == "baseline" else "5")
-            )
-        )
-    except ValueError:
-        count = 0
-    if count <= 0:
-        count = 0
+    count = _nonnegative_int_env(
+        relocation_count
+        if relocation_count not in {None, ""}
+        else ("0" if scenario_setup == "baseline" else "5"),
+        "relocation_count",
+        setting_name="relocation_count",
+    )
     if evidence_lane == "camera-raw-fpv":
         return max(1, (count * 7 + 9) // 10) if count else 1
     return max(1, count) if count else 1

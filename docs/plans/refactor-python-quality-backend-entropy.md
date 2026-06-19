@@ -27,7 +27,10 @@ Latest quality snapshot from 2026-06-20:
   live eval artifact selector below the C901 threshold, and surfaced malformed
   operator-console runtime inventory
   JSON, eval runtime-map artifacts, eval trace JSONL artifacts, and live eval
-  surface JSON artifacts as explicit source-error evidence. Eval-harness
+  surface JSON artifacts as explicit source-error evidence. Operator-console
+  prompt previews now reject malformed or negative cleanup `relocation_count`
+  overrides instead of rendering plausible target-count prompts for invalid
+  live-route input. Eval-harness
   provider readiness now rejects unknown provider profiles through the provider
   registry instead of treating them like the Codex router when Codex env vars
   happen to exist, and attached eval-harness `eval_results.json` files now
