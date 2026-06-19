@@ -42,6 +42,9 @@ Latest quality snapshot from 2026-06-19:
   to the wrong route instead of treating family-compatible names as launchable.
   RAW-FPV Codex event JSONL and observe text-result JSON source errors now fail
   aloud instead of being skipped into fewer apparent source observations.
+  Operator-console control source JSONL errors now fail aloud before appending
+  new manual-control rows, preserving operator-intervention evidence instead
+  of silently renumbering around corrupt history.
   Continue fail-aloud/runtime-source audits from fresh evidence rather than
   reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.

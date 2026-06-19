@@ -233,13 +233,29 @@ def _read_control_rows(run_dir: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise OperatorControlError(
+            f"operator control source cannot be read at {path}: {exc}",
+            status=409,
+        ) from exc
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
         try:
             payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            rows.append(payload)
+        except json.JSONDecodeError as exc:
+            raise OperatorControlError(
+                f"operator control source contains invalid JSON at {path}:{line_number}: {exc.msg}",
+                status=409,
+            ) from exc
+        if not isinstance(payload, dict):
+            raise OperatorControlError(
+                f"operator control source row must be an object at {path}:{line_number}",
+                status=409,
+            )
+        rows.append(payload)
     return rows
 
 

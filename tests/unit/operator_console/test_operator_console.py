@@ -9,6 +9,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from functools import partial
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -932,6 +933,20 @@ def _blocked_operator_control_payload(
     return json.loads(exc_info.value.read().decode("utf-8"))
 
 
+@contextmanager
+def _console_server(root: Path):
+    handler = partial(ConsoleRequestHandler, root=root)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def _exercise_allowlisted_operator_control(
     root: Path, run_id: str
 ) -> tuple[
@@ -953,12 +968,7 @@ def _exercise_allowlisted_operator_control(
             "requires_reobserve": True,
         }
 
-    handler = partial(ConsoleRequestHandler, root=root)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        host, port = server.server_address
+    with _console_server(root) as (host, port):
         with patch("roboclaws.operator_console.control._call_mcp_tool", fake_call_mcp_tool):
             payload = _post_operator_control_payload(
                 host,
@@ -987,10 +997,6 @@ def _exercise_allowlisted_operator_control(
                 "forward_m": 2.0,
             },
         )
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
 
     return payload, blocked_payload, large_payload
 
@@ -1044,6 +1050,38 @@ def test_operator_console_control_endpoint_is_allowlisted_and_records_operator_r
 
     _assert_allowlisted_operator_control_response(payload, blocked_payload, large_payload)
     _assert_operator_control_artifacts(tmp_path, run_dir, route)
+
+
+def test_operator_console_control_endpoint_rejects_malformed_control_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "malformed-control-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    (run_dir / "operator_control.jsonl").write_text("\n{not-json}\n", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator control source contains invalid JSON" in payload["error"]
+    assert "operator_control.jsonl:2" in payload["error"]
+    assert (run_dir / "operator_control.jsonl").read_text(encoding="utf-8") == "\n{not-json}\n"
+
+
+def test_operator_console_control_endpoint_rejects_non_object_control_source(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "non-object-control-run"
+    run_dir = _write_running_operator_control_state(tmp_path, route, run_id)
+    (run_dir / "operator_control.jsonl").write_text("[]\n", encoding="utf-8")
+
+    with _console_server(tmp_path) as (host, port):
+        payload = _blocked_operator_control_payload(host, port, run_id, {"action": "observe"})
+
+    assert "operator control source row must be an object" in payload["error"]
+    assert "operator_control.jsonl:1" in payload["error"]
+    assert (run_dir / "operator_control.jsonl").read_text(encoding="utf-8") == "[]\n"
 
 
 def test_operator_console_control_endpoint_allows_paused_operator_handoff(

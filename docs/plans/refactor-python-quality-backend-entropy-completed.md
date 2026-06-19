@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Operator-console manual-control source parsing now fails aloud
+  for malformed or non-object `operator_control.jsonl` rows. Corrupt present
+  control evidence no longer disappears before event-id assignment or
+  intervention summary generation, so the console will not append new manual
+  control rows around broken operator-intervention history. Owner layer: Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud runtime
+  artifact/source truth; valid manual control calls, route gating, MCP tool
+  invocation, operator-state updates, intervention artifact writing, and
+  blank-line tolerance are unchanged. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 78 oversized modules. Proof: focused operator-console
+  control endpoint tests, touched-file ruff/format checks, `git diff --check`,
+  and ratchet.
+
 - 2026-06-19: RAW-FPV Codex event source parsing now fails aloud for malformed
   JSONL rows and malformed observe text-result JSON. Corrupt present
   `codex-events*.jsonl` evidence no longer disappears into fewer source
