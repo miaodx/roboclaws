@@ -104,14 +104,28 @@ def _output_dir(args: argparse.Namespace) -> Path:
 
 def _load_agent_view(*, run_result: Path | None, agent_view: Path | None) -> dict[str, Any]:
     if run_result is not None:
-        data = json.loads(run_result.read_text(encoding="utf-8"))
+        data = _load_json_source(run_result, label="run result")
+        if not isinstance(data, dict):
+            raise SystemExit(
+                f"run result payload must be a JSON object: {run_result} "
+                f"(got {type(data).__name__})"
+            )
         loaded = data.get("agent_view")
     else:
         assert agent_view is not None
-        loaded = json.loads(agent_view.read_text(encoding="utf-8"))
+        loaded = _load_json_source(agent_view, label="agent view")
     if not isinstance(loaded, dict):
         raise SystemExit("agent view payload must be a JSON object")
     return loaded
+
+
+def _load_json_source(path: Path, *, label: str) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"{label} source is unreadable: {path}: {type(exc).__name__}: {exc}"
+        ) from exc
 
 
 if __name__ == "__main__":

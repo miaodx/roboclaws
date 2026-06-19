@@ -152,6 +152,57 @@ def test_exporter_writes_canonical_molmospaces_scene_bundle(tmp_path: Path) -> N
     assert (bundle_dir / "semantics.json").is_file()
 
 
+def test_exporter_cli_reports_malformed_agent_view_without_traceback(tmp_path: Path) -> None:
+    agent_view_path = tmp_path / "agent_view.json"
+    agent_view_path.write_text("{", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--agent-view",
+            str(agent_view_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "agent view source is unreadable" in result.stderr
+    assert str(agent_view_path) in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_exporter_cli_reports_non_object_run_result_without_traceback(tmp_path: Path) -> None:
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text('["not", "a", "run_result"]', encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            str(REPO_ROOT / ".venv" / "bin" / "python"),
+            str(EXPORTER_PATH),
+            "--run-result",
+            str(run_result_path),
+            "--output-dir",
+            str(tmp_path / "exported"),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "run result payload must be a JSON object" in result.stderr
+    assert "got list" in result.stderr
+    assert str(run_result_path) in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_checker_cli_reports_invalid_bundle_without_traceback(tmp_path: Path) -> None:
     invalid_bundle = tmp_path / "missing-scene-bundle"
     invalid_bundle.mkdir()

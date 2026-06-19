@@ -34,6 +34,17 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: The Nav2 map-bundle exporter now fails aloud on malformed
+  agent-view JSON and parseable non-object run-result JSON. CLI users get
+  concise source-path errors instead of tracebacks or raw type failures, while
+  valid `--agent-view` / `--run-result` export behavior and bundle validation
+  are unchanged. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud map/export source truth. Metric: ratchet
+  stayed at 0 Ruff complexity rows and reports 79 oversized modules in the
+  current dirty worktree. Proof: focused Nav2 map-bundle contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet.
+
 - 2026-06-20: Planner proof bundle result summaries now fail aloud when a
   present proof `run_result.json` source parses to non-object JSON. Wrong-shaped
   proof result files now become explicit unreadable result evidence with

@@ -49,7 +49,10 @@ Latest quality snapshot from 2026-06-20:
   deriving plausible timing from substitute/partial evidence. Planner proof
   bundle result summaries now surface parseable non-object proof
   `run_result.json` sources as explicit unreadable result evidence instead of
-  crashing or deriving proof-summary fields from wrong-shaped JSON. The
+  crashing or deriving proof-summary fields from wrong-shaped JSON. The Nav2
+  map-bundle exporter now reports malformed agent-view JSON and non-object
+  run-result JSON as concise CLI source errors instead of surfacing tracebacks
+  or raw type failures. The
   operator-state payload now
   reports malformed core
   `operator_state.json` / `live_status.json` / `run_result.json` sources as
