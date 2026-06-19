@@ -90,6 +90,7 @@ from scripts.molmo_cleanup.realworld_waypoint_honesty_checker import (
 )
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
+LEGACY_ROBOT_VIEW_CAMERA_CONTROL_FLAG = "--require-canonical-robot-view-camera-control"
 
 
 class _ResultOptions(dict[str, Any]):
@@ -98,6 +99,11 @@ class _ResultOptions(dict[str, Any]):
 
 
 def _result_assert_options(overrides: dict[str, Any]) -> _ResultOptions:
+    if "require_canonical_robot_view_camera_control" in overrides:
+        raise ValueError(
+            "require_canonical_robot_view_camera_control is obsolete; "
+            "use require_robot_head_camera_fpv instead."
+        )
     opts = _ResultOptions(
         {
             "expect_task": None,
@@ -238,12 +244,10 @@ def _add_isaac_checker_args(parser: argparse.ArgumentParser) -> None:
 
 def _add_robot_camera_checker_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--require-canonical-robot-view-camera-control",
+        LEGACY_ROBOT_VIEW_CAMERA_CONTROL_FLAG,
         action="store_true",
-        help=(
-            "Legacy alias for --require-robot-head-camera-fpv. Canonical free-camera "
-            "control is no longer accepted as agent-facing FPV proof."
-        ),
+        dest="unsupported_legacy_robot_view_camera_control",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--require-robot-head-camera-fpv",
@@ -255,6 +259,17 @@ def _add_robot_camera_checker_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _reject_legacy_robot_view_camera_control_flag(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> None:
+    if args.unsupported_legacy_robot_view_camera_control:
+        parser.error(
+            f"{LEGACY_ROBOT_VIEW_CAMERA_CONTROL_FLAG} is obsolete; "
+            "use --require-robot-head-camera-fpv."
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Validate ADR-0003 real-world-style Molmo cleanup artifacts."
@@ -264,7 +279,9 @@ def parse_args() -> argparse.Namespace:
     _add_planner_checker_args(parser)
     _add_isaac_checker_args(parser)
     _add_robot_camera_checker_args(parser)
-    return parser.parse_args()
+    args = parser.parse_args()
+    _reject_legacy_robot_view_camera_control_flag(parser, args)
+    return args
 
 
 def main() -> None:
@@ -351,10 +368,7 @@ def main() -> None:
             require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
             require_isaac_snapshot_provenance=args.require_isaac_snapshot_provenance,
             require_isaac_scene_index_map_context=(args.require_isaac_scene_index_map_context),
-            require_canonical_robot_view_camera_control=(
-                args.require_canonical_robot_view_camera_control
-                or args.require_robot_head_camera_fpv
-            ),
+            require_robot_head_camera_fpv=args.require_robot_head_camera_fpv,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -650,7 +664,7 @@ def _assert_optional_agent_observation_gates(
         _assert_clean_agent_run(data, min_complete_count=opts["min_semantic_accepted_count"])
     if opts["require_robot_views"]:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
-    if opts["require_canonical_robot_view_camera_control"]:
+    if opts["require_robot_head_camera_fpv"]:
         _assert_robot_head_camera_fpv(data, base)
     if opts["require_advisory_scoring"]:
         _assert_advisory_scoring(data, base, report_text)
@@ -1141,10 +1155,6 @@ def _assert_robot_head_camera_fpv(data: dict[str, Any], base: Path) -> None:
         )
 
 
-def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path) -> None:
-    _assert_robot_head_camera_fpv(data, base)
-
-
 def _assert_nonblank_image(path: Path, label: str) -> None:
     assert path.is_file(), path
     try:
@@ -1275,8 +1285,7 @@ def _assert_isaac_scene_index_room_scale(metric_map: dict[str, Any]) -> None:
 def _is_base_navigation_map(metric_map: dict[str, Any], runtime_map: dict[str, Any]) -> bool:
     base_map = metric_map.get("base_navigation_map") or {}
     return bool(
-        base_map.get("enabled") is True
-        or runtime_map.get("generated_exploration_candidates")
+        base_map.get("enabled") is True or runtime_map.get("generated_exploration_candidates")
     )
 
 

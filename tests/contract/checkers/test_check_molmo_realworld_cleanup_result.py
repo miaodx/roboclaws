@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -66,6 +67,56 @@ def _load_module(path: Path, name: str):
 
         module.run_smoke = run_synthetic_smoke
     return module
+
+
+def test_checker_parses_robot_head_camera_fpv_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_molmo_realworld_cleanup_result.py",
+            "run_result.json",
+            "--require-robot-head-camera-fpv",
+        ],
+    )
+
+    args = checker.parse_args()
+
+    assert args.require_robot_head_camera_fpv is True
+
+
+def test_checker_rejects_legacy_canonical_robot_view_camera_control_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_molmo_realworld_cleanup_result.py",
+            "run_result.json",
+            "--require-canonical-robot-view-camera-control",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        checker.parse_args()
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "--require-canonical-robot-view-camera-control is obsolete" in stderr
+    assert "use --require-robot-head-camera-fpv" in stderr
+
+
+def test_checker_rejects_legacy_canonical_robot_view_camera_control_override() -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    with pytest.raises(ValueError, match="use require_robot_head_camera_fpv"):
+        checker._result_assert_options({"require_canonical_robot_view_camera_control": True})
 
 
 def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
@@ -1555,7 +1606,7 @@ def test_checker_requires_robot_head_camera_fpv(
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=0,
         allow_partial_cleanup=True,
-        require_canonical_robot_view_camera_control=True,
+        require_robot_head_camera_fpv=True,
     )
 
 
@@ -1583,7 +1634,7 @@ def test_checker_rejects_backend_local_robot_view_when_head_camera_required(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=0,
             allow_partial_cleanup=True,
-            require_canonical_robot_view_camera_control=True,
+            require_robot_head_camera_fpv=True,
         )
 
 
@@ -1611,7 +1662,7 @@ def test_checker_rejects_canonical_free_camera_when_head_camera_required(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=0,
             allow_partial_cleanup=True,
-            require_canonical_robot_view_camera_control=True,
+            require_robot_head_camera_fpv=True,
         )
 
 
@@ -1644,7 +1695,7 @@ def test_checker_rejects_head_camera_contract_without_head_camera_source(
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=0,
             allow_partial_cleanup=True,
-            require_canonical_robot_view_camera_control=True,
+            require_robot_head_camera_fpv=True,
         )
 
 

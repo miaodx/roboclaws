@@ -459,14 +459,11 @@ confidence without postponing a stronger P1 frontier.
 - B1 preview row:
   `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 - Behavior-test fixture-builder work in selected operator-console tests.
-- Stale small cuts: empty camera-labeler maps, `_task_prefix_legacy`, legacy
-  checker flag `--require-canonical-robot-view-camera-control`, duplicated lane
-  prose, and old `hybrid-phase-pipeline` guidance wording.
+- Stale small cuts: empty camera-labeler maps, `_task_prefix_legacy`,
+  duplicated lane prose, and old `hybrid-phase-pipeline` guidance wording.
 
-Treat the legacy checker flag as a checker-contract migration, not an
-opportunistic delete. Keep public `camera_labeler` /
-`visual_grounding_pipeline_id` semantics unless a selected slice explicitly
-migrates them.
+Keep public `camera_labeler` / `visual_grounding_pipeline_id` semantics unless
+a selected slice explicitly migrates them.
 
 ## Cleared Or Parked
 

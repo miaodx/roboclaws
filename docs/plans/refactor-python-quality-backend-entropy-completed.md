@@ -3152,6 +3152,16 @@ logs before choosing the next slice.
   only if the runner rebuilds object/receptacle audit rows, compact/skipped
   audit packets, selected RGB/focus evidence, visual-state contracts,
   semantic-pose index fallback, or category summaries directly.
+- Cleanup checker robot-camera verification is owned by the current
+  `--require-robot-head-camera-fpv` contract; the historical
+  `--require-canonical-robot-view-camera-control` spelling is now an explicit
+  unsupported checker input instead of a silent alias. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: checker-contract migration /
+  stale compatibility surface removal. Metric: no new owner; checker/tests
+  remain under the current ratchet ceiling. Proof: focused cleanup checker
+  contract tests, ruff, format check, diff check, and ratchet. Reopen only if
+  active verification commands or tests regain canonical free-camera wording as
+  a current robot-FPV acceptance gate.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
