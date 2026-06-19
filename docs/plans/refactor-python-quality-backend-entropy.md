@@ -110,9 +110,12 @@ Latest quality snapshot from 2026-06-19:
   evidence instead of clickable proof links while preserving verified in-output
   artifact links. Eval dependency resolution now rejects missing or empty
   explicit `runtime_map_prior` paths before direct or live eval product launch
-  instead of passing declared stale priors through to the runner. Continue
-  fail-aloud/runtime-source audits from fresh evidence rather than reopening
-  closed helper splits; route any future test-shape cleanup through
+  instead of passing declared stale priors through to the runner. Eval
+  regression promotion now treats matched suite `sample_refs` as source truth
+  and fails before writing promoted sample/suite artifacts when the declared
+  source sample is missing, invalid, or resolves to a different sample id.
+  Continue fail-aloud/runtime-source audits from fresh evidence rather than
+  reopening closed helper splits; route any future test-shape cleanup through
   `$intuitive-tests`.
 
 The next implementation run should start with a fresh ratchet summary and a

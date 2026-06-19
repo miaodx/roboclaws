@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: Eval regression promotion now treats matched suite
+  `sample_refs` as declared source truth. Missing or invalid declared source
+  samples, plus refs that resolve to a different sample id, now fail before any
+  promoted sample or suite artifact is written, instead of silently
+  synthesizing a regression sample from eval-result identity fields while
+  ignoring corrupt suite/sample source evidence; promotion from a valid source
+  sample and passed-result/stop-label guards are unchanged. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud artifact/source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and reports 79 oversized modules in the current dirty
+  worktree. Proof: focused eval regression-promotion tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+
 - 2026-06-19: Eval artifact dependency resolution now treats explicit
   `runtime_map_prior` values as declared source truth and fails before direct
   or live product launch when the path is empty or missing. Missing explicit

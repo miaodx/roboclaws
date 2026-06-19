@@ -61,7 +61,7 @@ def promote_regression_sample_from_eval_result(
     sample_id = regression_sample_id or _default_regression_sample_id(identity, failure_class)
     sample_output_path = sample_output_path or _default_sample_output_path(sample_id)
     suite_payload = _suite_payload(bundle, suite_path=suite_path)
-    source_sample = _source_sample(bundle, identity)
+    source_sample = _source_sample(suite_payload, identity)
     sample_payload = _regression_sample_payload(
         source_sample=source_sample,
         identity=identity,
@@ -306,18 +306,30 @@ def _updated_suite_payload(
     return payload
 
 
-def _source_sample(bundle: dict[str, Any], identity: dict[str, Any]) -> EvalSample | None:
+def _source_sample(suite: dict[str, Any], identity: dict[str, Any]) -> EvalSample | None:
     sample_id = str(identity.get("sample_id") or "")
-    suite = _mapping(bundle.get("suite"))
-    for ref in suite.get("sample_refs") or ():
-        path = _repo_path(str(ref))
-        try:
-            sample = load_eval_sample(path)
-        except (OSError, ValueError):
-            continue
-        if sample.sample_id == sample_id:
-            return sample
-    return None
+    sample_refs = [str(item) for item in suite.get("sample_refs") or []]
+    sample_ids = [str(item) for item in suite.get("sample_ids") or []]
+    if not sample_refs:
+        return None
+    if len(sample_refs) != len(sample_ids):
+        raise ValueError("eval suite sample_refs must match sample_ids length")
+    refs_by_id = dict(zip(sample_ids, sample_refs, strict=True))
+    ref = refs_by_id.get(sample_id)
+    if ref is None:
+        return None
+    path = _repo_path(ref)
+    try:
+        sample = load_eval_sample(path)
+    except OSError as exc:
+        raise ValueError(f"source sample ref for {sample_id!r} is unreadable: {ref}") from exc
+    except ValueError as exc:
+        raise ValueError(f"source sample ref for {sample_id!r} is invalid: {ref}: {exc}") from exc
+    if sample.sample_id != sample_id:
+        raise ValueError(
+            f"source sample ref for {sample_id!r} resolved to sample_id {sample.sample_id!r}: {ref}"
+        )
+    return sample
 
 
 def _suite_payload(bundle: dict[str, Any], *, suite_path: Path | None) -> dict[str, Any]:
