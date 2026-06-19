@@ -5,7 +5,7 @@ accepted_severities:
   - P0
   - P1
   - P2
-last_verified: 2026-06-18
+last_verified: 2026-06-19
 completed_ledger: docs/plans/refactor-python-quality-backend-entropy-completed.md
 ---
 
@@ -18,13 +18,14 @@ live only in
 `docs/plans/refactor-python-quality-backend-entropy-completed.md`; do not copy
 their full execution notes back here.
 
-Latest quality snapshot from 2026-06-18:
+Latest quality snapshot from 2026-06-19:
 
-- Ruff complexity rows: 0.
-- Oversized modules: 79.
-- Current emphasis: fail aloud and early for silent fallback, ambiguous env
-  selection, missing runtime/source evidence, stale artifact discovery, and
-  invalid provider/profile/model/config input.
+- Ruff complexity rows: 6.
+- Oversized modules: 78.
+- Current emphasis: finish fresh complexity regressions only when they align
+  with validation/fail-aloud ownership, especially B1 preview/artifact visual
+  validation and semantic review helpers, while continuing to prefer explicit
+  blocked/unavailable states over fabricated runtime/source evidence.
 
 The next implementation run should start with a fresh ratchet summary and a
 targeted audit of one owner boundary before editing code.

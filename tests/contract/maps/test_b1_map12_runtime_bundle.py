@@ -333,6 +333,24 @@ def test_runtime_compiler_rejects_semantic_projection_review_mismatch(
         )
 
 
+def test_runtime_compiler_rejects_malformed_semantic_projection_room(
+    tmp_path: Path,
+) -> None:
+    projection_path = tmp_path / "semantic_projection.json"
+    projection = _semantic_projection_artifact(review_manifest_path=REVIEW_MANIFEST)
+    projection["rooms"] = ["meeting_room_a"]
+    projection_path.write_text(json.dumps(projection), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"rooms\[1\]: room must be an object"):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            semantic_projection_artifact_path=projection_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
 def test_runtime_compiler_rejects_navigation_without_alignment(
     tmp_path: Path,
 ) -> None:

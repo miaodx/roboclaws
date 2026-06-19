@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-19: B1 runtime-bundle semantic projection and robot-consumption
+  validation complexity was split into focused helpers inside the existing
+  compiler owner. Malformed semantic projection room rows now fail through the
+  explicit `ValueError("invalid semantic projection artifact: ...")`
+  validation path instead of risking incidental attribute errors during
+  duplicate tracking. Owner layer: Backend Runtime / Environment Primitive,
+  with artifact-validation impact on B1 Runtime Map Prior Snapshot inputs.
+  Behavior-change class: fail-aloud validation cleanup plus helper extraction;
+  public CLI arguments, runtime bundle schemas, valid alignment/navigation
+  proof handling, valid room-semantic projection materialization, and blocked
+  capability payloads are unchanged. Metric: fresh ratchet improved from 10 to
+  6 Ruff complexity rows and stayed at 78 oversized modules; the selected
+  `compile_b1_map12_runtime_bundle.py` complexity rows were cleared while the
+  file remains oversized at 1551 lines. Proof: focused B1 runtime bundle
+  contract tests, touched-file ruff and format check, `git diff --check`,
+  changed-code review, and ratchet.
+
 - 2026-06-18: Active plan compaction completed. The active plan was rewritten
   from an execution ledger mirror into a concise continuation control doc with
   resume checklist, operating rules, slice selector, active candidates, proof

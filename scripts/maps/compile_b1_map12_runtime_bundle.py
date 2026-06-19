@@ -66,6 +66,10 @@ def _repo_relative_path(path: Path) -> str:
         return path.as_posix()
 
 
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compile a generated B1 / Map 12 digital-twin runtime map bundle."
@@ -593,7 +597,25 @@ def verified_robot_consumption_proof(
 ) -> dict[str, Any]:
     if alignment_artifact_path is None and navigation_artifact_path is not None:
         raise ValueError("navigation artifact requires --alignment-artifact")
-    proof = {
+    proof = _blocked_robot_consumption_proof()
+    if alignment_artifact_path is None:
+        return proof
+
+    alignment_artifact_path, alignment = _verified_alignment_artifact(alignment_artifact_path)
+    proof.update(_verified_alignment_proof(alignment_artifact_path, alignment))
+    if navigation_artifact_path is None:
+        return proof
+
+    navigation_artifact_path, navigation = _verified_navigation_artifact(
+        navigation_artifact_path,
+        alignment_artifact_path=alignment_artifact_path,
+    )
+    proof.update(_verified_navigation_proof(navigation_artifact_path, navigation))
+    return proof
+
+
+def _blocked_robot_consumption_proof() -> dict[str, Any]:
+    return {
         "schema": "b1_map12_robot_consumption_proof_v1",
         "status": "blocked_missing_verified_alignment",
         "alignment_status": "not_provided",
@@ -615,9 +637,9 @@ def verified_robot_consumption_proof(
             "no_output_directory_autodiscovery": True,
         },
     }
-    if alignment_artifact_path is None:
-        return proof
 
+
+def _verified_alignment_artifact(alignment_artifact_path: Path) -> tuple[Path, dict[str, Any]]:
     alignment_artifact_path = Path(alignment_artifact_path)
     if not alignment_artifact_path.is_file():
         raise ValueError(f"alignment artifact missing: {alignment_artifact_path}")
@@ -627,27 +649,32 @@ def verified_robot_consumption_proof(
         raise ValueError("invalid alignment artifact: " + "; ".join(alignment_errors))
     if alignment.get("global_alignment_status") != "verified":
         raise ValueError("alignment artifact must be globally verified")
-    residual = (
-        alignment.get("residual_evidence")
-        if isinstance(alignment.get("residual_evidence"), dict)
-        else {}
-    )
-    proof.update(
-        {
-            "status": "verified_alignment_navigation_pending",
-            "alignment_status": "verified",
-            "alignment_artifact": str(alignment_artifact_path),
-            "alignment_transform_source": str(residual.get("transform_source") or ""),
-            "selected_transform_type": str(alignment.get("selected_transform_type") or ""),
-            "matched_anchor_count": int(residual.get("matched_anchor_count") or 0),
-            "mean_residual_m": residual.get("mean_residual_m"),
-            "p90_residual_m": residual.get("p90_residual_m"),
-            "max_residual_m": residual.get("max_residual_m"),
-        }
-    )
-    if navigation_artifact_path is None:
-        return proof
+    return alignment_artifact_path, alignment
 
+
+def _verified_alignment_proof(
+    alignment_artifact_path: Path,
+    alignment: dict[str, Any],
+) -> dict[str, Any]:
+    residual = _dict(alignment.get("residual_evidence"))
+    return {
+        "status": "verified_alignment_navigation_pending",
+        "alignment_status": "verified",
+        "alignment_artifact": str(alignment_artifact_path),
+        "alignment_transform_source": str(residual.get("transform_source") or ""),
+        "selected_transform_type": str(alignment.get("selected_transform_type") or ""),
+        "matched_anchor_count": int(residual.get("matched_anchor_count") or 0),
+        "mean_residual_m": residual.get("mean_residual_m"),
+        "p90_residual_m": residual.get("p90_residual_m"),
+        "max_residual_m": residual.get("max_residual_m"),
+    }
+
+
+def _verified_navigation_artifact(
+    navigation_artifact_path: Path,
+    *,
+    alignment_artifact_path: Path,
+) -> tuple[Path, dict[str, Any]]:
     navigation_artifact_path = Path(navigation_artifact_path)
     if not navigation_artifact_path.is_file():
         raise ValueError(f"navigation artifact missing: {navigation_artifact_path}")
@@ -659,29 +686,30 @@ def verified_robot_consumption_proof(
         raise ValueError("navigation artifact alignment_artifact must match --alignment-artifact")
     if navigation.get("robot_navigation_supported") is not True:
         raise ValueError("navigation artifact must claim robot_navigation_supported=true")
+    return navigation_artifact_path, navigation
+
+
+def _verified_navigation_proof(
+    navigation_artifact_path: Path,
+    navigation: dict[str, Any],
+) -> dict[str, Any]:
     waypoint_evidence = [
         item for item in navigation.get("waypoint_evidence") or [] if isinstance(item, dict)
     ]
-    same_pose_views = _same_pose_view_support(waypoint_evidence)
-    proof.update(
-        {
-            "status": "robot_navigation_verified",
-            "navigation_status": "verified",
-            "navigation_artifact": str(navigation_artifact_path),
-            "render_scene_usd": str(navigation.get("b1_scene_usd") or ""),
-            "visual_route": navigation.get("visual_route")
-            if isinstance(navigation.get("visual_route"), dict)
-            else {},
-            "robot_navigation_supported": True,
-            "robot_navigation_provenance": NAVIGATION_PROVENANCE,
-            "navigation_waypoint_count": int(navigation.get("navigation_waypoint_count") or 0),
-            "robot_view_evidence_status": str(navigation.get("robot_view_evidence_status") or ""),
-            "navigation_provenance": str(navigation.get("navigation_provenance") or ""),
-            "same_pose_views": same_pose_views,
-            "waypoint_ids": [str(item.get("waypoint_id") or "") for item in waypoint_evidence],
-        }
-    )
-    return proof
+    return {
+        "status": "robot_navigation_verified",
+        "navigation_status": "verified",
+        "navigation_artifact": str(navigation_artifact_path),
+        "render_scene_usd": str(navigation.get("b1_scene_usd") or ""),
+        "visual_route": _dict(navigation.get("visual_route")),
+        "robot_navigation_supported": True,
+        "robot_navigation_provenance": NAVIGATION_PROVENANCE,
+        "navigation_waypoint_count": int(navigation.get("navigation_waypoint_count") or 0),
+        "robot_view_evidence_status": str(navigation.get("robot_view_evidence_status") or ""),
+        "navigation_provenance": str(navigation.get("navigation_provenance") or ""),
+        "same_pose_views": _same_pose_view_support(waypoint_evidence),
+        "waypoint_ids": [str(item.get("waypoint_id") or "") for item in waypoint_evidence],
+    }
 
 
 def _same_pose_view_support(waypoint_evidence: list[dict[str, Any]]) -> dict[str, bool]:
@@ -792,7 +820,6 @@ def verified_room_semantic_projection(
     projection = json.loads(semantic_projection_artifact_path.read_text(encoding="utf-8"))
     errors = semantic_projection_errors(
         projection,
-        semantic_projection_artifact_path=semantic_projection_artifact_path,
         review_manifest_path=review_manifest_path,
         review_manifest=review_manifest,
     )
@@ -817,9 +844,35 @@ def verified_room_semantic_projection(
 def semantic_projection_errors(
     projection: dict[str, Any],
     *,
-    semantic_projection_artifact_path: Path,
     review_manifest_path: Path,
     review_manifest: dict[str, Any],
+) -> list[str]:
+    rooms = _semantic_projection_room_rows(projection)
+    errors = _semantic_projection_header_errors(
+        projection,
+        review_manifest_path=review_manifest_path,
+        rooms=rooms,
+    )
+    accepted_labels = _accepted_review_labels_by_id(review_manifest)
+    seen_room_ids: set[str] = set()
+    for index, room in enumerate(rooms, start=1):
+        room_errors = semantic_projection_room_errors(
+            room,
+            accepted_labels=accepted_labels,
+        )
+        errors.extend(f"rooms[{index}]: {error}" for error in room_errors)
+        room_id = _semantic_projection_room_id(room)
+        if room_id in seen_room_ids:
+            errors.append(f"duplicate room_id: {room_id}")
+        seen_room_ids.add(room_id)
+    return errors
+
+
+def _semantic_projection_header_errors(
+    projection: dict[str, Any],
+    *,
+    review_manifest_path: Path,
+    rooms: list[Any],
 ) -> list[str]:
     errors = []
     if projection.get("schema") != SEMANTIC_PROJECTION_SCHEMA:
@@ -828,78 +881,107 @@ def semantic_projection_errors(
         errors.append("status must be verified_room_semantics")
     if not _path_matches(projection.get("source_review_manifest"), review_manifest_path):
         errors.append("source_review_manifest must match --review-manifest")
-    if projection.get("object_projection_status") != "blocked_until_object_semantic_anchors":
-        errors.append("object_projection_status must remain blocked_until_object_semantic_anchors")
-    if projection.get("objects"):
-        errors.append("objects must stay empty until object semantic anchors exist")
-    policy = projection.get("policy") if isinstance(projection.get("policy"), dict) else {}
-    if policy.get("requires_accepted_semantic_anchors") is not True:
-        errors.append("policy.requires_accepted_semantic_anchors must be true")
-    if policy.get("object_labels_are_not_inferred_from_room_anchors") is not True:
-        errors.append("policy.object_labels_are_not_inferred_from_room_anchors must be true")
-    rooms = projection.get("rooms") if isinstance(projection.get("rooms"), list) else []
+    errors.extend(_semantic_projection_object_policy_errors(projection))
     if not rooms:
         errors.append("rooms must not be empty")
     if int(projection.get("room_projection_count") or 0) != len(rooms):
         errors.append("room_projection_count must match rooms")
     if int(projection.get("semantic_anchor_count") or 0) < len(rooms):
         errors.append("semantic_anchor_count must cover projected rooms")
-    accepted_labels = {
+    return errors
+
+
+def _semantic_projection_object_policy_errors(projection: dict[str, Any]) -> list[str]:
+    errors = []
+    if projection.get("object_projection_status") != "blocked_until_object_semantic_anchors":
+        errors.append("object_projection_status must remain blocked_until_object_semantic_anchors")
+    if projection.get("objects"):
+        errors.append("objects must stay empty until object semantic anchors exist")
+    policy = _dict(projection.get("policy"))
+    if policy.get("requires_accepted_semantic_anchors") is not True:
+        errors.append("policy.requires_accepted_semantic_anchors must be true")
+    if policy.get("object_labels_are_not_inferred_from_room_anchors") is not True:
+        errors.append("policy.object_labels_are_not_inferred_from_room_anchors must be true")
+    return errors
+
+
+def _semantic_projection_room_rows(projection: dict[str, Any]) -> list[Any]:
+    rooms = projection.get("rooms")
+    return rooms if isinstance(rooms, list) else []
+
+
+def _accepted_review_labels_by_id(review_manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
         str(label.get("label_id") or ""): label
         for label in review_manifest.get("labels") or []
         if isinstance(label, dict) and label.get("review_status") == ACCEPTED_REVIEW_STATUS
     }
-    seen_room_ids: set[str] = set()
-    for index, room in enumerate(rooms, start=1):
-        room_errors = semantic_projection_room_errors(
-            room,
-            accepted_labels=accepted_labels,
-        )
-        errors.extend(f"rooms[{index}]: {error}" for error in room_errors)
-        room_id = str(room.get("room_id") or "")
-        if room_id in seen_room_ids:
-            errors.append(f"duplicate room_id: {room_id}")
-        seen_room_ids.add(room_id)
-    return errors
+
+
+def _semantic_projection_room_id(room: Any) -> str:
+    return str(room.get("room_id") or "") if isinstance(room, dict) else ""
 
 
 def semantic_projection_room_errors(
-    room: dict[str, Any],
+    room: Any,
     *,
     accepted_labels: dict[str, dict[str, Any]],
 ) -> list[str]:
-    errors = []
     if not isinstance(room, dict):
         return ["room must be an object"]
+    errors = []
     room_id = str(room.get("room_id") or "")
     source_label_id = str(room.get("source_label_id") or room_id)
     label = accepted_labels.get(source_label_id)
     if label is None:
         errors.append(f"source_label_id {source_label_id!r} is not an accepted review label")
     else:
-        if str(room.get("navigation_area_id") or "") != str(label.get("map_area_id") or ""):
-            errors.append("navigation_area_id must match accepted review label map_area_id")
-        if str(room.get("asset_partition_id") or "") != str(label.get("scene_partition_id") or ""):
-            errors.append("asset_partition_id must match accepted review label scene_partition_id")
-    if not room_id:
-        errors.append("room_id is required")
-    if str(room.get("review_status") or "") != ACCEPTED_REVIEW_STATUS:
-        errors.append("review_status must be accepted")
-    if str(room.get("semantic_source") or "") != "reviewed_b1_map12_semantic_anchor":
-        errors.append("semantic_source must be reviewed_b1_map12_semantic_anchor")
-    if str(room.get("alignment_status") or "") != "accepted_semantic_anchor":
-        errors.append("alignment_status must be accepted_semantic_anchor")
-    anchors = room.get("semantic_anchors") if isinstance(room.get("semantic_anchors"), list) else []
-    if not anchors:
-        errors.append("semantic_anchors must not be empty")
-    polygon = room.get("map_polygon") if isinstance(room.get("map_polygon"), list) else []
-    if len(polygon) < 3:
-        errors.append("map_polygon must contain at least three points")
-    for point in polygon:
-        if not isinstance(point, dict) or "x" not in point or "y" not in point:
-            errors.append("map_polygon points must contain x/y")
-            break
+        errors.extend(_semantic_projection_label_binding_errors(room, label))
+    errors.extend(_semantic_projection_room_contract_errors(room_id, room))
+    errors.extend(_semantic_projection_room_geometry_errors(room))
     return errors
+
+
+def _semantic_projection_label_binding_errors(
+    room: dict[str, Any],
+    label: dict[str, Any],
+) -> list[str]:
+    errors = []
+    if str(room.get("navigation_area_id") or "") != str(label.get("map_area_id") or ""):
+        errors.append("navigation_area_id must match accepted review label map_area_id")
+    if str(room.get("asset_partition_id") or "") != str(label.get("scene_partition_id") or ""):
+        errors.append("asset_partition_id must match accepted review label scene_partition_id")
+    return errors
+
+
+def _semantic_projection_room_contract_errors(
+    room_id: str,
+    room: dict[str, Any],
+) -> list[str]:
+    expected_values = {
+        "review_status": ACCEPTED_REVIEW_STATUS,
+        "semantic_source": "reviewed_b1_map12_semantic_anchor",
+        "alignment_status": "accepted_semantic_anchor",
+    }
+    errors = ["room_id is required"] if not room_id else []
+    for field_name, expected in expected_values.items():
+        if str(room.get(field_name) or "") != expected:
+            errors.append(f"{field_name} must be {expected}")
+    anchors = room.get("semantic_anchors")
+    if not isinstance(anchors, list) or not anchors:
+        errors.append("semantic_anchors must not be empty")
+    return errors
+
+
+def _semantic_projection_room_geometry_errors(room: dict[str, Any]) -> list[str]:
+    polygon = room.get("map_polygon")
+    if not isinstance(polygon, list) or len(polygon) < 3:
+        return ["map_polygon must contain at least three points"]
+    if any(
+        not isinstance(point, dict) or "x" not in point or "y" not in point for point in polygon
+    ):
+        return ["map_polygon points must contain x/y"]
+    return []
 
 
 def semantic_projection_rooms(projection: dict[str, Any]) -> list[dict[str, Any]]:
