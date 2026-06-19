@@ -42,8 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = build_semantic_projection(
-            correspondences=json.loads(args.correspondences.read_text(encoding="utf-8")),
-            review_manifest=json.loads(args.review_manifest.read_text(encoding="utf-8")),
+            correspondences=_read_json_object(
+                args.correspondences,
+                label="correspondence manifest",
+            ),
+            review_manifest=_read_json_object(args.review_manifest, label="review manifest"),
             correspondences_path=args.correspondences,
             review_manifest_path=args.review_manifest,
         )
@@ -225,6 +228,18 @@ def projected_room(anchors: list[dict[str, Any]], label: dict[str, Any]) -> dict
         "source_label_id": str(label.get("label_id") or ""),
         "source_anchor_ids": [item["source_anchor_id"] for item in semantic_anchors],
     }
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 if __name__ == "__main__":

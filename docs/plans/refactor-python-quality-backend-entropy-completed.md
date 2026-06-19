@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 semantic projection CLI loading now treats explicit
+  `--correspondences` and `--review-manifest` inputs as JSON-object source
+  truth. Missing, malformed, or parseable non-object correspondence/review
+  files return concise CLI source-path errors and do not write projection
+  output, instead of surfacing raw file/parser/type failures before projection
+  validation. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 semantic projection source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the projection script remains small while the touched alignment test remains
+  existing warning-band debt. Proof: focused B1 alignment/projection contract
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet. Reopen only with fresh semantic-projection CLI evidence
+  that explicit correspondence or review source files are again loaded through
+  raw parser/type paths or accepted as plausible non-object source packets.
+
 - 2026-06-20: B1 runtime bundle robot-consumption proof loading now reads
   explicit alignment and navigation artifacts through the shared JSON-object
   source guard. Missing, malformed, or parseable non-object

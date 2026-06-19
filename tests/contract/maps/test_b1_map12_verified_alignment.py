@@ -1203,6 +1203,61 @@ def test_semantic_projection_cli_rejects_current_alignment_only_manifest(
     assert not output_path.exists()
 
 
+@pytest.mark.parametrize(
+    ("source_arg", "source_text", "expected_error"),
+    [
+        (
+            "--correspondences",
+            "{not-json\n",
+            "correspondence manifest must contain valid JSON object",
+        ),
+        (
+            "--correspondences",
+            "[]\n",
+            "correspondence manifest must contain a JSON object",
+        ),
+        (
+            "--review-manifest",
+            "{not-json\n",
+            "review manifest must contain valid JSON object",
+        ),
+        (
+            "--review-manifest",
+            "[]\n",
+            "review manifest must contain a JSON object",
+        ),
+    ],
+)
+def test_semantic_projection_cli_rejects_bad_source_json(
+    tmp_path: Path,
+    source_arg: str,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    bad_path = tmp_path / "bad.json"
+    output_path = tmp_path / "semantic_projection.json"
+    bad_path.write_text(source_text, encoding="utf-8")
+    args = [
+        sys.executable,
+        str(SEMANTIC_PROJECTION_SCRIPT),
+        "--correspondences",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-scene-correspondences.json"),
+        "--review-manifest",
+        str(REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"),
+        "--output",
+        str(output_path),
+    ]
+    args[args.index(source_arg) + 1] = str(bad_path)
+
+    completed = subprocess.run(args, capture_output=True, text=True)
+
+    assert completed.returncode == 2
+    assert not output_path.exists()
+    assert "error: " in completed.stderr
+    assert expected_error in completed.stderr
+    assert str(bad_path) in completed.stderr
+
+
 def test_semantic_projection_rejects_proposed_review_packet_input() -> None:
     proposed_packet = semantic_review_packet(
         anchors=[{**passing_anchors()[0], "review_status": "proposed"}]
