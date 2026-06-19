@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console public recipe tests now merge the standalone
+  `just/console.just` text-shape assertion into the public `just --summary` /
+  `just --dry-run console::run` behavior check. The slice keeps the separate
+  CLI default test for `roboclaws.operator_console` while replacing direct
+  recipe-file parsing with the launched public recipe surface. Owner layer:
+  Thin Runtime / Server Adapters. Behavior-change class: unit-test pruning /
+  no production behavior change. Metric: `test_operator_console.py` keeps 42
+  collected cases while test functions drop 40 -> 39; the touched file moves
+  1578 -> 1581 lines because the stronger public-surface assertion is slightly
+  longer. Proof: `$intuitive-tests` audit/propose, focused operator-console
+  tests plus route-adjacent coverage, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh static
+  operator-console recipe/DOM/route wiring assertions that are not already
+  covered through public launch readiness, CLI defaults, artifact links,
+  redaction, locks, or status transitions.
+
 - 2026-06-20: Eval-runner unit tests now consolidate duplicate launch-metadata
   validation bodies for direct live-surface command kwargs, sample-derived live
   launch metadata, and live runtime-map dependency metadata into behavior tables.

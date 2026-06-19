@@ -593,17 +593,27 @@ def test_operator_console_serves_only_operator_output_artifacts(tmp_path: Path) 
     assert raw_escape_error.value.code == 404
 
 
-def test_just_console_run_recipe_is_public() -> None:
+def test_just_console_run_recipe_is_public_and_uses_public_bind_defaults() -> None:
     repo_root = Path(__file__).resolve().parents[3]
-    result = subprocess.run(
+    summary_result = subprocess.run(
         [_just_bin(), "--summary"],
         cwd=repo_root,
         check=True,
         capture_output=True,
         text=True,
     )
-    summary = set(result.stdout.split())
+    summary = set(summary_result.stdout.split())
     assert "console::run" in summary
+
+    dry_run_result = subprocess.run(
+        [_just_bin(), "--dry-run", "console::run"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    dry_run_output = dry_run_result.stdout + dry_run_result.stderr
+    assert '-m roboclaws.operator_console --host "0.0.0.0" --port "8765"' in dry_run_output
 
 
 def test_operator_console_cli_defaults_to_all_interfaces() -> None:
@@ -612,13 +622,6 @@ def test_operator_console_cli_defaults_to_all_interfaces() -> None:
 
     assert run_server.call_args.args[1] == "0.0.0.0"
     assert run_server.call_args.args[2] == 8765
-
-
-def test_just_console_run_defaults_to_all_interfaces() -> None:
-    repo_root = Path(__file__).resolve().parents[3]
-    recipe = (repo_root / "just" / "console.just").read_text(encoding="utf-8")
-
-    assert 'run host="0.0.0.0" port="8765":' in recipe
 
 
 def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:

@@ -164,7 +164,9 @@ Latest quality snapshot from 2026-06-20:
   while dropping copied one-field row metadata assertions. Eval-runner tests now
   consolidate duplicate launch-metadata validation bodies into behavior tables
   while preserving helper-level, suite-level, and live-before-launch failure
-  surfaces. Eval
+  surfaces. Operator-console public recipe tests now replace a direct
+  `just/console.just` text-shape assertion with the public `just --dry-run
+  console::run` surface while keeping CLI default coverage separate. Eval
   regression promotion now treats matched suite `sample_refs` as source truth
   and fails before writing promoted sample/suite artifacts when the declared
   source sample is missing, invalid, or resolves to a different sample id.
@@ -373,6 +375,11 @@ Good families:
   exercising canonical resolution, readiness failure, or visible diagnostics.
 - Operator-console tests that assert static DOM/route wiring without launch
   readiness, redaction, locks, status transitions, or artifact links.
+- Operator-console `console::run` public recipe/default-bind pruning is done
+  for the current standalone recipe-text assertion; reopen only with fresh
+  static operator-console recipe/DOM/route wiring tests that are not covered by
+  public `just` behavior, CLI defaults, launch readiness, redaction, locks,
+  status transitions, or artifact links.
 - Eval-harness selector pruning is done for the current duplicate
   changed-file/explicit-intent shape; reopen only with fresh static manifest-key
   or row-metadata duplication. Other eval-harness tests remain valid candidates
