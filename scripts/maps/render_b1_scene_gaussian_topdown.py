@@ -477,7 +477,7 @@ def _capture_scene(
 def _capture_one_scene_cli(args: argparse.Namespace) -> int:
     if args.camera_request is None or args.views_dir is None or args.result is None:
         raise ValueError("--capture-one-scene requires --camera-request, --views-dir, and --result")
-    request = json.loads(args.camera_request.read_text(encoding="utf-8"))
+    request = _read_json_object(args.camera_request, label="camera request")
     from scripts.isaac_lab_cleanup import isaac_lab_backend_worker
 
     args.result.parent.mkdir(parents=True, exist_ok=True)
@@ -503,6 +503,18 @@ def _capture_one_scene_cli(args: argparse.Namespace) -> int:
         raise
     args.result.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return 0
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
 
 
 def pixel_to_scene_xyz_transform(

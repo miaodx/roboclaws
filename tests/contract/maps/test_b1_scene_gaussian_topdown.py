@@ -327,3 +327,42 @@ def test_topdown_cli_can_write_request_without_capture(tmp_path: Path) -> None:
     assert summary["geometry_status"] == "render_required"
     assert (tmp_path / "camera_request.json").is_file()
     assert (tmp_path / "scene_gaussian_topdown.json").is_file()
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "camera request must contain valid JSON object"),
+        ("[]\n", "camera request must contain a JSON object"),
+    ),
+)
+def test_capture_one_scene_rejects_malformed_camera_request_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    request_path = tmp_path / "camera_request.json"
+    request_path.write_text(source, encoding="utf-8")
+    result_path = tmp_path / "capture_result.json"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--capture-one-scene",
+            "--scene-usd",
+            str(tmp_path / "scene_gs.usda"),
+            "--camera-request",
+            str(request_path),
+            "--views-dir",
+            str(tmp_path / "views"),
+            "--result",
+            str(result_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert message in completed.stderr
+    assert not result_path.exists()

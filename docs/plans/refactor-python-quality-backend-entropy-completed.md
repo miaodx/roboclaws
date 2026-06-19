@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Gaussian scene topdown capture now treats the hidden explicit
+  `--camera-request` input as JSON-object source truth. Malformed or parseable
+  non-object camera-request packets return concise source-path errors before
+  Isaac capture or `capture_result.json` writes, instead of surfacing raw
+  parser/type failures or passing wrong-shaped request evidence into the
+  capture worker. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 scene camera-request source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  coverage landed in the small Gaussian topdown contract test file. Proof:
+  focused B1 scene Gaussian topdown contract tests, touched-file ruff/format
+  checks, `git diff --check`, changed-code review, and ratchet. Reopen only
+  with fresh Gaussian topdown capture evidence that explicit camera-request
+  packets are again loaded through raw parser/type paths, accepted as
+  plausible non-object packets, or allowed to write capture artifacts after
+  source-load failure.
+
 - 2026-06-20: B1 scene topdown diagnostic overlay loading now treats explicit
   `--scene-topdown-render` input as JSON-object source truth. Malformed or
   parseable non-object render packets return concise source-path errors before

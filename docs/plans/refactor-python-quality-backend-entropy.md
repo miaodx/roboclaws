@@ -103,7 +103,10 @@ Latest quality snapshot from 2026-06-20:
   verification promotion now applies the same source-truth rule to explicit
   `--draft` inputs before verification-only manifest writes. B1 scene topdown
   diagnostics now apply the same source-truth rule to explicit
-  `--scene-topdown-render` packets before overlay report writes.
+  `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
+  scene topdown capture now applies the same source-truth rule to explicit
+  hidden `--camera-request` packets before Isaac capture or capture-result
+  writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
