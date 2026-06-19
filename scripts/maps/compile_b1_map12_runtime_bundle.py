@@ -5,6 +5,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import shutil
 import sys
 from collections import Counter, defaultdict
@@ -167,7 +168,7 @@ def compile_runtime_bundle(
         include_draft_labels=include_draft_labels,
     )
     review_summary = review_validation_summary(review, include_draft_labels=include_draft_labels)
-    navigation_memory = json.loads(navigation_memory_path.read_text(encoding="utf-8"))
+    navigation_memory = _read_navigation_memory(navigation_memory_path)
     waypoints = _inspection_waypoints_from_navigation_memory(
         navigation_memory,
         frame_id=frame_id,
@@ -1246,30 +1247,33 @@ def _inspection_waypoints_from_navigation_memory(
 ) -> list[dict[str, Any]]:
     waypoints = []
     for index, item in enumerate(_navigation_memory_items(payload), start=1):
-        if not isinstance(item, dict):
-            continue
-        nav_goal = item.get("nav_goal") if isinstance(item.get("nav_goal"), dict) else {}
-        pose = item.get("pose") if isinstance(item.get("pose"), dict) else {}
+        item = _navigation_memory_item(item, index=index)
+        item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
+        nav_goal = _navigation_memory_point_source(
+            item.get("nav_goal"),
+            label=f"navigation_memory.json item {item_id} nav_goal",
+            required=False,
+        )
+        pose = _navigation_memory_point_source(
+            item.get("pose"),
+            label=f"navigation_memory.json item {item_id} pose",
+            required=False,
+        )
         source_name, source = _first_free_navigation_memory_point(
             nav_goal=nav_goal,
             pose=pose,
             grid=grid,
+            item_id=item_id,
         )
         if source is None:
             continue
-        try:
-            x = float(source["x"])
-            y = float(source["y"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
         waypoints.append(
             {
                 "waypoint_id": f"navmem_{item_id}",
                 "frame_id": frame_id,
-                "x": x,
-                "y": y,
-                "yaw": float(source.get("yaw") or 0.0),
+                "x": source["x"],
+                "y": source["y"],
+                "yaw": source.get("yaw") or 0.0,
                 "room_id": "",
                 "label": str(item.get("label") or item_id),
                 "purpose": str(item.get("kind") or "navigation_memory_anchor"),
@@ -1288,15 +1292,13 @@ def _first_free_navigation_memory_point(
     nav_goal: dict[str, Any],
     pose: dict[str, Any],
     grid: OccupancyGrid,
+    item_id: str,
 ) -> tuple[str, dict[str, Any] | None]:
     for source_name, source in (("nav_goal", nav_goal), ("pose", pose)):
         if not source:
             continue
-        try:
-            x = float(source["x"])
-            y = float(source["y"])
-        except (KeyError, TypeError, ValueError):
-            continue
+        x = source["x"]
+        y = source["y"]
         if grid.is_free_world(x, y):
             return source_name, source
     return "", None
@@ -1305,8 +1307,7 @@ def _first_free_navigation_memory_point(
 def _navigation_memory_anchors(payload: dict[str, Any], *, frame_id: str) -> list[dict[str, Any]]:
     anchors = []
     for index, item in enumerate(_navigation_memory_items(payload), start=1):
-        if not isinstance(item, dict):
-            continue
+        item = _navigation_memory_item(item, index=index)
         item_id = str(item.get("id") or f"navigation_memory_{index:03d}")
         anchors.append(
             {
@@ -1314,8 +1315,16 @@ def _navigation_memory_anchors(payload: dict[str, Any], *, frame_id: str) -> lis
                 "label": str(item.get("label") or item_id),
                 "kind": str(item.get("kind") or ""),
                 "scene_id": str(item.get("scene_id") or ""),
-                "pose": _navigation_memory_point(item.get("pose"), frame_id=frame_id),
-                "nav_goal": _navigation_memory_point(item.get("nav_goal"), frame_id=frame_id),
+                "pose": _navigation_memory_point(
+                    item.get("pose"),
+                    frame_id=frame_id,
+                    label=f"navigation_memory.json item {item_id} pose",
+                ),
+                "nav_goal": _navigation_memory_point(
+                    item.get("nav_goal"),
+                    frame_id=frame_id,
+                    label=f"navigation_memory.json item {item_id} nav_goal",
+                ),
                 "source": str(item.get("source") or ""),
                 "confidence": _optional_float(item.get("confidence")),
                 "provenance": "navigation_memory.json",
@@ -1324,20 +1333,25 @@ def _navigation_memory_anchors(payload: dict[str, Any], *, frame_id: str) -> lis
     return anchors
 
 
-def _navigation_memory_point(payload: Any, *, frame_id: str) -> dict[str, Any] | None:
-    if not isinstance(payload, dict) or "x" not in payload or "y" not in payload:
-        return None
-    try:
-        x = float(payload["x"])
-        y = float(payload["y"])
-    except (TypeError, ValueError):
+def _navigation_memory_point(
+    payload: Any,
+    *,
+    frame_id: str,
+    label: str,
+) -> dict[str, Any] | None:
+    source = _navigation_memory_point_source(
+        payload,
+        label=label,
+        required=False,
+    )
+    if not source:
         return None
     return {
         "frame_id": frame_id,
-        "x": x,
-        "y": y,
-        "z": _optional_float(payload.get("z")),
-        "yaw": _optional_float(payload.get("yaw")),
+        "x": source["x"],
+        "y": source["y"],
+        "z": source.get("z"),
+        "yaw": source.get("yaw"),
     }
 
 
@@ -1346,6 +1360,51 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _read_navigation_memory(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"navigation memory must contain valid JSON object: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"navigation memory must contain a JSON object: {path}")
+    return payload
+
+
+def _navigation_memory_point_source(
+    payload: Any,
+    *,
+    label: str,
+    required: bool,
+) -> dict[str, float]:
+    if payload is None and not required:
+        return {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object with x, y, and optional yaw/z")
+    if "x" not in payload or "y" not in payload:
+        raise ValueError(f"{label} must include x and y")
+    point = {
+        "x": _required_float(payload.get("x"), label=f"{label} x"),
+        "y": _required_float(payload.get("y"), label=f"{label} y"),
+    }
+    if "yaw" in payload:
+        point["yaw"] = _required_float(payload.get("yaw"), label=f"{label} yaw")
+    if "z" in payload:
+        point["z"] = _required_float(payload.get("z"), label=f"{label} z")
+    return point
+
+
+def _required_float(value: Any, *, label: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{label} must be a finite number")
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a finite number") from exc
+    if not math.isfinite(result):
+        raise ValueError(f"{label} must be a finite number")
+    return result
 
 
 def _room_waypoints_from_review_labels(
@@ -1409,11 +1468,29 @@ def _room_waypoints_from_rooms(
 
 
 def _navigation_memory_items(payload: dict[str, Any]) -> list[Any]:
-    if isinstance(payload.get("items"), list):
-        return list(payload["items"])
+    if "items" in payload:
+        items = payload["items"]
+        if not isinstance(items, list) or not items:
+            raise ValueError("navigation_memory.json items must be a non-empty list")
+        return list(items)
     catalog = payload.get("catalog") if isinstance(payload.get("catalog"), dict) else {}
     memory = catalog.get("navigation_memory")
-    return list(memory) if isinstance(memory, list) else []
+    if "navigation_memory" in catalog:
+        if not isinstance(memory, list) or not memory:
+            raise ValueError(
+                "navigation_memory.json catalog.navigation_memory must be a non-empty list"
+            )
+        return list(memory)
+    raise ValueError(
+        "navigation_memory.json must contain a non-empty items list "
+        "or catalog.navigation_memory list"
+    )
+
+
+def _navigation_memory_item(raw_item: Any, *, index: int) -> dict[str, Any]:
+    if not isinstance(raw_item, dict):
+        raise ValueError(f"navigation_memory.json item {index} must be a JSON object")
+    return raw_item
 
 
 def _driveable_ways_from_rooms(rooms: list[dict[str, Any]]) -> list[dict[str, str]]:

@@ -63,7 +63,12 @@ Latest quality snapshot from 2026-06-20:
   valid-looking empty snapshots, or defaulted map geometry. Runtime Map Prior
   Snapshot conversion also rejects malformed or missing Agibot
   `nav_goal`/`pose` and Nav2 waypoint `x`/`y`/`yaw` geometry instead of
-  defaulting offline prior coordinates to plausible map-frame zeroes. The Nav2 map-bundle
+  defaulting offline prior coordinates to plausible map-frame zeroes. B1 runtime
+  bundle compilation now rejects malformed, non-object, missing, empty, or
+  wrong-shaped `navigation_memory.json` sources and present malformed
+  `nav_goal`/`pose` point fields before writing runtime semantics, instead of
+  skipping source evidence into a generic no-waypoints failure or partial
+  bundle. The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
   during validation or projection. B1 runtime bundle compilation now reports

@@ -395,6 +395,67 @@ def test_runtime_compiler_rejects_malformed_semantic_projection_room(
         )
 
 
+@pytest.mark.parametrize(
+    ("navigation_memory", "expected_error"),
+    [
+        (
+            [],
+            r"navigation memory must contain a JSON object: .*navigation_memory\.json",
+        ),
+        (
+            {},
+            "navigation_memory.json must contain a non-empty items list "
+            "or catalog.navigation_memory list",
+        ),
+        (
+            {"items": []},
+            "navigation_memory.json items must be a non-empty list",
+        ),
+        (
+            {"items": [[]]},
+            "navigation_memory.json item 1 must be a JSON object",
+        ),
+        (
+            {"items": [{"id": "bad_anchor", "nav_goal": {"x": "bad", "y": 1.0}}]},
+            "navigation_memory.json item bad_anchor nav_goal x must be a finite number",
+        ),
+    ],
+)
+def test_runtime_compiler_rejects_malformed_navigation_memory_sources(
+    tmp_path: Path,
+    navigation_memory: object,
+    expected_error: str,
+) -> None:
+    navigation_memory_path = tmp_path / "navigation_memory.json"
+    navigation_memory_path.write_text(json.dumps(navigation_memory), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            navigation_memory_path=navigation_memory_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
+def test_runtime_compiler_rejects_malformed_navigation_memory_json(tmp_path: Path) -> None:
+    navigation_memory_path = tmp_path / "navigation_memory.json"
+    navigation_memory_path.write_text("{not-json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"navigation memory must contain valid JSON object: .*navigation_memory\.json",
+    ):
+        compile_runtime_bundle(
+            map_bundle=MAP12_BUNDLE,
+            scene_root=SCENE_ROOT,
+            review_manifest_path=REVIEW_MANIFEST,
+            navigation_memory_path=navigation_memory_path,
+            output_dir=tmp_path / "runtime",
+        )
+
+
 def test_runtime_compiler_rejects_navigation_without_alignment(
     tmp_path: Path,
 ) -> None:

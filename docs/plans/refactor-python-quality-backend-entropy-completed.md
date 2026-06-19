@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 runtime bundle compilation now loads
+  `navigation_memory.json` through a strict object parser, requires a non-empty
+  `items` or `catalog.navigation_memory` list, rejects non-object rows, and
+  rejects present malformed `nav_goal` / `pose` point fields before writing
+  `semantics.json` or provenance. Malformed memory sources can no longer crash
+  raw, collapse into a generic no-waypoints failure, or be skipped into partial
+  runtime semantics. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud B1 runtime source truth; valid memory rows
+  and costmap-based waypoint selection remain unchanged. Metric: ratchet stayed
+  at 0 Ruff complexity rows and 79 oversized modules. Proof: focused B1 Map 12
+  runtime bundle contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only with fresh runtime bundle
+  evidence that malformed navigation memory sources are again skipped,
+  genericized, or written into partial bundle artifacts.
+
 - 2026-06-20: Runtime Map Prior Snapshot conversion now requires Nav2
   cleanup-bundle `semantics.json` to provide a non-empty
   `inspection_waypoints` list and rejects non-object waypoint rows before
