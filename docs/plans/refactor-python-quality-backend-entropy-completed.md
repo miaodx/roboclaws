@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Codex cleanup apple-to-apple summaries now treat declared
+  `run_result.json`, present `agent_view.json`, and embedded
+  `run_result.agent_view` packets as object-typed source truth. Malformed or
+  parseable non-object source packets now raise concise path-labelled errors
+  before comparison manifest/report writes, instead of surfacing raw
+  parser/type failures or turning wrong-shaped embedded agent views into empty
+  worklists. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Codex cleanup apple-to-apple source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused Codex cleanup apple-to-apple summary tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh Codex cleanup apple-to-apple evidence
+  that malformed or non-object run-result/agent-view sources again produce
+  tracebacks, write comparison outputs after source-load failure, or fabricate
+  empty agent-view/worklist evidence from wrong-shaped source packets.
+
 - 2026-06-20: Visual-grounding cleanup-run corpus building now treats the
   declared `run_result.json` as object-typed source truth. Malformed or
   parseable non-object cleanup run-result sources now return concise builder

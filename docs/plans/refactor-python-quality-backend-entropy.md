@@ -225,8 +225,10 @@ Latest quality snapshot from 2026-06-20:
   under the run directory, rejecting missing, empty, or substitute paths instead
   of reusing CWD files or same-basename colocated files. The Codex cleanup
   apple-to-apple summary now applies the same run-dir source-truth rule to
-  declared summary artifacts and robot-view samples, rejecting missing declared
-  visual evidence instead of linking CWD substitutes or silently omitting links.
+  declared summary artifacts and robot-view samples, and treats run-result and
+  agent-view JSON packets as object-typed source truth, rejecting missing or
+  malformed source evidence instead of linking CWD substitutes, silently omitting
+  links, or falling back to an empty worklist.
   Operator-console B1 camera preview promotion now resolves declared relative
   view paths only under the source artifact directory and rejects `../` escapes,
   so stale CWD files or sibling run files cannot be promoted as current robot
