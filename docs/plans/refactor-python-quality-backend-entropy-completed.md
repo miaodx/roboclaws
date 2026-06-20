@@ -34,6 +34,27 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 operator-console scene previews now treat existing
+  `b1-map12-preview.json` metadata and declared camera artifacts as
+  JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object skip-existing metadata now returns a concise
+  `metadata_unreadable` result without rewriting metadata or deleting
+  companion preview images, and malformed or non-object camera artifacts now
+  surface `artifact_unreadable` inside the existing
+  `camera_preview_unavailable` packet instead of returning raw parser/type
+  failures or silently substituting an empty preview packet. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  operator-console B1 preview source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; focused coverage landed in a new
+  small source-test file instead of growing the already oversized preview test
+  module. Proof: focused B1 preview source tests, existing preview behavior
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh B1 preview evidence
+  that corrupt existing metadata is overwritten/deletes previews, or malformed
+  camera artifacts again produce raw parser/type failures or plausible current
+  preview evidence.
+
 - 2026-06-20: The cleanup checker now treats declared planner-proof request
   artifacts as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or

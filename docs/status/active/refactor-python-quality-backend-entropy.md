@@ -17,12 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: The cleanup checker now treats declared planner-proof request
-artifacts as source truth through `roboclaws.core.json_sources.read_json_object`.
-Malformed, non-object, or missing declared request manifests fail with
-path-labelled source errors instead of raw parser tracebacks or generic
-assertions. Focused cleanup-checker source tests, shared JSON-source helper
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: B1 operator-console scene previews now treat existing preview
+metadata and declared camera artifacts as JSON-object source truth through
+`roboclaws.core.json_sources.read_json_object`. Malformed or non-object
+skip-existing metadata returns `metadata_unreadable` without rewriting metadata
+or deleting companion previews, and malformed or non-object camera artifacts
+surface `artifact_unreadable` in the existing unavailable result packet.
+Focused B1 preview source tests, existing preview tests, touched-file
+Ruff/format, `git diff --check`, changed-code review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

@@ -219,6 +219,12 @@ Latest quality snapshot from 2026-06-20:
   JSON-object source truth through `roboclaws.core.json_sources`, failing
   malformed, non-object, or missing request manifests with path-labelled source
   errors instead of raw parser tracebacks or generic assertions.
+  B1 operator-console scene previews now treat existing preview metadata and
+  declared camera artifacts as JSON-object source truth through the same shared
+  helper, failing malformed or non-object skip-existing metadata as
+  `metadata_unreadable` before metadata rewrites or companion preview deletion,
+  and surfacing malformed or non-object camera artifacts as
+  `artifact_unreadable` inside the existing unavailable preview packet.
   Codex and Claude live-run timing writers now
   surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing
@@ -648,8 +654,6 @@ confidence without postponing a stronger P1 frontier.
 - Live runtime / eval harness rows:
   `roboclaws/evals/live_runtime.py::wait_for_live_surface_completion` and
   `skills/eval-harness/scripts/run_eval_harness.py::_row_blockers`.
-- B1 preview row:
-  `scripts/operator_console/render_scene_previews.py::render_b1_map12_preview`.
 - Behavior-test fixture-builder work in selected operator-console tests.
 - Stale small cuts: duplicated lane prose.
 
@@ -668,6 +672,7 @@ product slice that needs them:
 - `PhysicalObservationProvider`.
 - Scene-sampler public alias removal.
 - Broad behavior-test pruning.
+- Operator-console B1 preview metadata/camera-artifact source truth.
 - Closed owner families listed in `Active Candidates`.
 
 ## Evidence Ladder
