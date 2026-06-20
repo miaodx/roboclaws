@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac scene camera view-spec loading now routes file-backed
+  view-list or `{views: [...]}` payloads through
+  `roboclaws.core.json_sources.read_json_value` before the existing
+  list/object-with-views shape validation. Missing or malformed view-spec
+  files now use canonical path-labelled source wording, while the accepted
+  top-level list and wrapped-view payload forms remain unchanged. Owner layer:
+  Backend Runtime / Environment Primitive camera geometry helper.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused Isaac backend tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `scripts/isaac_lab_cleanup/isaac_scene_camera_geometry.py` regains local raw
+  JSON parsing for explicit camera view-spec files or malformed view-spec
+  sources can again reach camera-request normalization as parser tracebacks.
+
 - 2026-06-20: Isaac segmentation AOV comparison and matrix summary artifact
   reads now route explicit control/candidate state artifacts and
   `--entry LABEL=PATH` state/preflight artifacts through

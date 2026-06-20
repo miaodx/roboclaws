@@ -17,18 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac segmentation AOV comparison and matrix summary artifact
-reads now route through the shared JSON-object helper while preserving existing
-CLI wording for missing, malformed, and non-object state/preflight artifacts.
-Focused AOV comparison/matrix tests and touched-file Ruff/format passed, as did
-`git diff --check` and ratchet. Current shared-checkout ratchet summary still
-reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: Isaac scene camera view-spec loading now routes file-backed
+view-list or `{views: [...]}` payloads through the shared JSON-value helper
+before existing list/object-with-views validation. Focused Isaac backend tests
+and touched-file Ruff/format passed, as did `git diff --check` and ratchet.
+Current shared-checkout ratchet summary still reports 1 unrelated Ruff
+complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+oversized modules.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac segmentation AOV source-reader slice.
+committing the Isaac camera view-spec source-reader slice.
 
 ## Touched Areas
 
@@ -45,6 +45,7 @@ committing the Isaac segmentation AOV source-reader slice.
 - `scripts/isaac_lab_cleanup/check_prepared_semantic_usd_summary.py`
 - `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
+- `scripts/isaac_lab_cleanup/isaac_scene_camera_geometry.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/render_b1_scene_topdown_diagnostic.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`

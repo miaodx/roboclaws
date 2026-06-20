@@ -132,6 +132,57 @@ def test_isaac_worker_read_state_preserves_state_path(tmp_path: Path) -> None:
     assert loaded["_state_path"] == str(state_path)
 
 
+def test_isaac_camera_view_specs_reject_missing_source(tmp_path: Path) -> None:
+    missing = tmp_path / "missing_views.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"camera view spec source is missing: .*missing_views\.json",
+    ):
+        isaac_lab_backend_worker._load_camera_view_specs(missing)
+
+
+def test_isaac_camera_view_specs_reject_malformed_source(tmp_path: Path) -> None:
+    specs_path = tmp_path / "camera_views.json"
+    specs_path.write_text("{bad json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"camera view spec source must contain valid JSON: .*camera_views\.json",
+    ):
+        isaac_lab_backend_worker._load_camera_view_specs(specs_path)
+
+
+def test_isaac_camera_view_specs_reject_wrong_shape_source(tmp_path: Path) -> None:
+    specs_path = tmp_path / "camera_views.json"
+    specs_path.write_text(json.dumps({"views": {"bad": True}}), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="camera view spec must be a list or an object with a views list",
+    ):
+        isaac_lab_backend_worker._load_camera_view_specs(specs_path)
+
+
+def test_isaac_camera_view_specs_accept_list_or_wrapped_views(tmp_path: Path) -> None:
+    list_path = tmp_path / "camera_views_list.json"
+    wrapped_path = tmp_path / "camera_views_object.json"
+    list_path.write_text(
+        json.dumps([{"view_id": "fpv"}, "skip", {"view_id": "map"}]),
+        encoding="utf-8",
+    )
+    wrapped_path.write_text(
+        json.dumps({"views": [{"view_id": "verify"}]}),
+        encoding="utf-8",
+    )
+
+    assert isaac_lab_backend_worker._load_camera_view_specs(list_path) == [
+        {"view_id": "fpv"},
+        {"view_id": "map"},
+    ]
+    assert isaac_lab_backend_worker._load_camera_view_specs(wrapped_path) == [{"view_id": "verify"}]
+
+
 def test_isaac_lab_backend_reports_missing_runtime(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="Isaac Lab Python runtime is missing"):
         IsaacLabSubprocessBackend(
