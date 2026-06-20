@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Semantic map spatial-contract normalization now treats bundle
+  `semantics.json` as JSON-object source truth before in-place writes. Missing,
+  malformed, or parseable non-object semantics sources now return concise CLI
+  source-path errors instead of raw parser/type tracebacks, and the
+  cross-environment parity test now reflects the current seven accepted B1
+  geometry-only alignment anchors with blank semantic ids. Owner layer:
+  Backend Runtime / Environment Primitive and Artifacts, reports, and eval
+  suites. Behavior-change class: fail-aloud map-bundle source truth plus stale
+  test-truth refresh. Metric: staged/add-N ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules. Proof: focused cross-environment semantic-map
+  parity tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only with fresh normalizer evidence that `semantics.json`
+  again loads through raw parser/type paths or writes after source-load
+  failure, or with current B1 manifest evidence contradicting the accepted
+  seven-anchor alignment contract.
+
 - 2026-06-20: B1 asset visual comparisons now treat explicit
   `--baseline-navigation` and `--candidate-navigation` artifacts as
   JSON-object source truth. Missing, malformed, or parseable non-object

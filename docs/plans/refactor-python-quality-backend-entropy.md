@@ -127,6 +127,9 @@ Latest quality snapshot from 2026-06-20:
   before writing `visual_parity_summary.json` or `report.html`.
   B1 asset visual comparisons now treat explicit baseline/candidate navigation
   artifacts as JSON-object source truth before writing comparison outputs.
+  Semantic map spatial-contract normalization now treats bundle
+  `semantics.json` as JSON-object source truth before in-place writes, and the
+  parity test reflects the current accepted B1 alignment-anchor manifest.
   B1 correspondence review rendering now treats explicit correspondences and
   scene-topdown render packets as JSON-object source truth before writing
   `correspondence_review_packet.json` or `correspondence_review.html`.

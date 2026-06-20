@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,7 @@ from roboclaws.maps.spatial_contract import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+NORMALIZER_SCRIPT = REPO_ROOT / "scripts" / "maps" / "normalize_semantic_map_spatial_contract.py"
 STATIC_MAP_BUNDLES = tuple(
     sorted(
         path
@@ -54,6 +57,45 @@ def test_static_map_bundle_inventory_is_not_empty() -> None:
     assert STATIC_MAP_BUNDLES
 
 
+def test_semantic_map_spatial_contract_normalizer_reports_missing_semantics_without_traceback(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+
+    completed = _run_normalizer(bundle_dir)
+
+    assert completed.returncode == 2
+    assert "semantics missing" in completed.stderr
+    assert str(bundle_dir / "semantics.json") in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "semantics must contain valid JSON object"),
+        ("[]\n", "semantics must contain a JSON object"),
+    ),
+)
+def test_semantic_map_spatial_contract_normalizer_reports_bad_semantics_without_traceback(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    semantics_path = bundle_dir / "semantics.json"
+    semantics_path.write_text(source, encoding="utf-8")
+
+    completed = _run_normalizer(bundle_dir)
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
+    assert str(semantics_path) in completed.stderr
+    assert "Traceback" not in completed.stderr
+
+
 def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
     review = json.loads(
         (REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json").read_text(
@@ -65,9 +107,9 @@ def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
             encoding="utf-8"
         )
     )
-    raw_map = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / (
-        "robot_map_12"
-    ) / "agibot"
+    raw_map = (
+        REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
+    )
     removed_authored_bundle = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
     assert review["schema"] == "b1_map12_alignment_review_v1"
@@ -75,7 +117,14 @@ def test_b1_uses_separate_review_and_correspondence_manifests() -> None:
         "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     )
     assert correspondences["schema"] == "b1_map12_scene_correspondences_v1"
-    assert correspondences["anchors"] == []
+    assert len(correspondences["anchors"]) == 7
+    assert {anchor["review_status"] for anchor in correspondences["anchors"]} == {"accepted"}
+    assert {anchor["anchor_role"] for anchor in correspondences["anchors"]} == {"alignment"}
+    assert {anchor["anchor_type"] for anchor in correspondences["anchors"]} == {
+        "operator_correspondence"
+    }
+    assert {anchor["navigation_area_id"] for anchor in correspondences["anchors"]} == {""}
+    assert {anchor["asset_partition_id"] for anchor in correspondences["anchors"]} == {""}
     assert (raw_map / "nav2.yaml").is_file()
     assert (raw_map / "occupancy.pgm").is_file()
     assert not removed_authored_bundle.exists()
@@ -107,3 +156,13 @@ def test_candidate_navigation_zone_cannot_be_validated_as_room_boundary() -> Non
 
 def _semantics(bundle_dir: Path) -> dict:
     return json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+
+
+def _run_normalizer(bundle_dir: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(NORMALIZER_SCRIPT), str(bundle_dir)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )

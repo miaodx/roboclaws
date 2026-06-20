@@ -17,11 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 asset visual comparison validation now treats explicit baseline
-and candidate navigation artifacts as JSON-object source truth before writing
-comparison outputs. Focused asset-comparison CLI source tests, touched-file
-Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
-complexity rows, 79 oversized modules.
+2026-06-20: Semantic map spatial-contract normalization now treats
+`semantics.json` as JSON-object source truth before in-place bundle writes, and
+the parity test now reflects the current seven accepted B1 alignment anchors.
+Focused cross-environment semantic-map parity tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed. Quality signal: 0 Ruff complexity
+rows, 79 oversized modules.
 
 ## Next Action
 
@@ -41,6 +42,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/render_b1_map12_correspondence_review.py`
 - `scripts/maps/fit_b1_map12_scene_alignment.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
+- `scripts/maps/normalize_semantic_map_spatial_contract.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -52,6 +54,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_correspondence_review_cli.py`
 - `tests/contract/maps/test_b1_map12_alignment_fit_cli.py`
 - `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
+- `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 
