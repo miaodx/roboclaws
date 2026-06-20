@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console control endpoint operator-state reads now use
+  `roboclaws.core.json_sources.read_json_object` for strict operator-state
+  object sources while preserving existing `OperatorControlError` wording and
+  status codes for missing, malformed, non-object, and unreadable sources.
+  Control JSONL row parsing remains local because it is row-oriented. Owner
+  layer: Thin Runtime / Server Adapters. Behavior-change class: source-reader
+  consolidation with stable control endpoint diagnostics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+  unrelated no-touch debt, and this slice did not add new complexity in touched
+  files. Proof: full operator-console tests, touched-file ruff/format checks,
+  changed-code review, `git diff --check`, and ratchet. Reopen only if
+  operator-console control endpoint state loading regains a local raw
+  JSON-object reader or corrupt present operator-state sources stop surfacing
+  stable `OperatorControlError` evidence.
+
 - 2026-06-20: Operator-console latest-run history sidecar reads now use
   `roboclaws.core.json_sources.read_json_object` for operator-state and
   live-status object sources while preserving existing `HistorySourceError`
