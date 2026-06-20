@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console launcher no longer carries the unused permissive
+  `_read_json` helper that duplicated raw JSON parsing. All remaining launcher
+  JSON-object reads now flow through the existing strict/optional
+  `_read_json_source` path backed by `roboclaws.core.json_sources.read_json_object`.
+  Owner layer: Thin Runtime / Server Adapters. Behavior-change class: no-caller
+  dead raw-reader removal. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: exact no-reference search for `_read_json(` in launcher/operator-console
+  tests, focused launcher unit tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/operator_console/launcher.py` reintroduces a local permissive raw
+  JSON object reader instead of using `_read_json_source` / `read_json_object`.
+
 - 2026-06-20: Operator-console passive interaction state reads now route
   present `operator_state.json` summary files through
   `roboclaws.core.json_sources.read_json_object` while preserving the passive

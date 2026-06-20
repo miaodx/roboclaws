@@ -17,24 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console passive interaction state reads now route present
-`operator_state.json` summary files through the shared JSON-object helper
-while preserving the missing/corrupt/non-object-as-empty passive UI-summary
-behavior. Focused operator-console interaction unit tests and touched-file
+2026-06-20: Operator-console launcher no longer carries the unused permissive
+`_read_json` helper that duplicated raw JSON parsing. Remaining launcher
+JSON-object reads use the existing strict/optional `read_json_object`-backed
+path. Exact no-reference search, focused launcher unit tests, and touched-file
 Ruff/format passed, as did `git diff --check` and ratchet. Current
 shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Scene-camera USDA prepared-scene summary loading now routes
-present optional `summary.json` sidecars through the shared JSON-object helper
-while preserving the missing/corrupt/non-object-as-empty render-contract
-behavior. Focused scene-camera USDA source tests and touched-file Ruff/format
-passed.
+Previous slice: Operator-console passive interaction state reads now route
+present `operator_state.json` summary files through the shared JSON-object
+helper while preserving the missing/corrupt/non-object-as-empty passive
+UI-summary behavior. Focused operator-console interaction unit tests and
+touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console passive interaction state source-reader slice.
+committing the operator-console launcher dead raw-reader removal slice.
 
 ## Touched Areas
 
@@ -184,6 +184,7 @@ committing the operator-console passive interaction state source-reader slice.
 - `tests/unit/agents/test_provider_timing_proxy.py`
 - `roboclaws/household/visual_backend_slots.py`
 - `tests/unit/molmo_cleanup/test_visual_backend_slots.py`
+- `roboclaws/operator_console/launcher.py`
 - `roboclaws/operator_console/readiness.py`
 - `roboclaws/operator_console/state.py`
 - `roboclaws/operator_console/interactions.py`

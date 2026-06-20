@@ -945,16 +945,6 @@ def _docker_container_ids_with_mount(source: Path) -> list[str]:
     return docker_container_ids_with_mount(source, run_command=subprocess.run)
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
 def _read_optional_json_source(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
