@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker Isaac scene-index map-context semantics loading
+  now treats declared `semantics_json` evidence as JSON-object source truth
+  through `roboclaws.core.json_sources.read_json_object`. Missing, malformed,
+  or parseable non-object scene-index Nav2 semantics artifacts now fail with
+  path-labelled source errors before map-context validation, instead of
+  surfacing raw assertion/parser/type failures or wrong-shaped semantics
+  packets. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: fail-aloud cleanup-checker scene-index semantics source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the checker dropped by another line while focused scene-index source
+  coverage landed in a small source-test file. Proof: focused scene-index
+  source tests, existing scene-index map-context tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh cleanup-checker evidence that missing, malformed, or
+  non-object scene-index Nav2 semantics artifacts again produce raw
+  assertion/parser/type failures or reach map-context validation as plausible
+  semantics evidence.
+
 - 2026-06-20: Cleanup checker B1 robot-consumption semantics loading now
   treats declared `semantics_json` evidence as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or

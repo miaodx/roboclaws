@@ -239,6 +239,10 @@ Latest quality snapshot from 2026-06-20:
   `semantics_json` evidence as JSON-object source truth, failing missing,
   malformed, or non-object B1 Nav2 semantics artifacts with path-labelled
   source errors before robot-consumption proof validation.
+  Cleanup checker Isaac scene-index map-context semantics loading now treats
+  declared `semantics_json` evidence as JSON-object source truth too, failing
+  missing, malformed, or non-object scene-index Nav2 semantics artifacts with
+  path-labelled source errors before map-context validation.
   B1 operator-console scene previews now treat existing preview metadata and
   declared camera artifacts as JSON-object source truth through the same shared
   helper, failing malformed or non-object skip-existing metadata as

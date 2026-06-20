@@ -1240,8 +1240,7 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
 
     artifact_paths = nav2_bundle.get("artifact_paths") or {}
     semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
-    assert semantics_path.is_file(), nav2_bundle
-    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    semantics = read_json_object(semantics_path, label="Isaac scene-index Nav2 semantics")
     assert semantics.get("environment_id") == scenario_id, semantics
     assert str(semantics.get("map_id") or "").startswith(scenario_id), semantics
     assert "molmospaces-procthor-val-0-7" not in json.dumps(
