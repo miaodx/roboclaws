@@ -11,7 +11,10 @@ from typing import Any
 from urllib.parse import quote
 
 from roboclaws.core.json_sources import read_json_object
-from roboclaws.household.visual_backend_slots import list_visual_backend_slots
+from roboclaws.household.visual_backend_slots import (
+    VisualBackendSlotError,
+    list_visual_backend_slots,
+)
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root, operator_output_request_path
 from roboclaws.operator_console.process_status import pid_is_active
@@ -347,7 +350,11 @@ def _eval_row_task(root: Path, row: dict[str, Any], manifest_path: Path) -> dict
 
 def _visual_slot_tasks(root: Path) -> list[dict[str, Any]]:
     tasks: list[dict[str, Any]] = []
-    for slot in list_visual_backend_slots(repo_root=root):
+    try:
+        slots = list_visual_backend_slots(repo_root=root)
+    except VisualBackendSlotError as exc:
+        return [_visual_slot_config_error_task(root, exc)]
+    for slot in slots:
         if not slot.held:
             continue
         run_dir = _resolve_under_root(root, slot.output_dir)
@@ -397,6 +404,30 @@ def _visual_slot_tasks(root: Path) -> list[dict[str, Any]]:
             )
         )
     return tasks
+
+
+def _visual_slot_config_error_task(root: Path, error: VisualBackendSlotError) -> dict[str, Any]:
+    message = f"MolmoSpaces visual backend slot config is invalid: {error}"
+    return _task(
+        task_id="source-error:molmo-live:visual-backend-slot-config",
+        status="source_error",
+        owner="molmo-live",
+        label="Invalid MolmoSpaces visual backend slot config",
+        resource="invalid MolmoSpaces visual backend slot config",
+        resources=[
+            _resource(
+                "source_error",
+                message,
+                path=root / "output" / "molmo" / "visual-backend-slots",
+                active=False,
+                error_reason="invalid_config",
+            )
+        ],
+        extra={
+            "error_reason": "invalid_config",
+            "message": message,
+        },
+    )
 
 
 def _tmux_tasks(root: Path) -> list[dict[str, Any]]:

@@ -155,6 +155,33 @@ def test_runtime_inventory_surfaces_invalid_eval_harness_manifest_json(tmp_path:
     assert blockers["summary"]["active"] == 0
 
 
+def test_runtime_inventory_surfaces_invalid_visual_backend_slot_limit(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS", "0")
+
+    payload = runtime_inventory_payload(tmp_path)
+    blockers = runtime_blockers_payload(tmp_path)
+
+    task = next(item for item in payload["tasks"] if item["owner"] == "molmo-live")
+    assert task["id"] == "source-error:molmo-live:visual-backend-slot-config"
+    assert task["status"] == "source_error"
+    assert task["error_reason"] == "invalid_config"
+    assert "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS must be a positive integer" in task["message"]
+    assert task["resources"] == [
+        {
+            "kind": "source_error",
+            "label": task["message"],
+            "path": str(tmp_path / "output" / "molmo" / "visual-backend-slots"),
+            "active": False,
+            "error_reason": "invalid_config",
+        }
+    ]
+    assert [item["id"] for item in blockers["tasks"]] == [task["id"]]
+    assert blockers["summary"]["active"] == 0
+
+
 def test_runtime_blockers_payload_omits_terminal_history(tmp_path: Path) -> None:
     active_row_dir = tmp_path / "output" / "eval-harness" / "focused" / "rows" / "active-live"
     active_run_dir = active_row_dir / "run" / "0615_1225" / "seed-7"

@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: RAW-FPV perception probe runtime-prior loading now fails explicit
+2026-06-21: MolmoSpaces visual backend slot capacity config now fails invalid
+`ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and explicit `max_slots` values aloud
+instead of falling back to a plausible one-slot backend. Live household launch
+reports invalid slot config separately from normal slot contention, and
+operator-console runtime inventory surfaces the bad config as a blocking
+`source_error` task. Focused visual-slot, live-driver, and runtime-inventory
+tests, touched-file ruff, touched-file format checks, diff check,
+changed-code cleanup review, and the ratchet summary passed. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: RAW-FPV perception probe runtime-prior loading now fails explicit
 `--runtime-map-prior` paths aloud when missing, including split and equals CLI
 spellings, while preserving the default missing prior as intentional no-prior
 context. Focused RAW-FPV perception probe tests, touched-file ruff,
@@ -25,7 +35,7 @@ touched-file format checks, diff check, changed-code cleanup review, and the
 ratchet summary passed. Current ratchet: 0 Ruff complexity violations, 80
 oversized modules in the shared checkout.
 
-Previous slice: OpenAI Agents model-input compaction threshold parsing now fails
+Previous slice before that: OpenAI Agents model-input compaction threshold parsing now fails
 booleans and non-positive values aloud across the env-backed live runtime path,
 direct `model_input_compaction.min_chars` metadata, and the perf-profile
 `model_input_compaction_min_chars` producer path instead of clamping invalid
@@ -61,8 +71,9 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the RAW-FPV explicit runtime-prior source slice. Avoid reopening
-closed RAW-FPV source readers without fresh false-green evidence.
+committing the MolmoSpaces visual backend slot capacity config slice. Avoid
+reopening closed visual-slot config or slot-file source readers without fresh
+false-green evidence.
 
 ## Touched Areas
 
@@ -247,8 +258,12 @@ closed RAW-FPV source readers without fresh false-green evidence.
 - `tests/unit/agents/test_openai_agents_model_input_config.py`
 - `roboclaws/agents/provider_timing_proxy.py`
 - `tests/unit/agents/test_provider_timing_proxy.py`
+- `roboclaws/agents/drivers/household_live.py`
 - `roboclaws/household/visual_backend_slots.py`
 - `tests/unit/molmo_cleanup/test_visual_backend_slots.py`
+- `roboclaws/operator_console/runtime_inventory.py`
+- `tests/unit/agents/test_household_live_driver.py`
+- `tests/unit/operator_console/test_runtime_inventory.py`
 - `roboclaws/operator_console/launcher.py`
 - `roboclaws/operator_console/readiness.py`
 - `roboclaws/operator_console/state.py`

@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the MolmoSpaces visual backend slot
+  capacity config slice: invalid `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and
+  explicit `max_slots` values now fail aloud instead of falling back to a
+  plausible one-slot backend. Live household launch reports invalid slot
+  config separately from normal slot contention, and operator-console runtime
+  inventory surfaces the bad config as a blocking `source_error` task.
 - Current shared-checkout note after the RAW-FPV runtime-prior source slice:
   explicit `--runtime-map-prior` paths now fail aloud when missing, including
   both split and equals CLI spellings, while the default missing prior path

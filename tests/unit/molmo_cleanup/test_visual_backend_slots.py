@@ -8,6 +8,7 @@ from roboclaws.household.visual_backend_slots import (
     VisualBackendSlotError,
     acquire_visual_backend_slot,
     list_visual_backend_slots,
+    molmo_visual_slot_limit,
 )
 
 
@@ -88,6 +89,28 @@ def test_explicit_two_slot_limit_allows_two_and_blocks_third(
     assert second.state.slot_id == 2
     first.release()
     second.release()
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "abc"])
+def test_invalid_visual_backend_slot_limit_env_fails_aloud(
+    monkeypatch: pytest.MonkeyPatch,
+    raw: str,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS", raw)
+
+    with pytest.raises(VisualBackendSlotError) as exc_info:
+        molmo_visual_slot_limit()
+
+    assert "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS must be a positive integer" in str(exc_info.value)
+    assert repr(raw) in str(exc_info.value)
+
+
+@pytest.mark.parametrize("max_slots", [0, -1, False])
+def test_invalid_explicit_visual_backend_slot_limit_fails_aloud(tmp_path, max_slots: int) -> None:
+    with pytest.raises(VisualBackendSlotError) as exc_info:
+        list_visual_backend_slots(repo_root=tmp_path, max_slots=max_slots)
+
+    assert f"max_slots must be a positive integer, got {max_slots!r}" in str(exc_info.value)
 
 
 def test_stale_visual_backend_slot_is_released_only_when_pid_is_gone(

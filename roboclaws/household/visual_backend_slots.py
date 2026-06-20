@@ -86,9 +86,23 @@ def molmo_visual_slot_limit(env: dict[str, str] | None = None) -> int:
         return DEFAULT_MOLMO_MAX_VISUAL_BACKENDS
     try:
         value = int(raw)
-    except ValueError:
-        return DEFAULT_MOLMO_MAX_VISUAL_BACKENDS
-    return max(value, 1)
+    except ValueError as exc:
+        raise VisualBackendSlotError(
+            f"{MOLMO_MAX_VISUAL_BACKENDS_ENV} must be a positive integer, got {raw!r}"
+        ) from exc
+    if value <= 0:
+        raise VisualBackendSlotError(
+            f"{MOLMO_MAX_VISUAL_BACKENDS_ENV} must be a positive integer, got {raw!r}"
+        )
+    return value
+
+
+def _visual_slot_limit(max_slots: int | None) -> int:
+    if max_slots is None:
+        return molmo_visual_slot_limit()
+    if isinstance(max_slots, bool) or max_slots <= 0:
+        raise VisualBackendSlotError(f"max_slots must be a positive integer, got {max_slots!r}")
+    return max_slots
 
 
 def visual_backend_slot_root(repo_root: str | Path = ".") -> Path:
@@ -101,7 +115,7 @@ def list_visual_backend_slots(
     max_slots: int | None = None,
 ) -> list[VisualBackendSlotState]:
     root = visual_backend_slot_root(repo_root)
-    limit = max_slots or molmo_visual_slot_limit()
+    limit = _visual_slot_limit(max_slots)
     return [
         _read_slot(root / _slot_filename(slot_id), slot_id=slot_id)
         for slot_id in range(1, limit + 1)
@@ -122,7 +136,7 @@ def acquire_visual_backend_slot(
 ) -> VisualBackendSlotLease:
     root = visual_backend_slot_root(repo_root)
     root.mkdir(parents=True, exist_ok=True)
-    limit = max_slots or molmo_visual_slot_limit()
+    limit = _visual_slot_limit(max_slots)
     active: list[dict[str, Any]] = []
     for slot_id in range(1, limit + 1):
         path = root / _slot_filename(slot_id)

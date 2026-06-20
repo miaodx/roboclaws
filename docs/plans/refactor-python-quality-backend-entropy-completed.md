@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: MolmoSpaces visual backend slot capacity config now rejects
+  invalid `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and explicit `max_slots`
+  values before live launch or operator-console inventory can report a
+  plausible one-slot backend. Unset or blank env still uses the documented
+  single-slot default, normal slot contention still reports active slot
+  evidence, live household launch now names invalid slot config separately
+  from contention, and runtime inventory emits a blocking `source_error` task
+  for bad slot config. Owner layer: Backend Runtime / Environment Primitive
+  plus Thin Runtime / Server Adapters. Behavior-change class: fail-aloud
+  runtime capacity config validation. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused visual-slot, household live-driver, and
+  operator-console runtime-inventory tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only
+  if invalid MolmoSpaces visual backend slot capacity config again silently
+  falls back to a valid-looking slot count or disappears from console
+  readiness/inventory evidence.
+
 - 2026-06-21: RAW-FPV perception probe runtime-prior loading now distinguishes
   explicit operator input from the default optional prior. User-supplied
   `--runtime-map-prior` paths, including both split and equals CLI spellings,
