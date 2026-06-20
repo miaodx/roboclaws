@@ -17,20 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 runtime-bundle room-semantics reference validation now delegates
-per-room checks to a focused helper, clearing the remaining Ruff C901 row while
-preserving existing error output. Focused B1 runtime-bundle contract tests,
+2026-06-20: MolmoSpaces USD reference installer state-artifact loading now
+routes required `--state-path` JSON-object sources through the shared source
+helper while preserving the CLI-facing `SystemExit` wrapper. Missing,
+malformed, or non-object state artifacts now use path-labelled source errors
+before missing USD reference collection. Focused installer unit tests,
 touched-file ruff, touched-file format checks, diff check, and the ratchet
 summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
 modules.
 
-Previous slice: Claude live timing now routes present `run_result.json` object
-sources through the shared source helper before using runtime timing evidence.
+Previous slice: B1 runtime-bundle room-semantics reference validation now
+delegates per-room checks to a focused helper, clearing the remaining Ruff C901
+row while preserving existing error output.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the B1 runtime-bundle room-semantics validation split.
+committing the MolmoSpaces USD reference installer state-artifact source-reader
+slice.
 
 ## Touched Areas
 
@@ -51,6 +55,7 @@ committing the B1 runtime-bundle room-semantics validation split.
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/isaac_lab_cleanup/isaac_scene_camera_geometry.py`
 - `scripts/isaac_lab_cleanup/isaac_scenario_builders.py`
+- `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/render_b1_scene_topdown_diagnostic.py`
@@ -164,6 +169,7 @@ committing the B1 runtime-bundle room-semantics validation split.
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
 - `tests/unit/molmo_cleanup/test_isaac_robot_import_sources.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_worker_state.py`
+- `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`

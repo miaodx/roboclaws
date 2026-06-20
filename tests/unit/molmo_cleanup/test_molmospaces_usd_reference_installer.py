@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.isaac_lab_cleanup import install_molmospaces_usd_references as installer
 
 
@@ -44,6 +46,47 @@ def test_missing_referenced_assets_are_collected_from_nested_artifacts(tmp_path:
         "/repo/output/isaaclab/molmospaces-usd/objects/thor/Bowl_12_mesh/Bowl_12_mesh.usda",
         "/repo/output/isaaclab/molmospaces-usd/objects/thor/Sink_1_mesh/Sink_1_mesh.usda",
     ]
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{not-json\n",
+            "USD reference state artifact source must contain valid JSON object",
+        ),
+        (
+            "[]\n",
+            "USD reference state artifact source must contain a JSON object",
+        ),
+    ],
+)
+def test_missing_referenced_assets_reject_bad_state_artifact_sources(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    artifact = tmp_path / "state.json"
+    artifact.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc_info:
+        installer._missing_referenced_assets([artifact])
+    message = str(exc_info.value)
+    assert "Could not read JSON artifact" in message
+    assert expected_error in message
+    assert str(artifact) in message
+
+
+def test_missing_referenced_assets_reject_missing_state_artifact(tmp_path: Path) -> None:
+    artifact = tmp_path / "missing-state.json"
+
+    with pytest.raises(SystemExit) as exc_info:
+        installer._missing_referenced_assets([artifact])
+
+    message = str(exc_info.value)
+    assert "Could not read JSON artifact" in message
+    assert "USD reference state artifact source is missing" in message
+    assert str(artifact) in message
 
 
 def test_install_plan_maps_missing_usd_references_to_object_packages() -> None:

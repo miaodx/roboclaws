@@ -6016,6 +6016,18 @@ logs before choosing the next slice.
   diff check, and ratchet. Reopen only if
   `room_semantics_reference_errors` regains C901 complexity or drifts from the
   checked-in room semantics reference error contract.
+- MolmoSpaces USD reference installer state-artifact loading now routes
+  required `--state-path` JSON-object sources through the shared JSON-source
+  helper while preserving the CLI-facing `SystemExit` wrapper, so missing,
+  malformed, or non-object state artifacts use path-labelled source errors
+  before missing USD reference collection. Owner layer: Backend Runtime /
+  Environment Primitive plus Artifacts, reports, and eval suites.
+  Behavior-change class: strict source-reader consolidation. Metric: ratchet
+  remains at 0 Ruff complexity rows and 80 oversized modules. Proof: focused
+  installer unit tests, ruff, format check, diff check, and ratchet. Reopen
+  only if `install_molmospaces_usd_references.py` regains direct
+  `json.loads(read_text(...))` parsing for required state artifacts or accepts
+  non-object state evidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
