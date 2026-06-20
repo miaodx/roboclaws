@@ -17,6 +17,7 @@ juicefs_url="${ROBOCLAWS_JUICEFS_URL:-https://cloud.mioffice.cn/juicefs/vol-deta
 asset_mode="${ROBOCLAWS_STAGE_ASSET_MODE:-archive}"
 archive_name="${ROBOCLAWS_STAGE_ARCHIVE_NAME:-cleanup-focused-molmospaces-val0.tar.gz}"
 code_archive_name="${ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME:-roboclaws-code-${code_short}.tar.gz}"
+map_bundle="${ROBOCLAWS_STAGE_MAP_BUNDLE:-assets/maps/molmospaces/procthor-10k-val/0}"
 include_grasps="${ROBOCLAWS_STAGE_INCLUDE_GRASPS:-false}"
 run_upload_dry_run="${ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN:-true}"
 
@@ -38,6 +39,7 @@ Environment overrides:
   ROBOCLAWS_STAGE_ASSET_MODE          archive|manifest-only. Default: archive.
   ROBOCLAWS_STAGE_ARCHIVE_NAME        Default: cleanup-focused-molmospaces-val0.tar.gz
   ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME   Default: roboclaws-code-<code>.tar.gz
+  ROBOCLAWS_STAGE_MAP_BUNDLE          Default: assets/maps/molmospaces/procthor-10k-val/0
   ROBOCLAWS_STAGE_INCLUDE_GRASPS      Set true to include grasps/droid when materializing.
   ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN  Set false to skip executor upload dry-run.
   ROBOCLAWS_EXECUTOR_ROOT             Default: /home/mi/executor
@@ -95,10 +97,36 @@ require_path "$assets_source/scenes/procthor-10k-val/val_0.xml" \
   "MolmoSpaces val_0 scene XML"
 require_path "$assets_source/scenes/procthor-10k-val/val_0.json" \
   "MolmoSpaces val_0 scene metadata"
+require_path "$assets_source/scenes/procthor-10k-val/val_0_metadata.json" \
+  "MolmoSpaces val_0 scene runtime metadata"
+require_path "$assets_source/scenes/procthor-10k-val/val_0_ceiling.xml" \
+  "MolmoSpaces val_0 ceiling scene XML"
+require_path "$assets_source/scenes/procthor-10k-val/val_0_assets" \
+  "MolmoSpaces val_0 local mesh assets"
+require_path "$assets_source/scenes/procthor-10k-val/mjthor_resources_combined_meta.json.gz" \
+  "MolmoSpaces procthor val combined trie metadata"
+require_path "$assets_source/scenes/procthor-10k-val/mjthor_resource_file_to_size_mb.json" \
+  "MolmoSpaces procthor val remote manifest"
+require_path "$assets_source/scenes/procthor-10k-val/.procthor-10k-val_val_0.tar.zst_complete_links" \
+  "MolmoSpaces val_0 link completion flag"
 require_path "$assets_source/objects/thor" \
   "MolmoSpaces THOR object assets"
 require_path "$assets_source/robots/rby1m" \
   "MolmoSpaces RBY1M robot assets"
+require_path "$assets_source/mjthor_data_type_to_source_to_versions.json" \
+  "MolmoSpaces installed-source manifest"
+require_path "$cache_source/mjthor_data_type_to_source_to_versions.json" \
+  "MolmoSpaces cache manifest"
+case "$map_bundle" in
+  /*|../*|*/../*)
+    echo "error: ROBOCLAWS_STAGE_MAP_BUNDLE must be a repo-relative path: $map_bundle" >&2
+    exit 1
+    ;;
+esac
+require_path "$repo_root/$map_bundle/map.yaml" \
+  "Roboclaws Nav2 map bundle map.yaml"
+require_path "$repo_root/$map_bundle/semantics.json" \
+  "Roboclaws Nav2 map bundle semantics.json"
 
 clean_stage_dir "$stage_dir"
 
@@ -113,9 +141,21 @@ case "$asset_mode" in
   archive)
     archive_path="$stage_dir/archives/$archive_name"
     archive_tmp="${archive_path}.tmp"
+    archive_manifest_dir="$stage_dir/.archive-manifest"
+    mkdir -p "$archive_manifest_dir/molmospaces/assets" "$archive_manifest_dir/molmospaces/cache"
+    cp "$assets_source/mjthor_data_type_to_source_to_versions.json" \
+      "$archive_manifest_dir/molmospaces/assets/"
+    cp "$cache_source/mjthor_data_type_to_source_to_versions.json" \
+      "$archive_manifest_dir/molmospaces/cache/"
     tar_paths=(
       "scenes/procthor-10k-val/val_0.xml"
       "scenes/procthor-10k-val/val_0.json"
+      "scenes/procthor-10k-val/val_0_metadata.json"
+      "scenes/procthor-10k-val/val_0_ceiling.xml"
+      "scenes/procthor-10k-val/val_0_assets"
+      "scenes/procthor-10k-val/mjthor_resources_combined_meta.json.gz"
+      "scenes/procthor-10k-val/mjthor_resource_file_to_size_mb.json"
+      "scenes/procthor-10k-val/.procthor-10k-val_val_0.tar.zst_complete_links"
       "objects/thor"
       "robots/rby1m"
     )
@@ -125,9 +165,15 @@ case "$asset_mode" in
     fi
     tar -czf "$archive_tmp" \
       --dereference \
-      --transform 's#^#molmospaces/assets/#' \
+      --transform 's#^\(scenes\|objects\|robots\|grasps\)/#molmospaces/assets/\1/#' \
+      --transform 's#^assets/maps/#roboclaws/assets/maps/#' \
       -C "$assets_source" \
-      "${tar_paths[@]}"
+      "${tar_paths[@]}" \
+      -C "$archive_manifest_dir" \
+      "molmospaces" \
+      -C "$repo_root" \
+      "$map_bundle"
+    rm -rf "$archive_manifest_dir"
     mv "$archive_tmp" "$archive_path"
     archive_sha256="$(sha256sum "$archive_path" | awk '{print $1}')"
     archive_bytes="$(stat -c '%s' "$archive_path")"
@@ -158,6 +204,7 @@ staged_paths+=("archives/$code_archive_name" "archives/${code_archive_name}.sha2
 
 manifest_path="$stage_dir/roboclaws_cloudml_cleanup_assets.json"
 export ROBOCLAWS_STAGE_MANIFEST_PATH="$manifest_path"
+export ROBOCLAWS_STAGE_REPO_ROOT="$repo_root"
 export ROBOCLAWS_STAGE_DIR_RESOLVED="$stage_dir"
 export ROBOCLAWS_STAGE_INPUT_REL="$input_rel"
 export ROBOCLAWS_STAGE_JUICEFS_URL="$juicefs_url"
@@ -174,6 +221,7 @@ export ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME="$code_archive_name"
 export ROBOCLAWS_STAGE_CODE_ARCHIVE_PATH="$code_archive_path"
 export ROBOCLAWS_STAGE_CODE_ARCHIVE_SHA256="$code_archive_sha256"
 export ROBOCLAWS_STAGE_CODE_ARCHIVE_BYTES="$code_archive_bytes"
+export ROBOCLAWS_STAGE_MAP_BUNDLE="$map_bundle"
 export ROBOCLAWS_STAGE_INCLUDE_GRASPS="$include_grasps"
 export ROBOCLAWS_STAGE_STAGED_PATHS="$(IFS=:; echo "${staged_paths[*]}")"
 
@@ -184,7 +232,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-repo_root = Path(os.environ.get("PWD", ".")).resolve()
+repo_root = Path(os.environ["ROBOCLAWS_STAGE_REPO_ROOT"]).resolve()
 stage_dir = Path(os.environ["ROBOCLAWS_STAGE_DIR_RESOLVED"]).resolve()
 staged_paths = [item for item in os.environ["ROBOCLAWS_STAGE_STAGED_PATHS"].split(":") if item]
 archive_path = os.environ["ROBOCLAWS_STAGE_ARCHIVE_PATH"]
@@ -236,6 +284,8 @@ payload = {
         "molmospaces_assets_size": du(os.environ["ROBOCLAWS_STAGE_ASSETS_SOURCE"]),
         "molmospaces_cache_dir": os.environ["ROBOCLAWS_STAGE_CACHE_SOURCE"],
         "molmospaces_cache_size": du(os.environ["ROBOCLAWS_STAGE_CACHE_SOURCE"]),
+        "map_bundle": os.environ["ROBOCLAWS_STAGE_MAP_BUNDLE"],
+        "map_bundle_size": du(str(repo_root / os.environ["ROBOCLAWS_STAGE_MAP_BUNDLE"])),
     },
     "staged_assets": {
         "mode": os.environ["ROBOCLAWS_STAGE_ASSET_MODE"],
@@ -250,12 +300,17 @@ payload = {
         },
     },
     "required_cloudml_checks": [
+        "asset-cache/molmospaces/assets/mjthor_data_type_to_source_to_versions.json",
+        "asset-cache/molmospaces/cache/mjthor_data_type_to_source_to_versions.json",
         "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0.xml",
         "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0.json",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0_metadata.json",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/mjthor_resources_combined_meta.json.gz",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/mjthor_resource_file_to_size_mb.json",
         "asset-cache/molmospaces/assets/objects/thor",
         "asset-cache/molmospaces/assets/robots/rby1m",
-        "repo:assets/maps/molmospaces/procthor-10k-val/0/map.yaml",
-        "repo:assets/maps/molmospaces/procthor-10k-val/0/semantics.json",
+        "asset-cache/roboclaws/assets/maps/molmospaces/procthor-10k-val/0/map.yaml",
+        "asset-cache/roboclaws/assets/maps/molmospaces/procthor-10k-val/0/semantics.json",
     ],
     "eval": {
         "minimal_real_cleanup_product": (
