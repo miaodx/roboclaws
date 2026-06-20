@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac report scene-index artifact loading now routes present
+  optional `isaac_scene_index.json` sidecars through
+  `roboclaws.core.json_sources.read_json_object` while preserving the report
+  layer's current optional evidence behavior: missing, unresolved, malformed,
+  unreadable, or non-object sidecars render as absent artifact tables instead
+  of failing report generation. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation with stable
+  optional report-sidecar semantics. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused Isaac report-section source tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/report_sections_isaac.py` regains local raw JSON
+  parsing for scene-index report sidecars or corrupt optional sidecars stop
+  rendering as absent tables.
+
 - 2026-06-20: Isaac RBY1M robot import summary loading now routes present
   optional `rby1m_holobase_isaac.import_summary.json` files through
   `roboclaws.core.json_sources.read_json_object` while preserving the existing

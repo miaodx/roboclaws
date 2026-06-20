@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import html
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 MetricRenderer = Callable[[str, Any], str]
 ArtifactLinkRenderer = Callable[[str, Path], str]
@@ -141,10 +142,9 @@ def _load_isaac_scene_index_artifact(run_dir: Path, path: str) -> dict[str, Any]
     if resolved is None:
         return {}
     try:
-        payload = json.loads(resolved.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return read_json_object(resolved, label="Isaac scene index artifact")
+    except (OSError, ValueError):
         return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def _resolve_report_asset_path(run_dir: Path, path: Any) -> Path | None:
