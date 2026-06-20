@@ -33,6 +33,9 @@ Implementation progress:
   validator, current MolmoSpaces bundles expose explicit known gaps, and
   targeted negative tests cover missing labels/categories, empty waypoints,
   malformed area bindings, and forbidden fixture/object waypoint fields.
+- Slices 2-5 are not implemented yet. The next slice is the shared
+  area-based `BaseWaypointBuilder`; simulator source-map splitting, Agent View
+  fallback removal, and runtime contract cleanup remain pending.
 
 This document is now the execution plan for reducing map and waypoint
 source-of-truth entropy across simulator, real robot, and Digital Twin paths.

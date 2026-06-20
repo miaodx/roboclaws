@@ -5,7 +5,8 @@ Source plan:
 
 Latest user intent: approved implementation after plan discussion.
 
-Current slice: Slice 1 implemented; Slice 2 next.
+Current slice: Slice 1 implemented; Slice 2 next. The full plan is not
+complete; Slices 2-5 remain pending.
 
 Completed:
 
@@ -36,6 +37,13 @@ Next action:
 
 Implement Slice 2: extract the canonical area-based `BaseWaypointBuilder` and
 validator without changing simulator generation yet.
+
+Pending:
+
+- Slice 2: canonical area-based `BaseWaypointBuilder`.
+- Slice 3: MolmoSpaces source-map builder split.
+- Slice 4: remove Agent View snapshot fallback.
+- Slice 5: runtime contract cleanup.
 
 No-touch scope:
 
