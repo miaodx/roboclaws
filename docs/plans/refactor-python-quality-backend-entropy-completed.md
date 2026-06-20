@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces subprocess worker camera view-spec loading now routes
+  file-backed view-list or `{views: [...]}` payloads through
+  `roboclaws.core.json_sources.read_json_value` before the existing
+  list/object-with-views shape validation. Missing or malformed view-spec
+  files now use canonical path-labelled source wording, while the accepted
+  top-level list and wrapped-view payload forms remain unchanged for
+  camera-control request normalization. Owner layer: Backend Runtime /
+  Environment Primitive camera rendering helper. Behavior-change class:
+  source-reader consolidation / fail-aloud source validation. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused MolmoSpaces subprocess backend tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/molmospaces_subprocess_worker.py` regains local raw
+  JSON parsing for explicit camera view-spec files or malformed view-spec
+  sources can again reach camera-request normalization as parser tracebacks.
+
 - 2026-06-20: Isaac scene camera view-spec loading now routes file-backed
   view-list or `{views: [...]}` payloads through
   `roboclaws.core.json_sources.read_json_value` before the existing

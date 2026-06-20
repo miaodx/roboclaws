@@ -17,22 +17,28 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac scene camera view-spec loading now routes file-backed
+2026-06-20: MolmoSpaces subprocess worker camera view-spec loading now routes
+file-backed view-list or `{views: [...]}` payloads through the shared
+JSON-value helper before existing list/object-with-views validation. Focused
+MolmoSpaces subprocess backend tests and touched-file Ruff/format passed, as
+did `git diff --check` and ratchet. Current shared-checkout ratchet summary
+still reports 1 unrelated Ruff complexity row in
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+
+Previous slice: Isaac scene camera view-spec loading now routes file-backed
 view-list or `{views: [...]}` payloads through the shared JSON-value helper
 before existing list/object-with-views validation. Focused Isaac backend tests
-and touched-file Ruff/format passed, as did `git diff --check` and ratchet.
-Current shared-checkout ratchet summary still reports 1 unrelated Ruff
-complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
-oversized modules.
+and touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac camera view-spec source-reader slice.
+committing the MolmoSpaces camera view-spec source-reader slice.
 
 ## Touched Areas
 
 - `scripts/molmo_cleanup/molmospaces_worker_protocol.py`
+- `scripts/molmo_cleanup/molmospaces_subprocess_worker.py`
 - `scripts/agibot/capture_map_context_views.py`
 - `scripts/agibot/verify_waypoints_with_pnc.py`
 - `scripts/agibot/generate_metric_map_from_context.py`

@@ -519,6 +519,61 @@ def test_molmospaces_worker_normalizes_camera_control_request() -> None:
     assert spec["backend_target"] == pytest.approx(spec["lookat"])
 
 
+def test_molmospaces_camera_view_specs_reject_missing_source(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+    missing = tmp_path / "missing_views.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"camera view spec source is missing: .*missing_views\.json",
+    ):
+        worker._load_camera_view_specs(missing)
+
+
+def test_molmospaces_camera_view_specs_reject_malformed_source(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+    specs_path = tmp_path / "camera_views.json"
+    specs_path.write_text("{bad json\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=r"camera view spec source must contain valid JSON: .*camera_views\.json",
+    ):
+        worker._load_camera_view_specs(specs_path)
+
+
+def test_molmospaces_camera_view_specs_reject_wrong_shape_source(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+    specs_path = tmp_path / "camera_views.json"
+    specs_path.write_text(json.dumps({"views": {"bad": True}}), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="camera view spec must be a list or an object with a views list",
+    ):
+        worker._load_camera_view_specs(specs_path)
+
+
+def test_molmospaces_camera_view_specs_accept_list_or_wrapped_views(tmp_path: Path) -> None:
+    worker = _load_worker_module()
+    list_path = tmp_path / "camera_views_list.json"
+    wrapped_path = tmp_path / "camera_views_object.json"
+    list_path.write_text(
+        json.dumps([{"view_id": "fpv"}, "skip", {"view_id": "map"}]),
+        encoding="utf-8",
+    )
+    wrapped_path.write_text(
+        json.dumps({"views": [{"view_id": "verify"}]}),
+        encoding="utf-8",
+    )
+
+    assert worker._load_camera_view_specs(list_path) == [
+        {"view_id": "fpv"},
+        {"view_id": "map"},
+    ]
+    assert worker._load_camera_view_specs(wrapped_path) == [{"view_id": "verify"}]
+
+
 def test_molmospaces_worker_converts_canonical_eye_to_mujoco_free_camera_angles() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
