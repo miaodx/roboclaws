@@ -17,7 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Model-latency calibration JSONL reads now route present
+2026-06-21: OpenAI Agents RAW-FPV budget guard trace reads now route present
+`trace.jsonl` rows through the shared JSONL source helper instead of a local
+row parser. Missing trace files remain the intentional no-budget-evidence path,
+while malformed or non-object present rows use canonical
+`OpenAI Agents budget trace` `path:row` source wording before candidate,
+repeated-failure, or observe-per-waypoint budget decisions can derive
+confidence from partial trace history. Focused proof passed: OpenAI Agents
+budget source/behavior tests, touched-file ruff, touched-file format check,
+diff check, changed-code cleanup review, and ratchet summary. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Model-latency calibration JSONL reads now route present
 `model_call_metrics.jsonl` rows through the shared JSONL source helper instead
 of a local row parser. Missing metric files remain the intentional empty-source
 path for insufficient-sample diagnostics, while malformed or non-object
@@ -258,9 +269,15 @@ provider-request rows can again feed metrics confidence.
 Avoid reopening model-latency calibration JSONL source consolidation unless
 fresh calibration evidence shows corrupt present `model_call_metrics.jsonl`
 rows can again feed fitting, holdout validation, or coefficient-set confidence.
+Avoid reopening OpenAI Agents RAW-FPV budget trace source consolidation unless
+fresh budget-guard evidence shows corrupt present `trace.jsonl` rows can again
+feed candidate, repeated-failure, or observe-per-waypoint budget confidence.
 
 ## Touched Areas
 
+- `scripts/molmo_cleanup/openai_agents_budget.py`
+- `tests/unit/agents/test_openai_agents_budget_sources.py`
+- `tests/unit/agents/test_live_runtime.py`
 - `scripts/reports/calibrate_model_latency.py`
 - `tests/unit/reports/test_calibrate_model_latency.py`
 - `tests/unit/reports/test_live_performance.py`

@@ -4177,52 +4177,6 @@ def test_openai_agents_budget_guard_classifies_repeated_raw_fpv_failures(
     assert "image_region" not in json.dumps(detail)
 
 
-def test_openai_agents_budget_guard_fails_aloud_on_malformed_trace_source(
-    tmp_path: Path,
-) -> None:
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    (run_dir / "trace.jsonl").write_text(
-        '{"event":"request","tool":"navigate_to_visual_candidate"}\n{bad-json}\n',
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match=r"trace\.jsonl:2.*invalid JSON"):
-        _budget_failure_from_run_state(
-            run_dir,
-            {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
-            {
-                "profile_id": "raw_fpv_budgeted_v1",
-                "context_hard_limit_tokens": None,
-                "raw_fpv_candidate_budget": 1,
-                "max_observe_per_waypoint": None,
-            },
-        )
-
-
-def test_openai_agents_budget_guard_fails_aloud_on_non_object_trace_source(
-    tmp_path: Path,
-) -> None:
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    (run_dir / "trace.jsonl").write_text(
-        json.dumps(["not", "a", "trace-event"]) + "\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match=r"trace\.jsonl:1.*non-object JSON"):
-        _budget_failure_from_run_state(
-            run_dir,
-            {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
-            {
-                "profile_id": "raw_fpv_budgeted_v1",
-                "context_hard_limit_tokens": None,
-                "raw_fpv_candidate_budget": 1,
-                "max_observe_per_waypoint": None,
-            },
-        )
-
-
 def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     tmp_path: Path, monkeypatch
 ) -> None:

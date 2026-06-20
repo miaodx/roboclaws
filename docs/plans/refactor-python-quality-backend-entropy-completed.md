@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenAI Agents RAW-FPV budget guard trace parsing now delegates to
+  the shared JSONL source helper for present `trace.jsonl` rows. Missing trace
+  files remain the deliberate no-budget-evidence path, while malformed or
+  non-object present rows now use canonical `OpenAI Agents budget trace`
+  `path:row` source wording before candidate-attempt, repeated-failure, or
+  observe-per-waypoint budget decisions can derive confidence from partial
+  trace history. Owner layer: Agent Engines And Provider Profiles plus
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation with stable missing-source budget semantics and canonical
+  row-source diagnostics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout; new
+  source-reader regressions live in a focused OpenAI Agents budget-source test
+  file instead of growing the largest live-runtime test module. Proof: focused
+  OpenAI Agents budget source/behavior tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code cleanup review, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/openai_agents_budget.py` regains a local JSONL row
+  parser or corrupt present `trace.jsonl` rows can again feed RAW-FPV budget
+  decisions without canonical row-source diagnostics.
+
 - 2026-06-21: Model-latency calibration JSONL source parsing now delegates to
   the shared JSONL source helper for present `model_call_metrics.jsonl` rows.
   Missing metric files remain the deliberate empty-source path that produces

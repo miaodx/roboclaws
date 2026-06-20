@@ -22,6 +22,14 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenAI Agents RAW-FPV budget trace
+  source consolidation slice: budget-guard reads now route present
+  `trace.jsonl` rows through the shared JSONL source helper instead of a local
+  parser. Missing trace files remain the intentional no-budget-evidence path,
+  while malformed or non-object present rows use canonical
+  `OpenAI Agents budget trace` `path:row` diagnostics before candidate,
+  repeated-failure, or observe-per-waypoint budget decisions can derive
+  confidence from partial trace history.
 - Current shared-checkout note after the model-latency calibration JSONL source
   consolidation slice: calibration now routes present `model_call_metrics.jsonl`
   rows through the shared JSONL source helper instead of a local row parser.
