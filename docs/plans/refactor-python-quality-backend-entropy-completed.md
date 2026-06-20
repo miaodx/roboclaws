@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker top-level `run_result.json` loading now treats
+  single-file inputs, `seed-*` directories, and run-directory fallback inputs
+  as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object run-result sources now fail with path-labelled source errors
+  before checker assertions, instead of surfacing raw parser tracebacks or
+  allowing wrong-shaped packets into downstream validation. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: fail-aloud
+  cleanup-checker run-result source truth. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules; focused coverage landed in a new
+  small checker source-test file instead of growing the already oversized
+  checker contract module. Proof: focused checker run-result source tests,
+  adjacent planner-proof source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh cleanup-checker evidence that malformed top-level run-result sources
+  again produce raw parser/type failures or enter checker assertions as
+  plausible result evidence.
+
 - 2026-06-20: Scene-sampler room-label manifest loading now treats the
   prepared label manifest as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object` before schema/admission

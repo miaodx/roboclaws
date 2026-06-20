@@ -376,13 +376,13 @@ def main() -> None:
 
 def _load_run_results(path: Path) -> list[tuple[dict[str, Any], Path]]:
     if path.is_file():
-        return [(json.loads(path.read_text(encoding="utf-8")), path)]
+        return [(read_json_object(path, label="cleanup run result"), path)]
     results = []
     for child in sorted(path.glob("seed-*/run_result.json")):
-        results.append((json.loads(child.read_text(encoding="utf-8")), child))
+        results.append((read_json_object(child, label="cleanup run result"), child))
     if not results and (path / "run_result.json").is_file():
         child = path / "run_result.json"
-        results.append((json.loads(child.read_text(encoding="utf-8")), child))
+        results.append((read_json_object(child, label="cleanup run result"), child))
     return results
 
 

@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Scene-sampler room-label manifest loading now treats the prepared
-label manifest as JSON-object source truth through
-`roboclaws.core.json_sources.read_json_object` before schema/admission
-validation. Malformed or non-object manifests fail with path-labelled source
-errors instead of parser tracebacks or wrong-layer shape errors. Focused scene
-sampler tests, touched-file Ruff/format, `git diff --check`, changed-code
-review, and ratchet passed.
+2026-06-20: Cleanup checker top-level `run_result.json` loading now treats
+single-file, `seed-*`, and run-directory fallback inputs as JSON-object source
+truth through `roboclaws.core.json_sources.read_json_object`. Malformed or
+non-object run-result sources fail with path-labelled source errors instead of
+parser tracebacks or wrong-shaped packets entering checker assertions. Focused
+checker source tests, adjacent planner-proof source tests, touched-file
+Ruff/format, `git diff --check`, changed-code review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -74,6 +74,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
 - `tests/contract/checkers/test_cleanup_checker_planner_proof_request_sources.py`
+- `tests/contract/checkers/test_cleanup_checker_run_result_sources.py`
 - `tests/unit/core/test_json_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`

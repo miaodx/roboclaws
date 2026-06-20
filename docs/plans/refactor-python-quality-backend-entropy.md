@@ -219,6 +219,10 @@ Latest quality snapshot from 2026-06-20:
   JSON-object source truth through `roboclaws.core.json_sources`, failing
   malformed, non-object, or missing request manifests with path-labelled source
   errors instead of raw parser tracebacks or generic assertions.
+  Cleanup checker top-level `run_result.json` loading now treats single-file,
+  `seed-*`, and run-directory fallback inputs as JSON-object source truth too,
+  failing malformed or non-object run-result sources with path-labelled source
+  errors before checker assertions.
   B1 operator-console scene previews now treat existing preview metadata and
   declared camera artifacts as JSON-object source truth through the same shared
   helper, failing malformed or non-object skip-existing metadata as
