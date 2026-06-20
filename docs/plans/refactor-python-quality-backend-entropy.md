@@ -126,7 +126,8 @@ Latest quality snapshot from 2026-06-20:
   manifests, and nested RGB-gain source manifests as JSON-object source truth
   before writing `visual_parity_summary.json` or `report.html`.
   B1 asset visual comparisons now treat explicit baseline/candidate navigation
-  artifacts as JSON-object source truth before writing comparison outputs.
+  artifacts as JSON-object source truth through the shared source helper before
+  writing comparison outputs.
   Prepared semantic USD summary source loading now routes the explicit summary
   JSON-object artifact through the shared source helper instead of a duplicate
   local reader.

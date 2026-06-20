@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Visual-grounding benchmark runs now use the shared
-`roboclaws.core.json_sources.read_json_object` source reader for declared
-corpus and matrix JSON-object artifacts. Missing, malformed, or parseable
-non-object artifacts still fail without tracebacks at the CLI boundary under
-the canonical helper wording, and the runner no longer carries a duplicate
-local JSON-object parser. Focused visual-grounding benchmark source tests,
-benchmark contract tests, core JSON-source tests, touched-file Ruff/format,
-`git diff --check`, and ratchet passed.
+2026-06-20: B1 asset visual comparison now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for explicit
+baseline/candidate navigation artifacts. Missing, malformed, or parseable
+non-object artifacts keep path-labelled source errors under the canonical
+helper wording, and the comparison script no longer carries a duplicate local
+JSON-object reader. Focused B1 asset visual comparison and core JSON-source
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

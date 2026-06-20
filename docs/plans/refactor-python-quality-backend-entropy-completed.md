@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 asset visual comparison source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  baseline/candidate navigation artifacts. This removes the comparison
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  navigation artifacts under the canonical helper wording. Owner layer:
+  Artifacts, reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the comparison script
+  dropped from 463 to 451 lines. Proof: focused B1 asset visual comparison
+  tests, core JSON-source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the comparison script
+  regains a local JSON-object source reader or stops routing explicit
+  baseline/candidate navigation artifacts through the shared source helper.
+
 - 2026-06-20: Visual-grounding benchmark run source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for declared
   corpus and matrix JSON-object artifacts. This removes the runner's duplicate

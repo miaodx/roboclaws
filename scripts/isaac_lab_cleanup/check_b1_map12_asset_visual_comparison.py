@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     NAVIGATION_SMOKE_SCHEMA,
     SEMANTIC_SOURCE,
@@ -352,19 +353,7 @@ def _contact_sheet_status(contact_sheet: Path | None) -> tuple[str, list[str]]:
 
 
 def _load_navigation_artifact(path: Path) -> dict[str, Any]:
-    return _read_json_object(path, label="navigation artifact")
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise FileNotFoundError(f"{label} missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
+    return read_json_object(path, label="navigation artifact")
 
 
 def _navigation_artifact_shape_errors(payload: dict[str, Any], *, label: str) -> list[str]:
