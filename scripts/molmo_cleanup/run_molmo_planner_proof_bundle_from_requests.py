@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object as read_source_json_object  # noqa: E402
 from roboclaws.household.planner_proof_requests import (  # noqa: E402
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_cleanup_rerun_command,
@@ -513,7 +514,7 @@ def _prior_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
 
 def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
     manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
-    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data = read_source_json_object(manifest_path, label="prior proof bundle manifest")
     selection = data.get("proof_request_selection") or {}
     summaries = []
     nested_prior = data.get("prior_proof_result_summary")
@@ -561,8 +562,11 @@ def _load_standalone_probe_result_summary(run_result_paths: list[Path]) -> dict[
 
 
 def _standalone_probe_command(run_result_path: Path, index: int) -> dict[str, Any]:
-    data = json.loads(run_result_path.read_text(encoding="utf-8"))
-    evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
+    data = read_source_json_object(
+        run_result_path,
+        label="standalone planner probe run result",
+    )
+    evidence = data.get("manipulation_evidence")
     evidence = evidence if isinstance(evidence, dict) else {}
     requested_binding = evidence.get("requested_cleanup_primitive_binding")
     requested_binding = requested_binding if isinstance(requested_binding, dict) else {}
@@ -571,16 +575,16 @@ def _standalone_probe_command(run_result_path: Path, index: int) -> dict[str, An
     object_id = _first_nonempty_str(
         requested_binding.get("object_id"),
         cleanup_binding.get("object_id"),
-        data.get("object_id") if isinstance(data, dict) else "",
+        data.get("object_id"),
     )
     target_receptacle_id = _first_nonempty_str(
         requested_binding.get("target_receptacle_id"),
         cleanup_binding.get("target_receptacle_id"),
-        data.get("target_receptacle_id") if isinstance(data, dict) else "",
+        data.get("target_receptacle_id"),
     )
     return {
         "request_id": _standalone_probe_request_id(
-            data=data if isinstance(data, dict) else {},
+            data=data,
             evidence=evidence,
             requested_binding=requested_binding,
             run_result_path=run_result_path,

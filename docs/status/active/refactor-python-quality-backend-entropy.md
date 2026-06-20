@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup checker trace JSONL loading now treats `trace.jsonl` rows
-as object-typed source truth through
-`roboclaws.core.json_sources.read_jsonl_objects`. Malformed or parseable
-non-object trace rows fail with path-and-line-labelled source errors before
-public-trace privacy checks or duplicate post-place navigation checks can use
-partial evidence. Focused core JSON-source tests, focused checker trace-source
-tests, existing duplicate-navigation trace tests, touched-file Ruff/format,
+2026-06-20: Planner-proof bundle prior inputs now treat explicit prior
+`proof_bundle_run_manifest.json` files and standalone prior probe
+`run_result.json` files as JSON-object source truth through the shared
+`roboclaws.core.json_sources.read_json_object` helper. Malformed or parseable
+non-object prior artifacts fail with path-labelled source errors before
+prior-memory merge or proof-request selection. Focused prior-source tests,
+existing prior-manifest success tests, touched-file Ruff/format,
 `git diff --check`, changed-code review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
@@ -74,6 +74,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_codex_cleanup_apple2apple_summary.py`
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
+- `tests/unit/scripts/test_run_molmo_planner_proof_bundle_prior_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_planner_proof_request_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_b1_manifest_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_run_result_sources.py`

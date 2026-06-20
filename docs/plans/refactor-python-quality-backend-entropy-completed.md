@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Planner-proof bundle prior inputs now treat explicit prior
+  `proof_bundle_run_manifest.json` files and standalone prior probe
+  `run_result.json` files as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Malformed or parseable
+  non-object prior artifacts now fail with path-labelled source errors before
+  prior-memory merge or proof-request selection, instead of surfacing raw
+  parser/type failures or being folded into misleading empty prior evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud planner-proof prior-source validation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; focused source coverage
+  landed in a small new test file instead of growing the 1900-line runner test.
+  Proof: focused prior-source tests, existing prior-manifest success tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh planner-proof bundle evidence that
+  malformed or non-object prior proof-bundle manifests or standalone prior
+  probe run results again reach prior-memory merge or selection as plausible
+  prior evidence.
+
 - 2026-06-20: Cleanup checker trace JSONL loading now treats `trace.jsonl`
   rows as object-typed source truth through
   `roboclaws.core.json_sources.read_jsonl_objects`. Malformed or parseable
