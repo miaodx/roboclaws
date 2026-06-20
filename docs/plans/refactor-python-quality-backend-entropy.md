@@ -137,7 +137,9 @@ Latest quality snapshot from 2026-06-20:
   explicit control/candidate state artifacts as JSON-object source truth before
   writing comparison outputs, and AOV matrix summaries now treat
   explicit `--entry LABEL=PATH` artifacts as JSON-object source truth before
-  writing matrix outputs.
+  writing matrix outputs. Prepared semantic USD summary validation now treats
+  the explicit summary path as JSON-object source truth before reporting
+  readiness.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
