@@ -63,9 +63,10 @@ agent-visible runtime-prior capability exposure. Product and operator-preview
 routes compile a generated runtime bundle from
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot`,
 `vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json`,
-`assets/maps/b1-map12-alignment-review.json`, explicit alignment/navigation
-proof artifacts, and the raw scene root before passing map context to
-lower-level consumers. The implemented P0 consumer-chain plan is
+`assets/maps/b1-map12-room-semantics.json`, explicit alignment/navigation proof
+artifacts, and the raw scene root before passing map context to lower-level
+consumers. Room labels remain reference-only until an explicit semantic
+projection artifact binds them to Map12 navigation geometry. The implemented P0 consumer-chain plan is
 `docs/plans/2026-06-17-b1-map12-two-map-alignment-blocker.md`: explicit B1
 runtime priors now expose `digital_twin_capabilities`, `capability_summary`,
 render/observation readiness, and blocked `B1_floor2_slow` default visual-route

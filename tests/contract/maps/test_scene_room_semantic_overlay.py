@@ -20,7 +20,7 @@ SCENE_ROOT = (
 MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
 )
-REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
+ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 GENERATOR_PATH = (
     REPO_ROOT
     / "skills"
@@ -223,7 +223,7 @@ def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
     result = compile_runtime_bundle(
         map_bundle=MAP12_BUNDLE,
         scene_root=SCENE_ROOT,
-        review_manifest_path=REVIEW_MANIFEST,
+        room_semantics_path=ROOM_SEMANTICS,
         output_dir=tmp_path / "runtime-map-bundle",
     )
     bundle_dir = Path(result["output_dir"])
@@ -231,14 +231,11 @@ def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
 
     assert result["validation"]["ok"] is True
     assert validate_nav2_map_bundle(bundle_dir).ok
-    assert len(semantics["rooms"]) == 3
+    assert semantics["rooms"] == []
     assert semantics["fixtures"] == []
     assert len(semantics["navigation_memory_anchors"]) == 9
-    assert {item["label_id"] for item in semantics["review_labels"]} == {
-        "meeting_room_a",
-        "meeting_room_b",
-        "meeting_room_c",
-    }
+    assert semantics["review_labels"] == []
+    assert semantics["provenance"]["room_semantics_reference"] == str(ROOM_SEMANTICS)
 
 
 def test_scene_room_overlay_skill_script_writes_overlay_and_bundle(
@@ -272,18 +269,20 @@ def test_scene_room_overlay_skill_script_writes_overlay_and_bundle(
     assert not (tmp_path / "bundle").exists()
 
 
-def test_checked_in_b1_review_manifest_is_runtime_source_of_truth() -> None:
-    manifest = json.loads(REVIEW_MANIFEST.read_text(encoding="utf-8"))
-    labels = {item["label_id"]: item for item in manifest["labels"]}
+def test_checked_in_b1_room_semantics_is_dt_label_reference_only() -> None:
+    payload = json.loads(ROOM_SEMANTICS.read_text(encoding="utf-8"))
+    rooms = {item["asset_partition_id"]: item for item in payload["rooms"]}
 
-    assert manifest["schema"] == "b1_map12_alignment_review_v1"
-    assert manifest["source_assets"]["map_bundle"] == (
-        "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
+    assert payload["schema"] == "scene_room_semantic_overlay_overrides_v1"
+    assert payload["policy"]["source_of_truth"] == "digital_twin_scene_partitions"
+    assert payload["policy"]["contains_map12_candidate_polygons"] is False
+    assert payload["policy"]["contains_navigation_area_bindings"] is False
+    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert rooms["reception_area_a"]["category"] == "living_room"
+    assert all(room["review_status"] == "accepted" for room in rooms.values())
+    assert all(
+        "map_polygon" not in room and "navigation_area_id" not in room for room in rooms.values()
     )
-    assert labels["meeting_room_b"]["review_status"] == "accepted"
-    assert labels["short_corridor_a"]["review_status"] == "draft"
-    assert labels["reception_area_a"]["review_status"] == "blocked_shared_area"
-    assert labels["storage_room_a"]["review_status"] == "blocked_shared_area"
 
 
 def _require_scene_root() -> None:

@@ -168,6 +168,10 @@ def _room_from_partition(
         override.get("review_status")
         or _review_status(category, confidence, conflict=conflict, weak_evidence=weak_evidence)
     )
+    aliases = _aliases(partition_id, room_label, category)
+    aliases = list(
+        dict.fromkeys([*aliases, *(str(item) for item in override.get("aliases") or [])])
+    )
     room = {
         "room_id": str(override.get("room_id") or partition_id),
         "room_label": room_label,
@@ -188,7 +192,7 @@ def _room_from_partition(
             "weak_evidence": weak_evidence,
             "artifacts": list(override.get("evidence_artifacts") or []),
         },
-        "aliases": _aliases(partition_id, room_label, category),
+        "aliases": aliases,
     }
     for key in ("polygon", "map_center", "navigation_area_id"):
         if key in override:

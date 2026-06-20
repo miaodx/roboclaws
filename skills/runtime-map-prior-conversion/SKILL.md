@@ -25,8 +25,10 @@ This skill works at the map-artifact boundary:
   `scene_room_semantic_overlay_v1` review-evidence artifact.
 - Consumer path: pass the snapshot to cleanup or open household tasks through
   `runtime_map_prior=...`. For B1 / Map 12, compile raw Map12 plus
-  `assets/maps/b1-map12-alignment-review.json` into a generated runtime bundle
-  with `scripts/maps/compile_b1_map12_runtime_bundle.py`.
+  `assets/maps/b1-map12-room-semantics.json` into a generated runtime bundle
+  with `scripts/maps/compile_b1_map12_runtime_bundle.py`. Room labels remain
+  reference-only until an explicit semantic projection artifact binds them to
+  Map12 navigation geometry.
 
 Do not add an Agibot-specific cleanup loading path. Do not mutate the source
 map folder. Do not read or write private cleanup truth such as generated mess

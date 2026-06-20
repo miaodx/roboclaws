@@ -21,7 +21,7 @@ def test_robot_map12_consistency_checks_agibot_map_and_navigation_memory_only() 
 
     assert result["ok"] is True
     assert result["scope"] == "agibot_nav2_occupancy_and_navigation_memory_only"
-    assert result["excluded_inputs"] == ["scene_root", "gaussian_map", "b1_alignment_review"]
+    assert result["excluded_inputs"] == ["scene_root", "gaussian_map", "room_semantics"]
     assert result["map"] == {
         "frame_id": "map",
         "height": 716,

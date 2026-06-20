@@ -61,9 +61,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Chase is the robot follower camera, the map preview is static Base "
             "Navigation Map context, and Top-down is a separate scene camera render. B1 / Map 12 "
             "previews are static map assets generated from the raw map bundle plus "
-            "the human review manifest so the console can show the experimental "
-            "digital twin before Isaac starts without presenting fake FPV or chase "
-            "camera frames."
+            "Digital Twin room references or explicit semantic projection artifacts so "
+            "the console can show the experimental digital twin before Isaac starts "
+            "without presenting fake FPV or chase camera frames."
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

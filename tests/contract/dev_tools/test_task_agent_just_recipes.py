@@ -1444,14 +1444,13 @@ def test_b1_public_launch_routes_isaac_backend_to_current_implementation() -> No
         "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/F2_all/default.usda"
     )
     assert route[23:25] == ["household-world", "open-ended"]
-    assert route[25] == ""
-    assert route[26] == "assets/maps/b1-map12-alignment-review.json"
+    assert len(route) == 25
     assert "world=b1-map12" in plan_trace
     assert "backend=isaaclab" in plan_trace
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "household-world.open-ended codex-cli world-public-labels" in target_trace
     assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in target_trace
-    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in target_trace
+    assert "b1_alignment_review=" not in target_trace
     assert (
         "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
         "B1_floor2_slow/usda/F2_all/default.usda"
@@ -1477,9 +1476,9 @@ def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() ->
         "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
     )
 
-    assert route[27] == "output/b1-map12/alignment/alignment_residuals.json"
-    assert route[28] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
-    assert route[29] == "output/b1-map12/semantic-projection/semantic_projection.json"
+    assert route[26] == "output/b1-map12/alignment/alignment_residuals.json"
+    assert route[27] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
+    assert route[28] == "output/b1-map12/semantic-projection/semantic_projection.json"
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
         target_trace
@@ -1553,7 +1552,6 @@ def test_b1_isaac_route_requires_explicit_robot_consumption_artifacts() -> None:
             "world=b1-map12",
             "backend=isaaclab_subprocess",
             "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot",
-            "b1_alignment_review=assets/maps/b1-map12-alignment-review.json",
             "task_intent=open-ended",
         ],
         cwd=REPO_ROOT,

@@ -44,6 +44,7 @@ PROMOTED_ANCHOR_FIELDS = (
     "map_coordinate_source",
     "scene_coordinate_source",
     "coordinate_source",
+    "map_polygon",
 )
 
 

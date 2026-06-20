@@ -7,7 +7,6 @@ import hashlib
 import json
 import shutil
 import sys
-from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -51,18 +50,15 @@ from scripts.maps.build_b1_map12_semantic_projection import (  # noqa: E402
     SEMANTIC_PROJECTION_SCHEMA,
 )
 
-B1_MAP12_ALIGNMENT_REVIEW_SCHEMA = "b1_map12_alignment_review_v1"
 B1_MAP12_RUNTIME_PROVENANCE_SCHEMA = "b1_map12_runtime_bundle_provenance_v1"
 B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA = "b1_map12_robot_consumption_manifest_v1"
-ACCEPTED_REVIEW_STATUS = "accepted"
-RUNTIME_LABEL_STATUSES = frozenset({ACCEPTED_REVIEW_STATUS})
-REVIEW_ONLY_STATUSES = frozenset({"draft", "proposed", "blocked_shared_area"})
-EXPLICIT_SHARED_AREA_POLICIES = frozenset({"composite_area"})
+ROOM_SEMANTICS_REFERENCE_SCHEMA = "scene_room_semantic_overlay_overrides_v1"
+ACCEPTED_ROOM_STATUS = "accepted"
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
 DEFAULT_NAVIGATION_MEMORY = DEFAULT_MAP12_ROOT / "navigation_memory.json"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
-DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
+DEFAULT_ROOM_SEMANTICS = Path("assets/maps/b1-map12-room-semantics.json")
 DEFAULT_OUTPUT_DIR = Path("output/b1-map12/digital-twin-runtime")
 
 
@@ -84,16 +80,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--map-bundle", type=Path, default=DEFAULT_MAP_BUNDLE)
     parser.add_argument("--navigation-memory", type=Path, default=DEFAULT_NAVIGATION_MEMORY)
     parser.add_argument("--scene-root", type=Path, default=DEFAULT_SCENE_ROOT)
-    parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--room-semantics", type=Path, default=DEFAULT_ROOM_SEMANTICS)
     parser.add_argument("--alignment-artifact", type=Path)
     parser.add_argument("--navigation-artifact", type=Path)
     parser.add_argument("--semantic-projection-artifact", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument(
-        "--include-draft-labels",
-        action="store_true",
-        help="Debug only: include non-accepted labels in the generated semantic label layer.",
-    )
     return parser.parse_args(argv)
 
 
@@ -102,13 +93,12 @@ def main(argv: list[str] | None = None) -> int:
     result = compile_runtime_bundle(
         map_bundle=args.map_bundle,
         scene_root=args.scene_root,
-        review_manifest_path=args.review_manifest,
+        room_semantics_path=args.room_semantics,
         alignment_artifact_path=args.alignment_artifact,
         navigation_artifact_path=args.navigation_artifact,
         semantic_projection_artifact_path=args.semantic_projection_artifact,
         navigation_memory_path=args.navigation_memory,
         output_dir=args.output_dir,
-        include_draft_labels=args.include_draft_labels,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
@@ -118,26 +108,19 @@ def compile_runtime_bundle(
     *,
     map_bundle: Path,
     scene_root: Path,
-    review_manifest_path: Path,
+    room_semantics_path: Path = DEFAULT_ROOM_SEMANTICS,
     alignment_artifact_path: Path | None = None,
     navigation_artifact_path: Path | None = None,
     semantic_projection_artifact_path: Path | None = None,
     navigation_memory_path: Path = DEFAULT_NAVIGATION_MEMORY,
     output_dir: Path,
-    include_draft_labels: bool = False,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
     scene_root = Path(scene_root)
-    review_manifest_path = Path(review_manifest_path)
+    room_semantics_path = Path(room_semantics_path)
     navigation_memory_path = Path(navigation_memory_path)
     output_dir = Path(output_dir)
-    review = read_json_object(review_manifest_path, label="review manifest")
-    validate_review_manifest(
-        review,
-        map_bundle=map_bundle,
-        scene_root=scene_root,
-        review_manifest_path=review_manifest_path,
-    )
+    room_reference = read_room_semantics_reference(room_semantics_path)
     if not scene_root.is_dir():
         raise ValueError(f"scene root does not exist: {scene_root}")
     if not navigation_memory_path.is_file():
@@ -148,8 +131,8 @@ def compile_runtime_bundle(
     )
     room_semantics = verified_room_semantic_projection(
         semantic_projection_artifact_path=semantic_projection_artifact_path,
-        review_manifest_path=review_manifest_path,
-        review_manifest=review,
+        room_semantics_path=room_semantics_path,
+        room_semantics_reference=room_reference,
     )
 
     if output_dir.exists():
@@ -166,12 +149,6 @@ def compile_runtime_bundle(
         origin_y=origin["y"],
     )
     frame_id = "map"
-    runtime_labels = runtime_labels_from_review(
-        review,
-        frame_id=frame_id,
-        include_draft_labels=include_draft_labels,
-    )
-    review_summary = review_validation_summary(review, include_draft_labels=include_draft_labels)
     navigation_memory = read_navigation_memory(
         navigation_memory_path,
         source_name="navigation memory",
@@ -184,10 +161,9 @@ def compile_runtime_bundle(
     navigation_memory_anchors = _navigation_memory_anchors(navigation_memory, frame_id=frame_id)
     semantics = _runtime_semantics_payload(
         map_bundle=map_bundle,
-        review_manifest_path=review_manifest_path,
+        room_semantics_path=room_semantics_path,
         navigation_memory_path=navigation_memory_path,
         map_yaml=map_yaml,
-        runtime_labels=runtime_labels,
         waypoints=waypoints,
         navigation_memory_anchors=navigation_memory_anchors,
         robot_consumption_proof=proof,
@@ -202,15 +178,12 @@ def compile_runtime_bundle(
     provenance = runtime_provenance(
         map_bundle=map_bundle,
         scene_root=scene_root,
-        review_manifest_path=review_manifest_path,
+        room_semantics_path=room_semantics_path,
         navigation_memory_path=navigation_memory_path,
         output_dir=output_dir,
-        review=review,
-        runtime_labels=runtime_labels,
-        review_summary=review_summary,
+        room_reference=room_reference,
         robot_consumption_proof=proof,
         room_semantic_projection_proof=room_semantics["proof"],
-        include_draft_labels=include_draft_labels,
     )
     (output_dir / "b1_runtime_provenance.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n",
@@ -220,7 +193,7 @@ def compile_runtime_bundle(
         output_dir=output_dir,
         robot_consumption_proof=proof,
         room_semantic_projection_proof=room_semantics["proof"],
-        runtime_label_count=len(runtime_labels),
+        room_reference_count=len(room_reference["rooms"]),
         inspection_waypoint_count=len(semantics["inspection_waypoints"]),
     )
     (output_dir / "b1_robot_consumption_manifest.json").write_text(
@@ -234,10 +207,9 @@ def compile_runtime_bundle(
         "status": "compiled",
         "output_dir": str(output_dir),
         "robot_consumption_manifest": str(output_dir / "b1_robot_consumption_manifest.json"),
-        "runtime_label_count": len(runtime_labels),
+        "room_reference_count": len(room_reference["rooms"]),
         "robot_navigation_supported": proof["robot_navigation_supported"],
         "room_semantics_supported": room_semantics["proof"]["room_semantics_supported"],
-        "excluded_label_count": review_summary["excluded_label_count"],
         "validation": runtime_validation.as_dict(),
         "provenance": str(output_dir / "b1_runtime_provenance.json"),
     }
@@ -248,7 +220,7 @@ def b1_robot_consumption_manifest(
     output_dir: Path,
     robot_consumption_proof: dict[str, Any],
     room_semantic_projection_proof: dict[str, Any],
-    runtime_label_count: int,
+    room_reference_count: int,
     inspection_waypoint_count: int,
 ) -> dict[str, Any]:
     navigation_ready = bool(robot_consumption_proof.get("robot_navigation_supported"))
@@ -284,7 +256,7 @@ def b1_robot_consumption_manifest(
             "waypoint_ids": list(robot_consumption_proof.get("waypoint_ids") or []),
         },
         "semantics": {
-            "runtime_label_count": int(runtime_label_count),
+            "room_reference_count": int(room_reference_count),
             "room_semantics_ready": room_semantics_ready,
             "room_semantic_projection_status": room_semantic_projection_proof.get("status"),
             "semantic_projection_artifact": room_semantic_projection_proof.get(
@@ -354,248 +326,53 @@ def _blocked_consumption_capabilities(
     return blocked
 
 
-def validate_review_manifest(
-    payload: dict[str, Any],
-    *,
-    map_bundle: Path,
-    scene_root: Path,
-    review_manifest_path: Path,
-) -> list[str]:
-    errors = review_manifest_errors(
-        payload,
-        map_bundle=map_bundle,
-        scene_root=scene_root,
-        review_manifest_path=review_manifest_path,
-    )
+def read_room_semantics_reference(path: Path) -> dict[str, Any]:
+    path = Path(path)
+    payload = read_json_object(path, label="room semantics")
+    errors = room_semantics_reference_errors(payload, room_semantics_path=path)
     if errors:
-        raise ValueError("invalid B1 / Map 12 review manifest: " + "; ".join(errors))
-    return []
+        raise ValueError("invalid B1 / Map 12 room semantics reference: " + "; ".join(errors))
+    rooms = [dict(item) for item in payload.get("rooms") or [] if isinstance(item, dict)]
+    return {**payload, "rooms": rooms}
 
 
-def review_manifest_errors(
+def room_semantics_reference_errors(
     payload: dict[str, Any],
     *,
-    map_bundle: Path,
-    scene_root: Path,
-    review_manifest_path: Path,
+    room_semantics_path: Path,
 ) -> list[str]:
     errors: list[str] = []
-    errors.extend(
-        _review_manifest_header_errors(
-            payload,
-            map_bundle=map_bundle,
-            scene_root=scene_root,
-            review_manifest_path=review_manifest_path,
-        )
-    )
-    labels = payload.get("labels") if isinstance(payload.get("labels"), list) else []
-    if not labels:
-        errors.append("labels must not be empty")
+    if payload.get("schema") != ROOM_SEMANTICS_REFERENCE_SCHEMA:
+        errors.append(f"schema must be {ROOM_SEMANTICS_REFERENCE_SCHEMA}")
+    if not Path(room_semantics_path).is_file():
+        errors.append(f"room semantics missing: {room_semantics_path}")
+    rooms = payload.get("rooms") if isinstance(payload.get("rooms"), list) else []
+    if not rooms:
+        errors.append("rooms must not be empty")
         return errors
-    label_review = _review_manifest_label_review(labels)
-    errors.extend(label_review["errors"])
-    errors.extend(
-        _shared_accepted_label_errors(
-            labels,
-            accepted_signatures=label_review["accepted_signatures"],
-            accepted_map_areas=label_review["accepted_map_areas"],
-        )
-    )
-    return errors
-
-
-def _review_manifest_header_errors(
-    payload: dict[str, Any],
-    *,
-    map_bundle: Path,
-    scene_root: Path,
-    review_manifest_path: Path,
-) -> list[str]:
-    errors = []
-    if payload.get("schema") != B1_MAP12_ALIGNMENT_REVIEW_SCHEMA:
-        errors.append(f"schema must be {B1_MAP12_ALIGNMENT_REVIEW_SCHEMA}")
-    source_assets = (
-        payload.get("source_assets") if isinstance(payload.get("source_assets"), dict) else {}
-    )
-    if not _path_matches(source_assets.get("map_bundle"), map_bundle):
-        errors.append("source_assets.map_bundle must match --map-bundle")
-    if not _path_matches(source_assets.get("scene_root"), scene_root):
-        errors.append("source_assets.scene_root must match --scene-root")
-    if not Path(review_manifest_path).is_file():
-        errors.append(f"review manifest missing: {review_manifest_path}")
-    return errors
-
-
-def _review_manifest_label_review(labels: list[Any]) -> dict[str, Any]:
-    errors = []
-    seen_label_ids: set[str] = set()
-    accepted_signatures: dict[str, list[str]] = defaultdict(list)
-    accepted_map_areas: dict[str, list[str]] = defaultdict(list)
-    for index, raw_label in enumerate(labels, start=1):
-        label = raw_label if isinstance(raw_label, dict) else {}
-        label_id = str(label.get("label_id") or "")
-        label_id = _review_manifest_label_id(
-            label_id,
-            index=index,
-            seen_label_ids=seen_label_ids,
-            errors=errors,
-        )
-        label_result = _review_manifest_label_errors(label, label_id=label_id)
-        errors.extend(label_result["errors"])
-        if label_result["status"] == ACCEPTED_REVIEW_STATUS:
-            points = label_result["points"]
-            accepted_signatures[_polygon_signature(points)].append(label_id)
-            accepted_map_areas[str(label.get("map_area_id") or "")].append(label_id)
-    return {
-        "errors": errors,
-        "accepted_signatures": accepted_signatures,
-        "accepted_map_areas": accepted_map_areas,
-    }
-
-
-def _review_manifest_label_id(
-    label_id: str,
-    *,
-    index: int,
-    seen_label_ids: set[str],
-    errors: list[str],
-) -> str:
-    if not label_id:
-        errors.append(f"labels[{index}] missing label_id")
-        label_id = f"labels[{index}]"
-    if label_id in seen_label_ids:
-        errors.append(f"duplicate label_id: {label_id}")
-    seen_label_ids.add(label_id)
-    return label_id
-
-
-def _review_manifest_label_errors(label: dict[str, Any], *, label_id: str) -> dict[str, Any]:
-    errors = []
-    status = str(label.get("review_status") or "")
-    if status not in RUNTIME_LABEL_STATUSES | REVIEW_ONLY_STATUSES:
-        errors.append(f"label {label_id} has unsupported review_status {status!r}")
-    geometry = label.get("geometry") if isinstance(label.get("geometry"), dict) else {}
-    points = _geometry_points(geometry)
-    if status == ACCEPTED_REVIEW_STATUS:
-        if not str(label.get("scene_partition_id") or ""):
-            errors.append(f"accepted label {label_id} missing scene_partition_id")
-        if not str(label.get("map_area_id") or ""):
-            errors.append(f"accepted label {label_id} missing map_area_id")
-        if geometry.get("type") != "map_polygon":
-            errors.append(f"accepted label {label_id} geometry.type must be map_polygon")
-        if str(geometry.get("frame_id") or "") != "map":
-            errors.append(f"accepted label {label_id} geometry.frame_id must be map")
-        if len(points) < 3:
-            errors.append(f"accepted label {label_id} needs at least three map points")
-    return {"errors": errors, "status": status, "points": points}
-
-
-def _shared_accepted_label_errors(
-    labels: list[Any],
-    *,
-    accepted_signatures: dict[str, list[str]],
-    accepted_map_areas: dict[str, list[str]],
-) -> list[str]:
-    errors = []
-    for signature, label_ids in accepted_signatures.items():
-        if not signature or len(label_ids) < 2:
+    seen: set[str] = set()
+    for index, raw_room in enumerate(rooms, start=1):
+        if not isinstance(raw_room, dict):
+            errors.append(f"rooms[{index}] must be an object")
             continue
-        if not _accepted_labels_have_explicit_shared_policy(labels, label_ids):
+        partition_id = str(raw_room.get("asset_partition_id") or raw_room.get("room_id") or "")
+        if not partition_id:
+            errors.append(f"rooms[{index}] missing asset_partition_id")
+        if partition_id in seen:
+            errors.append(f"duplicate asset_partition_id: {partition_id}")
+        seen.add(partition_id)
+        if not str(raw_room.get("room_label") or ""):
+            errors.append(f"room {partition_id or index} missing room_label")
+        if not str(raw_room.get("category") or ""):
+            errors.append(f"room {partition_id or index} missing category")
+        if str(raw_room.get("review_status") or "") != ACCEPTED_ROOM_STATUS:
+            errors.append(f"room {partition_id or index} review_status must be accepted")
+        if "geometry" in raw_room or "polygon" in raw_room or "map_polygon" in raw_room:
             errors.append(
-                "accepted labels share geometry without shared_area_policy=composite_area: "
-                + ", ".join(label_ids)
-            )
-    for area_id, label_ids in accepted_map_areas.items():
-        if not area_id or len(label_ids) < 2:
-            continue
-        if not _accepted_labels_have_explicit_shared_policy(labels, label_ids):
-            errors.append(
-                "accepted labels share map_area_id without shared_area_policy=composite_area: "
-                + ", ".join(label_ids)
+                f"room {partition_id or index} must not carry Map12 geometry; "
+                "use a semantic projection artifact for map-frame room polygons"
             )
     return errors
-
-
-def _accepted_labels_have_explicit_shared_policy(
-    labels: list[Any],
-    label_ids: list[str],
-) -> bool:
-    policies = {
-        str(label.get("shared_area_policy") or "")
-        for label in labels
-        if isinstance(label, dict) and str(label.get("label_id") or "") in label_ids
-    }
-    return bool(policies) and policies <= EXPLICIT_SHARED_AREA_POLICIES
-
-
-def runtime_labels_from_review(
-    payload: dict[str, Any],
-    *,
-    frame_id: str,
-    include_draft_labels: bool = False,
-) -> list[dict[str, Any]]:
-    labels = []
-    for raw_label in payload.get("labels") or []:
-        if not isinstance(raw_label, dict):
-            continue
-        status = str(raw_label.get("review_status") or "")
-        if status != ACCEPTED_REVIEW_STATUS and not include_draft_labels:
-            continue
-        geometry = raw_label.get("geometry") if isinstance(raw_label.get("geometry"), dict) else {}
-        points = _geometry_points(geometry)
-        if len(points) < 3:
-            continue
-        label_id = str(raw_label.get("label_id") or "")
-        labels.append(
-            {
-                "label_id": label_id,
-                "room_label": str(raw_label.get("room_label") or label_id),
-                "category": str(raw_label.get("category") or ""),
-                "scene_partition_id": str(raw_label.get("scene_partition_id") or ""),
-                "map_area_id": str(raw_label.get("map_area_id") or ""),
-                "review_status": status,
-                "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
-                "source_map_frame_id": frame_id,
-                "geometry_source": str(
-                    geometry.get("source") or GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE
-                ),
-                "polygon_role": POLYGON_ROLE_NAVIGATION_AREA,
-                "polygon": points,
-                "map_center": _polygon_center(points),
-                "operator_note": str(raw_label.get("operator_note") or ""),
-                "shared_area_policy": str(raw_label.get("shared_area_policy") or ""),
-            }
-        )
-    return labels
-
-
-def review_validation_summary(
-    payload: dict[str, Any],
-    *,
-    include_draft_labels: bool,
-) -> dict[str, Any]:
-    statuses = Counter(
-        str(label.get("review_status") or "")
-        for label in payload.get("labels") or []
-        if isinstance(label, dict)
-    )
-    included = [
-        label
-        for label in payload.get("labels") or []
-        if isinstance(label, dict)
-        and (
-            str(label.get("review_status") or "") == ACCEPTED_REVIEW_STATUS or include_draft_labels
-        )
-    ]
-    return {
-        "status_counts": dict(sorted(statuses.items())),
-        "included_label_count": len(included),
-        "excluded_label_count": max(0, sum(statuses.values()) - len(included)),
-        "draft_label_policy": (
-            "included_for_debug_only" if include_draft_labels else "excluded_by_default"
-        ),
-        "duplicate_shared_area_policy": "accepted labels require shared_area_policy=composite_area",
-    }
 
 
 def verified_robot_consumption_proof(
@@ -794,8 +571,8 @@ def render_observation_proof(robot_consumption_proof: dict[str, Any]) -> dict[st
 def verified_room_semantic_projection(
     *,
     semantic_projection_artifact_path: Path | None,
-    review_manifest_path: Path,
-    review_manifest: dict[str, Any],
+    room_semantics_path: Path,
+    room_semantics_reference: dict[str, Any],
 ) -> dict[str, Any]:
     proof = {
         "schema": "b1_map12_room_semantics_proof_v1",
@@ -827,8 +604,8 @@ def verified_room_semantic_projection(
     )
     errors = semantic_projection_errors(
         projection,
-        review_manifest_path=review_manifest_path,
-        review_manifest=review_manifest,
+        room_semantics_path=room_semantics_path,
+        room_semantics_reference=room_semantics_reference,
     )
     if errors:
         raise ValueError("invalid semantic projection artifact: " + "; ".join(errors))
@@ -842,7 +619,7 @@ def verified_room_semantic_projection(
             "semantic_anchor_count": int(projection.get("semantic_anchor_count") or 0),
             "object_projection_status": str(projection.get("object_projection_status") or ""),
             "source_correspondences": str(projection.get("source_correspondences") or ""),
-            "source_review_manifest": str(projection.get("source_review_manifest") or ""),
+            "source_room_semantics": str(projection.get("source_room_semantics") or ""),
         }
     )
     return {"proof": proof, "rooms": rooms}
@@ -851,21 +628,21 @@ def verified_room_semantic_projection(
 def semantic_projection_errors(
     projection: dict[str, Any],
     *,
-    review_manifest_path: Path,
-    review_manifest: dict[str, Any],
+    room_semantics_path: Path,
+    room_semantics_reference: dict[str, Any],
 ) -> list[str]:
     rooms = _semantic_projection_room_rows(projection)
     errors = _semantic_projection_header_errors(
         projection,
-        review_manifest_path=review_manifest_path,
+        room_semantics_path=room_semantics_path,
         rooms=rooms,
     )
-    accepted_labels = _accepted_review_labels_by_id(review_manifest)
+    accepted_rooms = _accepted_reference_rooms_by_partition(room_semantics_reference)
     seen_room_ids: set[str] = set()
     for index, room in enumerate(rooms, start=1):
         room_errors = semantic_projection_room_errors(
             room,
-            accepted_labels=accepted_labels,
+            accepted_rooms=accepted_rooms,
         )
         errors.extend(f"rooms[{index}]: {error}" for error in room_errors)
         room_id = _semantic_projection_room_id(room)
@@ -878,7 +655,7 @@ def semantic_projection_errors(
 def _semantic_projection_header_errors(
     projection: dict[str, Any],
     *,
-    review_manifest_path: Path,
+    room_semantics_path: Path,
     rooms: list[Any],
 ) -> list[str]:
     errors = []
@@ -886,8 +663,8 @@ def _semantic_projection_header_errors(
         errors.append(f"schema must be {SEMANTIC_PROJECTION_SCHEMA}")
     if projection.get("status") != "verified_room_semantics":
         errors.append("status must be verified_room_semantics")
-    if not _path_matches(projection.get("source_review_manifest"), review_manifest_path):
-        errors.append("source_review_manifest must match --review-manifest")
+    if not _path_matches(projection.get("source_room_semantics"), room_semantics_path):
+        errors.append("source_room_semantics must match --room-semantics")
     errors.extend(_semantic_projection_object_policy_errors(projection))
     if not rooms:
         errors.append("rooms must not be empty")
@@ -917,11 +694,13 @@ def _semantic_projection_room_rows(projection: dict[str, Any]) -> list[Any]:
     return rooms if isinstance(rooms, list) else []
 
 
-def _accepted_review_labels_by_id(review_manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _accepted_reference_rooms_by_partition(
+    room_semantics_reference: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
     return {
-        str(label.get("label_id") or ""): label
-        for label in review_manifest.get("labels") or []
-        if isinstance(label, dict) and label.get("review_status") == ACCEPTED_REVIEW_STATUS
+        str(room.get("asset_partition_id") or room.get("room_id") or ""): room
+        for room in room_semantics_reference.get("rooms") or []
+        if isinstance(room, dict) and room.get("review_status") == ACCEPTED_ROOM_STATUS
     }
 
 
@@ -932,32 +711,34 @@ def _semantic_projection_room_id(room: Any) -> str:
 def semantic_projection_room_errors(
     room: Any,
     *,
-    accepted_labels: dict[str, dict[str, Any]],
+    accepted_rooms: dict[str, dict[str, Any]],
 ) -> list[str]:
     if not isinstance(room, dict):
         return ["room must be an object"]
     errors = []
     room_id = str(room.get("room_id") or "")
-    source_label_id = str(room.get("source_label_id") or room_id)
-    label = accepted_labels.get(source_label_id)
-    if label is None:
-        errors.append(f"source_label_id {source_label_id!r} is not an accepted review label")
+    asset_partition_id = str(room.get("asset_partition_id") or "")
+    reference = accepted_rooms.get(asset_partition_id)
+    if reference is None:
+        errors.append(
+            f"asset_partition_id {asset_partition_id!r} is not an accepted DT room reference"
+        )
     else:
-        errors.extend(_semantic_projection_label_binding_errors(room, label))
+        errors.extend(_semantic_projection_reference_binding_errors(room, reference))
     errors.extend(_semantic_projection_room_contract_errors(room_id, room))
     errors.extend(_semantic_projection_room_geometry_errors(room))
     return errors
 
 
-def _semantic_projection_label_binding_errors(
+def _semantic_projection_reference_binding_errors(
     room: dict[str, Any],
-    label: dict[str, Any],
+    reference: dict[str, Any],
 ) -> list[str]:
     errors = []
-    if str(room.get("navigation_area_id") or "") != str(label.get("map_area_id") or ""):
-        errors.append("navigation_area_id must match accepted review label map_area_id")
-    if str(room.get("asset_partition_id") or "") != str(label.get("scene_partition_id") or ""):
-        errors.append("asset_partition_id must match accepted review label scene_partition_id")
+    if str(room.get("room_label") or "") != str(reference.get("room_label") or ""):
+        errors.append("room_label must match accepted DT room reference")
+    if str(room.get("category") or "") != str(reference.get("category") or ""):
+        errors.append("category must match accepted DT room reference")
     return errors
 
 
@@ -966,7 +747,7 @@ def _semantic_projection_room_contract_errors(
     room: dict[str, Any],
 ) -> list[str]:
     expected_values = {
-        "review_status": ACCEPTED_REVIEW_STATUS,
+        "review_status": ACCEPTED_ROOM_STATUS,
         "semantic_source": "reviewed_b1_map12_semantic_anchor",
         "alignment_status": "accepted_semantic_anchor",
     }
@@ -1004,13 +785,13 @@ def semantic_projection_rooms(projection: dict[str, Any]) -> list[dict[str, Any]
                 "room_label": str(room.get("room_label") or room.get("room_id") or ""),
                 "category": str(room.get("category") or ""),
                 "polygon": map_polygon,
-                "review_status": ACCEPTED_REVIEW_STATUS,
+                "review_status": ACCEPTED_ROOM_STATUS,
                 "map_area_id": str(room.get("navigation_area_id") or ""),
                 "scene_partition_id": str(room.get("asset_partition_id") or ""),
                 "semantic_anchor_count": int(room.get("semantic_anchor_count") or 0),
                 "semantic_anchors": list(room.get("semantic_anchors") or []),
                 "semantic_source": str(room.get("semantic_source") or ""),
-                "source_label_id": str(room.get("source_label_id") or ""),
+                "source_room_semantics_id": str(room.get("source_room_semantics_id") or ""),
                 "source_anchor_ids": list(room.get("source_anchor_ids") or []),
             }
         )
@@ -1021,15 +802,12 @@ def runtime_provenance(
     *,
     map_bundle: Path,
     scene_root: Path,
-    review_manifest_path: Path,
+    room_semantics_path: Path,
     navigation_memory_path: Path,
     output_dir: Path,
-    review: dict[str, Any],
-    runtime_labels: list[dict[str, Any]],
-    review_summary: dict[str, Any],
+    room_reference: dict[str, Any],
     robot_consumption_proof: dict[str, Any],
     room_semantic_projection_proof: dict[str, Any],
-    include_draft_labels: bool,
 ) -> dict[str, Any]:
     source_files = [
         map_bundle / "nav2.yaml",
@@ -1037,7 +815,7 @@ def runtime_provenance(
         map_bundle / "raw_map.json.gz",
         map_bundle / "source.json",
         navigation_memory_path,
-        review_manifest_path,
+        room_semantics_path,
     ]
     semantic_projection_artifact = str(
         room_semantic_projection_proof["semantic_projection_artifact"]
@@ -1046,22 +824,20 @@ def runtime_provenance(
         source_files.append(Path(semantic_projection_artifact))
     return {
         "schema": B1_MAP12_RUNTIME_PROVENANCE_SCHEMA,
-        "generated_from_review_manifest": True,
         "generated_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "compiler": _repo_relative_path(Path(__file__)),
         "source_assets": {
             "map_bundle": str(map_bundle),
             "scene_root": str(scene_root),
-            "review_manifest": str(review_manifest_path),
+            "room_semantics": str(room_semantics_path),
             "navigation_memory": str(navigation_memory_path),
-            "review_schema": str(review.get("schema") or ""),
+            "room_semantics_schema": str(room_reference.get("schema") or ""),
         },
         "output_dir": str(output_dir),
         "source_file_hashes": {
             str(path): _file_sha256(path) for path in source_files if path.is_file()
         },
-        "include_draft_labels": include_draft_labels,
-        "runtime_label_count": len(runtime_labels),
+        "room_reference_count": len(room_reference.get("rooms") or []),
         "robot_consumption_proof": {
             "status": robot_consumption_proof["status"],
             "alignment_artifact": robot_consumption_proof["alignment_artifact"],
@@ -1076,11 +852,10 @@ def runtime_provenance(
             "room_semantics_supported": room_semantic_projection_proof["room_semantics_supported"],
             "object_projection_status": room_semantic_projection_proof["object_projection_status"],
         },
-        "review_validation": review_summary,
         "public_contract_note": (
-            "This generated bundle preserves raw Map12 navigation layers. Human review "
-            "labels are compiled as a semantic label layer and do not retarget waypoints "
-            "or rebuild driveable ways."
+            "This generated bundle preserves raw Map12 navigation layers. Digital Twin room "
+            "labels are reference semantics only until an explicit semantic projection artifact "
+            "binds them to Map12 navigation geometry."
         ),
     }
 
@@ -1119,10 +894,9 @@ def _copy_vendor_map12_source(source: Path, output_dir: Path) -> None:
 def _runtime_semantics_payload(
     *,
     map_bundle: Path,
-    review_manifest_path: Path,
+    room_semantics_path: Path,
     navigation_memory_path: Path,
     map_yaml: dict[str, Any],
-    runtime_labels: list[dict[str, Any]],
     waypoints: list[dict[str, Any]],
     navigation_memory_anchors: list[dict[str, Any]],
     robot_consumption_proof: dict[str, Any],
@@ -1133,7 +907,7 @@ def _runtime_semantics_payload(
     rooms = (
         _rooms_from_verified_semantic_projection(projected_rooms, frame_id=frame_id)
         if projected_rooms is not None
-        else _rooms_from_review_labels(runtime_labels, frame_id=frame_id)
+        else []
     )
     room_waypoints = _room_waypoints_from_rooms(rooms, frame_id=frame_id)
     alignment_status = (
@@ -1155,7 +929,7 @@ def _runtime_semantics_payload(
         ),
         "display_frame": None,
         "map_id": "agibot-robot-map-12_base_navigation_map",
-        "map_version": "robot_map_12_vendor_review_v1",
+        "map_version": "robot_map_12_vendor_runtime_v1",
         "resolution_m": float(map_yaml.get("resolution") or 0.05),
         "origin": _origin_payload(map_yaml),
         "rooms": rooms,
@@ -1168,15 +942,13 @@ def _runtime_semantics_payload(
             "render_observation_proof": render_observation_proof(robot_consumption_proof),
             "room_semantic_projection_proof": room_semantic_projection["proof"],
         },
-        "review_labels": runtime_labels,
-        "room_category_hints": _room_category_hints_from_review(runtime_labels),
+        "review_labels": [],
+        "room_category_hints": _room_category_hints_from_rooms(rooms),
         "provenance": {
-            "source": "vendor_robot_map_12_plus_review_manifest",
+            "source": "vendor_robot_map_12_plus_navigation_memory",
             "raw_map_bundle": str(map_bundle),
             "navigation_memory": str(navigation_memory_path),
-            "generated_from_review_manifest": True,
-            "b1_alignment_review_schema": B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
-            "b1_alignment_review_source": str(review_manifest_path),
+            "room_semantics_reference": str(room_semantics_path),
             "b1_runtime_compiler": _repo_relative_path(Path(__file__)),
             "contains_private_scoring_truth": False,
             "contains_runtime_observations": False,
@@ -1188,35 +960,6 @@ def _runtime_semantics_payload(
             ),
         },
     }
-
-
-def _rooms_from_review_labels(
-    labels: list[dict[str, Any]],
-    *,
-    frame_id: str,
-) -> list[dict[str, Any]]:
-    rooms = []
-    for label in labels:
-        label_id = str(label.get("label_id") or "")
-        rooms.append(
-            {
-                "room_id": label_id,
-                "room_label": str(label.get("room_label") or label_id),
-                "category": str(label.get("category") or ""),
-                "polygon": [dict(point) for point in label.get("polygon") or []],
-                "review_status": str(label.get("review_status") or ""),
-                "map_area_id": str(label.get("map_area_id") or ""),
-                "scene_partition_id": str(label.get("scene_partition_id") or ""),
-            }
-        )
-    return normalize_spatial_rooms(
-        rooms,
-        frame_id=frame_id,
-        polygon_role=POLYGON_ROLE_NAVIGATION_AREA,
-        geometry_source=GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE,
-        alignment_status=ALIGNMENT_STATUS_CANDIDATE,
-        semantic_label_status=ALIGNMENT_STATUS_CANDIDATE,
-    )
 
 
 def _rooms_from_verified_semantic_projection(
@@ -1357,33 +1100,6 @@ def _optional_float(value: Any) -> float | None:
         return None
 
 
-def _room_waypoints_from_review_labels(
-    labels: list[dict[str, Any]],
-    *,
-    frame_id: str,
-) -> list[dict[str, Any]]:
-    waypoints = []
-    for label in labels:
-        label_id = str(label.get("label_id") or "")
-        center = label.get("map_center") if isinstance(label.get("map_center"), dict) else {}
-        if not label_id or not center:
-            continue
-        waypoints.append(
-            {
-                "waypoint_id": f"{label_id}_center",
-                "frame_id": frame_id,
-                "x": float(center.get("x") or 0.0),
-                "y": float(center.get("y") or 0.0),
-                "yaw": 0.0,
-                "room_id": label_id,
-                "label": str(label.get("room_label") or label_id),
-                "purpose": "reviewed_room_center",
-                "waypoint_source": "generated_exploration_candidate",
-            }
-        )
-    return waypoints
-
-
 def _room_waypoints_from_rooms(
     rooms: list[dict[str, Any]],
     *,
@@ -1491,37 +1207,21 @@ def _simple_yaml(value: Any, *, indent: int = 0) -> str:
     return f"{prefix}{value}\n"
 
 
-def _room_category_hints_from_review(labels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _room_category_hints_from_rooms(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
     hints = []
-    for label in labels:
+    for room in rooms:
+        room_id = str(room.get("room_id") or "")
         hints.append(
             {
-                "room_id": str(label.get("label_id") or ""),
-                "room_label": str(label.get("room_label") or label.get("label_id") or ""),
-                "category": str(label.get("category") or ""),
-                "source": "b1_map12_alignment_review",
-                "review_status": str(label.get("review_status") or ""),
-                "map_area_id": str(label.get("map_area_id") or ""),
+                "room_id": room_id,
+                "room_label": str(room.get("room_label") or room_id),
+                "category": str(room.get("category") or ""),
+                "source": "b1_map12_verified_semantic_projection",
+                "review_status": str(room.get("review_status") or ""),
+                "map_area_id": str(room.get("map_area_id") or ""),
             }
         )
     return hints
-
-
-def _source_map_frame_id(semantics: dict[str, Any]) -> str:
-    frame_ids = semantics.get("frame_ids") if isinstance(semantics.get("frame_ids"), dict) else {}
-    return str(frame_ids.get("map") or "map")
-
-
-def _geometry_points(geometry: dict[str, Any]) -> list[dict[str, float]]:
-    points = []
-    for raw_point in geometry.get("points") or geometry.get("polygon") or []:
-        if not isinstance(raw_point, dict):
-            continue
-        try:
-            points.append({"x": float(raw_point["x"]), "y": float(raw_point["y"])})
-        except (KeyError, TypeError, ValueError):
-            continue
-    return points
 
 
 def _polygon_center(points: list[dict[str, float]]) -> dict[str, float]:
@@ -1529,13 +1229,6 @@ def _polygon_center(points: list[dict[str, float]]) -> dict[str, float]:
         "x": sum(point["x"] for point in points) / len(points),
         "y": sum(point["y"] for point in points) / len(points),
     }
-
-
-def _polygon_signature(points: list[dict[str, float]]) -> str:
-    if len(points) < 3:
-        return ""
-    normalized = sorted((round(point["x"], 4), round(point["y"], 4)) for point in points)
-    return "|".join(f"{x:.4f},{y:.4f}" for x, y in normalized)
 
 
 def _file_sha256(path: Path) -> str:
@@ -1553,9 +1246,8 @@ def _path_matches(declared: object, actual: Path) -> bool:
     actual_path = Path(actual)
     if declared_path == actual_path:
         return True
-    repo_root = Path(__file__).resolve().parents[2]
-    declared_abs = declared_path if declared_path.is_absolute() else repo_root / declared_path
-    actual_abs = actual_path if actual_path.is_absolute() else repo_root / actual_path
+    declared_abs = declared_path if declared_path.is_absolute() else REPO_ROOT / declared_path
+    actual_abs = actual_path if actual_path.is_absolute() else REPO_ROOT / actual_path
     return declared_abs.resolve(strict=False) == actual_abs.resolve(strict=False)
 
 

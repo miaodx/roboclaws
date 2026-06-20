@@ -36,7 +36,7 @@ B1_MAP12_BUNDLE = (
 B1_SCENE_ROOT = (
     REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / "2rd_floor_seperated"
 )
-B1_REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
+B1_ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 
 
 def _require_agibot_sdk_runner() -> None:
@@ -4925,7 +4925,7 @@ def _compile_b1_runtime_bundle_for_checker(tmp_path: Path, *, verified: bool) ->
     result = compile_runtime_bundle(
         map_bundle=B1_MAP12_BUNDLE,
         scene_root=B1_SCENE_ROOT,
-        review_manifest_path=B1_REVIEW_MANIFEST,
+        room_semantics_path=B1_ROOM_SEMANTICS,
         output_dir=tmp_path / ("b1-runtime-verified" if verified else "b1-runtime-blocked"),
         **kwargs,
     )

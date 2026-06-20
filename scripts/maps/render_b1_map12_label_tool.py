@@ -38,7 +38,6 @@ from roboclaws.maps.spatial_contract import (
 
 LABEL_TOOL_PACKET_SCHEMA = "b1_map12_label_tool_packet_v1"
 LABEL_DRAFT_MANIFEST_SCHEMA = "b1_map12_label_draft_manifest_v1"
-B1_MAP12_ALIGNMENT_REVIEW_SCHEMA = "b1_map12_alignment_review_v1"
 DEFAULT_MAP12_ROOT = Path("vendors/agibot_sdk/artifacts/maps/robot_map_12")
 DEFAULT_MAP_BUNDLE = DEFAULT_MAP12_ROOT / "agibot"
 DEFAULT_SCENE_ROOT = Path("data/robot-data-lab/scene-engine/data/2rd_floor_seperated")
@@ -68,7 +67,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Include scene/Gaussian evidence in the packet for review-only comparison.",
     )
-    parser.add_argument("--output-review-manifest", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     return parser.parse_args(argv)
 
@@ -81,7 +79,6 @@ def main(argv: list[str] | None = None) -> int:
             semantics_path=args.semantics,
             scene_root=args.scene_root,
             include_gaussian_scene=args.include_gaussian_scene,
-            review_manifest_path=args.output_review_manifest,
             output_dir=args.output_dir,
         )
     except ValueError as exc:
@@ -103,7 +100,6 @@ def write_label_tool_artifacts(
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
     include_gaussian_scene: bool = False,
-    review_manifest_path: Path | None = None,
     output_dir: Path,
 ) -> dict[str, Any]:
     packet = build_label_tool_packet(
@@ -111,7 +107,6 @@ def write_label_tool_artifacts(
         semantics_path=semantics_path,
         scene_root=scene_root,
         include_gaussian_scene=include_gaussian_scene,
-        review_manifest_path=review_manifest_path,
     )
     image_url = image_data_url(Path(packet["source_image"]))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -136,7 +131,6 @@ def build_label_tool_packet(
     semantics_path: Path | None = None,
     scene_root: Path = DEFAULT_SCENE_ROOT,
     include_gaussian_scene: bool = False,
-    review_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     map_bundle = Path(map_bundle)
     map_yaml_path = map_bundle / "map.yaml"
@@ -162,13 +156,7 @@ def build_label_tool_packet(
         allow_missing=not explicit_semantics_path,
     )
     frame_id = source_map_frame_id(semantics)
-    review_manifest = load_review_manifest(review_manifest_path)
-    shapes = seed_shapes_from_review_or_semantics(
-        review_manifest,
-        semantics,
-        transform=transform,
-        frame_id=frame_id,
-    )
+    shapes = seed_shapes_from_semantics(semantics, transform=transform, frame_id=frame_id)
     attach_room_geometry_conflicts(shapes)
     source_map_layers = source_map_layers_from_semantics(
         semantics,
@@ -185,7 +173,6 @@ def build_label_tool_packet(
         "draft_manifest_schema": LABEL_DRAFT_MANIFEST_SCHEMA,
         "map_bundle": str(map_bundle),
         "scene_root": str(scene_root),
-        "review_manifest": str(review_manifest_path or ""),
         "source_semantics": str(semantics_path),
         "source_image": str(image_path),
         "source_map_frame_id": frame_id,
@@ -227,7 +214,6 @@ def build_label_tool_packet(
                 "source_map_frame_id": frame_id,
                 "map_bundle": str(map_bundle),
                 "scene_root": str(scene_root),
-                "review_manifest": str(review_manifest_path or ""),
                 "source_semantics": str(semantics_path),
                 "source_image": str(image_path),
             },
@@ -240,25 +226,6 @@ def build_label_tool_packet(
             fallback_semantics=semantics,
         )
     return packet
-
-
-def load_review_manifest(review_manifest_path: Path | None) -> dict[str, Any] | None:
-    if review_manifest_path is None:
-        return None
-    path = Path(review_manifest_path)
-    if not path.is_file():
-        raise ValueError(f"review manifest missing: {path}")
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"review manifest must contain valid JSON object: {path}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"review manifest must contain a JSON object: {path}")
-    if payload.get("schema") != B1_MAP12_ALIGNMENT_REVIEW_SCHEMA:
-        raise ValueError(
-            f"review manifest schema must be {B1_MAP12_ALIGNMENT_REVIEW_SCHEMA}: {path}"
-        )
-    return payload
 
 
 def load_semantics_or_empty(
@@ -303,76 +270,6 @@ def load_semantics_or_empty(
             "contains_runtime_observations": False,
         },
     }
-
-
-def seed_shapes_from_review_or_semantics(
-    review_manifest: dict[str, Any] | None,
-    semantics: dict[str, Any],
-    *,
-    transform: SourceMapTransform,
-    frame_id: str,
-) -> list[dict[str, Any]]:
-    if review_manifest is not None:
-        return seed_shapes_from_review_manifest(
-            review_manifest,
-            transform=transform,
-            frame_id=frame_id,
-        )
-    return seed_shapes_from_semantics(semantics, transform=transform, frame_id=frame_id)
-
-
-def seed_shapes_from_review_manifest(
-    review_manifest: dict[str, Any],
-    *,
-    transform: SourceMapTransform,
-    frame_id: str,
-) -> list[dict[str, Any]]:
-    shapes: list[dict[str, Any]] = []
-    for index, raw_label in enumerate(review_manifest.get("labels") or [], start=1):
-        if not isinstance(raw_label, dict):
-            continue
-        geometry_payload = (
-            raw_label.get("geometry") if isinstance(raw_label.get("geometry"), dict) else {}
-        )
-        polygon = _polygon_points(geometry_payload.get("points") or geometry_payload.get("polygon"))
-        center = _geometry_center({"polygon": polygon})
-        shape_id = str(raw_label.get("label_id") or f"label_{index:03d}")
-        geometry = {
-            "kind": "polygon",
-            "polygon": polygon,
-            "pixel_polygon": [
-                world_to_pixel(point["x"], point["y"], transform) for point in polygon
-            ],
-        }
-        review_status = str(raw_label.get("review_status") or "draft")
-        shapes.append(
-            {
-                "shape_id": shape_id,
-                "label": str(raw_label.get("room_label") or shape_id),
-                "category": str(raw_label.get("category") or ""),
-                "navigation_area_id": str(raw_label.get("map_area_id") or ""),
-                "asset_partition_id": str(raw_label.get("scene_partition_id") or ""),
-                "source_room_id": shape_id,
-                "semantic_source": "human_alignment_review_manifest",
-                "render_review_recommended": review_status != "accepted",
-                "source_map_frame_id": str(geometry_payload.get("frame_id") or frame_id),
-                "geometry": geometry,
-                "map_center": center,
-                "polygon_role": POLYGON_ROLE_NAVIGATION_AREA,
-                "geometry_source": str(
-                    geometry_payload.get("source") or GEOMETRY_SOURCE_OPERATOR_NAVIGATION_ZONE
-                ),
-                "source_alignment_status": ALIGNMENT_STATUS_CANDIDATE,
-                "alignment_status": ALIGNMENT_STATUS_CANDIDATE,
-                "review_status": review_status,
-                "polygon_usage": {
-                    "navigation": True,
-                    "semantic_labeling": ALIGNMENT_STATUS_CANDIDATE,
-                    "review": True,
-                },
-            }
-        )
-    return shapes
 
 
 def materialize_scene_evidence_artifacts(packet: dict[str, Any], *, output_dir: Path) -> None:

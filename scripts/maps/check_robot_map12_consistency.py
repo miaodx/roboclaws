@@ -152,7 +152,7 @@ def _result(
         "ok": not errors,
         "map12_root": str(map12_root),
         "scope": "agibot_nav2_occupancy_and_navigation_memory_only",
-        "excluded_inputs": ["scene_root", "gaussian_map", "b1_alignment_review"],
+        "excluded_inputs": ["scene_root", "gaussian_map", "room_semantics"],
         "map": map_summary or {},
         "navigation_memory": navigation_memory_summary or {"item_count": len(anchors)},
         "anchors": anchors,

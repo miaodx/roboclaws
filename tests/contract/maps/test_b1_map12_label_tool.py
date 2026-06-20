@@ -7,7 +7,16 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
+import scripts.maps.render_b1_scene_topdown_diagnostic as scene_diagnostic
+from scripts.maps.fit_b1_map12_scene_alignment import build_alignment_residuals
+from scripts.maps.render_b1_map12_base_label_review import (
+    REVIEW_PACKET_SCHEMA as BASE_LABEL_REVIEW_PACKET_SCHEMA,
+)
+from scripts.maps.render_b1_map12_base_label_review import (
+    build_review_packet as build_base_label_review_packet,
+)
 from scripts.maps.render_b1_map12_label_tool import (
     LABEL_DRAFT_MANIFEST_SCHEMA,
     LABEL_TOOL_PACKET_SCHEMA,
@@ -25,12 +34,33 @@ from scripts.maps.render_b1_map12_label_tool import (
     world_to_pixel,
     write_label_tool_artifacts,
 )
+from scripts.maps.render_b1_scene_gaussian_topdown import (
+    build_topdown_camera_request,
+    topdown_render_packet,
+)
+from scripts.maps.render_b1_scene_topdown_diagnostic import build_scene_topdown_diagnostic
+from tests.contract.maps.test_b1_map12_verified_alignment import (
+    alignment_anchor,
+    correspondence_manifest,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MAP_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
 )
-REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
+ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
+NAVIGATION_MEMORY = (
+    REPO_ROOT
+    / "vendors"
+    / "agibot_sdk"
+    / "artifacts"
+    / "maps"
+    / ("robot_map_12")
+    / "navigation_memory.json"
+)
+SCENE_ROOT = (
+    REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / ("2rd_floor_seperated")
+)
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "render_b1_map12_label_tool.py"
 REMOVED_AUTHORED_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 
@@ -52,16 +82,14 @@ def test_map12_label_tool_pixel_world_roundtrip() -> None:
     assert restored["y"] == pytest.approx(source_point["y"])
 
 
-def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
-    packet = build_label_tool_packet(
-        map_bundle=MAP_BUNDLE,
-        review_manifest_path=REVIEW_MANIFEST,
-    )
+def test_label_tool_packet_starts_from_current_semantics_only(tmp_path: Path) -> None:
+    semantics_path = _write_polygon_semantics(tmp_path)
+
+    packet = build_label_tool_packet(map_bundle=MAP_BUNDLE, semantics_path=semantics_path)
 
     assert packet["schema"] == LABEL_TOOL_PACKET_SCHEMA
     assert packet["draft_manifest_schema"] == LABEL_DRAFT_MANIFEST_SCHEMA
     assert packet["map_bundle"].endswith("vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot")
-    assert packet["review_manifest"].endswith("assets/maps/b1-map12-alignment-review.json")
     assert packet["scene_root"].endswith(
         "data/robot-data-lab/scene-engine/data/2rd_floor_seperated"
     )
@@ -74,13 +102,9 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
     }
     assert packet["map"]["image_width_px"] == 913
     assert packet["map"]["image_height_px"] == 716
-    assert packet["shapes"]
+    assert len(packet["shapes"]) == 1
     assert all(shape["alignment_status"] == "candidate" for shape in packet["shapes"])
-    assert {shape["review_status"] for shape in packet["shapes"]} == {
-        "accepted",
-        "blocked_shared_area",
-        "draft",
-    }
+    assert {shape["review_status"] for shape in packet["shapes"]} == {"draft"}
     assert all(shape["source_map_frame_id"] == "map" for shape in packet["shapes"])
 
     manifest = packet["initial_draft_manifest"]
@@ -90,6 +114,57 @@ def test_label_tool_packet_seeds_candidate_source_map_shapes() -> None:
     assert all(label["alignment_status"] == "candidate" for label in manifest["labels"])
 
 
+def test_base_label_review_defaults_to_aligned_overlay_not_raw_source_map(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scene_topdown = _write_fake_scene_topdown_packet(tmp_path)
+    monkeypatch.setattr(
+        scene_diagnostic,
+        "scene_object_bounds_from_usd",
+        lambda _path: _fake_object_bounds_for_all_partitions(),
+    )
+    diagnostic = build_scene_topdown_diagnostic(
+        scene_root=SCENE_ROOT,
+        output_dir=tmp_path / "scene-diagnostic",
+        scene_topdown_render=scene_topdown,
+    )
+    diagnostic["validation"] = {"status": "passed", "errors": []}
+    diagnostic_path = tmp_path / "scene_topdown_diagnostic.json"
+    diagnostic_path.write_text(json.dumps(diagnostic), encoding="utf-8")
+    alignment_artifact = _write_verified_alignment_artifact(tmp_path)
+
+    packet = build_base_label_review_packet(
+        map_bundle=MAP_BUNDLE,
+        navigation_memory_path=NAVIGATION_MEMORY,
+        room_semantics_path=ROOM_SEMANTICS,
+        scene_root=SCENE_ROOT,
+        scene_topdown_render_path=scene_topdown,
+        scene_topdown_diagnostic_path=diagnostic_path,
+        alignment_artifact_path=alignment_artifact,
+    )
+
+    assert packet["schema"] == BASE_LABEL_REVIEW_PACKET_SCHEMA
+    assert packet["alignment_status"] == "verified"
+    assert packet["policy"]["default_overlay"] == "digital_twin_room_bounds"
+    assert packet["policy"]["map12_candidate_polygons_are_retired"] is True
+    assert packet["scene_projection"]["topdown_image"].endswith("views/top2down.png")
+    assert packet["scene_projection"]["diagnostic_schema"] == "b1_scene_topdown_diagnostic_v1"
+    assert packet["scene_projection"]["digital_twin_room_bounds_count"] >= 6
+    assert packet["summary"]["object_aliases_supported"] is True
+    assert packet["summary"]["room_aliases_recommended_as_required_field"] is True
+    assert {area["digital_twin_partition_id"] for area in packet["areas"]} >= {
+        "meeting_room_a",
+        "meeting_room_b",
+        "meeting_room_c",
+    }
+    assert all(
+        area["digital_twin_scene_bounds"]["frame_id"] == "digital_twin_scene"
+        for area in packet["areas"]
+    )
+    assert all(area["human_action"] for area in packet["areas"])
+
+
 def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE)
 
@@ -97,7 +172,6 @@ def test_label_tool_defaults_to_vendor_map12_without_authored_semantics() -> Non
     assert packet["source_semantics"].endswith(
         "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/semantics.json"
     )
-    assert packet["review_manifest"] == ""
     assert packet["shapes"] == []
     assert packet["source_map_layers"] == {
         "coordinate_policy": "map_native_layers_use_source_map_frame_coordinates_only",
@@ -175,43 +249,6 @@ def test_label_tool_rejects_missing_source_metadata_when_defaulting_semantics(
 
     with pytest.raises(ValueError, match=r"map source metadata missing: .*source\.json"):
         build_label_tool_packet(map_bundle=map_bundle)
-
-
-@pytest.mark.parametrize(
-    ("review_manifest_text", "expected_error"),
-    [
-        (
-            None,
-            r"review manifest missing: .*missing-review\.json",
-        ),
-        (
-            "{not-json\n",
-            r"review manifest must contain valid JSON object: .*missing-review\.json",
-        ),
-        (
-            json.dumps([]),
-            r"review manifest must contain a JSON object: .*missing-review\.json",
-        ),
-        (
-            json.dumps({"schema": "wrong_review_schema", "labels": []}),
-            r"review manifest schema must be b1_map12_alignment_review_v1: .*missing-review\.json",
-        ),
-    ],
-)
-def test_label_tool_rejects_malformed_explicit_review_manifest(
-    tmp_path: Path,
-    review_manifest_text: str | None,
-    expected_error: str,
-) -> None:
-    review_manifest_path = tmp_path / "missing-review.json"
-    if review_manifest_text is not None:
-        review_manifest_path.write_text(review_manifest_text, encoding="utf-8")
-
-    with pytest.raises(ValueError, match=expected_error):
-        build_label_tool_packet(
-            map_bundle=MAP_BUNDLE,
-            review_manifest_path=review_manifest_path,
-        )
 
 
 def test_authored_map12_bundle_stays_removed() -> None:
@@ -332,32 +369,6 @@ def test_label_tool_packet_excludes_scene_evidence_by_default() -> None:
     assert "scene_evidence" not in packet
 
 
-def test_label_tool_packet_marks_shared_room_polygon_conflicts() -> None:
-    packet = build_label_tool_packet(
-        map_bundle=MAP_BUNDLE,
-        review_manifest_path=REVIEW_MANIFEST,
-    )
-    shapes_by_id = {shape["shape_id"]: shape for shape in packet["shapes"]}
-    overlapping = [
-        shapes_by_id["reception_area_a"],
-        shapes_by_id["short_corridor_a"],
-        shapes_by_id["storage_room_a"],
-    ]
-
-    assert {shape["semantic_source"] for shape in overlapping} == {
-        "human_alignment_review_manifest"
-    }
-    assert all(shape["geometry_conflict"]["status"] == "shared_polygon" for shape in overlapping)
-    assert all(
-        shape["geometry_conflict"]["room_ids"]
-        == ["reception_area_a", "short_corridor_a", "storage_room_a"]
-        for shape in overlapping
-    )
-    assert shapes_by_id["short_corridor_a"]["render_review_recommended"] is True
-    assert shapes_by_id["reception_area_a"]["review_status"] == "blocked_shared_area"
-    assert shapes_by_id["storage_room_a"]["review_status"] == "blocked_shared_area"
-
-
 def test_label_tool_packet_exposes_scene_evidence_without_scene_object_coordinates() -> None:
     packet = build_label_tool_packet(map_bundle=MAP_BUNDLE, include_gaussian_scene=True)
     scene_evidence = packet["scene_evidence"]
@@ -422,10 +433,10 @@ def test_label_tool_html_template_is_external_and_supports_shape_moves() -> None
     assert "shape.geometry.polygon = geometry.polygon.map" in html
 
 
-def test_label_tool_rotates_polygons_without_rotated_box_schema() -> None:
+def test_label_tool_rotates_polygons_without_rotated_box_schema(tmp_path: Path) -> None:
     packet = build_label_tool_packet(
         map_bundle=MAP_BUNDLE,
-        review_manifest_path=REVIEW_MANIFEST,
+        semantics_path=_write_polygon_semantics(tmp_path),
     )
     html = render_label_tool_html(packet, image_data_url_value="data:image/png;base64,abc")
 
@@ -598,10 +609,10 @@ def test_label_draft_manifest_rejects_missing_or_invalid_polygon_role(
     assert any("polygon_role must be one of" in error for error in errors)
 
 
-def test_label_draft_manifest_rejects_verified_export() -> None:
+def test_label_draft_manifest_rejects_verified_export(tmp_path: Path) -> None:
     packet = build_label_tool_packet(
         map_bundle=MAP_BUNDLE,
-        review_manifest_path=REVIEW_MANIFEST,
+        semantics_path=_write_polygon_semantics(tmp_path),
     )
     manifest = json.loads(json.dumps(packet["initial_draft_manifest"]))
     manifest["labels"][0]["alignment_status"] = "verified"
@@ -665,3 +676,126 @@ def _copy_map12_bundle(tmp_path: Path) -> Path:
     map_dir = tmp_path / "robot_map_12"
     shutil.copytree(MAP_BUNDLE.parent, map_dir)
     return map_dir / "agibot"
+
+
+def _write_polygon_semantics(tmp_path: Path) -> Path:
+    path = tmp_path / "semantics.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "nav2_cleanup_semantics_v1",
+                "frame_ids": {"map": "map"},
+                "display_frame": None,
+                "rooms": [
+                    {
+                        "room_id": "meeting_room_a",
+                        "room_label": "Meeting room A",
+                        "category": "meeting_room",
+                        "navigation_area_id": "west_corridor",
+                        "asset_partition_id": "meeting_room_a",
+                        "semantic_source": "test_semantics",
+                        "polygon": [
+                            {"x": -8.0, "y": 0.0},
+                            {"x": -6.0, "y": 0.0},
+                            {"x": -6.0, "y": 2.0},
+                            {"x": -8.0, "y": 2.0},
+                        ],
+                    }
+                ],
+                "fixtures": [],
+                "inspection_waypoints": [],
+                "driveable_ways": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _write_fake_scene_topdown_packet(tmp_path: Path) -> Path:
+    render_dir = tmp_path / "scene-render"
+    request = build_topdown_camera_request(
+        scene_bounds=(-2.0, -4.0, 8.0, 4.0),
+        width=320,
+        height=240,
+        camera_height_m=18.0,
+        camera_y_offset_m=0.05,
+        target_z_m=0.6,
+        fov_deg=55.0,
+        camera_mode="near-vertical-topdown",
+    )
+    image_path = render_dir / "views" / "top2down.png"
+    image_path.parent.mkdir(parents=True)
+    Image.new("RGB", (320, 240), color=(220, 225, 230)).save(image_path)
+    packet = topdown_render_packet(
+        scene_usd=render_dir / "scene_gs.usda",
+        prepared_scene_usd=render_dir / "scene_gs.usda",
+        scene_bounds=(-2.0, -4.0, 8.0, 4.0),
+        request=request,
+        request_path=render_dir / "camera_request.json",
+        output_dir=render_dir,
+        nurec_crop={"status": "applied", "source": "explicit_nurec_crop_max_z"},
+        capture_result={
+            "ok": True,
+            "result_path": str(render_dir / "capture_result.json"),
+            "capture": {"images": {"top2down": str(image_path)}},
+        },
+    )
+    packet_path = render_dir / "scene_gaussian_topdown.json"
+    packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True), encoding="utf-8")
+    return packet_path
+
+
+def _fake_object_bounds_for_all_partitions() -> list[dict[str, object]]:
+    rows = [
+        ("meeting_room_a", "table", 4.0, -2.0, 7.0, 2.0),
+        ("meeting_room_b", "desk", 4.0, -5.0, 7.0, -3.5),
+        ("meeting_room_c", "tripod", 3.7, -8.0, 5.0, -6.7),
+        ("reception_area_a", "sofa", -1.5, -2.5, 2.0, 2.5),
+        ("short_corridor_a", "tv", -1.8, -3.5, -0.5, -2.7),
+        ("storage_room_a", "trash_bin", -1.7, 2.7, -0.6, 3.5),
+    ]
+    bounds = []
+    for partition_id, label, min_x, min_y, max_x, max_y in rows:
+        object_id = f"{partition_id}__{label}_1"
+        bounds.append(
+            {
+                "partition_id": partition_id,
+                "object_id": object_id,
+                "object_label": label,
+                "prim_path": f"/scene/{object_id}",
+                "bounds": {
+                    "min_x": min_x,
+                    "min_y": min_y,
+                    "min_z": 0.0,
+                    "max_x": max_x,
+                    "max_y": max_y,
+                    "max_z": 0.8,
+                },
+                "center": {
+                    "x": (min_x + max_x) / 2.0,
+                    "y": (min_y + max_y) / 2.0,
+                    "z": 0.4,
+                },
+            }
+        )
+    return bounds
+
+
+def _write_verified_alignment_artifact(tmp_path: Path) -> Path:
+    anchors = [
+        alignment_anchor("a1", (0.0, 0.0), (1.0, 2.0)),
+        alignment_anchor("a2", (2.0, 0.0), (3.0, 2.0)),
+        alignment_anchor("a3", (0.0, 2.0), (1.0, 4.0)),
+        alignment_anchor("a4", (2.0, 2.0), (3.0, 4.0)),
+        alignment_anchor("a5", (1.0, 3.0), (2.0, 5.0)),
+        alignment_anchor("a6", (3.0, 1.0), (4.0, 3.0)),
+    ]
+    payload = build_alignment_residuals(
+        correspondence_manifest(anchors=anchors),
+        map_bundle=MAP_BUNDLE,
+        output_dir=tmp_path / "alignment",
+    )
+    path = tmp_path / "alignment_residuals.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path

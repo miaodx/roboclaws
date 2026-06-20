@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 from pathlib import Path
 
@@ -18,11 +17,10 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     NAVIGATION_PROVENANCE,
 )
 from scripts.maps.compile_b1_map12_runtime_bundle import (
-    B1_MAP12_ALIGNMENT_REVIEW_SCHEMA,
     B1_ROBOT_CONSUMPTION_MANIFEST_SCHEMA,
     compile_runtime_bundle,
-    review_manifest_errors,
-    runtime_labels_from_review,
+    read_room_semantics_reference,
+    room_semantics_reference_errors,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -31,63 +29,69 @@ MAP12_BUNDLE = (
 )
 REMOVED_AUTHORED_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
 SCENE_ROOT = REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / "2rd_floor_seperated"
-REVIEW_MANIFEST = REPO_ROOT / "assets" / "maps" / "b1-map12-alignment-review.json"
+ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 
 
-def test_checked_in_review_manifest_blocks_shared_south_area_from_runtime() -> None:
-    manifest = _review_manifest()
+def test_checked_in_room_semantics_reference_is_dt_label_only() -> None:
+    payload = read_room_semantics_reference(ROOM_SEMANTICS)
+    rooms = {room["asset_partition_id"]: room for room in payload["rooms"]}
 
     assert not REMOVED_AUTHORED_BUNDLE.exists()
-    assert manifest["schema"] == B1_MAP12_ALIGNMENT_REVIEW_SCHEMA
+    assert payload["schema"] == "scene_room_semantic_overlay_overrides_v1"
+    assert payload["policy"]["source_of_truth"] == "digital_twin_scene_partitions"
+    assert payload["policy"]["contains_map12_candidate_polygons"] is False
+    assert payload["policy"]["contains_navigation_area_bindings"] is False
     assert (
-        review_manifest_errors(
-            manifest,
-            map_bundle=MAP12_BUNDLE,
-            scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+        room_semantics_reference_errors(
+            payload,
+            room_semantics_path=ROOM_SEMANTICS,
         )
         == []
     )
-
-    labels = runtime_labels_from_review(manifest, frame_id="map")
-    label_ids = {label["label_id"] for label in labels}
-
-    assert label_ids == {"meeting_room_a", "meeting_room_b", "meeting_room_c"}
-    assert {"reception_area_a", "short_corridor_a", "storage_room_a"} - label_ids == {
+    assert set(rooms) == {
+        "meeting_room_a",
+        "meeting_room_b",
+        "meeting_room_c",
         "reception_area_a",
         "short_corridor_a",
         "storage_room_a",
     }
+    assert rooms["meeting_room_b"]["room_label"] == "Open kitchen"
+    assert "厨房" in rooms["meeting_room_b"]["aliases"]
+    assert all("geometry" not in room and "polygon" not in room for room in rooms.values())
+    assert all(
+        "map_polygon" not in room and "navigation_area_id" not in room for room in rooms.values()
+    )
 
 
-def test_runtime_compiler_uses_vendor_map12_and_review_labels(tmp_path: Path) -> None:
+def test_runtime_compiler_uses_vendor_map12_and_dt_room_reference_without_projection(
+    tmp_path: Path,
+) -> None:
     result = compile_runtime_bundle(
         map_bundle=MAP12_BUNDLE,
         scene_root=SCENE_ROOT,
-        review_manifest_path=REVIEW_MANIFEST,
+        room_semantics_path=ROOM_SEMANTICS,
         output_dir=tmp_path / "runtime",
     )
     output_dir = Path(result["output_dir"])
     runtime_semantics = json.loads((output_dir / "semantics.json").read_text(encoding="utf-8"))
 
     assert result["status"] == "compiled"
+    assert result["room_reference_count"] == 6
     assert validate_nav2_map_bundle(output_dir).ok
-    assert len(runtime_semantics["rooms"]) == 3
+    assert runtime_semantics["rooms"] == []
     assert runtime_semantics["fixtures"] == []
     assert len(runtime_semantics["navigation_memory_anchors"]) == 9
     assert all(
         waypoint["waypoint_source"] == "generated_exploration_candidate"
         for waypoint in runtime_semantics["inspection_waypoints"]
     )
-    assert runtime_semantics["provenance"]["generated_from_review_manifest"] is True
+    assert runtime_semantics["provenance"]["room_semantics_reference"] == str(ROOM_SEMANTICS)
     assert runtime_semantics["provenance"]["raw_map_bundle"].endswith(
         "vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot"
     )
-    assert {label["label_id"] for label in runtime_semantics["review_labels"]} == {
-        "meeting_room_a",
-        "meeting_room_b",
-        "meeting_room_c",
-    }
+    assert runtime_semantics["review_labels"] == []
+    assert runtime_semantics["room_category_hints"] == []
     assert (output_dir / "b1_runtime_provenance.json").is_file()
     assert (output_dir / "b1_robot_consumption_manifest.json").is_file()
     assert not (output_dir / "review_labels_topdown.png").exists()
@@ -133,7 +137,7 @@ def test_runtime_compiler_materializes_verified_robot_consumption_proof(
     result = compile_runtime_bundle(
         map_bundle=MAP12_BUNDLE,
         scene_root=SCENE_ROOT,
-        review_manifest_path=REVIEW_MANIFEST,
+        room_semantics_path=ROOM_SEMANTICS,
         alignment_artifact_path=alignment_path,
         navigation_artifact_path=navigation_path,
         output_dir=tmp_path / "runtime",
@@ -179,14 +183,14 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
 ) -> None:
     projection_path = tmp_path / "semantic_projection.json"
     projection_path.write_text(
-        json.dumps(_semantic_projection_artifact(review_manifest_path=REVIEW_MANIFEST)),
+        json.dumps(_semantic_projection_artifact(room_semantics_path=ROOM_SEMANTICS)),
         encoding="utf-8",
     )
 
     result = compile_runtime_bundle(
         map_bundle=MAP12_BUNDLE,
         scene_root=SCENE_ROOT,
-        review_manifest_path=REVIEW_MANIFEST,
+        room_semantics_path=ROOM_SEMANTICS,
         semantic_projection_artifact_path=projection_path,
         output_dir=tmp_path / "runtime",
     )
@@ -229,21 +233,21 @@ def test_runtime_compiler_materializes_verified_room_semantic_projection(
     [
         (
             "{not-json\n",
-            r"review manifest source must contain valid JSON object: .*review\.json",
+            r"room semantics source must contain valid JSON object: .*room-semantics\.json",
         ),
         (
             "[]\n",
-            r"review manifest source must contain a JSON object: .*review\.json",
+            r"room semantics source must contain a JSON object: .*room-semantics\.json",
         ),
     ],
 )
-def test_runtime_compiler_rejects_bad_review_manifest_source(
+def test_runtime_compiler_rejects_bad_room_semantics_source(
     tmp_path: Path,
     source_text: str,
     expected_error: str,
 ) -> None:
-    review_path = tmp_path / "review.json"
-    review_path.write_text(source_text, encoding="utf-8")
+    room_semantics_path = tmp_path / "room-semantics.json"
+    room_semantics_path.write_text(source_text, encoding="utf-8")
 
     with pytest.raises(
         ValueError,
@@ -252,7 +256,7 @@ def test_runtime_compiler_rejects_bad_review_manifest_source(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=review_path,
+            room_semantics_path=room_semantics_path,
             output_dir=tmp_path / "runtime",
         )
 
@@ -306,7 +310,7 @@ def test_runtime_compiler_rejects_bad_robot_consumption_proof_artifact_sources(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             alignment_artifact_path=alignment_path,
             navigation_artifact_path=navigation_artifact_path,
             output_dir=tmp_path / "runtime",
@@ -326,7 +330,7 @@ def test_runtime_bundle_exports_canonical_runtime_map_prior_snapshot(
     result = compile_runtime_bundle(
         map_bundle=MAP12_BUNDLE,
         scene_root=SCENE_ROOT,
-        review_manifest_path=REVIEW_MANIFEST,
+        room_semantics_path=ROOM_SEMANTICS,
         alignment_artifact_path=alignment_path,
         navigation_artifact_path=navigation_path,
         output_dir=tmp_path / "runtime",
@@ -399,7 +403,7 @@ def test_runtime_compiler_rejects_missing_semantic_projection_artifact(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             semantic_projection_artifact_path=tmp_path / "missing.json",
             output_dir=tmp_path / "runtime",
         )
@@ -421,7 +425,7 @@ def test_runtime_compiler_rejects_malformed_semantic_projection_artifact(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             semantic_projection_artifact_path=projection_path,
             output_dir=tmp_path / "runtime",
         )
@@ -443,7 +447,7 @@ def test_runtime_compiler_rejects_non_object_semantic_projection_artifact(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             semantic_projection_artifact_path=projection_path,
             output_dir=tmp_path / "runtime",
         )
@@ -453,14 +457,16 @@ def test_runtime_compiler_rejects_semantic_projection_review_mismatch(
     tmp_path: Path,
 ) -> None:
     projection_path = tmp_path / "semantic_projection.json"
-    projection = _semantic_projection_artifact(review_manifest_path=tmp_path / "other_review.json")
+    projection = _semantic_projection_artifact(
+        room_semantics_path=tmp_path / "other_room_semantics.json"
+    )
     projection_path.write_text(json.dumps(projection), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="source_review_manifest must match"):
+    with pytest.raises(ValueError, match="source_room_semantics must match"):
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             semantic_projection_artifact_path=projection_path,
             output_dir=tmp_path / "runtime",
         )
@@ -470,7 +476,7 @@ def test_runtime_compiler_rejects_malformed_semantic_projection_room(
     tmp_path: Path,
 ) -> None:
     projection_path = tmp_path / "semantic_projection.json"
-    projection = _semantic_projection_artifact(review_manifest_path=REVIEW_MANIFEST)
+    projection = _semantic_projection_artifact(room_semantics_path=ROOM_SEMANTICS)
     projection["rooms"] = ["meeting_room_a"]
     projection_path.write_text(json.dumps(projection), encoding="utf-8")
 
@@ -478,7 +484,7 @@ def test_runtime_compiler_rejects_malformed_semantic_projection_room(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             semantic_projection_artifact_path=projection_path,
             output_dir=tmp_path / "runtime",
         )
@@ -522,7 +528,7 @@ def test_runtime_compiler_rejects_malformed_navigation_memory_sources(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             navigation_memory_path=navigation_memory_path,
             output_dir=tmp_path / "runtime",
         )
@@ -539,7 +545,7 @@ def test_runtime_compiler_rejects_malformed_navigation_memory_json(tmp_path: Pat
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             navigation_memory_path=navigation_memory_path,
             output_dir=tmp_path / "runtime",
         )
@@ -558,7 +564,7 @@ def test_runtime_compiler_rejects_navigation_without_alignment(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             navigation_artifact_path=navigation_path,
             output_dir=tmp_path / "runtime",
         )
@@ -580,53 +586,30 @@ def test_runtime_compiler_rejects_navigation_alignment_mismatch(
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=REVIEW_MANIFEST,
+            room_semantics_path=ROOM_SEMANTICS,
             alignment_artifact_path=alignment_path,
             navigation_artifact_path=navigation_path,
             output_dir=tmp_path / "runtime",
         )
 
 
-def test_runtime_compiler_rejects_duplicate_accepted_shared_area(tmp_path: Path) -> None:
-    manifest = _review_manifest()
-    for label in manifest["labels"]:
-        if label["label_id"] in {"reception_area_a", "storage_room_a"}:
-            label["review_status"] = "accepted"
+def test_runtime_compiler_rejects_room_semantics_with_map12_geometry(tmp_path: Path) -> None:
+    payload = read_room_semantics_reference(ROOM_SEMANTICS)
+    payload["rooms"][0]["map_polygon"] = [
+        {"x": 0.0, "y": 0.0},
+        {"x": 1.0, "y": 0.0},
+        {"x": 1.0, "y": 1.0},
+    ]
+    path = tmp_path / "room-semantics.json"
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    path = tmp_path / "review.json"
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="accepted labels share geometry"):
+    with pytest.raises(ValueError, match="must not carry Map12 geometry"):
         compile_runtime_bundle(
             map_bundle=MAP12_BUNDLE,
             scene_root=SCENE_ROOT,
-            review_manifest_path=path,
+            room_semantics_path=path,
             output_dir=tmp_path / "runtime",
         )
-
-
-def test_runtime_compiler_allows_explicit_composite_shared_area(tmp_path: Path) -> None:
-    manifest = _review_manifest()
-    for label in manifest["labels"]:
-        if label["label_id"] in {"reception_area_a", "storage_room_a"}:
-            label["review_status"] = "accepted"
-            label["shared_area_policy"] = "composite_area"
-
-    path = tmp_path / "review.json"
-    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-    result = compile_runtime_bundle(
-        map_bundle=MAP12_BUNDLE,
-        scene_root=SCENE_ROOT,
-        review_manifest_path=path,
-        output_dir=tmp_path / "runtime",
-    )
-
-    assert result["runtime_label_count"] == 5
-
-
-def _review_manifest() -> dict:
-    return copy.deepcopy(json.loads(REVIEW_MANIFEST.read_text(encoding="utf-8")))
 
 
 def _verified_alignment_artifact() -> dict:
@@ -731,17 +714,18 @@ def _navigation_artifact(tmp_path: Path, *, alignment_path: Path) -> dict:
     }
 
 
-def _semantic_projection_artifact(*, review_manifest_path: Path) -> dict:
-    review = _review_manifest()
-    label = next(item for item in review["labels"] if item["label_id"] == "meeting_room_a")
+def _semantic_projection_artifact(*, room_semantics_path: Path) -> dict:
     map_polygon = [
-        {"x": float(point["x"]), "y": float(point["y"])} for point in label["geometry"]["points"]
+        {"x": -8.0, "y": 0.0},
+        {"x": -6.0, "y": 0.0},
+        {"x": -6.0, "y": 2.0},
+        {"x": -8.0, "y": 2.0},
     ]
     return {
         "schema": "b1_map12_semantic_projection_v1",
         "status": "verified_room_semantics",
         "source_correspondences": "assets/maps/b1-map12-scene-correspondences.json",
-        "source_review_manifest": str(review_manifest_path),
+        "source_room_semantics": str(room_semantics_path),
         "source_map_frame": "robot_map_12",
         "target_scene_frame": "b1_rebuilt_scene_usd_world_candidate",
         "semantic_anchor_count": 1,
@@ -765,7 +749,7 @@ def _semantic_projection_artifact(*, review_manifest_path: Path) -> dict:
                 "alignment_status": "accepted_semantic_anchor",
                 "semantic_source": "reviewed_b1_map12_semantic_anchor",
                 "review_status": "accepted",
-                "source_label_id": "meeting_room_a",
+                "source_room_semantics_id": "meeting_room_a",
                 "source_anchor_ids": ["semantic_meeting_room_a"],
             }
         ],

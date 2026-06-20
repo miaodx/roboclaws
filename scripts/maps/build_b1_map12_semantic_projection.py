@@ -21,8 +21,9 @@ from scripts.maps.fit_b1_map12_scene_alignment import (  # noqa: E402
 )
 
 SEMANTIC_PROJECTION_SCHEMA = "b1_map12_semantic_projection_v1"
+ROOM_SEMANTICS_REFERENCE_SCHEMA = "scene_room_semantic_overlay_overrides_v1"
 DEFAULT_CORRESPONDENCES = Path("assets/maps/b1-map12-scene-correspondences.json")
-DEFAULT_REVIEW_MANIFEST = Path("assets/maps/b1-map12-alignment-review.json")
+DEFAULT_ROOM_SEMANTICS = Path("assets/maps/b1-map12-room-semantics.json")
 DEFAULT_OUTPUT = Path("output/b1-map12/semantic-projection/semantic_projection.json")
 
 
@@ -34,7 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         )
     )
     parser.add_argument("--correspondences", type=Path, default=DEFAULT_CORRESPONDENCES)
-    parser.add_argument("--review-manifest", type=Path, default=DEFAULT_REVIEW_MANIFEST)
+    parser.add_argument("--room-semantics", type=Path, default=DEFAULT_ROOM_SEMANTICS)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     return parser.parse_args(argv)
 
@@ -47,9 +48,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.correspondences,
                 label="correspondence manifest",
             ),
-            review_manifest=read_json_object(args.review_manifest, label="review manifest"),
+            room_semantics=read_json_object(args.room_semantics, label="room semantics"),
             correspondences_path=args.correspondences,
-            review_manifest_path=args.review_manifest,
+            room_semantics_path=args.room_semantics,
         )
     except (FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -74,28 +75,28 @@ def main(argv: list[str] | None = None) -> int:
 def build_semantic_projection(
     *,
     correspondences: dict[str, Any],
-    review_manifest: dict[str, Any],
+    room_semantics: dict[str, Any],
     correspondences_path: Path | None = None,
-    review_manifest_path: Path | None = None,
+    room_semantics_path: Path | None = None,
 ) -> dict[str, Any]:
     semantic_anchors = accepted_semantic_anchors(correspondences)
-    labels_by_partition = accepted_review_labels_by_partition(review_manifest)
+    rooms_by_partition = accepted_room_references_by_partition(room_semantics)
     anchors_by_partition: dict[str, list[dict[str, Any]]] = {}
-    missing_labels = []
+    missing_rooms = []
     for anchor in semantic_anchors:
         partition_id = str(anchor.get("asset_partition_id") or "")
-        label = labels_by_partition.get(partition_id)
-        if label is None:
-            missing_labels.append(partition_id)
+        room = rooms_by_partition.get(partition_id)
+        if room is None:
+            missing_rooms.append(partition_id)
             continue
         anchors_by_partition.setdefault(partition_id, []).append(anchor)
-    if missing_labels:
+    if missing_rooms:
         raise ValueError(
-            "accepted semantic anchors reference missing accepted review labels: "
-            + ", ".join(sorted(set(missing_labels)))
+            "accepted semantic anchors reference missing accepted DT room semantics: "
+            + ", ".join(sorted(set(missing_rooms)))
         )
     rooms = [
-        projected_room(anchors, labels_by_partition[partition_id])
+        projected_room(anchors, rooms_by_partition[partition_id])
         for partition_id, anchors in sorted(anchors_by_partition.items())
     ]
     if not rooms:
@@ -104,7 +105,7 @@ def build_semantic_projection(
         "schema": SEMANTIC_PROJECTION_SCHEMA,
         "status": "verified_room_semantics",
         "source_correspondences": str(correspondences_path or ""),
-        "source_review_manifest": str(review_manifest_path or ""),
+        "source_room_semantics": str(room_semantics_path or ""),
         "source_map_frame": str(correspondences.get("source_map_frame") or ""),
         "target_scene_frame": str(correspondences.get("target_scene_frame") or ""),
         "semantic_anchor_count": len(semantic_anchors),
@@ -144,65 +145,50 @@ def accepted_semantic_anchors(correspondences: dict[str, Any]) -> list[dict[str,
     return anchors
 
 
-def accepted_review_labels_by_partition(
-    review_manifest: dict[str, Any],
+def accepted_room_references_by_partition(
+    room_semantics: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
-    if review_manifest.get("schema") != "b1_map12_alignment_review_v1":
-        raise ValueError(f"unexpected review manifest schema: {review_manifest.get('schema')!r}")
+    if room_semantics.get("schema") != ROOM_SEMANTICS_REFERENCE_SCHEMA:
+        raise ValueError(f"unexpected room semantics schema: {room_semantics.get('schema')!r}")
     rows = {}
-    for label in review_manifest.get("labels") or []:
-        row = label if isinstance(label, dict) else {}
+    for room in room_semantics.get("rooms") or []:
+        row = room if isinstance(room, dict) else {}
         if row.get("review_status") != "accepted":
             continue
-        partition_id = accepted_review_label_partition_id(row)
-        validate_accepted_review_label(row)
+        partition_id = accepted_room_partition_id(row)
+        validate_accepted_room_reference(row)
         if partition_id in rows:
             raise ValueError(
-                f"duplicate accepted review label for scene partition {partition_id!r}"
+                f"duplicate accepted room semantics for scene partition {partition_id!r}"
             )
         rows[partition_id] = row
     if not rows:
-        raise ValueError("review manifest has no accepted room labels")
+        raise ValueError("room semantics reference has no accepted rooms")
     return rows
 
 
-def accepted_review_label_partition_id(row: dict[str, Any]) -> str:
-    partition_id = str(row.get("scene_partition_id") or "")
+def accepted_room_partition_id(row: dict[str, Any]) -> str:
+    partition_id = str(row.get("asset_partition_id") or row.get("room_id") or "")
     if not partition_id:
-        raise ValueError("accepted review labels need scene_partition_id")
+        raise ValueError("accepted room semantics need asset_partition_id")
     return partition_id
 
 
-def validate_accepted_review_label(row: dict[str, Any]) -> None:
-    if not row.get("label_id") or not row.get("map_area_id"):
-        raise ValueError("accepted review labels need label_id and map_area_id")
-    validate_accepted_review_label_geometry(row)
+def validate_accepted_room_reference(row: dict[str, Any]) -> None:
+    if not row.get("room_label") or not row.get("category"):
+        raise ValueError("accepted room semantics need room_label and category")
+    if "geometry" in row or "polygon" in row or "map_polygon" in row:
+        raise ValueError("room semantics reference must not carry Map12 geometry")
 
 
-def validate_accepted_review_label_geometry(row: dict[str, Any]) -> None:
-    geometry = row.get("geometry") if isinstance(row.get("geometry"), dict) else {}
-    points = geometry.get("points")
-    if geometry.get("type") != "map_polygon" or not isinstance(points, list) or len(points) < 3:
-        raise ValueError(
-            f"accepted review label {row.get('label_id')!r} needs map_polygon geometry"
-        )
-    if any(not isinstance(point, dict) or "x" not in point or "y" not in point for point in points):
-        raise ValueError(
-            f"accepted review label {row.get('label_id')!r} has malformed polygon point"
-        )
-
-
-def projected_room(anchors: list[dict[str, Any]], label: dict[str, Any]) -> dict[str, Any]:
+def projected_room(anchors: list[dict[str, Any]], room: dict[str, Any]) -> dict[str, Any]:
     navigation_area_ids = {str(anchor.get("navigation_area_id") or "") for anchor in anchors}
     if len(navigation_area_ids) != 1:
         raise ValueError(
             "accepted semantic anchors for a scene partition must share one navigation_area_id"
         )
     navigation_area_id = navigation_area_ids.pop()
-    if navigation_area_id != str(label.get("map_area_id") or ""):
-        raise ValueError(
-            "accepted semantic anchor navigation_area_id does not match review label map_area_id"
-        )
+    map_polygon = anchor_map_polygon(anchors)
     semantic_anchors = [
         {
             "source_anchor_id": str(anchor.get("anchor_id") or ""),
@@ -211,24 +197,46 @@ def projected_room(anchors: list[dict[str, Any]], label: dict[str, Any]) -> dict
         }
         for anchor in anchors
     ]
+    partition_id = str(anchors[0].get("asset_partition_id") or "")
     return {
-        "room_id": str(label.get("label_id") or anchors[0].get("asset_partition_id") or ""),
-        "room_label": str(label.get("room_label") or label.get("label_id") or ""),
-        "category": str(label.get("category") or ""),
+        "room_id": str(room.get("room_id") or partition_id),
+        "room_label": str(room.get("room_label") or partition_id),
+        "category": str(room.get("category") or ""),
         "navigation_area_id": navigation_area_id,
-        "asset_partition_id": str(anchors[0].get("asset_partition_id") or ""),
+        "asset_partition_id": partition_id,
         "semantic_anchor_count": len(anchors),
         "semantic_anchors": semantic_anchors,
-        "map_polygon": [
-            {"x": float(point["x"]), "y": float(point["y"])}
-            for point in dict(label.get("geometry") or {}).get("points") or []
-        ],
+        "map_polygon": map_polygon,
         "alignment_status": "accepted_semantic_anchor",
         "semantic_source": "reviewed_b1_map12_semantic_anchor",
         "review_status": "accepted",
-        "source_label_id": str(label.get("label_id") or ""),
+        "source_room_semantics_id": partition_id,
         "source_anchor_ids": [item["source_anchor_id"] for item in semantic_anchors],
     }
+
+
+def anchor_map_polygon(anchors: list[dict[str, Any]]) -> list[dict[str, float]]:
+    polygons = [anchor.get("map_polygon") for anchor in anchors if "map_polygon" in anchor]
+    if not polygons:
+        raise ValueError("accepted semantic anchors need explicit map_polygon")
+    first = normalize_map_polygon(polygons[0])
+    for polygon in polygons[1:]:
+        if normalize_map_polygon(polygon) != first:
+            raise ValueError(
+                "accepted semantic anchors for a scene partition must share one map_polygon"
+            )
+    return first
+
+
+def normalize_map_polygon(payload: Any) -> list[dict[str, float]]:
+    if not isinstance(payload, list) or len(payload) < 3:
+        raise ValueError("map_polygon must contain at least three points")
+    polygon = []
+    for point in payload:
+        if not isinstance(point, dict) or "x" not in point or "y" not in point:
+            raise ValueError("map_polygon points must contain x/y")
+        polygon.append({"x": float(point["x"]), "y": float(point["y"])})
+    return polygon
 
 
 if __name__ == "__main__":

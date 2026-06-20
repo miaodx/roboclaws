@@ -85,7 +85,6 @@ def test_molmospaces_worlds_expose_only_mujoco_while_b1_exposes_isaac() -> None:
     assert b1.backend == "isaaclab"
     assert b1.implementation_backend == "isaaclab_subprocess"
     assert "map_bundle=vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot" in b1.overrides
-    assert "b1_alignment_review=assets/maps/b1-map12-alignment-review.json" in b1.overrides
     assert not any(item.startswith("b1_alignment_artifact=") for item in b1.overrides)
     assert not any(item.startswith("b1_navigation_artifact=") for item in b1.overrides)
     assert not any(item.startswith("b1_semantic_projection_artifact=") for item in b1.overrides)
