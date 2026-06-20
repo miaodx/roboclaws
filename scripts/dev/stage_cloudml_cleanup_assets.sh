@@ -14,7 +14,8 @@ stage_dir="${ROBOCLAWS_STAGE_DIR:-/tmp/roboclaws-cloudml-cleanup-assets-${code_s
 registry_repo="${ROBOCLAWS_EVAL_REGISTRY_REPO:-micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging}"
 image_url="${ROBOCLAWS_CLOUDML_IMAGE_URL:-${registry_repo}:roboclaws-eval-env-$(git -C "$repo_root" rev-parse --short=8 HEAD)-code-${code_short}-${date_stamp}}"
 juicefs_url="${ROBOCLAWS_JUICEFS_URL:-https://cloud.mioffice.cn/juicefs/vol-detail?cluster=wlcb-cloudml&name=robot-intelligent-planning-data&path=/dongxu/gpu_perf/gpu_perf/${input_rel}}"
-materialize_assets="${ROBOCLAWS_STAGE_MATERIALIZE_ASSETS:-false}"
+asset_mode="${ROBOCLAWS_STAGE_ASSET_MODE:-archive}"
+archive_name="${ROBOCLAWS_STAGE_ARCHIVE_NAME:-cleanup-focused-molmospaces-val0.tar.gz}"
 include_grasps="${ROBOCLAWS_STAGE_INCLUDE_GRASPS:-false}"
 run_upload_dry_run="${ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN:-true}"
 
@@ -24,16 +25,17 @@ Usage:
   scripts/dev/stage_cloudml_cleanup_assets.sh
 
 Prepares a local CloudML cleanup asset staging directory and, by default, asks
-executor for a JuiceFS upload dry-run. The default path does not copy the large
-MolmoSpaces object cache; it writes a manifest and small repo map assets only.
+executor for a JuiceFS upload dry-run. The default mode writes one MolmoSpaces
+cleanup asset archive plus a sha256 file and manifest, avoiding a 100k-file
+JuiceFS upload.
 
 Environment overrides:
   ROBOCLAWS_STAGE_DIR                 Default: /tmp/roboclaws-cloudml-cleanup-assets-<code>-<date>
   ROBOCLAWS_JUICEFS_INPUT_REL         Default: roboclaws-assets/cleanup-focused
                                       under the CloudML /mnt/cloudml/input mount.
   ROBOCLAWS_JUICEFS_URL               Full cloud.mioffice.cn JuiceFS vol-detail URL.
-  ROBOCLAWS_STAGE_MATERIALIZE_ASSETS  Set true to dereference/copy real MolmoSpaces
-                                      cleanup assets into the staging directory.
+  ROBOCLAWS_STAGE_ASSET_MODE          archive|manifest-only. Default: archive.
+  ROBOCLAWS_STAGE_ARCHIVE_NAME        Default: cleanup-focused-molmospaces-val0.tar.gz
   ROBOCLAWS_STAGE_INCLUDE_GRASPS      Set true to include grasps/droid when materializing.
   ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN  Set false to skip executor upload dry-run.
   ROBOCLAWS_EXECUTOR_ROOT             Default: /home/mi/executor
@@ -77,29 +79,15 @@ require_path() {
   fi
 }
 
-copy_tree_following_symlinks() {
-  local src="$1"
-  local dst="$2"
-  require_path "$src" "$src"
-  mkdir -p "$dst"
-  if command -v rsync >/dev/null 2>&1; then
-    rsync -aL "$src"/ "$dst"/
-  else
-    cp -aL "$src"/. "$dst"/
+clean_stage_dir() {
+  local path="$1"
+  if [[ -z "$path" || "$path" == "/" || "$path" == "$repo_root" || "$path" == "$HOME" ]]; then
+    echo "error: refusing unsafe stage dir: $path" >&2
+    exit 1
   fi
+  rm -rf "$path"
+  mkdir -p "$path/archives"
 }
-
-copy_file_following_symlink() {
-  local src="$1"
-  local dst="$2"
-  require_path "$src" "$src"
-  mkdir -p "$(dirname "$dst")"
-  cp -L "$src" "$dst"
-}
-
-mkdir -p "$stage_dir"
-mkdir -p "$stage_dir/maps"
-copy_tree_following_symlinks "$repo_root/assets/maps/molmospaces" "$stage_dir/maps/molmospaces"
 
 require_path "$assets_source/scenes/procthor-10k-val/val_0.xml" \
   "MolmoSpaces val_0 scene XML"
@@ -110,33 +98,45 @@ require_path "$assets_source/objects/thor" \
 require_path "$assets_source/robots/rby1m" \
   "MolmoSpaces RBY1M robot assets"
 
-materialized_paths=()
-if [[ "$materialize_assets" == "true" ]]; then
-  copy_file_following_symlink \
-    "$assets_source/scenes/procthor-10k-val/val_0.xml" \
-    "$stage_dir/molmospaces/assets/scenes/procthor-10k-val/val_0.xml"
-  copy_file_following_symlink \
-    "$assets_source/scenes/procthor-10k-val/val_0.json" \
-    "$stage_dir/molmospaces/assets/scenes/procthor-10k-val/val_0.json"
-  copy_tree_following_symlinks \
-    "$assets_source/objects/thor" \
-    "$stage_dir/molmospaces/assets/objects/thor"
-  copy_tree_following_symlinks \
-    "$assets_source/robots/rby1m" \
-    "$stage_dir/molmospaces/assets/robots/rby1m"
-  materialized_paths+=(
-    "molmospaces/assets/scenes/procthor-10k-val/val_0.xml"
-    "molmospaces/assets/scenes/procthor-10k-val/val_0.json"
-    "molmospaces/assets/objects/thor"
-    "molmospaces/assets/robots/rby1m"
-  )
-  if [[ "$include_grasps" == "true" ]]; then
-    copy_tree_following_symlinks \
-      "$assets_source/grasps/droid" \
-      "$stage_dir/molmospaces/assets/grasps/droid"
-    materialized_paths+=("molmospaces/assets/grasps/droid")
-  fi
-fi
+clean_stage_dir "$stage_dir"
+
+archive_path=""
+archive_sha256=""
+archive_bytes=""
+staged_paths=()
+case "$asset_mode" in
+  archive)
+    archive_path="$stage_dir/archives/$archive_name"
+    archive_tmp="${archive_path}.tmp"
+    tar_paths=(
+      "scenes/procthor-10k-val/val_0.xml"
+      "scenes/procthor-10k-val/val_0.json"
+      "objects/thor"
+      "robots/rby1m"
+    )
+    if [[ "$include_grasps" == "true" ]]; then
+      require_path "$assets_source/grasps/droid" "MolmoSpaces DROID grasp assets"
+      tar_paths+=("grasps/droid")
+    fi
+    tar -czf "$archive_tmp" \
+      --dereference \
+      --transform 's#^#molmospaces/assets/#' \
+      -C "$assets_source" \
+      "${tar_paths[@]}"
+    mv "$archive_tmp" "$archive_path"
+    archive_sha256="$(sha256sum "$archive_path" | awk '{print $1}')"
+    archive_bytes="$(stat -c '%s' "$archive_path")"
+    printf '%s  %s\n' "$archive_sha256" "$archive_name" > "${archive_path}.sha256"
+    staged_paths+=("archives/$archive_name" "archives/${archive_name}.sha256")
+    ;;
+  manifest-only)
+    ;;
+  *)
+    echo "error: unsupported ROBOCLAWS_STAGE_ASSET_MODE '$asset_mode'" >&2
+    echo "expected archive|manifest-only" >&2
+    exit 1
+    ;;
+esac
 
 manifest_path="$stage_dir/roboclaws_cloudml_cleanup_assets.json"
 export ROBOCLAWS_STAGE_MANIFEST_PATH="$manifest_path"
@@ -147,9 +147,13 @@ export ROBOCLAWS_STAGE_CODE_COMMIT="$code_commit"
 export ROBOCLAWS_STAGE_IMAGE_URL="$image_url"
 export ROBOCLAWS_STAGE_ASSETS_SOURCE="$assets_source"
 export ROBOCLAWS_STAGE_CACHE_SOURCE="$cache_source"
-export ROBOCLAWS_STAGE_MATERIALIZE_ASSETS="$materialize_assets"
+export ROBOCLAWS_STAGE_ASSET_MODE="$asset_mode"
+export ROBOCLAWS_STAGE_ARCHIVE_NAME="$archive_name"
+export ROBOCLAWS_STAGE_ARCHIVE_PATH="$archive_path"
+export ROBOCLAWS_STAGE_ARCHIVE_SHA256="$archive_sha256"
+export ROBOCLAWS_STAGE_ARCHIVE_BYTES="$archive_bytes"
 export ROBOCLAWS_STAGE_INCLUDE_GRASPS="$include_grasps"
-export ROBOCLAWS_STAGE_MATERIALIZED_PATHS="$(IFS=:; echo "${materialized_paths[*]}")"
+export ROBOCLAWS_STAGE_STAGED_PATHS="$(IFS=:; echo "${staged_paths[*]}")"
 
 "$repo_root/.venv/bin/python" - <<'PY'
 import json
@@ -160,9 +164,8 @@ from pathlib import Path
 
 repo_root = Path(os.environ.get("PWD", ".")).resolve()
 stage_dir = Path(os.environ["ROBOCLAWS_STAGE_DIR_RESOLVED"]).resolve()
-materialized = [
-    item for item in os.environ["ROBOCLAWS_STAGE_MATERIALIZED_PATHS"].split(":") if item
-]
+staged_paths = [item for item in os.environ["ROBOCLAWS_STAGE_STAGED_PATHS"].split(":") if item]
+archive_path = os.environ["ROBOCLAWS_STAGE_ARCHIVE_PATH"]
 
 def du(path: str) -> str:
     candidate = Path(path).expanduser()
@@ -181,14 +184,12 @@ payload = {
         "input_rel": os.environ["ROBOCLAWS_STAGE_INPUT_REL"],
         "url": os.environ["ROBOCLAWS_STAGE_JUICEFS_URL"],
         "cloudml_mount_path": "/mnt/cloudml/input",
-        "expected_molmospaces_assets_dir": (
+        "archive_path": (
             f"/mnt/cloudml/input/{os.environ['ROBOCLAWS_STAGE_INPUT_REL']}"
-            "/molmospaces/assets"
-        ),
-        "expected_molmospaces_cache_dir": (
-            f"/mnt/cloudml/input/{os.environ['ROBOCLAWS_STAGE_INPUT_REL']}"
-            "/molmospaces/cache"
-        ),
+            f"/archives/{os.environ['ROBOCLAWS_STAGE_ARCHIVE_NAME']}"
+        )
+        if os.environ["ROBOCLAWS_STAGE_ASSET_MODE"] == "archive"
+        else "",
     },
     "git": {
         "code_commit": os.environ["ROBOCLAWS_STAGE_CODE_COMMIT"],
@@ -204,16 +205,22 @@ payload = {
         "molmospaces_cache_size": du(os.environ["ROBOCLAWS_STAGE_CACHE_SOURCE"]),
     },
     "staged_assets": {
-        "materialized": os.environ["ROBOCLAWS_STAGE_MATERIALIZE_ASSETS"] == "true",
+        "mode": os.environ["ROBOCLAWS_STAGE_ASSET_MODE"],
         "include_grasps": os.environ["ROBOCLAWS_STAGE_INCLUDE_GRASPS"] == "true",
-        "paths": materialized,
-        "repo_map_assets": "maps/molmospaces",
+        "paths": staged_paths,
+        "archive": {
+            "local_path": archive_path,
+            "name": os.environ["ROBOCLAWS_STAGE_ARCHIVE_NAME"],
+            "sha256": os.environ["ROBOCLAWS_STAGE_ARCHIVE_SHA256"],
+            "bytes": int(os.environ["ROBOCLAWS_STAGE_ARCHIVE_BYTES"] or "0"),
+            "cloudml_cache_root": "/mnt/cloudml/output/roboclaws-asset-cache/cleanup-focused",
+        },
     },
     "required_cloudml_checks": [
-        "molmospaces/assets/scenes/procthor-10k-val/val_0.xml",
-        "molmospaces/assets/scenes/procthor-10k-val/val_0.json",
-        "molmospaces/assets/objects/thor",
-        "molmospaces/assets/robots/rby1m",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0.xml",
+        "asset-cache/molmospaces/assets/scenes/procthor-10k-val/val_0.json",
+        "asset-cache/molmospaces/assets/objects/thor",
+        "asset-cache/molmospaces/assets/robots/rby1m",
         "repo:assets/maps/molmospaces/procthor-10k-val/0/map.yaml",
         "repo:assets/maps/molmospaces/procthor-10k-val/0/semantics.json",
     ],
@@ -246,7 +253,12 @@ PY
 echo "stage_dir=$stage_dir"
 echo "manifest=$manifest_path"
 echo "juicefs_url=$juicefs_url"
-echo "materialized_assets=$materialize_assets"
+echo "asset_mode=$asset_mode"
+if [[ -n "$archive_path" ]]; then
+  echo "archive=$archive_path"
+  echo "archive_sha256=$archive_sha256"
+  echo "archive_bytes=$archive_bytes"
+fi
 echo "upload_dry_run_command=EXECUTOR_CONFIG_ROOT=$executor_config_root EXECUTOR_CONFIG_PATH=$executor_config_path $executor_root/execute.py storage juicefs upload --local_dir '$stage_dir' --url '$juicefs_url' --dry_run --json"
 
 if [[ "$run_upload_dry_run" == "true" ]]; then
