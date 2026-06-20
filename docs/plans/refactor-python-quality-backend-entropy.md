@@ -22,6 +22,10 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the OpenClaw chat tail source slice:
+  parseable non-object Gateway session JSONL rows now render as flagged invalid
+  row evidence instead of crashing the host-side transcript tailer, while
+  malformed JSON keeps the existing compact invalid-row output.
 - Current shared-checkout note after the model-matrix provider response source
   slice: non-stream benchmark HTTP responses now reuse the shared JSON-object
   text helper instead of raw `json.loads`, so malformed or non-object provider

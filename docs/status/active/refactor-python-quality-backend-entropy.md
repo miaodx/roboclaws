@@ -17,7 +17,16 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Model-matrix benchmark non-stream provider responses now route
+2026-06-21: OpenClaw chat transcript tailing now treats parseable non-object
+session rows as flagged invalid row evidence instead of raising `AttributeError`
+while pretty-printing the Gateway session JSONL stream. Malformed JSON keeps
+the existing `?? invalid json` output, while non-object JSON now prints
+`?? invalid json object: <type>` and tailing continues. Focused proof passed:
+OpenClaw tailer contract tests, touched-file ruff, touched-file format check,
+diff check, and ratchet summary. Current ratchet before final slice closeout:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Model-matrix benchmark non-stream provider responses now route
 through the shared JSON-object text helper instead of raw `json.loads`.
 Malformed or non-object HTTP JSON responses now become source-labelled FAIL
 rows tied to the case id and benchmark layer before output extraction, token
@@ -696,6 +705,8 @@ diagnostics.
 - `tests/unit/molmo_cleanup/test_relative_navigation_worker_routing.py`
 - `scripts/dev/benchmark_model_matrix.py`
 - `tests/unit/providers/test_model_matrix_benchmark.py`
+- `scripts/openclaw/tail-openclaw-chat.py`
+- `tests/contract/openclaw/test_tail_openclaw_chat.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_generated_mess_scenario_state.py`

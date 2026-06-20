@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: OpenClaw chat transcript tailing now treats parseable non-object
+  Gateway session JSONL rows as flagged invalid row evidence instead of
+  raising `AttributeError` while pretty-printing the session stream. Malformed
+  JSON keeps the existing `?? invalid json` output, while non-object JSON now
+  prints `?? invalid json object: <type>` and tailing continues. Owner layer:
+  Harness recipes / OpenClaw transcript evidence. Behavior-change class:
+  internal evidence-tailer source-reader hardening with fail-aloud non-object
+  row diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  OpenClaw tailer contract tests, touched-file ruff/format checks,
+  changed-code cleanup review, `git diff --check`, and ratchet. Reopen only
+  if `scripts/openclaw/tail-openclaw-chat.py` can again crash on parseable
+  non-object Gateway session JSONL rows or silently omit malformed transcript
+  row evidence.
+
 - 2026-06-21: Model-matrix benchmark non-stream provider responses now route
   through the shared JSON-object text helper instead of raw `json.loads`.
   Malformed or non-object HTTP JSON responses now become source-labelled FAIL
