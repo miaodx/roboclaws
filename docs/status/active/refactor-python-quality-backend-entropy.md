@@ -17,22 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console MolmoSpaces scene preview rendering now routes
+2026-06-20: B1 / Map 12 readiness inspection now routes
+`navigation_memory.json` through the shared navigation-memory source reader,
+preserving accepted `items`/`catalog.navigation_memory` shapes while failing
+malformed or non-object memory sources with canonical path-labelled diagnostics.
+Focused B1 readiness contract tests, touched-file ruff, touched-file format
+checks, diff check, and the ratchet summary passed. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules.
+
+Previous slice: Operator-console MolmoSpaces scene preview rendering now routes
 required `molmospaces_backend_state.json` reads through the shared JSON-source
 helper, so missing, malformed, or non-object backend state fails before scene
-alignment or top-down camera request construction. Focused operator-console
-preview source tests, touched-file ruff, touched-file format checks, diff
-check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
-violations, 80 oversized modules.
-
-Previous slice: Scene-sampler facade no longer carries the unused permissive
-`_read_json_if_exists` raw JSON helper or direct `json` import; active preview
-metadata reads already route through focused strict source readers.
+alignment or top-down camera request construction.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console MolmoSpaces preview backend-state reader slice.
+committing the B1 readiness navigation-memory source-reader slice.
 
 ## Touched Areas
 

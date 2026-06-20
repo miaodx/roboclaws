@@ -17,6 +17,7 @@ from PIL import Image, ImageStat
 
 from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle import parse_map_yaml
+from roboclaws.maps.navigation_memory import navigation_memory_items, read_navigation_memory
 from roboclaws.maps.rasterize import load_pgm
 
 READINESS_SCHEMA = "b1_map12_digital_twin_readiness_v1"
@@ -522,8 +523,11 @@ def inspect_map12(map12_root: Path) -> dict[str, Any]:
         origin_x=float(origin[0]),
         origin_y=float(origin[1]),
     )
-    memory = json.loads(memory_path.read_text(encoding="utf-8"))
-    anchors = [_anchor_summary(item, index) for index, item in enumerate(memory.get("items") or [])]
+    memory = read_navigation_memory(memory_path)
+    anchors = [
+        _anchor_summary(item, index)
+        for index, item in enumerate(navigation_memory_items(memory), start=1)
+    ]
     nav_goal_bounds = _xy_pose_bounds([anchor["nav_goal"] for anchor in anchors])
     pose_bounds = _xy_pose_bounds([anchor["pose"] for anchor in anchors])
     return {

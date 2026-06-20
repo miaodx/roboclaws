@@ -111,6 +111,36 @@ def test_readiness_cli_rejects_missing_navigation_artifact_source(tmp_path: Path
     assert not output_path.exists()
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    (
+        ("{not-json\n", "navigation_memory.json must contain valid JSON object"),
+        ("[]\n", "navigation_memory.json must contain a JSON object"),
+    ),
+)
+def test_readiness_cli_rejects_bad_navigation_memory_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    b1_root = tmp_path / "b1"
+    map12_root = _write_map12_root(tmp_path)
+    output_path = tmp_path / "readiness.json"
+    memory_path = map12_root / "navigation_memory.json"
+    memory_path.write_text(source, encoding="utf-8")
+
+    completed = _run_readiness(
+        b1_root=b1_root,
+        map12_root=map12_root,
+        output_path=output_path,
+    )
+
+    assert completed.returncode == 2
+    assert message in completed.stderr
+    assert str(memory_path) in completed.stderr
+    assert not output_path.exists()
+
+
 def _run_readiness(
     *,
     b1_root: Path,

@@ -6125,6 +6125,16 @@ logs before choosing the next slice.
   ruff, format check, diff check, and ratchet. Reopen only if
   `render_scene_previews.py` regains direct `json.loads(read_text(...))`
   parsing for MolmoSpaces backend-state artifacts.
+- B1 / Map 12 readiness inspection now routes `navigation_memory.json` through
+  the shared navigation-memory source reader, preserving accepted
+  `items`/`catalog.navigation_memory` shapes while failing malformed or
+  non-object memory sources with canonical path-labelled diagnostics. Owner
+  layer: Artifacts, reports, and eval suites / readiness artifact contract.
+  Behavior-change class: strict source-reader consolidation. Metric: ratchet
+  remains at 0 Ruff complexity rows and 80 oversized modules. Proof: focused
+  B1 readiness contract tests, ruff, format check, diff check, and ratchet.
+  Reopen only if `check_b1_map12_readiness.py` regains direct
+  `json.loads(read_text(...))` parsing for navigation-memory artifacts.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
