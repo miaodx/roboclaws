@@ -22,12 +22,12 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80.
-- Current shared-checkout note after the B1 base-navigation label validation
-  helper split:
+- Current shared-checkout note after the scene-sampler facade dead raw-reader
+  removal slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 0 Ruff complexity rows and 80 oversized modules. The touched
-  B1 base-navigation map builder and focused contract tests remain under the
-  current ratchet ceiling.
+  scene-sampler facade and focused launch tests remain under the current
+  ratchet ceiling.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -323,6 +323,10 @@ Latest quality snapshot from 2026-06-20:
   navigation-area, usage, identity, and geometry checks into focused helpers,
   preserving existing validation errors while clearing the two C901 rows
   introduced by the concurrent base-navigation map builder commit.
+  Scene-sampler facade no longer carries the unused permissive
+  `_read_json_if_exists` raw JSON helper or its direct `json` import; active
+  preview metadata reads already route through their focused strict source
+  readers.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.

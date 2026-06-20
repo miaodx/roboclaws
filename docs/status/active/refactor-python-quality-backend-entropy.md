@@ -17,22 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 base-navigation label validation now splits source,
+2026-06-20: Scene-sampler facade no longer carries the unused permissive
+`_read_json_if_exists` raw JSON helper or direct `json` import; active preview
+metadata reads already route through focused strict source readers. Exact
+no-reference search, focused scene-sampler preview/selection tests, touched-file
+ruff, touched-file format checks, diff check, and the ratchet summary passed.
+Current ratchet: 0 Ruff complexity violations, 80 oversized modules.
+
+Previous slice: B1 base-navigation label validation now splits source,
 label-row, navigation-area, usage, identity, and geometry checks into focused
 helpers, preserving existing validation errors while clearing the two C901 rows
-introduced by the concurrent base-navigation map builder commit. Focused B1
-base-navigation contract tests, touched-file ruff, touched-file format checks,
-diff check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
-violations, 80 oversized modules.
-
-Previous slice: Scene-sampler prefilter optional JSON sidecar loading now
-routes through the shared source helper while preserving missing, unreadable,
-malformed, and non-object sources as empty optional metadata.
+introduced by the concurrent base-navigation map builder commit.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the B1 base-navigation label validation helper split.
+committing the scene-sampler facade dead raw-reader removal slice.
 
 ## Touched Areas
 

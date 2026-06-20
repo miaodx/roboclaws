@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import platform
 import sys
 from pathlib import Path
@@ -1245,14 +1244,6 @@ def _preview_metadata(scene_index: int) -> dict[str, Any]:
     if payload.get("backend") != PRIMARY_MOLMOSPACES_BACKEND:
         raise ValueError(f"preview {path} is not for backend={PRIMARY_MOLMOSPACES_BACKEND}")
     return payload
-
-
-def _read_json_if_exists(path: Path) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def _ready_row_preview_metadata(*, source: str, scene_index: int) -> dict[str, Any]:

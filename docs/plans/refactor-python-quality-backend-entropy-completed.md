@@ -6105,6 +6105,16 @@ logs before choosing the next slice.
   ratchet. Reopen only if `validate_base_navigation_labels` or
   `_label_contract_errors` regains C901 complexity or base-navigation label
   validation drifts from the checked-in contract tests.
+- Scene-sampler facade no longer carries the unused permissive
+  `_read_json_if_exists` raw JSON helper or its direct `json` import; active
+  preview metadata reads already route through strict scanner/preview source
+  readers. Owner layer: Runnable Surfaces And Presets / launch scene sampler.
+  Behavior-change class: no-caller dead raw-reader removal. Metric: ratchet
+  remains at 0 Ruff complexity rows and 80 oversized modules. Proof: exact
+  no-reference search for `_read_json_if_exists` in `scene_sampler.py`,
+  focused scene-sampler preview/selection tests, ruff, format check, diff
+  check, and ratchet. Reopen only if `scene_sampler.py` reintroduces a local
+  permissive raw JSON reader instead of using focused source readers.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
