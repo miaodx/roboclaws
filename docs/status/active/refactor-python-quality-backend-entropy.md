@@ -17,12 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 digital-twin readiness now uses the shared
+2026-06-20: B1 navigation report rendering now uses the shared
 `roboclaws.core.json_sources.read_json_object` source reader for explicit
-alignment artifacts and navigation artifacts. Missing, malformed, or parseable
-non-object artifacts keep path-labelled source errors under the canonical
-helper wording, and the readiness script no longer carries a duplicate local
-JSON-object reader. Focused B1 readiness and core JSON-source tests,
+navigation artifacts, optional readiness artifacts, and optional waypoint pose
+request artifacts. Missing, malformed, or parseable non-object artifacts keep
+path-labelled source errors under the canonical helper wording, and the report
+renderer no longer carries a duplicate local JSON-object reader. Focused B1
+navigation report and core JSON-source tests,
 touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 

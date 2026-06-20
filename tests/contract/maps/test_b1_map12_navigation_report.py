@@ -181,7 +181,7 @@ def test_b1_map12_navigation_report_rejects_explicit_missing_optional_artifact(
         run_dir=run_dir,
     )
 
-    assert f"readiness artifact missing: {missing_readiness}" in message
+    assert f"readiness artifact source is missing: {missing_readiness}" in message
     assert not (run_dir / "report.html").exists()
 
 
@@ -194,7 +194,7 @@ def test_b1_map12_navigation_report_rejects_malformed_navigation_artifact(
 
     message = _assert_render_fails_without_report(["--run-dir", str(run_dir)], run_dir=run_dir)
 
-    assert "navigation artifact must contain valid JSON object" in message
+    assert "navigation artifact source must contain valid JSON object" in message
     assert not (run_dir / "report.html").exists()
 
 
@@ -211,7 +211,7 @@ def test_b1_map12_navigation_report_rejects_present_malformed_default_sidecar(
 
     message = _assert_render_fails_without_report(["--run-dir", str(run_dir)], run_dir=run_dir)
 
-    assert "readiness artifact must contain valid JSON object" in message
+    assert "readiness artifact source must contain valid JSON object" in message
     assert not (run_dir / "report.html").exists()
 
 
@@ -237,14 +237,17 @@ def test_b1_map12_navigation_report_rejects_non_object_waypoint_pose_requests(
         run_dir=run_dir,
     )
 
-    assert f"waypoint pose request artifact must contain a JSON object: {pose_requests}" in message
+    assert (
+        f"waypoint pose request artifact source must contain a JSON object: {pose_requests}"
+        in message
+    )
     assert not (run_dir / "report.html").exists()
 
 
 def _assert_render_fails_without_report(argv: list[str], *, run_dir: Path) -> str:
     try:
         render_main(argv)
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         message = str(exc)
     else:  # pragma: no cover - source truth must fail before report writes
         raise AssertionError("expected navigation report rendering to fail")
