@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the representative visual-grounding corpus
+- Current shared-checkout note after the shared navigation-memory
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -104,6 +104,10 @@ Latest quality snapshot from 2026-06-20:
   snapshot, and source-frame preview reads through the shared JSON-source
   helper, so malformed or non-object `semantics.json` sources fail with
   canonical path-labelled source errors before projection or preview use.
+  The shared Agibot navigation-memory source owner now routes required
+  `navigation_memory.json` object reads through the shared JSON-object helper
+  while preserving existing navigation-memory-specific diagnostics for
+  downstream map/runtime consumers.
   Compressed Agibot raw-map loading now routes Map 12 consistency and Agibot
   Nav2 bundle export reads through a shared gzip JSON-object helper, so
   malformed, non-object, missing, or non-gzip `raw_map.json.gz` sources fail

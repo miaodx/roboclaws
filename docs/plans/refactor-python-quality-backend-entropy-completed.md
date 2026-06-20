@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Shared Agibot navigation-memory source loading now routes
+  required `navigation_memory.json` object reads through
+  `roboclaws.core.json_sources.read_json_object`. Existing
+  navigation-memory-specific error wording remains stable for missing,
+  malformed, non-object, item-list, and point-geometry failures across
+  runtime-prior, consistency, label-tool, and B1 runtime-bundle consumers.
+  Owner layer: Runtime Artifacts at the map source parsing boundary.
+  Behavior-change class: shared source-reader consolidation with stable
+  consumer diagnostics. Metric: current shared-checkout ratchet summary
+  reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused navigation-memory consumer contract tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/maps/navigation_memory.py` regains local raw JSON-object parsing
+  or downstream navigation-memory source diagnostics drift from the current
+  consumer-specific wording.
+
 - 2026-06-20: Representative visual-grounding corpus building now routes
   discovered cleanup `run_result.json` sources through
   `roboclaws.core.json_sources.read_json_object`. Malformed or non-object
