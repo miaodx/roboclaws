@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Grasp initial-contact diagnostics now route parent-side child
+  `initial_contact_probe_result.json` reads through
+  `roboclaws.core.json_sources.read_json_object`. Present malformed or
+  non-object child probe results now fail with path-labelled source errors
+  before variant summary/report assembly; the embedded MuJoCo child script and
+  candidate-grasp parsing behavior remain unchanged. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud source-reader
+  consolidation for diagnostic child-result evidence. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched diagnostics module is 593 lines and its focused test file is 206
+  lines. Proof: focused initial-contact diagnostics tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/household/grasp_initial_contact_diagnostics.py` regains local raw
+  JSON parsing for parent-side child probe results or malformed/non-object
+  child result artifacts can reach summary/report assembly.
+
 - 2026-06-20: Robot-camera apple-to-apple prior-probe manifest readers now
   route light/shadow, material-response, and tone/color comparison-history
   manifests through `roboclaws.core.json_sources.read_json_object` while

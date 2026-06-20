@@ -17,24 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Robot-camera apple-to-apple prior-probe manifest readers now route
-light/shadow, material-response, and tone/color comparison history manifests
-through the shared JSON-object source helper while preserving the optional
-report contract: missing prior probes are `missing_manifest`, malformed or
-non-object present probes are `read_failed`, and valid probes keep existing
-summary/history behavior. Focused prior-probe source tests, nearby apple-to-apple
-history tests, and touched-file Ruff/format passed. Current shared-checkout
-ratchet summary still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: Grasp initial-contact diagnostics now route parent-side child probe
+result reads through the shared JSON-object source helper. Present malformed or
+non-object `initial_contact_probe_result.json` files fail with path-labelled
+source errors before variant summary/report assembly; the embedded MuJoCo child
+script and candidate-grasp parsing behavior remain unchanged. Focused
+initial-contact diagnostics tests and touched-file Ruff/format passed. Current
+shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row
+in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: RAW-FPV perception probe report/input JSON-object sources now
-route runtime-map prior, private-label manifests, prediction manifests, run
-artifacts, and contrast artifacts through the shared source helper.
+Previous slice: Robot-camera apple-to-apple prior-probe manifest readers now
+route light/shadow, material-response, and tone/color comparison history
+manifests through the shared JSON-object source helper while preserving the
+optional report contract.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the robot-camera prior-probe source-reader slice.
+committing the grasp initial-contact probe-result source-reader slice.
 
 ## Touched Areas
 
@@ -88,6 +88,7 @@ committing the robot-camera prior-probe source-reader slice.
 - `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py`
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
 - `scripts/molmo_cleanup/robot_camera_apple2apple_materials.py`
+- `roboclaws/household/grasp_initial_contact_diagnostics.py`
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
@@ -170,6 +171,7 @@ committing the robot-camera prior-probe source-reader slice.
 - `tests/unit/molmo_cleanup/test_skill_scratchpad_sources.py`
 - `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_prior_probe_sources.py`
+- `tests/unit/molmo_cleanup/test_molmo_grasp_initial_contact_diagnostics.py`
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`

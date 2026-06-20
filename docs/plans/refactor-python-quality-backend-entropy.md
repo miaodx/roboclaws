@@ -22,14 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the robot-camera prior-probe
+- Current shared-checkout note after the grasp initial-contact probe-result
   source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
-  The touched apple-to-apple comparison runner remains at 1826 lines, and the
-  new focused prior-probe source test file is 106 lines instead of growing the
-  already oversized apple-to-apple comparison test module.
+  The touched grasp initial-contact diagnostics module is 593 lines and its
+  focused test file is 206 lines.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -283,6 +282,10 @@ Latest quality snapshot from 2026-06-20:
   contract: missing prior probes stay `missing_manifest`, present malformed or
   non-object probes become `read_failed`, and valid probes keep existing
   summary/history behavior.
+  Grasp initial-contact diagnostics now route parent-side child
+  `initial_contact_probe_result.json` reads through the shared JSON-object
+  helper, so malformed or non-object child probe results fail with
+  path-labelled source errors before variant summary/report assembly.
   Operator-console launcher no longer carries an unused permissive `_read_json`
   helper; launcher JSON source reads use the existing strict/optional
   `read_json_object`-backed path.
