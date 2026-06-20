@@ -17,24 +17,25 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: RAW-FPV public sweep corpus generation now routes required saved
-`molmospaces_backend_state.json` sources through the shared JSON-object helper
-before sweep replay setup or public frame capture. Malformed and non-object
-saved backend state now fail with path-labelled source errors. Focused RAW-FPV
-sweep corpus tests, exact stale-reader search, and touched-file Ruff/format
-passed, as did `git diff --check` and ratchet. Current
-shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
-`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+2026-06-20: RAW-FPV perception probe report/input JSON-object sources now route
+through the shared source helper: runtime-map prior, private-label manifests,
+prediction manifests, run artifacts, and contrast artifacts. Present malformed
+or non-object sources now fail with path-labelled source errors before prompt
+input, label, frame, or scoring assembly; missing optional runtime-map prior
+remains optional. Focused RAW-FPV perception tests and touched-file Ruff/format
+passed. Current shared-checkout ratchet summary still reports 1 unrelated Ruff
+complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+oversized modules; the touched RAW-FPV test file remains below the 2000-line
+hard ceiling at 1997 lines.
 
-Previous slice: RAW-FPV private-label generation now routes required saved
-`molmospaces_backend_state.json` sources through the shared JSON-object helper
-before replay setup or scorer-private generated-mess reconstruction. Focused
-RAW-FPV private-label tests and touched-file Ruff/format passed.
+Previous slice: RAW-FPV public sweep corpus generation now routes required
+saved `molmospaces_backend_state.json` sources through the shared JSON-object
+helper before sweep replay setup or public frame capture.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the RAW-FPV public sweep saved-state source-reader slice.
+committing the RAW-FPV perception probe source-reader slice.
 
 ## Touched Areas
 
@@ -85,6 +86,7 @@ committing the RAW-FPV public sweep saved-state source-reader slice.
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
+- `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
@@ -165,6 +167,7 @@ committing the RAW-FPV public sweep saved-state source-reader slice.
 - `tests/unit/molmo_cleanup/test_grasp_generation_setup.py`
 - `tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
 - `tests/unit/molmo_cleanup/test_skill_scratchpad_sources.py`
+- `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`

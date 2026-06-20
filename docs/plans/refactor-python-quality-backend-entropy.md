@@ -22,15 +22,13 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the RAW-FPV public sweep saved-state
-  source-reader consolidation
-  slice:
+- Current shared-checkout note after the RAW-FPV perception probe
+  source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
-  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
-  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry rolled
-  out of the top-80 list after the touched Agibot contract test grew, but
-  remains unrelated no-touch debt.
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  The touched `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
+  file remains below the 2000-line hard ceiling at 1997 lines.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -273,6 +271,11 @@ Latest quality snapshot from 2026-06-20:
   `operator_state.json` summary files through the shared JSON-object helper
   while preserving the missing/corrupt/non-object-as-empty passive UI-summary
   behavior.
+  RAW-FPV perception probe runtime-map prior, private-label manifests,
+  prediction manifests, run artifacts, and contrast artifacts now route
+  present JSON-object sources through the shared helper while preserving
+  optional missing runtime-map prior behavior; malformed or non-object sources
+  fail with path-labelled source errors before report/scoring assembly.
   Operator-console launcher no longer carries an unused permissive `_read_json`
   helper; launcher JSON source reads use the existing strict/optional
   `read_json_object`-backed path.

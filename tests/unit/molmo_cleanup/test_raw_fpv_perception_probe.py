@@ -454,6 +454,44 @@ def test_raw_fpv_probe_rejects_malformed_private_label_manifest_rows(
             raise AssertionError(f"expected malformed labels {name} to fail aloud")
 
 
+def test_raw_fpv_probe_rejects_invalid_private_label_manifest_source(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+
+    for name, contents, expected in (
+        (
+            "malformed_private_labels",
+            "{not-json}\n",
+            "RAW-FPV private label manifest source must contain valid JSON object",
+        ),
+        (
+            "non_object_private_labels",
+            "[]\n",
+            "RAW-FPV private label manifest source must contain a JSON object",
+        ),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(contents, encoding="utf-8")
+
+        try:
+            probe.load_probe_labels(
+                (path,),
+                frames=frames,
+                contrast_run_dirs=(),
+                default_hidden_target=True,
+            )
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert path.name in str(exc)
+        else:  # pragma: no cover - malformed explicit labels should fail aloud
+            raise AssertionError(f"expected invalid private label source {name} to fail aloud")
+
+
 def test_raw_fpv_probe_rejects_missing_all_visible_label_manifest(tmp_path: Path) -> None:
     probe = _load_module()
     run_dir = _raw_run_dir(tmp_path)
@@ -560,6 +598,33 @@ def test_raw_fpv_probe_rejects_malformed_prediction_manifest_rows(tmp_path: Path
             raise AssertionError(f"expected malformed predictions {name} to fail aloud")
 
 
+def test_raw_fpv_probe_rejects_invalid_prediction_manifest_source(tmp_path: Path) -> None:
+    probe = _load_module()
+
+    for name, contents, expected in (
+        (
+            "malformed_predictions",
+            "{not-json}\n",
+            "RAW-FPV prediction manifest source must contain valid JSON object",
+        ),
+        (
+            "non_object_predictions",
+            "[]\n",
+            "RAW-FPV prediction manifest source must contain a JSON object",
+        ),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_text(contents, encoding="utf-8")
+
+        try:
+            probe.load_predictions(path)
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert path.name in str(exc)
+        else:  # pragma: no cover - malformed explicit predictions should fail aloud
+            raise AssertionError(f"expected invalid prediction source {name} to fail aloud")
+
+
 def test_raw_fpv_probe_rejects_missing_raw_source_run_dir(tmp_path: Path) -> None:
     probe = _load_module()
 
@@ -614,6 +679,37 @@ def test_raw_fpv_probe_rejects_raw_source_without_usable_frames(tmp_path: Path) 
         assert "empty-raw-run" in str(exc)
     else:  # pragma: no cover - empty source evidence should fail before scoring
         raise AssertionError("expected empty RAW-FPV source run directory to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_invalid_raw_artifact_source(tmp_path: Path) -> None:
+    probe = _load_module()
+
+    for name, contents, expected in (
+        (
+            "malformed",
+            "{not-json}\n",
+            "RAW-FPV run artifact source must contain valid JSON object",
+        ),
+        (
+            "non_object",
+            "[]\n",
+            "RAW-FPV run artifact source must contain a JSON object",
+        ),
+    ):
+        run_dir = _raw_run_dir(tmp_path / name)
+        (run_dir / "agent_view.json").write_text(contents, encoding="utf-8")
+
+        try:
+            probe.collect_observation_frames(
+                raw_run_dirs=(run_dir,),
+                contrast_run_dirs=(),
+                max_frames_per_source=4,
+            )
+        except ValueError as exc:
+            assert expected in str(exc)
+            assert "agent_view.json" in str(exc)
+        else:  # pragma: no cover - corrupt source evidence should fail before scoring
+            raise AssertionError(f"expected invalid RAW-FPV artifact source {name} to fail aloud")
 
 
 def test_raw_fpv_probe_rejects_malformed_codex_event_source(tmp_path: Path) -> None:
@@ -1487,6 +1583,64 @@ def test_raw_fpv_probe_reads_public_sweep_observation_manifest(tmp_path: Path) -
     assert len(frames) == 1
     assert frames[0].frame_id.endswith("raw-fpv-sweep/raw_fpv_001")
     assert frames[0].source_kind == "raw_failure"
+
+
+def test_raw_fpv_probe_rejects_malformed_runtime_map_prior_source(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    runtime_map_prior = tmp_path / "runtime_metric_map.json"
+    runtime_map_prior.write_text("{not-json}\n", encoding="utf-8")
+
+    try:
+        probe.run_probe(
+            probe.parse_args(
+                [
+                    "--raw-run-dir",
+                    str(run_dir),
+                    "--contrast-run-dir",
+                    str(tmp_path / "missing-contrast"),
+                    "--runtime-map-prior",
+                    str(runtime_map_prior),
+                    "--output-dir",
+                    str(tmp_path / "out"),
+                    "--run-id",
+                    "bad-runtime-prior",
+                    "--prompt-variant",
+                    "baseline_json",
+                ]
+            )
+        )
+    except ValueError as exc:
+        assert "RAW-FPV runtime map prior source must contain valid JSON object" in str(exc)
+        assert "runtime_metric_map.json" in str(exc)
+    else:  # pragma: no cover - corrupt runtime-map prior should fail before scoring
+        raise AssertionError("expected malformed runtime-map prior source to fail aloud")
+
+
+def test_raw_fpv_probe_rejects_non_object_contrast_artifact_source(tmp_path: Path) -> None:
+    probe = _load_module()
+    raw_run_dir = _raw_run_dir(tmp_path)
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(raw_run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+    contrast_run_dir = tmp_path / "contrast" / "seed-7"
+    contrast_run_dir.mkdir(parents=True)
+    (contrast_run_dir / "run_result.json").write_text("[]\n", encoding="utf-8")
+
+    try:
+        probe.load_probe_labels(
+            (),
+            frames=frames,
+            contrast_run_dirs=(contrast_run_dir,),
+            default_hidden_target=True,
+        )
+    except ValueError as exc:
+        assert "RAW-FPV contrast artifact source must contain a JSON object" in str(exc)
+        assert "run_result.json" in str(exc)
+    else:  # pragma: no cover - wrong-shaped contrast evidence should fail before scoring
+        raise AssertionError("expected non-object contrast artifact source to fail aloud")
 
 
 def test_raw_fpv_sweep_corpus_public_observation_excludes_private_target_ids() -> None:

@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: RAW-FPV perception probe JSON-object source reads now route
+  runtime-map prior, private-label manifests, prediction manifests,
+  run artifacts, and contrast artifacts through
+  `roboclaws.core.json_sources.read_json_object`. Present malformed or
+  non-object sources now fail with path-labelled source errors before prompt
+  input, label, frame, or scoring assembly; missing optional runtime-map prior
+  remains optional. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation for
+  perception-probe report/scoring inputs. Metric: current shared-checkout
+  ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched RAW-FPV test file remains below the 2000-line hard ceiling at
+  1997 lines. Proof: focused RAW-FPV perception probe tests, touched-file
+  ruff/format checks, stale raw-parser search in the probe script,
+  `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py` regains local raw
+  JSON parsing for those object sources or malformed/non-object report inputs
+  can reach prompt/scoring assembly.
+
 - 2026-06-20: RAW-FPV public sweep corpus generation now routes required saved
   `molmospaces_backend_state.json` sources through
   `roboclaws.core.json_sources.read_json_object` before sweep replay setup,
