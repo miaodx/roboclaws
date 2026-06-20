@@ -22,6 +22,11 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the model-matrix provider response source
+  slice: non-stream benchmark HTTP responses now reuse the shared JSON-object
+  text helper instead of raw `json.loads`, so malformed or non-object provider
+  wire data becomes source-labelled FAIL rows tied to the case id and
+  benchmark layer before output extraction or route-support summaries.
 - Current shared-checkout note after the Isaac worker CLI inline waypoint
   source slice: `navigate_to_waypoint --waypoint-json` now reuses the shared
   JSON-object text helper instead of a local `json.loads` / type check, so

@@ -448,6 +448,75 @@ def test_stream_throughput_payload_requests_usage_tail(monkeypatch) -> None:
     assert result.first_content_s is not None
 
 
+def test_non_stream_trial_rejects_bad_provider_response_json(monkeypatch) -> None:
+    script = _load_script_module()
+    case = script.MatrixCase(
+        case_id="mimo-inside-openai-chat:mimo-1000:openai-chat",
+        provider_id="mimo-inside-openai-chat",
+        provider_label="MiMo inside",
+        model="mimo-1000",
+        wire_api="openai-chat",
+        api_key_env="MIMO_API_KEY",
+        base_url="https://mimo.example/v1",
+    )
+
+    class _Response:
+        status = 200
+        headers = {"content-type": "application/json"}
+
+        def __init__(self, body: bytes) -> None:
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return self.body
+
+    bodies = iter((b"{not-json}", b"[]"))
+
+    def fake_urlopen(_request, timeout):  # noqa: ANN001
+        assert timeout == 1.0
+        return _Response(next(bodies))
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", fake_urlopen)
+
+    malformed = script.run_trial(
+        case,
+        index=1,
+        layer="health",
+        prompt="ping",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+    non_object = script.run_trial(
+        case,
+        index=2,
+        layer="health",
+        prompt="ping",
+        max_tokens=8,
+        timeout_s=1.0,
+        api_key="secret",
+    )
+
+    assert malformed.status == "FAIL"
+    assert malformed.error_type == "ValueError"
+    assert "model-matrix provider response source must contain valid JSON object" in (
+        malformed.error or ""
+    )
+    assert "mimo-inside-openai-chat:mimo-1000:openai-chat health" in (malformed.error or "")
+    assert non_object.status == "FAIL"
+    assert non_object.error_type == "ValueError"
+    assert "model-matrix provider response source must contain a JSON object" in (
+        non_object.error or ""
+    )
+    assert "mimo-inside-openai-chat:mimo-1000:openai-chat health" in (non_object.error or "")
+
+
 def test_agent_cases_are_selectable_and_do_not_store_full_prompt() -> None:
     script = _load_script_module()
 

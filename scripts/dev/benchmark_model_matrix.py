@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.core.dotenv import update_env_from_dotenv_file
+from roboclaws.core.json_sources import parse_json_object_text
 from roboclaws.operator_console.redaction import redact_text
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
@@ -190,7 +191,11 @@ def run_trial(
             raise RuntimeError(f"HTTP {status_code}: {body[:500]}")
         if "json" not in content_type.lower():
             raise RuntimeError(f"expected JSON response, got {content_type}: {body[:500]}")
-        data = json.loads(body)
+        data = parse_json_object_text(
+            body,
+            label="model-matrix provider response",
+            source=f"{case.case_id} {layer}",
+        )
         output = output_text(case.wire_api, data)
         if not output:
             raise RuntimeError("provider call completed without visible output")

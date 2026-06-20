@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
+2026-06-21: Model-matrix benchmark non-stream provider responses now route
+through the shared JSON-object text helper instead of raw `json.loads`.
+Malformed or non-object HTTP JSON responses now become source-labelled FAIL
+rows tied to the case id and benchmark layer before output extraction, token
+usage, or route-support summaries can derive confidence from corrupt provider
+wire data. Focused proof passed: model-matrix benchmark unit tests,
+touched-file ruff, touched-file format check, diff check, and ratchet summary.
+Current ratchet before final slice closeout: 0 Ruff complexity violations,
+80 oversized modules in the shared checkout.
+
+Previous slice: Isaac worker CLI inline waypoint JSON now routes through the
 shared JSON-object text helper instead of a local `json.loads` / type check.
 Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now
 fail at argparse with source-labelled Isaac worker diagnostics before backend
@@ -684,6 +694,8 @@ diagnostics.
 - `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
 - `scripts/isaac_lab_cleanup/isaac_worker_cli.py`
 - `tests/unit/molmo_cleanup/test_relative_navigation_worker_routing.py`
+- `scripts/dev/benchmark_model_matrix.py`
+- `tests/unit/providers/test_model_matrix_benchmark.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_generated_mess_scenario_state.py`

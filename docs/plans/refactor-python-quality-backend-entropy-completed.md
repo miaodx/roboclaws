@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Model-matrix benchmark non-stream provider responses now route
+  through the shared JSON-object text helper instead of raw `json.loads`.
+  Malformed or non-object HTTP JSON responses now become source-labelled FAIL
+  rows tied to the case id and benchmark layer before output extraction, token
+  usage, or route-support summaries can derive confidence from corrupt
+  provider wire data. Owner layer: Harness recipes / dev provider benchmark.
+  Behavior-change class: internal dev-harness source-reader consolidation with
+  fail-aloud provider wire diagnostics. Metric: ratchet remains at 0 Ruff
+  complexity rows and reports 80 oversized modules in the current shared
+  checkout. Proof: focused model-matrix benchmark unit tests, touched-file
+  ruff/format checks, changed-code cleanup review, `git diff --check`, and
+  ratchet. Reopen only if `scripts/dev/benchmark_model_matrix.py` regains raw
+  non-stream provider response parsing or malformed/non-object provider
+  responses can again feed output extraction or route-support summaries without
+  source-labelled failure diagnostics.
+
 - 2026-06-21: Isaac worker CLI inline waypoint JSON now routes through the
   shared JSON-object text helper instead of local `json.loads` / type checks.
   Malformed or non-object `navigate_to_waypoint --waypoint-json` payloads now
