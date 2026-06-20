@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-sampler source-prep, scanner-plan, and next-flow worklist
+  runner inputs now use `roboclaws.core.json_sources.read_json_object` for
+  file-backed source artifacts. Missing, malformed, or parseable non-object
+  `scene_sampler_source_prep.json`,
+  `scene_sampler_scanner_execution_plan.json`, and
+  `scene_sampler_next_flow_worklist.json` files now use canonical
+  path-labelled source wording before runner schema checks, candidate
+  selection, worklist alignment, or command execution. Owner layer: Artifacts,
+  reports, and eval suites, with operator-console runner evidence.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules.
+  Proof: focused scene-sampler source-prep and scanner runner tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if these scene-sampler runner inputs regain local raw JSON file readers
+  or corrupt runner source artifacts can again reach schema/alignment logic as
+  parser tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Camera-control request loading now uses
   `roboclaws.core.json_sources.read_json_value` for file-backed request
   payloads. Missing or malformed request files now use canonical

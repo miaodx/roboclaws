@@ -122,6 +122,10 @@ Latest quality snapshot from 2026-06-20:
   request files fail with path-labelled source errors before normalization
   while legacy view-list JSON remains accepted by the existing request
   normalizer.
+  Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
+  now route explicit JSON-object artifacts through the shared source helper, so
+  missing, malformed, or non-object runner inputs fail with path-labelled
+  source errors before runner schema or alignment validation.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime

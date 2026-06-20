@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from scripts.operator_console.scene_sampler_worklist_alignment import (  # noqa: E402
     align_rows_to_worklist,
     load_next_flow_worklist,
@@ -135,7 +136,7 @@ def run_source_prep(
 
 
 def _load_prep(prep_path: Path) -> dict[str, Any]:
-    payload = json.loads(prep_path.read_text(encoding="utf-8"))
+    payload = read_json_object(prep_path, label="scene sampler source prep")
     if payload.get("schema") != "molmospaces_scene_sampler_source_prep_v1":
         raise ValueError(f"source prep schema mismatch: {payload.get('schema')!r}")
     return payload

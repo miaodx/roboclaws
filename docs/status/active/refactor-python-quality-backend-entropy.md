@@ -17,11 +17,11 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Camera-control request loading now routes file-backed payloads
-through the shared JSON-value source helper. Missing or malformed camera-control
-request files fail with canonical path-labelled source wording before request
-normalization; legacy view-list JSON remains accepted by the existing
-normalizer. Focused camera-control tests, core JSON-source tests, touched-file
+2026-06-20: Scene-sampler source-prep, scanner-plan, and next-flow worklist
+runner inputs now route explicit JSON-object artifacts through the shared
+source helper. Missing, malformed, or non-object runner inputs fail with
+canonical path-labelled source wording before runner schema or alignment
+validation. Focused operator-console scene-sampler runner tests, touched-file
 Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
 complexity rows, 79 oversized modules.
 
@@ -58,6 +58,9 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
+- `scripts/operator_console/scene_sampler_worklist_alignment.py`
+- `scripts/operator_console/run_scene_sampler_source_prep.py`
+- `scripts/operator_console/run_scene_sampler_scanner_plan.py`
 - `scripts/reports/write_pages_index.py`
 - `scripts/reports/compare_live_report_metrics.py`
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
@@ -116,6 +119,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
+- `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
+- `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `tests/unit/reports/test_write_pages_index_sources.py`
 - `tests/unit/reports/test_compare_live_report_metrics_sources.py`
