@@ -34,6 +34,28 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Robot-camera visual parity summary CLI loading now treats
+  explicit baseline/probe manifests, RAW-FPV run results, calibration
+  manifests, prepared USD summaries, paired comparison manifests, report
+  visual sample manifests, and nested RGB-gain source manifests as JSON-object
+  source truth. Missing declared optional sources, malformed JSON, and
+  parseable non-object source packets now return concise CLI/source errors
+  before writing `visual_parity_summary.json` or `report.html`, instead of
+  surfacing raw parser/type failures or publishing plausible parity reports
+  from corrupt evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud visual-parity report source truth. Metric:
+  staged/add-N ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; the visual-parity summary script remained in existing warning-band
+  debt at 1988 lines, and coverage landed in a small dedicated source-error
+  unit test file instead of expanding the 2262-line visual-parity regression
+  test. Proof: focused visual-parity source tests, selected existing
+  visual-parity regression tests, touched-file ruff/format checks, `git diff
+  --check`, changed-code review, and ratchet. Reopen only with fresh
+  visual-parity summary evidence that explicit report/calibration/prepared/USD
+  or nested source manifests are again loaded through raw parser/type paths,
+  accepted as plausible non-object packets, or allowed to write artifacts
+  after source-load failure.
+
 - 2026-06-20: B1 manual-anchor semantic suggestion CLI loading now treats
   `--draft`, `--review-manifest`, and `--scene-diagnostic` inputs as
   JSON-object source truth. Missing, malformed, or parseable non-object source

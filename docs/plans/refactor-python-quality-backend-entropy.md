@@ -118,6 +118,11 @@ Latest quality snapshot from 2026-06-20:
   report writes. B1 manual-anchor semantic suggestion loading now treats
   explicit draft, review-manifest, and scene-diagnostic inputs as JSON-object
   source truth before suggestion, review-packet, or review-report writes.
+  Robot-camera visual parity summary loading now treats explicit
+  baseline/probe manifests, RAW-FPV run results, calibration manifests,
+  prepared USD summaries, paired comparison manifests, report visual sample
+  manifests, and nested RGB-gain source manifests as JSON-object source truth
+  before writing `visual_parity_summary.json` or `report.html`.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors
