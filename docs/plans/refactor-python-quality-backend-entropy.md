@@ -165,7 +165,8 @@ Latest quality snapshot from 2026-06-20:
   a duplicate local reader.
   B1 map-scene alignment fitting now treats explicit correspondences as
   JSON-object source truth before writing `alignment_residuals.json` or preview
-  artifacts.
+  artifacts, and routes that JSON-object source through the shared source
+  helper instead of a duplicate local reader.
   B1 manual alignment overlay rendering now treats explicit scene-topdown and
   alignment artifacts as JSON-object source truth before writing overlay
   metadata or preview images. Isaac segmentation AOV comparisons now treat

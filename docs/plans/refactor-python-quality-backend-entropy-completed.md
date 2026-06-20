@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 map-scene alignment fitting now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  correspondence manifests. This removes the fitter's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for missing, malformed, or parseable non-object correspondence artifacts
+  under the canonical helper wording. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud behavior preservation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused B1 alignment fit
+  CLI tests, core JSON-source tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if the fitter regains a local
+  JSON-object source reader or stops routing correspondence artifacts through
+  the shared source helper.
+
 - 2026-06-20: Semantic map spatial-contract normalization now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for bundle
   `semantics.json` artifacts. This removes the normalizer's duplicate local

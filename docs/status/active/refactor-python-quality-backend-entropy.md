@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Semantic map spatial-contract normalization now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for bundle
-`semantics.json` artifacts. Missing, malformed, or parseable non-object
-semantics artifacts keep path-labelled source errors under the canonical helper
-wording, and the normalizer no longer carries a duplicate local JSON-object
-reader. Focused cross-environment semantic map parity and core JSON-source
-tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: B1 map-scene alignment fitting now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for explicit
+correspondence manifests. Missing, malformed, or parseable non-object
+correspondence artifacts keep path-labelled source errors under the canonical
+helper wording, and the fitter no longer carries a duplicate local JSON-object
+reader. Focused B1 alignment fit CLI and core JSON-source tests, touched-file
+Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

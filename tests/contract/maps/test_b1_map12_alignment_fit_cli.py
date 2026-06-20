@@ -17,12 +17,12 @@ RAW_MAP12_BUNDLE = REPO_ROOT / "assets" / "maps" / "agibot-robot-map-12"
         (
             "scene_correspondences.json",
             "{not-json\n",
-            "correspondence manifest must contain valid JSON object",
+            "correspondence manifest source must contain valid JSON object",
         ),
         (
             "scene_correspondences.json",
             "[]\n",
-            "correspondence manifest must contain a JSON object",
+            "correspondence manifest source must contain a JSON object",
         ),
     ),
 )
@@ -53,7 +53,7 @@ def test_alignment_fit_cli_rejects_missing_correspondence_manifest(
     completed = _run_alignment_cli(manifest_path=manifest_path, output_dir=output_dir)
 
     assert completed.returncode == 2
-    assert "correspondence manifest missing" in completed.stderr
+    assert "correspondence manifest source is missing" in completed.stderr
     assert str(manifest_path) in completed.stderr
     assert not (output_dir / "alignment_residuals.json").exists()
 
