@@ -13,6 +13,7 @@ from roboclaws.agents.provider_timing_contract import (
     PROVIDER_REQUEST_METRIC_SCHEMA,
     PROVIDER_REQUEST_METRICS_FILENAME,
 )
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 
 REPORT_PERFORMANCE_SCHEMA = "roboclaws_report_performance_metrics_v1"
@@ -334,18 +335,27 @@ def read_json(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        return read_json_object(path, label="report performance JSON")
     except OSError as exc:
         raise ReportPerformanceSourceError(f"failed to read JSON source {path}: {exc}") from exc
-    except json.JSONDecodeError as exc:
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            raise ReportPerformanceSourceError(
+                f"malformed JSON source {path}: "
+                f"line {cause.lineno} column {cause.colno}: {cause.msg}"
+            ) from exc
         raise ReportPerformanceSourceError(
-            f"malformed JSON source {path}: line {exc.lineno} column {exc.colno}: {exc.msg}"
+            f"malformed JSON source {path}: expected object, got {_json_type_name(path)}"
         ) from exc
-    if not isinstance(payload, dict):
-        raise ReportPerformanceSourceError(
-            f"malformed JSON source {path}: expected object, got {type(payload).__name__}"
-        )
-    return payload
+
+
+def _json_type_name(path: Path) -> str:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "unknown"
+    return type(payload).__name__
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:

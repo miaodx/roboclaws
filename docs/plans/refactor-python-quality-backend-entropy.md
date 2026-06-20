@@ -153,6 +153,9 @@ Latest quality snapshot from 2026-06-20:
   Eval-runner optional/required JSON sidecar grading now routes object reads
   through the shared JSON-object helper while preserving existing grader
   reason codes for missing, malformed, non-object, and unreadable sidecars.
+  Report-performance JSON artifact loading now routes object reads through the
+  shared JSON-object helper while preserving existing
+  `ReportPerformanceSourceError` wording for malformed or non-object sources.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

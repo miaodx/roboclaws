@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Report-performance JSON artifact loading now uses
+  `roboclaws.core.json_sources.read_json_object` for object parsing while
+  preserving existing `ReportPerformanceSourceError` wording for missing,
+  malformed, unreadable, and non-object JSON sources. JSONL source parsing
+  remains unchanged because it is row-oriented. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation with stable report-performance diagnostics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  dirty `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized
+  modules; the added oversized entry is unrelated no-touch dirty
+  `tests/contract/maps/test_b1_map12_label_tool.py`, and this slice did not
+  add new complexity in touched files. Proof: focused report-performance
+  malformed JSON/JSONL source tests, touched-file ruff/format checks,
+  changed-code review, `git diff --check`, and ratchet. Reopen only if
+  report-performance JSON artifact loading regains a local raw JSON-object
+  reader or malformed/non-object JSON sources stop surfacing the stable
+  report-performance source error wording.
+
 - 2026-06-20: Eval-runner optional and required JSON sidecar grading now uses
   `roboclaws.core.json_sources.read_json_object` for object parsing while
   preserving the existing grader reason-code contract: `missing`,
