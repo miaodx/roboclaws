@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Grasp pose-policy cache loading now uses
+  `roboclaws.core.json_sources.read_json_object` for initial-contact result
+  artifacts before best-variant pose-policy selection. Malformed or parseable
+  non-object initial-contact result files now use canonical path-labelled
+  source wording before pose-policy validation. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud source validation. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules. Proof: focused grasp
+  pose-policy cache tests, touched-file ruff/format checks, `git diff
+  --check`, and ratchet. Reopen only if grasp pose-policy cache loading
+  regains a local raw JSON file reader for initial-contact results or corrupt
+  results can again reach best-variant validation as parser tracebacks or
+  wrong-shaped payloads.
+
 - 2026-06-20: Grasp generation setup now uses
   `roboclaws.core.json_sources.read_json_object` for proof-bundle run manifest
   input before extracting `grasp_cache_availability_preflight`. Missing,

@@ -135,6 +135,10 @@ Latest quality snapshot from 2026-06-20:
   `grasp_cache_availability_preflight`, so missing, malformed, or non-object
   manifests fail with path-labelled source errors before preflight shape
   validation.
+  Grasp pose-policy cache loading now routes initial-contact result artifacts
+  through the shared JSON-object helper, so malformed or non-object result
+  files fail with path-labelled source errors before best-variant pose-policy
+  validation.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
