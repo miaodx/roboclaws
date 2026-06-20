@@ -6028,6 +6028,16 @@ logs before choosing the next slice.
   only if `install_molmospaces_usd_references.py` regains direct
   `json.loads(read_text(...))` parsing for required state artifacts or accepts
   non-object state evidence.
+- MolmoSpaces scene metadata optional sidecar loading now routes present
+  `scene_metadata.json` object sources through the shared JSON-source helper
+  while preserving the missing/corrupt/non-object-as-empty optional metadata
+  contract. Owner layer: Backend Runtime / Environment Primitive.
+  Behavior-change class: permissive optional source-reader consolidation.
+  Metric: ratchet remains at 0 Ruff complexity rows and 80 oversized modules.
+  Proof: focused Isaac backend metadata tests, ruff, format check, diff check,
+  and ratchet. Reopen only if `isaac_scene_index_metadata.py` regains direct
+  `json.loads(read_text(...))` parsing for scene metadata sidecars or starts
+  failing missing/corrupt optional metadata that should stay ignorable.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

@@ -22,11 +22,12 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80.
-- Current shared-checkout note after the MolmoSpaces USD reference installer
-  state-artifact source-reader consolidation slice:
+- Current shared-checkout note after the MolmoSpaces scene metadata optional
+  sidecar source-reader consolidation slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
-  reports 0 Ruff complexity rows and 80 oversized modules. The touched
-  installer and focused test file remain under the current ratchet ceiling.
+  reports 0 Ruff complexity rows and 80 oversized modules. The touched scene
+  metadata helper and focused test file remain under the current ratchet
+  ceiling.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -295,6 +296,10 @@ Latest quality snapshot from 2026-06-20:
   helper while preserving the CLI-facing `SystemExit` wrapper, so missing,
   malformed, or non-object state artifacts use path-labelled source errors
   before missing USD reference collection.
+  MolmoSpaces scene metadata optional sidecar loading now routes present
+  `scene_metadata.json` object sources through the shared JSON-source helper
+  while preserving the missing/corrupt/non-object-as-empty optional metadata
+  contract.
   Isaac RBY1M robot import summary loading now routes present optional import
   summary files through the shared JSON-object helper while preserving the
   missing/corrupt/non-object-as-empty optional source contract.

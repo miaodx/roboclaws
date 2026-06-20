@@ -17,24 +17,21 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces USD reference installer state-artifact loading now
-routes required `--state-path` JSON-object sources through the shared source
-helper while preserving the CLI-facing `SystemExit` wrapper. Missing,
-malformed, or non-object state artifacts now use path-labelled source errors
-before missing USD reference collection. Focused installer unit tests,
-touched-file ruff, touched-file format checks, diff check, and the ratchet
-summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
-modules.
+2026-06-20: MolmoSpaces scene metadata optional sidecar loading now routes
+present `scene_metadata.json` object sources through the shared source helper
+while preserving the missing/corrupt/non-object-as-empty optional metadata
+contract. Focused Isaac backend metadata tests, touched-file ruff, touched-file
+format checks, diff check, and the ratchet summary passed. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules.
 
-Previous slice: B1 runtime-bundle room-semantics reference validation now
-delegates per-room checks to a focused helper, clearing the remaining Ruff C901
-row while preserving existing error output.
+Previous slice: MolmoSpaces USD reference installer state-artifact loading now
+routes required `--state-path` JSON-object sources through the shared source
+helper while preserving the CLI-facing `SystemExit` wrapper.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces USD reference installer state-artifact source-reader
-slice.
+committing the MolmoSpaces scene metadata optional sidecar source-reader slice.
 
 ## Touched Areas
 
@@ -56,6 +53,7 @@ slice.
 - `scripts/isaac_lab_cleanup/isaac_scene_camera_geometry.py`
 - `scripts/isaac_lab_cleanup/isaac_scenario_builders.py`
 - `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`
+- `scripts/isaac_lab_cleanup/isaac_scene_index_metadata.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/render_b1_scene_topdown_diagnostic.py`

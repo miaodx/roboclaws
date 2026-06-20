@@ -2874,6 +2874,29 @@ def test_isaac_molmospaces_scene_metadata_indexes_real_geometry_prims(
     assert sink["kind"] == "receptacle"
 
 
+@pytest.mark.parametrize("source_text", ["{bad json\n", "[]\n"])
+def test_isaac_molmospaces_scene_metadata_ignores_bad_optional_source(
+    tmp_path: Path,
+    source_text: str,
+) -> None:
+    scene_dir = tmp_path / "val_0"
+    scene_dir.mkdir()
+    scene_usd = scene_dir / "scene.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    (scene_dir / "scene_metadata.json").write_text(source_text, encoding="utf-8")
+
+    assert isaac_lab_backend_worker._load_molmospaces_scene_metadata(scene_usd) == {}
+
+
+def test_isaac_molmospaces_scene_metadata_allows_missing_optional_source(
+    tmp_path: Path,
+) -> None:
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+
+    assert isaac_lab_backend_worker._load_molmospaces_scene_metadata(scene_usd) == {}
+
+
 def test_isaac_molmospaces_metadata_prefers_top_level_geometry_prim() -> None:
     assert (
         isaac_lab_backend_worker._molmospaces_metadata_prim_path(

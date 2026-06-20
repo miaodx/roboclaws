@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from roboclaws.core.json_sources import read_json_object
 
 MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = {
     "bed",
@@ -61,8 +62,8 @@ def load_molmospaces_scene_metadata(usd_path: Path) -> dict[str, dict[str, Any]]
     if not metadata_path.is_file():
         return {}
     try:
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        payload = read_json_object(metadata_path, label="MolmoSpaces scene metadata")
+    except (OSError, ValueError):
         return {}
     objects = payload.get("objects") if isinstance(payload, dict) else None
     if not isinstance(objects, dict):
