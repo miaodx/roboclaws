@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: MolmoSpaces worker protocol request rows and inline waypoint
+  JSON now route through the shared JSON-object text helper instead of local
+  `json.loads` / type checks. Malformed or non-object persistent-worker stdin
+  requests now return source-labelled worker error packets before command
+  dispatch, and malformed inline waypoint JSON uses the same worker source
+  diagnostics before navigation handling can consume wrong-shaped payloads.
+  Owner layer: Backend Runtime / Environment Primitive. Behavior-change
+  class: internal worker protocol source-reader consolidation with fail-aloud
+  command-row diagnostics. Metric: ratchet remains at 0 Ruff complexity rows
+  and reports 80 oversized modules in the current shared checkout. Proof:
+  focused relative-navigation worker routing tests, touched-file ruff/format
+  checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/molmospaces_worker_protocol.py` regains local JSON
+  object parsing for stdin requests or inline waypoint JSON, or malformed
+  worker command payloads can again reach command dispatch without
+  source-labelled diagnostics.
+
 - 2026-06-21: Operator-console HTTP POST bodies now route through the shared
   JSON-object source helper instead of raw `json.loads` in the server request
   handler. Malformed or non-object browser/operator payloads now return stable

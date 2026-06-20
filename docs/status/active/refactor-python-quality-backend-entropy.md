@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Operator-console HTTP POST bodies now route through the shared
+2026-06-21: MolmoSpaces worker protocol request rows and inline waypoint JSON
+now route through the shared JSON-object text helper instead of local
+`json.loads` / type checks. Malformed or non-object persistent-worker stdin
+requests now return source-labelled worker error packets before command
+dispatch, and malformed inline waypoint JSON now uses the same worker source
+diagnostics before navigation code can consume wrong-shaped payloads. Focused
+proof passed: relative-navigation worker routing tests, touched-file ruff,
+touched-file format check. Current ratchet before final slice closeout: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Operator-console HTTP POST bodies now route through the shared
 JSON-object source helper instead of raw `json.loads` in the server request
 handler. Malformed or non-object browser/operator payloads now return stable
 400 JSON diagnostics labelled by HTTP method/path before steer, next-goal,

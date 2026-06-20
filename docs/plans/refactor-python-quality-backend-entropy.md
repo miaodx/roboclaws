@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the MolmoSpaces worker protocol source
+  slice: persistent-worker stdin requests and inline waypoint JSON now reuse
+  the shared JSON-object text helper instead of local `json.loads` / type
+  checks, so malformed or non-object worker command rows return
+  source-labelled error packets before dispatch and wrong-shaped waypoint JSON
+  cannot reach navigation handling.
 - Current shared-checkout note after the operator-console HTTP body source
   slice: POST request bodies now reuse the shared JSON-object source helper
   instead of raw `json.loads`, so malformed or non-object browser/operator
