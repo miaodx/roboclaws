@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Agibot SDK cleanup backend explicit JSON inputs now fail through
+  source-labelled CLI diagnostics instead of raw `json.loads` tracebacks in
+  the vendor runner. `--context-json`, `--agent-view-json`, live-navigation
+  `--context-json`, and attached map artifact `source.json` all route through
+  one runner-local JSON-object source helper, preserving the standalone
+  `vendors/agibot_sdk` execution context. Owner layer: Backend Runtime /
+  Environment Primitive. Behavior-change class: internal CLI source-reader
+  hardening with fail-aloud diagnostics for malformed, missing, or non-object
+  explicit JSON sources. Metric: ratchet remains at 0 Ruff complexity rows and
+  reports 80 oversized modules in the current shared checkout. Proof: focused
+  Agibot map-context script contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the Agibot SDK cleanup
+  runner regains raw local `json.loads(path.read_text(...))` parsing for
+  explicit JSON input files or malformed source files can again produce Python
+  tracebacks instead of source-labelled CLI errors.
+
 - 2026-06-21: Persistent MolmoSpaces worker ready and command-response stdout
   packets now delegate to the shared worker JSON-object source helper instead
   of keeping local `json.loads` calls in

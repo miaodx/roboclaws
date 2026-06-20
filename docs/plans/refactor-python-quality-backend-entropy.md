@@ -29,6 +29,12 @@ Latest quality snapshot from 2026-06-21:
   Malformed or non-object ready/response packets now fail with
   `MolmoSpaces persistent worker ...` source diagnostics before readiness or
   command result handling can derive confidence from a wrong-shaped packet.
+- Current shared-checkout note after the Agibot SDK cleanup backend source
+  slice: explicit vendor-runner JSON inputs now fail with source-labelled CLI
+  diagnostics instead of raw JSON tracebacks. `--context-json`,
+  `--agent-view-json`, live-navigation context checks, and attached Agibot map
+  artifact `source.json` all route through one runner-local JSON-object source
+  helper that preserves the standalone `vendors/agibot_sdk` subprocess context.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev

@@ -487,6 +487,76 @@ def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_pat
     assert navigate_result["tool_response"]["navigation_status"] == "blocked"
 
 
+def test_sdk_runner_context_json_source_rejects_malformed_json(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
+    context_path = tmp_path / "agibot_map_context.malformed.json"
+    context_path.write_text("{bad json\n", encoding="utf-8")
+
+    proc = _run_sdk_allowing_failure(
+        "agent-view",
+        "--context-json",
+        str(context_path),
+        "--output-dir",
+        str(tmp_path / "agent-view"),
+    )
+
+    assert proc.returncode != 0
+    assert "Traceback" not in proc.stderr
+    assert "Agibot SDK context JSON source must contain valid JSON object" in proc.stderr
+    assert str(context_path) in proc.stderr
+
+
+def test_sdk_runner_agent_view_source_rejects_non_object_json(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
+    agent_view_path = tmp_path / "agent_view.json"
+    agent_view_path.write_text("[]\n", encoding="utf-8")
+
+    proc = _run_sdk_allowing_failure(
+        "navigate-waypoint",
+        "--agent-view-json",
+        str(agent_view_path),
+        "--output-dir",
+        str(tmp_path / "navigate"),
+        "--waypoint-id",
+        "wp_sofa_front",
+    )
+
+    assert proc.returncode != 0
+    assert "Traceback" not in proc.stderr
+    assert "Agibot SDK agent view source must contain a JSON object" in proc.stderr
+    assert str(agent_view_path) in proc.stderr
+
+
+def test_sdk_runner_map_artifact_source_rejects_malformed_json(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    artifact_dir = tmp_path / "agibot"
+    artifact_dir.mkdir()
+    (artifact_dir / "occupancy.pgm").write_bytes(b"P2\n1 1\n255\n0\n")
+    (artifact_dir / "nav2.yaml").write_text(
+        "image: occupancy.pgm\nresolution: 0.05\norigin: [0.0, 0.0, 0.0]\n",
+        encoding="utf-8",
+    )
+    source_path = artifact_dir / "source.json"
+    source_path.write_text("{bad json\n", encoding="utf-8")
+
+    proc = _run_sdk_allowing_failure(
+        "agent-view",
+        "--context-json",
+        str(context_path),
+        "--output-dir",
+        str(tmp_path / "agent-view"),
+        "--agibot-map-artifact-dir",
+        str(artifact_dir),
+    )
+
+    assert proc.returncode != 0
+    assert "Traceback" not in proc.stderr
+    assert "Agibot SDK map artifact metadata source must contain valid JSON object" in proc.stderr
+    assert str(source_path) in proc.stderr
+
+
 def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
     monkeypatch, tmp_path: Path
 ) -> None:

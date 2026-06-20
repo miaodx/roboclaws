@@ -17,7 +17,18 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Persistent MolmoSpaces worker ready and command-response stdout
+2026-06-21: Agibot SDK cleanup backend explicit JSON inputs now fail through
+source-labelled CLI diagnostics instead of raw `json.loads` tracebacks in the
+vendor runner. `--context-json`, `--agent-view-json`, live-navigation
+`--context-json`, and attached map artifact `source.json` all route through one
+runner-local JSON-object source helper, preserving the standalone
+`vendors/agibot_sdk` execution context while matching the campaign's
+fail-aloud semantics for malformed and non-object source files. Focused proof
+passed: Agibot map-context script contract tests, touched-file ruff,
+touched-file format check, diff check, and ratchet summary. Current ratchet:
+0 Ruff complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Persistent MolmoSpaces worker ready and command-response stdout
 packets now route through the shared worker JSON-object source helper instead
 of local `json.loads` calls in `roboclaws/household/subprocess_backend.py`.
 Malformed or non-object persistent ready/response packets now fail with
