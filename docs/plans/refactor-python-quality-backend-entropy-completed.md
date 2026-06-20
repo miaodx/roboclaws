@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Isaac RBY1M robot import summary loading now routes present
+  optional `rby1m_holobase_isaac.import_summary.json` files through
+  `roboclaws.core.json_sources.read_json_object` while preserving the existing
+  optional-source contract: missing, malformed, unreadable, or non-object
+  summaries return `{}` and keep the robot-import plan in pending/not-ready
+  state. Owner layer: Backend Runtime / Environment Primitive. Behavior-change
+  class: source-reader consolidation with stable optional-source semantics.
+  Metric: current shared-checkout ratchet summary reports 1 unrelated Ruff
+  complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+  oversized modules. Proof: focused Isaac robot import source tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/isaac_lab_cleanup/isaac_robot_import.py` regains local raw
+  JSON parsing for import summaries or optional corrupt summaries stop
+  resolving to `{}`.
+
 - 2026-06-20: MolmoSpaces visual backend slot reads now route present slot
   lease JSON through `roboclaws.core.json_sources.read_json_object` while
   preserving the lock manager's fail-closed behavior for malformed,

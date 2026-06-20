@@ -17,23 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces visual backend slot reads now route present slot lease
-files through the shared JSON-object helper while preserving fail-closed
-corrupt-lock behavior for malformed or non-object slot JSON. Focused visual
-backend slot unit tests and touched-file Ruff/format passed, as did
-`git diff --check` and ratchet. Current shared-checkout ratchet summary still
-reports 1 unrelated Ruff complexity row in
+2026-06-20: Isaac RBY1M robot import summary loading now routes present
+optional import summary files through the shared JSON-object helper while
+preserving the missing/corrupt/non-object-as-empty optional source contract.
+Focused Isaac robot import source tests and touched-file Ruff/format passed,
+as did `git diff --check` and ratchet. Current shared-checkout ratchet summary
+still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Scene-camera comparison metadata loading now routes present
-`scene_metadata.json` files through the shared JSON-object helper inside the
-existing RuntimeError translation layer. Focused scene-camera comparison
-contract tests and touched-file Ruff/format passed.
+Previous slice: MolmoSpaces visual backend slot reads now route present slot
+lease files through the shared JSON-object helper while preserving fail-closed
+corrupt-lock behavior for malformed or non-object slot JSON. Focused visual
+backend slot unit tests and touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the visual-backend slot source-reader slice.
+committing the Isaac robot import summary source-reader slice.
 
 ## Touched Areas
 
@@ -43,6 +43,7 @@ committing the visual-backend slot source-reader slice.
 - `scripts/agibot/verify_waypoints_with_pnc.py`
 - `scripts/agibot/generate_metric_map_from_context.py`
 - `scripts/isaac_lab_cleanup/isaac_worker_protocol.py`
+- `scripts/isaac_lab_cleanup/isaac_robot_import.py`
 - `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py`
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
@@ -148,6 +149,7 @@ committing the visual-backend slot source-reader slice.
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
 - `tests/contract/agibot/test_agibot_map_context_scripts.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `tests/unit/molmo_cleanup/test_isaac_robot_import_sources.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_worker_state.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
