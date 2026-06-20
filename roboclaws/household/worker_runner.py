@@ -76,9 +76,9 @@ def parse_last_json_object(stdout: str, *, worker_name: str = "subprocess") -> d
     for line_number, line in _candidate_json_object_lines(stdout):
         line = line.strip()
         try:
-            return parse_json_object_text(
+            return parse_worker_json_object_line(
                 line,
-                label=f"{worker_name} worker stdout row",
+                worker_name=worker_name,
                 source=f"stdout:{line_number}",
             )
         except ValueError as exc:
@@ -86,6 +86,19 @@ def parse_last_json_object(stdout: str, *, worker_name: str = "subprocess") -> d
                 continue
             raise RuntimeError(str(exc)) from exc
     raise RuntimeError(f"{worker_name} worker returned no JSON object: {stdout!r}")
+
+
+def parse_worker_json_object_line(
+    line: str,
+    *,
+    worker_name: str = "subprocess",
+    source: str,
+) -> dict[str, Any]:
+    return parse_json_object_text(
+        line.strip(),
+        label=f"{worker_name} worker stdout row",
+        source=source,
+    )
 
 
 def _candidate_json_object_lines(stdout: str) -> list[tuple[int, str]]:

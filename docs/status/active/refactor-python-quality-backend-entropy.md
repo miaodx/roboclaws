@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Repo-local dotenv parsing now has a shared core owner in
+2026-06-21: Persistent MolmoSpaces worker ready and command-response stdout
+packets now route through the shared worker JSON-object source helper instead
+of local `json.loads` calls in `roboclaws/household/subprocess_backend.py`.
+Malformed or non-object persistent ready/response packets now fail with
+`MolmoSpaces persistent worker ...` source diagnostics before worker readiness,
+response-id validation, or command result handling can derive confidence from
+wrong-shaped structured stdout. Focused proof passed: worker-runner parser
+tests, MolmoSpaces persistent packet/source tests, touched-file ruff,
+touched-file format check, changed-code cleanup review, and ratchet summary.
+Current ratchet: 0 Ruff complexity violations, 80 oversized modules in the
+shared checkout.
+
+Previous slice: Repo-local dotenv parsing now has a shared core owner in
 `roboclaws/core/dotenv.py`. The operator-console repo `.env` loader and the
 provider health/model-matrix dev scripts now use the same no-overwrite,
 comment/blank-line skipping, simple quote stripping, and `export ` value-prefix

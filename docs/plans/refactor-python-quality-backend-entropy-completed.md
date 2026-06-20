@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Persistent MolmoSpaces worker ready and command-response stdout
+  packets now delegate to the shared worker JSON-object source helper instead
+  of keeping local `json.loads` calls in
+  `roboclaws/household/subprocess_backend.py`. Malformed or non-object
+  persistent ready/response packets now fail with
+  `MolmoSpaces persistent worker ...` source diagnostics before worker
+  readiness, response-id validation, or command result handling can derive
+  confidence from a wrong-shaped structured packet. Owner layer: Backend
+  Runtime / Environment Primitive. Behavior-change class: internal
+  persistent-worker source-reader consolidation with fail-aloud packet
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  worker-runner parser tests, MolmoSpaces persistent packet/source tests,
+  touched-file ruff/format checks, changed-code cleanup review, and ratchet.
+  Reopen only if persistent MolmoSpaces ready/response handling regains local
+  JSON packet parsing or wrong-shaped structured stdout can again reach
+  readiness/result handling without worker source diagnostics.
+
 - 2026-06-21: Repo-local dotenv parsing now has a shared core owner in
   `roboclaws/core/dotenv.py` instead of duplicate local parsers in provider
   dev scripts and operator-console launch code. `load_repo_dotenv()` remains

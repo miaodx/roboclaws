@@ -23,6 +23,7 @@ from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
     _parse_last_json_object,
+    _parse_persistent_worker_packet,
     _worker_kwargs_from_args,
 )
 
@@ -56,6 +57,30 @@ def test_parse_last_json_object_tolerates_upstream_stdout_noise() -> None:
     )
 
     assert payload["backend"] == MOLMOSPACES_SUBPROCESS_BACKEND
+
+
+def test_persistent_worker_packet_reports_malformed_json_source() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "MolmoSpaces persistent worker returned invalid packet for serve: "
+            "MolmoSpaces persistent worker stdout row source must contain valid JSON object: "
+            "serve response"
+        ),
+    ):
+        _parse_persistent_worker_packet("{bad json", command="serve")
+
+
+def test_persistent_worker_packet_rejects_non_object_json() -> None:
+    with pytest.raises(
+        ValueError,
+        match=(
+            "MolmoSpaces persistent worker returned invalid packet for locations: "
+            "MolmoSpaces persistent worker stdout row source must contain a JSON object: "
+            "locations response"
+        ),
+    ):
+        _parse_persistent_worker_packet('["not", "a", "packet"]', command="locations")
 
 
 def test_subprocess_backend_reports_missing_runtime(tmp_path: Path) -> None:

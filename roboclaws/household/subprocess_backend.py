@@ -23,6 +23,7 @@ from roboclaws.household.types import (
 )
 from roboclaws.household.worker_runner import (
     parse_last_json_object,
+    parse_worker_json_object_line,
     run_json_worker_once,
     worker_env,
     worker_timeout_s,
@@ -364,13 +365,10 @@ class MolmoSpacesSubprocessBackend:
 
             line = self._read_persistent_line(process, timeout_s=timeout_s, command=command)
             try:
-                response = json.loads(line)
-            except json.JSONDecodeError as exc:
+                response = _parse_persistent_worker_packet(line, command=command)
+            except ValueError as exc:
                 self._stop_persistent_worker_locked()
-                raise RuntimeError(
-                    f"MolmoSpaces persistent worker returned invalid JSON for {command}: "
-                    f"{line.strip()!r}"
-                ) from exc
+                raise RuntimeError(str(exc)) from exc
             if response.get("id") != request_id:
                 self._stop_persistent_worker_locked()
                 raise RuntimeError(
@@ -419,12 +417,10 @@ class MolmoSpacesSubprocessBackend:
             command="serve",
         )
         try:
-            ready = json.loads(line)
-        except json.JSONDecodeError as exc:
+            ready = _parse_persistent_worker_packet(line, command="serve")
+        except ValueError as exc:
             self._stop_persistent_worker_locked()
-            raise RuntimeError(
-                f"MolmoSpaces persistent worker did not emit a JSON ready event: {line.strip()!r}"
-            ) from exc
+            raise RuntimeError(str(exc)) from exc
         if not ready.get("ok") or ready.get("event") != "ready":
             self._stop_persistent_worker_locked()
             raise RuntimeError(
@@ -527,6 +523,19 @@ def _worker_timeout_s(command: str) -> float:
 def _persistent_worker_enabled() -> bool:
     value = os.environ.get("ROBOCLAWS_MOLMOSPACES_PERSISTENT_WORKER", "1")
     return value.strip().lower() not in PERSISTENT_WORKER_DISABLED_VALUES
+
+
+def _parse_persistent_worker_packet(line: str, *, command: str) -> dict[str, Any]:
+    try:
+        return parse_worker_json_object_line(
+            line,
+            worker_name="MolmoSpaces persistent",
+            source=f"{command} response",
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"MolmoSpaces persistent worker returned invalid packet for {command}: {exc}"
+        ) from exc
 
 
 def _worker_kwargs_from_args(command: str, args: tuple[str, ...]) -> dict[str, str]:

@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the persistent MolmoSpaces worker packet
+  source slice: persistent-worker ready and command-response stdout packets
+  now route through the shared worker JSON-object source helper instead of
+  local `json.loads` calls in `roboclaws/household/subprocess_backend.py`.
+  Malformed or non-object ready/response packets now fail with
+  `MolmoSpaces persistent worker ...` source diagnostics before readiness or
+  command result handling can derive confidence from a wrong-shaped packet.
 - Current shared-checkout note after the core dotenv owner slice:
   repo-local dotenv parsing now lives in `roboclaws/core/dotenv.py`.
   Operator-console repo `.env` loading plus provider health/model-matrix dev
