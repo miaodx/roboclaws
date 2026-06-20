@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the model-latency calibration JSONL source
+  consolidation slice: calibration now routes present `model_call_metrics.jsonl`
+  rows through the shared JSONL source helper instead of a local row parser.
+  Missing metric files remain the intentional insufficient-samples path, while
+  malformed or non-object present rows use canonical `model-call metrics`
+  `path:row` diagnostics before fitting, holdout validation, or coefficient-set
+  evidence can derive confidence from partial telemetry.
 - Current shared-checkout note after the report-performance JSONL source slice:
   report-performance JSONL reads now route through the shared JSONL source
   helper instead of a local row parser, while preserving the

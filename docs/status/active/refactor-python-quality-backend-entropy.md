@@ -17,7 +17,19 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Report-performance JSONL reads now route through the shared JSONL
+2026-06-21: Model-latency calibration JSONL reads now route present
+`model_call_metrics.jsonl` rows through the shared JSONL source helper instead
+of a local row parser. Missing metric files remain the intentional empty-source
+path for insufficient-sample diagnostics, while malformed or non-object
+present rows now use canonical `model-call metrics` `path:row` source wording
+before calibration fitting, holdout validation, or coefficient-set evidence can
+derive confidence from partial model-call telemetry. Focused proof passed:
+calibration/report-performance unit tests, touched-file ruff, touched-file
+format check, diff check, changed-code cleanup review, and ratchet summary.
+Current ratchet: 0 Ruff complexity violations, 80 oversized modules in the
+shared checkout.
+
+Previous slice: Report-performance JSONL reads now route through the shared JSONL
 source helper instead of a local row parser, while preserving the
 `ReportPerformanceSourceError` boundary for trace, OpenAI Agents span,
 Codex/Claude event, and provider-request metrics consumers. Malformed and
@@ -243,9 +255,15 @@ again feed route timing/status confidence.
 Avoid reopening report-performance JSONL source handling unless fresh
 report/comparison evidence shows corrupt present trace, span, event, or
 provider-request rows can again feed metrics confidence.
+Avoid reopening model-latency calibration JSONL source consolidation unless
+fresh calibration evidence shows corrupt present `model_call_metrics.jsonl`
+rows can again feed fitting, holdout validation, or coefficient-set confidence.
 
 ## Touched Areas
 
+- `scripts/reports/calibrate_model_latency.py`
+- `tests/unit/reports/test_calibrate_model_latency.py`
+- `tests/unit/reports/test_live_performance.py`
 - `scripts/molmo_cleanup/isaac_semantic_pose_checker.py`
 - `tests/contract/checkers/test_isaac_semantic_pose_checker_trace_sources.py`
 - `scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`

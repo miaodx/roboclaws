@@ -11,6 +11,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from roboclaws.core.json_sources import read_jsonl_objects
 from roboclaws.reports.live_performance import MODEL_CALL_METRIC_SCHEMA
 
 CALIBRATION_SCHEMA = "roboclaws_model_latency_calibration_v1"
@@ -180,27 +181,7 @@ def _metrics_path(path: Path) -> Path:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    rows: list[dict[str, Any]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8", errors="replace").splitlines(),
-        start=1,
-    ):
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"model-call metrics source {path} contains invalid JSON at "
-                f"line {line_number}: {exc.msg}"
-            ) from exc
-        if not isinstance(payload, dict):
-            raise ValueError(
-                f"model-call metrics source {path} contains non-object JSON at "
-                f"line {line_number}: {type(payload).__name__}"
-            )
-        rows.append(payload)
-    return rows
+    return read_jsonl_objects(path, label="model-call metrics")
 
 
 def _model_row(row: dict[str, Any], *, source: str) -> dict[str, Any] | None:

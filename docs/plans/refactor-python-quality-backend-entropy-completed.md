@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Model-latency calibration JSONL source parsing now delegates to
+  the shared JSONL source helper for present `model_call_metrics.jsonl` rows.
+  Missing metric files remain the deliberate empty-source path that produces
+  insufficient-sample diagnostics, while malformed or non-object present rows
+  now use canonical `model-call metrics` `path:row` source wording before
+  calibration fitting, holdout validation, sample counts, or coefficient sets
+  can derive confidence from partial telemetry. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader consolidation
+  with stable missing-source calibration semantics and canonical row-source
+  diagnostics. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout; calibration tests now
+  live in a focused report test file instead of keeping them in the larger
+  live-performance test module. Proof: focused calibration/report-performance
+  tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code cleanup review, and ratchet. Reopen only if
+  `scripts/reports/calibrate_model_latency.py` regains a local JSONL row
+  parser or corrupt present `model_call_metrics.jsonl` rows can again feed
+  fitting or holdout validation without canonical row-source diagnostics.
+
 - 2026-06-21: MolmoSpaces grasp initial-contact diagnostics now validate
   explicit candidate grasp JSON in the parent process before launching the
   child probe. Present malformed or non-object candidate files fail with
