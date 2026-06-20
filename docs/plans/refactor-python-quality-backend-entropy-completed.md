@@ -1020,6 +1020,22 @@ logs before choosing the next slice.
   parser/type paths, accepted as plausible non-object packets, or allowed to
   write overlay artifacts after source-load failure.
 
+- 2026-06-20: B1 scene topdown diagnostic overlay loading now routes explicit
+  `--scene-topdown-render` JSON-object packets through
+  `roboclaws.core.json_sources.read_json_object` instead of a local duplicate
+  reader. Missing, malformed, and parseable non-object Gaussian topdown packets
+  keep failing before schema validation or overlay writes, now with the
+  canonical path-labelled source wording shared by adjacent scene-topdown
+  consumers. Owner layer: Artifacts, reports, and eval suites. Behavior-change
+  class: source-reader consolidation / fail-aloud behavior preservation.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  `render_b1_scene_topdown_diagnostic.py` dropped from 884 to 876 lines. Proof:
+  focused B1 scene topdown diagnostic tests, core JSON-source tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if the diagnostic regains a local JSON-object source reader or stops
+  routing explicit Gaussian topdown render packets through the shared source
+  helper.
+
 - 2026-06-20: B1 Map 12 manual-draft verification promotion CLI loading now
   treats explicit `--draft` input as JSON-object source truth. Missing,
   malformed, or parseable non-object draft packets return concise CLI

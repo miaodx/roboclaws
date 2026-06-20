@@ -158,7 +158,7 @@ def test_b1_scene_topdown_overlay_rejects_bad_render_packet_source_json(
         )
     except ValueError as exc:
         message = str(exc)
-        assert "scene top-down render must contain valid JSON object" in message
+        assert "scene top-down render source must contain valid JSON object" in message
         assert str(bad_packet) in message
     else:
         raise AssertionError("malformed scene top-down render packet must fail aloud")
@@ -178,10 +178,29 @@ def test_b1_scene_topdown_overlay_rejects_non_object_render_packet_source_json(
         )
     except ValueError as exc:
         message = str(exc)
-        assert "scene top-down render must contain a JSON object" in message
+        assert "scene top-down render source must contain a JSON object" in message
         assert str(bad_packet) in message
     else:
         raise AssertionError("non-object scene top-down render packet must fail aloud")
+
+
+def test_b1_scene_topdown_overlay_rejects_missing_render_packet_source_json(
+    tmp_path: Path,
+) -> None:
+    missing_packet = tmp_path / "missing_scene_gaussian_topdown.json"
+
+    try:
+        build_scene_topdown_diagnostic(
+            scene_root=SCENE_ROOT,
+            output_dir=tmp_path / "overlay",
+            scene_topdown_render=missing_packet,
+        )
+    except FileNotFoundError as exc:
+        message = str(exc)
+        assert "scene top-down render source is missing" in message
+        assert str(missing_packet) in message
+    else:
+        raise AssertionError("missing scene top-down render packet must fail aloud")
 
 
 def _write_fake_scene_topdown_packet(tmp_path: Path) -> Path:

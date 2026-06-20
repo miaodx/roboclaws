@@ -17,13 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 manual-draft verification promotion and semantic review-packet
-promotion now route explicit draft/review-packet sources through the shared
-JSON-source helper. Their CLI errors keep the existing no-traceback return path
-while using canonical path-labelled source wording, and a stale scene top-down
-missing-source assertion was aligned with the same helper wording. Focused B1
-verified-alignment and core JSON-source tests, touched-file Ruff/format, `git
-diff --check`, and ratchet passed.
+2026-06-20: B1 scene topdown diagnostic overlay loading now routes explicit
+`--scene-topdown-render` packets through the shared JSON-source helper.
+Missing, malformed, or parseable non-object Gaussian topdown packets use the
+canonical path-labelled source wording before schema validation or overlay
+writes. Focused B1 scene topdown diagnostic and core JSON-source tests,
+touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -40,6 +39,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/isaac_lab_cleanup/compare_isaac_segmentation_aov.py`
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
+- `scripts/maps/render_b1_scene_topdown_diagnostic.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `scripts/maps/build_b1_map12_semantic_anchor_review_packet.py`
 - `scripts/maps/build_b1_map12_semantic_projection.py`

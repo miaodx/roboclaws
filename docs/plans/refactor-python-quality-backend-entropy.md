@@ -138,7 +138,9 @@ Latest quality snapshot from 2026-06-20:
   route those JSON-object sources through the shared source helper instead of
   duplicate local readers. B1 scene topdown
   diagnostics now apply the same source-truth rule to explicit
-  `--scene-topdown-render` packets before overlay report writes. B1 Gaussian
+  `--scene-topdown-render` packets before overlay report writes and route that
+  JSON-object source through the shared source helper instead of a duplicate
+  local reader. B1 Gaussian
   scene topdown capture now applies the same source-truth rule to explicit
   hidden `--camera-request` packets before Isaac capture or capture-result
   writes, and routes that JSON-object source through the shared source helper
