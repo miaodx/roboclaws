@@ -22,6 +22,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
     DEFAULT_VISUAL_GROUNDING_BASE_URL,
     DEFAULT_VISUAL_GROUNDING_TIMEOUT_S,
@@ -195,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _load_corpus(path: Path) -> dict[str, Any]:
-    corpus = _read_json_object(path, label="visual grounding benchmark corpus")
+    corpus = _read_source_json_object(path, label="visual grounding benchmark corpus")
     if corpus.get("schema") != CORPUS_SCHEMA:
         raise SystemExit(f"unsupported corpus schema in {path}")
     observations = corpus.get("observations")
@@ -210,7 +211,7 @@ def _benchmark_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
         pipeline_ids = _pipeline_ids(args.pipeline)
         return [_default_benchmark_row(pipeline_id) for pipeline_id in pipeline_ids]
 
-    matrix = _read_json_object(args.matrix, label="visual grounding benchmark matrix")
+    matrix = _read_source_json_object(args.matrix, label="visual grounding benchmark matrix")
     if matrix.get("schema") != "visual_grounding_benchmark_matrix_v1":
         raise SystemExit(f"unsupported benchmark matrix schema in {args.matrix}")
     raw_rows = matrix.get("rows")
@@ -232,16 +233,11 @@ def _benchmark_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     return rows
 
 
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    if not path.is_file():
-        raise SystemExit(f"{label} missing: {path}")
+def _read_source_json_object(path: Path, *, label: str) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
-    if not isinstance(payload, dict):
-        raise SystemExit(f"{label} must contain a JSON object: {path}")
-    return payload
+        return read_json_object(path, label=label)
+    except (FileNotFoundError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _default_benchmark_row(pipeline_id: str) -> dict[str, Any]:

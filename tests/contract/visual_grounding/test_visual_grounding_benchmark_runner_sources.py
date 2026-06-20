@@ -20,7 +20,7 @@ def test_visual_grounding_runner_rejects_missing_corpus_source(tmp_path: Path) -
     )
 
     assert result.returncode == 1
-    assert "visual grounding benchmark corpus missing" in result.stderr
+    assert "visual grounding benchmark corpus source is missing" in result.stderr
     assert str(missing) in result.stderr
     assert not (tmp_path / "visual_grounding_benchmark_result.json").exists()
     assert "Traceback" not in result.stderr
@@ -37,7 +37,9 @@ def test_visual_grounding_runner_rejects_malformed_corpus_source(tmp_path: Path)
     )
 
     assert result.returncode == 1
-    assert "visual grounding benchmark corpus must contain valid JSON object" in result.stderr
+    assert (
+        "visual grounding benchmark corpus source must contain valid JSON object" in result.stderr
+    )
     assert str(corpus) in result.stderr
     assert not (tmp_path / "visual_grounding_benchmark_result.json").exists()
     assert "Traceback" not in result.stderr
@@ -54,7 +56,7 @@ def test_visual_grounding_runner_rejects_non_object_matrix_source(tmp_path: Path
     )
 
     assert result.returncode == 1
-    assert "visual grounding benchmark matrix must contain a JSON object" in result.stderr
+    assert "visual grounding benchmark matrix source must contain a JSON object" in result.stderr
     assert str(matrix) in result.stderr
     assert not (tmp_path / "visual_grounding_benchmark_result.json").exists()
     assert "Traceback" not in result.stderr

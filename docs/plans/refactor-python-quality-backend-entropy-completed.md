@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Visual-grounding benchmark run source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for declared
+  corpus and matrix JSON-object artifacts. This removes the runner's duplicate
+  local JSON-object parser while preserving no-traceback CLI behavior for
+  missing, malformed, or parseable non-object corpus/matrix inputs under the
+  canonical helper wording. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud behavior
+  preservation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules; the runner stayed at 1291 lines because the parser became
+  a tiny CLI-boundary wrapper. Proof: focused visual-grounding benchmark
+  source tests, visual-grounding benchmark contract tests, core JSON-source
+  tests, touched-file ruff/format checks, `git diff --check`, and ratchet.
+  Reopen only if the runner regains a local JSON parser or stops routing
+  declared corpus/matrix JSON-object artifacts through the shared source
+  helper.
+
 - 2026-06-20: Visual-grounding cleanup-run corpus source loading now uses the
   shared `roboclaws.core.json_sources.read_json_object` reader for declared
   cleanup `run_result.json` artifacts. This removes the corpus builder's

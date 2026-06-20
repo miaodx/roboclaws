@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Visual-grounding cleanup-run corpus building now uses the shared
+2026-06-20: Visual-grounding benchmark runs now use the shared
 `roboclaws.core.json_sources.read_json_object` source reader for declared
-cleanup `run_result.json` artifacts. Malformed or parseable non-object
-artifacts still fail without tracebacks at the CLI boundary under the canonical
-helper wording, and the builder no longer carries a duplicate local
-JSON-object reader. Focused visual-grounding corpus-builder and core
-JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed.
+corpus and matrix JSON-object artifacts. Missing, malformed, or parseable
+non-object artifacts still fail without tracebacks at the CLI boundary under
+the canonical helper wording, and the runner no longer carries a duplicate
+local JSON-object parser. Focused visual-grounding benchmark source tests,
+benchmark contract tests, core JSON-source tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

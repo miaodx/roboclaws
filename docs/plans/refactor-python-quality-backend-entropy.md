@@ -139,7 +139,8 @@ Latest quality snapshot from 2026-06-20:
   prediction JSONL artifacts as object-typed source truth before benchmark
   validation.
   Visual-grounding benchmark runs now treat declared corpus and matrix inputs
-  as source truth before writing benchmark outputs.
+  as source truth before writing benchmark outputs and route those JSON-object
+  sources through the shared source helper instead of a duplicate local parser.
   Visual-grounding cleanup-run corpus building now treats declared
   `run_result.json` inputs as object-typed source truth before writing corpus
   outputs and routes that JSON-object source through the shared helper instead
