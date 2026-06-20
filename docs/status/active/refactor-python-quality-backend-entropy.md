@@ -17,25 +17,25 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 waypoint pose request building now rejects missing, malformed,
-or wrong-shaped required `--alignment-artifact` and explicit `--points`
-sources before writing `waypoint_pose_requests.json`. Focused CLI tests,
-existing B1 verified-alignment contract tests, touched-file Ruff/format,
-`git diff --check`, changed-code review, and ratchet passed. Quality signal:
-0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: B1 navigation smoke now rejects missing, malformed, or non-object
+explicit `--readiness-artifact` and `--waypoint-pose-requests` sources before
+writing `navigation_smoke.json`. Focused navigation-smoke CLI tests, existing
+B1 verified-alignment contract tests, touched-file Ruff/format,
+`git diff --check`, changed-code review, and ratchet passed. Quality signal: 0
+Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence. Good
 remaining candidates include
 `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py` source loads or
-`scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py` explicit
-`--waypoint-pose-requests` / readiness artifact loading.
+`scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py` explicit
+navigation/report artifact loading.
 
 ## Touched Areas
 
-- `scripts/isaac_lab_cleanup/build_b1_map12_waypoint_pose_requests.py`
-- `tests/contract/maps/test_b1_map12_waypoint_pose_requests_cli.py`
+- `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
+- `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

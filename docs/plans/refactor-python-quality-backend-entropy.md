@@ -109,7 +109,10 @@ Latest quality snapshot from 2026-06-20:
   writes. B1 waypoint pose request building now treats required
   `--alignment-artifact` input and explicit `--points` input as source truth,
   failing missing, malformed, or wrong-shaped sources before pose-request
-  artifact writes.
+  artifact writes. B1 navigation smoke now treats explicit
+  `--readiness-artifact` and `--waypoint-pose-requests` inputs as source truth
+  too, failing missing, malformed, or non-object sources before navigation
+  smoke artifact writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

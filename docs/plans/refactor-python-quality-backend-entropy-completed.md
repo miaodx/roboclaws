@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 navigation smoke now treats explicit
+  `--readiness-artifact` and `--waypoint-pose-requests` inputs as source truth.
+  Missing, malformed, or parseable non-object readiness or waypoint request
+  artifacts return concise source-path errors before `navigation_smoke.json`
+  writes, instead of surfacing raw parser/type failures or writing plausible
+  blocked navigation artifacts from corrupt source evidence. Schema-valid
+  blocked waypoint request artifacts still produce blocked navigation evidence.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud B1 navigation smoke source truth. Metric: ratchet stayed at 0
+  Ruff complexity rows and 79 oversized modules; coverage landed in a small
+  dedicated navigation-smoke CLI contract test file instead of adding to the
+  2000-line B1 alignment hard-ceiling test. Proof: focused navigation smoke
+  CLI tests, existing B1 verified-alignment contract tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh navigation smoke evidence that explicit readiness or
+  waypoint request artifacts are again loaded through raw parser/type paths,
+  accepted as plausible non-object packets, or allowed to write artifacts after
+  source-load failure.
+
 - 2026-06-20: B1 Map 12 waypoint pose request building now treats required
   `--alignment-artifact` input and explicit `--points` input as source truth.
   Missing, malformed, or parseable wrong-shaped alignment artifacts and points
