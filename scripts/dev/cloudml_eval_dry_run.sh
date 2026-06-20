@@ -10,6 +10,7 @@ env_ref="${ROBOCLAWS_EVAL_ENV_REF:-HEAD}"
 code_ref="${ROBOCLAWS_EVAL_CODE_REF:-mi/main}"
 env_short="$(git -C "$repo_root" rev-parse --short=8 "$env_ref")"
 code_commit="${ROBOCLAWS_CLOUDML_CODE_COMMIT:-$(git -C "$repo_root" rev-parse "$code_ref")}"
+platform_code_commit="${ROBOCLAWS_CLOUDML_CODE_COMMIT_FOR_PLATFORM:-$code_commit}"
 code_short="$(git -C "$repo_root" rev-parse --short=12 "$code_commit")"
 registry_repo="${ROBOCLAWS_EVAL_REGISTRY_REPO:-micr.cloud.mioffice.cn/cc-proxy/miuniverse-staging}"
 default_tag="roboclaws-eval-env-${env_short}-code-${code_short}-${date_stamp}"
@@ -42,6 +43,9 @@ Environment overrides:
   ROBOCLAWS_CLOUDML_IMAGE_URL     Pushed eval image URL.
   ROBOCLAWS_CLOUDML_CODE_URL      Default: https://git.n.xiaomi.com/ipg/infra/roboclaws.git
   ROBOCLAWS_CLOUDML_CODE_COMMIT   Default: mi/main commit.
+  ROBOCLAWS_CLOUDML_CODE_COMMIT_FOR_PLATFORM
+                                  Optional CloudML codeConfig commit override.
+                                  The entrypoint still verifies ROBOCLAWS_CLOUDML_CODE_COMMIT.
   ROBOCLAWS_CLOUDML_RUN_MODE      Default: product-cleanup.
                                    product-cleanup runs the public cleanup surface
                                    and is compatible with the current mi/main commit.
@@ -238,7 +242,7 @@ argv=(
   --image_command "$image_command"
   --code_url "$code_url"
   --code_branch "$code_branch"
-  --code_commit "$code_commit"
+  --code_commit "$platform_code_commit"
   --dry_run "$dry_run"
   --output_yaml_path "$output_yaml_path"
   --json
