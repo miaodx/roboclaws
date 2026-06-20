@@ -18,9 +18,7 @@ from scripts.maps.build_b1_map12_base_navigation_map import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-MAP_BUNDLE = (
-    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
-)
+MAP_BUNDLE = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
 BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
 ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 SCRIPT = REPO_ROOT / "scripts" / "maps" / "build_b1_map12_base_navigation_map.py"
@@ -33,9 +31,7 @@ def test_checked_in_base_navigation_labels_are_accepted_source_of_truth() -> Non
     assert labels["schema"] == B1_BASE_NAVIGATION_LABELS_SCHEMA
     assert labels["review_status"] == "accepted"
     assert labels["source_map_mutated"] is False
-    assert labels["policy"]["source_of_truth"] == (
-        "operator_reviewed_map12_navigation_area_labels"
-    )
+    assert labels["policy"]["source_of_truth"] == ("operator_reviewed_map12_navigation_area_labels")
     assert labels["policy"]["contains_static_fixtures"] is False
     assert labels["policy"]["contains_movable_objects"] is False
     assert set(areas) == {
@@ -53,9 +49,7 @@ def test_checked_in_base_navigation_labels_are_accepted_source_of_truth() -> Non
     assert areas["open_kitchen_a"]["asset_partition_id"] == ""
     assert areas["long_corridor_a"]["asset_partition_id"] == ""
     assert {
-        area_id
-        for area_id, label in areas.items()
-        if label["polygon_usage"]["navigation"] is True
+        area_id for area_id, label in areas.items() if label["polygon_usage"]["navigation"] is True
     } == {
         "meeting_room_b",
         "meeting_room_c",
@@ -79,8 +73,7 @@ def test_base_navigation_map_builder_generates_shared_robot_and_dt_bundle(
     manifest = _read_json(output_dir / "base_navigation_map_manifest.json")
     rooms = {room["room_id"]: room for room in semantics["rooms"]}
     waypoints = {
-        waypoint["navigation_area_id"]: waypoint
-        for waypoint in semantics["inspection_waypoints"]
+        waypoint["navigation_area_id"]: waypoint for waypoint in semantics["inspection_waypoints"]
     }
 
     assert result["schema"] == B1_BASE_NAVIGATION_MAP_MANIFEST_SCHEMA

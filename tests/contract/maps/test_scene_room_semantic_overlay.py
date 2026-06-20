@@ -10,7 +10,7 @@ from roboclaws.maps.room_semantics import (
     ROOM_SEMANTIC_OVERLAY_SCHEMA,
     build_scene_room_semantic_overlay,
 )
-from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle
+from scripts.maps.build_b1_map12_base_navigation_map import build_base_navigation_map_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENE_ROOT = (
@@ -19,6 +19,7 @@ SCENE_ROOT = (
 MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_12") / "agibot"
 )
+BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
 ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
 
 
@@ -200,26 +201,25 @@ def test_scene_room_overlay_uses_source_bundle_room_geometry(tmp_path: Path) -> 
     assert room["map_center"] == {"x": 1.0, "y": 1.0}
 
 
-def test_b1_runtime_compiler_materializes_review_labels_without_retargeting_map(
+def test_b1_base_navigation_map_materializes_review_labels_without_retargeting_map(
     tmp_path: Path,
 ) -> None:
-    _require_scene_root()
-
-    result = compile_runtime_bundle(
+    result = build_base_navigation_map_bundle(
         map_bundle=MAP12_BUNDLE,
-        scene_root=SCENE_ROOT,
+        labels_path=BASE_LABELS,
         room_semantics_path=ROOM_SEMANTICS,
-        output_dir=tmp_path / "runtime-map-bundle",
+        output_dir=tmp_path / "base-navigation-map",
     )
     bundle_dir = Path(result["output_dir"])
     semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
 
     assert result["validation"]["ok"] is True
     assert validate_nav2_map_bundle(bundle_dir).ok
-    assert semantics["rooms"] == []
+    assert len(semantics["rooms"]) == 8
     assert semantics["fixtures"] == []
-    assert len(semantics["navigation_memory_anchors"]) == 9
-    assert semantics["review_labels"] == []
+    assert semantics["navigation_memory_anchors"] == []
+    assert semantics["provenance"]["base_navigation_labels"] == str(BASE_LABELS)
+    assert semantics["provenance"]["uses_navigation_memory_as_waypoint_source"] is False
     assert semantics["provenance"]["room_semantics_reference"] == str(ROOM_SEMANTICS)
 
 
@@ -285,4 +285,3 @@ def _minimal_scene_root(tmp_path: Path) -> Path:
     partition.mkdir(parents=True)
     (partition / "scene.usd").write_text("#usda 1.0\n", encoding="utf-8")
     return tmp_path / "scene"
-

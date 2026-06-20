@@ -1473,12 +1473,11 @@ def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() ->
         "evidence_lane=world-public-labels",
         "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json",
         "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json",
-        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
     )
 
     assert route[26] == "output/b1-map12/alignment/alignment_residuals.json"
     assert route[27] == ("output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json")
-    assert route[28] == "output/b1-map12/semantic-projection/semantic_projection.json"
+    assert len(route) == 28
     target_trace = next(item for item in plan_trace if item.startswith("target=just agent::run "))
     assert "b1_alignment_artifact=output/b1-map12/alignment/alignment_residuals.json" in (
         target_trace
@@ -1487,10 +1486,21 @@ def test_b1_public_launch_passes_explicit_robot_consumption_proof_artifacts() ->
         "b1_navigation_artifact=output/b1-map12/navigation-smoke/residual-overlay/navigation_smoke.json"
         in target_trace
     )
-    assert (
-        "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json"
-        in target_trace
-    )
+    assert "b1_semantic_projection_artifact=" not in target_trace
+
+
+def test_b1_public_launch_rejects_stale_semantic_projection_artifact_axis() -> None:
+    with pytest.raises(subprocess.CalledProcessError) as exc:
+        trace_surface_run_with_plan(
+            "surface=household-world",
+            "world=b1-map12",
+            "backend=isaaclab",
+            "agent_engine=codex-cli",
+            "prompt=inspect the digital twin",
+            "evidence_lane=world-public-labels",
+            "b1_semantic_projection_artifact=output/b1-map12/semantic-projection/semantic_projection.json",
+        )
+    assert "b1_semantic_projection_artifact= is no longer" in exc.value.stderr
 
 
 def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() -> None:
@@ -1500,9 +1510,15 @@ def test_b1_runtime_bundle_branch_exports_canonical_runtime_prior_artifacts() ->
         1,
     )[0]
 
-    assert "compile_b1_map12_runtime_bundle.py" in b1_branch
+    assert "build_b1_map12_base_navigation_map.py" in b1_branch
+    assert "augment_b1_map12_base_navigation_map.py" in b1_branch
+    assert "compile_b1_map12_runtime_bundle.py" not in b1_branch
     assert "convert_nav2_cleanup_bundle.py" in b1_branch
     assert "b1_robot_consumption_manifest.json" in b1_branch
+    assert "--base-map-bundle" in b1_branch
+    assert "--alignment-artifact" in b1_branch
+    assert "--navigation-artifact" in b1_branch
+    assert "--semantic-projection-artifact" not in b1_branch
     assert '--output "${output_dir}/runtime_map_prior_snapshot.json"' in b1_branch
     assert '--summary-json "${output_dir}/runtime_map_prior_targets.json"' in b1_branch
     assert 'map_bundle_dir="$b1_runtime_map_bundle_dir"' in b1_branch

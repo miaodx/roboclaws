@@ -20,7 +20,8 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
 )
-from scripts.maps.compile_b1_map12_runtime_bundle import compile_runtime_bundle
+from scripts.maps.augment_b1_map12_base_navigation_map import augment_base_navigation_map_bundle
+from scripts.maps.build_b1_map12_base_navigation_map import build_base_navigation_map_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -33,10 +34,8 @@ AGIBOT_SDK_RUNNER_PATH = (
 B1_MAP12_BUNDLE = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_12" / "agibot"
 )
-B1_SCENE_ROOT = (
-    REPO_ROOT / "data" / "robot-data-lab" / "scene-engine" / "data" / "2rd_floor_seperated"
-)
 B1_ROOM_SEMANTICS = REPO_ROOT / "assets" / "maps" / "b1-map12-room-semantics.json"
+B1_BASE_LABELS = REPO_ROOT / "assets" / "maps" / "b1-map12-base-navigation-labels.json"
 
 
 def _require_agibot_sdk_runner() -> None:
@@ -4983,11 +4982,16 @@ def _compile_b1_runtime_bundle_for_checker(tmp_path: Path, *, verified: bool) ->
             "alignment_artifact_path": alignment_path,
             "navigation_artifact_path": navigation_path,
         }
-    result = compile_runtime_bundle(
+    base_result = build_base_navigation_map_bundle(
         map_bundle=B1_MAP12_BUNDLE,
-        scene_root=B1_SCENE_ROOT,
+        labels_path=B1_BASE_LABELS,
         room_semantics_path=B1_ROOM_SEMANTICS,
+        output_dir=tmp_path / ("b1-base-verified" if verified else "b1-base-blocked"),
+    )
+    result = augment_base_navigation_map_bundle(
+        base_map_bundle=Path(base_result["output_dir"]),
         output_dir=tmp_path / ("b1-runtime-verified" if verified else "b1-runtime-blocked"),
+        allow_blocked_proof=not verified,
         **kwargs,
     )
     return Path(result["output_dir"])

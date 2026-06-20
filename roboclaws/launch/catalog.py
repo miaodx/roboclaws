@@ -307,6 +307,13 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
             "environment_setup= is no longer a public run::surface argument",
             "use scenario_setup=baseline|relocate-cleanup-related-objects",
         )
+    if _override_value(overrides, "b1_semantic_projection_artifact"):
+        raise LaunchError(
+            "b1_semantic_projection_artifact= is no longer a public run::surface argument",
+            "Base Navigation Map room semantics are shared by B1 real-robot and "
+            "Digital Twin routes; pass only b1_alignment_artifact= and "
+            "b1_navigation_artifact= for robot-consumption proof",
+        )
 
 
 def _strip_named(value: str, name: str) -> str:

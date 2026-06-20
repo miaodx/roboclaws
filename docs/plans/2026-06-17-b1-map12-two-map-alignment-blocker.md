@@ -730,22 +730,23 @@ Current gate:
   residual artifact. The default navigation-smoke harness now passes with two
   residual-backed Map12 navigation-memory points and same-pose Isaac FPV/Chase
   evidence.
-- `scripts/maps/compile_b1_map12_runtime_bundle.py` can now consume explicit
-  verified alignment and navigation artifacts and write
+- The current B1 launch path now runs
+  `scripts/maps/build_b1_map12_base_navigation_map.py` and then
+  `scripts/maps/augment_b1_map12_base_navigation_map.py`. The sidecar consumes
+  explicit verified alignment/navigation artifacts and writes
   `digital_twin_capabilities.robot_consumption_proof` into `semantics.json`.
-  With the accepted residual/navigation smoke artifacts, the compiled runtime
-  bundle validates and reports `robot_navigation_supported=true`. The compiler
-  does not auto-discover `output/` artifacts; callers must pass explicit paths,
-  and missing, invalid, or mismatched artifacts fail loudly.
-- The compiled bundle writes `b1_robot_consumption_manifest.json` as the thin
-  robot-consumer status packet. It summarizes navigation readiness, room/object
-  semantic readiness, blocked capabilities, required bundle files, and the
-  no-autodiscovery policy without adding another fallback path.
-- The same compiler can now consume an explicit verified semantic projection
-  artifact and write
-  `digital_twin_capabilities.room_semantic_projection_proof` into
-  `semantics.json`. This only promotes room semantics when the projection
-  artifact itself was produced from accepted semantic anchors. The default route
+  With the accepted residual/navigation smoke artifacts, the augmented Base
+  Navigation Map bundle validates and reports `robot_navigation_supported=true`.
+  The sidecar does not auto-discover `output/` artifacts; callers must pass
+  explicit paths, and missing, invalid, or mismatched artifacts fail loudly.
+- The sidecar writes `b1_robot_consumption_manifest.json` as the thin
+  robot-consumer status packet. It summarizes navigation readiness, base room
+  semantic readiness, blocked object/manipulation capabilities, required bundle
+  files, and the no-autodiscovery policy without adding another fallback path.
+- The active launch path no longer accepts a separate semantic projection
+  artifact. Base room semantics come from the reviewed Base Navigation Map.
+  Object semantics remain blocked until a separate proof-gated source exists.
+  The default route
   does not auto-discover semantic projection output, and object projection stays
   `blocked_until_object_semantic_anchors`.
 - A compiled B1/Nav2 cleanup bundle can now be converted into the same

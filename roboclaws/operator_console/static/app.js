@@ -63,9 +63,6 @@ const els = {
   isaacSceneInput: document.getElementById("isaac-scene-input"),
   b1AlignmentArtifactInput: document.getElementById("b1-alignment-artifact-input"),
   b1NavigationArtifactInput: document.getElementById("b1-navigation-artifact-input"),
-  b1SemanticProjectionArtifactInput: document.getElementById(
-    "b1-semantic-projection-artifact-input"
-  ),
   localizationGate: document.getElementById("localization-gate"),
   enablementGate: document.getElementById("enablement-gate"),
   estopGate: document.getElementById("estop-gate"),
@@ -178,7 +175,6 @@ function bindEvents() {
     els.isaacSceneInput,
     els.b1AlignmentArtifactInput,
     els.b1NavigationArtifactInput,
-    els.b1SemanticProjectionArtifactInput,
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
@@ -1164,9 +1160,6 @@ async function refreshSelectedRouteReadiness() {
   if (els.b1NavigationArtifactInput.value) {
     params.set("b1_navigation_artifact", els.b1NavigationArtifactInput.value);
   }
-  if (els.b1SemanticProjectionArtifactInput.value) {
-    params.set("b1_semantic_projection_artifact", els.b1SemanticProjectionArtifactInput.value);
-  }
   if (isAgibotRoute(route)) {
     params.set("real_movement_enabled", els.realMovementGate.checked ? "true" : "false");
     params.set("localization_ready", els.localizationGate.checked ? "true" : "false");
@@ -1438,9 +1431,6 @@ function launchOverrides(route = state.selectedRoute) {
   }
   if (els.b1NavigationArtifactInput.value) {
     overrides.b1_navigation_artifact = els.b1NavigationArtifactInput.value;
-  }
-  if (els.b1SemanticProjectionArtifactInput.value) {
-    overrides.b1_semantic_projection_artifact = els.b1SemanticProjectionArtifactInput.value;
   }
   return overrides;
 }
