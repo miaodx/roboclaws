@@ -235,6 +235,10 @@ Latest quality snapshot from 2026-06-20:
   non-object status sources aloud instead of collapsing them to an empty phase
   and allowing generic operator-handoff failure handling to overwrite corrupt
   source context.
+  Scene-sampler room-label manifest loading now treats the prepared label
+  manifest as JSON-object source truth before schema/admission validation, so
+  malformed or non-object manifests fail with path-labelled source errors
+  instead of parser tracebacks or wrong-layer shape errors.
   Codex and Claude live-run timing writers now
   surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing

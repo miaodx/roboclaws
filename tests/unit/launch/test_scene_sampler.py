@@ -22,6 +22,7 @@ from roboclaws.launch.scene_sampler import (
     eval_sampler_rows,
     eval_suite_payload,
     legacy_molmospaces_world_ids,
+    load_room_label_manifest,
     parse_molmospaces_world_id,
     readiness_report,
     sampler_manifest,
@@ -637,6 +638,29 @@ def test_scene_sampler_rejects_heuristic_room_category_provenance() -> None:
 
     with pytest.raises(ValueError, match="trusted room-category provenance"):
         validate_sampler_manifest(manifest)
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_message"),
+    [
+        ("{", "room label manifest source must contain valid JSON object"),
+        ("[]", "room label manifest source must contain a JSON object"),
+    ],
+)
+def test_scene_sampler_room_label_manifest_reports_source_errors(
+    tmp_path: Path,
+    source_text: str,
+    expected_message: str,
+) -> None:
+    manifest_path = tmp_path / "room-labels.json"
+    manifest_path.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError) as exc_info:
+        load_room_label_manifest(manifest_path)
+
+    message = str(exc_info.value)
+    assert expected_message in message
+    assert str(manifest_path) in message
 
 
 def test_scene_sampler_requires_exactly_three_ui_rows_per_visible_source() -> None:

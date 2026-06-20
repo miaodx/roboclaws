@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-sampler room-label manifest loading now treats the
+  prepared label manifest as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object` before schema/admission
+  validation. Malformed or parseable non-object manifests now fail with
+  path-labelled source errors instead of parser tracebacks or wrong-layer
+  shape errors. Owner layer: Runnable Surfaces And Presets plus Artifacts,
+  reports, and eval suites. Behavior-change class: fail-aloud scene-sampler
+  admission source truth. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules. Proof: focused scene sampler tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh scene-sampler evidence that malformed room-label
+  manifests again surface raw parser/type errors or pass into schema/admission
+  validation as plausible label evidence.
+
 - 2026-06-20: Codex operator-handoff terminal-phase polling now treats present
   `live_status.json` as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object`. Malformed or parseable

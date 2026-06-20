@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Codex operator-handoff terminal-phase polling now treats present
-`live_status.json` as JSON-object source truth through
-`roboclaws.core.json_sources.read_json_object`. Malformed or non-object status
-sources fail aloud instead of collapsing to an empty phase and allowing generic
-operator-handoff failure handling to overwrite the corrupt source context.
-Focused Codex live report tests, touched-file Ruff/format, `git diff --check`,
-changed-code review, and ratchet passed.
+2026-06-20: Scene-sampler room-label manifest loading now treats the prepared
+label manifest as JSON-object source truth through
+`roboclaws.core.json_sources.read_json_object` before schema/admission
+validation. Malformed or non-object manifests fail with path-labelled source
+errors instead of parser tracebacks or wrong-layer shape errors. Focused scene
+sampler tests, touched-file Ruff/format, `git diff --check`, changed-code
+review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
