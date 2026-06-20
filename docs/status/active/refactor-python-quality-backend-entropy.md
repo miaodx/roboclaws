@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Planner-proof bundle loading now uses the shared
-`roboclaws.core.json_sources.read_json_object` source reader for cleanup
-`run_result.json`, declared `planner_proof_requests.json`, prior
-`proof_bundle_run_manifest.json`, and standalone prior probe `run_result.json`
-inputs. Malformed or parseable non-object artifacts keep path-labelled source
-errors while the runner no longer carries a duplicate local JSON-object reader.
-Focused planner-proof source tests, touched-file Ruff/format,
-`git diff --check`, changed-code review, and ratchet passed.
+2026-06-20: MolmoSpaces apple-to-apple grid execution now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for existing
+`apple2apple_test_grid.json` manifests and detached live `live_status.json`
+polling. Malformed or parseable non-object artifacts keep path-labelled source
+errors, transient live-status partial writes still retry, and the runner no
+longer carries a duplicate local JSON-object reader. Focused apple-to-apple
+grid tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -47,6 +46,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
 - `scripts/maps/export_bundle.py`
+- `scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
@@ -68,6 +68,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
 - `tests/contract/maps/test_nav2_map_bundle_contract.py`
+- `tests/unit/molmo_cleanup/test_apple2apple_test_grid.py`
 - `tests/contract/visual_grounding/test_visual_grounding_benchmark_checker_sources.py`
 - `tests/contract/visual_grounding/test_visual_grounding_benchmark_runner_sources.py`
 - `tests/contract/visual_grounding/test_visual_grounding_corpus_builder.py`

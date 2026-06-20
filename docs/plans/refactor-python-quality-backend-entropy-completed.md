@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: MolmoSpaces apple-to-apple grid source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for existing
+  `apple2apple_test_grid.json` manifests and detached live `live_status.json`
+  polling. This removes the runner's duplicate local JSON-object reader while
+  preserving fail-aloud path-labelled source errors for malformed or parseable
+  non-object artifacts and preserving the small retry window for transient
+  live-status partial writes. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation / fail-aloud
+  behavior preservation. Metric: ratchet stayed at 0 Ruff complexity rows and
+  79 oversized modules; the grid runner dropped from 371 to 356 lines. Proof:
+  focused apple-to-apple grid tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if the runner regains a local
+  JSON-object source reader or stops routing explicit JSON-object artifacts
+  through the shared source helper.
+
 - 2026-06-20: Planner-proof bundle source loading now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for cleanup
   `run_result.json`, declared `planner_proof_requests.json`, prior

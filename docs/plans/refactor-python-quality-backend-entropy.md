@@ -221,7 +221,10 @@ Latest quality snapshot from 2026-06-20:
   merge or proof-request selection. Planner-proof bundle source loading now
   routes cleanup run-result, declared request, prior manifest, and standalone
   prior probe JSON-object artifacts through the shared source helper instead
-  of a duplicate local reader.
+  of a duplicate local reader. MolmoSpaces apple-to-apple grid source loading
+  now routes existing grid manifests and detached live-status JSON-object
+  artifacts through the shared source helper instead of a duplicate local
+  reader.
   The cleanup checker now treats declared planner-proof request artifacts as
   JSON-object source truth through `roboclaws.core.json_sources`, failing
   malformed, non-object, or missing request manifests with path-labelled source
