@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Report-performance comparison manifest loading now uses
+  `roboclaws.core.json_sources.read_json_object` for explicit `--manifest`
+  artifacts. Missing, malformed, or parseable non-object comparison manifests
+  now use canonical path-labelled source wording before comparison-list
+  validation or run-dir extraction. Owner layer: Artifacts, reports, and eval
+  suites. Behavior-change class: source-reader consolidation / fail-aloud
+  source validation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused comparison manifest source tests, core
+  JSON-source tests, touched-file ruff/format checks, `git diff --check`, and
+  ratchet. Reopen only if `compare_live_report_metrics.py` regains a local raw
+  JSON file reader for explicit comparison manifests or corrupt manifests can
+  again fall through into shape validation as wrong-typed payloads.
+
 - 2026-06-20: Pages index rendering now uses
   `roboclaws.core.json_sources.read_json_object` for present Molmo live
   `live-report-manifest.json` sources. Missing manifests still render the

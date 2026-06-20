@@ -17,12 +17,11 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Pages index rendering now routes present Molmo live
-`live-report-manifest.json` sources through the shared JSON-object source
-helper. Missing manifests still render the documented household placeholder,
-while malformed or non-object manifests fail with canonical path-labelled
-source wording before live report tiles are rendered. Focused Pages index
-source tests, existing CI live report index tests, core JSON-source tests,
+2026-06-20: Report-performance comparison manifest loading now routes explicit
+`--manifest` artifacts through the shared JSON-object source helper. Missing,
+malformed, or non-object comparison manifests fail with canonical
+path-labelled source wording before comparison-list validation or run-dir
+extraction. Focused comparison manifest source tests, core JSON-source tests,
 touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
 signal: 0 Ruff complexity rows, 79 oversized modules.
 
@@ -60,6 +59,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
 - `scripts/reports/write_pages_index.py`
+- `scripts/reports/compare_live_report_metrics.py`
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
@@ -116,6 +116,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/launch/test_goal_contract_sources.py`
 - `tests/unit/reports/test_write_pages_index_sources.py`
+- `tests/unit/reports/test_compare_live_report_metrics_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

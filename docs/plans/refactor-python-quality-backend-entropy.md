@@ -113,6 +113,10 @@ Latest quality snapshot from 2026-06-20:
   `live-report-manifest.json` sources through the shared JSON-object helper,
   so corrupt published live-report manifests fail aloud while the missing
   manifest placeholder path stays explicit.
+  Report-performance comparison manifest loading now routes explicit
+  `--manifest` artifacts through the shared JSON-object helper, so missing,
+  malformed, or non-object comparison manifests fail with path-labelled source
+  errors before comparison-list validation or run-dir extraction.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
