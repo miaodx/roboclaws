@@ -112,7 +112,10 @@ Latest quality snapshot from 2026-06-20:
   artifact writes. B1 navigation smoke now treats explicit
   `--readiness-artifact` and `--waypoint-pose-requests` inputs as source truth
   too, failing missing, malformed, or non-object sources before navigation
-  smoke artifact writes.
+  smoke artifact writes. B1 navigation report rendering now treats the
+  required navigation artifact, explicit optional readiness/waypoint-request
+  artifacts, and present default sidecars as JSON-object source truth before
+  report writes.
   The Nav2 map-bundle
   validator now reports parseable non-object `semantics.json`
   sources as bundle validation errors instead of raising raw attribute errors

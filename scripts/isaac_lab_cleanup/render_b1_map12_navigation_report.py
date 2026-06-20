@@ -45,17 +45,45 @@ def main(argv: list[str] | None = None) -> int:
     )
     output_path = Path(args.output or run_dir / "report.html")
 
-    navigation = _read_json(navigation_path)
-    readiness = _read_json(readiness_path) if readiness_path.is_file() else {}
-    pose_requests = _read_json(pose_requests_path) if pose_requests_path.is_file() else {}
+    navigation = _read_json_object(navigation_path, label="navigation artifact")
+    _require_schema(
+        navigation,
+        path=navigation_path,
+        label="navigation artifact",
+        expected=NAVIGATION_SMOKE_SCHEMA,
+    )
+    readiness = _read_optional_json_object(
+        readiness_path,
+        label="readiness artifact",
+        explicit=args.readiness_artifact is not None,
+    )
+    if readiness is not None:
+        _require_schema(
+            readiness,
+            path=readiness_path,
+            label="readiness artifact",
+            expected=READINESS_SCHEMA,
+        )
+    pose_requests = _read_optional_json_object(
+        pose_requests_path,
+        label="waypoint pose request artifact",
+        explicit=args.waypoint_pose_requests is not None,
+    )
+    if pose_requests is not None:
+        _require_schema(
+            pose_requests,
+            path=pose_requests_path,
+            label="waypoint pose request artifact",
+            expected=WAYPOINT_POSE_REQUESTS_SCHEMA,
+        )
     html = render_report(
         run_dir=run_dir,
         navigation=navigation,
-        readiness=readiness,
-        pose_requests=pose_requests,
+        readiness=readiness or {},
+        pose_requests=pose_requests or {},
         navigation_path=navigation_path,
-        readiness_path=readiness_path if readiness else None,
-        pose_requests_path=pose_requests_path if pose_requests else None,
+        readiness_path=readiness_path if readiness is not None else None,
+        pose_requests_path=pose_requests_path if pose_requests is not None else None,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
@@ -377,8 +405,38 @@ def render_report(
 """
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+def _read_optional_json_object(
+    path: Path,
+    *,
+    label: str,
+    explicit: bool,
+) -> dict[str, Any] | None:
+    if explicit or path.is_file():
+        return _read_json_object(path, label=label)
+    return None
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise ValueError(f"{label} missing: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must contain valid JSON object: {path}: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return payload
+
+
+def _require_schema(
+    payload: dict[str, Any],
+    *,
+    path: Path,
+    label: str,
+    expected: str,
+) -> None:
+    if payload.get("schema") != expected:
+        raise ValueError(f"unexpected {label} schema in {path}: {payload.get('schema')!r}")
 
 
 def _waypoints(navigation: dict[str, Any]) -> list[dict[str, Any]]:

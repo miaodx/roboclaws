@@ -34,6 +34,27 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 navigation report rendering now treats
+  `navigation_smoke.json`, explicitly supplied `--readiness-artifact` /
+  `--waypoint-pose-requests`, and present default readiness/waypoint request
+  sidecars as JSON-object source truth. Missing explicit optional artifacts,
+  malformed required navigation artifacts, malformed present default sidecars,
+  and parseable non-object waypoint request artifacts now return concise
+  source-path errors before `report.html` writes, instead of silently omitting
+  corrupt report evidence or surfacing raw parser/type paths. The no-sidecar
+  default remains a deliberate report mode only when those optional files are
+  absent and not explicitly requested. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: fail-aloud B1 navigation report source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; report coverage stayed in the small navigation-report contract test
+  file instead of the 2000-line B1 alignment hard-ceiling test. Proof: focused
+  navigation-report tests, adjacent B1 readiness/report contract tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code review,
+  and ratchet. Reopen only with fresh navigation-report evidence that explicit
+  optional artifacts or present sidecars are again loaded through raw
+  parser/type paths, accepted as plausible non-object packets, silently
+  omitted, or allowed to write reports after source-load failure.
+
 - 2026-06-20: B1 navigation smoke now treats explicit
   `--readiness-artifact` and `--waypoint-pose-requests` inputs as source truth.
   Missing, malformed, or parseable non-object readiness or waypoint request
