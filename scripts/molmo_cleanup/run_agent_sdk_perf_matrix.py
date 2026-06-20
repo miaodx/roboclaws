@@ -90,7 +90,22 @@ def _load_manifest(path: Path) -> dict[str, Any] | None:
     if payload.get("schema") != "agent_sdk_speedup_matrix_v1":
         print("error: unsupported matrix manifest schema", file=sys.stderr)
         return None
+    if rows_error := _matrix_rows_error(payload, source_path=path):
+        print(f"error: {rows_error}", file=sys.stderr)
+        return None
     return payload
+
+
+def _matrix_rows_error(payload: dict[str, Any], *, source_path: Path) -> str:
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        return f"matrix manifest rows must be a non-empty JSON array: {source_path}"
+    if not rows:
+        return f"matrix manifest rows must be a non-empty JSON array: {source_path}"
+    for index, row in enumerate(rows, start=1):
+        if not isinstance(row, dict):
+            return f"matrix manifest row {index} must be a JSON object: {source_path}"
+    return ""
 
 
 def _dry_run_packet(manifest: dict[str, Any]) -> dict[str, Any]:

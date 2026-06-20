@@ -34,6 +34,19 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Agent SDK speedup matrix manifests now require a non-empty
+  `rows` array whose entries are JSON objects. Missing, empty, non-array, or
+  wrong-shaped row sources now fail at manifest load before dry-run or
+  offline-preflight packet generation, instead of producing successful zero-row
+  matrix evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud Agent SDK speedup-matrix manifest source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules. Proof: focused Agent SDK perf-matrix tests, touched-file
+  ruff/format checks, `git diff --check`, changed-code review, and ratchet.
+  Reopen only with fresh speedup-matrix evidence that wrong-shaped manifest
+  rows again produce a successful dry-run/preflight packet or hide missing
+  decision-row evidence as an intentional zero-row matrix.
+
 - 2026-06-20: Codex cleanup apple-to-apple summaries now treat declared
   `run_result.json`, present `agent_view.json`, and embedded
   `run_result.agent_view` packets as object-typed source truth. Malformed or

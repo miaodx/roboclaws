@@ -17,13 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Codex cleanup apple-to-apple summaries now treat declared
-`run_result.json`, present `agent_view.json`, and embedded `run_result.agent_view`
-as object-typed source truth. Malformed or non-object source packets fail before
-comparison manifest/report writes instead of raw JSON/type tracebacks or empty
-worklist fallback. Focused Codex cleanup apple-to-apple summary tests,
-touched-file Ruff/format, `git diff --check`, changed-code review, and ratchet
-passed. Quality signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Agent SDK speedup matrix manifests now require a non-empty
+object-row `rows` array at load time. Missing, empty, or wrong-shaped rows fail
+before dry-run/preflight packets instead of producing successful zero-row
+matrix evidence. Focused Agent SDK perf-matrix tests, touched-file Ruff/format,
+`git diff --check`, changed-code review, and ratchet passed. Quality signal:
+0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -49,6 +48,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
+- `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -66,6 +66,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/visual_grounding/test_visual_grounding_benchmark_runner_sources.py`
 - `tests/contract/visual_grounding/test_visual_grounding_corpus_builder.py`
 - `tests/unit/molmo_cleanup/test_codex_cleanup_apple2apple_summary.py`
+- `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 

@@ -206,10 +206,11 @@ Latest quality snapshot from 2026-06-20:
   non-object `live_status.json`, `live_timing.json`, `run_result.json`, and
   `trace.jsonl` sources instead of rendering pending/unknown summaries from
   corrupt evidence. Agent SDK speedup matrix rows now block on present
-  malformed or non-object baseline/candidate run source artifacts instead of
-  accepting, rejecting, or recommending speedup work from empty or partial
-  performance evidence. Codex and Claude live-run timing writers now surface
-  malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
+  malformed or non-object baseline/candidate run source artifacts, and manifests
+  now require non-empty object row sources instead of
+  accepting, rejecting, recommending, or dry-running speedup work from empty,
+  partial, or zero-row evidence. Codex and Claude live-run timing writers now
+  surface malformed or non-object `trace.jsonl` / Codex event JSONL source errors in
   failed timing/status evidence instead of skipping corrupt rows while writing
   model/timing summaries. Eval-runner graders now fail rows aloud on present
   malformed or non-object optional sidecars (`live_status.json`,
