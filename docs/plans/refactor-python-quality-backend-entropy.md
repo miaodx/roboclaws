@@ -227,6 +227,10 @@ Latest quality snapshot from 2026-06-20:
   `goal_contract.json` evidence as JSON-object source truth, failing missing,
   malformed, or non-object goal-contract artifacts with path-labelled source
   errors before contract comparison.
+  Cleanup checker advisory-scoring artifact loading now treats declared
+  advisory-evaluation evidence as JSON-object source truth, failing missing,
+  malformed, or non-object advisory artifacts with path-labelled source errors
+  before advisory validation.
   B1 operator-console scene previews now treat existing preview metadata and
   declared camera artifacts as JSON-object source truth through the same shared
   helper, failing malformed or non-object skip-existing metadata as

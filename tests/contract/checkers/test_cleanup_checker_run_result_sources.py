@@ -142,6 +142,77 @@ def test_checker_accepts_matching_goal_contract_artifact_source(tmp_path: Path) 
     )
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"advisory evaluation source must contain valid JSON object: .*advisory\.json",
+        ),
+        (
+            "[]\n",
+            r"advisory evaluation source must contain a JSON object: .*advisory\.json",
+        ),
+    ],
+)
+def test_checker_rejects_malformed_advisory_artifact_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    checker = _load_checker()
+    advisory_path = tmp_path / "advisory.json"
+    advisory_path.write_text(source, encoding="utf-8")
+    run_result = {
+        "generated_mess_count": 1,
+        "advisory_evaluation": _advisory_evaluation(),
+        "artifacts": {"advisory_evaluation": "advisory.json"},
+    }
+
+    with pytest.raises(ValueError, match=message):
+        checker._assert_advisory_scoring(
+            run_result,
+            tmp_path,
+            report_text="Advisory Review",
+        )
+
+
+def test_checker_rejects_missing_advisory_artifact_source(tmp_path: Path) -> None:
+    checker = _load_checker()
+    run_result = {
+        "generated_mess_count": 1,
+        "advisory_evaluation": _advisory_evaluation(),
+        "artifacts": {"advisory_evaluation": "missing_advisory.json"},
+    }
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"advisory evaluation source is missing: .*missing_advisory\.json",
+    ):
+        checker._assert_advisory_scoring(
+            run_result,
+            tmp_path,
+            report_text="Advisory Review",
+        )
+
+
+def test_checker_accepts_matching_advisory_artifact_source(tmp_path: Path) -> None:
+    checker = _load_checker()
+    advisory = _advisory_evaluation()
+    advisory_path = tmp_path / "advisory.json"
+    advisory_path.write_text(json.dumps(advisory), encoding="utf-8")
+
+    checker._assert_advisory_scoring(
+        {
+            "generated_mess_count": 1,
+            "advisory_evaluation": advisory,
+            "artifacts": {"advisory_evaluation": "advisory.json"},
+        },
+        tmp_path,
+        report_text="Advisory Review",
+    )
+
+
 def _goal_contract() -> dict[str, object]:
     return {
         "schema": "roboclaws_goal_contract_v1",
@@ -149,4 +220,14 @@ def _goal_contract() -> dict[str, object]:
         "intent": "open-ended",
         "normalized_goal": "find something useful to drink",
         "goal_scope": "agent-declared",
+    }
+
+
+def _advisory_evaluation() -> dict[str, object]:
+    return {
+        "schema_version": "advisory_cleanup_scoring_v1",
+        "authoritative": False,
+        "status": "ok",
+        "object_reviews": [{"object_id": "mug_01"}],
+        "counts": {"total_reviewed": 1},
     }

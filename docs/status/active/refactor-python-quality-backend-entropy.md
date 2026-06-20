@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup checker goal-contract artifact loading now treats declared
-`goal_contract.json` evidence as JSON-object source truth through
+2026-06-20: Cleanup checker advisory-scoring artifact loading now treats
+declared `advisory_evaluation` evidence as JSON-object source truth through
 `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
-non-object goal-contract artifacts fail with path-labelled source errors
-instead of file-read/parser tracebacks or wrong-shaped packets entering
-contract comparison. Focused checker source tests, adjacent planner-proof
-source tests, touched-file Ruff/format, `git diff --check`, changed-code
-review, and ratchet passed.
+non-object advisory artifacts fail with path-labelled source errors instead of
+file-read/parser tracebacks or wrong-shaped packets entering advisory
+validation. Focused checker source tests, adjacent planner-proof source tests,
+touched-file Ruff/format, `git diff --check`, changed-code review, and ratchet
+passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action

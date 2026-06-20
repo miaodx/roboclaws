@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker advisory-scoring artifact loading now treats
+  declared advisory-evaluation evidence as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object advisory artifacts now fail with path-labelled source
+  errors before advisory validation, instead of surfacing raw file-read or
+  parser/type failures. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud cleanup-checker advisory artifact source
+  truth. Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized
+  modules; the checker dropped by another line while focused coverage stayed
+  in the small checker source-test file. Proof: focused checker source tests,
+  adjacent planner-proof source tests, touched-file ruff/format checks,
+  `git diff --check`, changed-code review, and ratchet. Reopen only with
+  fresh cleanup-checker evidence that malformed declared advisory artifacts
+  again produce raw file/parser/type failures or reach advisory validation as
+  plausible artifact evidence.
+
 - 2026-06-20: Cleanup checker goal-contract artifact loading now treats
   declared `goal_contract.json` evidence as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or

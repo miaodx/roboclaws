@@ -1337,8 +1337,7 @@ def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str)
     assert int(counts.get("total_reviewed") or 0) == len(reviews), advisory
     artifacts = data.get("artifacts") or {}
     advisory_path = _resolve_path(base, artifacts.get("advisory_evaluation", ""))
-    assert advisory_path.is_file(), advisory_path
-    loaded = json.loads(advisory_path.read_text(encoding="utf-8"))
+    loaded = read_json_object(advisory_path, label="advisory evaluation")
     assert loaded.get("authoritative") is False, loaded
     assert "Advisory Review" in report_text, report_text[:500]
 
