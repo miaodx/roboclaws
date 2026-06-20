@@ -145,6 +145,11 @@ Latest quality snapshot from 2026-06-20:
   sidecars through the shared JSON-object helper while preserving missing
   sidecars as absent runner timing, so malformed or non-object timing evidence
   fails with path-labelled source errors before report rendering.
+  Eval regression promotion now routes explicit eval-results and suite
+  JSON-object inputs through the shared JSON-object helper while preserving the
+  do-not-promote stop label before source reads or writes, so malformed,
+  missing, or non-object promotion sources fail with path-labelled source
+  errors before regression sample or suite outputs are written.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

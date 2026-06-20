@@ -34,6 +34,26 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Eval regression promotion now uses
+  `roboclaws.core.json_sources.read_json_object` for explicit eval-results and
+  suite JSON-object inputs while preserving the
+  `eval-regression:do-not-promote` stop label before source reads or writes.
+  Missing, malformed, or parseable non-object promotion sources now use
+  canonical path-labelled source wording before regression sample or suite
+  output writes. Owner layer: Eval suites and regression-promotion artifacts.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: current shared-checkout ratchet summary reports
+  1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the added oversized entry is unrelated no-touch dirty
+  `tests/contract/maps/test_b1_map12_label_tool.py`, and this slice did not
+  add new complexity in touched files. Proof: focused regression-promotion
+  source tests, existing regression-promotion behavior tests, touched-file
+  ruff/format checks, changed-code review, `git diff --check`, and ratchet.
+  Reopen only if regression promotion regains a local raw JSON reader or
+  corrupt explicit promotion sources can again reach sample/suite promotion as
+  parser tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Cleanup report runtime timing now uses
   `roboclaws.core.json_sources.read_json_object` for present
   `live_timing.json` sidecars while preserving missing sidecars as absent
