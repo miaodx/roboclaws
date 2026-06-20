@@ -16,6 +16,7 @@ image_url="${ROBOCLAWS_CLOUDML_IMAGE_URL:-${registry_repo}:roboclaws-eval-env-$(
 juicefs_url="${ROBOCLAWS_JUICEFS_URL:-https://cloud.mioffice.cn/juicefs/vol-detail?cluster=wlcb-cloudml&name=robot-intelligent-planning-data&path=/dongxu/gpu_perf/gpu_perf/${input_rel}}"
 asset_mode="${ROBOCLAWS_STAGE_ASSET_MODE:-archive}"
 archive_name="${ROBOCLAWS_STAGE_ARCHIVE_NAME:-cleanup-focused-molmospaces-val0.tar.gz}"
+code_archive_name="${ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME:-roboclaws-code-${code_short}.tar.gz}"
 include_grasps="${ROBOCLAWS_STAGE_INCLUDE_GRASPS:-false}"
 run_upload_dry_run="${ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN:-true}"
 
@@ -36,6 +37,7 @@ Environment overrides:
   ROBOCLAWS_JUICEFS_URL               Full cloud.mioffice.cn JuiceFS vol-detail URL.
   ROBOCLAWS_STAGE_ASSET_MODE          archive|manifest-only. Default: archive.
   ROBOCLAWS_STAGE_ARCHIVE_NAME        Default: cleanup-focused-molmospaces-val0.tar.gz
+  ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME   Default: roboclaws-code-<code>.tar.gz
   ROBOCLAWS_STAGE_INCLUDE_GRASPS      Set true to include grasps/droid when materializing.
   ROBOCLAWS_STAGE_RUN_UPLOAD_DRY_RUN  Set false to skip executor upload dry-run.
   ROBOCLAWS_EXECUTOR_ROOT             Default: /home/mi/executor
@@ -103,6 +105,9 @@ clean_stage_dir "$stage_dir"
 archive_path=""
 archive_sha256=""
 archive_bytes=""
+code_archive_path="$stage_dir/archives/$code_archive_name"
+code_archive_sha256=""
+code_archive_bytes=""
 staged_paths=()
 case "$asset_mode" in
   archive)
@@ -138,6 +143,19 @@ case "$asset_mode" in
     ;;
 esac
 
+code_tmp="$stage_dir/.code-archive-tmp"
+rm -rf "$code_tmp"
+mkdir -p "$code_tmp/roboclaws.git"
+git -C "$repo_root" archive --format=tar "$code_commit" | tar -xf - -C "$code_tmp/roboclaws.git"
+printf '%s\n' "$code_commit" > "$code_tmp/roboclaws.git/.roboclaws_code_commit"
+tar -czf "${code_archive_path}.tmp" -C "$code_tmp" roboclaws.git
+mv "${code_archive_path}.tmp" "$code_archive_path"
+rm -rf "$code_tmp"
+code_archive_sha256="$(sha256sum "$code_archive_path" | awk '{print $1}')"
+code_archive_bytes="$(stat -c '%s' "$code_archive_path")"
+printf '%s  %s\n' "$code_archive_sha256" "$code_archive_name" > "${code_archive_path}.sha256"
+staged_paths+=("archives/$code_archive_name" "archives/${code_archive_name}.sha256")
+
 manifest_path="$stage_dir/roboclaws_cloudml_cleanup_assets.json"
 export ROBOCLAWS_STAGE_MANIFEST_PATH="$manifest_path"
 export ROBOCLAWS_STAGE_DIR_RESOLVED="$stage_dir"
@@ -152,6 +170,10 @@ export ROBOCLAWS_STAGE_ARCHIVE_NAME="$archive_name"
 export ROBOCLAWS_STAGE_ARCHIVE_PATH="$archive_path"
 export ROBOCLAWS_STAGE_ARCHIVE_SHA256="$archive_sha256"
 export ROBOCLAWS_STAGE_ARCHIVE_BYTES="$archive_bytes"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME="$code_archive_name"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_PATH="$code_archive_path"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_SHA256="$code_archive_sha256"
+export ROBOCLAWS_STAGE_CODE_ARCHIVE_BYTES="$code_archive_bytes"
 export ROBOCLAWS_STAGE_INCLUDE_GRASPS="$include_grasps"
 export ROBOCLAWS_STAGE_STAGED_PATHS="$(IFS=:; echo "${staged_paths[*]}")"
 
@@ -166,6 +188,7 @@ repo_root = Path(os.environ.get("PWD", ".")).resolve()
 stage_dir = Path(os.environ["ROBOCLAWS_STAGE_DIR_RESOLVED"]).resolve()
 staged_paths = [item for item in os.environ["ROBOCLAWS_STAGE_STAGED_PATHS"].split(":") if item]
 archive_path = os.environ["ROBOCLAWS_STAGE_ARCHIVE_PATH"]
+code_archive_path = os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_PATH"]
 
 def du(path: str) -> str:
     candidate = Path(path).expanduser()
@@ -188,12 +211,22 @@ payload = {
             f"/mnt/cloudml/input/{os.environ['ROBOCLAWS_STAGE_INPUT_REL']}"
             f"/archives/{os.environ['ROBOCLAWS_STAGE_ARCHIVE_NAME']}"
         )
-        if os.environ["ROBOCLAWS_STAGE_ASSET_MODE"] == "archive"
+        if os.environ["ROBOCLAWS_STAGE_ARCHIVE_NAME"]
         else "",
+        "code_archive_path": (
+            f"/mnt/cloudml/input/{os.environ['ROBOCLAWS_STAGE_INPUT_REL']}"
+            f"/archives/{os.environ['ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME']}"
+        ),
     },
     "git": {
         "code_commit": os.environ["ROBOCLAWS_STAGE_CODE_COMMIT"],
-        "source_path": "cloudml.codeConfig",
+        "source_path": "juicefs.code_archive",
+        "code_archive": {
+            "local_path": code_archive_path,
+            "name": os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_NAME"],
+            "sha256": os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_SHA256"],
+            "bytes": int(os.environ["ROBOCLAWS_STAGE_CODE_ARCHIVE_BYTES"] or "0"),
+        },
     },
     "image": {
         "url": os.environ["ROBOCLAWS_STAGE_IMAGE_URL"],
@@ -259,6 +292,9 @@ if [[ -n "$archive_path" ]]; then
   echo "archive_sha256=$archive_sha256"
   echo "archive_bytes=$archive_bytes"
 fi
+echo "code_archive=$code_archive_path"
+echo "code_archive_sha256=$code_archive_sha256"
+echo "code_archive_bytes=$code_archive_bytes"
 echo "upload_dry_run_command=EXECUTOR_CONFIG_ROOT=$executor_config_root EXECUTOR_CONFIG_PATH=$executor_config_path $executor_root/execute.py storage juicefs upload --local_dir '$stage_dir' --url '$juicefs_url' --dry_run --json"
 
 if [[ "$run_upload_dry_run" == "true" ]]; then

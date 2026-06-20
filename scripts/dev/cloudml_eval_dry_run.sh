@@ -21,6 +21,8 @@ budget="${ROBOCLAWS_CLOUDML_BUDGET:-focused}"
 input_rel="${ROBOCLAWS_CLOUDML_INPUT_REL:-roboclaws-assets/cleanup-focused}"
 asset_archive_name="${ROBOCLAWS_CLOUDML_ASSET_ARCHIVE_NAME:-cleanup-focused-molmospaces-val0.tar.gz}"
 asset_cache_root="${ROBOCLAWS_CLOUDML_ASSET_CACHE_ROOT:-/mnt/cloudml/output/roboclaws-asset-cache/cleanup-focused}"
+code_source_mode="${ROBOCLAWS_CLOUDML_CODE_SOURCE_MODE:-archive}"
+code_archive_name="${ROBOCLAWS_CLOUDML_CODE_ARCHIVE_NAME:-roboclaws-code-${code_short}.tar.gz}"
 stamp="${ROBOCLAWS_CLOUDML_STAMP:-cloudml-cleanup-${code_short}-${date_stamp}}"
 job_name="${ROBOCLAWS_CLOUDML_JOB_NAME:-roboclaws-cleanup-${code_short}}"
 output_yaml_path="${ROBOCLAWS_CLOUDML_OUTPUT_YAML:-/tmp/roboclaws-cloudml-${stamp}.yaml}"
@@ -63,6 +65,12 @@ Environment overrides:
                                   under <input_rel>/archives/.
   ROBOCLAWS_CLOUDML_ASSET_CACHE_ROOT
                                   Default: /mnt/cloudml/output/roboclaws-asset-cache/cleanup-focused.
+  ROBOCLAWS_CLOUDML_CODE_SOURCE_MODE
+                                  archive|cloudml-codeconfig. Default: archive.
+                                  archive avoids CloudML's forced recursive
+                                  submodule sync by unpacking code from JuiceFS.
+  ROBOCLAWS_CLOUDML_CODE_ARCHIVE_NAME
+                                  Default: roboclaws-code-<code>.tar.gz.
   ROBOCLAWS_CLOUDML_MAP_BUNDLE    Default: assets/maps/molmospaces/procthor-10k-val/0
   ROBOCLAWS_CLOUDML_OUTPUT_YAML   Default: /tmp/roboclaws-cloudml-<stamp>.yaml
   ROBOCLAWS_CLOUDML_DRY_RUN       Default: true. Set false for a real submit.
@@ -126,6 +134,10 @@ input_rel=${input_rel}
 archive_name=${asset_archive_name}
 archive_path=/mnt/cloudml/input/\${input_rel}/archives/\${archive_name}
 sha_path=\${archive_path}.sha256
+code_source_mode=${code_source_mode}
+code_archive_name=${code_archive_name}
+code_archive_path=/mnt/cloudml/input/\${input_rel}/archives/\${code_archive_name}
+code_sha_path=\${code_archive_path}.sha256
 cache_root=${asset_cache_root}
 map_bundle=${map_bundle}
 stamp=${stamp}
@@ -199,8 +211,40 @@ test -f "\${MLSPACES_ASSETS_DIR}/scenes/procthor-10k-val/val_0.json"
 test -d "\${MLSPACES_ASSETS_DIR}/objects/thor"
 test -d "\${MLSPACES_ASSETS_DIR}/robots/rby1m"
 
+case "\${code_source_mode}" in
+  archive)
+    echo code_archive_path=\${code_archive_path}
+    test -f "\${code_archive_path}"
+    test -f "\${code_sha_path}"
+    code_archive_sha=\$(awk '{print \$1}' "\${code_sha_path}")
+    code_archive_actual_sha=\$(sha256sum "\${code_archive_path}" | awk '{print \$1}')
+    if [[ "\${code_archive_actual_sha}" != "\${code_archive_sha}" ]]; then
+      echo "error: code archive sha256 \${code_archive_actual_sha} != expected \${code_archive_sha}" >&2
+      exit 1
+    fi
+    rm -rf "\${repo_dir}"
+    mkdir -p /ml-engine/code
+    tar -xzf "\${code_archive_path}" -C /ml-engine/code
+    test -f "\${repo_dir}/.roboclaws_code_commit"
+    if [[ "\$(cat "\${repo_dir}/.roboclaws_code_commit")" != "\${expected_code_commit}" ]]; then
+      echo "error: code archive commit \$(cat "\${repo_dir}/.roboclaws_code_commit") != expected \${expected_code_commit}" >&2
+      exit 1
+    fi
+    ;;
+  cloudml-codeconfig)
+    ;;
+  *)
+    echo "error: unsupported code source mode: \${code_source_mode}" >&2
+    exit 1
+    ;;
+esac
+
 cd "\${repo_dir}"
-actual_code_commit=\$(git rev-parse HEAD)
+if git rev-parse HEAD >/dev/null 2>&1; then
+  actual_code_commit=\$(git rev-parse HEAD)
+else
+  actual_code_commit=\$(cat .roboclaws_code_commit)
+fi
 if [[ "\${actual_code_commit}" != "\${expected_code_commit}" ]]; then
   echo "error: CloudML checkout commit \${actual_code_commit} != expected \${expected_code_commit}" >&2
   exit 1
@@ -240,13 +284,25 @@ argv=(
   --description "${run_description} for ${code_commit}"
   --image_url "$image_url"
   --image_command "$image_command"
-  --code_url "$code_url"
-  --code_branch "$code_branch"
-  --code_commit "$platform_code_commit"
   --dry_run "$dry_run"
   --output_yaml_path "$output_yaml_path"
   --json
 )
+
+case "$code_source_mode" in
+  archive)
+    ;;
+  cloudml-codeconfig)
+    argv+=(--code_url "$code_url")
+    argv+=(--code_branch "$code_branch")
+    argv+=(--code_commit "$platform_code_commit")
+    ;;
+  *)
+    echo "error: unsupported ROBOCLAWS_CLOUDML_CODE_SOURCE_MODE '$code_source_mode'" >&2
+    echo "expected archive|cloudml-codeconfig" >&2
+    exit 1
+    ;;
+esac
 
 if [[ -n "${ROBOCLAWS_CLOUDML_CODE_TOKEN:-}" ]]; then
   argv+=(--code_token "$ROBOCLAWS_CLOUDML_CODE_TOKEN")
