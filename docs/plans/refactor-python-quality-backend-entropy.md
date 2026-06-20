@@ -141,6 +141,10 @@ Latest quality snapshot from 2026-06-20:
   private-manifest JSON-object sources through the shared JSON-object helper,
   so malformed or non-object report inputs fail with path-labelled source
   errors before report assembly.
+  Cleanup report runtime timing now routes present `live_timing.json`
+  sidecars through the shared JSON-object helper while preserving missing
+  sidecars as absent runner timing, so malformed or non-object timing evidence
+  fails with path-labelled source errors before report rendering.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

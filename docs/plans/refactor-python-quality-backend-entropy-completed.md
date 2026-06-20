@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup report runtime timing now uses
+  `roboclaws.core.json_sources.read_json_object` for present
+  `live_timing.json` sidecars while preserving missing sidecars as absent
+  runner timing. Malformed or parseable non-object timing evidence now uses
+  canonical path-labelled source wording before report rendering instead of
+  disappearing from the timing section. Owner layer: Artifacts, reports, and
+  eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud source validation. Metric: current shared-checkout ratchet
+  summary reports 1 unrelated Ruff complexity row in dirty
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the added oversized entry is unrelated no-touch dirty
+  `tests/contract/maps/test_b1_map12_label_tool.py`, and this slice did not
+  add new complexity in touched files. Proof: focused runtime-timing report
+  tests, touched-file ruff/format checks, changed-code review,
+  `git diff --check`, and ratchet. Reopen only if report runtime timing
+  loading regains a local raw JSON reader or corrupt present `live_timing.json`
+  sidecars can again be hidden as absent runner timing.
+
 - 2026-06-20: Cleanup report artifact re-rendering now uses
   `roboclaws.core.json_sources.read_json_object` for run-result, scenario, and
   adjacent private-manifest JSON-object sources. Malformed or parseable
