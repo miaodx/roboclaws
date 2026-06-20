@@ -196,6 +196,86 @@ def test_robot_camera_comparison_accepts_zero_render_settle_frames(
     assert seen["output_dir"] == tmp_path
 
 
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{bad json\n",
+            "robot camera apple2apple JSON artifact source must contain valid JSON object",
+        ),
+        (
+            "[]\n",
+            "robot camera apple2apple JSON artifact source must contain a JSON object",
+        ),
+    ],
+)
+def test_robot_camera_read_json_rejects_bad_required_artifact(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_bad_required_json",
+    )
+    artifact = tmp_path / "state.json"
+    artifact.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        run_camera._read_json(artifact)
+
+
+def test_robot_camera_read_json_rejects_missing_required_artifact(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_missing_required_json",
+    )
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"robot camera apple2apple JSON artifact source is missing: .*state\.json",
+    ):
+        run_camera._read_json(tmp_path / "state.json")
+
+
+def test_robot_camera_optional_json_keeps_absent_path_empty(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_missing_optional_json",
+    )
+
+    assert run_camera._load_optional_json(None) == {}
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_error"),
+    [
+        (
+            "{bad json\n",
+            "robot camera apple2apple optional JSON artifact source must contain valid JSON object",
+        ),
+        (
+            "[]\n",
+            "robot camera apple2apple optional JSON artifact source must contain a JSON object",
+        ),
+    ],
+)
+def test_robot_camera_optional_json_rejects_bad_present_artifact(
+    tmp_path: Path,
+    source_text: str,
+    expected_error: str,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_bad_optional_json",
+    )
+    artifact = tmp_path / "color_profile.json"
+    artifact.write_text(source_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=expected_error):
+        run_camera._load_optional_json(artifact)
+
+
 def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     left_path = tmp_path / "mujoco.png"
     right_path = tmp_path / "isaac.png"

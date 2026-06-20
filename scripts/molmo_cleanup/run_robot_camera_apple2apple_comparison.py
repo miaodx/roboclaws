@@ -866,13 +866,13 @@ def _state_location_map(state: dict[str, Any]) -> dict[str, str]:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label="robot camera apple2apple JSON artifact")
 
 
 def _load_optional_json(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label="robot camera apple2apple optional JSON artifact")
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

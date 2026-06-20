@@ -6050,6 +6050,18 @@ logs before choosing the next slice.
   regains direct `json.loads(read_text(...))` parsing for scene metadata
   sidecars or accepts malformed/non-object metadata before semantic label
   authoring.
+- Robot-camera apple-to-apple required JSON artifacts and explicit optional
+  color-profile artifacts now route through the shared JSON-source helper, so
+  required missing, malformed, or non-object state/manifest artifacts fail with
+  path-labelled source errors, absent optional color-profile input remains
+  empty, and present bad optional input fails aloud. Owner layer: Artifacts,
+  reports, and eval suites plus Backend Runtime / Environment Primitive.
+  Behavior-change class: strict/permissive source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused source-reader tests, ruff, format check, diff check, and ratchet.
+  Reopen only if `run_robot_camera_apple2apple_comparison.py` regains local
+  `json.loads(read_text(...))` helpers for comparison state/manifest artifacts
+  or accepts malformed/non-object explicit color-profile inputs.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

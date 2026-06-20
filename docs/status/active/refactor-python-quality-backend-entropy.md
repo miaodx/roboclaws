@@ -17,24 +17,24 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces flattened semantic USD scene metadata loading now
+2026-06-20: Robot-camera apple-to-apple required JSON artifacts and explicit
+optional color-profile artifacts now route through the shared source helper.
+Required missing, malformed, or non-object state/manifest artifacts fail with
+path-labelled source errors; absent optional color-profile input still stays
+empty while present malformed or non-object optional input fails aloud. Focused
+source-reader tests, touched-file ruff, touched-file format checks, diff check,
+and the ratchet summary passed. Current ratchet: 0 Ruff complexity violations,
+80 oversized modules.
+
+Previous slice: MolmoSpaces flattened semantic USD scene metadata loading now
 routes present `scene_metadata.json` object sources through the shared source
 helper, so malformed or non-object metadata fails before semantic label
 authoring while missing metadata still yields the existing blocked summary.
-Focused source-reader tests, touched-file ruff, touched-file format checks,
-diff check, and the ratchet summary passed. Current ratchet: 0 Ruff complexity
-violations, 80 oversized modules.
-
-Previous slice: MolmoSpaces scene metadata optional sidecar loading now routes
-present `scene_metadata.json` object sources through the shared source helper
-while preserving the missing/corrupt/non-object-as-empty optional metadata
-contract.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces flattened semantic USD scene metadata source-reader
-slice.
+committing the robot-camera apple-to-apple JSON artifact reader slice.
 
 ## Touched Areas
 
