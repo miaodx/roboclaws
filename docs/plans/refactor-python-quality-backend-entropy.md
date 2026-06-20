@@ -85,6 +85,10 @@ Latest quality snapshot from 2026-06-20:
   review-manifest, alignment-artifact, and correspondence-manifest inputs
   through the shared JSON-source helper instead of duplicate local readers,
   preserving concise CLI errors for missing, malformed, or non-object sources.
+  Goal-contract file loading now routes explicit `--goal-contract` artifacts
+  through the shared JSON-source helper too, so missing, malformed, or
+  non-object file-backed launch contracts fail with path-labelled source
+  errors before household launch/runtime consumers normalize the payload.
   Robot-camera visual parity summary now routes its comparison, visual-sample,
   RAW-FPV run-result, prepared-USD, calibration, paired baseline/probe, and
   Isaac state artifacts through the shared JSON-source helper instead of a

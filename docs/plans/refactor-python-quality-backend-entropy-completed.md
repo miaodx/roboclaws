@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Goal-contract file loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for explicit
+  `--goal-contract` artifacts. This removes the launch goal reader's raw
+  `json.loads(Path(...).read_text())` path for file-backed contracts and
+  preserves file absence, malformed JSON, and parseable non-object failures as
+  path-labelled source errors before household launch/runtime consumers
+  normalize the payload. Owner layer: Runnable Surfaces And Presets, with
+  handoff into Thin Runtime / Server Adapters. Behavior-change class:
+  fail-aloud source-reader consolidation. Metric: ratchet stayed at 0 Ruff
+  complexity rows and 79 oversized modules. Proof: focused launch
+  goal-contract source tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `goal_contract_from_file()` stops routing explicit goal-contract file
+  artifacts through the shared source helper or if inline goal-contract JSON
+  needs its own accepted source-diagnostic slice.
+
 - 2026-06-20: B1 semantic-anchor review packet and semantic projection CLI
   source loading now use the shared
   `roboclaws.core.json_sources.read_json_object` reader for review-manifest,

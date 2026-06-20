@@ -17,14 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 semantic-anchor review packet and semantic projection CLIs now
-use the shared `roboclaws.core.json_sources.read_json_object` source reader for
-explicit review-manifest, alignment-artifact, and correspondence-manifest
-inputs. Missing, malformed, or parseable non-object artifacts use the canonical
-path-labelled helper wording, and both CLIs no longer carry duplicate local
-JSON-object readers. Focused B1 verified-alignment source CLI and core
-JSON-source tests, touched-file Ruff/format, `git diff --check`, and ratchet
-passed.
+2026-06-20: Goal-contract file loading now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for explicit
+`--goal-contract` artifacts. Missing, malformed, or parseable non-object
+contract files use the canonical path-labelled helper wording before
+household launch/runtime consumers normalize the payload. Focused launch
+goal-contract source tests, core JSON-source tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -61,6 +60,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`
 - `roboclaws/core/json_sources.py`
+- `roboclaws/launch/goals.py`
 - `tests/contract/maps/test_b1_map12_navigation_smoke_cli.py`
 - `tests/contract/maps/test_b1_map12_navigation_report.py`
 - `tests/contract/maps/test_b1_map12_readiness_cli.py`
@@ -92,6 +92,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/checkers/test_cleanup_checker_trace_sources.py`
 - `tests/contract/maps/test_runtime_map_prior_snapshot.py`
 - `tests/unit/core/test_json_sources.py`
+- `tests/unit/launch/test_goal_contract_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`
 - `docs/plans/refactor-python-quality-backend-entropy-completed.md`
 
