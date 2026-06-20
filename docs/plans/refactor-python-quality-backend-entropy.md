@@ -111,11 +111,13 @@ Latest quality snapshot from 2026-06-20:
   failing missing, malformed, or wrong-shaped sources before pose-request
   artifact writes. B1 digital-twin readiness now treats explicit
   `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
-  source truth before writing readiness artifacts. B1 navigation smoke now
-  treats explicit `--readiness-artifact` and `--waypoint-pose-requests` inputs
-  as source truth too, failing missing, malformed, or non-object sources before
-  navigation smoke artifact writes, and routes those JSON-object sources through
-  the shared source helper instead of a duplicate local reader. B1 navigation
+  source truth before writing readiness artifacts, and routes those
+  JSON-object sources through the shared source helper instead of a duplicate
+  local reader. B1 navigation smoke now treats explicit `--readiness-artifact`
+  and `--waypoint-pose-requests` inputs as source truth too, failing missing,
+  malformed, or non-object sources before navigation smoke artifact writes, and
+  routes those JSON-object sources through the shared source helper instead of a
+  duplicate local reader. B1 navigation
   report rendering now treats the required navigation artifact, explicit
   optional readiness/waypoint-request artifacts, and present default sidecars
   as JSON-object source truth before report writes. B1 manual-anchor semantic
