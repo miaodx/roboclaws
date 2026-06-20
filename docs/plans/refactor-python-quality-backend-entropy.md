@@ -109,7 +109,9 @@ Latest quality snapshot from 2026-06-20:
   writes. B1 waypoint pose request building now treats required
   `--alignment-artifact` input and explicit `--points` input as source truth,
   failing missing, malformed, or wrong-shaped sources before pose-request
-  artifact writes. B1 digital-twin readiness now treats explicit
+  artifact writes, and routes the alignment JSON-object source through the
+  shared source helper instead of a duplicate local reader. B1 digital-twin
+  readiness now treats explicit
   `--alignment-artifact` and `--navigation-artifact` inputs as JSON-object
   source truth before writing readiness artifacts, and routes those
   JSON-object sources through the shared source helper instead of a duplicate
