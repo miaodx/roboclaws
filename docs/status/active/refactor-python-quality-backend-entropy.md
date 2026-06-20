@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Isaac runtime checker no longer carries the unreachable
+2026-06-21: Codex and Claude live cleanup timing trace readers now route
+present `trace.jsonl` and Codex event JSONL rows through the shared JSONL
+source helper instead of duplicate local row parsers. Missing trace sidecars
+remain optional, while malformed or non-object present rows keep route-labelled
+source errors before live timing can derive MCP timing confidence. Focused
+proof passed: Codex/Claude live timing trace-source tests, Codex event-summary
+source test, touched-file ruff, touched-file format check, diff check,
+changed-code cleanup review, and ratchet summary. Current ratchet: 0 Ruff
+complexity violations, 80 oversized modules in the shared checkout.
+
+Previous slice: Isaac runtime checker no longer carries the unreachable
 `_trace_events_from_path` helper. Current cleanup trace and Isaac
 semantic-pose trace source validation live in their dedicated checker owners,
 so the stale raw JSONL reader is removed instead of hardened. Focused proof
@@ -200,7 +210,7 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac runtime checker stale trace-helper deletion. Avoid reopening
+committing the Codex/Claude live trace-source consolidation. Avoid reopening
 closed visual-slot config, slot-file source readers, Docker mount stop/source
 handling, Docker inventory mount source handling, camera-control vectors,
 generated-mess relation/index placement fields, initial-contact candidate
@@ -215,6 +225,9 @@ again feed readiness/done/run-result evidence.
 Avoid reopening the deleted Isaac runtime checker trace helper unless a real
 caller appears; current cleanup trace and semantic-pose trace readers are
 owned elsewhere.
+Avoid reopening Codex/Claude live trace timing JSONL readers unless fresh
+live-timing or event-summary evidence shows corrupt present JSONL rows can
+again feed route timing/status confidence.
 
 ## Touched Areas
 
@@ -278,6 +291,9 @@ owned elsewhere.
 - `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_smoke_artifacts.py`
 - `scripts/visual_grounding/check_visual_grounding_benchmark_result.py`
 - `scripts/visual_grounding/run_visual_grounding_benchmark.py`
+- `scripts/molmo_cleanup/run_live_codex_cleanup.py`
+- `scripts/molmo_cleanup/run_live_claude_cleanup.py`
+- `tests/unit/molmo_cleanup/test_ci_live_reports.py`
 - `scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py`
 - `scripts/operator_console/scene_sampler_worklist_alignment.py`
 - `scripts/operator_console/run_scene_sampler_source_prep.py`

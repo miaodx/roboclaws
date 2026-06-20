@@ -35,7 +35,7 @@ from roboclaws.agents.provider_timing_proxy import (
     start_provider_timing_proxy,
     stop_provider_timing_proxy,
 )
-from roboclaws.core.json_sources import read_json_object
+from roboclaws.core.json_sources import read_json_object, read_jsonl_objects
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import household_intent_from_args as _household_intent
 from roboclaws.household.task_intent import household_task_name_from_args as _household_run_id
@@ -1133,22 +1133,7 @@ def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    events: list[dict[str, Any]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1
-    ):
-        if not line.strip():
-            continue
-        source = f"{path}:{line_number}"
-        try:
-            item = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Codex live source {source}: invalid JSON: {exc.msg}") from exc
-        if isinstance(item, dict):
-            events.append(item)
-        else:
-            raise ValueError(f"Codex live source {source}: non-object JSON: {type(item).__name__}")
-    return events
+    return read_jsonl_objects(path, label="Codex live")
 
 
 def _float_or_none(value: Any) -> float | None:

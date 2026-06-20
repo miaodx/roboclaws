@@ -827,7 +827,7 @@ def test_live_codex_timing_fails_aloud_on_malformed_trace_source(tmp_path: Path)
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
     assert source_error.startswith("live_timing_source_error: Codex live source")
     assert "trace.jsonl:2" in source_error
-    assert "non-object JSON: list" in source_error
+    assert "must contain a JSON object" in source_error
     assert timing["phase"] == "failed"
     assert timing["exit_status"] == 1
     assert timing["reason"] == source_error

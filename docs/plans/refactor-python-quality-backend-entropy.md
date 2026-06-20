@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Codex/Claude live trace-source slice:
+  live cleanup timing trace readers now route present `trace.jsonl` and Codex
+  event JSONL rows through the shared JSONL source helper instead of duplicate
+  local row parsers. Missing trace sidecars remain optional, while malformed
+  or non-object present rows keep route-labelled source errors before MCP
+  timing/status confidence is derived.
 - Current shared-checkout note after the Isaac runtime checker stale-helper
   slice: the unused `_trace_events_from_path` helper is removed from
   `scripts/molmo_cleanup/isaac_runtime_checker.py`. Current cleanup trace and

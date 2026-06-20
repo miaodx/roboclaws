@@ -6491,6 +6491,19 @@ logs before choosing the next slice.
   ratchet. Reopen only if a real caller needs Isaac-runtime-specific trace
   parsing instead of the existing cleanup or semantic-pose checker trace
   owners.
+- Codex and Claude live cleanup timing trace readers now route present
+  `trace.jsonl` and Codex event JSONL rows through the shared JSONL source
+  helper instead of duplicate local row parsers. Missing trace sidecars remain
+  optional, while malformed or non-object present rows keep route-labelled
+  source errors before live timing can derive MCP timing confidence. Owner
+  layer: Artifacts, reports, and eval suites. Behavior-change class:
+  fail-aloud source-reader consolidation. Metric: ratchet remains at 0 Ruff
+  complexity rows and 80 oversized modules. Proof: focused Codex/Claude live
+  timing trace-source tests, Codex event-summary source test, ruff, format
+  check, diff check, changed-code cleanup review, and ratchet. Reopen only if
+  `run_live_codex_cleanup.py` or `run_live_claude_cleanup.py` regains local
+  raw JSONL row parsing or accepts malformed/non-object present live trace
+  rows before route timing/status confidence.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;
