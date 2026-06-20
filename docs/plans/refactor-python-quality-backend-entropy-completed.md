@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Skill scratchpad artifact loading now uses
+  `roboclaws.core.json_sources.read_json_object` for present
+  `agent_scratchpad.json` and legacy `cleanup_scratch.json` sources while
+  preserving missing-source creation. Malformed or parseable non-object
+  scratchpad artifacts now use canonical path-labelled source wording before
+  MCP done-artifact assembly, and legacy scratchpad copying still writes the
+  canonical `agent_scratchpad.json` target. Owner layer: Household World
+  artifacts under the MCP run artifact boundary. Behavior-change class:
+  source-reader consolidation / fail-aloud source validation. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  dirty `scripts/maps/compile_b1_map12_runtime_bundle.py` and 79 oversized
+  modules; this slice did not add new complexity in touched files. Proof:
+  focused scratchpad source tests, touched-file ruff/format checks,
+  changed-code review, `git diff --check`, and ratchet. Reopen only if
+  scratchpad loading regains a local raw JSON reader or corrupt present
+  scratchpad sources can again reach MCP artifact assembly as parser
+  tracebacks or wrong-shaped payloads.
+
 - 2026-06-20: Live eval artifact sidecar loading now uses
   `roboclaws.core.json_sources.read_json_object` for present JSON sidecars
   while preserving missing optional sidecars as empty evidence. Malformed or

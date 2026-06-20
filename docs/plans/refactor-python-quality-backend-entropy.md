@@ -130,6 +130,11 @@ Latest quality snapshot from 2026-06-20:
   the shared JSON-object helper while preserving missing optional sidecars as
   empty evidence, so malformed or non-object live eval artifacts use canonical
   source errors before runner grading.
+  Skill scratchpad artifact loading now routes present `agent_scratchpad.json`
+  and legacy `cleanup_scratch.json` sources through the shared JSON-object
+  helper while preserving missing-source creation, so malformed or non-object
+  scratchpad artifacts fail with path-labelled source errors before MCP
+  done-artifact assembly.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

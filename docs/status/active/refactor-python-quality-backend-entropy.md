@@ -17,15 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Live eval artifact sidecar loading now routes present JSON
-sidecars through the shared JSON-object source helper while preserving missing
-optional sidecars as empty evidence. Malformed or non-object live eval
-artifacts fail with canonical path-labelled source wording before runner
-grading. Focused live-artifact source tests, the existing malformed
-run-result live-eval regression test, touched-file Ruff/format, changed-code
-review, and `git diff --check` passed. Current shared-checkout ratchet summary
-is blocked by unrelated dirty `scripts/maps/compile_b1_map12_runtime_bundle.py`
-work: 1 Ruff complexity row, 79 oversized modules.
+2026-06-20: Skill scratchpad artifact loading now routes present
+`agent_scratchpad.json` and legacy `cleanup_scratch.json` sources through the
+shared JSON-object source helper while preserving missing-source creation.
+Malformed or non-object scratchpad artifacts fail with canonical path-labelled
+source wording before MCP done-artifact assembly. Focused scratchpad source
+tests, touched-file Ruff/format, changed-code review, and `git diff --check`
+passed. Current shared-checkout ratchet summary is blocked by unrelated dirty
+`scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
+79 oversized modules.
 
 ## Next Action
 
@@ -89,6 +89,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/household/grasp_cache_generation.py`
 - `roboclaws/household/grasp_generation_setup.py`
 - `roboclaws/household/grasp_pose_policy_cache.py`
+- `roboclaws/household/skill_scratchpad.py`
 - `roboclaws/launch/goals.py`
 - `roboclaws/evals/models.py`
 - `roboclaws/maps/room_semantics.py`
@@ -136,6 +137,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_grasp_cache_generation.py`
 - `tests/unit/molmo_cleanup/test_grasp_generation_setup.py`
 - `tests/unit/molmo_cleanup/test_grasp_pose_policy_cache.py`
+- `tests/unit/molmo_cleanup/test_skill_scratchpad_sources.py`
 - `tests/unit/evals/test_eval_models.py`
 - `tests/unit/operator_console/test_scene_sampler_source_prep_runner.py`
 - `tests/unit/operator_console/test_scene_sampler_scanner_runner.py`
