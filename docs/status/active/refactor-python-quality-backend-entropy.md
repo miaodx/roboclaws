@@ -17,14 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup checker advisory-scoring artifact loading now treats
-declared `advisory_evaluation` evidence as JSON-object source truth through
+2026-06-20: Cleanup checker B1 robot-consumption manifest loading now treats
+`b1_robot_consumption_manifest.json` as JSON-object source truth through
 `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
-non-object advisory artifacts fail with path-labelled source errors instead of
-file-read/parser tracebacks or wrong-shaped packets entering advisory
-validation. Focused checker source tests, adjacent planner-proof source tests,
-touched-file Ruff/format, `git diff --check`, changed-code review, and ratchet
-passed.
+non-object robot-consumption manifests fail with path-labelled source errors
+instead of file-read/parser tracebacks or wrong-shaped packets entering
+readiness validation. Focused B1 manifest source tests, affected B1 checker
+tests, touched-file Ruff/format, `git diff --check`, changed-code review, and
+ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -75,6 +75,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
 - `tests/contract/checkers/test_cleanup_checker_planner_proof_request_sources.py`
+- `tests/contract/checkers/test_cleanup_checker_b1_manifest_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_run_result_sources.py`
 - `tests/unit/core/test_json_sources.py`
 - `docs/plans/refactor-python-quality-backend-entropy.md`

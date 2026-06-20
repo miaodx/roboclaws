@@ -1838,8 +1838,7 @@ def _assert_b1_robot_consumption_proof(data: dict[str, Any], base: Path) -> None
 
 def _assert_b1_robot_consumption_manifest(base: Path, proof: dict[str, Any]) -> None:
     manifest_path = base / "b1_robot_consumption_manifest.json"
-    assert manifest_path.is_file(), manifest_path
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = read_json_object(manifest_path, label="B1 robot consumption manifest")
     assert manifest.get("schema") == "b1_map12_robot_consumption_manifest_v1", manifest
     assert manifest.get("status") == "robot_navigation_ready", manifest
     navigation = manifest.get("navigation") if isinstance(manifest.get("navigation"), dict) else {}

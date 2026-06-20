@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup checker B1 robot-consumption manifest loading now treats
+  `b1_robot_consumption_manifest.json` as JSON-object source truth through
+  `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
+  parseable non-object manifests now fail with path-labelled source errors
+  before readiness validation, instead of surfacing raw file-read or
+  parser/type failures. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud cleanup-checker B1 manifest source truth.
+  Metric: ratchet stayed at 0 Ruff complexity rows and 79 oversized modules;
+  the checker dropped by another line while focused B1 source coverage landed
+  in a small source-test file. The existing oversized checker contract test
+  grew only to update the affected missing-manifest expectation to the new
+  source-error behavior. Proof: focused B1 manifest source tests, affected B1
+  checker tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code review, and ratchet. Reopen only with fresh cleanup-checker
+  evidence that malformed or missing B1 robot-consumption manifests again
+  produce raw file/parser/type failures or reach readiness validation as
+  plausible manifest evidence.
+
 - 2026-06-20: Cleanup checker advisory-scoring artifact loading now treats
   declared advisory-evaluation evidence as JSON-object source truth through
   `roboclaws.core.json_sources.read_json_object`. Missing, malformed, or
