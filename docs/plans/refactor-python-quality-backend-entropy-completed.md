@@ -6443,6 +6443,17 @@ logs before choosing the next slice.
   probe tests, ruff, format check, diff check, changed-code cleanup review, and
   ratchet. Reopen only if `generate_raw_fpv_private_labels.py` regains local
   raw JSONL trace parsing or accepts malformed/non-object trace rows.
+- Cleanup artifact-report trace JSONL loading now routes through the shared
+  JSONL source helper instead of a local parser. Malformed or non-object trace
+  rows fail with row-labelled `cleanup report trace` source errors before
+  stale cleanup report re-rendering can pass semantic timeline evidence from
+  partial trace data into report generation. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: fail-aloud source-reader
+  consolidation. Metric: ratchet remains at 0 Ruff complexity rows and
+  80 oversized modules. Proof: focused artifact-report contract tests, ruff,
+  format check, diff check, changed-code cleanup review, and ratchet. Reopen
+  only if `artifact_report.py` regains local raw JSONL trace parsing or accepts
+  malformed/non-object trace rows.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

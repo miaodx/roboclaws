@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the cleanup artifact-report trace-source
+  slice: stale cleanup report re-rendering now routes trace JSONL reads through
+  the shared JSONL source helper instead of a local parser, so malformed or
+  non-object trace rows fail with row-labelled `cleanup report trace` source
+  errors before report timeline rendering can derive confidence from partial
+  trace evidence.
 - Current shared-checkout note after the RAW-FPV private-label trace-source
   slice: private-label trace JSONL reads now route through the shared JSONL
   source helper instead of a local parser, so malformed or non-object trace

@@ -338,6 +338,33 @@ def test_rerender_cleanup_report_from_run_result_rejects_empty_declared_trace(
         rerender_cleanup_report_from_run_result(run_result_path)
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            '{"event": "response", "tool": "observe", "response": {}}\n{not-json\n',
+            r"cleanup report trace source row must contain valid JSON object: "
+            r".*trace\.jsonl:2",
+        ),
+        (
+            '{"event": "response", "tool": "observe", "response": {}}\n[]\n',
+            r"cleanup report trace source row must contain a JSON object: "
+            r".*trace\.jsonl:2",
+        ),
+    ],
+)
+def test_rerender_cleanup_report_from_run_result_rejects_bad_trace_rows(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    run_result_path = _write_minimal_run_result(tmp_path / "run")
+    (run_result_path.parent / "trace.jsonl").write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        rerender_cleanup_report_from_run_result(run_result_path)
+
+
 def test_rerender_cleanup_report_from_run_result_rejects_missing_declared_scenario(
     tmp_path: Path,
 ) -> None:
