@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: OpenAI Agents SDK live timing now routes present
+  `run_result.json` reads through
+  `roboclaws.core.json_sources.read_json_value` while preserving the existing
+  `OpenAI Agents live source ...` timing-source error wording. Malformed and
+  non-object run results still fail final timing aloud before falling back to
+  trace-derived plausible timing. Owner layer: Agent Engines And Provider
+  Profiles / live-agent timing artifacts. Behavior-change class:
+  source-reader consolidation for strict live timing evidence. Metric:
+  ratchet remains at 0 Ruff complexity rows and reports 79 oversized modules
+  in the current shared checkout; this slice added one focused parametrized
+  row to the existing oversized `tests/unit/agents/test_live_runtime.py` to
+  pin non-object `run_result.json` wording. Proof: focused OpenAI Agents live
+  timing source-error tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `run_live_openai_agents_cleanup.py::_mcp_trace_timing` regains direct
+  `json.loads(read_text(...))` parsing for `run_result.json` timing sources or
+  stops failing malformed/non-object run results before trace fallback.
+
 - 2026-06-20: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
   route through `roboclaws.core.json_sources.read_json_object`. Valid state
   accessors remain unchanged, while missing, malformed, or non-object backend

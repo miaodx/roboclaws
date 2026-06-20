@@ -17,24 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
+2026-06-20: OpenAI Agents SDK live timing now routes present
+`run_result.json` reads through the shared JSON-value helper while preserving
+existing `OpenAI Agents live source ...` timing-source error wording for
+malformed and non-object run results. Focused OpenAI Agents live timing
+source-error tests, touched-file ruff, touched-file format checks, diff check,
+and the ratchet summary passed. Current ratchet: 0 Ruff complexity violations,
+79 oversized modules in the shared checkout.
+
+Previous slice: MolmoSpaces and Isaac Lab backend wrapper state-file reads now
 route through the shared JSON-source helper, preserving valid state accessor
 behavior while failing missing, malformed, or non-object backend state with
-path-labelled source errors. Focused backend-state source tests, touched-file
-ruff, touched-file format checks, diff check, and the ratchet summary passed.
-Current ratchet: 0 Ruff complexity violations, 79 oversized modules in the
-shared checkout. The module-count drop from 80 is affected by unrelated
-no-touch worktree state and is not claimed by this slice.
-
-Previous slice: B1 / Map 12 readiness inspection now routes
-`navigation_memory.json` through the shared navigation-memory source reader,
-preserving accepted `items`/`catalog.navigation_memory` shapes while failing
-malformed or non-object memory sources with canonical path-labelled diagnostics.
+path-labelled source errors.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the backend runtime state-reader slice.
+committing the OpenAI Agents live timing source-reader slice.
 
 ## Touched Areas
 
@@ -105,6 +104,7 @@ committing the backend runtime state-reader slice.
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `scripts/molmo_cleanup/run_live_claude_cleanup.py`
+- `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
 - `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `scripts/molmo_cleanup/summarize_live_run.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`
@@ -208,6 +208,7 @@ committing the backend runtime state-reader slice.
 - `tests/unit/evals/test_eval_runner_sources.py`
 - `roboclaws/reports/live_performance.py`
 - `roboclaws/agents/live_runtime.py`
+- `tests/unit/agents/test_live_runtime.py`
 - `tests/unit/agents/test_live_runtime_sources.py`
 - `roboclaws/agents/provider_timing_proxy.py`
 - `tests/unit/agents/test_provider_timing_proxy.py`

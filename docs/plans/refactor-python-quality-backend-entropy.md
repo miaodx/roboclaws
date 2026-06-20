@@ -23,7 +23,8 @@ Latest quality snapshot from 2026-06-20:
 - Ruff complexity rows: 0.
 - Oversized modules: 79 in the current shared checkout. The count change from
   the prior 80-module checkpoint is affected by unrelated no-touch worktree
-  state and is not claimed by the backend runtime state-reader slice.
+  state and is not claimed by the backend runtime or OpenAI Agents live timing
+  source-reader slices.
 - Current shared-checkout note after the B1 readiness navigation-memory
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
@@ -35,6 +36,11 @@ Latest quality snapshot from 2026-06-20:
   shared JSON-source helper, preserving valid state accessor behavior while
   failing missing, malformed, or non-object backend state with path-labelled
   source errors.
+- Current shared-checkout note after the OpenAI Agents live timing
+  source-reader slice: final live timing now routes present `run_result.json`
+  reads through the shared JSON-value helper while preserving the existing
+  `OpenAI Agents live source ...` timing-source error wording for malformed
+  and non-object run results.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed

@@ -29,6 +29,7 @@ from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
 from roboclaws.agents.thinking_policy import THINKING_MODES
+from roboclaws.core.json_sources import read_json_value
 from roboclaws.household.realworld_mcp_server import ROBOT_VIEW_CAPTURE_POLICY_FULL
 from roboclaws.household.report_sections_timing import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
@@ -1703,10 +1704,13 @@ def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
     run_result_path = run_dir / "run_result.json"
     if run_result_path.is_file():
         try:
-            run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
+            run_result = read_json_value(run_result_path, label="OpenAI Agents live run_result")
+        except ValueError as exc:
+            cause = exc.__cause__
+            if not isinstance(cause, json.JSONDecodeError):
+                raise
             raise ValueError(
-                f"OpenAI Agents live source {run_result_path}: invalid JSON: {exc.msg}"
+                f"OpenAI Agents live source {run_result_path}: invalid JSON: {cause.msg}"
             ) from exc
         except OSError as exc:
             raise ValueError(
