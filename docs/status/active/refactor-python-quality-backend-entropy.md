@@ -17,30 +17,27 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Shared JSON source helpers now own parseable source type-name
+2026-06-20: Base Navigation Map v1 area semantic validation now splits
+geometry, label, category, source, and review checks into focused helpers while
+preserving strict validator diagnostics. Focused map bundle contract tests,
+touched-file ruff, touched-file format checks, diff check, and the ratchet
+summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
+Previous slice: Shared JSON source helpers now own parseable source type-name
 reporting for non-object source diagnostics. Live-agent artifact loading and
 report-performance JSON loading no longer keep duplicate local file reparsing
-helpers, while preserving existing non-object error wording. Focused core
-JSON-source, live-runtime source, and report-performance source tests,
-touched-file ruff, touched-file format checks, and diff check passed. The
-global ratchet command currently reports 1 unrelated C901 row in no-touch
-`roboclaws/maps/bundle_validation.py` and 80 oversized modules after
-concurrent map-validation work appeared in the shared checkout.
+helpers, while preserving existing non-object error wording.
 
-Previous slice: Scene-sampler scanner optional preview and product-smoke
+Previous committed slice before that: Scene-sampler scanner optional preview and product-smoke
 sidecar loading now routes through the shared JSON-source helper while
 preserving the missing, unreadable, malformed, or non-object-as-empty optional
 metadata contract.
 
-Previous committed slice before that: OpenAI Agents SDK live timing now routes present
-`run_result.json` reads through the shared JSON-value helper while preserving
-existing `OpenAI Agents live source ...` timing-source error wording for
-malformed and non-object run results.
-
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the shared JSON source type-name slice.
+committing the Base Navigation Map v1 area-validator complexity slice.
 
 ## Touched Areas
 

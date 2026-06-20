@@ -341,10 +341,7 @@ def _base_navigation_areas(
         if polygon_usage.get("navigation") is not True:
             continue
         area_id = str(
-            room.get("navigation_area_id")
-            or room.get("map_area_id")
-            or room.get("room_id")
-            or ""
+            room.get("navigation_area_id") or room.get("map_area_id") or room.get("room_id") or ""
         )
         if not area_id:
             errors.append(f"navigation area rooms[{index}] missing navigation_area_id")
@@ -361,35 +358,79 @@ def _validate_base_navigation_area_semantics(
     errors: list[str],
 ) -> None:
     for area_id, area in navigation_areas.items():
-        polygon = area.get("polygon") if isinstance(area.get("polygon"), list) else []
-        if len(polygon) < 3:
-            errors.append(f"navigation area {area_id} must contain a source-frame polygon")
-        if not str(area.get("room_label") or area.get("semantic_label") or area.get("label") or ""):
-            errors.append(f"navigation area {area_id} missing semantic label")
-        category = str(area.get("semantic_category") or area.get("category") or "")
-        if not category:
-            errors.append(f"navigation area {area_id} missing semantic category")
-        elif category == UNKNOWN_REVIEW_REQUIRED_CATEGORY:
-            errors.append(
-                f"navigation area {area_id} category {UNKNOWN_REVIEW_REQUIRED_CATEGORY} "
-                "is not valid for product Base Navigation Map v1"
-            )
-        elif category not in PRODUCT_SEMANTIC_CATEGORIES:
-            errors.append(
-                f"navigation area {area_id} semantic category {category!r} is not in "
-                "the product Base Navigation Map v1 vocabulary"
-            )
-        if not str(area.get("geometry_source") or ""):
-            errors.append(f"navigation area {area_id} missing geometry_source")
-        if not str(area.get("label_source") or area.get("semantic_source") or ""):
-            errors.append(f"navigation area {area_id} missing label_source")
-        if area.get("review_status") != "accepted":
-            errors.append(f"navigation area {area_id} review_status must be accepted")
-        polygon_usage = (
-            area.get("polygon_usage") if isinstance(area.get("polygon_usage"), dict) else {}
+        _validate_base_navigation_area_geometry(area, area_id=area_id, errors=errors)
+        _validate_base_navigation_area_label(area, area_id=area_id, errors=errors)
+        _validate_base_navigation_area_category(area, area_id=area_id, errors=errors)
+        _validate_base_navigation_area_sources(area, area_id=area_id, errors=errors)
+        _validate_base_navigation_area_review(area, area_id=area_id, errors=errors)
+
+
+def _validate_base_navigation_area_geometry(
+    area: dict[str, Any],
+    *,
+    area_id: str,
+    errors: list[str],
+) -> None:
+    polygon = area.get("polygon") if isinstance(area.get("polygon"), list) else []
+    if len(polygon) < 3:
+        errors.append(f"navigation area {area_id} must contain a source-frame polygon")
+
+
+def _validate_base_navigation_area_label(
+    area: dict[str, Any],
+    *,
+    area_id: str,
+    errors: list[str],
+) -> None:
+    label = str(area.get("room_label") or area.get("semantic_label") or area.get("label") or "")
+    if not label:
+        errors.append(f"navigation area {area_id} missing semantic label")
+
+
+def _validate_base_navigation_area_category(
+    area: dict[str, Any],
+    *,
+    area_id: str,
+    errors: list[str],
+) -> None:
+    category = str(area.get("semantic_category") or area.get("category") or "")
+    if not category:
+        errors.append(f"navigation area {area_id} missing semantic category")
+    elif category == UNKNOWN_REVIEW_REQUIRED_CATEGORY:
+        errors.append(
+            f"navigation area {area_id} category {UNKNOWN_REVIEW_REQUIRED_CATEGORY} "
+            "is not valid for product Base Navigation Map v1"
         )
-        if polygon_usage.get("semantic_labeling") != "accepted":
-            errors.append(f"navigation area {area_id} semantic_labeling must be accepted")
+    elif category not in PRODUCT_SEMANTIC_CATEGORIES:
+        errors.append(
+            f"navigation area {area_id} semantic category {category!r} is not in "
+            "the product Base Navigation Map v1 vocabulary"
+        )
+
+
+def _validate_base_navigation_area_sources(
+    area: dict[str, Any],
+    *,
+    area_id: str,
+    errors: list[str],
+) -> None:
+    if not str(area.get("geometry_source") or ""):
+        errors.append(f"navigation area {area_id} missing geometry_source")
+    if not str(area.get("label_source") or area.get("semantic_source") or ""):
+        errors.append(f"navigation area {area_id} missing label_source")
+
+
+def _validate_base_navigation_area_review(
+    area: dict[str, Any],
+    *,
+    area_id: str,
+    errors: list[str],
+) -> None:
+    if area.get("review_status") != "accepted":
+        errors.append(f"navigation area {area_id} review_status must be accepted")
+    polygon_usage = area.get("polygon_usage") if isinstance(area.get("polygon_usage"), dict) else {}
+    if polygon_usage.get("semantic_labeling") != "accepted":
+        errors.append(f"navigation area {area_id} semantic_labeling must be accepted")
 
 
 def _validate_base_navigation_waypoints(
@@ -482,9 +523,7 @@ def _validate_base_navigation_waypoint_policy(
             "base_navigation_area_inspection"
         )
     if not str(waypoint.get("generation_policy") or ""):
-        errors.append(
-            f"Base Navigation Map waypoint {waypoint_id} missing generation_policy"
-        )
+        errors.append(f"Base Navigation Map waypoint {waypoint_id} missing generation_policy")
     try:
         sweep_index = int(waypoint.get("sweep_index"))
     except (TypeError, ValueError):
@@ -523,9 +562,7 @@ def _validate_base_navigation_sidecar_scope(
         semantics.get("provenance") if isinstance(semantics.get("provenance"), dict) else {}
     )
     if not provenance.get("b1_base_navigation_sidecar"):
-        errors.append(
-            "digital_twin_capabilities are allowed only as sidecar capability metadata"
-        )
+        errors.append("digital_twin_capabilities are allowed only as sidecar capability metadata")
 
 
 def _validate_semantics_provenance(semantics: dict[str, Any], errors: list[str]) -> None:

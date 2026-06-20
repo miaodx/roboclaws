@@ -21,11 +21,7 @@ their full execution notes back here.
 Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 0.
-- Oversized modules: 79 in the current shared checkout. The count change from
-  the prior 80-module checkpoint is affected by unrelated no-touch worktree
-  state and is not claimed by the backend runtime, OpenAI Agents live timing,
-  scene-sampler scanner optional source-reader, or shared JSON source
-  type-name slices.
+- Oversized modules: 80 in the current shared checkout.
 - Current shared-checkout note after the B1 readiness navigation-memory
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
@@ -50,11 +46,11 @@ Latest quality snapshot from 2026-06-20:
 - Current shared-checkout note after the shared JSON source type-name slice:
   live-agent artifact loading and report-performance JSON loading now reuse
   the shared source type-name helper instead of duplicate local file reparsing,
-  while preserving existing non-object error wording. Focused proof and
-  touched-file static checks passed; the global ratchet command currently
-  reports 1 unrelated C901 row in no-touch
-  `roboclaws/maps/bundle_validation.py` and 80 oversized modules after
-  concurrent map-validation work appeared in the shared checkout.
+  while preserving existing non-object error wording.
+- Current shared-checkout note after the Base Navigation Map v1 area-validator
+  split: area geometry, label, category, source, and review checks now live in
+  focused helpers, preserving strict validator diagnostics while clearing the
+  new C901 row in `roboclaws/maps/bundle_validation.py`.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed

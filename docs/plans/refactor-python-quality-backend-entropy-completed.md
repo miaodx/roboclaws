@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Base Navigation Map v1 area semantic validation now splits
+  geometry, label, category, source, and review checks into focused helpers in
+  `roboclaws/maps/bundle_validation.py`. The strict validator keeps the same
+  error wording and contract behavior while clearing the new C901 row from
+  `_validate_base_navigation_area_semantics`. Owner layer: Backend Runtime /
+  Environment Primitive map artifact validation. Behavior-change class:
+  internal validator refactor with stable public validation diagnostics.
+  Metric: global ratchet returns to 0 Ruff complexity rows and reports 80
+  oversized modules in the current shared checkout. Proof: focused Base
+  Navigation Map/Nav2 bundle contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if Base Navigation Map v1 area
+  validation regains a C901 row or starts changing existing validation error
+  wording without a contract update.
+
 - 2026-06-20: Shared JSON source helpers now own parseable source type-name
   reporting through `roboclaws.core.json_sources.json_source_type_name`.
   Live-agent artifact loading and report-performance JSON loading no longer
