@@ -247,8 +247,14 @@ def test_codex_cleanup_apple2apple_summary_rejects_missing_robot_view_sample(
 @pytest.mark.parametrize(
     ("source", "message"),
     [
-        ("{not-json\n", r"cleanup run result must contain valid JSON object: .*run_result\.json"),
-        ("[]\n", r"cleanup run result must contain a JSON object: .*run_result\.json"),
+        (
+            "{not-json\n",
+            r"cleanup run result source must contain valid JSON object: .*run_result\.json",
+        ),
+        (
+            "[]\n",
+            r"cleanup run result source must contain a JSON object: .*run_result\.json",
+        ),
     ],
 )
 def test_codex_cleanup_apple2apple_summary_rejects_malformed_run_result_source(
@@ -265,6 +271,23 @@ def test_codex_cleanup_apple2apple_summary_rejects_malformed_run_result_source(
         run_summary._lane_summary(
             lane_id="molmospaces-mujoco-codex",
             run_result_path=run_dir / "run_result.json",
+            output_dir=tmp_path / "summary",
+        )
+
+
+def test_codex_cleanup_apple2apple_summary_rejects_missing_run_result_source(
+    tmp_path: Path,
+) -> None:
+    run_summary = _load_module(RUN_SUMMARY_PATH, "run_codex_cleanup_apple2apple_summary")
+    run_result_path = tmp_path / "mujoco" / "seed-6" / "run_result.json"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match=r"cleanup run result source is missing: .*run_result\.json",
+    ):
+        run_summary._lane_summary(
+            lane_id="molmospaces-mujoco-codex",
+            run_result_path=run_result_path,
             output_dir=tmp_path / "summary",
         )
 
@@ -289,7 +312,8 @@ def test_codex_cleanup_apple2apple_summary_rejects_non_object_agent_view_source(
     (run_dir / "agent_view.json").write_text("[]\n", encoding="utf-8")
 
     with pytest.raises(
-        ValueError, match=r"agent view must contain a JSON object: .*agent_view\.json"
+        ValueError,
+        match=r"agent view source must contain a JSON object: .*agent_view\.json",
     ):
         run_summary._lane_summary(
             lane_id="molmospaces-mujoco-codex",

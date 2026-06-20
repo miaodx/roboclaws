@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Codex cleanup apple-to-apple summary source loading now uses the
+  shared `roboclaws.core.json_sources.read_json_object` reader for cleanup
+  run-result and sidecar agent-view artifacts. This removes the summary
+  script's duplicate local JSON-object reader while preserving fail-aloud
+  path-labelled source errors for missing, malformed, or parseable non-object
+  artifacts under the canonical helper wording. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules. Proof: focused Codex
+  cleanup apple-to-apple summary tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if the
+  summary script regains a local JSON-object source reader or stops routing
+  run-result and agent-view artifacts through the shared source helper.
+
 - 2026-06-20: B1 map-scene alignment fitting now uses the shared
   `roboclaws.core.json_sources.read_json_object` reader for explicit
   correspondence manifests. This removes the fitter's duplicate local

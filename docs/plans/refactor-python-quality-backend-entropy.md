@@ -242,7 +242,10 @@ Latest quality snapshot from 2026-06-20:
   merge or proof-request selection. Planner-proof bundle source loading now
   routes cleanup run-result, declared request, prior manifest, and standalone
   prior probe JSON-object artifacts through the shared source helper instead
-  of a duplicate local reader. MolmoSpaces apple-to-apple grid source loading
+  of a duplicate local reader. Codex cleanup apple-to-apple summary source
+  loading now routes cleanup run-result and sidecar agent-view JSON-object
+  artifacts through the shared source helper instead of a duplicate local
+  reader. MolmoSpaces apple-to-apple grid source loading
   now routes existing grid manifests and detached live-status JSON-object
   artifacts through the shared source helper instead of a duplicate local
   reader.

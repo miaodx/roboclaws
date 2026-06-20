@@ -16,6 +16,8 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
+
 SCHEMA = "roboclaws_codex_cleanup_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-codex"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd-codex"
@@ -87,7 +89,7 @@ def build_summary(*, output_dir: Path, lane_paths: dict[str, Path]) -> dict[str,
 def _lane_summary(*, lane_id: str, run_result_path: Path, output_dir: Path) -> dict[str, Any]:
     run_result_path = run_result_path.resolve()
     run_dir = run_result_path.parent
-    run_result = _read_json_object(run_result_path, label="cleanup run result")
+    run_result = read_json_object(run_result_path, label="cleanup run result")
     score = dict(run_result.get("score") or {})
     private_evaluation = dict(run_result.get("private_evaluation") or {})
     agent_view = _agent_view(run_result, run_dir)
@@ -417,7 +419,7 @@ def _scene_source_from_scenario(scenario_id: str) -> str | None:
 def _agent_view(run_result: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     path = run_dir / "agent_view.json"
     if path.is_file():
-        return _read_json_object(path, label="agent view")
+        return read_json_object(path, label="agent view")
     embedded = run_result.get("agent_view")
     if embedded is None:
         return {}
@@ -524,16 +526,6 @@ def _list_dicts(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [dict(item) for item in value if isinstance(item, dict)]
-
-
-def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{label} must contain valid JSON object: {path}") from exc
-    if not isinstance(payload, dict):
-        raise ValueError(f"{label} must contain a JSON object: {path}")
-    return payload
 
 
 def _read_text_if_exists(path: Path) -> str:
