@@ -17,15 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Cleanup-result Isaac runtime checker scene-index artifact loading
-now routes required `isaac_scene_index.json` object sources through the shared
-source helper while preserving assertion-style checker failures. Missing,
-malformed, or non-object scene-index artifacts fail before schema, privacy,
-binding, index, or segmentation assertions. Focused cleanup-result checker
-contract tests, touched-file ruff, and touched-file format checks passed.
+2026-06-20: Scene-sampler required Procthor preview metadata loading now routes
+`molmospaces-val_<N>-preview.json` object sources through the shared source
+helper while preserving missing-source, source-id, and backend validation.
+Malformed or non-object preview metadata now fails before scanner admission or
+eval sample rows derive preview status from wrong-shaped metadata. Focused
+scene-sampler unit tests, touched-file ruff, and touched-file format checks
+passed.
 
-Previous slice: Isaac scenario-builder map-bundle semantics loading now routes
-strict `semantics.json` object sources through the shared source helper.
+Previous slice: Cleanup-result Isaac runtime checker scene-index artifact
+loading now routes required `isaac_scene_index.json` object sources through the
+shared source helper.
 
 ## Next Action
 

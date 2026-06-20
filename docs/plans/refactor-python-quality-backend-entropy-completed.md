@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Scene-sampler required Procthor preview metadata loading now
+  routes `molmospaces-val_<N>-preview.json` JSON-object sources through
+  `roboclaws.core.json_sources.read_json_object` while preserving
+  missing-source, source-id, and backend validation. Malformed or non-object
+  preview metadata now fails before scanner admission or eval sample rows
+  derive preview status from wrong-shaped metadata. Owner layer: Eval suites /
+  launch scene sampler. Behavior-change class: source-reader consolidation
+  for strict sampler preview metadata evidence. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched scene sampler is 1944 lines and its focused unit test file is
+  1949 lines. Proof: focused scene-sampler unit tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `roboclaws/launch/scene_sampler.py` regains local raw JSON parsing for
+  required Procthor preview metadata or malformed/non-object preview metadata
+  can reach scanner admission or eval-sample row assembly as loaded metadata.
+
 - 2026-06-20: Cleanup-result Isaac runtime checker scene-index artifact
   loading now routes required `isaac_scene_index.json` JSON-object sources
   through `roboclaws.core.json_sources.read_json_object` while preserving

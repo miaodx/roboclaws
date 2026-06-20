@@ -1235,9 +1235,11 @@ def _eval_projection_support_status(
 def _preview_metadata(scene_index: int) -> dict[str, Any]:
     path = _PREVIEW_ROOT / f"molmospaces-val_{scene_index}-preview.json"
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = read_json_object(path, label="scene sampler preview metadata")
     except FileNotFoundError as exc:
         raise ValueError(f"missing preview metadata for scene {scene_index}: {path}") from exc
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
     if payload.get("scene_source") != "procthor-10k-val":
         raise ValueError(f"preview {path} is not procthor-10k-val")
     if payload.get("backend") != PRIMARY_MOLMOSPACES_BACKEND:

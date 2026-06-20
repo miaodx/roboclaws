@@ -1718,6 +1718,69 @@ def test_scene_sampler_source_prep_install_command_resolves_dict_scene_refs() ->
     assert "install_scene_with_objects_and_grasps_from_path(scene_path)" in command
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"valid JSON object: .*preview\.json",
+        ),
+        (
+            "[]\n",
+            r"scene sampler preview metadata source must contain a JSON object: .*preview\.json",
+        ),
+    ],
+)
+def test_scene_sampler_preview_metadata_rejects_bad_sources(
+    monkeypatch,
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(scene_sampler, "_PREVIEW_ROOT", tmp_path)
+    (tmp_path / "molmospaces-val_4-preview.json").write_text(source, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        scene_sampler._preview_metadata(4)
+
+
+def test_scene_sampler_preview_metadata_rejects_missing_source(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(scene_sampler, "_PREVIEW_ROOT", tmp_path)
+
+    with pytest.raises(
+        ValueError,
+        match=r"missing preview metadata for scene 4: .*molmospaces-val_4-preview\.json",
+    ):
+        scene_sampler._preview_metadata(4)
+
+
+def test_scene_sampler_preview_metadata_loads_valid_source(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    import roboclaws.launch.scene_sampler as scene_sampler
+
+    monkeypatch.setattr(scene_sampler, "_PREVIEW_ROOT", tmp_path)
+    payload = {
+        "scene_source": "procthor-10k-val",
+        "scene_index": 4,
+        "backend": scene_sampler.PRIMARY_MOLMOSPACES_BACKEND,
+    }
+    (tmp_path / "molmospaces-val_4-preview.json").write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+    )
+
+    assert scene_sampler._preview_metadata(4) == payload
+
+
 def test_scene_sampler_scanner_admission_report_records_missing_gates(monkeypatch) -> None:
     import roboclaws.launch.scene_sampler as scene_sampler
 
