@@ -22,13 +22,14 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the operator-console launcher
+- Current shared-checkout note after the Agibot metric-map context
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
   `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
-  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
-  unrelated no-touch debt.
+  the 801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry rolled
+  out of the top-80 list after the touched Agibot contract test grew, but
+  remains unrelated no-touch debt.
 - Current emphasis: fresh Ruff complexity rows are clear again. The latest
   fail-aloud slices kept Ruff complexity rows clear again after splitting the
   live eval artifact selector below the C901 threshold, and surfaced malformed
@@ -193,6 +194,10 @@ Latest quality snapshot from 2026-06-20:
   the shared helper while preserving existing `_JsonSourceError` wording for
   stop/readiness diagnostics; its permissive optional reader remains local by
   design.
+  Agibot metric-map generation now routes the required `context_json` source
+  through the shared helper before map-context validation, so missing,
+  malformed, or non-object authoring context files fail with path-labelled
+  source errors instead of raw parser/type failures.
   Camera-control request loading now routes file-backed payloads through the
   shared JSON-value source helper, so missing or malformed camera-control
   request files fail with path-labelled source errors before normalization

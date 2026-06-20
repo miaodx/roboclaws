@@ -17,25 +17,27 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Operator-console launcher strict JSON-object source reads now
-route through the shared JSON-object source helper while preserving existing
-`_JsonSourceError` wording for stop/readiness diagnostics. The permissive
-optional launcher reader stays local by design. Focused launcher source-error
-tests, touched-file Ruff/format, changed-code review, `git diff --check`, and
-ratchet passed.
+2026-06-20: Agibot metric-map generation now routes the required
+`context_json` source through the shared JSON-object helper before map-context
+validation. Missing, malformed, and non-object authoring context sources fail
+with path-labelled source errors instead of raw parser/type failures. Focused
+Agibot context source-error and happy-path tests, touched-file Ruff/format,
+`git diff --check`, and ratchet passed.
 Current shared-checkout ratchet summary still reports 1 unrelated Ruff
 complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules; the
-801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry remains
+801-line `tests/contract/maps/test_b1_map12_label_tool.py` entry rolled out of
+the top-80 list after the touched Agibot contract test grew, but remains
 unrelated no-touch debt.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the operator-console launcher source-reader slice.
+committing the Agibot metric-map context source-reader slice.
 
 ## Touched Areas
 
+- `scripts/agibot/generate_metric_map_from_context.py`
 - `scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py`
 - `scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py`
 - `scripts/isaac_lab_cleanup/check_b1_map12_readiness.py`
@@ -136,6 +138,7 @@ committing the operator-console launcher source-reader slice.
 - `tests/contract/maps/test_runtime_map_prior_snapshot.py`
 - `tests/contract/maps/test_runtime_map_prior_source_loading.py`
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`
+- `tests/contract/agibot/test_agibot_map_context_scripts.py`
 - `tests/unit/core/test_json_sources.py`
 - `tests/unit/molmo_cleanup/test_camera_control.py`
 - `tests/unit/molmo_cleanup/test_ci_live_reports.py`

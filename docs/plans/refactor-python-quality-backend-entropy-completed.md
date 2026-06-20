@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Agibot metric-map generation now routes the required
+  `context_json` source through `roboclaws.core.json_sources.read_json_object`
+  before map-context schema validation. Missing, malformed, and non-object
+  authoring context sources now fail with path-labelled source errors instead
+  of raw parser/type failures. Owner layer: Backend Runtime / Environment
+  Primitive tooling at the Agibot map-artifact boundary. Behavior-change class:
+  required CLI source-reader consolidation with fail-aloud diagnostics. Metric:
+  current shared-checkout ratchet summary reports 1 unrelated Ruff complexity
+  row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized
+  modules; this slice did not add new complexity in touched files. Proof:
+  focused Agibot map-context source-error and happy-path tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/agibot/generate_metric_map_from_context.py` regains a local raw
+  JSON-object reader for required context files or source diagnostics stop
+  naming the failing context path.
+
 - 2026-06-20: Operator-console launcher strict JSON-object source reads now use
   `roboclaws.core.json_sources.read_json_object` while preserving existing
   `_JsonSourceError` wording for operator stop/readiness diagnostics. The
