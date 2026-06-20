@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import argparse
 import html
-import json
 from pathlib import Path
+
+from roboclaws.core.json_sources import read_json_object
 
 _TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head>
@@ -91,7 +92,7 @@ def _molmo_live_section(site_dir: Path) -> str:
     manifest_path = site_dir / "molmo" / "live" / "live-report-manifest.json"
     if not manifest_path.is_file():
         return ""
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = read_json_object(manifest_path, label="Molmo live report manifest")
     entries = manifest.get("entries") or []
     if not entries:
         return ""

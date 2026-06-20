@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Pages index rendering now uses
+  `roboclaws.core.json_sources.read_json_object` for present Molmo live
+  `live-report-manifest.json` sources. Missing manifests still render the
+  documented household placeholder, while malformed or parseable non-object
+  manifests now fail with canonical path-labelled source wording before live
+  report tiles are rendered. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused Pages index source tests, existing CI live
+  report index tests, core JSON-source tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if Pages index rendering
+  regains a local raw JSON file reader for live report manifests or corrupt
+  manifests can again be treated like empty/missing live-report state.
+
 - 2026-06-20: Planner manipulation-probe and proof-bundle runner checker CLIs
   now use `roboclaws.core.json_sources.read_json_object` for required top-level
   source artifacts before checker assertions. Missing, malformed, or parseable

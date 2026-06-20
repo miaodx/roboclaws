@@ -109,6 +109,10 @@ Latest quality snapshot from 2026-06-20:
   required top-level checker source artifacts through the shared JSON-object
   helper, so corrupt checker inputs fail with path-labelled source errors
   before assertion logic sees wrong-shaped payloads.
+  Pages index rendering now routes present Molmo live
+  `live-report-manifest.json` sources through the shared JSON-object helper,
+  so corrupt published live-report manifests fail aloud while the missing
+  manifest placeholder path stays explicit.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
