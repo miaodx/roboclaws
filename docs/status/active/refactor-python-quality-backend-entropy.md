@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Planner-proof bundle prior inputs now treat explicit prior
-`proof_bundle_run_manifest.json` files and standalone prior probe
-`run_result.json` files as JSON-object source truth through the shared
-`roboclaws.core.json_sources.read_json_object` helper. Malformed or parseable
-non-object prior artifacts fail with path-labelled source errors before
-prior-memory merge or proof-request selection. Focused prior-source tests,
-existing prior-manifest success tests, touched-file Ruff/format,
+2026-06-20: Planner-proof bundle loading now uses the shared
+`roboclaws.core.json_sources.read_json_object` source reader for cleanup
+`run_result.json`, declared `planner_proof_requests.json`, prior
+`proof_bundle_run_manifest.json`, and standalone prior probe `run_result.json`
+inputs. Malformed or parseable non-object artifacts keep path-labelled source
+errors while the runner no longer carries a duplicate local JSON-object reader.
+Focused planner-proof source tests, touched-file Ruff/format,
 `git diff --check`, changed-code review, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 

@@ -1717,8 +1717,8 @@ def test_runner_requires_planner_proof_requests(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("source", "message"),
     [
-        ("{not-json\n", r"cleanup run result must contain valid JSON object: .*run_result\.json"),
-        ("[]\n", r"cleanup run result must contain a JSON object: .*run_result\.json"),
+        ("{not-json\n", "valid JSON object"),
+        ("[]\n", "a JSON object"),
     ],
 )
 def test_runner_rejects_malformed_cleanup_run_result_source(
@@ -1731,6 +1731,7 @@ def test_runner_rejects_malformed_cleanup_run_result_source(
     cleanup_run_result.parent.mkdir()
     cleanup_run_result.write_text(source, encoding="utf-8")
 
+    message = rf"cleanup run result source must contain {message}: .*run_result\.json"
     with pytest.raises(ValueError, match=message):
         _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
 
@@ -1832,7 +1833,9 @@ def test_runner_rejects_malformed_declared_request_artifact_source(
     )
 
     reason = "a JSON object" if valid else "valid JSON object"
-    message = rf"planner proof requests must contain {reason}: .*planner_proof_requests\.json"
+    message = (
+        rf"planner proof requests source must contain {reason}: .*planner_proof_requests\.json"
+    )
     with pytest.raises(ValueError, match=message):
         _run_minimal_bundle(runner, cleanup_run_result, output_dir=tmp_path / "bundle")
 

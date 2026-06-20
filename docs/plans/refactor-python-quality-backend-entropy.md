@@ -218,7 +218,10 @@ Latest quality snapshot from 2026-06-20:
   Planner-proof bundle prior-memory loading now treats explicit prior
   `proof_bundle_run_manifest.json` files and standalone prior probe
   `run_result.json` files as JSON-object source truth before prior-memory
-  merge or proof-request selection.
+  merge or proof-request selection. Planner-proof bundle source loading now
+  routes cleanup run-result, declared request, prior manifest, and standalone
+  prior probe JSON-object artifacts through the shared source helper instead
+  of a duplicate local reader.
   The cleanup checker now treats declared planner-proof request artifacts as
   JSON-object source truth through `roboclaws.core.json_sources`, failing
   malformed, non-object, or missing request manifests with path-labelled source

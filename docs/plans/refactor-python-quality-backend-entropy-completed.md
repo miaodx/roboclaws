@@ -34,6 +34,22 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Planner-proof bundle source loading now uses the shared
+  `roboclaws.core.json_sources.read_json_object` reader for cleanup
+  `run_result.json`, declared `planner_proof_requests.json`, prior
+  `proof_bundle_run_manifest.json`, and standalone prior probe
+  `run_result.json` inputs. This removes the runner's duplicate local
+  JSON-object reader while preserving fail-aloud path-labelled source errors
+  for malformed or parseable non-object artifacts. Owner layer: Artifacts,
+  reports, and eval suites. Behavior-change class: source-reader
+  consolidation / fail-aloud behavior preservation. Metric: ratchet stayed at
+  0 Ruff complexity rows and 79 oversized modules; the planner-proof bundle
+  runner dropped from 876 to 866 lines. Proof: focused planner-proof source
+  tests, touched-file ruff/format checks, `git diff --check`, changed-code
+  review, and ratchet. Reopen only if the runner regains a local JSON-object
+  source reader or stops routing explicit JSON-object artifacts through the
+  shared source helper.
+
 - 2026-06-20: Planner-proof bundle prior inputs now treat explicit prior
   `proof_bundle_run_manifest.json` files and standalone prior probe
   `run_result.json` files as JSON-object source truth through
