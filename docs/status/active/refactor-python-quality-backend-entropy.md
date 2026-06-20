@@ -17,7 +17,17 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: MolmoSpaces visual backend slot capacity config now fails invalid
+2026-06-21: Operator-console stop handling now treats successful Docker
+mount-inspect output with malformed or wrong-shaped JSON as an operator stop
+source error instead of silently deciding that no task container is mounted.
+Docker absence and nonzero inspect results remain optional cleanup paths, but
+corrupt present mount metadata now blocks state rewrite and lock release.
+Focused operator-console launcher tests, touched-file ruff, touched-file
+format checks, diff check, changed-code cleanup review, and the ratchet
+summary passed. Current ratchet: 0 Ruff complexity violations, 80 oversized
+modules in the shared checkout.
+
+Previous slice: MolmoSpaces visual backend slot capacity config now fails invalid
 `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and explicit `max_slots` values aloud
 instead of falling back to a plausible one-slot backend. Live household launch
 reports invalid slot config separately from normal slot contention, and
@@ -27,7 +37,7 @@ tests, touched-file ruff, touched-file format checks, diff check,
 changed-code cleanup review, and the ratchet summary passed. Current ratchet:
 0 Ruff complexity violations, 80 oversized modules in the shared checkout.
 
-Previous slice: RAW-FPV perception probe runtime-prior loading now fails explicit
+Previous slice before that: RAW-FPV perception probe runtime-prior loading now fails explicit
 `--runtime-map-prior` paths aloud when missing, including split and equals CLI
 spellings, while preserving the default missing prior as intentional no-prior
 context. Focused RAW-FPV perception probe tests, touched-file ruff,
@@ -71,9 +81,9 @@ complexity violations, 80 oversized modules in the shared checkout.
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the MolmoSpaces visual backend slot capacity config slice. Avoid
-reopening closed visual-slot config or slot-file source readers without fresh
-false-green evidence.
+committing the operator-console Docker mount source slice. Avoid reopening
+closed visual-slot config, slot-file source readers, or Docker mount stop
+source handling without fresh false-green evidence.
 
 ## Touched Areas
 
@@ -261,6 +271,7 @@ false-green evidence.
 - `roboclaws/agents/drivers/household_live.py`
 - `roboclaws/household/visual_backend_slots.py`
 - `tests/unit/molmo_cleanup/test_visual_backend_slots.py`
+- `roboclaws/operator_console/launch_support.py`
 - `roboclaws/operator_console/runtime_inventory.py`
 - `tests/unit/agents/test_household_live_driver.py`
 - `tests/unit/operator_console/test_runtime_inventory.py`

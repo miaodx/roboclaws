@@ -27,6 +27,7 @@ from roboclaws.launch.environment_setup import (
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.launch_support import (
+    DockerMountSourceError,
     apply_env_overrides,
     docker_container_ids_with_mount,
     provider_env_overrides_for_route,
@@ -931,7 +932,11 @@ def _stop_docker_containers_for_run(display_run_dir: Path) -> None:
     workspace = (display_run_dir / "agent-docker-workspace").resolve()
     if not workspace.exists():
         return
-    for container_id in _docker_container_ids_with_mount(workspace):
+    try:
+        container_ids = _docker_container_ids_with_mount(workspace)
+    except DockerMountSourceError as exc:
+        raise ConsoleLaunchError(f"operator stop source error: {exc}") from exc
+    for container_id in container_ids:
         subprocess.run(
             ["docker", "stop", "--time", "5", container_id],
             check=False,

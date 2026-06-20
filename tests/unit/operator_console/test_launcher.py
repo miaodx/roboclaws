@@ -772,6 +772,69 @@ def test_stop_console_run_stops_docker_container_bound_to_attempt_workspace(
     assert docker_stops == [["docker", "stop", "--time", "5", "container-b"]]
 
 
+def test_stop_console_run_rejects_corrupt_docker_mount_source_before_state_rewrite(
+    tmp_path: Path,
+) -> None:
+    route = get_selection(MUJOCO_CODEX_OPEN_TASK)
+    run_id = "wrapper-run"
+    wrapper_pid = 123450
+    server_pid = 123451
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0608_1807" / "seed-7"
+    workspace = attempt_dir / "agent-docker-workspace"
+    workspace.mkdir(parents=True)
+    state_path = run_dir / "operator_state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": wrapper_pid,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    live_status_path = attempt_dir / "live_status.json"
+    live_status_path.write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "server.pid").write_text(f"{server_pid}\n", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=wrapper_pid)
+
+    def fake_run(command, **kwargs):  # noqa: ANN001, ANN003, ANN202
+        del kwargs
+
+        class Result:
+            returncode = 0
+            stdout = ""
+
+        result = Result()
+        if command == ["docker", "ps", "-q"]:
+            result.stdout = "container-a\n"
+        elif command[:4] == ["docker", "inspect", "--format", "{{json .Mounts}}"]:
+            result.stdout = "{bad-mounts"
+        return result
+
+    with (
+        patch("roboclaws.operator_console.launcher._process_parent_pid", return_value=wrapper_pid),
+        patch("roboclaws.operator_console.launcher._descendant_pids", return_value=[server_pid]),
+        patch("roboclaws.operator_console.launcher.os.getpgid", side_effect=lambda pid: pid),
+        patch("roboclaws.operator_console.launcher.os.killpg"),
+        patch("roboclaws.operator_console.launcher.subprocess.run", side_effect=fake_run),
+        pytest.raises(ConsoleLaunchError, match="operator stop source error") as exc_info,
+    ):
+        stop_console_run(tmp_path, run_id)
+
+    assert "docker inspect mounts for container-a contain invalid JSON" in str(exc_info.value)
+    assert json.loads(state_path.read_text(encoding="utf-8"))["phase"] == "starting"
+    assert json.loads(live_status_path.read_text(encoding="utf-8"))["phase"] == "running-codex"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is True
+
+
 def test_stop_console_run_rejects_malformed_operator_state_source(tmp_path: Path) -> None:
     route = get_selection(MUJOCO_CODEX_OPEN_TASK)
     run_id = "corrupt-stop-run"

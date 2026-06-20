@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Operator-console stop handling now rejects corrupt successful
+  Docker mount metadata before deciding whether a task container is attached
+  to the run workspace. Missing Docker and nonzero `docker inspect` remain
+  optional cleanup paths, while malformed, non-array, or non-object successful
+  mount JSON now raises an operator stop source error before live-status or
+  operator-state rewrite and before backend-lock release. Owner layer: Thin
+  Runtime / Server Adapters. Behavior-change class: fail-aloud stop-source
+  validation for task-container cleanup evidence. Metric: ratchet remains at
+  0 Ruff complexity rows and reports 80 oversized modules in the current
+  shared checkout. Proof: focused operator-console launcher tests,
+  touched-file ruff/format checks, `git diff --check`, changed-code cleanup
+  review, and ratchet. Reopen only if corrupt present Docker mount metadata
+  can again disappear into "no mounted container" during operator stop
+  handling.
+
 - 2026-06-21: MolmoSpaces visual backend slot capacity config now rejects
   invalid `ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS` and explicit `max_slots`
   values before live launch or operator-console inventory can report a
