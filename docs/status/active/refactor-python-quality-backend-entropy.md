@@ -17,13 +17,14 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Planner-proof attachment loading now routes strict proof
-`run_result.json` sources through the shared JSON-object source helper.
-Missing, malformed, or non-object proof run results fail with canonical
-path-labelled source wording before strict planner-backed evidence validation
-or image copies. Focused planner-proof attachment and core JSON-source tests,
-touched-file Ruff/format, `git diff --check`, and ratchet passed. Quality
-signal: 0 Ruff complexity rows, 79 oversized modules.
+2026-06-20: Planner manipulation-probe and proof-bundle runner checker CLIs
+now route required top-level source artifacts through the shared JSON-object
+source helper. Missing, malformed, or non-object `run_result.json` /
+`proof_bundle_run_manifest.json` inputs fail with canonical path-labelled
+source wording before checker assertions. Focused checker source tests,
+existing valid-path checker tests, core JSON-source tests, touched-file
+Ruff/format, `git diff --check`, and ratchet passed. Quality signal: 0 Ruff
+complexity rows, 79 oversized modules.
 
 ## Next Action
 
@@ -61,6 +62,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/run_codex_cleanup_apple2apple_summary.py`
 - `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`
 - `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`
+- `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
+- `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`
 - `roboclaws/maps/bundle.py`
@@ -105,6 +108,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/checkers/test_cleanup_checker_run_result_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_scene_index_sources.py`
 - `tests/contract/checkers/test_cleanup_checker_trace_sources.py`
+- `tests/contract/checkers/test_planner_checker_source_readers.py`
 - `tests/contract/maps/test_runtime_map_prior_snapshot.py`
 - `tests/contract/maps/test_runtime_map_prior_source_loading.py`
 - `tests/contract/maps/test_scene_room_semantic_overlay.py`

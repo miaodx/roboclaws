@@ -34,6 +34,20 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Planner manipulation-probe and proof-bundle runner checker CLIs
+  now use `roboclaws.core.json_sources.read_json_object` for required top-level
+  source artifacts before checker assertions. Missing, malformed, or parseable
+  non-object `run_result.json` / `proof_bundle_run_manifest.json` inputs now
+  use canonical path-labelled source wording instead of raw file/JSON parser
+  failures or wrong-shaped assertion drift. Owner layer: Artifacts, reports,
+  and eval suites. Behavior-change class: source-reader consolidation /
+  fail-aloud source validation. Metric: ratchet stayed at 0 Ruff complexity
+  rows and 79 oversized modules. Proof: focused planner checker source tests,
+  existing valid-path checker tests, core JSON-source tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if either
+  planner checker CLI regains a local raw JSON file reader or corrupt checker
+  source artifacts can again reach assertion logic as wrong-shaped payloads.
+
 - 2026-06-20: Planner-proof attachment loading now uses
   `roboclaws.core.json_sources.read_json_object` for strict proof
   `run_result.json` sources before evidence validation or proof-image copies.
