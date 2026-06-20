@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from roboclaws.core.json_sources import read_json_object
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleLaunchSelection, get_selection
 from roboclaws.operator_console.state import (
@@ -620,19 +621,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _read_session_json(path: Path, *, session_id: str) -> dict[str, Any]:
     if not path.exists():
         return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise InteractionError(
-            (
-                f"operator session source contains invalid JSON at {path}: "
-                f"line {exc.lineno} column {exc.colno}: {exc.msg}"
-            )
-        ) from exc
-    except OSError as exc:
-        raise InteractionError(f"operator session source cannot be read at {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise InteractionError(f"operator session source must be a JSON object at {path}")
+    payload = _read_strict_json_object(path, source_name="operator session")
     if str(payload.get("operator_session_id") or session_id) != session_id:
         raise InteractionError(f"operator session source id mismatch at {path}")
     return payload
@@ -641,20 +630,24 @@ def _read_session_json(path: Path, *, session_id: str) -> dict[str, Any]:
 def _read_run_state(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise InteractionError(f"unknown run: {path.parent.name}")
+    return _read_strict_json_object(path, source_name="operator state")
+
+
+def _read_strict_json_object(path: Path, *, source_name: str) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise InteractionError(
-            (
-                f"operator state source contains invalid JSON at {path}: "
-                f"line {exc.lineno} column {exc.colno}: {exc.msg}"
-            )
-        ) from exc
+        return read_json_object(path, label=source_name)
+    except ValueError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, json.JSONDecodeError):
+            raise InteractionError(
+                (
+                    f"{source_name} source contains invalid JSON at {path}: "
+                    f"line {cause.lineno} column {cause.colno}: {cause.msg}"
+                )
+            ) from exc
+        raise InteractionError(f"{source_name} source must be a JSON object at {path}") from exc
     except OSError as exc:
-        raise InteractionError(f"operator state source cannot be read at {path}: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise InteractionError(f"operator state source must be a JSON object at {path}")
-    return payload
+        raise InteractionError(f"{source_name} source cannot be read at {path}: {exc}") from exc
 
 
 def _session_path(root: Path, session_id: str) -> Path:
