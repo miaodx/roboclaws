@@ -6422,6 +6422,17 @@ logs before choosing the next slice.
   diff check, changed-code cleanup review, and ratchet. Reopen only if
   `realworld_agibot_map_build_checker.py` regains local raw JSONL trace
   parsing or accepts malformed/non-object trace rows.
+- Isaac semantic-pose checker trace JSONL loading now routes through the shared
+  JSONL source helper instead of a local parser. Malformed or non-object trace
+  rows fail with row-labelled `Isaac semantic-pose trace` source errors before
+  semantic-pose pick/place provenance checks can pass from partial trace
+  evidence. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: fail-aloud source-reader consolidation. Metric:
+  ratchet remains at 0 Ruff complexity rows and 80 oversized modules. Proof:
+  focused semantic-pose and cleanup trace-source checker tests, ruff, format
+  check, diff check, changed-code cleanup review, and ratchet. Reopen only if
+  `isaac_semantic_pose_checker.py` regains local raw JSONL trace parsing or
+  accepts malformed/non-object trace rows.
 - Scene-camera USD render-contract parsing, image metrics, native render
   diagnostics, lighting/tone/shadow diagnostics, render-domain calibration,
   and render source references are owned by their focused scene-camera modules;

@@ -22,6 +22,12 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the Isaac semantic-pose trace-source
+  slice: checker trace JSONL reads now route through the shared JSONL source
+  helper instead of a local parser, so malformed or non-object trace rows fail
+  with row-labelled `Isaac semantic-pose trace` source errors before
+  semantic-pose pick/place provenance checks can derive confidence from
+  partial trace evidence.
 - Current shared-checkout note after the Agibot map-build trace-source slice:
   checker trace JSONL reads now route through the shared JSONL source helper
   instead of a local parser, so malformed or non-object trace rows fail with
