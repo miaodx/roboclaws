@@ -18,7 +18,11 @@ else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.core.json_sources import read_json_object
-from roboclaws.maps.bundle import validate_nav2_map_bundle, write_source_frame_bundle_preview
+from roboclaws.maps.bundle import (
+    validate_base_navigation_map_v1_bundle,
+    validate_nav2_map_bundle,
+    write_source_frame_bundle_preview,
+)
 from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (  # noqa: E402
     DEFAULT_B1_VISUAL_ROUTE_SCENE_USD,
     NAVIGATION_PROVENANCE,
@@ -76,6 +80,8 @@ def augment_base_navigation_map_bundle(
     output_dir = Path(output_dir)
     validation = validate_nav2_map_bundle(base_map_bundle)
     validation.raise_for_errors()
+    base_validation = validate_base_navigation_map_v1_bundle(base_map_bundle)
+    base_validation.raise_for_errors()
     semantics = read_json_object(base_map_bundle / "semantics.json", label="base map semantics")
     _assert_base_navigation_semantics(semantics, base_map_bundle=base_map_bundle)
     base_manifest = read_json_object(
@@ -113,6 +119,8 @@ def augment_base_navigation_map_bundle(
     write_source_frame_bundle_preview(output_dir)
     sidecar_validation = validate_nav2_map_bundle(output_dir)
     sidecar_validation.raise_for_errors()
+    sidecar_base_validation = validate_base_navigation_map_v1_bundle(output_dir)
+    sidecar_base_validation.raise_for_errors()
     room_semantic_projection_proof = sidecar_semantics["digital_twin_capabilities"][
         "room_semantic_projection_proof"
     ]
@@ -138,7 +146,7 @@ def augment_base_navigation_map_bundle(
         output_dir=output_dir,
         base_manifest=base_manifest,
         robot_consumption_proof=proof,
-        validation=sidecar_validation.as_dict(),
+        validation=sidecar_base_validation.as_dict(),
     )
     (output_dir / "b1_base_navigation_sidecar.json").write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n",
@@ -151,7 +159,7 @@ def augment_base_navigation_map_bundle(
         "robot_consumption_manifest": str(output_dir / "b1_robot_consumption_manifest.json"),
         "provenance": str(output_dir / "b1_base_navigation_sidecar.json"),
         "robot_navigation_supported": bool(proof.get("robot_navigation_supported")),
-        "validation": sidecar_validation.as_dict(),
+        "validation": sidecar_base_validation.as_dict(),
     }
 
 

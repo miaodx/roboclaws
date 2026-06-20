@@ -26,6 +26,14 @@ related_context:
 
 Status: Approved for implementation.
 
+Implementation progress:
+
+- Slice 1 is implemented by `validate_base_navigation_map_v1_bundle()`.
+  B1 / Map 12 generated bundles now pass the strict Base Navigation Map v1
+  validator, current MolmoSpaces bundles expose explicit known gaps, and
+  targeted negative tests cover missing labels/categories, empty waypoints,
+  malformed area bindings, and forbidden fixture/object waypoint fields.
+
 This document is now the execution plan for reducing map and waypoint
 source-of-truth entropy across simulator, real robot, and Digital Twin paths.
 Implementation should happen in the slices below, not as one unbounded
@@ -488,6 +496,18 @@ Acceptance:
   area bindings, and forbidden fixture/object fields have targeted negative
   tests.
 
+Status: Implemented.
+
+Evidence:
+
+- `validate_base_navigation_map_v1_bundle()` is exposed beside the existing
+  generic Nav2 bundle validator.
+- B1 base-map generation and B1 Digital Twin sidecar generation call the strict
+  validator before publishing manifests.
+- Current MolmoSpaces bundles intentionally fail the strict validator for known
+  gaps that Slice 2 and Slice 3 will address; the generic Nav2 bundle validator
+  still covers current runtime compatibility.
+
 ### Slice 2: Canonical Area-Based BaseWaypointBuilder
 
 Extract a shared builder and validator for sparse area inspection waypoints.
@@ -732,14 +752,14 @@ just run::surface \
 
 ## Next Implementation
 
-No additional design discussion is required before starting Slice 1.
+No additional design discussion is required before starting Slice 2.
 
 Recommended next implementation command:
 
 ```text
-Implement Slice 1 from docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md:
-add strict Base Navigation Map v1 validation and negative tests, without
-changing simulator generation yet.
+Implement Slice 2 from docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md:
+extract the canonical area-based BaseWaypointBuilder and validator for sparse
+area inspection waypoints, without changing simulator generation yet.
 ```
 
 Stop before implementation if any change would:

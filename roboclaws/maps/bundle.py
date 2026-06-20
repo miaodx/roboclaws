@@ -15,6 +15,7 @@ from roboclaws.maps.bundle_validation import (
     parse_map_yaml as parse_map_yaml,
 )
 from roboclaws.maps.bundle_validation import (
+    validate_base_navigation_map_v1_payload,
     validate_nav2_map_bundle_payload,
 )
 from roboclaws.maps.rasterize import (
@@ -335,6 +336,17 @@ def _existing_bundle_snapshot(
 def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:
     bundle_dir = Path(bundle_dir)
     errors, warnings, metadata = validate_nav2_map_bundle_payload(
+        bundle_dir,
+        paths=_bundle_local_paths(),
+        default_resolution_m=DEFAULT_COSTMAP_PARAMETERS["resolution_m"],
+        private_map_keys=PRIVATE_MAP_KEYS,
+    )
+    return MapBundleValidation(bundle_dir, errors, warnings, metadata)
+
+
+def validate_base_navigation_map_v1_bundle(bundle_dir: Path) -> MapBundleValidation:
+    bundle_dir = Path(bundle_dir)
+    errors, warnings, metadata = validate_base_navigation_map_v1_payload(
         bundle_dir,
         paths=_bundle_local_paths(),
         default_resolution_m=DEFAULT_COSTMAP_PARAMETERS["resolution_m"],

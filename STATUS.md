@@ -91,17 +91,18 @@ thin review/runtime contract is
 
 ## Next Action
 
-Start Slice 1 of
+Start Slice 2 of
 `docs/plans/2026-06-20-cross-environment-map-waypoint-source-of-truth.md`:
-add strict Base Navigation Map v1 validation and negative tests, without
-changing simulator generation yet.
+extract the canonical area-based `BaseWaypointBuilder` so simulator, real
+robot, and Digital Twin bundles normalize base inspection waypoints through
+one builder contract.
 
 ## Current Blocker
 
 No current human blocker for the approved cross-environment map/waypoint
-source-of-truth plan. The B1 real-robot / Digital Twin base-map path is already
-unified; the next implementation pressure is strict shared validation,
-simulator source-map preparation, and the canonical area-based waypoint builder.
+source-of-truth plan. Slice 1 strict Base Navigation Map v1 validation is
+implemented; the next implementation pressure is the canonical area-based
+waypoint builder and simulator source-map preparation.
 
 No current implementation blocker for deterministic or open-ended coding-agent
 smoke eval work. Opt-in live eval execution reaches the live product route on

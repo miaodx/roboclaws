@@ -12,6 +12,7 @@ from roboclaws.household.realworld_contract import RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import (
     static_landmarks_from_fixture_projection,
+    validate_base_navigation_map_v1_bundle,
     validate_nav2_map_bundle,
     write_nav2_map_bundle,
 )
@@ -73,6 +74,98 @@ def test_nav2_bundle_validation_rejects_private_cleanup_truth(tmp_path: Path) ->
 
     assert validation.ok is False
     assert any("private cleanup truth" in error for error in validation.errors)
+
+
+def test_base_navigation_map_v1_validation_accepts_b1_bundle(tmp_path: Path) -> None:
+    from scripts.maps.build_b1_map12_base_navigation_map import (
+        DEFAULT_LABELS,
+        DEFAULT_MAP_BUNDLE,
+        DEFAULT_ROOM_SEMANTICS,
+        build_base_navigation_map_bundle,
+    )
+
+    output_dir = tmp_path / "base-navigation-map"
+    build_base_navigation_map_bundle(
+        map_bundle=DEFAULT_MAP_BUNDLE,
+        labels_path=DEFAULT_LABELS,
+        room_semantics_path=DEFAULT_ROOM_SEMANTICS,
+        output_dir=output_dir,
+    )
+
+    validation = validate_base_navigation_map_v1_bundle(output_dir)
+
+    assert validation.ok, validation.as_dict()
+    assert validation.metadata["base_navigation_map_schema"] == "base_navigation_map_v1"
+    assert validation.metadata["base_navigation_map_v1_ready"] is True
+    assert validation.metadata["waypoint_count"] == 5
+
+
+def test_base_navigation_map_v1_validation_reports_current_molmospaces_gaps() -> None:
+    validation = validate_base_navigation_map_v1_bundle(CANONICAL_SCENE_BUNDLE)
+
+    assert validation.ok is False
+    errors = "\n".join(validation.errors)
+    assert (
+        "semantics.json must contain base_navigation_map_contract.schema=base_navigation_map_v1"
+        in errors
+    )
+    assert "Base Navigation Map v1 must not contain static_landmarks" in errors
+    assert "semantic category 'room_area'" in errors
+    assert "Base Navigation Map waypoint generated_exploration_001 missing navigation_area_id" in (
+        errors
+    )
+    assert "Base Navigation Map waypoint generated_exploration_001 missing generation_policy" in (
+        errors
+    )
+    assert validation.metadata["base_navigation_map_v1_ready"] is False
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected_error"),
+    (
+        (
+            lambda semantics: semantics["rooms"][1].update({"category": ""}),
+            "navigation area meeting_room_b missing semantic category",
+        ),
+        (
+            lambda semantics: semantics["rooms"][1].update(
+                {"category": "unknown_review_required"}
+            ),
+            "unknown_review_required",
+        ),
+        (
+            lambda semantics: semantics.update({"inspection_waypoints": []}),
+            "Base Navigation Map v1 must contain base inspection waypoints",
+        ),
+        (
+            lambda semantics: semantics["inspection_waypoints"][0].update(
+                {"navigation_area_id": "missing_area"}
+            ),
+            "binds unknown navigation_area_id 'missing_area'",
+        ),
+        (
+            lambda semantics: semantics["inspection_waypoints"][0].update(
+                {"fixture_id": "counter_1"}
+            ),
+            "contains forbidden fields: ['fixture_id']",
+        ),
+    ),
+)
+def test_base_navigation_map_v1_validation_rejects_contract_violations(
+    tmp_path: Path,
+    mutator,
+    expected_error: str,
+) -> None:
+    bundle_dir = _b1_base_navigation_bundle(tmp_path)
+    semantics_path = bundle_dir / "semantics.json"
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    mutator(semantics)
+    semantics_path.write_text(json.dumps(semantics), encoding="utf-8")
+
+    validation = validate_base_navigation_map_v1_bundle(bundle_dir)
+
+    assert validation.ok is False
+    assert any(expected_error in error for error in validation.errors), validation.as_dict()
 
 
 def test_nav2_projection_rejects_map_yaml_without_image(tmp_path: Path) -> None:
@@ -503,6 +596,24 @@ def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:
         if observation["visible_object_detections"]:
             return observation
     raise AssertionError("expected at least one visible object detection")
+
+
+def _b1_base_navigation_bundle(tmp_path: Path) -> Path:
+    from scripts.maps.build_b1_map12_base_navigation_map import (
+        DEFAULT_LABELS,
+        DEFAULT_MAP_BUNDLE,
+        DEFAULT_ROOM_SEMANTICS,
+        build_base_navigation_map_bundle,
+    )
+
+    output_dir = tmp_path / "base-navigation-map"
+    build_base_navigation_map_bundle(
+        map_bundle=DEFAULT_MAP_BUNDLE,
+        labels_path=DEFAULT_LABELS,
+        room_semantics_path=DEFAULT_ROOM_SEMANTICS,
+        output_dir=output_dir,
+    )
+    return output_dir
 
 
 def _load_module(path: Path, name: str):

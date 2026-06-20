@@ -24,6 +24,7 @@ from roboclaws.core.json_sources import read_json_object
 from roboclaws.maps.bundle import (
     DEFAULT_COSTMAP_PARAMETERS,
     DEFAULT_ROBOT_PROFILE,
+    validate_base_navigation_map_v1_bundle,
     validate_nav2_map_bundle,
     write_source_frame_bundle_preview,
 )
@@ -134,6 +135,8 @@ def build_base_navigation_map_bundle(
     write_source_frame_bundle_preview(output_dir)
     validation = validate_nav2_map_bundle(output_dir)
     validation.raise_for_errors()
+    base_navigation_validation = validate_base_navigation_map_v1_bundle(output_dir)
+    base_navigation_validation.raise_for_errors()
     manifest = _manifest_payload(
         output_dir=output_dir,
         map_bundle=map_bundle,
@@ -141,7 +144,7 @@ def build_base_navigation_map_bundle(
         room_semantics_path=room_semantics_path,
         labels=labels,
         semantics=semantics,
-        validation=validation.as_dict(),
+        validation=base_navigation_validation.as_dict(),
     )
     (output_dir / "base_navigation_map_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
@@ -154,7 +157,7 @@ def build_base_navigation_map_bundle(
         "manifest": str(output_dir / "base_navigation_map_manifest.json"),
         "navigation_area_count": manifest["base_navigation_map"]["navigation_area_count"],
         "inspection_waypoint_count": manifest["base_navigation_map"]["inspection_waypoint_count"],
-        "validation": validation.as_dict(),
+        "validation": base_navigation_validation.as_dict(),
     }
 
 
