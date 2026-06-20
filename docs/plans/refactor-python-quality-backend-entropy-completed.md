@@ -34,6 +34,25 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Cleanup-result Isaac runtime checker scene-index artifact
+  loading now routes required `isaac_scene_index.json` JSON-object sources
+  through `roboclaws.core.json_sources.read_json_object` while preserving
+  assertion-style checker failures. Missing, malformed, or non-object
+  scene-index artifacts now fail before schema, privacy, binding, index, or
+  segmentation assertions. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation for strict checker
+  artifact evidence. Metric: current shared-checkout ratchet summary reports 1
+  unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules;
+  the touched Isaac runtime checker is 578 lines and the touched existing
+  cleanup-result checker contract test file is 5156 lines. Proof: focused
+  cleanup-result checker contract tests, touched-file ruff/format checks,
+  `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/isaac_runtime_checker.py` regains local raw JSON
+  parsing for required `isaac_scene_index.json` artifacts or
+  malformed/non-object scene-index artifacts can reach checker
+  schema/privacy/binding/index assertions.
+
 - 2026-06-20: Isaac scenario-builder map-bundle semantics loading now routes
   strict `semantics.json` JSON-object sources through
   `roboclaws.core.json_sources.read_json_object` while preserving valid

@@ -1352,6 +1352,67 @@ def test_checker_rejects_isaac_selected_binding_index_mismatch(
         )
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            "{not-json\n",
+            r"valid JSON object: .*isaac_scene_index\.json",
+        ),
+        (
+            "[]\n",
+            r"source must contain a JSON object: .*isaac_scene_index\.json",
+        ),
+    ],
+)
+def test_checker_rejects_bad_isaac_scene_index_artifact_source(
+    tmp_path: Path,
+    source: str,
+    message: str,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    (tmp_path / "isaac_scene_index.json").write_text(source, encoding="utf-8")
+
+    with pytest.raises(AssertionError, match=message):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_missing_isaac_scene_index_artifact_source(tmp_path: Path) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+
+    with pytest.raises(
+        AssertionError,
+        match=r"Isaac scene-index artifact source is missing: .*isaac_scene_index\.json",
+    ):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_checker_rejects_isaac_scene_index_binding_drift_from_run_result(
     tmp_path: Path,
 ) -> None:

@@ -17,15 +17,15 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac scenario-builder map-bundle semantics loading now routes
-strict `semantics.json` object sources through the shared source helper while
-preserving valid empty-fixture fallback and map-aligned scenario construction.
-Missing, malformed, or non-object map-bundle semantics fail before Isaac
-map-aligned scenario assembly. Focused Isaac scenario-builder source tests,
-touched-file ruff, and touched-file format checks passed.
+2026-06-20: Cleanup-result Isaac runtime checker scene-index artifact loading
+now routes required `isaac_scene_index.json` object sources through the shared
+source helper while preserving assertion-style checker failures. Missing,
+malformed, or non-object scene-index artifacts fail before schema, privacy,
+binding, index, or segmentation assertions. Focused cleanup-result checker
+contract tests, touched-file ruff, and touched-file format checks passed.
 
-Previous slice: Isaac scenario-builder generated-mess manifest loading now
-routes strict manifest JSON-object sources through the shared source helper.
+Previous slice: Isaac scenario-builder map-bundle semantics loading now routes
+strict `semantics.json` object sources through the shared source helper.
 
 ## Next Action
 
