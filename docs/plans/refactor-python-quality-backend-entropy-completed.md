@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Operator-console state JSON source normalization now uses
+  `roboclaws.core.json_sources.read_json_object` for present operator state,
+  live status, and run-result object reads while preserving the existing
+  `JsonSourceError` payload shape and operator-visible invalid/non-object
+  reason text. Owner layer: Thin Runtime / Server Adapters. Behavior-change
+  class: source-reader consolidation with stable operator-state diagnostics.
+  Metric: current shared-checkout ratchet summary reports 1 unrelated Ruff
+  complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
+  oversized modules; the 801-line
+  `tests/contract/maps/test_b1_map12_label_tool.py` entry remains unrelated
+  no-touch debt, and this slice did not add new complexity in touched files.
+  Proof: full operator-console state unit tests, touched-file ruff/format
+  checks, changed-code review, `git diff --check`, and ratchet. Reopen only if
+  operator-console state loading regains local raw JSON-object readers for
+  operator state/live status/run result artifacts or corrupt present state
+  artifacts stop surfacing stable `JsonSourceError` evidence.
+
 - 2026-06-20: Operator-console request-field readiness now uses
   `roboclaws.core.json_sources.read_json_object` for attached JSON-object gate
   artifacts while preserving existing gate statuses and operator-facing
