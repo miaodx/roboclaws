@@ -22,7 +22,7 @@ Latest quality snapshot from 2026-06-20:
 
 - Ruff complexity rows: 1 unrelated shared-checkout row.
 - Oversized modules: 80.
-- Current shared-checkout note after the Gaussian topdown capture-result
+- Current shared-checkout note after the manual alignment overlay
   source-reader slice:
   `python scripts/dev/check_python_quality_ratchet.py --summary --top 80`
   reports 1 Ruff complexity row in
@@ -246,6 +246,9 @@ Latest quality snapshot from 2026-06-20:
   `capture_result.json` artifacts through the shared JSON-object helper, so
   malformed or non-object child results fail with path-labelled source errors
   before topdown packet assembly.
+  B1 Map 12 manual alignment overlay scene-topdown and alignment artifact
+  reads now route through the shared JSON-object helper while preserving the
+  tested CLI wording for missing, malformed, and non-object sources.
   Scene-sampler source-prep, scanner-plan, and next-flow worklist runner inputs
   now route explicit JSON-object artifacts through the shared source helper, so
   missing, malformed, or non-object runner inputs fail with path-labelled

@@ -34,6 +34,21 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: B1 Map 12 manual alignment overlay scene-topdown and alignment
+  artifact reads now route through
+  `roboclaws.core.json_sources.read_json_object` inside the existing
+  `load_json` wrapper. The CLI keeps its established missing, malformed, and
+  non-object source wording while sharing the canonical raw JSON parser.
+  Owner layer: Artifacts, reports, and eval suites. Behavior-change class:
+  source-reader consolidation with stable CLI diagnostics. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused B1 Map 12 manual alignment overlay contract tests,
+  touched-file ruff/format checks, `git diff --check`, and ratchet. Reopen
+  only if `scripts/maps/render_b1_map12_manual_alignment_overlay.py` regains
+  local raw JSON parsing for scene-topdown or alignment artifacts, or if the
+  overlay CLI source-error wording drifts from the tested current wording.
+
 - 2026-06-20: B1 scene Gaussian topdown capture-result loading now routes the
   child `capture_result.json` artifact through
   `roboclaws.core.json_sources.read_json_object` before attaching the

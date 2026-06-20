@@ -17,23 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: B1 scene Gaussian topdown capture-result loading now routes child
+2026-06-20: B1 Map 12 manual alignment overlay scene-topdown and alignment
+artifact reads now route through the shared JSON-object helper inside the
+existing `load_json` wrapper while preserving current CLI wording. Focused B1
+Map 12 manual alignment overlay contract tests and touched-file Ruff/format
+passed, as did `git diff --check` and ratchet. Current shared-checkout ratchet
+summary still reports 1 unrelated Ruff complexity row in
+`scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+
+Previous slice: B1 scene Gaussian topdown capture-result loading now routes child
 `capture_result.json` artifacts through the shared JSON-object helper before
 attaching `result_path`. Focused B1 scene Gaussian topdown contract tests and
-touched-file Ruff/format passed, as did `git diff --check` and ratchet.
-Current shared-checkout ratchet summary still reports 1 unrelated Ruff
-complexity row in `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80
-oversized modules.
-
-Previous slice: MolmoSpaces subprocess worker camera view-spec loading now routes
-file-backed view-list or `{views: [...]}` payloads through the shared
-JSON-value helper before existing list/object-with-views validation. Focused
-MolmoSpaces subprocess backend tests and touched-file Ruff/format passed.
+touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Gaussian topdown capture-result source-reader slice.
+committing the manual alignment overlay source-reader slice.
 
 ## Touched Areas
 
@@ -53,6 +53,7 @@ committing the Gaussian topdown capture-result source-reader slice.
 - `scripts/isaac_lab_cleanup/summarize_isaac_aov_matrix.py`
 - `scripts/isaac_lab_cleanup/isaac_scene_camera_geometry.py`
 - `scripts/maps/render_b1_scene_gaussian_topdown.py`
+- `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/render_b1_scene_topdown_diagnostic.py`
 - `scripts/maps/suggest_b1_map12_manual_anchor_semantics.py`
 - `scripts/maps/build_b1_map12_semantic_anchor_review_packet.py`
