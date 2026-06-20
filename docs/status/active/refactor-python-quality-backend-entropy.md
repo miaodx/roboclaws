@@ -17,7 +17,22 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-21: Operator-console runtime inventory now surfaces successful Docker
+2026-06-21: Camera-control request normalization and backend camera-view spec
+builders now reject malformed explicit render-pose vectors instead of
+defaulting `target`/`lookat` to origin or deriving a plausible `eye` from bad
+input. Canonical eye/target requests require finite 3-number `eye`,
+`target`/`lookat`, and `up` vectors; anchor-orbit requests require an explicit
+finite target unless they use the narrow focus-receptacle derived-camera path;
+non-object view rows now fail instead of disappearing into an empty render
+request. MolmoSpaces and Isaac direct camera-spec helpers reuse the same
+strict vector parser while Isaac USD-bound target derivation remains covered.
+Focused camera-control, MolmoSpaces camera-view, Isaac camera-view, and
+scene-camera color-profile tests, touched-file ruff, touched-file format
+checks, diff check, changed-code cleanup review, and the ratchet summary
+passed. Current ratchet: 0 Ruff complexity violations, 80 oversized modules in
+the shared checkout.
+
+Previous slice: Operator-console runtime inventory now surfaces successful Docker
 mount-inspect output with malformed or wrong-shaped JSON as a blocking
 `source_error` task instead of omitting the running container as if no
 repo-relevant mount existed. Normal repo-mounted Docker containers still appear

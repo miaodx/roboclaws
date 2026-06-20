@@ -34,6 +34,24 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-21: Camera-control request normalization now rejects malformed or
+  missing explicit render-pose vectors and non-object view rows before
+  renderers can emit valid-looking camera artifacts from fallback origin/default
+  pose data. Canonical eye/target views require finite 3-number `eye`,
+  `target`/`lookat`, and `up` vectors; anchor-orbit views require finite
+  `target`/`lookat`; MolmoSpaces and Isaac camera-view spec helpers reuse the
+  shared strict vector parser for direct calls; and Isaac USD-bound target
+  derivation remains an explicit covered backend path. Owner layer: Backend
+  Runtime / Environment Primitive plus the public household camera-control
+  contract. Behavior-change class: fail-aloud camera-control source/vector
+  validation. Metric: ratchet remains at 0 Ruff complexity rows and reports
+  80 oversized modules in the current shared checkout. Proof: focused
+  camera-control, MolmoSpaces camera-view, Isaac camera-view, and scene-camera
+  color-profile tests, touched-file ruff/format checks, `git diff --check`,
+  changed-code cleanup review, and ratchet. Reopen only if malformed
+  camera-control `target`/`lookat`/`eye` rows can again become origin/default
+  render poses or disappear from the view list without a source error.
+
 - 2026-06-21: Operator-console runtime inventory now rejects corrupt
   successful Docker mount metadata before deciding whether a running container
   is repo-relevant. Missing Docker and nonzero `docker inspect` stay optional

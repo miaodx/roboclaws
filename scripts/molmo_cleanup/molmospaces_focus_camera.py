@@ -6,7 +6,7 @@ from typing import Any, Callable
 import mujoco
 from PIL import Image, ImageDraw
 
-from roboclaws.household.camera_control import ANCHOR_ORBIT_CAMERA_MODEL
+from roboclaws.household.camera_control import ANCHOR_ORBIT_CAMERA_MODEL, camera_pose_vec3
 from scripts.molmo_cleanup.molmospaces_room_map import item_label
 
 
@@ -46,13 +46,12 @@ def focus_camera(
 def camera_view_spec(raw_spec: dict[str, Any], *, index: int) -> dict[str, Any]:
     view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
     safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
-    lookat = camera_vec3(raw_spec.get("lookat") or raw_spec.get("target"), default=[0, 0, 0])
+    target_field = "lookat" if raw_spec.get("lookat") is not None else "target"
+    lookat = camera_vec3(raw_spec.get(target_field), field_name=target_field)
     camera_orbit = lane_camera_orbit(raw_spec, "molmospaces-mujoco")
     lens = raw_spec.get("lens") if isinstance(raw_spec.get("lens"), dict) else {}
     if "eye" in raw_spec and raw_spec.get("eye") is not None:
-        eye = camera_vec3(
-            raw_spec.get("eye"), default=[lookat[0], lookat[1] - 4.0, lookat[2] + 2.0]
-        )
+        eye = camera_vec3(raw_spec.get("eye"), field_name="eye")
         dx = eye[0] - lookat[0]
         dy = eye[1] - lookat[1]
         dz = eye[2] - lookat[2]
@@ -112,10 +111,8 @@ def lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
     return camera_orbit if isinstance(camera_orbit, dict) else {}
 
 
-def camera_vec3(value: Any, *, default: list[float]) -> list[float]:
-    if not isinstance(value, list | tuple) or len(value) < 3:
-        return [float(default[0]), float(default[1]), float(default[2])]
-    return [float(value[0]), float(value[1]), float(value[2])]
+def camera_vec3(value: Any, *, field_name: str = "camera vector") -> list[float]:
+    return camera_pose_vec3(value, field_name=field_name)
 
 
 def eye_from_mujoco_free_camera(

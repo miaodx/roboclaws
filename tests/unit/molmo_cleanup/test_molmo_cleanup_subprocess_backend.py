@@ -559,19 +559,27 @@ def test_molmospaces_camera_view_specs_accept_list_or_wrapped_views(tmp_path: Pa
     list_path = tmp_path / "camera_views_list.json"
     wrapped_path = tmp_path / "camera_views_object.json"
     list_path.write_text(
-        json.dumps([{"view_id": "fpv"}, "skip", {"view_id": "map"}]),
+        json.dumps(
+            [
+                {"view_id": "fpv", "target": [0.0, 0.0, 0.0]},
+                "skip",
+                {"view_id": "map", "target": [1.0, 0.0, 0.0]},
+            ]
+        ),
         encoding="utf-8",
     )
     wrapped_path.write_text(
-        json.dumps({"views": [{"view_id": "verify"}]}),
+        json.dumps({"views": [{"view_id": "verify", "target": [2.0, 0.0, 0.0]}]}),
         encoding="utf-8",
     )
 
     assert worker._load_camera_view_specs(list_path) == [
-        {"view_id": "fpv"},
-        {"view_id": "map"},
+        {"view_id": "fpv", "target": [0.0, 0.0, 0.0]},
+        {"view_id": "map", "target": [1.0, 0.0, 0.0]},
     ]
-    assert worker._load_camera_view_specs(wrapped_path) == [{"view_id": "verify"}]
+    assert worker._load_camera_view_specs(wrapped_path) == [
+        {"view_id": "verify", "target": [2.0, 0.0, 0.0]}
+    ]
 
 
 def test_molmospaces_worker_converts_canonical_eye_to_mujoco_free_camera_angles() -> None:
@@ -604,6 +612,38 @@ def test_molmospaces_worker_converts_canonical_eye_to_mujoco_free_camera_angles(
         elevation=spec["elevation"],
     )
     assert reconstructed_eye == pytest.approx(requested_eye)
+
+
+@pytest.mark.parametrize(
+    ("raw_spec", "message"),
+    [
+        (
+            {
+                "camera_model": "canonical_eye_target_camera_v1",
+                "eye": [1.0, 2.0, 3.0],
+                "target": [2.7, 5.9],
+            },
+            "target must be a 3-number vector",
+        ),
+        (
+            {
+                "camera_model": "canonical_eye_target_camera_v1",
+                "eye": [1.0, True, 3.0],
+                "target": [2.7, 5.9, 1.0],
+            },
+            r"eye\[1\] must be a finite number",
+        ),
+    ],
+)
+def test_molmospaces_camera_view_spec_rejects_invalid_explicit_vectors(
+    raw_spec: dict[str, object],
+    message: str,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+
+    with pytest.raises(ValueError, match=message):
+        worker._camera_view_spec(raw_spec, index=1)
 
 
 def test_molmospaces_camera_views_apply_color_profile(

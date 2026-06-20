@@ -22,6 +22,13 @@ Latest quality snapshot from 2026-06-21:
 
 - Ruff complexity rows: 0.
 - Oversized modules: 80 in the current shared checkout.
+- Current shared-checkout note after the camera-control vector source slice:
+  public camera-control request normalization now rejects malformed or missing
+  explicit render-pose vectors and non-object view rows before MuJoCo or Isaac
+  renderers can synthesize valid-looking camera artifacts from origin/default
+  pose data. MolmoSpaces and Isaac camera-view spec helpers reuse the shared
+  strict vector parser for direct calls, while the intentional Isaac USD-bound
+  target derivation path remains covered.
 - Current shared-checkout note after the operator-console Docker inventory
   mount source slice: runtime inventory now surfaces successful Docker
   mount-inspect output with malformed or wrong-shaped JSON as a blocking
