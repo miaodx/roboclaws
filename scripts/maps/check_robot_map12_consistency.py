@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import sys
 from pathlib import Path
@@ -13,6 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.json_sources import read_gzip_json_object
 from roboclaws.maps.bundle_validation import parse_map_yaml
 from roboclaws.maps.navigation_memory import (
     navigation_memory_item,
@@ -80,8 +80,12 @@ def check_robot_map12_consistency(map12_root: Path) -> dict[str, Any]:
         origin_x=origin[0],
         origin_y=origin[1],
     )
-    raw_map = _load_raw_map(raw_map_path)
     warnings: list[str] = []
+    try:
+        raw_map = _load_raw_map(raw_map_path)
+    except ValueError as exc:
+        errors.append(str(exc))
+        return _result(map12_root, errors=errors, warnings=warnings, anchors=[])
     errors.extend(_raw_map_metadata_errors(raw_map, grid=grid, yaw=origin[2]))
 
     map_summary = {
@@ -158,9 +162,7 @@ def _result(
 
 
 def _load_raw_map(path: Path) -> dict[str, Any]:
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        payload = json.load(handle)
-    return payload if isinstance(payload, dict) else {}
+    return read_gzip_json_object(path, label="raw map")
 
 
 def _raw_map_metadata_errors(

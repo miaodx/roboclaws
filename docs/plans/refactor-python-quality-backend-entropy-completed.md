@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: Compressed Agibot raw-map loading now uses
+  `roboclaws.core.json_sources.read_gzip_json_object` for Map 12 consistency
+  checks and Agibot Nav2 bundle export. Malformed, parseable non-object,
+  missing, or non-gzip `raw_map.json.gz` sources now use canonical
+  path-labelled source wording; the consistency checker records that source
+  error instead of returning a generic missing-`occupancy_grid` metadata
+  failure or surfacing a parser traceback. Adjacent Agibot map `source.json`
+  and context-object loading in the exporter now use the shared JSON-object
+  source helper too. Owner layer: Artifacts, reports, and eval suites.
+  Behavior-change class: source-reader consolidation / fail-aloud source
+  validation. Metric: ratchet stayed at 0 Ruff complexity rows and 79
+  oversized modules. Proof: focused core JSON-source tests, Map 12 consistency
+  tests, Agibot map-bundle export tests, touched-file ruff/format checks, `git
+  diff --check`, and ratchet. Reopen only if Agibot raw-map source readers
+  regain local gzip JSON parsing or corrupt `raw_map.json.gz` can again be
+  reported as generic map metadata absence.
+
 - 2026-06-20: Nav2 map-bundle semantics loading now routes validation,
   projection, existing-bundle snapshot, and source-frame preview reads through
   `roboclaws.core.json_sources.read_json_object` instead of local

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import shutil
@@ -9,6 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.core.json_sources import read_gzip_json_object, read_json_object
 from roboclaws.household.agibot_map_defaults import (
     DEFAULT_AGIBOT_ENVIRONMENT_ID,
     DEFAULT_AGIBOT_MAP_VERSION,
@@ -352,10 +352,7 @@ def _simple_yaml(value: Any, *, indent: int = 0) -> str:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"JSON object expected: {path}")
-    return data
+    return read_json_object(path, label="Agibot map")
 
 
 def _file_sha256(path: Path) -> str:
@@ -367,11 +364,7 @@ def _file_sha256(path: Path) -> str:
 
 
 def _load_raw_map(path: Path) -> dict[str, Any]:
-    with gzip.open(path, "rt", encoding="utf-8") as handle:
-        data = json.load(handle)
-    if not isinstance(data, dict):
-        raise ValueError(f"JSON object expected: {path}")
-    return data
+    return read_gzip_json_object(path, label="Agibot raw map")
 
 
 def _dict(value: Any) -> dict[str, Any]:

@@ -17,13 +17,13 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Nav2 map-bundle semantics loading now routes validation,
-projection, snapshot, and source-frame preview reads through the shared
-JSON-source helper. Missing, malformed, or parseable non-object
-`semantics.json` packets use the canonical path-labelled source wording, and
-validation stops at unreadable source evidence instead of piling on secondary
-shape errors. Focused Nav2 map-bundle contract and core JSON-source tests,
-touched-file Ruff/format, `git diff --check`, and ratchet passed.
+2026-06-20: Compressed Agibot raw-map loading now routes Map 12 consistency
+and Agibot Nav2 bundle export reads through a shared gzip JSON-object source
+helper. Malformed, non-object, missing, or non-gzip `raw_map.json.gz` sources
+use canonical path-labelled source wording, and the consistency checker returns
+source errors instead of generic missing-metadata results or tracebacks.
+Focused core JSON-source, Map 12 consistency, and Agibot map-bundle export
+tests, touched-file Ruff/format, `git diff --check`, and ratchet passed.
 Quality signal: 0 Ruff complexity rows, 79 oversized modules.
 
 ## Next Action
@@ -50,6 +50,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/maps/render_b1_map12_manual_alignment_overlay.py`
 - `scripts/maps/normalize_semantic_map_spatial_contract.py`
 - `scripts/maps/compile_b1_map12_runtime_bundle.py`
+- `scripts/maps/check_robot_map12_consistency.py`
 - `scripts/maps/export_bundle.py`
 - `scripts/maps/promote_b1_map12_manual_draft_for_verification.py`
 - `scripts/maps/promote_b1_map12_semantic_review_packet.py`
@@ -66,6 +67,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `roboclaws/maps/bundle.py`
 - `roboclaws/maps/bundle_validation.py`
 - `roboclaws/maps/project.py`
+- `roboclaws/household/agibot_map_bundle.py`
 - `roboclaws/cli/household_agent_server.py`
 - `roboclaws/household/realworld_cleanup.py`
 - `roboclaws/core/json_sources.py`
@@ -86,6 +88,8 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/maps/test_b1_map12_manual_alignment_overlay_cli.py`
 - `tests/contract/maps/test_cross_environment_semantic_map_parity.py`
 - `tests/contract/maps/test_b1_map12_runtime_bundle.py`
+- `tests/contract/maps/test_robot_map12_consistency.py`
+- `tests/contract/maps/test_agibot_map_bundle_export.py`
 - `tests/contract/maps/test_nav2_map_bundle_contract.py`
 - `tests/unit/molmo_cleanup/test_apple2apple_test_grid.py`
 - `tests/contract/visual_grounding/test_visual_grounding_benchmark_checker_sources.py`

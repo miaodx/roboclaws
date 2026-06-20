@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import shutil
 import subprocess
@@ -108,6 +109,31 @@ def test_robot_map12_consistency_reports_malformed_navigation_memory_json(
         and str(map_dir / "navigation_memory.json") in error
         for error in result["errors"]
     )
+
+
+@pytest.mark.parametrize(
+    ("raw_map", "expected_error"),
+    [
+        ("{not-json\n", "raw map source must contain valid JSON object"),
+        ("[]\n", "raw map source must contain a JSON object"),
+    ],
+)
+def test_robot_map12_consistency_rejects_malformed_raw_map_source(
+    tmp_path: Path,
+    raw_map: str,
+    expected_error: str,
+) -> None:
+    map_dir = _copy_robot_map12_fixture(tmp_path)
+    raw_map_path = map_dir / "agibot" / "raw_map.json.gz"
+    with gzip.open(raw_map_path, "wt", encoding="utf-8") as handle:
+        handle.write(raw_map)
+
+    result = check_robot_map12_consistency(map_dir)
+
+    assert result["ok"] is False
+    assert result["anchors"] == []
+    assert any(expected_error in error and str(raw_map_path) in error for error in result["errors"])
+    assert not any("lacks occupancy_grid metadata" in error for error in result["errors"])
 
 
 def test_robot_map12_consistency_accepts_catalog_navigation_memory_items(

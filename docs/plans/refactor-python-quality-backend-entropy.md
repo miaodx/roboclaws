@@ -96,6 +96,11 @@ Latest quality snapshot from 2026-06-20:
   snapshot, and source-frame preview reads through the shared JSON-source
   helper, so malformed or non-object `semantics.json` sources fail with
   canonical path-labelled source errors before projection or preview use.
+  Compressed Agibot raw-map loading now routes Map 12 consistency and Agibot
+  Nav2 bundle export reads through a shared gzip JSON-object helper, so
+  malformed, non-object, missing, or non-gzip `raw_map.json.gz` sources fail
+  with path-labelled source errors instead of tracebacks or generic
+  missing-metadata results.
   Runtime-map-prior file loading now routes direct cleanup, household agent
   server, and MCP smoke explicit prior artifacts through the Runtime Map Prior
   Snapshot owner, preserving path-labelled source errors before raw runtime
