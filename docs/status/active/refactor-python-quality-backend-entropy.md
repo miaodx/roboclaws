@@ -17,13 +17,12 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Grasp cache generation now routes proof-bundle run manifests
-through the shared JSON-object source helper before extracting
-`grasp_cache_generation_preflight`. Missing, malformed, or non-object
-manifests fail with canonical path-labelled source wording before generation
-preflight validation. Focused grasp cache generation tests, touched-file
-Ruff/format, and `git diff --check` passed. Current shared-checkout ratchet
-summary is blocked by unrelated dirty
+2026-06-20: Robot-camera RGB gain profile fitting now routes declared
+comparison manifests through the shared JSON-object source helper before
+selecting image pairs. Missing, malformed, or non-object manifests fail with
+canonical path-labelled source wording before RGB gain fitting. Focused RGB
+gain profile tests, touched-file Ruff/format, and `git diff --check` passed.
+Current shared-checkout ratchet summary is blocked by unrelated dirty
 `scripts/maps/compile_b1_map12_runtime_bundle.py` work: 1 Ruff complexity row,
 79 oversized modules.
 
@@ -71,6 +70,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py`
 - `scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `roboclaws/maps/runtime_prior_snapshot.py`
 - `roboclaws/maps/bundle.py`
 - `roboclaws/maps/bundle_validation.py`
@@ -111,6 +111,7 @@ Pick a fresh fail-aloud/source-truth seam from current ratchet evidence.
 - `tests/contract/visual_grounding/test_visual_grounding_corpus_builder.py`
 - `tests/unit/molmo_cleanup/test_codex_cleanup_apple2apple_summary.py`
 - `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_rgb_gain_profile.py`
 - `tests/unit/molmo_cleanup/test_molmo_planner_proof_attachment.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py`
 - `tests/unit/scripts/test_run_molmo_planner_proof_bundle_prior_sources.py`
