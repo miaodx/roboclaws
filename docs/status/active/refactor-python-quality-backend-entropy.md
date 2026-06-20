@@ -17,25 +17,23 @@ only in the completed ledger.
 
 ## Latest Checkpoint
 
-2026-06-20: Isaac segmentation AOV comparison and matrix summary now share the
-same CLI-facing JSON artifact source adapter. The matrix script no longer
-carries a duplicate `_read_json` wrapper around `read_json_object`, while
-missing/malformed/non-object CLI wording stays stable for both labels. Focused
-AOV comparison/matrix tests, exact stale-reader search, and touched-file
-Ruff/format passed, as did `git diff --check` and ratchet. Current
+2026-06-20: RAW-FPV private-label generation now routes required saved
+`molmospaces_backend_state.json` sources through the shared JSON-object helper
+before replay setup or scorer-private generated-mess reconstruction. Malformed
+and non-object saved backend state now fail with path-labelled source errors.
+Focused RAW-FPV private-label tests, exact stale-reader search, and
+touched-file Ruff/format passed, as did `git diff --check` and ratchet. Current
 shared-checkout ratchet summary still reports 1 unrelated Ruff complexity row in
 `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
 
-Previous slice: Operator-console state normalization no longer carries the
-unused `_read_json` wrapper that collapsed `JsonSourceError` state into `{}`.
-Active state reads use `_read_json_source` and preserve source-error evidence
-for malformed live state artifacts. Focused state unit tests and touched-file
-Ruff/format passed.
+Previous slice: Isaac segmentation AOV comparison and matrix summary now share
+the same CLI-facing JSON artifact source adapter. Focused AOV
+comparison/matrix tests and touched-file Ruff/format passed.
 
 ## Next Action
 
 Pick a fresh fail-aloud/source-truth seam from current ratchet evidence after
-committing the Isaac segmentation AOV source-adapter consolidation slice.
+committing the RAW-FPV private-label saved-state source-reader slice.
 
 ## Touched Areas
 

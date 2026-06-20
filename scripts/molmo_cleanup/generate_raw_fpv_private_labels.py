@@ -18,6 +18,7 @@ if __package__ in {None, ""}:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
+from roboclaws.core.json_sources import read_json_object  # noqa: E402
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 
 MANIFEST_SCHEMA = "raw_fpv_private_label_manifest_v1"
@@ -738,7 +739,7 @@ def _iter_trace_rows(trace_path: Path) -> list[dict[str, Any]]:
 
 
 def _load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path, label="MolmoSpaces backend state")
 
 
 def _output_run_dir(output_root: Path, run_id: str) -> Path:

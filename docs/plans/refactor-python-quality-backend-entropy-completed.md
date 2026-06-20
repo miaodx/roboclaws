@@ -34,6 +34,23 @@ logs before choosing the next slice.
 
 ## Completed Bundles
 
+- 2026-06-20: RAW-FPV private-label generation now routes required saved
+  `molmospaces_backend_state.json` sources through
+  `roboclaws.core.json_sources.read_json_object` before replay setup or
+  scorer-private generated-mess reconstruction. Missing, malformed, and
+  non-object saved backend state now fail with path-labelled source errors
+  instead of raw parser/type failures. Owner layer: Backend Runtime /
+  Environment Primitive. Behavior-change class: fail-aloud source-reader
+  consolidation for scorer-private replay input. Metric: current
+  shared-checkout ratchet summary reports 1 unrelated Ruff complexity row in
+  `scripts/maps/compile_b1_map12_runtime_bundle.py` and 80 oversized modules.
+  Proof: focused RAW-FPV perception/private-label tests, exact stale
+  `_load_json`/raw-parser search in the generator and tests, touched-file
+  ruff/format checks, `git diff --check`, and ratchet. Reopen only if
+  `scripts/molmo_cleanup/generate_raw_fpv_private_labels.py` regains local raw
+  JSON parsing for saved backend-state sources or malformed saved state can
+  reach private-label replay.
+
 - 2026-06-20: Isaac segmentation AOV comparison and matrix summary now share
   the same CLI-facing JSON artifact source adapter. The matrix script no
   longer carries a duplicate `_read_json` wrapper around

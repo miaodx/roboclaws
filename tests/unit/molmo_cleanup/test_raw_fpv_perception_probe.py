@@ -1225,6 +1225,38 @@ def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) ->
     assert observations[0]["image_artifact"] == "robot_views/0001_raw_fpv_001.fpv.png"
 
 
+def test_private_label_generator_rejects_malformed_backend_state_source(
+    tmp_path: Path,
+) -> None:
+    labels = _load_label_module()
+    state_path = tmp_path / "molmospaces_backend_state.json"
+    state_path.write_text("{bad-json\n", encoding="utf-8")
+
+    try:
+        labels._load_json(state_path)
+    except ValueError as exc:
+        assert "MolmoSpaces backend state source must contain valid JSON object" in str(exc)
+        assert str(state_path) in str(exc)
+    else:  # pragma: no cover - corrupt saved backend state should fail before replay
+        raise AssertionError("expected malformed saved backend state to fail aloud")
+
+
+def test_private_label_generator_rejects_non_object_backend_state_source(
+    tmp_path: Path,
+) -> None:
+    labels = _load_label_module()
+    state_path = tmp_path / "molmospaces_backend_state.json"
+    state_path.write_text("[]\n", encoding="utf-8")
+
+    try:
+        labels._load_json(state_path)
+    except ValueError as exc:
+        assert "MolmoSpaces backend state source must contain a JSON object" in str(exc)
+        assert str(state_path) in str(exc)
+    else:  # pragma: no cover - wrong-shaped saved backend state should fail before replay
+        raise AssertionError("expected non-object saved backend state to fail aloud")
+
+
 def test_private_label_generator_rejects_non_positive_render_dimensions() -> None:
     labels = _load_label_module()
 
